@@ -985,6 +985,7 @@
         "type": "object",
         "properties": {
           "source": { "title": "Source", "type": "string" },
+          "expression": { "title": "Expression", "type": "string" },
           "models": {
             "title": "Models",
             "type": "object",

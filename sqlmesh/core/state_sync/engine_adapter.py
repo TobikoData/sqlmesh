@@ -30,7 +30,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model, SeedModel
+from sqlmesh.core.model import Model, ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
     Intervals,
     Snapshot,
@@ -87,6 +87,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "identifier": exp.DataType.build("text"),
             "version": exp.DataType.build("text"),
             "snapshot": exp.DataType.build("text"),
+            "kind_name": exp.DataType.build("text"),
         }
 
         self._environment_columns_to_types = {
@@ -238,6 +239,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 .where(self._snapshot_id_filter(snapshot_ids))
             )
         }
+
+    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+        query = (
+            exp.select("name")
+            .from_(self.snapshots_table)
+            .where(exp.column("name").isin(*names))
+            .distinct()
+        )
+        if exclude_external:
+            query = query.where(exp.column("kind_name").neq(ModelKindName.EXTERNAL.value))
+        return {name for name, in self.engine_adapter.fetchall(query)}
 
     def reset(self) -> None:
         """Resets the state store to the state when it was first initialized."""
@@ -821,6 +833,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
                 "snapshot": snapshot.json(exclude={"intervals", "dev_intervals"}),
+                "kind_name": snapshot.model_kind_name.value,
             }
             for snapshot in snapshots
         ]

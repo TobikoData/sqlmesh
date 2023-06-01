@@ -121,10 +121,11 @@ def test_delete_pr_environment(
     controller = github_pr_synchronized_approvers_controller
     controller._context._engine_adapter = mock_engine_adapter = mocker.MagicMock()
     controller.delete_pr_environment()
-    assert mock_engine_adapter.method_calls == [
+    assert sorted(mock_engine_adapter.method_calls, key=str) == [
+        call.drop_schema(schema_name="raw__hello_world_2", ignore_if_not_exists=True, cascade=True),
         call.drop_schema(
             schema_name="sushi__hello_world_2", ignore_if_not_exists=True, cascade=True
-        )
+        ),
     ]
 
 

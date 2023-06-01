@@ -24,6 +24,7 @@ if t.TYPE_CHECKING:
 
     from sqlmesh.core.context_diff import ContextDiff
     from sqlmesh.core.plan import Plan
+    from sqlmesh.core.table_diff import RowDiff, SchemaDiff
 
     LayoutWidget = t.TypeVar("LayoutWidget", bound=t.Union[widgets.VBox, widgets.HBox])
 
@@ -121,6 +122,14 @@ class Console(abc.ABC):
     @abc.abstractmethod
     def loading_stop(self, id: uuid.UUID) -> None:
         """Stop loading for the given id"""
+
+    @abc.abstractmethod
+    def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
+        """Show table schema diff"""
+
+    @abc.abstractmethod
+    def show_row_diff(self, row_diff: RowDiff) -> None:
+        """Show table summary diff"""
 
 
 class TerminalConsole(Console):
@@ -448,6 +457,35 @@ class TerminalConsole(Console):
     def loading_stop(self, id: uuid.UUID) -> None:
         self.loading_status[id].stop()
         del self.loading_status[id]
+
+    def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
+        tree = Tree(f"[bold]Schema Diff Between '{schema_diff.source}' and '{schema_diff.target}':")
+
+        if schema_diff.added:
+            added = Tree("[green]Added Columns:")
+            for c, t in schema_diff.added:
+                added.add(f"[green]{c} ({t})")
+            tree.add(added)
+
+        if schema_diff.removed:
+            removed = Tree("[red]Removed Columns:")
+            for c, t in schema_diff.removed:
+                removed.add(f"[red]{c} ({t})")
+            tree.add(removed)
+
+        if schema_diff.modified:
+            modified = Tree("[magenta]Modified Columns:")
+            for c, (ft, tt) in schema_diff.modified.items():
+                modified.add(f"[magenta]{c} ({ft} -> {tt})")
+            tree.add(modified)
+
+        self.console.print(tree)
+
+    def show_row_diff(self, row_diff: RowDiff) -> None:
+        self.console.print(
+            f"[bold]Row Count:[/bold] {row_diff.source}: {row_diff.source_count}, {row_diff.target}: {row_diff.target_count} -- {row_diff.count_pct_change}%"
+        )
+        self.console.print(row_diff.sample.to_string(index=False))
 
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool

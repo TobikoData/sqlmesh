@@ -1,13 +1,11 @@
-import { type MouseEvent, useEffect, useState, useCallback } from 'react'
+import { type MouseEvent, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import ModalConfirmation from '../modal/ModalConfirmation'
 import type { Confirmation } from '../modal/ModalConfirmation'
 import { Button } from '../button/Button'
-import { debounceAsync, isNotNil } from '~/utils'
+import { isNotNil } from '~/utils'
 import Directory from './Directory'
-import { apiCancelFiles, useApiFiles } from '@api/index'
 import { useStoreFileTree } from '@context/fileTree'
-import { useQueryClient } from '@tanstack/react-query'
 
 /* TODO:
   - add ability to create file or directory on top level
@@ -23,36 +21,10 @@ export default function FileTree({
 }: {
   className?: string
 }): JSX.Element {
-  const client = useQueryClient()
-
   const project = useStoreFileTree(s => s.project)
-  const setFiles = useStoreFileTree(s => s.setFiles)
-  const setProject = useStoreFileTree(s => s.setProject)
-
-  const { refetch: getFiles } = useApiFiles()
-
-  const debouncedGetFiles = useCallback(debounceAsync(getFiles, 1000, true), [
-    getFiles,
-  ])
 
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>()
   const [showConfirmation, setShowConfirmation] = useState(false)
-
-  useEffect(() => {
-    void debouncedGetFiles().then(({ data }) => {
-      setProject(data)
-    })
-
-    return () => {
-      debouncedGetFiles.cancel()
-
-      apiCancelFiles(client)
-    }
-  }, [])
-
-  useEffect(() => {
-    setFiles(project?.allFiles ?? [])
-  }, [project])
 
   useEffect(() => {
     setShowConfirmation(isNotNil(confirmation))

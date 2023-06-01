@@ -59,7 +59,7 @@ class ModelKindMixin:
     @property
     def only_latest(self) -> bool:
         """Whether or not this model only cares about latest date to render."""
-        return self.model_kind_name in (ModelKindName.VIEW, ModelKindName.FULL)
+        return self.is_view or self.is_full
 
 
 class ModelKindName(str, ModelKindMixin, Enum):
@@ -81,17 +81,79 @@ class ModelKindName(str, ModelKindMixin, Enum):
 class ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
 
-    def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
-        return d.ModelKind(this=self.name.value.upper(), **kwargs)
+    @classmethod
+    def field_validator(cls) -> classmethod:
+        def _model_kind_validator(v: t.Any) -> ModelKind:
+            if isinstance(v, ModelKind):
+                return v
+
+            if isinstance(v, d.ModelKind):
+                name = v.this
+                props = {prop.name: prop.args.get("value") for prop in v.expressions}
+                klass: t.Type[ModelKind] = ModelKind
+                if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+                    klass = IncrementalByTimeRangeKind
+                elif name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
+                    klass = IncrementalByUniqueKeyKind
+                elif name == ModelKindName.SEED:
+                    klass = SeedKind
+                else:
+                    props["name"] = ModelKindName(name)
+                return klass(**props)
+
+            if isinstance(v, dict):
+                if v.get("name") == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
+                    klass = IncrementalByTimeRangeKind
+                elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
+                    klass = IncrementalByUniqueKeyKind
+                elif v.get("name") == ModelKindName.SEED:
+                    klass = SeedKind
+                else:
+                    klass = ModelKind
+                return klass(**v)
+
+            name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
+
+            try:
+                return ModelKind(name=ModelKindName(name))
+            except ValueError:
+                raise ConfigError(f"Invalid model kind '{name}'")
+
+        return validator("kind", pre=True, allow_reuse=True)(_model_kind_validator)
 
     @property
     def model_kind_name(self) -> ModelKindName:
         return self.name
 
+    def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
+        return d.ModelKind(this=self.name.value.upper(), **kwargs)
+
 
 class TimeColumn(PydanticModel):
     column: str
     format: t.Optional[str] = None
+
+    @classmethod
+    def field_validator(cls) -> classmethod:
+        def _time_column_validator(v: t.Any) -> TimeColumn:
+            if isinstance(v, exp.Tuple):
+                kwargs = {
+                    key: v.expressions[i].name
+                    for i, key in enumerate(("column", "format")[: len(v.expressions)])
+                }
+                return TimeColumn(**kwargs)
+
+            if isinstance(v, exp.Identifier):
+                return TimeColumn(column=v.name)
+
+            if isinstance(v, exp.Expression):
+                return TimeColumn(column=v.name)
+
+            if isinstance(v, str):
+                return TimeColumn(column=v)
+            return v
+
+        return validator("time_column", pre=True, allow_reuse=True)(_time_column_validator)
 
     @validator("column", pre=True)
     def _column_validator(cls, v: str) -> str:
@@ -126,6 +188,9 @@ class TimeColumn(PydanticModel):
             ]
         )
 
+    def to_property(self, dialect: str = "") -> exp.Property:
+        return exp.Property(this="time_column", value=self.to_expression(dialect))
+
 
 class _Incremental(ModelKind):
     batch_size: t.Optional[int]
@@ -156,31 +221,10 @@ class IncrementalByTimeRangeKind(_Incremental):
     name: ModelKindName = Field(ModelKindName.INCREMENTAL_BY_TIME_RANGE, const=True)
     time_column: TimeColumn
 
-    @validator("time_column", pre=True)
-    def _parse_time_column(cls, v: t.Any) -> TimeColumn:
-        if isinstance(v, exp.Tuple):
-            kwargs = {
-                key: v.expressions[i].name
-                for i, key in enumerate(("column", "format")[: len(v.expressions)])
-            }
-            return TimeColumn(**kwargs)
-
-        if isinstance(v, exp.Identifier):
-            return TimeColumn(column=v.name)
-
-        if isinstance(v, exp.Expression):
-            return TimeColumn(column=v.name)
-
-        if isinstance(v, str):
-            return TimeColumn(column=v)
-        return v
+    _time_column_validator = TimeColumn.field_validator()
 
     def to_expression(self, dialect: str = "", **kwargs: t.Any) -> d.ModelKind:
-        return super().to_expression(
-            expressions=[
-                exp.Property(this="time_column", value=self.time_column.to_expression(dialect))
-            ],
-        )
+        return super().to_expression(expressions=[self.time_column.to_property(dialect)])
 
 
 class IncrementalByUniqueKeyKind(_Incremental):
@@ -228,43 +272,3 @@ class SeedKind(ModelKind):
                 ),
             ],
         )
-
-
-def _model_kind_validator(v: t.Any) -> ModelKind:
-    if isinstance(v, ModelKind):
-        return v
-
-    if isinstance(v, d.ModelKind):
-        name = v.this
-        props = {prop.name: prop.args.get("value") for prop in v.expressions}
-        klass: t.Type[ModelKind] = ModelKind
-        if name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-            klass = IncrementalByTimeRangeKind
-        elif name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
-            klass = IncrementalByUniqueKeyKind
-        elif name == ModelKindName.SEED:
-            klass = SeedKind
-        else:
-            props["name"] = ModelKindName(name)
-        return klass(**props)
-
-    if isinstance(v, dict):
-        if v.get("name") == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-            klass = IncrementalByTimeRangeKind
-        elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
-            klass = IncrementalByUniqueKeyKind
-        elif v.get("name") == ModelKindName.SEED:
-            klass = SeedKind
-        else:
-            klass = ModelKind
-        return klass(**v)
-
-    name = (v.name if isinstance(v, exp.Expression) else str(v)).upper()
-
-    try:
-        return ModelKind(name=ModelKindName(name))
-    except ValueError:
-        raise ConfigError(f"Invalid model kind '{name}'")
-
-
-model_kind_validator = validator("kind", pre=True, allow_reuse=True)(_model_kind_validator)

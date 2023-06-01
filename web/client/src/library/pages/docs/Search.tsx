@@ -51,20 +51,25 @@ export default function Search({
           )}
           {isArrayNotEmpty(found) &&
             found.map(([model, index]) => (
-              <Link
+              <li
                 key={model.name}
-                to={`${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(
-                  model.name,
-                )}`}
-                className="text-md font-normal mb-1 w-full"
+                className="p-2 cursor-pointer hover:bg-primary-10 rounded-lg"
               >
-                <li className="p-2 cursor-pointer hover:bg-secondary-10">
+                <Link
+                  to={`${
+                    EnumRoutes.IdeDocsModels
+                  }/${ModelSQLMeshModel.encodeName(model.name)}`}
+                  className="text-md font-normal mb-1 w-full"
+                >
                   <span className="font-bold">{model.name}</span>
-                  <small className="block text-neutral-600 p-2 italic">
-                    {highlightMatch(index, search)}
-                  </small>
-                </li>
-              </Link>
+                  <small
+                    className="block text-neutral-600 p-2 italic"
+                    dangerouslySetInnerHTML={{
+                      __html: highlightMatch(index, search),
+                    }}
+                  ></small>
+                </Link>
+              </li>
             ))}
         </ul>
       )}
@@ -72,23 +77,10 @@ export default function Search({
   )
 }
 
-function highlightMatch(source: string, match: string): JSX.Element {
-  return (
-    <>
-      {source.split(match).reduce((acc: JSX.Element[], part, idx, arr) => {
-        acc.push(<>{part}</>)
-
-        if (idx > 0 || idx % 2 !== 0 || idx === arr.length) return acc
-
-        acc.push(
-          <span className="inline-block text-brand-500 bg-brand-10">
-            {match}
-          </span>,
-        )
-
-        return acc
-      }, [])}
-    </>
+function highlightMatch(source: string, match: string): string {
+  return source.replaceAll(
+    match,
+    `<b class="inline-block text-brand-500 bg-brand-10">${match}</b>`,
   )
 }
 

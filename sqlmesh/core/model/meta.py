@@ -10,13 +10,11 @@ from sqlglot import exp
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
-    IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     ModelKind,
     ModelKindName,
     TimeColumn,
     _Incremental,
-    model_kind_validator,
 )
 from sqlmesh.utils import unique
 from sqlmesh.utils.date import TimeLike, preserve_time_like_kind, to_datetime
@@ -59,12 +57,13 @@ class ModelMeta(PydanticModel):
     column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
     tags: t.List[str] = []
+    grain: t.List[str] = []
     hash_raw_query: bool = False
 
     _croniter: t.Optional[croniter] = None
     _interval_unit: t.Optional[IntervalUnit] = None
 
-    _model_kind_validator = model_kind_validator
+    _model_kind_validator = ModelKind.field_validator()
 
     @validator("audits", pre=True)
     def _audits_validator(cls, v: t.Any) -> t.Any:
@@ -107,7 +106,7 @@ class ModelMeta(PydanticModel):
             ]
         return v
 
-    @validator("partitioned_by_", "tags", pre=True)
+    @validator("partitioned_by_", "tags", "grain", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [e.name for e in v.expressions]
@@ -174,9 +173,8 @@ class ModelMeta(PydanticModel):
 
     @property
     def time_column(self) -> t.Optional[TimeColumn]:
-        if isinstance(self.kind, IncrementalByTimeRangeKind):
-            return self.kind.time_column
-        return None
+        """The time column for incremental models."""
+        return getattr(self.kind, "time_column", None)
 
     @property
     def unique_key(self) -> t.List[str]:
@@ -215,7 +213,7 @@ class ModelMeta(PydanticModel):
     @property
     def batch_size(self) -> t.Optional[int]:
         """The maximal number of units in a single task for a backfill."""
-        return self.kind.batch_size if isinstance(self.kind, _Incremental) else None
+        return getattr(self.kind, "batch_size", None)
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Returns the IntervalUnit of the model

@@ -184,6 +184,7 @@ class ModelDetails(BaseModel):
     storage_format: t.Optional[str] = None
     time_column: t.Optional[str] = None
     tags: t.Optional[str] = None
+    grain: t.Optional[str] = None
     partitioned_by: t.Optional[str] = None
     lookback: t.Optional[int] = None
     cron_prev: t.Optional[TimeLike] = None
@@ -235,7 +236,8 @@ class PlanOptions(BaseModel):
 
 
 class LineageColumn(BaseModel):
-    source: t.Optional[str]
+    source: t.Optional[str] = None
+    expression: t.Optional[str] = None
     models: t.Optional[t.Dict[str, t.List[str]]]
 
 

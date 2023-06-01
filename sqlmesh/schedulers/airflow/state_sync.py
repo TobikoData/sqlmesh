@@ -92,16 +92,17 @@ class HttpStateReader(StateReader):
             return set()
         return self._client.snapshots_exist([s.snapshot_id for s in snapshot_ids])
 
-    def get_snapshots_by_models(self, *names: str) -> t.List[Snapshot]:
-        """
-        Get all snapshots by model name.
+    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+        """Returns the model names that exist in the state sync.
+
+        Args:
+            names: Iterable of model names to check.
+            exclude_external: Whether to exclude external models from the output.
 
         Returns:
-            The list of snapshots.
+            A set of all the existing model names.
         """
-        raise NotImplementedError(
-            "Getting snapshots by model names is not supported by the Airflow HTTP State Sync"
-        )
+        return self._client.models_exist(names, exclude_external=exclude_external)
 
     def get_snapshot_intervals(
         self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]

@@ -1,3 +1,4 @@
+import datetime
 import typing as t
 
 import pytest
@@ -23,7 +24,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, to_ds, yesterday
 
 
 @pytest.fixture(autouse=True)
@@ -148,6 +149,7 @@ def validate_query_change(
         "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
+        "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
     ]
     not_modified = [
@@ -242,6 +244,7 @@ def validate_model_kind_change(
         "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
+        "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
     ]
     if kind_name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
@@ -287,6 +290,7 @@ def test_environment_isolation(sushi_context: Context):
         "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
+        "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
     ]
 
@@ -482,6 +486,7 @@ def setup_rebase(
             "sushi.waiter_revenue_by_day",
             "sushi.top_waiters",
             "sushi.customer_revenue_by_day",
+            "sushi.customer_revenue_lifetime",
         }
     }
     context.apply(plan)
@@ -627,13 +632,15 @@ def test_auto_categorization(sushi_context: Context):
 @pytest.mark.integration
 @pytest.mark.core_integration
 def test_multi(mocker):
-    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], config="memory")
+    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], gateway="memory")
     context._new_state_sync().reset()
     plan = context.plan()
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
 
-    context = Context(paths=["examples/multi/repo_1"], engine_adapter=context.engine_adapter)
+    context = Context(
+        paths=["examples/multi/repo_1"], engine_adapter=context.engine_adapter, gateway="memory"
+    )
     model = context.models["bronze.a"]
     context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
     plan = context.plan()
@@ -642,6 +649,24 @@ def test_multi(mocker):
     assert len(plan.missing_intervals) == 2
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots)
+
+
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_incremental_time_self_reference(sushi_context: Context):
+    df = sushi_context.engine_adapter.fetchdf("SELECT MIN(ds) FROM sushi.customer_revenue_lifetime")
+    assert df.iloc[0, 0] == to_ds("1 week ago")
+    df = sushi_context.engine_adapter.fetchdf("SELECT MAX(ds) FROM sushi.customer_revenue_lifetime")
+    assert df.iloc[0, 0] == to_ds("yesterday")
+    results = sushi_context.engine_adapter.fetchdf(
+        "SELECT ds, count(*) FROM sushi.customer_revenue_lifetime group by 1 order by 2 desc, 1 desc"
+    ).values
+    # Validate that both rows increase over time and all days are present
+    assert len(results) == 7
+    assert [x[0] for x in results] == [
+        to_ds(yesterday() - datetime.timedelta(days=x)) for x in range(7)
+    ]
+    # TODO: Add a restatement test
 
 
 def initial_add(context: Context, environment: str):
@@ -775,10 +800,10 @@ def validate_environment_views(
 ) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
-        if snapshot.is_embedded:
+        if snapshot.is_symbolic:
             continue
-
         view_name = snapshot.qualified_view_name.for_environment(environment=environment)
+
         assert adapter.table_exists(view_name)
         assert select_all(
             snapshot.table_name(is_dev=environment != c.PROD, for_read=True), adapter

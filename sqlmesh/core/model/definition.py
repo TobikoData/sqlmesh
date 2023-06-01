@@ -104,6 +104,7 @@ class _Model(ModelMeta, frozen=True):
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
+    _depends_on_past: t.Optional[bool] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
 
     _expressions_validator = expression_validator
@@ -347,8 +348,12 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A unified text diff showing additions and deletions.
         """
-        meta_a, *statements_a, query_a = self.render_definition()
-        meta_b, *statements_b, query_b = other.render_definition()
+        meta_a, *statements_a = self.render_definition()
+        meta_b, *statements_b = other.render_definition()
+
+        query_a = statements_a.pop() if statements_a else None
+        query_b = statements_b.pop() if statements_b else None
+
         return "\n".join(
             (
                 d.text_diff(meta_a, meta_b, self.dialect),
@@ -448,6 +453,15 @@ class _Model(ModelMeta, frozen=True):
     @property
     def is_seed(self) -> bool:
         return False
+
+    @property
+    def depends_on_past(self) -> bool:
+        if self._depends_on_past is None:
+            self._depends_on_past = (
+                self.kind.is_incremental_by_unique_key
+                or self.name in _find_tables([self.render_query()])
+            )
+        return self._depends_on_past
 
     def validate_definition(self) -> None:
         """Validates the model's definition.
@@ -816,6 +830,10 @@ class SeedModel(_Model):
         if not seed_path.is_absolute():
             return self._path.parent / seed_path
         return seed_path
+
+    @property
+    def depends_on_past(self) -> bool:
+        return False
 
     def to_dehydrated(self) -> SeedModel:
         """Creates a dehydrated copy of this model.
@@ -1449,5 +1467,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     ),
     "tags": lambda value: (
         exp.to_identifier(value[0]) if len(value) == 1 else exp.Tuple(expressions=value)
+    ),
+    "grain": lambda value: (
+        exp.to_column(value[0]) if len(value) == 1 else exp.Tuple(expressions=exp.to_column(value))
     ),
 }

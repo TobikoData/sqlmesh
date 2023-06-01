@@ -101,6 +101,17 @@ def get_snapshot_intervals() -> Response:
         )
 
 
+@sqlmesh_api_v1.get("/models")
+@csrf.exempt
+@check_authentication
+def models_exist() -> Response:
+    with util.scoped_state_sync() as state_sync:
+        names = _csv_arg("names")
+        exclude_external = "exclude_external" in request.args
+        existing_models = state_sync.models_exist(names, exclude_external=exclude_external)
+        return _success(common.ExistingModelsResponse(names=list(existing_models)))
+
+
 @sqlmesh_api_v1.get("/versions")
 @csrf.exempt
 @check_authentication
@@ -138,3 +149,9 @@ def _snapshot_name_versions_from_request() -> t.Optional[t.List[SnapshotNameVers
 
     raw_versions = json.loads(request.args["versions"])
     return [SnapshotNameVersion.parse_obj(v) for v in raw_versions]
+
+
+def _csv_arg(arg: str) -> t.List[str]:
+    if arg not in request.args:
+        return []
+    return [v.strip() for v in request.args[arg].split(",")]

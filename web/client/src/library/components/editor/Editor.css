@@ -36,6 +36,14 @@
   width: 0.2rem;
 }
 
+.scrollbar--vertical-md .cm-scroller::-webkit-scrollbar {
+  width: 0.4rem;
+}
+
+.scrollbar--horizontal-md .cm-scroller::-webkit-scrollbar {
+  height: 0.4rem;
+}
+
 .cm-editor .cm-scroller::-webkit-scrollbar-track {
   background-color: transparent;
 }
@@ -49,6 +57,11 @@
   border: none !important;
   outline: none !important;
   background: var(--color-theme) !important;
+}
+
+.sqlmesh-expression {
+  color: var(--color-primary-500);
+  background: var(--color-primary-10);
 }
 
 .sqlmesh-model,

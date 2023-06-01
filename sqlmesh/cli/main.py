@@ -392,6 +392,54 @@ def create_external_models(obj: Context) -> None:
     obj.create_external_models()
 
 
+@cli.command("table_diff")
+@click.option(
+    "--source",
+    "-s",
+    type=str,
+    required=True,
+    help="The source environment or table.",
+)
+@click.option(
+    "--target",
+    "-t",
+    type=str,
+    required=True,
+    help="The target environment or table.",
+)
+@click.option(
+    "--on",
+    type=str,
+    nargs="+",
+    required=True,
+    help='The SQL join condition or list of columns to use as keys. Table aliases must be "s" and "t" for source and target.',
+)
+@click.option(
+    "--model",
+    type=str,
+    help="The model to diff against when source and target are environments and not tables.",
+)
+@click.option(
+    "--where",
+    type=str,
+    help="An optional where statement to filter results.",
+)
+@click.option(
+    "--limit",
+    type=int,
+    help="The limit of the sample dataframe.",
+)
+@click.pass_obj
+@error_handler
+def table_diff(obj: Context, **kwargs: t.Any) -> None:
+    """Show the diff between two tables.
+
+    Can either be two tables or two environments and a model.
+    """
+    kwargs["model_or_snapshot"] = kwargs.pop("model", None)
+    obj.table_diff(**kwargs)
+
+
 @cli.command("prompt")
 @click.argument("prompt")
 @click.option(

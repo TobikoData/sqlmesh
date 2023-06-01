@@ -77,6 +77,18 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
+    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+        """Returns the model names that exist in the state sync.
+
+        Args:
+            names: Iterable of model names to check.
+            exclude_external: Whether to exclude external models from the output.
+
+        Returns:
+            A set of all the existing model names.
+        """
+
+    @abc.abstractmethod
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         """Fetches the environment if it exists.
 
@@ -93,14 +105,6 @@ class StateReader(abc.ABC):
 
         Returns:
             A list of all environments.
-        """
-
-    @abc.abstractmethod
-    def get_snapshots_by_models(self, *names: str) -> t.List[Snapshot]:
-        """Get all snapshots by model name.
-
-        Returns:
-            The list of snapshots.
         """
 
     @abc.abstractmethod

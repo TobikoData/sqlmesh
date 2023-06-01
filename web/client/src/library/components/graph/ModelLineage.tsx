@@ -17,11 +17,10 @@ export default function ModelLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { clearActiveEdges, setLineage, models } = useLineageFlow()
+  const { setActiveEdges, setConnections, setLineage, models, handleError } =
+    useLineageFlow()
 
-  const { data: dataLineage, refetch: getModelLineage } = useApiModelLineage(
-    model.name,
-  )
+  const { refetch: getModelLineage } = useApiModelLineage(model.name)
 
   const debouncedGetModelLineage = useCallback(
     debounceAsync(getModelLineage, 500),
@@ -29,21 +28,23 @@ export default function ModelLineage({
   )
 
   useEffect(() => {
+    setActiveEdges(new Map())
+    setConnections(new Map())
+
     void debouncedGetModelLineage()
+      .then(({ data }) => {
+        setLineage(() =>
+          data == null ? undefined : mergeLineageWithModels({}, data),
+        )
+      })
+      .catch(error => {
+        handleError?.(error)
+      })
   }, [fingerprint])
 
   useEffect(() => {
-    if (dataLineage == null) {
-      setLineage(undefined)
-    } else {
-      setLineage(lineage =>
-        mergeLineageWithModels(structuredClone(lineage), dataLineage),
-      )
-    }
-  }, [dataLineage])
-
-  useEffect(() => {
-    clearActiveEdges()
+    setActiveEdges(new Map())
+    setConnections(new Map())
   }, [model.name])
 
   return (
