@@ -45,13 +45,12 @@ After SQLMesh creates a plan, it summarizes the breaking and non-breaking change
 
 A plan's actions are determined by the [kinds](./concepts/models/model_kinds.md) of models the project uses. This example project uses three model kinds:
 
-1. [`SEED` models](./concepts/models/model_kinds.md#seed) read data from CSV files stored in the SQLMesh project directory every time the model is run.
-2. [`INCREMENTAL_BY_TIME_RANGE` models](./concepts/models/model_kinds.md#incremental_by_time_range) use a date/time data column to track which time intervals are affected by a plan and process only the affected intervals when a model is run.
-3. [`FULL` models](./concepts/models/model_kinds.md#full) fully refresh (rewrite) the data associated with the model every time the model is run.
+1. [`SEED` models](./concepts/models/model_kinds.md#seed) read data from CSV files stored in the SQLMesh project directory.
+2. [`FULL` models](./concepts/models/model_kinds.md#full) fully refresh (rewrite) the data associated with the model every time the model is run.
+3. [`INCREMENTAL_BY_TIME_RANGE` models](./concepts/models/model_kinds.md#incremental_by_time_range) use a date/time data column to track which time intervals are affected by a plan and process only the affected intervals when a model is run.
 
 
-
-## 1. Create a SQLMesh project
+## 1. Create the SQLMesh project
 Create a project directory and navigate to it, as in the following example:
 
 ```bash
@@ -84,13 +83,116 @@ This will create the directories and files that you can use to organize your SQL
 - ./macros
     - Macro files. Refer to [macros](concepts/macros/overview.md).
 
+### Project data
+
+The data used in this example project is contained in the `seed_data.csv` file in the `/seeds` project directory. The data reflects sales of 3 items over 7 days in January 2020.
+
+The data contains three columns, `id`, `item_id`, and `ds`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
+
+This is the complete dataset:
+
+```linenums="1"
+id,item_id,ds
+1,2,2020-01-01
+2,1,2020-01-01
+3,3,2020-01-03
+4,1,2020-01-04
+5,1,2020-01-05
+6,1,2020-01-06
+7,1,2020-01-07
+```
+
+### Project configuration
+
+SQLMesh project-level configuration parameters are specified in the `config.yaml` file in the project directory.
+
+This example project uses the embedded DuckDB SQL engine, so its configuration specifies `duckdb` as the local gateway's connection and the `local` gateway as the default:
+
+```yaml linenums="1"
+gateways:
+    local:
+        connection:
+            type: duckdb
+            database: db.db
+
+default_gateway: local
+```
+
+Learn more about SQLMesh project configuration [here](./reference/configuration.md).
+
+### Project models
+
+We now briefly review each model in the project. 
+
+The first model is a `SEED` model that imports `seed_data.csv`. This model consists of only a `MODEL` statement because `SEED` models do not query a database. In addition to specifying the model name and CSV path relative to the model file, it includes the column names and data types of the CSV contents:
+
+```sql linenums="1"
+MODEL (
+    name sqlmesh_example.seed_model,
+    kind SEED (
+        path '../seeds/seed_data.csv'
+    ),
+    columns (
+        id INTEGER,
+        item_id INTEGER,
+        ds VARCHAR
+    )
+);
+```
+
+The second model is a `INCREMENTAL_BY_TIME_RANGE` model that includes both a `MODEL` statement and a SQL query selecting from the first seed model. 
+
+The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the first time the model should process and the `cron` property specifying that the model should run daily.
+
+The SQL query includes a `WHERE` clause that SQLMesh uses to filter the selected data to a specific time interval when loading data incrementally:
+
+```sql linenums="1"
+MODEL (
+    name sqlmesh_example.incremental_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column ds
+    ),
+    start '2020-01-01',
+    cron '@daily',
+);
+
+SELECT
+    id,
+    item_id,
+    ds,
+FROM
+    sqlmesh_example.seed_model
+WHERE
+    ds between @start_ds and @end_ds
+```
+
+The final model in the pipeline is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](./concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory that verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
+
+```sql linenums="1"
+MODEL (
+  name sqlmesh_example.full_model,
+  kind FULL,
+  cron '@daily',
+  audits [assert_positive_order_ids],
+);
+
+SELECT
+  item_id,
+  count(distinct id) AS num_orders,
+FROM
+    sqlmesh_example.incremental_model
+GROUP BY item_id
+```
+
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment
 
-To materialize this pipeline into DuckDB, run `sqlmesh plan` to get started with the plan/apply flow. The prompt will ask you what date to backfill; you can leave those blank for now (hit `Enter`) to backfill all of history. Finally, it will ask you whether or not you want backfill the plan. Enter `y`:
+As discussed above, SQLMesh's key actions are creating and applying *plans* to *environments*. At this point, the only environment is the empty `prod` environment.
 
-```bash
-(.env) [user@computer sqlmesh-example]$ sqlmesh plan
+The first SQLMesh plan must execute the entire pipeline to populate the production environment. Running `sqlmesh plan` will generate the plan and the following output: 
+
+```bash linenums="1"
+$ sqlmesh plan
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
@@ -101,9 +203,21 @@ Summary of differences against `prod`:
     ├── sqlmesh_example.incremental_model
     └── sqlmesh_example.full_model
 Models needing backfill (missing dates):
-├── sqlmesh_example.seed_model: (2020-01-01, 2023-03-22)
-├── sqlmesh_example.incremental_model: (2020-01-01, 2023-03-22)
-└── sqlmesh_example.full_model: (2023-03-22, 2023-03-22)
+├── sqlmesh_example.full_model: 2020-01-01 - 2023-05-31
+├── sqlmesh_example.incremental_model: 2020-01-01 - 2023-05-31
+└── sqlmesh_example.seed_model: 2023-05-31 - 2023-05-31
+Apply - Backfill Tables [y/n]:
+```
+
+Line 5 of the output describes what environments the plan will affect when applied - a new `prod` environment in this case.
+
+Lines 7-10 of the output show that SQLMesh detected three new models relative to the current empty environment.
+
+Lines 11-14 list each model that will be executed by the plan, along with the date intervals that will be run. Note that `full_model` and `incremental_model` both show `2020-01-01` as their start date because the incremental model specifies that date in the `start` property of its `MODEL` statement and the full model depends on the incremental model. `seed_model` date range begins on the same day as the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
+
+Line 15 asks you whether to proceed with executing the model backfills described in lines 11-14. Enter `y` and press `Enter`, and SQLMesh will execute the models and return this output:
+
+```bash linenums="1"
 Apply - Backfill Tables [y/n]: y
        sqlmesh_example.seed_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 sqlmesh_example.incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
@@ -116,19 +230,27 @@ Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━
 The target environment has been updated successfully
 ```
 
+Lines 2-4 show the completion percentage and run time for each model (very fast in this simple example). Line 8 shows that the `prod` environment now points to the tables created during model execution.
+
 You've now created a new production environment with all of history backfilled.
 
 ### 2.2 Create a dev environment
-Now that you've created a production environment, it's time to create a development environment so that you can make changes without affecting production. Run `sqlmesh plan dev` to create a development environment called `dev`.
+Now that you've created a production environment, it's time to create a development environment so that you can modify the models without affecting production. Run `sqlmesh plan dev` to create a development environment called `dev`:
 
-Although the summary of changes is similar, by showing that you've added two new models to this environment, the prompt notes that no backfills are needed and you're only required to perform a Virtual Update. This is because SQLMesh is able to safely reuse the tables you've already backfilled. Enter `y` to perform the Virtual Update:
-
-```bash
-(.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
+```bash linenums="1"
+$ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
 New environment `dev` will be created from `prod`
+Apply - Virtual Update [y/n]: 
+```
+
+The output does not list any added or modified models because the environment is being created from the existing `prod` environment. 
+
+Line 6 shows that when you apply the plan creating the `dev` environment will only involve a Virtual Update. This is because SQLMesh is able to safely reuse the tables you've already backfilled in the `prod` environment. Enter `y` to perform the Virtual Update:
+
+```bash linenums="1"
 Apply - Virtual Update [y/n]: y
 Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
 
@@ -138,9 +260,14 @@ The target environment has been updated successfully
 Virtual Update executed successfully
 ```
 
+The output confirms that the `dev` environment has been updated successfully.
+
 ## 3. Make your first update
+
+Now that we have have populated both `prod` and `dev` environments, let's modify one of the SQL models, validate it in `dev`, and push it to `prod`.
+
 ### 3.1 Edit the configuration
-Let's add a new column. Open the `models/incremental_model.sql` file and add `#!sql 'z' AS new_column` under `item_id` as follows:
+We modify the incremental SQL model by adding a new column to the query. Open the `models/incremental_model.sql` file and add `#!sql 'z' AS new_column` under `item_id` as follows:
 
 ```bash
 diff --git a/models/incremental_model.sql b/models/incremental_model.sql
@@ -158,12 +285,10 @@ index e1407e6..8154da2 100644
 ```
 
 ## 4. Plan and apply updates
-Once this change is made, we can preview it using the `sqlmesh plan` command to understand the impact it had.
+Once this change is made, we can preview it using the `sqlmesh plan dev` command to understand the impact it had:
 
-Run `sqlmesh plan dev` and hit `Enter` to leave the backfill start and end dates empty:
-
-```bash
-(.env) [user@computer sqlmesh-example]$ sqlmesh plan dev
+```bash linenums="1"
+$ sqlmesh plan dev
 ======================================================================
 Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
@@ -172,28 +297,34 @@ Summary of differences against `dev`:
 │   └── sqlmesh_example.incremental_model
 └── Indirectly Modified:
     └── sqlmesh_example.full_model
----                                                                                                             
-                                                                                                                
-+++                                                                                                             
-                                                                                                                
-@@ -1,6 +1,7 @@                                                                                                 
-                                                                                                                
- SELECT                                                                                                         
-   id,                                                                                                          
-   item_id,                                                                                                     
-+  'z' AS new_column,                                                                                           
-   ds                                                                                                           
- FROM sqlmesh_example.seed_model                                                                                
- WHERE                                                                                                          
+--- 
+
++++ 
+
+@@ -1,6 +1,7 @@
+
+ SELECT
+   id,
+   item_id,
++  'z' AS new_column,
+   ds
+ FROM sqlmesh_example.seed_model
+ WHERE
 Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
     └── sqlmesh_example.full_model
 Models needing backfill (missing dates):
-└── sqlmesh_example__dev.incremental_model: (2020-01-01, 2023-04-27)
-Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history: 
+└── sqlmesh_example__dev.incremental_model: 2020-01-01 - 2023-05-31
+Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
+```
+
+Lines 5-9 of the output summarize the differences between the modified pipeline and the existing `dev` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. On line 23, we see that SQLMesh semantically understood that the change was additive (added an unused column) and was automatically classified as a non-breaking change.
+
+Hit `Enter` at the prompt to backfill data from our start date `2020-01-01` until now. Another prompt will appear asking for a backfill end date; hit `Enter` to backfill until now. Finally, enter `y` and hit `Enter` to apply the plan and execute the backfill:
+
+```bash linenums="1"
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now: 
 Apply - Backfill Tables [y/n]: y
-
 sqlmesh_example__dev.incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 
 All model batches have been executed successfully
@@ -203,9 +334,7 @@ Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━�
 The target environment has been updated successfully
 ```
 
-Notice that SQLMesh has detected that you've added `new_column`. It also shows you that the downstream model `sqlmesh_example.full_model` was indirectly modified. SQLMesh semantically understood that your change was additive (added an unused column) and so it was automatically classified as a non-breaking change.
-
-SQLMesh now applies the change to `sqlmesh_example.incremental_model` and backfills the model. SQLMesh did not need to backfill `sqlmesh_example.full_model`, since it was `non-breaking`.
+SQLMesh applies the change to `sqlmesh_example.incremental_model` and backfills the model. SQLMesh did not need to backfill `sqlmesh_example.full_model` since the change was `non-breaking`.
 
 ### 4.1 Validate updates in dev
 You can now view this change by running `sqlmesh fetchdf "select * from sqlmesh_example__dev.incremental_model"`:
