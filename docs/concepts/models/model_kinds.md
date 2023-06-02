@@ -89,6 +89,13 @@ It is recommended that queries of models of this kind are [idempotent](../glossa
 
 Note, however, that upstream models and tables can impact a model's idempotency. For example, referencing an upstream model of kind [FULL](#full) in the model query automatically causes the model to be non-idempotent.
 
+### Self-Referencing Models
+If your model references itself then SQLMesh interprets this to mean that your model `depends_on_past`. 
+What this means is that it knows that when backfilling/restating your model that each partition requires the prior partition to be loaded in order to run. 
+This forces backfills to load sequentially and if you restate a past partition then all partitions after that must also be restated. 
+This pattern can be useful when you have a model that has expensive aggregates that you want to use prior aggregations as a "cache" to help loading future aggregations. 
+As a result this makes backfills more expensive but can make incremental loads faster. 
+
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_TIME_RANGE` kind are materialized using the following strategies:
 
@@ -152,6 +159,10 @@ WHERE
 ```
 
 **Note:** Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are inherently [non-idempotent](../glossary.md#idempotency), which should be taken into consideration during data [restatement](../plans.md#restatement-plans).
+
+### Depends on Past
+Similar to [self-referencing incremental by time range models](#self-referencing-models), `INCREMENTAL_BY_UNIQUE_KEY` models `depend_on_past`.
+As a result loads must be done sequentially (if `batch_size` is defined) and restating past partitioning means all partitions after that must also be restated.
 
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are materialized using the following strategies:
