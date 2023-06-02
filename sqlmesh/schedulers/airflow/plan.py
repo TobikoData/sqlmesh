@@ -62,7 +62,7 @@ def create_plan_dag_spec(
             intervals=state_sync.get_snapshot_intervals(all_snapshots.values()),
             start=request.environment.start_at,
             end=end,
-            latest=end,
+            latest=now(),
             is_dev=request.is_dev,
             restatements=request.restatements,
         )
