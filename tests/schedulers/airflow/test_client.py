@@ -67,8 +67,8 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "ttl": "in 1 week",
                 "fingerprint": snapshot.fingerprint.dict(),
                 "indirect_versions": {},
-                "intervals": [],
-                "dev_intervals": [],
+                "intervals_": [],
+                "dev_intervals_": [],
                 "model": {
                     "audits": [],
                     "cron": "@daily",

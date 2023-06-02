@@ -837,7 +837,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "name": snapshot.name,
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
-                "snapshot": snapshot.json(exclude={"intervals", "dev_intervals"}),
+                "snapshot": snapshot.json(exclude={"_intervals", "_dev_intervals"}),
                 "kind_name": snapshot.model_kind_name.value,
             }
             for snapshot in snapshots

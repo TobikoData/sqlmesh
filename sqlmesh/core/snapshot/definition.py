@@ -334,18 +334,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         name: The snapshot name which is the same as the model name and should be unique per model.
 
         fingerprint: A unique hash of the model definition so that models can be reused across environments.
-        physical_schema: The physical schema that the snapshot is stored in.
+        physical_schema_: The physical schema that the snapshot is stored in.
         model: Model object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
         audits: The list of audits used by the model.
-        intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
-        dev_intervals: List of [start, end) intervals showing development intervals (forward-only).
         project: The name of the project this snapshot is associated with.
         created_ts: Epoch millis timestamp when a snapshot was first created.
         updated_ts: Epoch millis timestamp when a snapshot was last updated.
         ttl: The time-to-live of a snapshot determines when it should be deleted after it's no longer referenced
             in any environment.
-        previous: The snapshot data version that this snapshot was based on. If this snapshot is new, then previous will be None.
+        previous_versions: The snapshot data versions that this snapshot was based on. If this snapshot is new, then previous_versions will be None.
         version: User specified version for a snapshot that is used for physical storage.
             By default, the version is the fingerprint, but not all changes to models require a backfill.
             If a user passes a previous version, that will be used instead and no backfill will be required.
@@ -354,6 +352,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             this snapshot is evaluated on a recurring basis. None indicates that this snapshot is paused.
         effective_from: The timestamp which indicates when this snapshot should be considered effective.
             Applicable for forward-only snapshots only.
+        _intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
+        _dev_intervals: List of [start, end) intervals showing development intervals (forward-only).
     """
 
     name: str
@@ -362,8 +362,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     model: Model
     parents: t.Tuple[SnapshotId, ...]
     audits: t.Tuple[Audit, ...]
-    intervals: Intervals = []
-    dev_intervals: Intervals = []
     project: str = ""
     created_ts: int
     updated_ts: int
@@ -376,6 +374,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
     _start: t.Optional[datetime] = None
+    intervals_: t.Optional[Intervals] = None
+    dev_intervals_: t.Optional[Intervals] = None
 
     @validator("ttl")
     @classmethod
@@ -468,7 +468,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         Args:
             model: Model to snapshot.
-            physical_schema: The schema of the snapshot which represents where it is stored.
             models: Dictionary of all models in the graph to make the fingerprint dependent on parent changes.
                 If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
@@ -505,13 +504,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 for name in _parents_from_model(model, models)
             ),
             audits=tuple(model.referenced_audits(audits)),
-            intervals=[],
-            dev_intervals=[],
             project=project,
             created_ts=created_ts,
             updated_ts=created_ts,
             ttl=ttl,
             version=version,
+            intervals_=[],
+            dev_intervals_=[],
         )
 
     def __eq__(self, other: t.Any) -> bool:
@@ -542,9 +541,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         merged_intervals = merge_intervals(intervals)
         if is_temp_table:
-            self.dev_intervals = merged_intervals
+            self.dev_intervals_ = merged_intervals
         else:
-            self.intervals = merged_intervals
+            self.intervals_ = merged_intervals
 
     def remove_interval(
         self, start: TimeLike, end: TimeLike, latest: t.Optional[TimeLike] = None
@@ -557,8 +556,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             latest: The latest time to use for the end of the interval.
         """
         interval = self.inclusive_exclusive(start, end, latest, for_removal=True)
-        self.intervals = remove_interval(self.intervals, *interval)
-        self.dev_intervals = remove_interval(self.dev_intervals, *interval)
+        self.intervals_ = remove_interval(self.intervals, *interval)
+        self.dev_intervals_ = remove_interval(self.dev_intervals, *interval)
 
     def inclusive_exclusive(
         self,
@@ -750,6 +749,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def version_get_or_generate(self) -> str:
         """Helper method to get the version or generate it from the fingerprint."""
         return self.version or self.fingerprint.to_version()
+
+    @property
+    def intervals(self) -> Intervals:
+        """Gets the intervals for a Snapshot. Asserts that intervals have been hydrated."""
+        assert self.intervals_ is not None, "Intervals have not been hydrated"
+        return self.intervals_
+
+    @property
+    def dev_intervals(self) -> Intervals:
+        """Gets the dev intervals for a Snapshot. Asserts that intervals have been hydrated."""
+        assert self.dev_intervals_ is not None, "Intervals have not been hydrated"
+        return self.dev_intervals_
 
     @property
     def physical_schema(self) -> str:

@@ -79,8 +79,8 @@ def test_json(snapshot: Snapshot):
         "created_ts": 1663891973000,
         "ttl": "in 1 week",
         "fingerprint": snapshot.fingerprint,
-        "intervals": [],
-        "dev_intervals": [],
+        "intervals_": [],
+        "dev_intervals_": [],
         "model": {
             "audits": [],
             "cron": "1 0 * * *",

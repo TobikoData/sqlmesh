@@ -254,3 +254,79 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
             (incremental_self_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))),
         },
     }
+    restatement_batches = scheduler.batches(
+        start, end, end, restatements={incremental_self_snapshot.name}, is_dev=True
+    )
+    restatement_dag = scheduler._dag(restatement_batches)
+    assert restatement_dag.graph == {
+        # The prior partitions that had already been loaded are no longer valid
+        (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))): set(),
+        (incremental_self_snapshot, (to_datetime("2023-01-02"), to_datetime("2023-01-03"))): {
+            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02")))
+        },
+        (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))): {
+            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-02"), to_datetime("2023-01-03"))),
+        },
+        (incremental_self_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))): {
+            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-02"), to_datetime("2023-01-03"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
+        },
+        (incremental_self_snapshot, (to_datetime("2023-01-05"), to_datetime("2023-01-06"))): {
+            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-02"), to_datetime("2023-01-03"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))),
+        },
+        (incremental_self_snapshot, (to_datetime("2023-01-06"), to_datetime("2023-01-07"))): {
+            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-02"), to_datetime("2023-01-03"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))),
+            (incremental_self_snapshot, (to_datetime("2023-01-05"), to_datetime("2023-01-06"))),
+        },
+    }
+
+
+def test_incremental_by_unique_key_contiguous_loads(mocker: MockerFixture, make_snapshot):
+    start = to_datetime("2022-12-30")
+    end = to_datetime("2022-12-31")
+    merge_snapshot: Snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByUniqueKeyKind(unique_key=["id"], batch_size=30),
+            owner="owner",
+            dialect="",
+            cron="@daily",
+            start=start,
+            query=parse_one("SELECT id, FROM other.table"),
+        ),
+    )
+    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
+    mock_state_sync = mocker.MagicMock()
+    mock_state_sync.get_snapshot_intervals.return_value = [
+        SnapshotIntervals(
+            name=merge_snapshot.name,
+            identifier=merge_snapshot.identifier,
+            version=merge_snapshot.fingerprint.to_version(),
+            intervals=[
+                (to_timestamp("2023-01-02 00:00:00"), to_timestamp("2023-01-03 00:00:00")),
+                (to_timestamp("2023-01-03 00:00:00"), to_timestamp("2023-01-04 00:00:00")),
+                (to_timestamp("2023-01-04 00:00:00"), to_timestamp("2023-01-05 00:00:00")),
+            ],
+            dev_intervals=[],
+        )
+    ]
+    scheduler = Scheduler(
+        snapshots=[merge_snapshot],
+        snapshot_evaluator=snapshot_evaluator,
+        state_sync=mock_state_sync,
+        max_workers=2,
+    )
+    batches = scheduler.batches(start, end, end, is_dev=False)
+    dag = scheduler._dag(batches)
+    assert dag.graph == {
+        # Make sure all partitions are loaded between new start and old end
+        (merge_snapshot, (to_datetime("2022-12-30"), to_datetime("2023-01-04"))): set(),
+    }
