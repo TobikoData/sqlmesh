@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ruamel.yaml import YAML
+from sqlglot import exp
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.qualify_columns import validate_qualify_columns
 from sqlglot.schema import MappingSchema, nested_set
@@ -39,7 +40,7 @@ if t.TYPE_CHECKING:
 
 
 def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> None:
-    schema = MappingSchema()
+    schema = MappingSchema(normalize=False)
 
     for name in dag.sorted():
         model = models.get(name)
@@ -52,9 +53,7 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
 
         for dep in model.depends_on:
             external = external or dep not in models
-            table = schema._normalize_table(
-                schema._ensure_table(dep, dialect=model.dialect), dialect=model.dialect
-            )
+            table = exp.to_table(dep, dialect=model.dialect)
             mapping_schema = schema.find(table)
 
             if mapping_schema:

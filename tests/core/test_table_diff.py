@@ -28,6 +28,6 @@ def test_data_diff(sushi_context):
     assert schema_diff.removed == []
 
     row_diff = diff.row_diff()
-    assert row_diff.source_count == 2346
-    assert row_diff.target_count == 2759
+    assert row_diff.source_count == 2163
+    assert row_diff.target_count == 2586
     assert row_diff.sample.shape == (20, 7)

@@ -6,6 +6,7 @@ from sqlglot import exp, parse, parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
@@ -511,11 +512,11 @@ def test_render_definition():
     expressions = parse(
         """
         MODEL (
+            dialect spark,
             name db.table,
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column (a, 'yyyymmdd')
             ),
-            dialect spark,
             owner owner_name,
             storage_format iceberg,
             partitioned_by a,
@@ -1047,6 +1048,55 @@ def test_star_expansion(assert_exp_eq) -> None:
     )
 
 
+def test_case_sensitivity(assert_exp_eq):
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
+    context = Context(config=config)
+
+    source = load_model(
+        d.parse(
+            """
+            MODEL (name example.source, kind EMBEDDED);
+
+            SELECT "id", "name", "payload" FROM db.schema."table"
+            """
+        ),
+        dialect="snowflake",
+    )
+
+    # Ensure that when manually specifying dependencies, they're normalized correctly
+    downstream = load_model(
+        d.parse(
+            """
+            MODEL (name example.model, kind FULL, depends_on [ExAmPlE.SoUrCe]);
+
+            SELECT JSON_EXTRACT_PATH_TEXT("payload", 'field') AS "new_field", * FROM example.source
+            """
+        ),
+        dialect="snowflake",
+    )
+
+    context.upsert_model(source)
+    context.upsert_model(downstream)
+
+    assert_exp_eq(
+        context.render("example.model"),
+        """
+        SELECT
+          JSON_EXTRACT_PATH_TEXT("SOURCE"."payload", 'field') AS "new_field",
+          "SOURCE"."id" AS "id",
+          "SOURCE"."name" AS "name",
+          "SOURCE"."payload" AS "payload"
+        FROM (
+          SELECT
+            "id" AS "id",
+            "name" AS "name",
+            "payload" AS "payload"
+          FROM "DB"."SCHEMA"."table" AS "table"
+        ) AS "SOURCE"
+        """,
+    )
+
+
 def test_batch_size_validation():
     expressions = parse(
         """
@@ -1106,7 +1156,7 @@ def test_model_ctas_query():
         read="bigquery",
     )
 
-    assert load_model(expressions, dialect="bigquery").ctas_query({}).sql() == "SELECT 1 AS a"
+    assert load_model(expressions, dialect="bigquery").ctas_query({}).sql() == 'SELECT 1 AS "a"'
 
     expressions = parse(
         """
@@ -1115,7 +1165,10 @@ def test_model_ctas_query():
         """
     )
 
-    assert load_model(expressions).ctas_query({}).sql() == "SELECT 1 AS a FROM b AS b WHERE FALSE"
+    assert (
+        load_model(expressions).ctas_query({}).sql()
+        == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
+    )
 
 
 def test_is_breaking_change():
