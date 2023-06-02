@@ -78,6 +78,7 @@ setup(
             "PyGithub",
             "pytest",
             "pytest-asyncio",
+            "pytest-lazy-fixture",
             "pytest-mock",
             "pyspark>=3.4.0",
             "pytz",

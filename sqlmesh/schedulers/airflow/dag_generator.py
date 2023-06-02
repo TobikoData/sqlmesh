@@ -349,7 +349,7 @@ class SnapshotDagGenerator:
             snapshot_end_task = EmptyOperator(
                 task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.identifier}__end"
             )
-            if snapshot.is_incremental_by_unique_key:
+            if snapshot.depends_on_past:
                 baseoperator.chain(snapshot_start_task, *tasks, snapshot_end_task)
             else:
                 snapshot_start_task >> tasks >> snapshot_end_task
