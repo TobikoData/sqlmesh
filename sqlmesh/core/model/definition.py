@@ -654,7 +654,7 @@ class SqlModel(_Model):
         if self._columns_to_types is None:
             self._columns_to_types = {
                 expression.output_name: expression.type or exp.DataType.build("unknown")
-                for expression in self._query_renderer.render().expressions
+                for expression in self._query_renderer.render().selects
             }
 
         return self._columns_to_types
@@ -667,7 +667,7 @@ class SqlModel(_Model):
         if self._column_descriptions is None:
             self._column_descriptions = {
                 select.alias: "\n".join(comment.strip() for comment in select.comments)
-                for select in self.render_query().expressions
+                for select in self.render_query().selects
                 if select.comments
             }
         return self._column_descriptions
@@ -678,9 +678,7 @@ class SqlModel(_Model):
         if not isinstance(query, exp.Subqueryable):
             raise_config_error("Missing SELECT query in the model definition", self._path)
 
-        projection_list = (
-            query.expressions if not isinstance(query, exp.Union) else query.this.expressions
-        )
+        projection_list = query.selects
         if not projection_list:
             raise_config_error("Query missing select statements", self._path)
 

@@ -109,13 +109,8 @@ def render(
     dialect: t.Optional[str] = None,
 ) -> None:
     """Renders a model's query, optionally expanding referenced models."""
-    snapshot = ctx.obj.snapshots.get(model)
-
-    if not snapshot:
-        raise click.ClickException(f"Model `{model}` not found.")
-
     rendered = ctx.obj.render(
-        snapshot,
+        model,
         start=start,
         end=end,
         latest=latest,

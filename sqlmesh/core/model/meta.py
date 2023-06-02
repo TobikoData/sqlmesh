@@ -41,9 +41,9 @@ AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 class ModelMeta(PydanticModel):
     """Metadata for models which can be defined in SQL."""
 
+    dialect: str = ""
     name: str
     kind: ModelKind = ModelKind(name=ModelKindName.VIEW)
-    dialect: str = ""
     cron: str = "@daily"
     owner: t.Optional[str]
     description: t.Optional[str]
@@ -64,6 +64,10 @@ class ModelMeta(PydanticModel):
     _interval_unit: t.Optional[IntervalUnit] = None
 
     _model_kind_validator = ModelKind.field_validator()
+
+    @validator("name", pre=True)
+    def _name_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> str:
+        return d.normalize_model_name(v, dialect=values.get("dialect"))
 
     @validator("audits", pre=True)
     def _audits_validator(cls, v: t.Any) -> t.Any:
@@ -144,14 +148,19 @@ class ModelMeta(PydanticModel):
         return v
 
     @validator("depends_on_", pre=True)
-    def _depends_on_validator(cls, v: t.Any) -> t.Optional[t.Set[str]]:
+    def _depends_on_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
+        dialect = values.get("dialect")
+
         if isinstance(v, (exp.Array, exp.Tuple)):
             return {
-                exp.table_name(table.name if table.is_string else table.sql())
+                d.normalize_model_name(
+                    table.name if table.is_string else table.sql(dialect=dialect), dialect=dialect
+                )
                 for table in v.expressions
             }
         if isinstance(v, exp.Expression):
-            return {exp.table_name(v.sql())}
+            return {d.normalize_model_name(v.sql(dialect=dialect), dialect=dialect)}
+
         return v
 
     @validator("start", pre=True)

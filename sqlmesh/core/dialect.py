@@ -8,6 +8,8 @@ from difflib import unified_diff
 import pandas as pd
 from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
+from sqlglot.dialects.dialect import DialectType
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.jinja import ENVIRONMENT
@@ -543,4 +545,10 @@ def pandas_to_sql(
         columns_to_types=columns_to_types or columns_to_types_from_df(df),
         batch_size=batch_size,
         alias=alias,
+    )
+
+
+def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) -> str:
+    return exp.table_name(
+        normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect)
     )
