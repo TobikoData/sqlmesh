@@ -4,6 +4,8 @@
 
 There are many tools and frameworks in the data ecosystem. This page tries to make sense of it all.
 
+If you are not familiar with SQLMesh, it will be helpful to first read [Why SQLMesh](../#why-sqlmesh) and [What is SQLMesh](../#what-is-sqlmesh) to better understand the comparisons.
+
 ## dbt
 [dbt](https://www.getdbt.com/) is a tool for data transformations. It is a pioneer in this space and has shown how valuable transformation frameworks can be. Although dbt is a fantastic tool, it has trouble scaling with data and organizational size.
 
@@ -11,44 +13,42 @@ dbt built their product focused on simple data transformations. By default, it f
 
 Over time dbt has seen that data transformations are not enough to operate a scalable and robust data product. As a result, advanced features are patched in, such as state management (defer) and incremental loads, to try to address these needs while pushing the burden of correctness onto users with increased complexity. These "advanced" features make up some of the fundamental building blocks of a DataOps framework.
 
-In other words, the challenge of implementing these features in dbt falls primarily on **you**: more jinja macro blocks, more manual configuration, and more opportunities for error. We needed an easier, more reliable way, so we designed SQLMesh from the ground up to be a robust DataOps framework.
-
-SQLMesh makes correctness and efficiency accessible to everyone, not just power users.
+In other words, the challenge of implementing these features in dbt falls primarily on **you**: more jinja macro blocks, more manual configuration, more custom tooling, and more opportunities for error. We needed an easier, more reliable way, so we designed SQLMesh from the ground up to be a robust DataOps framework.
 
 SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with minor changes is in development.
 
 ### Feature comparisons
 | Feature                           | dbt | SQLMesh
 | -------                           | --- | -------
-| `SQL models`                      | ✅ | ✅
-| `Python models`                   | ✅ | ✅
-| `Seed models`                     | ✅ | ✅
+| Modeling
+| `SQL models`                      | ✅ | [✅](../concepts/models/overview)
+| `Python models`                   | ✅ | [✅✅](../concepts/models/python_models)
 | `Jinja support`                   | ✅ | ✅
-| `Views / Embedded models`         | ✅ | ✅
-| `Incremental models`              | ✅ | ✅
-| `Seed models`                     | ✅ | ✅
-| `Snapshot models`                 | ✅ | ❌
-| `Documentation generation`        | ✅ | ❌
+| `Jinja macros`                    | ✅ | [✅](../concepts/macros/jinja_macros)
+| `Python macros`                   | ❌ | [✅](../concepts/macros/sqlmesh_macros)
+| Validation   
+| `SQL semantic validation`         | ❌ | [✅](../concepts/glossary/#semantic-understanding)
+| `Unit tests`                      | ❌ | [✅](../concepts/tests)
+| `Table diff`                      | ❌ | ✅
+| `Data audits`                     | ✅ | [✅](../concepts/audits)
+| `Data contracts`                  | ✅ | [✅✅](../concepts/plans)
+| Deployment
+| `Virtual Data Environments`       | ❌ | [✅](../concepts/environments)
+| `Open-source CI/CD bot`           | ❌ | [✅](../integrations/github)
+| `Data consistency enforcement`    | ❌ | ✅
+| `Native Airflow integration`      | ❌ | [✅](../integrations/airflow)
+| Interfaces
+| `CLI`                             | ✅ | [✅](../reference/cli)
+| `Paid UI`                         | ✅ | ❌
+| `Open-source UI`                  | ❌ | ✅
+| `Native Notebook Support`         | ❌ | [✅](../reference/notebook)
+| Visualization
+| `Documentation generation`        | ✅ | ✅ 
+| `Column-level lineage`            | ❌ | ✅
+| Miscellaneous 
 | `Package manager`                 | ✅ | ❌
-| `Semantic validation`             | ❌ | ✅
-| `Transpilation`                   | ❌ | ✅
-| `Unit tests`                      | ❌ | ✅
-| `Data audits`                     | ✅ | ✅
-| `Column level lineage`            | ❌ | ✅
-| `Accessible incremental models`   | ❌ | ✅
-| `Downstream impact planner`       | ❌ | ✅
-| `Change categorization`           | ❌ | ✅
-| `Native Airflow integration`      | ❌ | ✅
-| `Date leakage protection`         | ❌ | ✅
-| `Data gap detection/repair`       | ❌ | ✅
-| `Batched backfills`               | ❌ | ✅
-| `Table reuse across environments` | ❌ | ✅
-| `Local Python execution`          | ❌ | ✅
-| `Open-source CI/CD Bot`           | ❌ | ✅
-| `Open-source IDE (UI)`            | ❌ | ✅
-| `CLI`                             | ✅ | ✅
-| `Notebook Support`                | ❌ | ✅
-| `Comprehensive Python API`        | ❌ | ✅
+| `Multi-repository support`        | ❌ | [✅](../guides/multi_repo)
+| `SQL transpilation`               | ❌ | [✅](../concepts/models/sql_models/#transpilation)
 
 ### Environments
 Development and staging environments in dbt are costly to make and not fully representative of what will go into production.
@@ -70,7 +70,7 @@ Additionally, SQLMesh ensures that promotion of staging environments to producti
 Implementing incremental models is difficult and error-prone in dbt because it does not keep track of state.
 
 #### Complexity
-Since there is no state in dbt, users must write and maintain subqueries to find missing date boundaries themselves:
+Since there is no state of which incremental intervals have already run in dbt, users must write and maintain subqueries to find missing date boundaries themselves:
 
 ```sql
 -- dbt incremental
@@ -162,3 +162,13 @@ Additionally, having a first-class understanding of SQL supercharges SQLMesh wit
 Data quality checks such as detecting NULL values and duplicated rows are extremely valuable for detecting upstream data issues and large scale problems. However, they are not meant for testing edge cases or business logic, and they are not sufficient for creating robust data pipelines.
 
 [Unit and integration tests](./concepts/tests.md) are the tools to use to validate business logic. SQLMesh encourages users to add unit tests to all of their models to ensure changes don't unexpectedly break assumptions. Unit tests are designed to be fast and self contained so that they can run in continuous integration (CI) frameworks.
+
+### Python models
+dbt's Python models only run remotely on adapters of data platforms that have a full Python runtime, limiting the number of users that can take advantage of them and making the models difficult to debug. 
+
+SQLMesh's Python models run locally and can be used with any data warehouse. Breakpoints can be added to debug the model.
+
+### Data contracts
+dbt data contracts require manually configured yaml that will check the model's schema against the yaml schema at runtime.
+
+On SQLMesh, data contracts are automatically checked for each model during `sqlmesh plan` and which downstream models are affected by the schema change.
