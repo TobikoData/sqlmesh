@@ -166,9 +166,9 @@ Data quality checks such as detecting NULL values and duplicated rows are extrem
 ### Python models
 dbt's Python models only run remotely on adapters of data platforms that have a full Python runtime, limiting the number of users that can take advantage of them and making the models difficult to debug. 
 
-SQLMesh's Python models run locally and can be used with any data warehouse. Breakpoints can be added to debug the model.
+SQLMesh's [Python models](../concepts/models/python_models) run locally and can be used with any data warehouse. Breakpoints can be added to debug the model.
 
 ### Data contracts
 dbt data contracts require manually configured yaml that will check the model's schema against the yaml schema at runtime.
 
-On SQLMesh, data contracts are automatically checked for each model during `sqlmesh plan` and which downstream models are affected by the schema change.
+On SQLMesh, [`sqlmesh plan`](../concepts/plans) will automatically check data contracts for every model and show which downstream models are affected by the schema change.
