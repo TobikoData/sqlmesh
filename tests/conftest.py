@@ -35,6 +35,9 @@ class SushiDataValidator:
     def validate(
         self, model_name: str, start: TimeLike, end: TimeLike, *, env_name: t.Optional[str] = None
     ) -> t.Dict[t.Any, t.Any]:
+        """
+        Both start and end are inclusive.
+        """
         if model_name == "sushi.customer_revenue_lifetime":
             env_name = f"__{env_name}" if env_name else ""
             full_table_path = f"sushi{env_name}.customer_revenue_lifetime"

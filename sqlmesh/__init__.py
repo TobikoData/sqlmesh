@@ -19,6 +19,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, model
 from sqlmesh.core.snapshot import Snapshot
+from sqlmesh.utils import str_to_bool
 
 try:
     from sqlmesh._version import __version__, __version_tuple__  # type: ignore
@@ -113,7 +114,7 @@ class CustomFormatter(logging.Formatter):
 
 
 def debug_mode_enabled() -> bool:
-    return os.environ.get("SQLMESH_DEBUG", "").lower() in ("1", "true", "t", "yes", "y")
+    return str_to_bool(os.environ.get("SQLMESH_DEBUG"))
 
 
 def enable_logging(level: t.Optional[int] = None) -> None:

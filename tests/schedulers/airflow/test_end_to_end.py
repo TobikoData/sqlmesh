@@ -4,7 +4,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 from sqlmesh.core.context import Context
 from sqlmesh.schedulers.airflow.client import AirflowClient
-from sqlmesh.utils.date import now
+from sqlmesh.utils.date import now, yesterday
 from tests.conftest import SushiDataValidator
 
 
@@ -38,7 +38,9 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
         auto_apply=True,
     )
 
-    data_validator.validate("sushi.customer_revenue_lifetime", start, end, env_name="test_dev")
+    data_validator.validate(
+        "sushi.customer_revenue_lifetime", start, yesterday(), env_name="test_dev"
+    )
 
     # Ensure that the plan has been applied successfully.
     no_change_plan = context.plan(

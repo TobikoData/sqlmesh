@@ -170,7 +170,7 @@ def str_to_bool(s: t.Optional[str] = None) -> bool:
     Unlike disutils, this actually returns a bool and never raises. If a value cannot be determined to be true
     then false is returned.
     """
-    if s is None:
+    if not s:
         return False
     return s.lower() in ("true", "1", "t", "y", "yes", "on")
 

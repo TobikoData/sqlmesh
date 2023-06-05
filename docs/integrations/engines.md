@@ -2,6 +2,8 @@
 
 # BigQuery
 ## BigQuery - Local/Built-in Scheduler
+**Engine Adapter Type**: `bigquery`
+
 | Option                          | Description                                                                                   |  Type  | Required |
 |---------------------------------|-----------------------------------------------------------------------------------------------|:------:|:--------:|
 | `method`                        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json` | string |    N     |
@@ -47,6 +49,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Databricks
 ## Databricks - Local/Built-in Scheduler
+**Engine Adapter Type**: `databricks`
+
 SQLMesh's Databricks implementation uses the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) to connect to Databricks by default.
 If your project contains PySpark DataFrames in Python models then it will use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to connect to Databricks.
 SQLMesh's Databricks Connect implementation supports Databricks Runtime 13.0 or higher. If SQLMesh detects you have Databricks Connect installed then it will use it for all Python models (so both Pandas and PySpark DataFrames).
@@ -135,6 +139,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # DuckDB
 ## DuckDB - Local/Built-in Scheduler
+**Engine Adapter Type**: `duckdb`
+
 | Option     | Description                                                                  |  Type  | Required |
 |------------|------------------------------------------------------------------------------|:------:|:--------:|
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
@@ -144,6 +150,8 @@ DuckDB only works when running locally; therefore it does not support Airflow.
 
 # Postgres
 ## Postgres - Local/Built-in Scheduler
+**Engine Adapter Type**: `postgres`
+
 | Option            | Description                                                                     |  Type  | Required |
 |-------------------|---------------------------------------------------------------------------------|:------:|:--------:|
 | `host`            | The hostname of the Postgres server                                             | string |    Y     |
@@ -181,6 +189,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Redshift
 ## Redshift - Local/Built-in Scheduler
+**Engine Adapter Type**: `Redshift`
+
 | Option                  | Description                                                                                                 |  Type  | Required |
 |-------------------------|-------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `user`                  | The username to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
@@ -228,6 +238,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Snowflake
 ## Snowflake - Local/Built-in Scheduler
+**Engine Adapter Type**: `snowflake`
+
 | Option          | Description                        |  Type  | Required |
 |-----------------|------------------------------------|:------:|:--------:|
 | `user`          | The Snowflake username             | string |    N     |
@@ -263,6 +275,14 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Spark
 ## Spark - Local/Built-in Scheduler
+**Engine Adapter Type**: `spark`
+
+| Option          | Description                                          |  Type  | Required |
+|-----------------|------------------------------------------------------|:------:|:--------:|
+| `config_dir`    | Value to set for `SPARK_CONFIG_DIR`                  | string |    N     |
+| `catalog`       | The catalog to use when issuing commands             | string |    N     |
+| `config`        | Key/value pairs to set for the Spark Configuration.  |  dict  |    N     |
+
 Spark on Local/Built-in Scheduler is current unsupported. [Issue to track progress](https://github.com/TobikoData/sqlmesh/issues/575)
 
 ## Spark - Airflow Scheduler
