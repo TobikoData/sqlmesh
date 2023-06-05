@@ -19,7 +19,7 @@ def test_data_diff(sushi_context):
     diff = sushi_context.table_diff(
         source="prod",
         target="dev",
-        on=exp.condition("s.customer_id = t.customer_id"),
+        on=exp.condition("s.customer_id = t.customer_id AND s.ds = t.ds"),
         model_or_snapshot="sushi.customer_revenue_by_day",
     )
 
@@ -28,6 +28,6 @@ def test_data_diff(sushi_context):
     assert schema_diff.removed == []
 
     row_diff = diff.row_diff()
-    assert row_diff.source_count == 2163
-    assert row_diff.target_count == 2586
+    assert row_diff.source_count == 123
+    assert row_diff.target_count == 1685
     assert row_diff.sample.shape == (20, 7)
