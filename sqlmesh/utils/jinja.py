@@ -309,6 +309,9 @@ class JinjaMacroRegistry(PydanticModel):
             top_level_packages=[*self.top_level_packages, *other.top_level_packages],
         )
 
+    def __deepcopy__(self, memo: t.Dict[int, t.Any]) -> JinjaMacroRegistry:
+        return JinjaMacroRegistry.parse_obj(self.dict())
+
     def _parse_macro(self, name: str, package: t.Optional[str]) -> Template:
         cache_key = (package, name)
         if cache_key not in self._parser_cache:

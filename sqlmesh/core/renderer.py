@@ -275,6 +275,8 @@ class QueryRenderer(ExpressionRenderer):
         # We don't want to normalize names in the schema because that's handled by the optimizer
         schema = ensure_schema(self.schema, dialect=self._dialect, normalize=False)
         query = t.cast(exp.Subqueryable, query.copy())
+        for node, *_ in query.walk():
+            node.type = None
 
         try:
             qualify(

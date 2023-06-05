@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import validator
-from sqlglot import exp, maybe_parse
+from sqlglot import exp
 from sqlglot.helper import seq_get, split_num_words
 
 from sqlmesh.core.dialect import parse
@@ -33,7 +33,11 @@ def parse_expression(
         return v
 
     if isinstance(v, list):
-        return [e for e in (maybe_parse(i) for i in v) if e]
+        return [
+            e
+            for expressions in (parse(i) if not isinstance(i, exp.Expression) else [i] for i in v)
+            for e in expressions
+        ]
 
     if isinstance(v, str):
         return seq_get(parse(v), 0)
