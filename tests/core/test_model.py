@@ -21,6 +21,7 @@ from sqlmesh.core.model import (
     load_model,
     model,
 )
+from sqlmesh.core.model.common import parse_expression
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
@@ -1185,3 +1186,8 @@ def test_is_breaking_change():
         )
         is None
     )
+
+
+def test_parse_expression_list_with_jinja():
+    input = ["{{ log('log message') }}", "GRANT SELECT ON TABLE foo TO DEV"]
+    assert input == [val.sql() for val in parse_expression(input)]

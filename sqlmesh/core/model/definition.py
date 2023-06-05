@@ -623,8 +623,8 @@ class SqlModel(_Model):
     def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
         result = super().render_definition(include_python=include_python)
         result.extend(self.pre_statements)
-        result.append(self.query)
         result.extend(self.post_statements)
+        result.append(self.query)
         return result
 
     @property
@@ -1480,4 +1480,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     ),
     "tags": _single_value_or_tuple,
     "grain": _single_value_or_tuple,
+    "hash_raw_query": exp.convert,
 }

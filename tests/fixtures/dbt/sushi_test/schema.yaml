@@ -1,0 +1,21 @@
+- name: raw.items
+  columns:
+    id: BIGINT
+    name: VARCHAR
+    price: DOUBLE
+    ds: DATE
+- name: raw.order_items
+  columns:
+    id: BIGINT
+    order_id: BIGINT
+    item_id: BIGINT
+    quantity: BIGINT
+    ds: DATE
+- name: raw.orders
+  columns:
+    id: BIGINT
+    customer_id: BIGINT
+    waiter_id: BIGINT
+    start_ts: TIMESTAMP
+    end_ts: TIMESTAMP
+    ds: DATE
