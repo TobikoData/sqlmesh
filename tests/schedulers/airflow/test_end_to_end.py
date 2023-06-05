@@ -38,7 +38,7 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
         auto_apply=True,
     )
 
-    data_validator.validate("sushi.customer_revenue_lifetime", start, end)
+    data_validator.validate("sushi.customer_revenue_lifetime", start, end, env_name="test_dev")
 
     # Ensure that the plan has been applied successfully.
     no_change_plan = context.plan(

@@ -162,6 +162,19 @@ def nullsafe_join(join_char: str, *args: t.Optional[str]) -> str:
     return join_char.join(filter(None, args))
 
 
+def str_to_bool(s: t.Optional[str] = None) -> bool:
+    """
+    Convert a string to a boolean. disutils is being deprecated and it is recommended to implement your own version:
+    https://peps.python.org/pep-0632/
+
+    Unlike disutils, this actually returns a bool and never raises. If a value cannot be determined to be true
+    then false is returned.
+    """
+    if s is None:
+        return False
+    return s.lower() in ("true", "1", "t", "y", "yes", "on")
+
+
 class classproperty(property):
     """
     Similar to a normal property but works for class methods

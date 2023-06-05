@@ -28,12 +28,28 @@ local_config = Config(
 )
 
 # Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
-airflow_config = Config(default_scheduler=AirflowSchedulerConfig())  # type: ignore
+airflow_config = Config(  # type: ignore
+    default_scheduler=AirflowSchedulerConfig(),
+    gateways={
+        "spark": {
+            "connection": {
+                "type": "spark",
+            },
+        }
+    },
+)
 
 
 # Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
 airflow_config_docker = Config(  # type: ignore
-    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/")
+    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
+    gateways={
+        "spark": {
+            "connection": {
+                "type": "spark",
+            },
+        }
+    },
 )
 
 

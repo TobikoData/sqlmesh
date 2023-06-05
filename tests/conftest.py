@@ -32,9 +32,13 @@ class SushiDataValidator:
     def from_context(cls, context: Context):
         return cls(engine_adapter=context.engine_adapter)
 
-    def validate(self, model_name: str, start: TimeLike, end: TimeLike) -> t.Dict[t.Any, t.Any]:
+    def validate(
+        self, model_name: str, start: TimeLike, end: TimeLike, *, env_name: t.Optional[str] = None
+    ) -> t.Dict[t.Any, t.Any]:
         if model_name == "sushi.customer_revenue_lifetime":
-            query = "SELECT ds, count(*) AS the_count FROM sushi.customer_revenue_lifetime group by 1 order by 2 desc, 1 desc"
+            env_name = f"__{env_name}" if env_name else ""
+            full_table_path = f"sushi{env_name}.customer_revenue_lifetime"
+            query = f"SELECT ds, count(*) AS the_count FROM {full_table_path} group by 1 order by 2 desc, 1 desc"
             results = self.engine_adapter.fetchdf(query).to_dict()
             start_date, end_date = to_date(start), to_date(end)
             num_days_diff = (end_date - start_date).days + 1
