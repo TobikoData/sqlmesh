@@ -283,8 +283,6 @@ sqlmesh_airflow = SQLMeshAirflow(
 | `catalog`       | The catalog to use when issuing commands             | string |    N     |
 | `config`        | Key/value pairs to set for the Spark Configuration.  |  dict  |    N     |
 
-Spark on Local/Built-in Scheduler is current unsupported. [Issue to track progress](https://github.com/TobikoData/sqlmesh/issues/575)
-
 ## Spark - Airflow Scheduler
 **Engine Name:** `spark`
 
