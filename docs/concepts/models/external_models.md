@@ -1,14 +1,14 @@
 # External models
-Some SQLMesh models query "external" tables that were created by code unavailable to SQLMesh. External models are a special model kind used to store metadata about those external tables.
+Models may reference "external" tables that have been created outside SQLMesh. These external tables are captured in SQLMesh as models with a unique "external" kind. Each external model retains metadata about a table it represents.
 
-External models allow SQLMesh to provide column-level lineage and data type information for external tables queried with SELECT *.
+This metadata allows SQLMesh to provide column-level lineage and data type information for models that reference external tables.
 
 ## Generating external models schema
-External models consist of an external table's schema information stored in the `schema.yaml` file in the SQLMesh project's root directory.
+External models are defined in the `schema.yaml` file in the SQLMesh project's root folder.
 
-You can add schema information to the file by either (i) writing the YAML by hand or (ii) allowing SQLMesh to query the external table and add the information itself with the create_external_models CLI command.
+You can create this file by either (i) allowing SQLMesh to fetch information about external tables with the `create_external_models` CLI command or (ii) writing the YAML by hand.
 
-Consider this example FULL model that queries an external table external_db.external_table:
+Consider this example model that queries an external table `external_db.external_table`:
 
 ```sql
 MODEL (
@@ -22,20 +22,15 @@ FROM
   external_db.external_table;
 ```
 
-The following sections demonstrate how to create an external model containing metadata about external_db.external_table, which contains columns column_a and column_b.
+The following sections demonstrate how to create an external model containing metadata about `external_db.external_table`, which contains columns `column_a` and `column_b`.
 
-## Writing YAML by hand
-This example demonstrates how the schema.yaml file should be formatted.
+### Using CLI
+Instead of creating the `schema.yaml` file manually, SQLMesh can generate it for you. The [create_external_models](../../../reference/cli#create_external_models) CLI command does exactly this.
 
-```yaml
-- name: external_db.external_table
-  description: An external table
-  columns:
-    column_a: int
-    column_b: text
-```
+The command locates all external tables referenced in your SQLMesh project, fetches their schemas (column names and types), and then stores them in the `schema.yaml` file.
 
-All the external models in a SQLMesh project are stored in one schema.yaml file. The file might look like this with an additional external model:
+### Writing YAML by hand
+The following example demonstrates a typical content of the `schema.yaml` file:
 
 ```yaml
 - name: external_db.external_table
@@ -43,16 +38,11 @@ All the external models in a SQLMesh project are stored in one schema.yaml file.
   columns:
     column_a: int
     column_b: text
-- name: external_db.external_table_2
+- name: external_db.some_other_external_table
   description: Another external table
   columns:
     column_c: bool
     column_d: float
 ```
 
-### Using the create_external_models CLI command
-Instead of writing the external model YAML by hand, SQLMesh can create it for you with the [create_external_models](../../../reference/cli#create_external_models) CLI command.
-
-The command locates all external tables queried in your SQLMesh project, executes the queries, and infers the tables' column names and types from the results.
-
-It then writes that information to the schema.yaml file.
+All the external models in a SQLMesh project are stored in a single `schema.yaml` file.
