@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import typing as t
 
 import pandas as pd
@@ -65,6 +66,8 @@ class RowDiff(PydanticModel, frozen=True):
     @property
     def count_pct_change(self) -> float:
         """The percentage change of the counts."""
+        if self.source_count == 0:
+            return math.inf
         return ((self.target_count - self.source_count) / self.source_count) * 100
 
 
