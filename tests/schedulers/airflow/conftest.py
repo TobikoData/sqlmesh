@@ -6,13 +6,14 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 from sqlmesh.core.config import AirflowSchedulerConfig
 from sqlmesh.schedulers.airflow.client import AirflowClient
+from sqlmesh.utils import str_to_bool
 
 logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="session")
 def is_docker() -> bool:
-    return os.environ.get("IS_DOCKER", "false").lower() in ("true", "1")
+    return str_to_bool(os.environ.get("IS_DOCKER"))
 
 
 @pytest.fixture(scope="session")
