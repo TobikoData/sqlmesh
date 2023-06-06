@@ -162,7 +162,7 @@ def nullsafe_join(join_char: str, *args: t.Optional[str]) -> str:
     return join_char.join(filter(None, args))
 
 
-def str_to_bool(s: t.Optional[str] = None) -> bool:
+def str_to_bool(s: t.Optional[str]) -> bool:
     """
     Convert a string to a boolean. disutils is being deprecated and it is recommended to implement your own version:
     https://peps.python.org/pep-0632/
