@@ -31,7 +31,8 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 | `Unit tests`                      | ❌ | [✅](../concepts/tests)
 | `Table diff`                      | ❌ | ✅
 | `Data audits`                     | ✅ | [✅](../concepts/audits)
-| `Data contracts`                  | ✅ | [✅✅](../concepts/plans)
+| `Schema contracts`                | ✅ | [✅](../concepts/plans)
+| `Data contracts`                  | ❌ | [✅](../concepts/plans)
 | Deployment
 | `Virtual Data Environments`       | ❌ | [✅](../concepts/environments)
 | `Open-source CI/CD bot`           | ❌ | [✅](../integrations/github)
@@ -169,6 +170,8 @@ dbt's Python models only run remotely on adapters of data platforms that have a 
 SQLMesh's [Python models](../concepts/models/python_models) run locally and can be used with any data warehouse. Breakpoints can be added to debug the model.
 
 ### Data contracts
-dbt data contracts require manually configured yaml that will check the model's schema against the yaml schema at runtime.
+dbt offers manually configured schema contracts that will check the model's schema against the yaml schema at runtime. Models can be versioned to allow downstream teams time to migrate to the latest version, at the risk of a fragmented source of truth during the migration period.
 
-On SQLMesh, [`sqlmesh plan`](../concepts/plans) will automatically check data contracts for every model and show which downstream models are affected by the schema change.
+SQLMesh provides automatic schema contracts and data contracts via [`sqlmesh plan`](../concepts/plans), which checks the model's schema and query logic for changes that affect downstream users. `sqlmesh plan` will show which models have breaking changes and which downstream models are affected.
+
+While breaking changes can be rolled out as separate models to allow for a migration period, SQLMesh's [Virtual Preview](../concepts/glossary#virtual-preview) empowers teams to collaborate on migrations before the changes are deployed to prod, maintaining a single source of truth across the business.
