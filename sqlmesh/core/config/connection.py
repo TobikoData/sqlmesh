@@ -127,7 +127,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        if values["type"] != "snowflake":
+        if "type" in values and values["type"] != "snowflake":
             return values
         auth = values.get("authenticator")
         user = values.get("user")

@@ -29,6 +29,26 @@ def test_create_view(mocker: MockerFixture):
     )
 
 
+def test_create_materialized_view(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.SUPPORTS_MATERIALIZED_VIEWS = True
+    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), materialized=True)
+    adapter.create_view(
+        "test_view", parse_one("SELECT a FROM tbl"), replace=False, materialized=True
+    )
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call("CREATE OR REPLACE MATERIALIZED VIEW test_view AS SELECT a FROM tbl"),
+            call("CREATE MATERIALIZED VIEW test_view AS SELECT a FROM tbl"),
+        ]
+    )
+
+
 def test_create_schema(mocker: MockerFixture):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()

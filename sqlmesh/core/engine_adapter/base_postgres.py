@@ -19,6 +19,7 @@ if t.TYPE_CHECKING:
 
 class BasePostgresEngineAdapter(EngineAdapter):
     COLUMNS_TABLE = "information_schema.columns"
+    SUPPORTS_MATERIALIZED_VIEWS = True
 
     def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
@@ -71,6 +72,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
+        materialized: bool = False,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -87,7 +89,8 @@ class BasePostgresEngineAdapter(EngineAdapter):
                 view_name,
                 query_or_df,
                 columns_to_types=columns_to_types,
-                replace=replace,
+                replace=False,
+                materialized=materialized,
                 **create_kwargs,
             )
 

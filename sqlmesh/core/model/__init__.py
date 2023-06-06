@@ -20,6 +20,7 @@ from sqlmesh.core.model.kind import (
     ModelKindName,
     SeedKind,
     TimeColumn,
+    ViewKind,
 )
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed

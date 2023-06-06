@@ -186,6 +186,109 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
+def test_evaluate_materialized_view(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW (
+                    materialized true
+                )
+            );
+
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        "2020-01-01",
+        "2020-01-02",
+        "2020-01-02",
+        snapshots={},
+    )
+
+    # Evaluation shouldn't take place because the rendered query hasn't changed
+    # since the last view creation.
+    assert not adapter_mock.create_view.called
+
+
+def test_evaluate_materialized_view_with_latest_macro(
+    mocker: MockerFixture, adapter_mock, make_snapshot
+):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW (
+                    materialized true
+                )
+            );
+
+            SELECT a::int FROM tbl WHERE ds < @latest_ds;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        "2020-01-01",
+        "2020-01-02",
+        "2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.create_view.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(latest="2020-01-02"),
+        model.columns_to_types,
+        materialized=True,
+    )
+
+
+def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW (
+                    materialized true
+                )
+            );
+
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.create_view.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        materialized=True,
+    )
+
+
 def test_promote_model_info(mocker: MockerFixture):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
 

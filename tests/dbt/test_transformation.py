@@ -11,6 +11,7 @@ from sqlmesh.core.model import (
     IncrementalByUniqueKeyKind,
     ModelKind,
     ModelKindName,
+    ViewKind,
 )
 from sqlmesh.dbt.column import (
     ColumnConfig,
@@ -36,9 +37,7 @@ def test_model_kind():
     assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == ModelKind(
         name=ModelKindName.FULL
     )
-    assert ModelConfig(materialized=Materialization.VIEW).model_kind(target) == ModelKind(
-        name=ModelKindName.VIEW
-    )
+    assert ModelConfig(materialized=Materialization.VIEW).model_kind(target) == ViewKind()
     assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(target) == ModelKind(
         name=ModelKindName.EMBEDDED
     )
