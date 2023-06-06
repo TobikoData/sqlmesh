@@ -40,7 +40,7 @@ Refer to the [Connection Configuration](../reference/configuration.md#connection
 ## SQLMesh client configuration
 In your SQLMesh repository, create the following configuration within config.yaml:
 ```yaml linenums="1"
-scheduler:
+default_scheduler:
     type: airflow
     airflow_url: https://<Airflow Webserver Host>:<Airflow Webserver Port>/
     username: <Airflow Username>
