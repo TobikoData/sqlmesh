@@ -13,6 +13,7 @@ from sqlmesh.core.model import (
     Model,
     ModelKind,
     ModelKindName,
+    ViewKind,
     create_sql_model,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
@@ -123,7 +124,7 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.TABLE:
             return ModelKind(name=ModelKindName.FULL)
         if materialization == Materialization.VIEW:
-            return ModelKind(name=ModelKindName.VIEW)
+            return ViewKind()
         if materialization == Materialization.INCREMENTAL:
             incremental_kwargs = {}
             for field in ("batch_size", "lookback"):

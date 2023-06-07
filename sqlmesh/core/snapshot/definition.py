@@ -19,6 +19,7 @@ from sqlmesh.core.model import (
     PythonModel,
     SeedModel,
     SqlModel,
+    ViewKind,
     kind,
     parse_model_name,
 )
@@ -792,6 +793,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             intervals=self.intervals.copy(),
             dev_intervals=self.dev_intervals.copy(),
         )
+
+    @property
+    def is_materialized_view(self) -> bool:
+        """Returns whether or not this snapshot's model represents a materialized view."""
+        return isinstance(self.model.kind, ViewKind) and self.model.kind.materialized
 
     @property
     def is_new_version(self) -> bool:

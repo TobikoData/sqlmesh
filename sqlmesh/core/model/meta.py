@@ -12,8 +12,8 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
-    ModelKindName,
     TimeColumn,
+    ViewKind,
     _Incremental,
 )
 from sqlmesh.utils import unique
@@ -43,7 +43,7 @@ class ModelMeta(PydanticModel):
 
     dialect: str = ""
     name: str
-    kind: ModelKind = ModelKind(name=ModelKindName.VIEW)
+    kind: ModelKind = ViewKind()
     cron: str = "@daily"
     owner: t.Optional[str]
     description: t.Optional[str]

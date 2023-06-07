@@ -66,6 +66,7 @@ class EngineAdapter:
     ESCAPE_JSON = False
     SUPPORTS_INDEXES = False
     SUPPORTS_INSERT_OVERWRITE = False
+    SUPPORTS_MATERIALIZED_VIEWS = False
     SCHEMA_DIFFER = SchemaDiffer()
 
     def __init__(
@@ -384,6 +385,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
+        materialized: bool = False,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -396,6 +398,7 @@ class EngineAdapter:
             query_or_df: A query or dataframe.
             columns_to_types: Columns to use in the view statement.
             replace: Whether or not to replace an existing view defaults to True.
+            materialized: Whether to create a a materialized view. Only used for engines that support this feature.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
@@ -409,6 +412,16 @@ class EngineAdapter:
                 expressions=[exp.column(column) for column in columns_to_types],
             )
             query_or_df = next(self._pandas_to_sql(df, columns_to_types=columns_to_types))
+
+        properties = create_kwargs.pop("properties", None)
+        if not properties:
+            properties = exp.Properties(expressions=[])
+
+        if materialized and self.SUPPORTS_MATERIALIZED_VIEWS:
+            properties.append("expressions", exp.MaterializedProperty())
+
+        if properties.expressions:
+            create_kwargs["properties"] = properties
 
         self.execute(
             exp.Create(
