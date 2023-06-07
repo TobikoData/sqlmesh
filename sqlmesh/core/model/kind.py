@@ -97,6 +97,8 @@ class ModelKind(PydanticModel, ModelKindMixin):
                     klass = IncrementalByUniqueKeyKind
                 elif name == ModelKindName.SEED:
                     klass = SeedKind
+                elif name == ModelKindName.VIEW:
+                    klass = ViewKind
                 else:
                     props["name"] = ModelKindName(name)
                 return klass(**props)
@@ -108,6 +110,8 @@ class ModelKind(PydanticModel, ModelKindMixin):
                     klass = IncrementalByUniqueKeyKind
                 elif v.get("name") == ModelKindName.SEED:
                     klass = SeedKind
+                elif v.get("name") == ModelKindName.VIEW:
+                    klass = ViewKind
                 else:
                     klass = ModelKind
                 return klass(**v)
@@ -238,6 +242,17 @@ class IncrementalByUniqueKeyKind(_Incremental):
         if isinstance(v, exp.Tuple):
             return [e.this for e in v.expressions]
         return [i.this if isinstance(i, exp.Identifier) else str(i) for i in v]
+
+
+class ViewKind(ModelKind):
+    name: ModelKindName = Field(ModelKindName.VIEW, const=True)
+    materialized: bool = False
+
+    @validator("materialized", pre=True)
+    def _parse_materialized(cls, v: t.Any) -> bool:
+        if isinstance(v, exp.Expression):
+            return bool(v.this)
+        return bool(v)
 
 
 class SeedKind(ModelKind):
