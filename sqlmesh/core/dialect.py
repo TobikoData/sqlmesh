@@ -143,15 +143,15 @@ def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.E
 
 def _parse_join(self: Parser, skip_join_token: bool = False) -> t.Optional[exp.Expression]:
     index = self._index
-    natural, side, kind = self._parse_join_side_and_kind()
+    method, side, kind = self._parse_join_parts()
     macro = _parse_matching_macro(self, "JOIN")
     if not macro:
         self._retreat(index)
         return self.__parse_join()  # type: ignore
 
     join = self.__parse_join(skip_join_token=True)  # type: ignore
-    if natural:
-        join.set("natural", True)
+    if method:
+        join.set("method", method.text)
     if side:
         join.set("side", side.text)
     if kind:
