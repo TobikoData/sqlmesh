@@ -218,16 +218,6 @@ class ModelConfig(BaseModelConfig):
             dialect=dialect,
             kind=self.model_kind(context.target),
             start=self.start,
-            pre_statements=[
-                exp
-                for hook in pre_hooks
-                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
-            ],
-            post_statements=[
-                exp
-                for hook in self.post_hook
-                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
-            ],
             **optional_kwargs,
             **self.sqlmesh_model_kwargs(context),
         )

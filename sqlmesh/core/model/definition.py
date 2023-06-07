@@ -44,6 +44,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
     from sqlmesh.core.snapshot import Snapshot
+    from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
@@ -520,57 +521,17 @@ class _Model(ModelMeta, frozen=True):
         ]
 
 
-class SqlModel(_Model):
-    """The model definition which relies on a SQL query to fetch the data.
-
-    Args:
-        query: The main query representing the model.
-        pre_statements: The list of SQL statements that precede the model's query.
-        post_statements: The list of SQL statements that follow after the model's query.
-    """
-
-    query: t.Union[exp.Subqueryable, d.Jinja]
+class _SqlBasedModel(_Model):
     pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="pre_statements"
     )
     post_statements_: t.Optional[t.List[exp.Expression]] = Field(
         default=None, alias="post_statements"
     )
-    source_type: Literal["sql"] = "sql"
 
-    _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
-    __query_renderer: t.Optional[QueryRenderer] = None
     __statement_renderers: t.Dict[int, ExpressionRenderer] = {}
 
     _expression_validator = expression_validator
-
-    def render_query(
-        self,
-        *,
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        expand: t.Iterable[str] = tuple(),
-        is_dev: bool = False,
-        engine_adapter: t.Optional[EngineAdapter] = None,
-        **kwargs: t.Any,
-    ) -> exp.Subqueryable:
-        query = self._query_renderer.render(
-            start=start,
-            end=end,
-            latest=latest,
-            snapshots=snapshots,
-            expand=expand,
-            is_dev=is_dev,
-            engine_adapter=engine_adapter,
-            **kwargs,
-        )
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                f"Rendered query for '{self.name}':\n{indent(query.sql(dialect=self.dialect, pretty=True), '  ')}"
-            )
-        return query
 
     def render_pre_statements(
         self,
@@ -620,17 +581,6 @@ class SqlModel(_Model):
             **kwargs,
         )
 
-    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
-        result = super().render_definition(include_python=include_python)
-        result.extend(self.pre_statements)
-        result.extend(self.post_statements)
-        result.append(self.query)
-        return result
-
-    @property
-    def is_sql(self) -> bool:
-        return True
-
     @property
     def pre_statements(self) -> t.List[exp.Expression]:
         return self.pre_statements_ or []
@@ -645,6 +595,87 @@ class SqlModel(_Model):
         return [
             s for s in [*self.pre_statements, *self.post_statements] if isinstance(s, d.MacroDef)
         ]
+
+    def _render_statements(
+        self,
+        statements: t.Iterable[exp.Expression],
+        **kwargs: t.Any,
+    ) -> t.List[exp.Expression]:
+        rendered = [
+            self._statement_renderer(statement).render(**kwargs)
+            for statement in statements
+            if not isinstance(statement, d.MacroDef)
+        ]
+        return [r for r in rendered if r is not None]
+
+    def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
+        expression_key = id(expression)
+        if expression_key not in self.__statement_renderers:
+            self.__statement_renderers[expression_key] = ExpressionRenderer(
+                expression,
+                self.dialect,
+                self.macro_definitions,
+                path=self._path,
+                jinja_macro_registry=self.jinja_macros,
+                python_env=self.python_env,
+                only_latest=self.kind.only_latest,
+            )
+        return self.__statement_renderers[expression_key]
+
+
+class SqlModel(_SqlBasedModel):
+    """The model definition which relies on a SQL query to fetch the data.
+
+    Args:
+        query: The main query representing the model.
+        pre_statements: The list of SQL statements that precede the model's query.
+        post_statements: The list of SQL statements that follow after the model's query.
+    """
+
+    query: t.Union[exp.Subqueryable, d.Jinja]
+    source_type: Literal["sql"] = "sql"
+
+    _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    __query_renderer: t.Optional[QueryRenderer] = None
+
+    def render_query(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> exp.Subqueryable:
+        query = self._query_renderer.render(
+            start=start,
+            end=end,
+            latest=latest,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                f"Rendered query for '{self.name}':\n{indent(query.sql(dialect=self.dialect, pretty=True), '  ')}"
+            )
+        return query
+
+    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
+        result = super().render_definition(include_python=include_python)
+        result.extend(self.pre_statements)
+        result.extend(self.post_statements)
+        result.append(self.query)
+        return result
+
+    @property
+    def is_sql(self) -> bool:
+        return True
 
     @property
     def columns_to_types(self) -> t.Dict[str, exp.DataType]:
@@ -739,37 +770,11 @@ class SqlModel(_Model):
             )
         return self.__query_renderer
 
-    def _render_statements(
-        self,
-        statements: t.Iterable[exp.Expression],
-        **kwargs: t.Any,
-    ) -> t.List[exp.Expression]:
-        rendered = [
-            self._statement_renderer(statement).render(**kwargs)
-            for statement in statements
-            if not isinstance(statement, d.MacroDef)
-        ]
-        return [r for r in rendered if r is not None]
-
-    def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
-        expression_key = id(expression)
-        if expression_key not in self.__statement_renderers:
-            self.__statement_renderers[expression_key] = ExpressionRenderer(
-                expression,
-                self.dialect,
-                self.macro_definitions,
-                path=self._path,
-                jinja_macro_registry=self.jinja_macros,
-                python_env=self.python_env,
-                only_latest=self.kind.only_latest,
-            )
-        return self.__statement_renderers[expression_key]
-
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
 
 
-class SeedModel(_Model):
+class SeedModel(_SqlBasedModel):
     """The model definition which uses a pre-built static dataset to source the data from.
 
     Args:
@@ -1030,7 +1035,7 @@ def load_model(
         )
 
     # Extract the query and any pre/post statements
-    query, pre_statements, post_statements = _extract_sql_model_select(
+    query_or_seed_insert, pre_statements, post_statements = _split_sql_model_statements(
         expressions[1:], jinja_macros or JinjaMacroRegistry(), dialect, path
     )
 
@@ -1047,15 +1052,20 @@ def load_model(
     if not name:
         raise_config_error("Model must have a name", path)
 
-    if query is not None:
-        macro_references = [
-            extract_macro_references(query.sql(dialect=dialect)),
+    macro_references: t.Set[MacroReference] = {
+        r
+        for references in [
             *[extract_macro_references(e.sql(dialect=dialect)) for e in pre_statements],
             *[extract_macro_references(e.sql(dialect=dialect)) for e in post_statements],
         ]
+        for r in references
+    }
+
+    if query_or_seed_insert is not None and isinstance(query_or_seed_insert, exp.Subqueryable):
+        macro_references.update(extract_macro_references(query_or_seed_insert.sql(dialect=dialect)))
         return create_sql_model(
             name,
-            query,
+            query_or_seed_insert,
             pre_statements=pre_statements,
             post_statements=post_statements,
             defaults=defaults,
@@ -1063,9 +1073,7 @@ def load_model(
             module_path=module_path,
             time_column_format=time_column_format,
             macros=macros,
-            jinja_macros=(jinja_macros or JinjaMacroRegistry()).trim(
-                {r for references in macro_references for r in references}
-            ),
+            jinja_macros=(jinja_macros or JinjaMacroRegistry()).trim(macro_references),
             python_env=python_env,
             **meta_fields,
         )
@@ -1077,8 +1085,14 @@ def load_model(
             return create_seed_model(
                 name,
                 SeedKind(**seed_properties),
+                pre_statements=pre_statements,
+                post_statements=post_statements,
                 defaults=defaults,
                 path=path,
+                module_path=module_path,
+                macros=macros,
+                jinja_macros=(jinja_macros or JinjaMacroRegistry()).trim(macro_references),
+                python_env=python_env,
                 **meta_fields,
             )
         except Exception:
@@ -1157,8 +1171,13 @@ def create_seed_model(
     name: str,
     seed_kind: SeedKind,
     *,
+    pre_statements: t.Optional[t.List[exp.Expression]] = None,
+    post_statements: t.Optional[t.List[exp.Expression]] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
+    module_path: Path = Path(),
+    macros: t.Optional[MacroRegistry] = None,
+    python_env: t.Optional[t.Dict[str, Executable]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a Seed model.
@@ -1167,13 +1186,29 @@ def create_seed_model(
         name: The name of the model, which is of the form [catalog].[db].table.
             The catalog and db are optional.
         seed_kind: The information about the location of a seed and other related configuration.
+        pre_statements: The list of SQL statements that precede the insertion of the seed's content.
+        post_statements: The list of SQL statements that follow after the insertion of the seed's content.
         defaults: Definition default values.
         path: An optional path to the model definition file.
+        macros: The custom registry of macros. If not provided the default registry will be used.
+        python_env: The custom Python environment for macros. If not provided the environment will be constructed
+            from the macro registry.
     """
     seed_path = Path(seed_kind.path)
     if not seed_path.is_absolute():
         seed_path = path / seed_path if path.is_dir() else path.parents[0] / seed_path
     seed = create_seed(seed_path)
+
+    pre_statements = pre_statements or []
+    post_statements = post_statements or []
+
+    if not python_env:
+        python_env = _python_env(
+            [*pre_statements, *post_statements],
+            module_path,
+            macros or macro.get_registry(),
+        )
+
     return _create_model(
         SeedModel,
         name,
@@ -1182,6 +1217,9 @@ def create_seed_model(
         seed=seed,
         kind=seed_kind,
         depends_on=kwargs.pop("depends_on", set()),
+        python_env=python_env,
+        pre_statements=pre_statements,
+        post_statements=post_statements,
         **kwargs,
     )
 
@@ -1289,20 +1327,23 @@ def _create_model(
     return t.cast(Model, model)
 
 
-def _extract_sql_model_select(
+SEED_INSERT_MACRO_CALL = d.parse("@SEED_INSERT()")[0]
+
+
+def _split_sql_model_statements(
     expressions: t.List[exp.Expression], jinja_macros: JinjaMacroRegistry, dialect: str, path: Path
-) -> t.Tuple[t.Optional[exp.Subqueryable], t.List[exp.Expression], t.List[exp.Expression]]:
+) -> t.Tuple[t.Optional[exp.Expression], t.List[exp.Expression], t.List[exp.Expression]]:
     """Extracts the SELECT query from a sequence of expressions.
 
     Args:
         expressions: The list of all SQL statements in the model definition.
 
     Returns:
-        A tuple containing the extracted SELECT query, the statements before the query, and
-        the statements after the query.
+        A tuple containing the extracted SELECT query or the `@SEED_INSERT()` call, the statements before the it, and
+        the statements after it.
 
     Raises:
-        ConfigError: If the model definition contains more than one SELECT query.
+        ConfigError: If the model definition contains more than one SELECT query or `@SEED_INSERT()` call.
     """
     query_positions = []
     for idx, expression in enumerate(expressions):
@@ -1314,11 +1355,11 @@ def _extract_sql_model_select(
                 continue
             expression = parse_one(rendered_expression, read=dialect)
 
-        if isinstance(expression, exp.Subqueryable):
+        if isinstance(expression, exp.Subqueryable) or expression == SEED_INSERT_MACRO_CALL:
             query_positions.append((expression, idx))
 
     if not query_positions:
-        return None, [], []
+        return None, expressions, []
     elif len(query_positions) > 1:
         raise_config_error("Only one SELECT query is allowed per model", path)
 

@@ -484,6 +484,69 @@ def test_seed_model_diff(tmp_path):
     assert diff.endswith("-1,value_a\n+2,value_b")
 
 
+def test_seed_pre_post_statements():
+    @macro()
+    def bar(**kwargs) -> None:
+        pass
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+
+        @bar();
+
+        CREATE TABLE x{{ 1 + 1 }};
+
+        @SEED_INSERT();
+
+        @bar(foo='x', val=@this);
+
+        DROP TABLE x2;
+    """
+    )
+
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    expected_pre = [*d.parse("@bar()"), *d.parse("CREATE TABLE x{{ 1 + 1 }};")]
+    assert model.pre_statements == expected_pre
+
+    expected_post = [
+        *d.parse("@bar(foo='x', val=@this)"),
+        *d.parse("DROP TABLE x2;"),
+    ]
+    assert model.post_statements == expected_post
+
+
+def test_seed_pre_statements_only():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+
+        CREATE TABLE x{{ 1 + 1 }};
+
+        DROP TABLE x2;
+    """
+    )
+
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    expected_pre = [*d.parse("CREATE TABLE x{{ 1 + 1 }};"), *d.parse("DROP TABLE x2;")]
+    assert model.pre_statements == expected_pre
+    assert not model.post_statements
+
+
 def test_audits():
     expressions = parse(
         """

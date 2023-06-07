@@ -9,6 +9,7 @@ from dbt.contracts.relation import RelationType
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.column import (
@@ -236,6 +237,16 @@ class BaseModelConfig(GeneralConfig):
             "jinja_macros": jinja_macros,
             "path": self.path,
             "hash_raw_query": True,
+            "pre_statements": [
+                exp
+                for hook in self.pre_hook
+                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
+            ],
+            "post_statements": [
+                exp
+                for hook in self.post_hook
+                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
+            ],
             **optional_kwargs,
         }
 

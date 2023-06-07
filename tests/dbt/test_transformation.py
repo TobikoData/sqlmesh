@@ -167,16 +167,21 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
-def test_hooks(capsys, sushi_test_dbt_context: Context):
+@pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
+def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
     engine_adapter = sushi_test_dbt_context.engine_adapter
-    waiters = sushi_test_dbt_context.models["sushi.waiters"]
+    waiters = sushi_test_dbt_context.models[model]
     capsys.readouterr()
 
-    engine_adapter.execute(waiters.render_pre_statements(engine_adapter=engine_adapter))
+    engine_adapter.execute(
+        waiters.render_pre_statements(engine_adapter=engine_adapter, latest="2023-01-01")
+    )
     assert "pre-hook" in capsys.readouterr().out
 
     engine_adapter.execute(
-        waiters.render_post_statements(engine_adapter=sushi_test_dbt_context.engine_adapter)
+        waiters.render_post_statements(
+            engine_adapter=sushi_test_dbt_context.engine_adapter, latest="2023-01-01"
+        )
     )
     assert "post-hook" in capsys.readouterr().out
 
