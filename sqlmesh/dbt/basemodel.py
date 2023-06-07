@@ -70,8 +70,9 @@ class BaseModelConfig(GeneralConfig):
         database: Database the model is stored in
         schema: Custom schema name added to the model schema name
         alias: Relation identifier for this model instead of the filename
-        pre-hook: List of SQL statements to run before the model is built
-        post-hook: List of SQL statements to run after the model is built
+        sql_header: SQL statement to run before table/view creation. Currently implemented as a pre-hook.
+        pre-hook: List of SQL statements to run before the model is built (not supported for seeds)
+        post-hook: List of SQL statements to run after the model is built (not supported for seeds)
         full_refresh: Forces the model to always do a full refresh or never do a full refresh
         grants: Set or revoke permissions to the database object for this model
         columns: Column information for the model
@@ -84,6 +85,7 @@ class BaseModelConfig(GeneralConfig):
     storage_format: t.Optional[str] = None
     path: Path = Path()
     dependencies: Dependencies = Dependencies()
+    tests: t.List[TestConfig] = []
 
     # DBT configuration fields
     name: str = ""
@@ -91,13 +93,13 @@ class BaseModelConfig(GeneralConfig):
     schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
     alias: t.Optional[str] = None
+    sql_header: t.Optional[str] = None
     pre_hook: t.List[Hook] = Field([], alias="pre-hook")
     post_hook: t.List[Hook] = Field([], alias="post-hook")
     full_refresh: t.Optional[bool] = None
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: QuotingConfig = Field(default_factory=QuotingConfig)
-    tests: t.List[TestConfig] = []
 
     @validator("pre_hook", "post_hook", pre=True)
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[Hook]:
@@ -132,16 +134,6 @@ class BaseModelConfig(GeneralConfig):
             "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
-
-    @property
-    def all_sql(self) -> SqlStr:
-        return SqlStr(
-            "\n".join(
-                [hook.sql for hook in self.pre_hook]
-                + [self.sql_no_config]
-                + [hook.sql for hook in self.post_hook]
-            )
-        )
 
     @property
     def sql_no_config(self) -> SqlStr:

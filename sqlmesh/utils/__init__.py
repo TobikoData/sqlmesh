@@ -64,6 +64,11 @@ class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
 class AttributeDict(dict, t.Mapping[KEY, VALUE]):
     __getattr__ = dict.get
 
+    def set(self, field: str, value: t.Any) -> str:
+        self[field] = value
+        # Return an empty string, so that this method can be used within Jinja
+        return ""
+
     def __deepcopy__(self, memo: t.Dict[t.Any, AttributeDict]) -> AttributeDict:
         copy: AttributeDict = AttributeDict()
         memo[id(self)] = copy
