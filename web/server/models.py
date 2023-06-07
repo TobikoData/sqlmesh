@@ -5,6 +5,7 @@ import pathlib
 import typing as t
 
 from pydantic import BaseModel, validator
+from sqlglot import exp
 
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.model.meta import IntervalUnit
@@ -259,3 +260,37 @@ class ApiExceptionPayload(BaseModel):
     description: t.Optional[str] = None
     traceback: t.Optional[str] = None
     stack: t.Optional[t.List[str]] = None
+
+
+class SchemaDiff(BaseModel):
+    source: str
+    target: str
+    source_schema: t.Dict[str, str]
+    target_schema: t.Dict[str, str]
+    added: t.Dict[str, str]
+    removed: t.Dict[str, str]
+    modified: t.Dict[str, str]
+
+    @validator("source_schema", "target_schema", "added", "removed", "modified", pre=True)
+    def validate_schema(
+        cls, v: t.Union[t.Dict[str, exp.DataType], t.List[t.Tuple[str, exp.DataType]]]
+    ) -> t.Dict[str, str]:
+        if isinstance(v, dict):
+            return {k: str(v) for k, v in v.items()}
+        if isinstance(v, list):
+            return {k: str(v) for k, v in v}
+
+
+class RowDiff(BaseModel):
+    source: str
+    target: str
+    stats: t.Dict[str, float]
+    sample: t.Dict[str, t.Any]
+    source_count: int
+    target_count: int
+    count_pct_change: float
+
+
+class TableDiff(BaseModel):
+    schema_diff: SchemaDiff
+    row_diff: RowDiff
