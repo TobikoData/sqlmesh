@@ -167,19 +167,17 @@ class SnapshotEvaluator:
             **common_render_kwargs,
         )
 
-        pre_statements = model.render_pre_statements(**render_statements_kwargs)
-        post_statements = model.render_post_statements(**render_statements_kwargs)
-        queries_or_dfs = model.render(
-            context=ExecutionContext(self.adapter, snapshots, is_dev), **common_render_kwargs
-        )
-
         with self.adapter.transaction(
             transaction_type=TransactionType.DDL
             if model.kind.is_view or model.kind.is_full
             else TransactionType.DML
         ):
             if not limit:
-                self.adapter.execute(pre_statements)
+                self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
+
+            queries_or_dfs = model.render(
+                context=ExecutionContext(self.adapter, snapshots, is_dev), **common_render_kwargs
+            )
 
             if limit and limit > 0:
                 query_or_df = next(queries_or_dfs)
@@ -211,7 +209,7 @@ class SnapshotEvaluator:
                     apply(query_or_df, index)
 
             if not limit:
-                self.adapter.execute(post_statements)
+                self.adapter.execute(model.render_post_statements(**render_statements_kwargs))
 
             return None
 
