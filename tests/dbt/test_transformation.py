@@ -1,3 +1,4 @@
+import typing as t
 from pathlib import Path
 
 import agate
@@ -11,6 +12,7 @@ from sqlmesh.core.model import (
     IncrementalByUniqueKeyKind,
     ModelKind,
     ModelKindName,
+    SqlModel,
     ViewKind,
 )
 from sqlmesh.dbt.column import (
@@ -209,6 +211,21 @@ def test_schema_jinja(sushi_test_project: Project):
     )
     context = sushi_test_project.context
     model_config.to_sqlmesh(context).render_query().sql() == "SELECT 1 AS one FROM sushi AS sushi"
+
+
+def test_config_jinja(sushi_test_project: Project):
+    hook = "{{ config(alias='bar') }} {{ config.alias }}"
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        sql="""SELECT 1 AS one FROM foo""",
+        **{"pre-hook": hook},
+    )
+    context = sushi_test_project.context
+    model = t.cast(SqlModel, model_config.to_sqlmesh(context))
+    assert model.pre_statements[0].sql() == hook
+    assert model.render_pre_statements()[0].sql() == "bar"
 
 
 def test_this(assert_exp_eq, sushi_test_project: Project):
