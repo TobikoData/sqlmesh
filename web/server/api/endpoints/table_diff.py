@@ -16,7 +16,7 @@ router = APIRouter()
 def get_table_diff(
     source: str,
     target: str,
-    on: str,
+    on: t.Optional[str] = None,
     model_or_snapshot: t.Optional[str] = None,
     where: t.Optional[str] = None,
     limit: int = 20,
@@ -26,7 +26,7 @@ def get_table_diff(
     diff = context.table_diff(
         source=source,
         target=target,
-        on=exp.condition(on),
+        on=exp.condition(on) if on else None,
         model_or_snapshot=model_or_snapshot,
         where=where,
         limit=limit,

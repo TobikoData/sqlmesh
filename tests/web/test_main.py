@@ -530,8 +530,7 @@ def test_table_diff(web_sushi_context: Context) -> None:
         params={
             "source": "prod",
             "target": "dev",
-            "on": "s.id = t.id",
-            "model_or_snapshot": "sushi.items",
+            "model_or_snapshot": "sushi.customer_revenue_by_day",
         },
     )
     assert response.status_code == 200
