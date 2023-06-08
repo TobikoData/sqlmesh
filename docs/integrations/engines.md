@@ -6,7 +6,7 @@
 
 | Option                          | Description                                                                                                    |  Type  | Required |
 |---------------------------------|----------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `method`                        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json`. Default: `oath` | string |    Y     |
+| `method`                        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json`. Default: `oath` | string |    N     |
 | `project`                       | The name of the GCP project                                                                                    | string |    N     |
 | `location`                      | The location of for the datasets (can be regional or multi-regional)                                           | string |    N     |
 | `keyfile`                       | Path to the keyfile to be used with service-account method                                                     | string |    N     |
