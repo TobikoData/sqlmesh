@@ -37,7 +37,7 @@ pip install "sqlmesh[bigquery]"
 
 The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target BigQuery account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) for more details.
 
-By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "bigquery",
@@ -226,12 +226,12 @@ pip install "sqlmesh[redshift]"
 
 The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Redshift account. Refer to [AmazonRedshiftConnection](https://airflow.apache.org/docs/apache-airflow-providers-amazon/stable/connections/redshift.html#authenticating-to-amazon-redshift) for details on how to define a connection string.
 
-By default, the connection ID is set to `sqlmesh_redshift_default`, but it can be overridden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+By default, the connection ID is set to `sqlmesh_redshift_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "redshift",
-    default_engine_operator_args={
-        "sqlmesh_redshift_conn_id": "<Connection ID>"
+    engine_operator_args={
+        "conn_id": "<Connection ID>"
     },
 )
 ```
