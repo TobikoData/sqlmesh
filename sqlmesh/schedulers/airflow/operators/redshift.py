@@ -14,15 +14,16 @@ class SQLMeshRedshiftOperator(BaseSQLOperator):
 
     Args:
         target: The target that will be executed by this operator instance.
-        conn_id: The Airflow connection id for the Redshift target.
+        redshift_conn_id: The Airflow connection id for the Redshift target.
     """
 
     def __init__(
         self,
         target: BaseTarget,
+        redshift_conn_id: str = SQLMeshRedshiftHook.default_conn_name,
         **kwargs: t.Any,
     ) -> None:
-        super().__init__(conn_id=SQLMeshRedshiftHook.default_conn_name, **kwargs)
+        super().__init__(conn_id=redshift_conn_id, **kwargs)
         self._target = target
 
     def get_db_hook(self) -> SQLMeshRedshiftHook:

@@ -231,7 +231,7 @@ By default, the connection ID is set to `sqlmesh_redshift_default`, but it can b
 sqlmesh_airflow = SQLMeshAirflow(
     "redshift",
     engine_operator_args={
-        "conn_id": "<Connection ID>"
+        "redshift_conn_id": "<Connection ID>"
     },
 )
 ```
