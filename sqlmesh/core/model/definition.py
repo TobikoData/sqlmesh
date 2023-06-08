@@ -592,20 +592,18 @@ class _SqlBasedModel(_Model):
     @property
     def macro_definitions(self) -> t.List[d.MacroDef]:
         """All macro definitions from the list of expressions."""
-        return [
-            s for s in [*self.pre_statements, *self.post_statements] if isinstance(s, d.MacroDef)
-        ]
+        return [s for s in self.pre_statements + self.post_statements if isinstance(s, d.MacroDef)]
 
     def _render_statements(
         self,
         statements: t.Iterable[exp.Expression],
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
-        rendered = [
+        rendered = (
             self._statement_renderer(statement).render(**kwargs)
             for statement in statements
             if not isinstance(statement, d.MacroDef)
-        ]
+        )
         return [r for r in rendered if r is not None]
 
     def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
@@ -811,6 +809,14 @@ class SeedModel(_SqlBasedModel):
         return "\n".join(
             (
                 d.text_diff(meta_a, meta_b, self.dialect),
+                *(
+                    d.text_diff(pa, pb, self.dialect)
+                    for pa, pb in zip_longest(self.pre_statements, other.pre_statements)
+                ),
+                *(
+                    d.text_diff(pa, pb, self.dialect)
+                    for pa, pb in zip_longest(self.pre_statements, other.post_statements)
+                ),
                 *unified_diff(
                     self.seed.content.split("\n"),
                     other.seed.content.split("\n"),
@@ -1327,7 +1333,7 @@ def _create_model(
     return t.cast(Model, model)
 
 
-SEED_INSERT_MACRO_CALL = d.parse("@SEED_INSERT()")[0]
+INSERT_SEED_MACRO_CALL = d.parse("@INSERT_SEED()")[0]
 
 
 def _split_sql_model_statements(
@@ -1339,11 +1345,11 @@ def _split_sql_model_statements(
         expressions: The list of all SQL statements in the model definition.
 
     Returns:
-        A tuple containing the extracted SELECT query or the `@SEED_INSERT()` call, the statements before the it, and
+        A tuple containing the extracted SELECT query or the `@INSERT_SEED()` call, the statements before the it, and
         the statements after it.
 
     Raises:
-        ConfigError: If the model definition contains more than one SELECT query or `@SEED_INSERT()` call.
+        ConfigError: If the model definition contains more than one SELECT query or `@INSERT_SEED()` call.
     """
     query_positions = []
     for idx, expression in enumerate(expressions):
@@ -1355,7 +1361,7 @@ def _split_sql_model_statements(
                 continue
             expression = parse_one(rendered_expression, read=dialect)
 
-        if isinstance(expression, exp.Subqueryable) or expression == SEED_INSERT_MACRO_CALL:
+        if isinstance(expression, exp.Subqueryable) or expression == INSERT_SEED_MACRO_CALL:
             query_positions.append((expression, idx))
 
     if not query_positions:

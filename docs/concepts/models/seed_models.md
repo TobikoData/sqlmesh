@@ -136,7 +136,7 @@ MODEL (
 ALTER SESSION SET TIMEZONE = 'UTC';
 ```
 
-To add post-statements, you should use the special `@SEED_INSERT()` macro to separate pre- and post-statements:
+To add post-statements, you should use the special `@INSERT_SEED()` macro to separate pre- and post-statements:
 
 ```sql linenums="1" hl_lines="11"
 MODEL (
@@ -149,7 +149,7 @@ MODEL (
 -- These are pre-statements
 ALTER SESSION SET TIMEZONE = 'UTC';
 
-@SEED_INSERT();
+@INSERT_SEED();
 
 -- These are post-statements
 ALTER SESSION SET TIMEZONE = 'PST';

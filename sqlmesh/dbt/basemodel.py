@@ -72,8 +72,8 @@ class BaseModelConfig(GeneralConfig):
         schema: Custom schema name added to the model schema name
         alias: Relation identifier for this model instead of the filename
         sql_header: SQL statement to run before table/view creation. Currently implemented as a pre-hook.
-        pre-hook: List of SQL statements to run before the model is built (not supported for seeds)
-        post-hook: List of SQL statements to run after the model is built (not supported for seeds)
+        pre-hook: List of SQL statements to run before the model is built.
+        post-hook: List of SQL statements to run after the model is built.
         full_refresh: Forces the model to always do a full refresh or never do a full refresh
         grants: Set or revoke permissions to the database object for this model
         columns: Column information for the model
@@ -227,6 +227,10 @@ class BaseModelConfig(GeneralConfig):
             if field_val:
                 optional_kwargs[field] = field_val
 
+        pre_hooks = self.pre_hook
+        if self.sql_header:
+            pre_hooks.insert(0, Hook(sql=self.sql_header))
+
         return {
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns) or None,
@@ -239,7 +243,7 @@ class BaseModelConfig(GeneralConfig):
             "hash_raw_query": True,
             "pre_statements": [
                 exp
-                for hook in self.pre_hook
+                for hook in pre_hooks
                 for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
             ],
             "post_statements": [

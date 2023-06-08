@@ -503,7 +503,7 @@ def test_seed_pre_post_statements():
 
         CREATE TABLE x{{ 1 + 1 }};
 
-        @SEED_INSERT();
+        @INSERT_SEED();
 
         @bar(foo='x', val=@this);
 
