@@ -76,7 +76,7 @@ All model batches have been executed successfully
 test_db.national_holidays ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-Applying the plan created a new table `test_db.national_holidays`. 
+Applying the plan created a new table `test_db.national_holidays`.
 
 You can now run a custom query against the table with `sqlmesh fetchdf`:
 ```bash
@@ -117,4 +117,40 @@ Apply - Backfill Tables [y/n]: y
 All model batches have been executed successfully
 
 test_db.national_holidays ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+```
+
+## Pre- and post-statements
+
+Seed models also support pre- and post-statements, which are evaluated before inserting the seed's content and after, respectively.
+
+Below is an example that only involves pre-statements:
+
+```sql linenums="1" hl_lines="8"
+MODEL (
+  name test_db.national_holidays,
+  kind SEED (
+    path 'national_holidays.csv'
+  )
+);
+
+ALTER SESSION SET TIMEZONE = 'UTC';
+```
+
+To add post-statements, you should use the special `@INSERT_SEED()` macro to separate pre- and post-statements:
+
+```sql linenums="1" hl_lines="11"
+MODEL (
+  name test_db.national_holidays,
+  kind SEED (
+    path 'national_holidays.csv'
+  )
+);
+
+-- These are pre-statements
+ALTER SESSION SET TIMEZONE = 'UTC';
+
+@INSERT_SEED();
+
+-- These are post-statements
+ALTER SESSION SET TIMEZONE = 'PST';
 ```

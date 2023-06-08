@@ -23,6 +23,7 @@ from sqlmesh.core.model import (
     kind,
     parse_model_name,
 )
+from sqlmesh.core.model.definition import _SqlBasedModel
 from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
@@ -914,8 +915,7 @@ def _model_data_hash(model: Model) -> str:
         model.stamp,
     ]
 
-    if isinstance(model, SqlModel):
-        query = model.query if model.hash_raw_query else model.render_query()
+    if isinstance(model, _SqlBasedModel):
         pre_statements = (
             model.pre_statements if model.hash_raw_query else model.render_pre_statements()
         )
@@ -923,6 +923,13 @@ def _model_data_hash(model: Model) -> str:
             model.post_statements if model.hash_raw_query else model.render_post_statements()
         )
         macro_defs = model.macro_definitions if model.hash_raw_query else []
+    else:
+        pre_statements = []
+        post_statements = []
+        macro_defs = []
+
+    if isinstance(model, SqlModel):
+        query = model.query if model.hash_raw_query else model.render_query()
 
         for e in (query, *pre_statements, *post_statements, *macro_defs):
             data.append(e.sql(comments=False))
@@ -939,6 +946,9 @@ def _model_data_hash(model: Model) -> str:
     elif isinstance(model, PythonModel):
         data.append(model.entrypoint)
     elif isinstance(model, SeedModel):
+        for e in (*pre_statements, *post_statements, *macro_defs):
+            data.append(e.sql(comments=False))
+
         for column_name, column_hash in model.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
