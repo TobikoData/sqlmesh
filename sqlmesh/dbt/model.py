@@ -16,7 +16,7 @@ from sqlmesh.core.model import (
     ViewKind,
     create_sql_model,
 )
-from sqlmesh.dbt.basemodel import BaseModelConfig, Hook, Materialization
+from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
 from sqlmesh.dbt.common import SqlStr, extract_jinja_config
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
@@ -205,10 +205,6 @@ class ModelConfig(BaseModelConfig):
             if field_val:
                 optional_kwargs[field] = field_val
 
-        pre_hooks = self.pre_hook
-        if self.sql_header:
-            pre_hooks.insert(0, Hook(sql=self.sql_header))
-
         if not context.target:
             raise ConfigError(f"Target required to load '{self.sql_name}' into SQLMesh.")
 
@@ -218,16 +214,6 @@ class ModelConfig(BaseModelConfig):
             dialect=dialect,
             kind=self.model_kind(context.target),
             start=self.start,
-            pre_statements=[
-                exp
-                for hook in pre_hooks
-                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
-            ],
-            post_statements=[
-                exp
-                for hook in self.post_hook
-                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
-            ],
             **optional_kwargs,
             **self.sqlmesh_model_kwargs(context),
         )
