@@ -12,6 +12,8 @@ MODEL (
   )
 );
 
+JINJA_QUERY_BEGIN;
+
 {% set x = 1 %}
 
 SELECT
@@ -21,4 +23,6 @@ SELECT
   {{ alias(identity(x), 'flag') }}
 FROM sushi.waiters AS w
 JOIN sushi.customers as c ON w.waiter_id = c.customer_id
-JOIN sushi.waiter_names as wn ON w.waiter_id = wn.id
+JOIN sushi.waiter_names as wn ON w.waiter_id = wn.id;
+
+JINJA_END;
