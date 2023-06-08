@@ -76,6 +76,11 @@ class AttributeDict(dict, t.Mapping[KEY, VALUE]):
             copy[k] = deepcopy(v, memo)
         return copy
 
+    def __call__(self, **kwargs: t.Dict[str, t.Any]) -> str:
+        self.update(**kwargs)
+        # Return an empty string, so that this method can be used within Jinja
+        return ""
+
 
 class registry_decorator:
     """A decorator that registers itself."""
