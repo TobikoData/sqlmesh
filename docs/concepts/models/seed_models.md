@@ -119,7 +119,7 @@ All model batches have been executed successfully
 test_db.national_holidays ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-## Pre- and post- statements
+## Pre- and post-statements
 
 Seed models also support pre- and post-statements, which are evaluated before inserting the seed's content and after, respectively.
 
