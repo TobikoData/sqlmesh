@@ -1058,7 +1058,7 @@ def load_model(
     if not name:
         raise_config_error("Model must have a name", path)
 
-    macro_references: t.Set[MacroReference] = {
+    jinja_macro_references: t.Set[MacroReference] = {
         r
         for references in [
             *[extract_macro_references(e.sql(dialect=dialect)) for e in pre_statements],
@@ -1067,41 +1067,40 @@ def load_model(
         for r in references
     }
 
+    common_kwargs = dict(
+        pre_statements=pre_statements,
+        post_statements=post_statements,
+        defaults=defaults,
+        path=path,
+        module_path=module_path,
+        macros=macros,
+        python_env=python_env,
+        jinja_macros=jinja_macros,
+        jinja_macro_references=jinja_macro_references,
+        **meta_fields,
+    )
+
     if query_or_seed_insert is not None and isinstance(
         query_or_seed_insert, (exp.Subqueryable, d.JinjaQuery)
     ):
-        macro_references.update(extract_macro_references(query_or_seed_insert.sql(dialect=dialect)))
+        jinja_macro_references.update(
+            extract_macro_references(query_or_seed_insert.sql(dialect=dialect))
+        )
         return create_sql_model(
             name,
             query_or_seed_insert,
-            pre_statements=pre_statements,
-            post_statements=post_statements,
-            defaults=defaults,
-            path=path,
-            module_path=module_path,
             time_column_format=time_column_format,
-            macros=macros,
-            jinja_macros=(jinja_macros or JinjaMacroRegistry()).trim(macro_references),
-            python_env=python_env,
-            **meta_fields,
+            **common_kwargs,
         )
     else:
         try:
             seed_properties = {
-                p.name.lower(): p.args.get("value") for p in meta_fields.pop("kind").expressions
+                p.name.lower(): p.args.get("value") for p in common_kwargs.pop("kind").expressions
             }
             return create_seed_model(
                 name,
                 SeedKind(**seed_properties),
-                pre_statements=pre_statements,
-                post_statements=post_statements,
-                defaults=defaults,
-                path=path,
-                module_path=module_path,
-                macros=macros,
-                jinja_macros=(jinja_macros or JinjaMacroRegistry()).trim(macro_references),
-                python_env=python_env,
-                **meta_fields,
+                **common_kwargs,
             )
         except Exception:
             raise_config_error(
@@ -1123,6 +1122,8 @@ def create_sql_model(
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     macros: t.Optional[MacroRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
+    jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
@@ -1156,6 +1157,7 @@ def create_sql_model(
     if not python_env:
         python_env = _python_env(
             [*pre_statements, query, *post_statements],
+            jinja_macro_references,
             module_path,
             macros or macro.get_registry(),
         )
@@ -1167,6 +1169,8 @@ def create_sql_model(
         path=path,
         time_column_format=time_column_format,
         python_env=python_env,
+        jinja_macros=jinja_macros,
+        jinja_macro_references=jinja_macro_references,
         dialect=dialect,
         query=query,
         pre_statements=pre_statements,
@@ -1186,6 +1190,8 @@ def create_seed_model(
     module_path: Path = Path(),
     macros: t.Optional[MacroRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
+    jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a Seed model.
@@ -1213,6 +1219,7 @@ def create_seed_model(
     if not python_env:
         python_env = _python_env(
             [*pre_statements, *post_statements],
+            jinja_macro_references,
             module_path,
             macros or macro.get_registry(),
         )
@@ -1226,6 +1233,8 @@ def create_seed_model(
         kind=seed_kind,
         depends_on=kwargs.pop("depends_on", set()),
         python_env=python_env,
+        jinja_macros=jinja_macros,
+        jinja_macro_references=jinja_macro_references,
         pre_statements=pre_statements,
         post_statements=post_statements,
         **kwargs,
@@ -1306,6 +1315,8 @@ def _create_model(
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
+    jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
     **kwargs: t.Any,
@@ -1314,11 +1325,16 @@ def _create_model(
 
     dialect = dialect or ""
 
+    jinja_macros = jinja_macros or JinjaMacroRegistry()
+    if jinja_macro_references is not None:
+        jinja_macros = jinja_macros.trim(jinja_macro_references)
+
     try:
         model = klass(
             name=name,
             **{
                 **(defaults or {}),
+                "jinja_macros": jinja_macros,
                 "dialect": dialect,
                 "depends_on": depends_on,
                 **kwargs,
@@ -1403,6 +1419,7 @@ def _find_tables(expressions: t.List[exp.Expression]) -> t.Set[str]:
 
 def _python_env(
     expressions: t.Union[exp.Expression, t.List[exp.Expression]],
+    jinja_macro_references: t.Optional[t.Set[MacroReference]],
     module_path: Path,
     macros: MacroRegistry,
 ) -> t.Dict[str, Executable]:
@@ -1410,20 +1427,17 @@ def _python_env(
 
     used_macros = {}
 
-    def _capture_expression_macros(expression: exp.Expression) -> None:
-        if isinstance(expression, d.Jinja):
-            for var in expression.expressions:
-                if var in macros:
-                    used_macros[var] = macros[var]
-        else:
+    expressions = ensure_list(expressions)
+    for expression in expressions:
+        if not isinstance(expression, d.Jinja):
             for macro_func in expression.find_all(d.MacroFunc):
                 if macro_func.__class__ is d.MacroFunc:
                     name = macro_func.this.name.lower()
                     used_macros[name] = macros[name]
 
-    expressions = ensure_list(expressions)
-    for expression in expressions:
-        _capture_expression_macros(expression)
+    for macro_ref in jinja_macro_references or set():
+        if macro_ref.package is None and macro_ref.name in macros:
+            used_macros[macro_ref.name] = macros[macro_ref.name]
 
     for name, macro in used_macros.items():
         if not macro.func.__module__.startswith("sqlmesh."):
