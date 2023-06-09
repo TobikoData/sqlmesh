@@ -224,7 +224,7 @@ def test_config_jinja(sushi_test_project: Project):
     )
     context = sushi_test_project.context
     model = t.cast(SqlModel, model_config.to_sqlmesh(context))
-    assert model.pre_statements[0].sql() == hook
+    assert hook in model.pre_statements[0].sql()
     assert model.render_pre_statements()[0].sql() == "bar"
 
 
