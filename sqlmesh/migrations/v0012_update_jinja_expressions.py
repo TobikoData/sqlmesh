@@ -78,8 +78,8 @@ def _wrap_statement(sql: str) -> str:
     return f"JINJA_STATEMENT_BEGIN;\n{sql}\nJINJA_END;"
 
 
-JINJA_REGEX = r"({{|{%)"
+JINJA_REGEX = re.compile(r"({{|{%)")
 
 
 def _has_jinja(value: str) -> bool:
-    return re.search(JINJA_REGEX, value) is not None
+    return JINJA_REGEX.search(value) is not None
