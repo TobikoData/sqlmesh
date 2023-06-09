@@ -7,14 +7,12 @@ from difflib import unified_diff
 from enum import Enum, auto
 
 import pandas as pd
-from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
-from sqlmesh.utils.jinja import ENVIRONMENT
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 
@@ -27,8 +25,7 @@ class Audit(exp.Expression):
 
 
 class Jinja(exp.Func):
-    arg_types = {"this": True, "expressions": False}
-    is_var_len_args = True
+    arg_types = {"this": True}
 
 
 class JinjaQuery(Jinja):
@@ -492,14 +489,8 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
         else:
             start, *_, end = chunk
             segment = sql[start.start : end.end + 2]
-            variables = [
-                exp.Literal.string(var)
-                for var in find_undeclared_variables(ENVIRONMENT.parse(segment))
-            ]
-            klass = JinjaQuery if chunk_type == ChunkType.JINJA_QUERY else JinjaStatement
-            expressions.append(
-                klass(this=exp.Literal.string(segment.strip()), expressions=variables)
-            )
+            factory = jinja_query if chunk_type == ChunkType.JINJA_QUERY else jinja_statement
+            expressions.append(factory(segment.strip()))
 
     return expressions
 
