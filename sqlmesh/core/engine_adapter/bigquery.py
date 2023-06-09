@@ -225,7 +225,10 @@ class BigQueryEngineAdapter(EngineAdapter):
 
     @classmethod
     def __convert_bq_table_to_table(cls, bq_table: bigquery.Table) -> exp.Table:
-        return exp.to_table(".".join([bq_table.project, bq_table.dataset_id, bq_table.table_id]))
+        return exp.to_table(
+            ".".join([bq_table.project, bq_table.dataset_id, bq_table.table_id]),
+            dialect=cls.DIALECT,
+        )
 
     def _insert_overwrite_by_condition(
         self,
