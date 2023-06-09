@@ -99,7 +99,7 @@ class TestConfig(GeneralConfig):
 
         sql_no_config, _sql_config_only = extract_jinja_config(self.sql)
         sql_no_config = sql_no_config.replace("**_dbt_generic_test_kwargs", self._kwargs())
-        expressions = d.parse(sql_no_config, default_dialect=self.dialect or context.dialect)
+        query = d.jinja_query(sql_no_config)
 
         skip = not self.enabled
         blocking = self.severity == Severity.ERROR
@@ -109,8 +109,7 @@ class TestConfig(GeneralConfig):
             dialect=self.dialect,
             skip=skip,
             blocking=blocking,
-            query=expressions[-1],
-            expressions=expressions[0:-1],
+            query=query,
             jinja_macros=jinja_macros,
         )
 

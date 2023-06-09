@@ -12,7 +12,7 @@ from textwrap import indent
 
 from astor import to_source
 from pydantic import Field
-from sqlglot import diff, exp, parse_one
+from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.scope import traverse_scope
@@ -26,7 +26,7 @@ from sqlmesh.core.model.kind import ModelKindName, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
-from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
 from sqlmesh.utils.metaprogramming import (
@@ -630,7 +630,7 @@ class SqlModel(_SqlBasedModel):
         post_statements: The list of SQL statements that follow after the model's query.
     """
 
-    query: t.Union[exp.Subqueryable, d.Jinja]
+    query: t.Union[exp.Subqueryable, d.JinjaQuery]
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -1042,7 +1042,7 @@ def load_model(
 
     # Extract the query and any pre/post statements
     query_or_seed_insert, pre_statements, post_statements = _split_sql_model_statements(
-        expressions[1:], jinja_macros or JinjaMacroRegistry(), dialect, path
+        expressions[1:], path
     )
 
     meta_fields: t.Dict[str, t.Any] = {
@@ -1067,7 +1067,9 @@ def load_model(
         for r in references
     }
 
-    if query_or_seed_insert is not None and isinstance(query_or_seed_insert, exp.Subqueryable):
+    if query_or_seed_insert is not None and isinstance(
+        query_or_seed_insert, (exp.Subqueryable, d.JinjaQuery)
+    ):
         macro_references.update(extract_macro_references(query_or_seed_insert.sql(dialect=dialect)))
         return create_sql_model(
             name,
@@ -1103,7 +1105,7 @@ def load_model(
             )
         except Exception:
             raise_config_error(
-                "The model definition must either have a SELECT query or a valid Seed kind",
+                "The model definition must either have a SELECT query, a JINJA_QUERY block, or a valid Seed kind",
                 path,
             )
             raise
@@ -1142,9 +1144,9 @@ def create_sql_model(
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
     """
-    if not isinstance(query, (exp.Subqueryable, d.Jinja)):
+    if not isinstance(query, (exp.Subqueryable, d.JinjaQuery)):
         raise_config_error(
-            "A query is required and must be a SELECT or UNION statement",
+            "A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block",
             path,
         )
 
@@ -1337,7 +1339,7 @@ INSERT_SEED_MACRO_CALL = d.parse("@INSERT_SEED()")[0]
 
 
 def _split_sql_model_statements(
-    expressions: t.List[exp.Expression], jinja_macros: JinjaMacroRegistry, dialect: str, path: Path
+    expressions: t.List[exp.Expression], path: Path
 ) -> t.Tuple[t.Optional[exp.Expression], t.List[exp.Expression], t.List[exp.Expression]]:
     """Extracts the SELECT query from a sequence of expressions.
 
@@ -1353,15 +1355,10 @@ def _split_sql_model_statements(
     """
     query_positions = []
     for idx, expression in enumerate(expressions):
-        # Render the expression using the macro registry if the expression is jinja.
-        if isinstance(expression, d.Jinja):
-            jinja_env = jinja_macros.build_environment(**date_dict(c.EPOCH, c.EPOCH, c.EPOCH))
-            rendered_expression = jinja_env.from_string(expression.name).render()
-            if rendered_expression is None:
-                continue
-            expression = parse_one(rendered_expression, read=dialect)
-
-        if isinstance(expression, exp.Subqueryable) or expression == INSERT_SEED_MACRO_CALL:
+        if (
+            isinstance(expression, (exp.Subqueryable, d.JinjaQuery))
+            or expression == INSERT_SEED_MACRO_CALL
+        ):
             query_positions.append((expression, idx))
 
     if not query_positions:
