@@ -1,8 +1,8 @@
 # Jinja macros
 
-SQLMesh supports macros from the [Jinja](https://jinja.palletsprojects.com/en/3.1.x/) templating system. 
+SQLMesh supports macros from the [Jinja](https://jinja.palletsprojects.com/en/3.1.x/) templating system.
 
-Jinja's macro approach is pure string substitution. Unlike SQLMesh macros, they assemble SQL query text without building a semantic representation. 
+Jinja's macro approach is pure string substitution. Unlike SQLMesh macros, they assemble SQL query text without building a semantic representation.
 
 **NOTE:** SQLMesh projects support the standard Jinja function library only - they do **not** support dbt-specific jinja functions like `{{ ref() }}`. dbt-specific functions are allowed in dbt projects being run with the [SQLMesh adapter](../../integrations/dbt.md).
 
@@ -16,6 +16,41 @@ The three curly brace symbols are:
 - `{%...%}` creates Jinja statements. Statements give instructions to Jinja, such as setting variable values, control flow with `if`, `for` loops, and defining macro functions.
 - `{#...#}` creates Jinja comments. These comments will not be included in the rendered SQL query.
 
+Since Jinja strings are not syntactically valid SQL expressions and cannot be parsed as such, the model query must be wrapped in a special `JINJA_QUERY_BEGIN; ...; JINJA_END;` block in order for SQLMesh to detect it:
+
+```sql linenums="1" hl_lines="5 9"
+MODEL (
+  name sqlmesh_example.full_model
+);
+
+JINJA_QUERY_BEGIN;
+
+SELECT {{ 1 + 1 }};
+
+JINJA_END;
+```
+
+Similarly, to use Jinja expressions as part of statements that should be evaluated before or after the model query, the `JINJA_STATEMENT_BEGIN; ...; JINJA_END;` block should be used:
+
+```sql linenums="1"
+MODEL (
+  name sqlmesh_example.full_model
+);
+
+JINJA_STATEMENT_BEGIN;
+{{ pre_hook() }}
+JINJA_END;
+
+JINJA_QUERY_BEGIN;
+SELECT {{ 1 + 1 }};
+JINJA_END;
+
+JINJA_STATEMENT_BEGIN;
+{{ post_hook() }}
+JINJA_END;
+```
+
+
 ## User-defined variables
 
 Define your own variables with the Jinja statement `{% set ... %}`. For example, we could specify the name of the `num_orders` column in the `sqlmesh_example.full_model` like this:
@@ -28,6 +63,8 @@ MODEL (
   audits [assert_positive_order_ids],
 );
 
+JINJA_QUERY_BEGIN;
+
 {% set my_col = 'num_orders' %} -- Jinja definition of variable `my_col`
 
 SELECT
@@ -36,6 +73,8 @@ SELECT
 FROM
     sqlmesh_example.incremental_model
 GROUP BY item_id
+
+JINJA_END;
 ```
 
 Note that the Jinja set statement is written after the `MODEL` statement and before the SQL query.
@@ -48,7 +87,7 @@ Jinja variables can be string, integer, or float data types. They can also be an
 
 #### for loops
 
-For loops let you iterate over a collection of items to condense repetitive code and easily change the values used by the code. 
+For loops let you iterate over a collection of items to condense repetitive code and easily change the values used by the code.
 
 Jinja for loops begin with `{% for ... %}` and end with `{% endfor %}`. This example demonstrates creating indicator variables with `CASE WHEN` using a Jinja for loop:
 
@@ -88,9 +127,9 @@ FROM table
 
 The rendered query would be the same as before.
 
-#### if 
+#### if
 
-if statements allow you to take an action (or not) based on some condition. 
+if statements allow you to take an action (or not) based on some condition.
 
 Jinja if statements begin with `{% if ... %}` and end with `{% endif %}`. The starting `if` statement must contain code that evaluates to `True` or `False`. For example, all of `True`, `1 + 1 == 2`, and `'a' in ['a', 'b']` evaluate to `True`.
 
@@ -118,11 +157,11 @@ FROM table
 
 ## User-defined macro functions
 
-User-defined macro functions allow the same macro code to be used in multiple models. 
+User-defined macro functions allow the same macro code to be used in multiple models.
 
 Jinja macro functions should be placed in `.sql` files in the SQLMesh project's `macros` directory. Multiple functions can be defined in one `.sql` file, or they can be distributed across multiple files.
 
-Jinja macro functions are defined with the `{% macro %}` and `{% endmacro %}` statements. The macro function name and arguments are specified in the `{% macro %}` statement. 
+Jinja macro functions are defined with the `{% macro %}` and `{% endmacro %}` statements. The macro function name and arguments are specified in the `{% macro %}` statement.
 
 For example, a macro function named `print_text` that takes no arguments could be defined with:
 
@@ -186,6 +225,6 @@ Some SQL dialects interpret double and single quotes differently. We could repla
 
 ## Mixing macro systems
 
-SQLMesh supports both the Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways. 
+SQLMesh supports both the Jinja and [SQLMesh](./sqlmesh_macros.md) macro systems. We strongly recommend using only one system in a single model - if both are present, they may fail or behave in unintuitive ways.
 
 [Predefined SQLMesh macro variables](./macro_variables.md) can be used in a query containing user-defined Jinja variables and functions. However, predefined variables passed as arguments to a user-defined Jinja macro function must use the Jinja curly brace syntax `{{ start_ds }}` instead of the SQLMesh macro `@` prefix syntax `@start_ds`. Note that curly brace syntax may require quoting to generate the equivalent of the `@` syntax.

@@ -189,13 +189,7 @@ class ModelConfig(BaseModelConfig):
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         dialect = self.model_dialect or context.dialect
-        expressions = d.parse(self.sql_no_config, default_dialect=dialect)
-        if not expressions:
-            raise ConfigError(f"Model '{self.table_name}' must have a query.")
-        if len(expressions) > 1:
-            raise ConfigError(
-                f"Unexpected number of SQL statements ({len(expressions)}) in model '{self.table_name}'."
-            )
+        query = d.jinja_query(self.sql_no_config)
 
         optional_kwargs: t.Dict[str, t.Any] = {}
         if self.partitioned_by:
@@ -210,7 +204,7 @@ class ModelConfig(BaseModelConfig):
 
         return create_sql_model(
             self.sql_name,
-            expressions[0],
+            query,
             dialect=dialect,
             kind=self.model_kind(context.target),
             start=self.start,

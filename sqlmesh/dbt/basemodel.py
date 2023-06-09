@@ -241,16 +241,8 @@ class BaseModelConfig(GeneralConfig):
             "jinja_macros": jinja_macros,
             "path": self.path,
             "hash_raw_query": True,
-            "pre_statements": [
-                exp
-                for hook in pre_hooks
-                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
-            ],
-            "post_statements": [
-                exp
-                for hook in self.post_hook
-                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
-            ],
+            "pre_statements": [d.jinja_statement(hook.sql) for hook in pre_hooks],
+            "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             **optional_kwargs,
         }
 

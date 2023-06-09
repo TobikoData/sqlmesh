@@ -88,7 +88,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
     assert isinstance(model, SqlModel)
     assert model.name == "database.custom.model"
     assert model.description == "test model"
-    assert model.query.sql() == "SELECT 1 AS a FROM foo"
+    assert model.render_query().sql() == 'SELECT 1 AS "a" FROM "foo" AS "foo"'
     assert model.start == "Jan 1 2023"
     assert model.partitioned_by == ["a"]
     assert model.cron == "@hourly"
@@ -119,7 +119,7 @@ def test_test_to_sqlmesh_fields():
     assert audit.dialect == "snowflake"
     assert audit.skip == False
     assert audit.blocking == True
-    assert audit.query.sql() == sql
+    assert sql in audit.query.sql()
 
     sql = "SELECT * FROM FOO WHERE NOT id IS NULL"
     test_config = TestConfig(
@@ -138,7 +138,7 @@ def test_test_to_sqlmesh_fields():
     assert audit.dialect == "duckdb"
     assert audit.skip == True
     assert audit.blocking == False
-    assert audit.query.sql() == sql
+    assert sql in audit.query.sql()
 
 
 def test_model_config_sql_no_config():

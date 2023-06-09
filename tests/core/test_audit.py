@@ -153,7 +153,7 @@ def test_macro(model: Model):
 
     audit_jinja = Audit(
         name="test_audit",
-        query="SELECT * FROM {{ this_model }} WHERE a IS NULL",
+        query="JINJA_QUERY_BEGIN; SELECT * FROM {{ this_model }} WHERE a IS NULL; JINJA_END;",
     )
 
     assert audit.render_query(model).sql() == expected_query

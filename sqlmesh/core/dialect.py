@@ -4,12 +4,14 @@ import functools
 import re
 import typing as t
 from difflib import unified_diff
+from enum import Enum, auto
 
 import pandas as pd
 from jinja2.meta import find_undeclared_variables
 from sqlglot import Dialect, Generator, Parser, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.jinja import ENVIRONMENT
@@ -27,6 +29,14 @@ class Audit(exp.Expression):
 class Jinja(exp.Func):
     arg_types = {"this": True, "expressions": False}
     is_var_len_args = True
+
+
+class JinjaQuery(Jinja):
+    pass
+
+
+class JinjaStatement(Jinja):
+    pass
 
 
 class ModelKind(exp.Expression):
@@ -387,6 +397,47 @@ DIALECT_PATTERN = re.compile(
 )
 
 
+def _is_command_statement(command: str, tokens: t.List[Token], pos: int) -> bool:
+    try:
+        return (
+            tokens[pos].text.upper() == command.upper()
+            and tokens[pos + 1].token_type == TokenType.SEMICOLON
+        )
+    except IndexError:
+        return False
+
+
+JINJA_QUERY_BEGIN = "JINJA_QUERY_BEGIN"
+JINJA_STATEMENT_BEGIN = "JINJA_STATEMENT_BEGIN"
+JINJA_END = "JINJA_END"
+
+
+def _is_jinja_statement_begin(tokens: t.List[Token], pos: int) -> bool:
+    return _is_command_statement(JINJA_STATEMENT_BEGIN, tokens, pos)
+
+
+def _is_jinja_query_begin(tokens: t.List[Token], pos: int) -> bool:
+    return _is_command_statement(JINJA_QUERY_BEGIN, tokens, pos)
+
+
+def _is_jinja_end(tokens: t.List[Token], pos: int) -> bool:
+    return _is_command_statement(JINJA_END, tokens, pos)
+
+
+def jinja_query(query: str) -> JinjaQuery:
+    return JinjaQuery(this=exp.Literal.string(query))
+
+
+def jinja_statement(statement: str) -> JinjaStatement:
+    return JinjaStatement(this=exp.Literal.string(statement))
+
+
+class ChunkType(Enum):
+    JINJA_QUERY = auto()
+    JINJA_STATEMENT = auto()
+    SQL = auto()
+
+
 def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expression]:
     """Parse a sql string.
 
@@ -404,37 +455,51 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)()
 
     tokens = dialect.tokenizer.tokenize(sql)
-    chunks: t.List[t.Tuple[t.List, bool]] = [([], False)]
+    chunks: t.List[t.Tuple[t.List[Token], ChunkType]] = [([], ChunkType.SQL)]
     total = len(tokens)
 
-    for i, token in enumerate(tokens):
-        if token.token_type == TokenType.SEMICOLON:
-            if i < total - 1:
-                chunks.append(([], False))
+    pos = 0
+    while pos < total:
+        token = tokens[pos]
+        if _is_jinja_end(tokens, pos) or (
+            chunks[-1][1] == ChunkType.SQL
+            and token.token_type == TokenType.SEMICOLON
+            and pos < total - 1
+        ):
+            chunks.append(([], ChunkType.SQL))
+            if token.token_type == TokenType.SEMICOLON:
+                pos += 1
+            else:
+                # Jinja end statement
+                pos += 2
+        elif _is_jinja_query_begin(tokens, pos):
+            chunks.append(([], ChunkType.JINJA_QUERY))
+            pos += 2
+        elif _is_jinja_statement_begin(tokens, pos):
+            chunks.append(([], ChunkType.JINJA_STATEMENT))
+            pos += 2
         else:
-            if token.token_type == TokenType.BLOCK_START or (
-                i < total - 1
-                and token.token_type == TokenType.L_BRACE
-                and tokens[i + 1].token_type == TokenType.L_BRACE
-            ):
-                chunks[-1] = (chunks[-1][0], True)
             chunks[-1][0].append(token)
+            pos += 1
 
     expressions: t.List[exp.Expression] = []
 
-    for chunk, is_jinja in chunks:
-        if is_jinja:
+    for chunk, chunk_type in chunks:
+        if chunk_type == ChunkType.SQL:
+            for expression in dialect.parser().parse(chunk, sql):
+                if expression:
+                    expressions.append(expression)
+        else:
             start, *_, end = chunk
             segment = sql[start.start : end.end + 2]
             variables = [
                 exp.Literal.string(var)
                 for var in find_undeclared_variables(ENVIRONMENT.parse(segment))
             ]
-            expressions.append(Jinja(this=exp.Literal.string(segment), expressions=variables))
-        else:
-            for expression in dialect.parser().parse(chunk, sql):
-                if expression:
-                    expressions.append(expression)
+            klass = JinjaQuery if chunk_type == ChunkType.JINJA_QUERY else JinjaStatement
+            expressions.append(
+                klass(this=exp.Literal.string(segment.strip()), expressions=variables)
+            )
 
     return expressions
 
@@ -462,6 +527,8 @@ def extend_sqlglot() -> None:
                     MacroVar: lambda self, e: f"@{e.name}",
                     Model: _model_sql,
                     Jinja: lambda self, e: e.name,
+                    JinjaQuery: lambda self, e: f"{JINJA_QUERY_BEGIN};\n{e.name}\n{JINJA_END};",
+                    JinjaStatement: lambda self, e: f"{JINJA_STATEMENT_BEGIN};\n{e.name.strip()}\n{JINJA_END};",
                     ModelKind: _model_kind_sql,
                     PythonCode: lambda self, e: self.expressions(e, sep="\n", indent=False),
                 }

@@ -1,7 +1,8 @@
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.dialect import (
-    Jinja,
+    JinjaQuery,
+    JinjaStatement,
     Model,
     format_model_expressions,
     parse,
@@ -75,7 +76,7 @@ SELECT
         parse(
             """
             MODEL(name a.b, kind FULL);
-            SELECT * FROM x WHERE y = {{ 1 }};"""
+            JINJA_QUERY_BEGIN; SELECT * FROM x WHERE y = {{ 1 }}; JINJA_END;"""
         )
     )
     assert (
@@ -85,7 +86,9 @@ SELECT
   kind FULL
 );
 
-SELECT * FROM x WHERE y = {{ 1 }};"""
+JINJA_QUERY_BEGIN;
+SELECT * FROM x WHERE y = {{ 1 }};
+JINJA_END;"""
     )
 
 
@@ -146,10 +149,49 @@ def test_parse():
 
         CACHE TABLE x as SELECT 1 as Y;
 
+        JINJA_QUERY_BEGIN;
+
         SELECT * FROM x WHERE y = {{ 1 }} ;
+
+        JINJA_END;
+
+        JINJA_STATEMENT_BEGIN;
+
+        {{ side_effect() }};
+
+        JINJA_END;
     """
     )
 
+    assert len(expressions) == 4
     assert isinstance(expressions[0], Model)
     assert isinstance(expressions[1], exp.Cache)
-    assert isinstance(expressions[2], Jinja)
+    assert isinstance(expressions[2], JinjaQuery)
+    assert isinstance(expressions[3], JinjaStatement)
+
+
+def test_parse_jinja_with_semicolons():
+    expressions = parse(
+        """
+        CREATE TABLE a as SELECT 1;
+        CREATE TABLE b as SELECT 1;
+
+        JINJA_STATEMENT_BEGIN;
+
+        {% call set_sql_header(config) %}
+            CREATE OR REPLACE TEMP MACRO add(a, b) AS a + b;
+        {%- endcall %}
+
+        JINJA_END;
+
+        DROP TABLE a;
+        DROP TABLE b;
+    """
+    )
+
+    assert len(expressions) == 5
+    assert isinstance(expressions[0], exp.Create)
+    assert isinstance(expressions[1], exp.Create)
+    assert isinstance(expressions[2], JinjaStatement)
+    assert isinstance(expressions[3], exp.Drop)
+    assert isinstance(expressions[4], exp.Drop)
