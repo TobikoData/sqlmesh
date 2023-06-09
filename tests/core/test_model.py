@@ -333,6 +333,30 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
     )
 
 
+def test_model_jinja_macro_reference_extraction():
+    @macro()
+    def test_macro(**kwargs) -> None:
+        pass
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+        );
+
+        JINJA_STATEMENT_BEGIN;
+        {{ test_macro() }}
+        JINJA_END;
+
+        SELECT 1 AS x;
+    """
+    )
+    model = load_model(expressions)
+    assert "test_macro" in model.python_env
+
+
 def test_model_pre_post_statements():
     @macro()
     def foo(**kwargs) -> None:
