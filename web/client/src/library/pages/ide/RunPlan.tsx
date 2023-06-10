@@ -116,15 +116,15 @@ export default function RunPlan(): JSX.Element {
   }, [])
 
   useEffect(() => {
+    if (shouldStartPlanAutomatically) {
+      startPlan()
+      setShouldSartPlanAutomatically(false)
+    }
+
     if (isFalse(environment.isSyncronized)) return
 
-    debouncedRunPlan().finally(() => {
-      if (shouldStartPlanAutomatically) {
-        startPlan()
-        setShouldSartPlanAutomatically(false)
-      }
-    })
-  }, [environment, shouldStartPlanAutomatically])
+    void debouncedRunPlan()
+  }, [environment])
 
   useEffect(() => {
     if (planState === EnumPlanState.Finished) {
