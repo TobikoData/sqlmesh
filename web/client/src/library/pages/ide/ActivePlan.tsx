@@ -3,7 +3,7 @@ import TasksOverview from '@components/tasksOverview/TasksOverview'
 import { Popover, Transition } from '@headlessui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { Fragment, type MouseEvent } from 'react'
+import { Fragment, useState, type MouseEvent } from 'react'
 import { apiCancelPlanApply } from '~/api'
 import { useStoreContext } from '~/context/context'
 import {
@@ -29,6 +29,8 @@ export default function ActivePlan({
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
 
+  const [isShowing, setIsShowing] = useState(false)
+
   function cancel(): void {
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
@@ -42,18 +44,27 @@ export default function ActivePlan({
   }
 
   return (
-    <Popover className="relative flex">
+    <Popover
+      onMouseEnter={() => {
+        setIsShowing(true)
+      }}
+      onMouseLeave={() => {
+        setIsShowing(false)
+      }}
+      className="relative flex px-2"
+    >
       {() => (
         <>
-          <Popover.Button
+          <span
             className={clsx(
-              'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold',
+              'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold cursor-default',
               getTriggerBgColor(planState),
             )}
           >
             {plan == null ? 0 : 1}
-          </Popover.Button>
+          </span>
           <Transition
+            show={isShowing}
             as={Fragment}
             enter="transition ease-out duration-200"
             enterFrom="opacity-0 translate-y-1"

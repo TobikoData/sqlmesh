@@ -65,14 +65,17 @@ export default function RunPlan(): JSX.Element {
     s => s.hasSyncronizedEnvironments,
   )
 
+  const [hasChanges, setHasSetChanges] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [plan, setPlan] = useState<ContextEnvironment | undefined>()
   const [shouldStartPlanAutomatically, setShouldSartPlanAutomatically] =
     useState(false)
 
-  const { refetch: getEnvironments } = useApiEnvironments()
+  const { data: dataEnvironments, refetch: getEnvironments } =
+    useApiEnvironments()
   const {
     refetch: planRun,
-    data: plan,
+    data: dataPlan,
     isFetching,
   } = useApiPlanRun(environment.name, {
     planOptions: {
@@ -125,28 +128,50 @@ export default function RunPlan(): JSX.Element {
 
   useEffect(() => {
     if (planState === EnumPlanState.Finished) {
-      void debouncedRunPlan()
-      void debouncedGetEnvironemnts()
+      setActivePlan(undefined)
+
+      // TODO: Remove setTimeout when we have a better way to handle this
+      setTimeout(() => {
+        void debouncedGetEnvironemnts()
+      }, 500)
     }
   }, [planState])
 
   useEffect(() => {
-    setInitialDates(plan?.start, plan?.end)
-  }, [plan])
+    if (dataPlan == null) return
+
+    setPlan(dataPlan)
+    setInitialDates(dataPlan.start, dataPlan.end)
+    setHasSetChanges(
+      [
+        dataPlan.changes?.added,
+        dataPlan.changes?.removed,
+        dataPlan.changes?.modified?.direct,
+        dataPlan.changes?.modified?.indirect,
+        dataPlan.changes?.modified?.metadata,
+      ].some(isArrayNotEmpty),
+    )
+  }, [dataPlan])
+
+  useEffect(() => {
+    if (dataEnvironments == null || isObjectEmpty(dataEnvironments)) return
+
+    addSyncronizedEnvironments(Object.values(dataEnvironments))
+
+    if (planState !== EnumPlanState.Applying) {
+      void debouncedRunPlan()
+    }
+  }, [dataEnvironments])
 
   useEffect(() => {
     if (models.size > 0 && isFalse(hasSyncronizedEnvironments())) {
-      void debouncedGetEnvironemnts().then(({ data }) => {
-        if (data == null || isObjectEmpty(data)) return
-
-        addSyncronizedEnvironments(Object.values(data))
-      })
+      void debouncedGetEnvironemnts()
     }
 
     if (hasSyncronizedEnvironments()) {
       void debouncedRunPlan()
     }
-  }, [models, environments])
+  }, [models])
 
   function startPlan(): void {
     setActivePlan(undefined)
@@ -155,15 +180,12 @@ export default function RunPlan(): JSX.Element {
     setIsPlanOpen(true)
   }
 
-  const hasChanges = [
-    plan?.changes?.added,
-    plan?.changes?.removed,
-    plan?.changes?.modified?.direct,
-    plan?.changes?.modified?.indirect,
-    plan?.changes?.modified?.metadata,
-  ].some(isArrayNotEmpty)
-
   const hasErrors = errors.size > 0
+  const showRunButton =
+    (isFalse(environment.isInitial) && isFalse(environment.isDefault)) ||
+    hasSyncronizedEnvironments()
+  const showSelectEnvironmentButton =
+    isFalse(environment.isInitial) || isFalse(environment.isDefault)
 
   return (
     <div
@@ -173,57 +195,14 @@ export default function RunPlan(): JSX.Element {
           'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
-      <div className="flex items-center relative">
-        <Button
-          className={clsx(
-            'mx-0',
-            isFalse(environment.isInitial && environment.isDefault) &&
-              'rounded-none rounded-l-lg border-r',
-          )}
-          disabled={
-            hasErrors ||
-            isFetching ||
-            planAction !== EnumPlanAction.None ||
-            planState === EnumPlanState.Applying ||
-            planState === EnumPlanState.Running ||
-            planState === EnumPlanState.Cancelling
-          }
-          variant={EnumVariant.Alternative}
-          size={EnumSize.sm}
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
-
-            if (environment.isDefault && isFalse(environment.isInitial)) {
-              setShowConfirmation(true)
-            } else {
-              startPlan()
-            }
-          }}
-        >
-          {includes(
-            [
-              EnumPlanState.Applying,
-              EnumPlanState.Running,
-              EnumPlanState.Cancelling,
-            ],
-            planState,
-          ) && <Spinner className="w-3 h-3 mr-1" />}
-          <span className="inline-block">
-            {planState === EnumPlanState.Running
-              ? 'Running Plan...'
-              : planState === EnumPlanState.Applying
-              ? 'Applying Plan...'
-              : planState === EnumPlanState.Cancelling
-              ? 'Cancelling Plan...'
-              : planAction !== EnumPlanAction.None
-              ? 'Setting Plan...'
-              : 'Run Plan'}
-          </span>
-        </Button>
-        {(isFalse(environment.isInitial) || isFalse(environment.isDefault)) && (
-          <SelectEnvironemnt
-            className="rounded-none rounded-r-lg border-l mx-0"
-            environment={environment}
+      {showRunButton && (
+        <div className="flex items-center relative">
+          <Button
+            className={clsx(
+              'mx-0',
+              isFalse(environment.isInitial && environment.isDefault) &&
+                'rounded-none rounded-l-lg border-r',
+            )}
             disabled={
               hasErrors ||
               isFetching ||
@@ -232,9 +211,54 @@ export default function RunPlan(): JSX.Element {
               planState === EnumPlanState.Running ||
               planState === EnumPlanState.Cancelling
             }
-          />
-        )}
-      </div>
+            variant={EnumVariant.Alternative}
+            size={EnumSize.sm}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
+              if (environment.isDefault && isFalse(environment.isInitial)) {
+                setShowConfirmation(true)
+              } else {
+                startPlan()
+              }
+            }}
+          >
+            {includes(
+              [
+                EnumPlanState.Applying,
+                EnumPlanState.Running,
+                EnumPlanState.Cancelling,
+              ],
+              planState,
+            ) && <Spinner className="w-3 h-3 mr-1" />}
+            <span className="inline-block">
+              {planState === EnumPlanState.Running
+                ? 'Running Plan...'
+                : planState === EnumPlanState.Applying
+                ? 'Applying Plan...'
+                : planState === EnumPlanState.Cancelling
+                ? 'Cancelling Plan...'
+                : planAction !== EnumPlanAction.None
+                ? 'Setting Plan...'
+                : 'Run Plan'}
+            </span>
+          </Button>
+          {showSelectEnvironmentButton && (
+            <SelectEnvironemnt
+              className="rounded-none rounded-r-lg border-l mx-0"
+              environment={environment}
+              disabled={
+                hasErrors ||
+                isFetching ||
+                planAction !== EnumPlanAction.None ||
+                planState === EnumPlanState.Applying ||
+                planState === EnumPlanState.Running ||
+                planState === EnumPlanState.Cancelling
+              }
+            />
+          )}
+        </div>
+      )}
       {planState !== EnumPlanState.Applying && (
         <PlanChanges
           environment={environment}
@@ -340,9 +364,9 @@ function PlanChanges({
   hasChanges: boolean
 }): JSX.Element {
   return (
-    <span className="flex align-center pr-2 h-full w-full">
+    <span className="flex align-center h-full w-full">
       <>
-        {environment.isInitial && environment.isSyncronized && (
+        {environment.isInitial && environment.isLocal && (
           <span
             title="New"
             className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
@@ -438,7 +462,13 @@ function SelectEnvironemnt({
             disabled={disabled}
             className={clsx(className)}
           >
-            <span className="block overflow-hidden truncate">
+            <span
+              className={clsx(
+                'block overflow-hidden truncate',
+                (environment.isLocal || disabled) && 'text-neutral-500',
+                environment.isSyncronized && 'text-primary-500',
+              )}
+            >
               {environment.name}
             </span>
             <span className="pointer-events-none inset-y-0 right-0 flex items-center pl-2">

@@ -139,13 +139,13 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                   <CodeEditor.SQLMeshDialect
                     content={source}
                     type={EnumFileExtensions.SQL}
-                    className="scrollbar--vertical-md scrollbar--horizontal-md !h-[25vh] !max-w-[30rem]"
+                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !h-[25vh] !max-w-[30rem]"
                   >
                     {({ extensions, content }) => (
                       <CodeEditor
                         extensions={extensions.concat(modelExtensions)}
                         content={content}
-                        className="text-xs"
+                        className="text-xs pr-2"
                       />
                     )}
                   </CodeEditor.SQLMeshDialect>
@@ -288,6 +288,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
             {type === 'sql' && 'SQL'}
             {type === 'seed' && 'Seed'}
             {type === 'cte' && 'CTE'}
+            {type === 'external' && 'External'}
           </span>
         )}
         <span
@@ -768,7 +769,6 @@ function ModelColumnLineage({
     void createGraphLayout(nodesAndEdges)
       .then(layout => {
         toggleEdgeAndNodes(layout.edges, layout.nodes)
-
         setIsBuildingLayout(
           isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
         )
@@ -794,6 +794,8 @@ function ModelColumnLineage({
         )
       }
 
+      // console.log([edge.id, edge.sourceHandle], hasActiveEdge(edge.sourceHandle), hasActiveEdge(edge.targetHandle))
+
       const isTableSource =
         nodesAndEdges.nodesMap[edge.source]?.data.type === 'cte'
       const isTableTarget =
@@ -806,7 +808,7 @@ function ModelColumnLineage({
 
         visibility.set(
           edge.source,
-          isFalse(visibility.get(edge.source)) ? false : edge.hidden,
+          isFalse(visibility.has(edge.source)) ? false : edge.hidden,
         )
       }
 

@@ -438,6 +438,7 @@ function mergeConnections(
       }
 
       Object.entries(column.models).forEach(([id, columns]) => {
+        console.log(id, columns)
         columns.forEach(column => {
           const connectionTarget = connections.get(
             toNodeOrEdgeId(id, column),
@@ -452,18 +453,21 @@ function mergeConnections(
 
           connections.set(toNodeOrEdgeId(id, column), connectionTarget)
           connections.set(columnId, connectionSource)
+
+          addActiveEdges(
+            [
+              connectionTarget.left.map(id => toNodeOrEdgeId('right', id)),
+              connectionTarget.right.map(id => toNodeOrEdgeId('left', id)),
+            ].flat(),
+          )
         })
       })
 
-      const modelColumnConnectionsLeft = connectionSource.left.map(id =>
-        toNodeOrEdgeId('right', id),
-      )
-      const modelColumnConnectionsRight = connectionSource.right.map(id =>
-        toNodeOrEdgeId('left', id),
-      )
-
       addActiveEdges(
-        modelColumnConnectionsLeft.concat(modelColumnConnectionsRight),
+        [
+          connectionSource.left.map(id => toNodeOrEdgeId('right', id)),
+          connectionSource.right.map(id => toNodeOrEdgeId('left', id)),
+        ].flat(),
       )
     }
   }

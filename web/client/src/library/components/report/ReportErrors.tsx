@@ -181,7 +181,7 @@ export function DisplayError({
                     </div>
                   </Disclosure.Button>
                   <Disclosure.Panel className="px-2 pb-2 overflow-hidden">
-                    <pre className="font-mono w-full bg-dark-lighter text-lighter rounded-lg p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[35vh] text-sm">
+                    <pre className="font-mono w-full bg-dark-lighter text-danger-500 rounded-lg p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[35vh] text-sm">
                       <code>{error.traceback ?? error.message}</code>
                     </pre>
                   </Disclosure.Panel>

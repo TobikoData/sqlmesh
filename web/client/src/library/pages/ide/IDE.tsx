@@ -125,10 +125,8 @@ export default function PageIDE(): JSX.Element {
 
     if (isFalse(data.ok)) {
       setState(EnumPlanState.Failed)
-      setActivePlan(undefined)
     } else if (isAllTasksCompleted(data.tasks)) {
       setState(EnumPlanState.Finished)
-      setActivePlan(undefined)
     } else {
       setState(EnumPlanState.Applying)
     }
