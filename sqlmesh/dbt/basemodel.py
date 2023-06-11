@@ -9,6 +9,7 @@ from dbt.contracts.relation import RelationType
 from pydantic import Field, validator
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import Model
 from sqlmesh.dbt.column import (
@@ -70,8 +71,9 @@ class BaseModelConfig(GeneralConfig):
         database: Database the model is stored in
         schema: Custom schema name added to the model schema name
         alias: Relation identifier for this model instead of the filename
-        pre-hook: List of SQL statements to run before the model is built
-        post-hook: List of SQL statements to run after the model is built
+        sql_header: SQL statement to run before table/view creation. Currently implemented as a pre-hook.
+        pre-hook: List of SQL statements to run before the model is built.
+        post-hook: List of SQL statements to run after the model is built.
         full_refresh: Forces the model to always do a full refresh or never do a full refresh
         grants: Set or revoke permissions to the database object for this model
         columns: Column information for the model
@@ -84,6 +86,7 @@ class BaseModelConfig(GeneralConfig):
     storage_format: t.Optional[str] = None
     path: Path = Path()
     dependencies: Dependencies = Dependencies()
+    tests: t.List[TestConfig] = []
 
     # DBT configuration fields
     name: str = ""
@@ -91,13 +94,13 @@ class BaseModelConfig(GeneralConfig):
     schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
     alias: t.Optional[str] = None
+    sql_header: t.Optional[str] = None
     pre_hook: t.List[Hook] = Field([], alias="pre-hook")
     post_hook: t.List[Hook] = Field([], alias="post-hook")
     full_refresh: t.Optional[bool] = None
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: QuotingConfig = Field(default_factory=QuotingConfig)
-    tests: t.List[TestConfig] = []
 
     @validator("pre_hook", "post_hook", pre=True)
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[Hook]:
@@ -132,16 +135,6 @@ class BaseModelConfig(GeneralConfig):
             "columns": UpdateStrategy.KEY_EXTEND,
         },
     }
-
-    @property
-    def all_sql(self) -> SqlStr:
-        return SqlStr(
-            "\n".join(
-                [hook.sql for hook in self.pre_hook]
-                + [self.sql_no_config]
-                + [hook.sql for hook in self.post_hook]
-            )
-        )
 
     @property
     def sql_no_config(self) -> SqlStr:
@@ -234,6 +227,10 @@ class BaseModelConfig(GeneralConfig):
             if field_val:
                 optional_kwargs[field] = field_val
 
+        pre_hooks = self.pre_hook
+        if self.sql_header:
+            pre_hooks.insert(0, Hook(sql=self.sql_header))
+
         return {
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns) or None,
@@ -244,6 +241,8 @@ class BaseModelConfig(GeneralConfig):
             "jinja_macros": jinja_macros,
             "path": self.path,
             "hash_raw_query": True,
+            "pre_statements": [d.jinja_statement(hook.sql) for hook in pre_hooks],
+            "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             **optional_kwargs,
         }
 

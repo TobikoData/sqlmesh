@@ -35,6 +35,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
+        materialized: bool = False,
         **create_kwargs: t.Any,
     ) -> None:
         """
@@ -52,7 +53,13 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
                 "support using `VALUES` in a `CREATE VIEW` statement."
             )
         return super().create_view(
-            view_name, query_or_df, columns_to_types, replace, no_schema_binding=True
+            view_name,
+            query_or_df,
+            columns_to_types,
+            replace,
+            materialized,
+            no_schema_binding=True,
+            **create_kwargs,
         )
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:

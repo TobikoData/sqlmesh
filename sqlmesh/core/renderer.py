@@ -7,9 +7,8 @@ from pathlib import Path
 from sqlglot import exp, parse_one
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.annotate_types import annotate_types
-from sqlglot.optimizer.lower_identities import lower_identities
-from sqlglot.optimizer.qualify_columns import qualify_columns
-from sqlglot.optimizer.qualify_tables import qualify_tables
+from sqlglot.optimizer.qualify import qualify
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.simplify import simplify
 from sqlglot.schema import ensure_schema
 
@@ -259,7 +258,7 @@ class QueryRenderer(ExpressionRenderer):
         if not isinstance(query, exp.Subqueryable):
             raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
 
-        return t.cast(exp.Subqueryable, query)
+        return t.cast(exp.Subqueryable, quote_identifiers(query, dialect=self._dialect))
 
     def time_column_filter(self, start: TimeLike, end: TimeLike) -> exp.Between:
         """Returns a between statement with the properly formatted time column."""
@@ -273,19 +272,27 @@ class QueryRenderer(ExpressionRenderer):
         )
 
     def _optimize_query(self, query: exp.Expression) -> exp.Expression:
-        schema = ensure_schema(self.schema, dialect=self._dialect)
-
+        # We don't want to normalize names in the schema because that's handled by the optimizer
+        schema = ensure_schema(self.schema, dialect=self._dialect, normalize=False)
         query = t.cast(exp.Subqueryable, query.copy())
-        lower_identities(query)
-        qualify_tables(query)
+        for node, *_ in query.walk():
+            node.type = None
 
         try:
+            qualify(
+                query,
+                dialect=self._dialect,
+                schema=schema,
+                infer_schema=False,
+                validate_qualify_columns=False,
+                qualify_columns=not schema.empty,
+                quote_identifiers=False,
+            )
+
             if schema.empty:
                 for select in query.selects:
                     if not isinstance(select, exp.Alias) and select.output_name not in ("*", ""):
                         select.replace(exp.alias_(select, select.output_name))
-            else:
-                qualify_columns(query, schema=schema, infer_schema=False)
         except SqlglotError as ex:
             raise_config_error(
                 f"Error qualifying columns, the column may not exist or is ambiguous. {ex}",

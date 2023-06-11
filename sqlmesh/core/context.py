@@ -49,7 +49,12 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.dialect import format_model_expressions, pandas_to_sql, parse
+from sqlmesh.core.dialect import (
+    format_model_expressions,
+    normalize_model_name,
+    pandas_to_sql,
+    parse,
+)
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
@@ -277,13 +282,13 @@ class Context(BaseContext):
         Returns:
             A new instance of the updated or inserted model.
         """
-        if isinstance(model, str):
-            model = self._models[model]
+        model = self.get_model(model, raise_if_missing=True)
+        path = model._path
 
-        path = model._path  # type: ignore
         # model.copy() can't be used here due to a cached state that can be a part of a model instance.
         model = t.cast(Model, type(model)(**{**t.cast(Model, model).dict(), **kwargs}))
         model._path = path
+
         self._models.update({model.name: model})
 
         self._add_model_to_dag(model)
@@ -409,7 +414,8 @@ class Context(BaseContext):
             The expected model.
         """
         if isinstance(model_or_snapshot, str):
-            model = self._models.get(model_or_snapshot)
+            normalized_name = normalize_model_name(model_or_snapshot, dialect=self.config.dialect)
+            model = self._models.get(normalized_name)
         elif isinstance(model_or_snapshot, Snapshot):
             model = model_or_snapshot.model
         else:
@@ -417,6 +423,7 @@ class Context(BaseContext):
 
         if raise_if_missing and not model:
             raise SQLMeshError(f"Cannot find model for '{model_or_snapshot}'")
+
         return model
 
     @t.overload
@@ -444,7 +451,8 @@ class Context(BaseContext):
             The expected snapshot.
         """
         if isinstance(model_or_snapshot, str):
-            snapshot = self.snapshots.get(model_or_snapshot)
+            normalized_name = normalize_model_name(model_or_snapshot, dialect=self.config.dialect)
+            snapshot = self.snapshots.get(normalized_name)
         elif isinstance(model_or_snapshot, Snapshot):
             snapshot = model_or_snapshot
         else:
@@ -908,7 +916,9 @@ class Context(BaseContext):
         """
 
         snapshots = (
-            [self.snapshots[model] for model in models] if models else self.snapshots.values()
+            [self.get_snapshot(model, raise_if_missing=True) for model in models]
+            if models
+            else self.snapshots.values()
         )
 
         num_audits = sum(len(snapshot.model.audits) for snapshot in snapshots)
@@ -942,6 +952,7 @@ class Context(BaseContext):
             )
             self.console.log_status_update(f"Got {error.count} results, expected 0.")
             self.console.show_sql(f"{error.query}")
+
         self.console.log_status_update("Done.")
 
     def migrate(self) -> None:

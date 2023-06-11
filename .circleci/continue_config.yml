@@ -141,6 +141,7 @@ jobs:
       - run:
           name: Run Airflow integration tests
           command: make airflow-it-test-docker-with-env
+          no_output_timeout: 15m
       - run:
           name: Collect Airflow logs
           command: |

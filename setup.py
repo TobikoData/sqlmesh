@@ -44,7 +44,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=14.1.0",
+        "sqlglot~=15.2.0",
         "fsspec",
     ],
     extras_require={
@@ -78,6 +78,7 @@ setup(
             "PyGithub",
             "pytest",
             "pytest-asyncio",
+            "pytest-lazy-fixture",
             "pytest-mock",
             "pyspark>=3.4.0",
             "pytz",

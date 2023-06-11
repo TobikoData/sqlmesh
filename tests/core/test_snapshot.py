@@ -383,7 +383,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1204843539",
+        data_hash="1634812886",
         metadata_hash="382750147",
     )
 
@@ -473,7 +473,7 @@ def test_fingerprint_jinja_macros(model: Model):
     fingerprint = fingerprint_from_model(model, models={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="3334558345",
+        data_hash="524645336",
         metadata_hash="382750147",
     )
 

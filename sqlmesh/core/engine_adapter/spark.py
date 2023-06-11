@@ -200,6 +200,7 @@ class SparkEngineAdapter(EngineAdapter):
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         replace: bool = True,
+        materialized: bool = False,
         **create_kwargs: t.Any,
     ) -> None:
         """Create a view with a query or dataframe.
@@ -217,7 +218,9 @@ class SparkEngineAdapter(EngineAdapter):
         pyspark_df = self.try_get_pyspark_df(query_or_df)
         if pyspark_df:
             query_or_df = pyspark_df.toPandas()
-        super().create_view(view_name, query_or_df, columns_to_types, replace, **create_kwargs)
+        super().create_view(
+            view_name, query_or_df, columns_to_types, replace, materialized, **create_kwargs
+        )
 
     def _create_table_properties(
         self,

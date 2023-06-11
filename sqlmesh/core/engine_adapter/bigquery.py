@@ -47,6 +47,7 @@ class BigQueryEngineAdapter(EngineAdapter):
     DIALECT = "bigquery"
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
+    SUPPORTS_MATERIALIZED_VIEWS = True
     # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
     # Can explore doing this with the API in the future
     SCHEMA_DIFFER = SchemaDiffer(
@@ -224,7 +225,10 @@ class BigQueryEngineAdapter(EngineAdapter):
 
     @classmethod
     def __convert_bq_table_to_table(cls, bq_table: bigquery.Table) -> exp.Table:
-        return exp.to_table(".".join([bq_table.project, bq_table.dataset_id, bq_table.table_id]))
+        return exp.to_table(
+            ".".join([bq_table.project, bq_table.dataset_id, bq_table.table_id]),
+            dialect=cls.DIALECT,
+        )
 
     def _insert_overwrite_by_condition(
         self,

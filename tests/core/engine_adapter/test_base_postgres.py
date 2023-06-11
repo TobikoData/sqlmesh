@@ -54,7 +54,7 @@ def test_create_view(mocker: MockerFixture):
         [
             # 1st call
             call("DROP VIEW IF EXISTS db.view"),
-            call("CREATE OR REPLACE VIEW db.view AS SELECT 1"),
+            call("CREATE VIEW db.view AS SELECT 1"),
             # 2nd call
             call("CREATE VIEW db.view AS SELECT 1"),
         ]

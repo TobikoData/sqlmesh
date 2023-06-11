@@ -1,3 +1,4 @@
+import typing as t
 from pathlib import Path
 
 import agate
@@ -11,6 +12,8 @@ from sqlmesh.core.model import (
     IncrementalByUniqueKeyKind,
     ModelKind,
     ModelKindName,
+    SqlModel,
+    ViewKind,
 )
 from sqlmesh.dbt.column import (
     ColumnConfig,
@@ -36,9 +39,7 @@ def test_model_kind():
     assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == ModelKind(
         name=ModelKindName.FULL
     )
-    assert ModelConfig(materialized=Materialization.VIEW).model_kind(target) == ModelKind(
-        name=ModelKindName.VIEW
-    )
+    assert ModelConfig(materialized=Materialization.VIEW).model_kind(target) == ViewKind()
     assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(target) == ModelKind(
         name=ModelKindName.EMBEDDED
     )
@@ -104,6 +105,7 @@ def test_model_kind():
 
 def test_model_columns():
     model = ModelConfig(
+        alias="test",
         target_schema="foo",
         table_name="bar",
         sql="SELECT * FROM baz",
@@ -167,16 +169,21 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
-def test_hooks(capsys, sushi_test_dbt_context: Context):
+@pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
+def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
     engine_adapter = sushi_test_dbt_context.engine_adapter
-    waiters = sushi_test_dbt_context.models["sushi.waiters"]
+    waiters = sushi_test_dbt_context.models[model]
     capsys.readouterr()
 
-    engine_adapter.execute(waiters.render_pre_statements(engine_adapter=engine_adapter))
+    engine_adapter.execute(
+        waiters.render_pre_statements(engine_adapter=engine_adapter, latest="2023-01-01")
+    )
     assert "pre-hook" in capsys.readouterr().out
 
     engine_adapter.execute(
-        waiters.render_post_statements(engine_adapter=sushi_test_dbt_context.engine_adapter)
+        waiters.render_post_statements(
+            engine_adapter=sushi_test_dbt_context.engine_adapter, latest="2023-01-01"
+        )
     )
     assert "post-hook" in capsys.readouterr().out
 
@@ -204,6 +211,21 @@ def test_schema_jinja(sushi_test_project: Project):
     )
     context = sushi_test_project.context
     model_config.to_sqlmesh(context).render_query().sql() == "SELECT 1 AS one FROM sushi AS sushi"
+
+
+def test_config_jinja(sushi_test_project: Project):
+    hook = "{{ config(alias='bar') }} {{ config.alias }}"
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        sql="""SELECT 1 AS one FROM foo""",
+        **{"pre-hook": hook},
+    )
+    context = sushi_test_project.context
+    model = t.cast(SqlModel, model_config.to_sqlmesh(context))
+    assert hook in model.pre_statements[0].sql()
+    assert model.render_pre_statements()[0].sql() == "bar"
 
 
 def test_this(assert_exp_eq, sushi_test_project: Project):

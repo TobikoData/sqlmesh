@@ -53,7 +53,7 @@ class Audit(AuditMeta, frozen=True):
     An audit is a SQL query that returns bad records.
     """
 
-    query: t.Union[exp.Subqueryable, d.Jinja]
+    query: t.Union[exp.Subqueryable, d.JinjaQuery]
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
 

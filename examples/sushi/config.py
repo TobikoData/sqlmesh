@@ -6,10 +6,13 @@ from sqlmesh.core.config import (
     CategorizerConfig,
     Config,
     DuckDBConnectionConfig,
+    GatewayConfig,
+    SparkConnectionConfig,
 )
 from sqlmesh.core.user import User, UserRole
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+CURRENT_FILE_PATH = os.path.abspath(__file__)
+DATA_DIR = os.path.join(CURRENT_FILE_PATH, "data")
 
 
 # An in memory DuckDB config.
@@ -28,12 +31,23 @@ local_config = Config(
 )
 
 # Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
-airflow_config = Config(default_scheduler=AirflowSchedulerConfig())  # type: ignore
+airflow_config = Config(  # type: ignore
+    default_scheduler=AirflowSchedulerConfig(),
+    gateways=GatewayConfig(
+        connection=SparkConnectionConfig(
+            config_dir=os.path.join(CURRENT_FILE_PATH, "..", "airflow", "spark_conf"),
+            config={
+                "spark.hadoop.javax.jdo.option.ConnectionURL": "jdbc:postgresql://localhost:5432/metastore_db"
+            },
+        )
+    ),
+)
 
 
 # Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
 airflow_config_docker = Config(  # type: ignore
-    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/")
+    default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
+    gateways=GatewayConfig(connection=SparkConnectionConfig()),
 )
 
 

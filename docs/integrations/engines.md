@@ -2,25 +2,47 @@
 
 # BigQuery
 ## BigQuery - Local/Built-in Scheduler
-| Option                          | Description                                                                                   |  Type  | Required |
-|---------------------------------|-----------------------------------------------------------------------------------------------|:------:|:--------:|
-| `method`                        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json` | string |    N     |
-| `project`                       | The name of the GCP project                                                                   | string |    N     |
-| `location`                      | The location of for the datasets (can be regional or multi-regional)                          | string |    Y     |
-| `keyfile`                       | Path to the keyfile to be used with service-account method                                    | string |    Y     |
-| `keyfile_json`                  | Keyfile information provided inline (not recommended)                                         |  dict  |    N     |
-| `token`                         | Oath secret auth token                                                                        | string |    N     |
-| `refresh_token`                 | Oath secret auth refresh_token                                                                | string |    N     |
-| `client_id`                     | Oath secret auth client_id                                                                    | string |    N     |
-| `client_secret`                 | Oath secret auth client_secret                                                                | string |    N     |
-| `token_uri`                     | Oath secret auth token_uri                                                                    | string |    N     |
-| `scopes`                        | Oath secret auth scopes                                                                       |  list  |    N     |
-| `job_creation_timeout_seconds`  | The maximum amount of time, in seconds, to wait for the underlying job to be created.         |  int   |    N     |
-| `job_execution_timeout_seconds` | The maximum amount of time, in seconds, to wait for the underlying job to complete.           |  int   |    N     |
-| `job_retries`                   | The number of times to retry the underlying job if it fails. (Default: `1`)                   |  int   |    N     |
-| `priority`                      | The priority of the underlying job. (Default: `INTERACTIVE`)                                  | string |    N     |
-| `maximum_bytes_billed`          | The maximum number of bytes to be billed for the underlying job.                              |  int   |    N     |
+**Engine Adapter Type**: `bigquery`
 
+| Option                          | Description                                                                                                    |  Type  | Required |
+|---------------------------------|----------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| `method`                        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json`. Default: `oath` | string |    N     |
+| `project`                       | The name of the GCP project                                                                                    | string |    N     |
+| `location`                      | The location of for the datasets (can be regional or multi-regional)                                           | string |    N     |
+| `keyfile`                       | Path to the keyfile to be used with service-account method                                                     | string |    N     |
+| `keyfile_json`                  | Keyfile information provided inline (not recommended)                                                          |  dict  |    N     |
+| `token`                         | OAuth 2.0 access token                                                                                         | string |    N     |
+| `refresh_token`                 | OAuth 2.0 refresh token                                                                                        | string |    N     |
+| `client_id`                     | OAuth 2.0 client ID                                                                                            | string |    N     |
+| `client_secret`                 | OAuth 2.0 client secret                                                                                        | string |    N     |
+| `token_uri`                     | OAuth 2.0 authorization server's toke endpoint URI                                                             | string |    N     |
+| `scopes`                        | The scopes used to obtain authorization                                                                        |  list  |    N     |
+| `job_creation_timeout_seconds`  | The maximum amount of time, in seconds, to wait for the underlying job to be created.                          |  int   |    N     |
+| `job_execution_timeout_seconds` | The maximum amount of time, in seconds, to wait for the underlying job to complete.                            |  int   |    N     |
+| `job_retries`                   | The number of times to retry the underlying job if it fails. (Default: `1`)                                    |  int   |    N     |
+| `priority`                      | The priority of the underlying job. (Default: `INTERACTIVE`)                                                   | string |    N     |
+| `maximum_bytes_billed`          | The maximum number of bytes to be billed for the underlying job.                                               |  int   |    N     |
+
+### Connection Methods:
+* [oath](https://google-auth.readthedocs.io/en/master/reference/google.auth.html#google.auth.default) (default)
+  * Related Credential Configuration:
+    * `scopes` (Optional)
+* [oauth-secrets](https://google-auth.readthedocs.io/en/stable/reference/google.oauth2.credentials.html)
+  * Related Credential Configuration:
+    * `token` (Optional): Can be None if refresh information is provided.
+    * `refresh_token` (Optional): If specified, credentials can be refreshed.
+    * `client_id` (Optional): Must be specified for refresh, can be left as None if the token can not be refreshed.
+    * `client_secret` (Optional): Must be specified for refresh, can be left as None if the token can not be refreshed.
+    * `token_uri` (Optional): Must be specified for refresh, can be left as None if the token can not be refreshed.
+    * `scopes` (Optional): OAuth 2.0 credentials can not request additional scopes after authorization. The scopes must be derivable from the refresh token if refresh information is provided (e.g. The refresh token scopes are a superset of this or contain a wild card scope like 'https://www.googleapis.com/auth/any-api')
+* [service-account](https://google-auth.readthedocs.io/en/master/reference/google.oauth2.service_account.html#google.oauth2.service_account.IDTokenCredentials.from_service_account_file)
+  * Related Credential Configuration:
+    * `keyfile` (Required)
+    * `scopes` (Optional)
+* [service-account-json](https://google-auth.readthedocs.io/en/master/reference/google.oauth2.service_account.html#google.oauth2.service_account.IDTokenCredentials.from_service_account_info)
+  * Related Credential Configuration:
+    * `keyfile_json` (Required)
+    * `scopes` (Optional)
 
 ## BigQuery - Airflow Scheduler
 **Engine Name:** `bigquery`
@@ -35,18 +57,20 @@ pip install "sqlmesh[bigquery]"
 
 The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target BigQuery account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) for more details.
 
-By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "bigquery",
-    default_engine_operator_args={
-        "sqlmesh_gcp_conn_id": "<Connection ID>"
+    engine_operator_args={
+        "bigquery_conn_id": "<Connection ID>"
     },
 )
 ```
 
 # Databricks
 ## Databricks - Local/Built-in Scheduler
+**Engine Adapter Type**: `databricks`
+
 SQLMesh's Databricks implementation uses the [Databricks SQL Connector](https://docs.databricks.com/dev-tools/python-sql-connector.html) to connect to Databricks by default.
 If your project contains PySpark DataFrames in Python models then it will use [Databricks Connect](https://docs.databricks.com/dev-tools/databricks-connect.html) to connect to Databricks.
 SQLMesh's Databricks Connect implementation supports Databricks Runtime 13.0 or higher. If SQLMesh detects you have Databricks Connect installed then it will use it for all Python models (so both Pandas and PySpark DataFrames).
@@ -135,6 +159,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # DuckDB
 ## DuckDB - Local/Built-in Scheduler
+**Engine Adapter Type**: `duckdb`
+
 | Option     | Description                                                                  |  Type  | Required |
 |------------|------------------------------------------------------------------------------|:------:|:--------:|
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
@@ -144,6 +170,8 @@ DuckDB only works when running locally; therefore it does not support Airflow.
 
 # Postgres
 ## Postgres - Local/Built-in Scheduler
+**Engine Adapter Type**: `postgres`
+
 | Option            | Description                                                                     |  Type  | Required |
 |-------------------|---------------------------------------------------------------------------------|:------:|:--------:|
 | `host`            | The hostname of the Postgres server                                             | string |    Y     |
@@ -181,6 +209,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Redshift
 ## Redshift - Local/Built-in Scheduler
+**Engine Adapter Type**: `Redshift`
+
 | Option                  | Description                                                                                                 |  Type  | Required |
 |-------------------------|-------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `user`                  | The username to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
@@ -216,18 +246,20 @@ pip install "sqlmesh[redshift]"
 
 The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target Redshift account. Refer to [AmazonRedshiftConnection](https://airflow.apache.org/docs/apache-airflow-providers-amazon/stable/connections/redshift.html#authenticating-to-amazon-redshift) for details on how to define a connection string.
 
-By default, the connection ID is set to `sqlmesh_redshift_default`, but it can be overridden using the `default_engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+By default, the connection ID is set to `sqlmesh_redshift_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
 sqlmesh_airflow = SQLMeshAirflow(
     "redshift",
-    default_engine_operator_args={
-        "sqlmesh_redshift_conn_id": "<Connection ID>"
+    engine_operator_args={
+        "redshift_conn_id": "<Connection ID>"
     },
 )
 ```
 
 # Snowflake
 ## Snowflake - Local/Built-in Scheduler
+**Engine Adapter Type**: `snowflake`
+
 | Option          | Description                        |  Type  | Required |
 |-----------------|------------------------------------|:------:|:--------:|
 | `user`          | The Snowflake username             | string |    N     |
@@ -263,7 +295,13 @@ sqlmesh_airflow = SQLMeshAirflow(
 
 # Spark
 ## Spark - Local/Built-in Scheduler
-Spark on Local/Built-in Scheduler is current unsupported. [Issue to track progress](https://github.com/TobikoData/sqlmesh/issues/575)
+**Engine Adapter Type**: `spark`
+
+| Option          | Description                                          |  Type  | Required |
+|-----------------|------------------------------------------------------|:------:|:--------:|
+| `config_dir`    | Value to set for `SPARK_CONFIG_DIR`                  | string |    N     |
+| `catalog`       | The catalog to use when issuing commands             | string |    N     |
+| `config`        | Key/value pairs to set for the Spark Configuration.  |  dict  |    N     |
 
 ## Spark - Airflow Scheduler
 **Engine Name:** `spark`

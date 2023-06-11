@@ -1,3 +1,4 @@
+import json
 import typing as t
 
 import duckdb
@@ -839,6 +840,13 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     assert len(state_sync.missing_intervals("dev", start="2023-01-08", end="2023-01-10")) == 8
 
     assert all(not s.intervals for s in state_sync.get_snapshots(None).values())
+
+    customer_revenue_by_day = new_snapshots.loc[
+        new_snapshots["name"] == "sushi.customer_revenue_by_day"
+    ].iloc[0]
+    assert json.loads(customer_revenue_by_day["snapshot"])["model"]["query"].startswith(
+        "JINJA_QUERY_BEGIN"
+    )
 
 
 def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:

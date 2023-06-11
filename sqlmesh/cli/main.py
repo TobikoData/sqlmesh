@@ -16,7 +16,17 @@ from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
 
 
+def _sqlmesh_version() -> str:
+    try:
+        from sqlmesh import __version__
+
+        return __version__
+    except ImportError:
+        return "0.0.0"
+
+
 @click.group(no_args_is_help=True)
+@click.version_option(version=_sqlmesh_version(), message="%(version)s")
 @opt.paths
 @opt.config
 @click.option(
@@ -109,13 +119,8 @@ def render(
     dialect: t.Optional[str] = None,
 ) -> None:
     """Renders a model's query, optionally expanding referenced models."""
-    snapshot = ctx.obj.snapshots.get(model)
-
-    if not snapshot:
-        raise click.ClickException(f"Model `{model}` not found.")
-
     rendered = ctx.obj.render(
-        snapshot,
+        model,
         start=start,
         end=end,
         latest=latest,
@@ -322,18 +327,6 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
 def info(obj: Context) -> None:
     """Print info."""
     obj.print_info()
-
-
-@cli.command("version")
-@error_handler
-def version() -> None:
-    """Print version."""
-    try:
-        from sqlmesh import __version__
-
-        print(__version__)
-    except ImportError:
-        print("Version is not available")
 
 
 @cli.command("ide")

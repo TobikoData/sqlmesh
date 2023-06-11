@@ -105,8 +105,21 @@ class SnapshotEvaluator:
             if snapshot.is_view:
                 if index > 0:
                     raise ConfigError("Cannot batch view creation.")
+
+                if (
+                    isinstance(query_or_df, exp.Expression)
+                    and model.render_query(snapshots=snapshots, is_dev=is_dev) == query_or_df
+                ):
+                    logger.info("Skipping creation of the view '%s'", table_name)
+                    return
+
                 logger.info("Replacing view '%s'", table_name)
-                self.adapter.create_view(table_name, query_or_df, columns_to_types)
+                self.adapter.create_view(
+                    table_name,
+                    query_or_df,
+                    columns_to_types,
+                    materialized=snapshot.is_materialized_view,
+                )
             elif index > 0:
                 self.adapter.insert_append(
                     table_name, query_or_df, columns_to_types=columns_to_types
@@ -154,19 +167,17 @@ class SnapshotEvaluator:
             **common_render_kwargs,
         )
 
-        pre_statements = model.render_pre_statements(**render_statements_kwargs)
-        post_statements = model.render_post_statements(**render_statements_kwargs)
-        queries_or_dfs = model.render(
-            context=ExecutionContext(self.adapter, snapshots, is_dev), **common_render_kwargs
-        )
-
         with self.adapter.transaction(
             transaction_type=TransactionType.DDL
             if model.kind.is_view or model.kind.is_full
             else TransactionType.DML
         ):
             if not limit:
-                self.adapter.execute(pre_statements)
+                self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
+
+            queries_or_dfs = model.render(
+                context=ExecutionContext(self.adapter, snapshots, is_dev), **common_render_kwargs
+            )
 
             if limit and limit > 0:
                 query_or_df = next(queries_or_dfs)
@@ -197,7 +208,9 @@ class SnapshotEvaluator:
                 for index, query_or_df in enumerate(queries_or_dfs):
                     apply(query_or_df, index)
 
-            self.adapter.execute(post_statements)
+            if not limit:
+                self.adapter.execute(model.render_post_statements(**render_statements_kwargs))
+
             return None
 
     def promote(
@@ -405,6 +418,7 @@ class SnapshotEvaluator:
                 self.adapter.create_view(
                     table_name,
                     snapshot.model.render_query(snapshots=parent_snapshots_by_name, is_dev=is_dev),
+                    materialized=snapshot.is_materialized_view,
                 )
             else:
                 logger.info("Creating table '%s'", table_name)

@@ -6,6 +6,7 @@ from sqlglot import exp, parse, parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
+from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
@@ -20,6 +21,7 @@ from sqlmesh.core.model import (
     load_model,
     model,
 )
+from sqlmesh.core.model.common import parse_expression
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
@@ -331,6 +333,30 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
     )
 
 
+def test_model_jinja_macro_reference_extraction():
+    @macro()
+    def test_macro(**kwargs) -> None:
+        pass
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+        );
+
+        JINJA_STATEMENT_BEGIN;
+        {{ test_macro() }}
+        JINJA_END;
+
+        SELECT 1 AS x;
+    """
+    )
+    model = load_model(expressions)
+    assert "test_macro" in model.python_env
+
+
 def test_model_pre_post_statements():
     @macro()
     def foo(**kwargs) -> None:
@@ -346,7 +372,9 @@ def test_model_pre_post_statements():
 
         @foo();
 
+        JINJA_STATEMENT_BEGIN;
         CREATE TABLE x{{ 1 + 1 }};
+        JINJA_END;
 
         SELECT 1 AS x;
 
@@ -357,7 +385,10 @@ def test_model_pre_post_statements():
     )
     model = load_model(expressions)
 
-    expected_pre = [*d.parse("@foo()"), *d.parse("CREATE TABLE x{{ 1 + 1 }};")]
+    expected_pre = [
+        *d.parse("@foo()"),
+        d.jinja_statement("CREATE TABLE x{{ 1 + 1 }};"),
+    ]
     assert model.pre_statements == expected_pre
 
     expected_post = [
@@ -482,6 +513,79 @@ def test_seed_model_diff(tmp_path):
     assert diff.endswith("-1,value_a\n+2,value_b")
 
 
+def test_seed_pre_post_statements():
+    @macro()
+    def bar(**kwargs) -> None:
+        pass
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+
+        @bar();
+
+        JINJA_STATEMENT_BEGIN;
+        CREATE TABLE x{{ 1 + 1 }};
+        JINJA_END;
+
+        @INSERT_SEED();
+
+        @bar(foo='x', val=@this);
+
+        DROP TABLE x2;
+    """
+    )
+
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    expected_pre = [
+        *d.parse("@bar()"),
+        d.jinja_statement("CREATE TABLE x{{ 1 + 1 }};"),
+    ]
+    assert model.pre_statements == expected_pre
+
+    expected_post = [
+        *d.parse("@bar(foo='x', val=@this)"),
+        *d.parse("DROP TABLE x2;"),
+    ]
+    assert model.post_statements == expected_post
+
+
+def test_seed_pre_statements_only():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+            )
+        );
+
+        JINJA_STATEMENT_BEGIN;
+        CREATE TABLE x{{ 1 + 1 }};
+        JINJA_END;
+
+        DROP TABLE x2;
+    """
+    )
+
+    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    expected_pre = [
+        d.jinja_statement("CREATE TABLE x{{ 1 + 1 }};"),
+        *d.parse("DROP TABLE x2;"),
+    ]
+    assert model.pre_statements == expected_pre
+    assert not model.post_statements
+
+
 def test_audits():
     expressions = parse(
         """
@@ -511,11 +615,11 @@ def test_render_definition():
     expressions = parse(
         """
         MODEL (
+            dialect spark,
             name db.table,
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column (a, 'yyyymmdd')
             ),
-            dialect spark,
             owner owner_name,
             storage_format iceberg,
             partitioned_by a,
@@ -1047,6 +1151,55 @@ def test_star_expansion(assert_exp_eq) -> None:
     )
 
 
+def test_case_sensitivity(assert_exp_eq):
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
+    context = Context(config=config)
+
+    source = load_model(
+        d.parse(
+            """
+            MODEL (name example.source, kind EMBEDDED);
+
+            SELECT "id", "name", "payload" FROM db.schema."table"
+            """
+        ),
+        dialect="snowflake",
+    )
+
+    # Ensure that when manually specifying dependencies, they're normalized correctly
+    downstream = load_model(
+        d.parse(
+            """
+            MODEL (name example.model, kind FULL, depends_on [ExAmPlE.SoUrCe]);
+
+            SELECT JSON_EXTRACT_PATH_TEXT("payload", 'field') AS "new_field", * FROM example.source
+            """
+        ),
+        dialect="snowflake",
+    )
+
+    context.upsert_model(source)
+    context.upsert_model(downstream)
+
+    assert_exp_eq(
+        context.render("example.model"),
+        """
+        SELECT
+          JSON_EXTRACT_PATH_TEXT("SOURCE"."payload", 'field') AS "new_field",
+          "SOURCE"."id" AS "id",
+          "SOURCE"."name" AS "name",
+          "SOURCE"."payload" AS "payload"
+        FROM (
+          SELECT
+            "id" AS "id",
+            "name" AS "name",
+            "payload" AS "payload"
+          FROM "DB"."SCHEMA"."table" AS "table"
+        ) AS "SOURCE"
+        """,
+    )
+
+
 def test_batch_size_validation():
     expressions = parse(
         """
@@ -1106,7 +1259,7 @@ def test_model_ctas_query():
         read="bigquery",
     )
 
-    assert load_model(expressions, dialect="bigquery").ctas_query({}).sql() == "SELECT 1 AS a"
+    assert load_model(expressions, dialect="bigquery").ctas_query({}).sql() == 'SELECT 1 AS "a"'
 
     expressions = parse(
         """
@@ -1115,7 +1268,10 @@ def test_model_ctas_query():
         """
     )
 
-    assert load_model(expressions).ctas_query({}).sql() == "SELECT 1 AS a FROM b AS b WHERE FALSE"
+    assert (
+        load_model(expressions).ctas_query({}).sql()
+        == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
+    )
 
 
 def test_is_breaking_change():
@@ -1132,3 +1288,11 @@ def test_is_breaking_change():
         )
         is None
     )
+
+
+def test_parse_expression_list_with_jinja():
+    input = [
+        "JINJA_STATEMENT_BEGIN;\n{{ log('log message') }}\nJINJA_END;",
+        "GRANT SELECT ON TABLE foo TO DEV",
+    ]
+    assert input == [val.sql() for val in parse_expression(input)]

@@ -38,9 +38,9 @@ To configure a different storage backend for the SQLMesh state you need to creat
 Refer to the [Connection Configuration](../reference/configuration.md#connection) for supported fields.
 
 ## SQLMesh client configuration
-In your SQLMesh repository, create the following configuration within config.py:
+In your SQLMesh repository, create the following configuration within config.yaml:
 ```yaml linenums="1"
-scheduler:
+default_scheduler:
     type: airflow
     airflow_url: https://<Airflow Webserver Host>:<Airflow Webserver Port>/
     username: <Airflow Username>

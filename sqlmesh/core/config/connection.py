@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import os
 import sys
 import typing as t
 from enum import Enum
@@ -126,7 +127,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        if values["type"] != "snowflake":
+        if "type" in values and values["type"] != "snowflake":
             return values
         auth = values.get("authenticator")
         user = values.get("user")
@@ -550,6 +551,54 @@ class PostgresConnectionConfig(_ConnectionConfig):
         return connect
 
 
+class SparkConnectionConfig(_ConnectionConfig):
+    """
+    Vanilla Spark Connection Configuration. Use `DatabricksConnectionConfig` for Databricks.
+    """
+
+    config_dir: t.Optional[str] = None
+    catalog: t.Optional[str] = None
+    config: t.Dict[str, t.Any] = {}
+
+    concurrent_tasks: int = 4
+
+    type_: Literal["spark"] = Field(alias="type", default="spark")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "catalog",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.SparkEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from sqlmesh.engines.spark.db_api.spark_session import connection
+
+        return connection
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        from pyspark.conf import SparkConf
+        from pyspark.sql import SparkSession
+
+        spark_config = SparkConf()
+        if self.config:
+            for k, v in self.config.items():
+                spark_config.set(k, v)
+
+        if self.config_dir:
+            os.environ["SPARK_CONF_DIR"] = self.config_dir
+        return {
+            "spark": SparkSession.builder.config(conf=spark_config)
+            .enableHiveSupport()
+            .getOrCreate(),
+        }
+
+
 ConnectionConfig = Annotated[
     t.Union[
         BigQueryConnectionConfig,
@@ -558,6 +607,7 @@ ConnectionConfig = Annotated[
         PostgresConnectionConfig,
         RedshiftConnectionConfig,
         SnowflakeConnectionConfig,
+        SparkConnectionConfig,
     ],
     Field(discriminator="type_"),
 ]

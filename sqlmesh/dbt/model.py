@@ -13,6 +13,7 @@ from sqlmesh.core.model import (
     Model,
     ModelKind,
     ModelKindName,
+    ViewKind,
     create_sql_model,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
@@ -123,7 +124,7 @@ class ModelConfig(BaseModelConfig):
         if materialization == Materialization.TABLE:
             return ModelKind(name=ModelKindName.FULL)
         if materialization == Materialization.VIEW:
-            return ModelKind(name=ModelKindName.VIEW)
+            return ViewKind()
         if materialization == Materialization.INCREMENTAL:
             incremental_kwargs = {}
             for field in ("batch_size", "lookback"):
@@ -188,13 +189,7 @@ class ModelConfig(BaseModelConfig):
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         dialect = self.model_dialect or context.dialect
-        expressions = d.parse(self.sql_no_config, default_dialect=dialect)
-        if not expressions:
-            raise ConfigError(f"Model '{self.table_name}' must have a query.")
-        if len(expressions) > 1:
-            raise ConfigError(
-                f"Unexpected number of SQL statements ({len(expressions)}) in model '{self.table_name}'."
-            )
+        query = d.jinja_query(self.sql_no_config)
 
         optional_kwargs: t.Dict[str, t.Any] = {}
         if self.partitioned_by:
@@ -209,20 +204,10 @@ class ModelConfig(BaseModelConfig):
 
         return create_sql_model(
             self.sql_name,
-            expressions[0],
+            query,
             dialect=dialect,
             kind=self.model_kind(context.target),
             start=self.start,
-            pre_statements=[
-                exp
-                for hook in self.pre_hook
-                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
-            ],
-            post_statements=[
-                exp
-                for hook in self.post_hook
-                for exp in d.parse(hook.sql, default_dialect=self.model_dialect or context.dialect)
-            ],
             **optional_kwargs,
             **self.sqlmesh_model_kwargs(context),
         )

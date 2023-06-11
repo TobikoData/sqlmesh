@@ -64,12 +64,22 @@ class UniqueKeyDict(dict, t.Mapping[KEY, VALUE]):
 class AttributeDict(dict, t.Mapping[KEY, VALUE]):
     __getattr__ = dict.get
 
+    def set(self, field: str, value: t.Any) -> str:
+        self[field] = value
+        # Return an empty string, so that this method can be used within Jinja
+        return ""
+
     def __deepcopy__(self, memo: t.Dict[t.Any, AttributeDict]) -> AttributeDict:
         copy: AttributeDict = AttributeDict()
         memo[id(self)] = copy
         for k, v in self.items():
             copy[k] = deepcopy(v, memo)
         return copy
+
+    def __call__(self, **kwargs: t.Dict[str, t.Any]) -> str:
+        self.update(**kwargs)
+        # Return an empty string, so that this method can be used within Jinja
+        return ""
 
 
 class registry_decorator:
@@ -160,6 +170,19 @@ def double_escape(s: str) -> str:
 
 def nullsafe_join(join_char: str, *args: t.Optional[str]) -> str:
     return join_char.join(filter(None, args))
+
+
+def str_to_bool(s: t.Optional[str]) -> bool:
+    """
+    Convert a string to a boolean. disutils is being deprecated and it is recommended to implement your own version:
+    https://peps.python.org/pep-0632/
+
+    Unlike disutils, this actually returns a bool and never raises. If a value cannot be determined to be true
+    then false is returned.
+    """
+    if not s:
+        return False
+    return s.lower() in ("true", "1", "t", "y", "yes", "on")
 
 
 class classproperty(property):

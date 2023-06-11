@@ -1,4 +1,3 @@
-import datetime
 import typing as t
 from collections import Counter
 
@@ -26,7 +25,8 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import TimeLike, to_date, to_ds, to_timestamp, yesterday
+from sqlmesh.utils.date import TimeLike, to_date, to_ds, to_timestamp
+from tests.conftest import SushiDataValidator
 
 
 @pytest.fixture(autouse=True)
@@ -655,18 +655,15 @@ def test_multi(mocker):
 
 @pytest.mark.integration
 @pytest.mark.core_integration
-def test_incremental_time_self_reference(mocker: MockerFixture, sushi_context: Context):
+def test_incremental_time_self_reference(
+    mocker: MockerFixture, sushi_context: Context, sushi_data_validator: SushiDataValidator
+):
+    start_date, end_date = to_date("1 week ago"), to_date("yesterday")
     df = sushi_context.engine_adapter.fetchdf("SELECT MIN(ds) FROM sushi.customer_revenue_lifetime")
-    assert df.iloc[0, 0] == to_ds("1 week ago")
+    assert df.iloc[0, 0] == to_ds(start_date)
     df = sushi_context.engine_adapter.fetchdf("SELECT MAX(ds) FROM sushi.customer_revenue_lifetime")
-    assert df.iloc[0, 0] == to_ds("yesterday")
-    query_get_date_and_count = "SELECT ds, count(*) AS the_count FROM sushi.customer_revenue_lifetime group by 1 order by 2 desc, 1 desc"
-    results = sushi_context.engine_adapter.fetchdf(query_get_date_and_count).to_dict()
-    # Validate that both rows increase over time and all days are present
-    assert len(results["ds"]) == 7
-    assert list(results["ds"].values()) == [
-        to_ds(yesterday() - datetime.timedelta(days=x)) for x in range(7)
-    ]
+    assert df.iloc[0, 0] == to_ds(end_date)
+    results = sushi_data_validator.validate("sushi.customer_revenue_lifetime", start_date, end_date)
     plan = sushi_context.plan(
         restate_models=["sushi.customer_revenue_lifetime", "sushi.customer_revenue_by_day"],
         no_prompts=True,
@@ -709,7 +706,9 @@ def test_incremental_time_self_reference(mocker: MockerFixture, sushi_context: C
         "sushi.customer_revenue_by_day": 1,
     }
     # Validate that the results are the same as before the restate
-    assert results == sushi_context.engine_adapter.fetchdf(query_get_date_and_count).to_dict()
+    assert results == sushi_data_validator.validate(
+        "sushi.customer_revenue_lifetime", start_date, end_date
+    )
 
 
 def initial_add(context: Context, environment: str):

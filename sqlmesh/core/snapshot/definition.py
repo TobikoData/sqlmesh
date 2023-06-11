@@ -19,9 +19,11 @@ from sqlmesh.core.model import (
     PythonModel,
     SeedModel,
     SqlModel,
+    ViewKind,
     kind,
     parse_model_name,
 )
+from sqlmesh.core.model.definition import _SqlBasedModel
 from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
@@ -794,6 +796,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
     @property
+    def is_materialized_view(self) -> bool:
+        """Returns whether or not this snapshot's model represents a materialized view."""
+        return isinstance(self.model.kind, ViewKind) and self.model.kind.materialized
+
+    @property
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         self._ensure_categorized()
@@ -908,8 +915,7 @@ def _model_data_hash(model: Model) -> str:
         model.stamp,
     ]
 
-    if isinstance(model, SqlModel):
-        query = model.query if model.hash_raw_query else model.render_query()
+    if isinstance(model, _SqlBasedModel):
         pre_statements = (
             model.pre_statements if model.hash_raw_query else model.render_pre_statements()
         )
@@ -917,6 +923,13 @@ def _model_data_hash(model: Model) -> str:
             model.post_statements if model.hash_raw_query else model.render_post_statements()
         )
         macro_defs = model.macro_definitions if model.hash_raw_query else []
+    else:
+        pre_statements = []
+        post_statements = []
+        macro_defs = []
+
+    if isinstance(model, SqlModel):
+        query = model.query if model.hash_raw_query else model.render_query()
 
         for e in (query, *pre_statements, *post_statements, *macro_defs):
             data.append(e.sql(comments=False))
@@ -933,6 +946,9 @@ def _model_data_hash(model: Model) -> str:
     elif isinstance(model, PythonModel):
         data.append(model.entrypoint)
     elif isinstance(model, SeedModel):
+        for e in (*pre_statements, *post_statements, *macro_defs):
+            data.append(e.sql(comments=False))
+
         for column_name, column_hash in model.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
