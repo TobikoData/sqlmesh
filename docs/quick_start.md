@@ -100,7 +100,7 @@ It will also create the files needed for this quickstart:
 
 The data used in this example project is contained in the `seed_data.csv` file in the `/seeds` project directory. The data reflects sales of 3 items over 7 days in January 2020.
 
-The data contains three columns, `id`, `item_id`, and `ds`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
+The file contains three columns, `id`, `item_id`, and `ds`, which correspond to each row's unique ID, the sold item's ID number, and the date the item was sold, respectively.
 
 This is the complete dataset:
 
@@ -341,7 +341,7 @@ Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill 
 
 Lines 5-9 of the output summarize the differences between the modified pipeline and the existing `dev` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. 
 
-On line 23, we see that SQLMesh semantically understood that the change was additive (added a column not used by `full_model`) and was automatically classified as a non-breaking change.
+On line 23, we see that SQLMesh understood that the change was additive (added a column not used by `full_model`) and was automatically classified as a non-breaking change.
 
 Hit `Enter` at the prompt to backfill data from our start date `2020-01-01`. Another prompt will appear asking for a backfill end date; hit `Enter` to backfill until now. Finally, enter `y` and press `Enter` to apply the plan and execute the backfill:
 
