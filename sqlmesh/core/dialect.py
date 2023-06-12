@@ -289,7 +289,7 @@ _parse_audit = _create_parser(Audit, ["model"])
 PARSERS = {"MODEL": _parse_model, "AUDIT": _parse_audit}
 
 
-def _model_sql(self: Generator, expression: exp.Expression) -> str:
+def _model_sql(self: Generator, expression: Model) -> str:
     props = ",\n".join(
         self.indent(f"{prop.name} {self.sql(prop, 'value')}") for prop in expression.expressions
     )
@@ -313,7 +313,7 @@ def _macro_keyword_func_sql(self: Generator, expression: exp.Expression) -> str:
     return self.sql(clause).replace(keyword, macro, 1)
 
 
-def _macro_func_sql(self: Generator, expression: exp.Expression) -> str:
+def _macro_func_sql(self: Generator, expression: MacroFunc) -> str:
     expression = expression.this
     name = expression.name
     if name in KEYWORD_MACROS:
@@ -335,8 +335,9 @@ def format_model_expressions(
     Args:
         expressions: The model's expressions, must be at least model def + query.
         dialect: The dialect to render the expressions as.
+
     Returns:
-        A string with the formatted model.
+        A string representing the formatted model.
     """
     if len(expressions) == 1:
         return expressions[0].sql(pretty=True, dialect=dialect)
@@ -446,7 +447,7 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
         default_dialect: The dialect to use if the model does not specify one.
 
     Returns:
-        A list of the expressions, [Model, *Statements, Query | Jinja]
+        A list of the parsed expressions: [Model, *Statements, Query, *Statements]
     """
     match = DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)()
@@ -528,16 +529,8 @@ def extend_sqlglot() -> None:
             generator.WITH_SEPARATED_COMMENTS = (*generator.WITH_SEPARATED_COMMENTS, Model)  # type: ignore
 
     for parser in parsers:
-        parser.FUNCTIONS.update(
-            {
-                "JINJA": Jinja.from_arg_list,
-            }
-        )
-        parser.PLACEHOLDER_PARSERS.update(
-            {
-                TokenType.PARAMETER: _parse_macro,
-            }
-        )
+        parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list})
+        parser.PLACEHOLDER_PARSERS.update({TokenType.PARAMETER: _parse_macro})
 
     _override(Parser, _parse_statement)
     _override(Parser, _parse_join)
