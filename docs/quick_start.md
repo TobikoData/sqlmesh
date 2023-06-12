@@ -7,7 +7,9 @@ Before beginning, ensure that you meet all the [prerequisites](prerequisites.md)
 
 This project demonstrates key SQLMesh features by walking through the SQLMesh workflow on a simple data pipeline. This section describes the project structure and the SQLMesh concepts you will encounter as you work through it.
 
-The project structure is a three-model pipeline with a CSV file as the only data source: 
+The term "pipeline" is generic and usually refers to more than a collection of models and the relationships among them. We use instead the more specific term "directed acyclic graph" (or "DAG") to refer to the models and relationships in a SQLMesh project. In this context, "graph" is synonymous with "network" - each model is a node in the network, and two models are linked if one of them `SELECT`s from the other. A SQLMesh project's model graph is "acyclic" because it cannot contain cycles where two models `SELECT` from one another, either directly or indirectly via other models.
+
+The project structure is a three-model DAG with a CSV file as the only data source: 
 
 ```
 ┌─────────────┐
@@ -27,7 +29,7 @@ The project structure is a three-model pipeline with a CSV file as the only data
                                              └──────────────┘
 ```
 
-Although the pipeline is simple, the project touches on all the primary concepts needed to use SQLMesh productively. 
+Although the project is simple, it touches on all the primary concepts needed to use SQLMesh productively. 
 
 ### Plans
 
@@ -179,7 +181,7 @@ WHERE
     ds between @start_ds and @end_ds
 ```
 
-The final model in the pipeline is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](./concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory that verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
+The final model in the DAG is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](./concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory that verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
 
 ```sql linenums="1"
 MODEL (
@@ -202,7 +204,7 @@ GROUP BY item_id
 
 SQLMesh's key actions are creating and applying *plans* to *environments*. At this point, the only environment is the empty `prod` environment.
 
-The first SQLMesh plan must execute the entire pipeline to populate the production environment. Running `sqlmesh plan` will generate the plan and the following output: 
+The first SQLMesh plan must execute the entire DAG to populate the production environment. Running `sqlmesh plan` will generate the plan and the following output: 
 
 ```bash linenums="1"
 $ sqlmesh plan
@@ -339,7 +341,7 @@ Models needing backfill (missing dates):
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
 ```
 
-Lines 5-9 of the output summarize the differences between the modified pipeline and the existing `dev` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. 
+Lines 5-9 of the output summarize the differences between the modified project components and the existing `dev` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. 
 
 On line 23, we see that SQLMesh understood that the change was additive (added a column not used by `full_model`) and was automatically classified as a non-breaking change.
 
