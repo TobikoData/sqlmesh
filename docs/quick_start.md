@@ -263,7 +263,7 @@ Apply - Virtual Update [y/n]:
 
 The output does not list any added or modified models because `dev` is being created from the existing `prod` environment without modification. 
 
-Line 6 shows that when you apply the plan creating the `dev` environment will only involve a Virtual Update. This is because SQLMesh is able to safely reuse the tables you've already backfilled in the `prod` environment. Enter `y` and press `Enter` to perform the Virtual Update:
+Line 6 shows that when you apply the plan creating the `dev` environment, it will only involve a Virtual Update. This is because SQLMesh is able to safely reuse the tables you've already backfilled in the `prod` environment. Enter `y` and press `Enter` to perform the Virtual Update:
 
 ```bash linenums="1"
 Apply - Virtual Update [y/n]: y
