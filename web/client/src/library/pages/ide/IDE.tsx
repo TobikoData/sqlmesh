@@ -5,6 +5,10 @@ import {
   apiCancelModels,
   useApiFiles,
   apiCancelFiles,
+  useApiEnvironments,
+  useApiPlanRun,
+  apiCancelGetEnvironments,
+  apiCancelPlanRun,
 } from '../../../api'
 import {
   EnumPlanState,
@@ -13,7 +17,7 @@ import {
   type PlanTasks,
 } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
-import { debounceAsync, isFalse, isObject } from '~/utils'
+import { debounceAsync, isFalse, isObject, isObjectEmpty } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
 import { EnumSize, EnumVariant } from '~/types/enum'
@@ -41,15 +45,24 @@ export default function PageIDE(): JSX.Element {
 
   const { removeError } = useIDE()
 
+  const models = useStoreContext(s => s.models)
+  const environment = useStoreContext(s => s.environment)
   const setModels = useStoreContext(s => s.setModels)
-  const setFiles = useStoreFileTree(s => s.setFiles)
+  const addSyncronizedEnvironments = useStoreContext(
+    s => s.addSyncronizedEnvironments,
+  )
+  const hasSyncronizedEnvironments = useStoreContext(
+    s => s.hasSyncronizedEnvironments,
+  )
 
+  const planState = useStorePlan(s => s.state)
   const activePlan = useStorePlan(s => s.activePlan)
   const setState = useStorePlan(s => s.setState)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
   const project = useStoreFileTree(s => s.project)
   const setProject = useStoreFileTree(s => s.setProject)
+  const setFiles = useStoreFileTree(s => s.setFiles)
 
   const subscribe = useChannelEvents()
 
@@ -57,6 +70,13 @@ export default function PageIDE(): JSX.Element {
   // all pages have access to models and files
   const { refetch: getModels } = useApiModels()
   const { refetch: getFiles } = useApiFiles()
+  const { data: dataEnvironments, refetch: getEnvironments } =
+    useApiEnvironments()
+  const { refetch: planRun } = useApiPlanRun(environment.name, {
+    planOptions: {
+      skip_tests: true,
+    },
+  })
 
   const debouncedGetModels = useCallback(debounceAsync(getModels, 1000, true), [
     getModels,
@@ -66,9 +86,22 @@ export default function PageIDE(): JSX.Element {
     getFiles,
   ])
 
+  const debouncedGetEnvironemnts = useCallback(
+    debounceAsync(getEnvironments, 1000, true),
+    [getEnvironments],
+  )
+
+  const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
+    planRun,
+  ])
+
   useEffect(() => {
     const unsubscribeTasks = subscribe<PlanProgress>('tasks', updateTasks)
     const unsubscribeModels = subscribe<Model[]>('models', updateModels)
+    const unsubscribePromote = subscribe<any>(
+      'promote-environment',
+      handlePromote,
+    )
 
     void debouncedGetModels().then(({ data }) => {
       updateModels(data)
@@ -79,14 +112,19 @@ export default function PageIDE(): JSX.Element {
     })
 
     return () => {
+      debouncedGetEnvironemnts.cancel()
       debouncedGetModels.cancel()
       debouncedGetFiles.cancel()
+      debouncedRunPlan.cancel()
 
       apiCancelFiles(client)
       apiCancelModels(client)
+      apiCancelGetEnvironments(client)
+      apiCancelPlanRun(client)
 
       unsubscribeTasks?.()
       unsubscribeModels?.()
+      unsubscribePromote?.()
     }
   }, [])
 
@@ -99,6 +137,28 @@ export default function PageIDE(): JSX.Element {
   useEffect(() => {
     setFiles(project?.allFiles ?? [])
   }, [project])
+
+  useEffect(() => {
+    if (dataEnvironments == null || isObjectEmpty(dataEnvironments)) return
+
+    addSyncronizedEnvironments(Object.values(dataEnvironments))
+
+    // This use case is happening when user refreshes the page
+    // while plan is still applying
+    if (planState !== EnumPlanState.Applying) {
+      void debouncedRunPlan()
+    }
+  }, [dataEnvironments])
+
+  useEffect(() => {
+    if (models.size > 0 && isFalse(hasSyncronizedEnvironments())) {
+      void debouncedGetEnvironemnts()
+    }
+
+    if (hasSyncronizedEnvironments()) {
+      void debouncedRunPlan()
+    }
+  }, [models])
 
   function updateModels(models?: Model[]): void {
     removeError(EnumErrorKey.General)
@@ -130,6 +190,12 @@ export default function PageIDE(): JSX.Element {
     } else {
       setState(EnumPlanState.Applying)
     }
+  }
+
+  function handlePromote(): void {
+    setActivePlan(undefined)
+
+    void debouncedGetEnvironemnts()
   }
 
   const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor

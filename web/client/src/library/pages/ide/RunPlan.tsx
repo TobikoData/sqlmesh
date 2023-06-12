@@ -9,12 +9,7 @@ import {
   useMemo,
   useCallback,
 } from 'react'
-import {
-  apiCancelGetEnvironments,
-  apiCancelPlanRun,
-  useApiEnvironments,
-  useApiPlanRun,
-} from '~/api'
+import { useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
@@ -26,7 +21,6 @@ import {
   isFalse,
   isStringEmptyOrNil,
   debounceAsync,
-  isObjectEmpty,
 } from '~/utils'
 import { Button, makeButton, type ButtonSize } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
@@ -41,11 +35,8 @@ import {
 } from '@components/plan/context'
 import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { useIDE } from './context'
-import { useQueryClient } from '@tanstack/react-query'
 
 export default function RunPlan(): JSX.Element {
-  const client = useQueryClient()
-
   const { errors, setIsPlanOpen } = useIDE()
 
   const planState = useStorePlan(s => s.state)
@@ -54,39 +45,25 @@ export default function RunPlan(): JSX.Element {
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
-  const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const setInitialDates = useStoreContext(s => s.setInitialDates)
-  const addSyncronizedEnvironments = useStoreContext(
-    s => s.addSyncronizedEnvironments,
-  )
   const hasSyncronizedEnvironments = useStoreContext(
     s => s.hasSyncronizedEnvironments,
   )
 
-  const [hasChanges, setHasSetChanges] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [plan, setPlan] = useState<ContextEnvironment | undefined>()
   const [shouldStartPlanAutomatically, setShouldSartPlanAutomatically] =
     useState(false)
 
-  const { data: dataEnvironments, refetch: getEnvironments } =
-    useApiEnvironments()
   const {
     refetch: planRun,
     data: dataPlan,
     isFetching,
-  } = useApiPlanRun(environment.name, {
-    planOptions: {
-      skip_tests: true,
-    },
-  })
+  } = useApiPlanRun(environment.name, { planOptions: { skip_tests: true } })
 
-  const debouncedGetEnvironemnts = useCallback(
-    debounceAsync(getEnvironments, 1000, true),
-    [getEnvironments],
-  )
   const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
     planRun,
   ])
@@ -106,16 +83,6 @@ export default function RunPlan(): JSX.Element {
   }, [environment])
 
   useEffect(() => {
-    return () => {
-      debouncedGetEnvironemnts.cancel()
-      debouncedRunPlan.cancel()
-
-      apiCancelGetEnvironments(client)
-      apiCancelPlanRun(client)
-    }
-  }, [])
-
-  useEffect(() => {
     if (shouldStartPlanAutomatically) {
       startPlan()
       setShouldSartPlanAutomatically(false)
@@ -127,22 +94,11 @@ export default function RunPlan(): JSX.Element {
   }, [environment])
 
   useEffect(() => {
-    if (planState === EnumPlanState.Finished) {
-      setActivePlan(undefined)
-
-      // TODO: Remove setTimeout when we have a better way to handle this
-      setTimeout(() => {
-        void debouncedGetEnvironemnts()
-      }, 500)
-    }
-  }, [planState])
-
-  useEffect(() => {
     if (dataPlan == null) return
 
     setPlan(dataPlan)
     setInitialDates(dataPlan.start, dataPlan.end)
-    setHasSetChanges(
+    setHasChanges(
       [
         dataPlan.changes?.added,
         dataPlan.changes?.removed,
@@ -152,26 +108,6 @@ export default function RunPlan(): JSX.Element {
       ].some(isArrayNotEmpty),
     )
   }, [dataPlan])
-
-  useEffect(() => {
-    if (dataEnvironments == null || isObjectEmpty(dataEnvironments)) return
-
-    addSyncronizedEnvironments(Object.values(dataEnvironments))
-
-    if (planState !== EnumPlanState.Applying) {
-      void debouncedRunPlan()
-    }
-  }, [dataEnvironments])
-
-  useEffect(() => {
-    if (models.size > 0 && isFalse(hasSyncronizedEnvironments())) {
-      void debouncedGetEnvironemnts()
-    }
-
-    if (hasSyncronizedEnvironments()) {
-      void debouncedRunPlan()
-    }
-  }, [models])
 
   function startPlan(): void {
     setActivePlan(undefined)
