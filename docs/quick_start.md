@@ -7,7 +7,7 @@ Before beginning, ensure that you meet all the [prerequisites](prerequisites.md)
 
 This project demonstrates key SQLMesh features by walking through the SQLMesh workflow on a simple data pipeline. This section describes the project structure and the SQLMesh concepts you will encounter as you work through it.
 
-The term "pipeline" is generic and usually refers to more than a collection of models and the relationships among them. We use instead the more specific term "directed acyclic graph" (or "DAG") to refer to the models and relationships in a SQLMesh project. In this context, "graph" is synonymous with "network" - each model is a node in the network, and two models are linked if one of them `SELECT`s from the other. A SQLMesh project's model graph is "acyclic" because it cannot contain cycles where two models `SELECT` from one another, either directly or indirectly via other models.
+The term "pipeline" is generic and usually refers to more than a collection of models and the relationships among them. We use instead the more specific term "directed acyclic graph" (or "DAG") to refer to the models and their relationships in a SQLMesh project. In this context, "graph" is synonymous with "network" - each model is a node in the network, and two models are linked if one of them `SELECT`s from the other. A SQLMesh project's model graph is "acyclic" because it cannot contain cycles where two models both `SELECT` from one another, either directly or indirectly via other models.
 
 The project structure is a three-model DAG with a CSV file as the only data source: 
 
