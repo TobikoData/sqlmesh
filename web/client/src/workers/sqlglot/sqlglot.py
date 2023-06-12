@@ -23,16 +23,13 @@ def parse_to_json(sql: str, read: DialectType = None) -> str:
 
 def get_dialect(name: str = "") -> str:
     dialect = Dialect.classes.get(name, Dialect)
-    tokenizer = dialect.tokenizer_class
-    output = {"keywords": "", "types": ""}
+    keywords = dialect.tokenizer_class.KEYWORDS
+    type_mapping = dialect.generator_class.TYPE_MAPPING
 
-    if tokenizer is not None and dialect.generator_class is not None:
-        type_mapping = dialect.generator_class.TYPE_MAPPING
-
-        output = {
-            "keywords": " ".join(tokenizer.KEYWORDS) + " ",
-            "types": " ".join(type_mapping.get(t, t.value) for t in exp.DataType.Type) + " ",
-        }
+    output = {
+        "keywords": " ".join(keywords) + " ",
+        "types": " ".join(type_mapping.get(t, t.value) for t in exp.DataType.Type) + " ",
+    }
 
     return json.dumps(output)
 

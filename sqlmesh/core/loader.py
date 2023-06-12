@@ -12,10 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ruamel.yaml import YAML
-from sqlglot import exp
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.qualify_columns import validate_qualify_columns
-from sqlglot.schema import MappingSchema, nested_set
+from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
@@ -49,22 +48,10 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
         if not model:
             continue
 
-        external = False
-
-        for dep in model.depends_on:
-            external = external or dep not in models
-            table = exp.to_table(dep, dialect=model.dialect)
-            mapping_schema = schema.find(table)
-
-            if mapping_schema:
-                nested_set(
-                    model.mapping_schema,
-                    tuple(str(part) for part in table.parts),
-                    {k: str(v) for k, v in mapping_schema.items()},
-                )
-
+        model.update_schema(schema)
         schema.add_table(name, model.columns_to_types, dialect=model.dialect)
 
+        external = any(dep not in models for dep in model.depends_on)
         if external:
             if "*" in model.columns_to_types:
                 raise ConfigError(

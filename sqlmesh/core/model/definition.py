@@ -16,6 +16,7 @@ from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.scope import traverse_scope
+from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
@@ -383,7 +384,7 @@ class _Model(ModelMeta, frozen=True):
             # Transpile the time column format into the generic dialect
             formatted_time = format_time(
                 self.time_column.format,
-                d.Dialect.get_or_raise(self.dialect).time_mapping,
+                d.Dialect.get_or_raise(self.dialect).TIME_MAPPING,
             )
             assert formatted_time is not None
             self.time_column.format = formatted_time
@@ -404,6 +405,19 @@ class _Model(ModelMeta, frozen=True):
             elif time_column_type.this in exp.DataType.TEMPORAL_TYPES:
                 return exp.cast(exp.Literal.string(time), time_column_type)
         return exp.convert(time)
+
+    def update_schema(self, schema: MappingSchema) -> None:
+        """Updates the schema for this model's dependencies based on the given mapping schema."""
+        for dep in self.depends_on:
+            table = exp.to_table(dep, dialect=self.dialect)
+            mapping_schema = schema.find(table)
+
+            if mapping_schema:
+                nested_set(
+                    self.mapping_schema,
+                    tuple(str(part) for part in table.parts),
+                    {k: str(v) for k, v in mapping_schema.items()},
+                )
 
     @property
     def depends_on(self) -> t.Set[str]:
@@ -700,6 +714,10 @@ class SqlModel(_SqlBasedModel):
                 if select.comments
             }
         return self._column_descriptions
+
+    def update_schema(self, schema: MappingSchema) -> None:
+        super().update_schema(schema)
+        self._columns_to_types = None
 
     def validate_definition(self) -> None:
         query = self._query_renderer.render()

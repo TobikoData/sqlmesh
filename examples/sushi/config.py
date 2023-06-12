@@ -12,7 +12,7 @@ from sqlmesh.core.config import (
 from sqlmesh.core.user import User, UserRole
 
 CURRENT_FILE_PATH = os.path.abspath(__file__)
-DATA_DIR = os.path.join(CURRENT_FILE_PATH, "data")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
 # An in memory DuckDB config.
