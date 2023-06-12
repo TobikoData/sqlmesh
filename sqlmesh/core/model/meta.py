@@ -4,7 +4,6 @@ import typing as t
 from datetime import timedelta
 from enum import Enum
 
-from croniter import croniter
 from pydantic import Field, root_validator, validator
 from sqlglot import exp
 
@@ -17,7 +16,8 @@ from sqlmesh.core.model.kind import (
     _Incremental,
 )
 from sqlmesh.utils import unique
-from sqlmesh.utils.date import TimeLike, preserve_time_like_kind, to_datetime
+from sqlmesh.utils.cron import CroniterCache
+from sqlmesh.utils.date import TimeLike, to_datetime
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -60,7 +60,7 @@ class ModelMeta(PydanticModel):
     grain: t.List[str] = []
     hash_raw_query: bool = False
 
-    _croniter: t.Optional[croniter] = None
+    _croniter: t.Optional[CroniterCache] = None
     _interval_unit: t.Optional[IntervalUnit] = None
 
     _model_kind_validator = ModelKind.field_validator()
@@ -128,9 +128,11 @@ class ModelMeta(PydanticModel):
     def _cron_validator(cls, v: t.Any) -> t.Optional[str]:
         cron = cls._string_validator(v)
         if cron:
+            from croniter import CroniterBadCronError, croniter
+
             try:
                 croniter(cron)
-            except Exception:
+            except CroniterBadCronError:
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
 
@@ -236,8 +238,8 @@ class ModelMeta(PydanticModel):
             The IntervalUnit enum.
         """
         if not self._interval_unit:
-            schedule = croniter(self.cron)
-            samples = [schedule.get_next() for _ in range(sample_size)]
+            croniter = CroniterCache(self.cron)
+            samples = [croniter.get_next() for _ in range(sample_size)]
             min_interval = min(b - a for a, b in zip(samples, samples[1:]))
             if min_interval >= 86400:
                 self._interval_unit = IntervalUnit.DAY
@@ -265,10 +267,11 @@ class ModelMeta(PydanticModel):
             return "0 0 * * *"
         return ""
 
-    def croniter(self, value: TimeLike) -> croniter:
+    def croniter(self, value: TimeLike) -> CroniterCache:
         if self._croniter is None:
-            self._croniter = croniter(self.normalized_cron())
-        self._croniter.set_current(to_datetime(value))
+            self._croniter = CroniterCache(self.normalized_cron(), value)
+        else:
+            self._croniter.curr = value
         return self._croniter
 
     def cron_next(self, value: TimeLike) -> TimeLike:
@@ -281,7 +284,7 @@ class ModelMeta(PydanticModel):
         Returns:
             The timestamp for the next run.
         """
-        return preserve_time_like_kind(value, self.croniter(value).get_next())
+        return self.croniter(value).get_next()
 
     def cron_prev(self, value: TimeLike) -> TimeLike:
         """
@@ -293,7 +296,7 @@ class ModelMeta(PydanticModel):
         Returns:
             The timestamp for the previous run.
         """
-        return preserve_time_like_kind(value, self.croniter(value).get_prev())
+        return self.croniter(value).get_prev()
 
     def cron_floor(self, value: TimeLike) -> TimeLike:
         """
@@ -305,4 +308,4 @@ class ModelMeta(PydanticModel):
         Returns:
             The timestamp floor.
         """
-        return preserve_time_like_kind(value, self.croniter(self.cron_next(value)).get_prev())
+        return self.croniter(self.cron_next(value)).get_prev()

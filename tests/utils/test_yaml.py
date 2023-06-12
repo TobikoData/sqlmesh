@@ -13,7 +13,6 @@ def test_yaml() -> None:
     prod:
       type: postgres
       host: 127.0.0.1
-      # IMPORTANT: Make sure to quote the entire Jinja string here
       user: "{{ env_var('__SQLMESH_TEST_ENV_USER__') }}"
       password: "{{ env_var('__SQLMESH_TEST_ENV_PASSWORD__') }}"
 """
@@ -26,7 +25,6 @@ def test_yaml() -> None:
     prod:
       type: postgres
       host: 127.0.0.1
-      # IMPORTANT: Make sure to quote the entire Jinja string here
       user: user
       password: password
 """

@@ -223,6 +223,12 @@ class ManifestHelper:
 
         profile = self._load_profile()
         project = self._load_project(profile)
+
+        if not any(k in project.models for k in ("start", "+start")):
+            raise ConfigError(
+                f"SQLMesh's requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
+            )
+
         runtime_config = RuntimeConfig.from_parts(project, profile, args)
 
         self._project_name = project.project_name

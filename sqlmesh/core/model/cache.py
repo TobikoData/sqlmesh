@@ -12,7 +12,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 class SqlModelCacheEntry(PydanticModel):
     model: SqlModel
-    rendered_query: t.Dict
+    rendered_query: exp.Expression
 
 
 class ModelCache:
@@ -44,13 +44,13 @@ class ModelCache:
         cache_entry = self._file_cache.get(name, entry_id)
         if cache_entry:
             model = cache_entry.model
-            model._query_renderer.update_cache(exp.Expression.load(cache_entry.rendered_query))
+            model._query_renderer.update_cache(cache_entry.rendered_query)
             return model
 
         loaded_model = loader()
         if isinstance(loaded_model, SqlModel):
             new_entry = SqlModelCacheEntry(
-                model=loaded_model, rendered_query=loaded_model.render_query().dump()
+                model=loaded_model, rendered_query=loaded_model.render_query()
             )
             self._file_cache.put(name, entry_id, new_entry)
 

@@ -213,7 +213,7 @@ def sequential_apply_to_dag(
 
     failed_or_skipped_nodes: t.Set[H] = set()
 
-    for node in dag.sorted():
+    for node in dag.sorted:
         if not failed_or_skipped_nodes.isdisjoint(dependencies[node]):
             skipped_nodes.append(node)
             failed_or_skipped_nodes.add(node)

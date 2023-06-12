@@ -290,8 +290,7 @@ class Context(BaseContext):
         model._path = path
 
         self._models.update({model.name: model})
-
-        self._add_model_to_dag(model)
+        self.dag.add(model.name, model.depends_on)
         update_model_schemas(self.dag, self._models)
 
         return model
@@ -1077,11 +1076,6 @@ class Context(BaseContext):
             )
             for path in paths
         }
-
-    def _add_model_to_dag(self, model: Model) -> None:
-        self.dag.graph[model.name] = set()
-
-        self.dag.add(model.name, model.depends_on)
 
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()

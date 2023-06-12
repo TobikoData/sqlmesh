@@ -15,7 +15,7 @@ def test_no_downstream(sushi_context):
 
 
 def test_lineage(sushi_context):
-    lineage = sushi_context.dag.lineage("sushi.order_items").sorted()
+    lineage = sushi_context.dag.lineage("sushi.order_items").sorted
     assert lineage.index("sushi.order_items") > lineage.index("sushi.items")
     assert lineage.index("sushi.customer_revenue_by_day") > lineage.index("sushi.order_items")
     assert lineage.index("sushi.waiter_revenue_by_day") > lineage.index("sushi.order_items")
@@ -23,7 +23,7 @@ def test_lineage(sushi_context):
 
 def test_sorted():
     dag = DAG({"a": {"b", "c"}, "b": {"d", "e"}, "c": {"f", "g"}})
-    result = dag.sorted()
+    result = dag.sorted
 
     assert len(set(result)) == 7
     assert result[0] in ("d", "e", "f", "g")

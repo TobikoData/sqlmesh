@@ -176,7 +176,7 @@ class Scheduler:
         dag = self._dag(batches)
 
         visited = set()
-        for snapshot, _ in dag.sorted():
+        for snapshot, _ in dag.sorted:
             if snapshot in visited:
                 continue
             visited.add(snapshot)
