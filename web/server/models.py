@@ -273,12 +273,14 @@ class SchemaDiff(BaseModel):
 
     @validator("source_schema", "target_schema", "added", "removed", "modified", pre=True)
     def validate_schema(
-        cls, v: t.Union[t.Dict[str, exp.DataType], t.List[t.Tuple[str, exp.DataType]]]
+        cls,
+        v: t.Union[t.Dict[str, exp.DataType], t.List[t.Tuple[str, exp.DataType]], t.Dict[str, str]],
     ) -> t.Dict[str, str]:
         if isinstance(v, dict):
             return {k: str(v) for k, v in v.items()}
         if isinstance(v, list):
             return {k: str(v) for k, v in v}
+        return v
 
 
 class RowDiff(BaseModel):
