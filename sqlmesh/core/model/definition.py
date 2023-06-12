@@ -384,7 +384,7 @@ class _Model(ModelMeta, frozen=True):
             # Transpile the time column format into the generic dialect
             formatted_time = format_time(
                 self.time_column.format,
-                d.Dialect.get_or_raise(self.dialect).time_mapping,
+                d.Dialect.get_or_raise(self.dialect).TIME_MAPPING,
             )
             assert formatted_time is not None
             self.time_column.format = formatted_time
