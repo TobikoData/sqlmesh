@@ -48,10 +48,10 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
         if not model:
             continue
 
-        external = any(dep not in models for dep in model.depends_on)
         model.update_schema(schema)
         schema.add_table(name, model.columns_to_types, dialect=model.dialect)
 
+        external = any(dep not in models for dep in model.depends_on)
         if external:
             if "*" in model.columns_to_types:
                 raise ConfigError(
