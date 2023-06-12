@@ -16,7 +16,7 @@ def dbt_utils_star() -> MacroConfig:
     {%- if except|length > 0 %} EXCEPT (
         {%- for col in except -%}
             {%- if not loop.first %}, {% endif -%}
-            {%- if quote_identifiers -%}\"{{ col }}\"{%- else -%}{{ col }}{%- endif -%}
+            {%- if quote_identifiers -%}{{ adapter.quote(col)|trim }}{%- else -%}{{ col }}{%- endif -%}
         {%- endfor -%}
         )
     {%- endif -%}
