@@ -14,7 +14,7 @@ import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
-import { EnumSize, EnumVariant } from '~/types/enum'
+import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
 import {
   isArrayNotEmpty,
   includes,
@@ -369,7 +369,7 @@ function SelectEnvironemnt({
   onSelect,
   environment,
   disabled,
-  side = 'right',
+  side = EnumSide.Right,
   className,
   showAddEnvironemnt = true,
   size = EnumSize.sm,
@@ -378,7 +378,7 @@ function SelectEnvironemnt({
   disabled: boolean
   className?: string
   size?: ButtonSize
-  side?: 'left' | 'right'
+  side?: Side
   onSelect?: () => void
   showAddEnvironemnt?: boolean
 }): JSX.Element {
@@ -423,8 +423,8 @@ function SelectEnvironemnt({
             <div
               className={clsx(
                 'absolute top-9 overflow-hidden shadow-xl bg-theme border-2 border-primary-20 rounded-md flex flex-col z-10',
-                side === 'left' && 'left-0',
-                side === 'right' && 'right-0',
+                side === EnumSide.Left && 'left-0',
+                side === EnumSide.Right && 'right-0',
               )}
             >
               <Menu.Items className="overflow-auto max-h-80 py-2 scrollbar scrollbar--vertical">

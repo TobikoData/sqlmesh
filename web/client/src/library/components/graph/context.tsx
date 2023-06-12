@@ -5,6 +5,7 @@ import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { createContext, useState, useContext, useCallback } from 'react'
 import { toNodeOrEdgeId } from './help'
 import { type ErrorIDE } from '~/library/pages/ide/context'
+import { EnumSide } from '~/types/enum'
 
 export interface Connections {
   left: string[]
@@ -104,8 +105,8 @@ export default function LineageFlowProvider({
     function removeActiveEdges(edges: string[]): void {
       setActiveEdges(activeEdges => {
         edges.forEach(edge => {
-          activeEdges.set(toNodeOrEdgeId('left', edge), 0)
-          activeEdges.set(toNodeOrEdgeId('right', edge), 0)
+          activeEdges.set(toNodeOrEdgeId(EnumSide.Left, edge), 0)
+          activeEdges.set(toNodeOrEdgeId(EnumSide.Right, edge), 0)
         })
 
         return new Map(activeEdges)
@@ -125,8 +126,8 @@ export default function LineageFlowProvider({
   const isActiveColumn = useCallback(
     function isActive(modelName: string, columnName: string): boolean {
       return (
-        hasActiveEdge(toNodeOrEdgeId('left', modelName, columnName)) ||
-        hasActiveEdge(toNodeOrEdgeId('right', modelName, columnName))
+        hasActiveEdge(toNodeOrEdgeId(EnumSide.Left, modelName, columnName)) ||
+        hasActiveEdge(toNodeOrEdgeId(EnumSide.Right, modelName, columnName))
       )
     },
     [hasActiveEdge],
