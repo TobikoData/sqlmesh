@@ -757,7 +757,7 @@ class Context(BaseContext):
         self,
         source: str,
         target: str,
-        on: t.List[str] | exp.Condition,
+        on: t.List[str] | exp.Condition | None = None,
         model_or_snapshot: t.Optional[ModelOrSnapshot] = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
@@ -769,6 +769,7 @@ class Context(BaseContext):
             source: The source environment or table.
             target: The target environment or table.
             on: The join condition, table aliases must be "s" and "t" for source and target.
+                If omitted, the table's grain will be used.
             model_or_snapshot: The model or snapshot to use when environments are passed in.
             where: An optional where statement to filter results.
             limit: The limit of the sample dataframe.
@@ -793,6 +794,12 @@ class Context(BaseContext):
             target = next(
                 snapshot for snapshot in target_env.snapshots if snapshot.name == model.name
             ).table_name()
+
+            if not on and model.grain:
+                on = model.grain
+
+        if not on:
+            raise SQLMeshError("Missing join condition 'on'")
 
         table_diff = TableDiff(
             adapter=self._engine_adapter, source=source, target=target, on=on, where=where

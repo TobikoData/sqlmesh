@@ -516,3 +516,23 @@ WHERE
             }
         },
     }
+
+
+def test_table_diff(web_sushi_context: Context) -> None:
+    web_sushi_context.plan(
+        "dev",
+        no_prompts=True,
+        auto_apply=True,
+        skip_tests=True,
+    )
+    response = client.get(
+        "/api/table_diff",
+        params={
+            "source": "prod",
+            "target": "dev",
+            "model_or_snapshot": "sushi.customer_revenue_by_day",
+        },
+    )
+    assert response.status_code == 200
+    assert "schema_diff" in response.json()
+    assert "row_diff" in response.json()
