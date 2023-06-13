@@ -90,7 +90,7 @@ jobs:
 
   ui_test:
     docker:
-      - image: node:18
+      - image: mcr.microsoft.com/playwright:v1.35.0-jammy
     resource_class: medium
     steps:
       - checkout
@@ -100,9 +100,6 @@ jobs:
       - run:
           name: Install packages
           command: npm --prefix web/client ci
-      - run:
-          name: Install Playwright Browsers
-          command: npm --prefix web/client run playwright:install
       - save_cache:
           key: v1-nm-cache-{{ checksum "web/client/package-lock.json" }}
           paths:

@@ -60,9 +60,9 @@ repos:
             "@typescript-eslint/parser",
             eslint@8.40.0,
             eslint-config-prettier@8.8.0,
-            eslint-config-standard-with-typescript@34.0.1,
+            eslint-config-standard-with-typescript@35.0.0,
             eslint-plugin-import@2.27.4,
-            eslint-plugin-n@15.7.0,
+            eslint-plugin-n@16.0.0,
             eslint-plugin-promise@6.1.1,
             eslint-plugin-react@7.32.2,
           ]
