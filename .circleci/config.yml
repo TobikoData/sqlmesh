@@ -40,7 +40,7 @@ jobs:
             CONTINUE_ON_ERROR="false" \
             npx https://github.com/TobikoData/circleci-gh-conventional-release
 
-  ide-build:
+  ui-build:
     docker:
       - image: cimg/node:18
     resource_class: medium
@@ -50,7 +50,7 @@ jobs:
           name: Install packages
           command: npm --prefix web/client ci
       - run:
-          name: Build IDE
+          name: Build UI
           command: npm --prefix web/client run build
       - persist_to_workspace:
           root: web/client
@@ -69,11 +69,11 @@ workflows:
 
       - gh-release:
           <<: *on_tag_filter
-      - ide-build:
+      - ui-build:
           <<: *on_tag_filter
           requires:
             - gh-release
       - publish:
           <<: *on_tag_filter
           requires:
-            - ide-build
+            - ui-build
