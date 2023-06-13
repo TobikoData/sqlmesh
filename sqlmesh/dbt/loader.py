@@ -180,9 +180,11 @@ class DbtLoader(Loader):
             self._model_cache = ModelCache(cache_path)
 
         def get_or_load_model(self, target_path: Path, loader: t.Callable[[], Model]) -> Model:
-            return self._model_cache.get_or_load(
+            model = self._model_cache.get_or_load(
                 self._cache_entry_name(target_path), self._cache_entry_id(target_path), loader
             )
+            model._path = target_path
+            return model
 
         def _cache_entry_name(self, target_path: Path) -> str:
             try:
