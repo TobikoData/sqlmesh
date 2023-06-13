@@ -6,7 +6,7 @@ from collections import OrderedDict
 from os import getenv
 from pathlib import Path
 
-from ruamel.yaml import YAML, CommentedMap
+from ruamel import yaml
 
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import ENVIRONMENT
@@ -14,6 +14,8 @@ from sqlmesh.utils.jinja import ENVIRONMENT
 JINJA_METHODS = {
     "env_var": lambda key, default=None: getenv(key, default),
 }
+
+YAML = lambda: yaml.YAML(typ="safe")
 
 
 def load(
@@ -45,8 +47,8 @@ def load(
     return contents
 
 
-def dumps(value: CommentedMap | OrderedDict) -> str:
+def dumps(value: dict | yaml.CommentedMap | OrderedDict) -> str:
     """Dumps a ruamel.yaml loaded object and converts it into a string"""
     result = io.StringIO()
-    YAML().dump(value, result)
+    yaml.YAML().dump(value, result)
     return result.getvalue()

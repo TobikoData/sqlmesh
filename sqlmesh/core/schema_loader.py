@@ -5,12 +5,12 @@ import typing as t
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ruamel.yaml import YAML
 from sqlglot.dialects.dialect import DialectType
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
 from sqlmesh.core.state_sync import StateReader
+from sqlmesh.utils.yaml import YAML
 
 logger = logging.getLogger(__name__)
 

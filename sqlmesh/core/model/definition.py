@@ -231,10 +231,11 @@ class _Model(ModelMeta, frozen=True):
         """
         return exp.select(
             *(
-                exp.alias_(f"NULL::{column_type}", name)
+                exp.cast(exp.Null(), column_type, copy=False).as_(name, copy=False)
                 for name, column_type in self.columns_to_types.items()
-            )
-        ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]))
+            ),
+            copy=False,
+        ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]), copy=False)
 
     def render_pre_statements(
         self,

@@ -22,7 +22,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
-from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
+from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
 
@@ -665,14 +665,14 @@ def test_render_definition():
 
 def test_cron():
     daily = ModelMeta(name="x", cron="@daily")
-    assert daily.cron_prev("2020-01-01") == to_date("2019-12-31")
-    assert daily.cron_floor("2020-01-01") == to_date("2020-01-01")
+    assert to_datetime(daily.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
+    assert to_datetime(daily.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
     assert to_timestamp(daily.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
     assert to_timestamp(daily.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
 
     offset = ModelMeta(name="x", cron="1 0 * * *")
-    assert offset.cron_prev("2020-01-01") == to_date("2019-12-31")
-    assert offset.cron_floor("2020-01-01") == to_date("2020-01-01")
+    assert to_datetime(offset.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
+    assert to_datetime(offset.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
     assert to_timestamp(offset.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
     assert to_timestamp(offset.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
 

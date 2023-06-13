@@ -3,13 +3,14 @@ from __future__ import annotations
 import importlib
 import re
 import sys
+import time
 import traceback
 import types
 import typing as t
 import uuid
 from contextlib import contextmanager
 from copy import deepcopy
-from functools import wraps
+from functools import lru_cache, wraps
 from pathlib import Path
 
 T = t.TypeVar("T")
@@ -183,6 +184,31 @@ def str_to_bool(s: t.Optional[str]) -> bool:
     if not s:
         return False
     return s.lower() in ("true", "1", "t", "y", "yes", "on")
+
+
+def ttl_cache(ttl: int = 60, maxsize: int = 128000) -> t.Callable:
+    """Caches a function that clears whenever the current epoch / ttl seconds changes.
+
+    TTL is not exact, it is used as a salt. So by default, at every minute mark, the cache will be cleared.
+    This is done for simplicity.
+
+    Args:
+        ttl: The number of seconds to hold the cache for.
+        maxsize: The maximum size of the cache.
+    """
+
+    def decorator(func: t.Callable) -> t.Any:
+        @lru_cache(maxsize=maxsize)
+        def cache(tick: int, *args: t.Any, **kwargs: t.Any) -> t.Any:
+            return func(*args, **kwargs)
+
+        @wraps(func)
+        def wrap(*args: t.Any, **kwargs: t.Any) -> t.Any:
+            return cache(int(time.time() / ttl), *args, **kwargs)
+
+        return wrap
+
+    return decorator
 
 
 class classproperty(property):

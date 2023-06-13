@@ -11,7 +11,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from ruamel.yaml import YAML
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.qualify_columns import validate_qualify_columns
 from sqlglot.schema import MappingSchema
@@ -32,6 +31,7 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
+from sqlmesh.utils.yaml import YAML
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.config import Config
@@ -41,7 +41,7 @@ if t.TYPE_CHECKING:
 def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> None:
     schema = MappingSchema(normalize=False)
 
-    for name in dag.sorted():
+    for name in dag.sorted:
         model = models.get(name)
 
         # External models don't exist in the context, so we need to skip them
@@ -55,7 +55,7 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
         if external:
             if "*" in model.columns_to_types:
                 raise ConfigError(
-                    f"Can't expand SELECT * expression for model '{name}'."
+                    f"Can't expand SELECT * expression for model '{name}' at '{model._path}'."
                     " Either specify external source projections expliticly or"
                     ' add source tables as "external models" using the command'
                     " 'sqlmesh create_external_models'."
@@ -179,7 +179,6 @@ class Loader(abc.ABC):
         return models
 
     def _add_model_to_dag(self, model: Model) -> None:
-        self._dag.graph[model.name] = set()
         self._dag.add(model.name, model.depends_on)
 
     def _track_file(self, path: Path) -> None:

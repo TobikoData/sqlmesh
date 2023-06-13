@@ -100,7 +100,6 @@ class Plan:
         self._dag: DAG[str] = DAG()
 
         for name, snapshot in self.context_diff.snapshots.items():
-            self._dag.graph[name] = set()
             self._dag.add(name, snapshot.model.depends_on)
 
         self._state_reader = state_reader
