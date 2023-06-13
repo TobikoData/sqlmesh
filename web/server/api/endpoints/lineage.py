@@ -65,13 +65,15 @@ async def column_lineage(
             origin="API -> lineage -> column_lineage",
         )
 
-    graph = {}
+    graph: t.Dict[str, t.Dict[str, LineageColumn]] = {}
     table = model_name
 
     for i, node in enumerate(node.walk()):
         if i > 0:
             table = _get_table(node) or node.name
             column_name = exp.to_column(node.name).name
+        if table in graph and column_name in graph[table]:
+            continue
         dialect = context.models[table].dialect if table in context.models else ""
         graph[table] = {
             column_name: LineageColumn(

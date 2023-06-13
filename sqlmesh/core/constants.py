@@ -34,6 +34,7 @@ DEFAULT_MAX_LIMIT = 1000
 AUDITS = "audits"
 MACROS = "macros"
 MODELS = "models"
+SEEDS = "seeds"
 TESTS = "tests"
 CACHE = ".cache"
 SCHEMA_YAML = "schema.yaml"
