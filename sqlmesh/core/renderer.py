@@ -162,6 +162,7 @@ class ExpressionRenderer:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        **kwargs: t.Any,
     ) -> None:
         self._cache[_dates(start, end, latest)] = expression
 
@@ -193,6 +194,8 @@ class QueryRenderer(ExpressionRenderer):
         self._time_column = time_column
         self._time_converter = time_converter or (lambda v: exp.convert(v))
 
+        self._optimized_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
+
         self.schema = {} if schema is None else schema
 
     def render(
@@ -204,6 +207,7 @@ class QueryRenderer(ExpressionRenderer):
         is_dev: bool = False,
         expand: t.Iterable[str] = tuple(),
         add_incremental_filter: bool = False,
+        optimize: bool = True,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -213,26 +217,32 @@ class QueryRenderer(ExpressionRenderer):
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
-            add_incremental_filter: Add an incremental filter to the query if the model is incremental.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            is_dev: Indicates whether the rendering happens in the development mode and temporary
-                tables / table clones should be used where applicable.
+            add_incremental_filter: Add an incremental filter to the query if the model is incremental.
+            optimize: Whether to optimize the query.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
             The rendered expression.
         """
-        query = t.cast(
-            t.Optional[exp.Subqueryable],
-            super().render(start=start, end=end, latest=latest, **kwargs),
-        )
-        if not query:
-            raise ConfigError(f"Failed to render query:\n{query}")
+        cache_key = _dates(start, end, latest)
 
-        query = self._optimize_query(query)
+        if cache_key not in self._optimized_cache or not optimize:
+            query = super().render(start=start, end=end, latest=latest, **kwargs)  # type: ignore
+            if not query:
+                raise ConfigError(f"Failed to render query:\n{query}")
+
+            if optimize:
+                query = self._optimize_query(t.cast(exp.Subqueryable, query))
+                self._optimized_cache[cache_key] = query
+        else:
+            query = self._optimized_cache[cache_key]
+
         query = _resolve_tables(
             query,
             snapshots=snapshots,
@@ -247,6 +257,7 @@ class QueryRenderer(ExpressionRenderer):
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
         if add_incremental_filter and self._time_column:
+            query = t.cast(exp.Expression, query.copy())
             dates = _dates(start, end, latest)
             with_ = query.args.pop("with", None)
             query = (
@@ -264,6 +275,20 @@ class QueryRenderer(ExpressionRenderer):
             raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
 
         return t.cast(exp.Subqueryable, quote_identifiers(query, dialect=self._dialect))
+
+    def update_cache(
+        self,
+        expression: exp.Expression,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        optimized: bool = False,
+        **kwargs: t.Any,
+    ) -> None:
+        if not optimized:
+            super().update_cache(expression, start=start, end=end, latest=latest, **kwargs)
+        else:
+            self._optimized_cache[_dates(start, end, latest)] = expression
 
     def time_column_filter(self, start: TimeLike, end: TimeLike) -> exp.Between:
         """Returns a between statement with the properly formatted time column."""
@@ -341,7 +366,7 @@ def _resolve_tables(
                     )
             return node
 
-        expression = expression.transform(_expand, copy=False)
+        expression = expression.transform(_expand)
 
     if mapping:
         expression = exp.replace_tables(expression, mapping)

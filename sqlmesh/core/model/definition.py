@@ -721,6 +721,7 @@ class SqlModel(_SqlBasedModel):
     def update_schema(self, schema: MappingSchema) -> None:
         super().update_schema(schema)
         self._columns_to_types = None
+        self._query_renderer._optimized_cache = {}
 
     def validate_definition(self) -> None:
         query = self._query_renderer.render()

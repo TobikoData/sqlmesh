@@ -291,7 +291,7 @@ class Context(BaseContext):
 
         self._models.update({model.name: model})
         self.dag.add(model.name, model.depends_on)
-        update_model_schemas(self.dag, self._models)
+        update_model_schemas(self.dag, self._models, self.path)
 
         return model
 

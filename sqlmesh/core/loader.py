@@ -22,6 +22,7 @@ from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model import (
     Model,
     ModelCache,
+    OptimizedQueryCache,
     SeedModel,
     create_external_model,
     load_model,
@@ -38,8 +39,11 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
 
 
-def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> None:
+def update_model_schemas(
+    dag: DAG[str], models: UniqueKeyDict[str, Model], context_path: Path
+) -> None:
     schema = MappingSchema(normalize=False)
+    optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
 
     for name in dag.sorted:
         model = models.get(name)
@@ -49,6 +53,7 @@ def update_model_schemas(dag: DAG[str], models: UniqueKeyDict[str, Model]) -> No
             continue
 
         model.update_schema(schema)
+        optimized_query_cache.with_optimized_query(model)
         schema.add_table(name, model.columns_to_types, dialect=model.dialect)
 
         external = any(dep not in models for dep in model.depends_on)
@@ -120,7 +125,7 @@ class Loader(abc.ABC):
             self._add_model_to_dag(model)
 
         if update_schemas:
-            update_model_schemas(self._dag, models)
+            update_model_schemas(self._dag, models, self._context.path)
 
         audits = self._load_audits()
 
