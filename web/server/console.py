@@ -99,7 +99,16 @@ class ApiConsole(TerminalConsole):
         self.queue.put_nowait(self._make_event(data, event="tests", ok=ok))
 
     def log_success(self, msg: str) -> None:
-        self.queue.put_nowait(self._make_event(msg, event="promote-environment"))
+        self.queue.put_nowait(self._make_event(msg))
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        if success:
+            self.queue.put_nowait(
+                self._make_event(
+                    "The target environment has been updated successfully",
+                    event="promote-environment",
+                )
+            )
 
     def log_exception(self) -> None:
         """Log an exception."""
