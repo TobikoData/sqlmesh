@@ -93,6 +93,7 @@ jobs:
       - image: mcr.microsoft.com/playwright:v1.35.0-jammy
     resource_class: medium
     steps:
+      - halt_unless_client
       - checkout
       - restore_cache:
           keys:
