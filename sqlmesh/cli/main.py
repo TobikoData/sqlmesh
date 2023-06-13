@@ -7,7 +7,6 @@ import typing as t
 
 import click
 from sqlglot import exp
-from sqlglot.helper import ensure_list
 
 from sqlmesh import debug_mode_enabled, enable_logging
 from sqlmesh.cli import error_handler
@@ -407,6 +406,7 @@ def create_external_models(obj: Context) -> None:
 @click.option(
     "--limit",
     type=int,
+    default=20,
     help="The limit of the sample dataframe.",
 )
 @click.pass_obj

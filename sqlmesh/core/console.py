@@ -459,7 +459,9 @@ class TerminalConsole(Console):
         del self.loading_status[id]
 
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
-        tree = Tree(f"[bold]Schema Diff Between '{schema_diff.source}' and '{schema_diff.target}':")
+        tree = Tree(
+            f"\n[b]Schema Diff Between '[yellow]{schema_diff.source}[/yellow]' and '[green]{schema_diff.target}[/green]':"
+        )
 
         if schema_diff.added:
             added = Tree("[green]Added Columns:")
@@ -482,10 +484,16 @@ class TerminalConsole(Console):
         self.console.print(tree)
 
     def show_row_diff(self, row_diff: RowDiff) -> None:
+        self.console.print("\n[b]Row Count:[/b]")
         self.console.print(
-            f"[bold]Row Count:[/bold] {row_diff.source}: {row_diff.source_count}, {row_diff.target}: {row_diff.target_count} -- {row_diff.count_pct_change}%"
+            f" [yellow]{row_diff.source_env.upper()}[/yellow]: {row_diff.source_count} rows"
         )
-        self.console.print(row_diff.sample.to_string(index=False))
+        self.console.print(
+            f" [green]{row_diff.target_env.upper()}[/green]: {row_diff.target_count} rows"
+        )
+        self.console.print(f"\n[b]Rows Added/Removed[b]: {row_diff.count_pct_change:.1f}%")
+        self.console.print("\n[b]Sample Rows:[/b]")
+        self.console.print(row_diff.sample.to_string(index=False) + "\n")
 
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool

@@ -52,6 +52,8 @@ class RowDiff(PydanticModel, frozen=True):
     target: str
     stats: t.Dict[str, float]
     sample: pd.DataFrame
+    source_env: str = "source"
+    target_env: str = "target"
 
     @property
     def source_count(self) -> int:
@@ -83,12 +85,16 @@ class TableDiff:
         where: t.Optional[str | exp.Condition] = None,
         dialect: DialectType = None,
         limit: int = 20,
+        source_env: str = "source",
+        target_env: str = "target",
     ):
         self.adapter = adapter
         self.source = source
         self.target = target
         self.where = exp.condition(where, dialect=dialect) if where else None
         self.limit = limit
+        self.source_env = source_env
+        self.target_env = target_env
 
         if isinstance(on, list):
             self.on: exp.Condition = exp.and_(
@@ -194,5 +200,7 @@ class TableDiff:
                     target=self.target,
                     stats=self.adapter.fetchdf(summary_query).iloc[0].to_dict(),
                     sample=self.adapter.fetchdf(sample_query),
+                    source_env=self.source_env,
+                    target_env=self.target_env,
                 )
         return self._row_diff
