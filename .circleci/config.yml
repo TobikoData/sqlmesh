@@ -51,7 +51,7 @@ jobs:
           command: npm --prefix web/client ci
       - run:
           name: Build IDE
-          command: npm --prefix web/client run build     
+          command: npm --prefix web/client run build
       - persist_to_workspace:
           root: web/client
           paths:
