@@ -159,9 +159,7 @@ class DbtContext:
     @property
     def jinja_environment(self) -> Environment:
         if self._jinja_environment is None:
-            self._jinja_environment = self.jinja_macros.build_environment(
-                **self.jinja_globals, engine_adapter=self.engine_adapter
-            )
+            self._jinja_environment = self.jinja_macros.build_environment(**self.jinja_globals)
         return self._jinja_environment
 
     @property
