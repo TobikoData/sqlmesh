@@ -17,6 +17,7 @@ from dbt.tracking import do_not_track
 from dbt.version import get_installed_version
 
 from sqlmesh.dbt.basemodel import Dependencies
+from sqlmesh.dbt.macros import MACRO_OVERRIDES
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
@@ -119,7 +120,10 @@ class ManifestHelper:
             if macro.name.startswith("test_"):
                 macro.macro_sql = _convert_jinja_test_to_macro(macro.macro_sql)
 
-            self._macros_per_package[macro.package_name][macro.name] = MacroConfig(
+            package_overrides = MACRO_OVERRIDES.get(macro.package_name, {})
+            self._macros_per_package[macro.package_name][macro.name] = package_overrides.get(
+                macro.name
+            ) or MacroConfig(
                 info=MacroInfo(
                     definition=macro.macro_sql,
                     depends_on=list(_macro_references(self._manifest, macro)),

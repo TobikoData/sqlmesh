@@ -308,7 +308,9 @@ def create_builtin_globals(
 
     if engine_adapter is not None:
         adapter = RuntimeAdapter(
-            engine_adapter, jinja_macros, jinja_globals={**builtin_globals, **jinja_globals}
+            engine_adapter,
+            jinja_macros,
+            jinja_globals={**builtin_globals, **jinja_globals},
         )
         sql_execution = SQLExecution(adapter)
         builtin_globals.update(
@@ -325,11 +327,14 @@ def create_builtin_globals(
             }
         )
     else:
+        target = jinja_globals.get("target")
         builtin_globals.update(
             {
                 "execute": False,
                 "adapter": ParsetimeAdapter(
-                    jinja_macros, jinja_globals={**builtin_globals, **jinja_globals}
+                    jinja_macros,
+                    jinja_globals={**builtin_globals, **jinja_globals},
+                    dialect=target.type if target else None,
                 ),
                 "load_relation": lambda *args, **kwargs: None,
                 "store_result": lambda *args, **kwargs: "",
