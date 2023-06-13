@@ -513,7 +513,5 @@ function mergeConnections(
     }
   }
 
-  console.log(connections)
-
   return new Map(connections)
 }
