@@ -388,35 +388,16 @@ def create_external_models(obj: Context) -> None:
 
 
 @cli.command("table_diff")
-@click.option(
-    "--source",
-    "-s",
-    type=str,
+@click.argument(
+    "from_to",
     required=True,
-    help="The source environment or table.",
+    help="The source and target environment to diff. Format: source:target",
 )
-@click.option(
-    "--target",
-    "-t",
-    type=str,
-    required=True,
-    help="The target environment or table.",
-)
-@click.option(
-    "--grain",
-    type=str,
-    multiple=True,
-    help="The list of columns to use as keys.",
-)
+@click.argument("model_name", required=True)
 @click.option(
     "--on",
     type=str,
     help='The SQL join condition or list of columns to use as keys. Table aliases must be "s" and "t" for source and target.',
-)
-@click.option(
-    "--model",
-    type=str,
-    help="The model to diff against when source and target are environments and not tables.",
 )
 @click.option(
     "--where",
@@ -430,16 +411,19 @@ def create_external_models(obj: Context) -> None:
 )
 @click.pass_obj
 @error_handler
-def table_diff(obj: Context, **kwargs: t.Any) -> None:
-    """Show the diff between two tables.
-
-    Can either be two tables or two environments and a model.
-    """
-    kwargs["model_or_snapshot"] = kwargs.pop("model", None)
-    on = kwargs.pop("on", None)
-    grain = ensure_list(kwargs.pop("grain", None))
-    kwargs["on"] = exp.condition(on) if on else grain
-    obj.table_diff(**kwargs)
+def table_diff(
+    obj: Context, from_to: str, model_name: str, on: t.Optional[str], **kwargs: t.Any
+) -> None:
+    """Show the diff between two tables."""
+    model = obj.get_model(model_name, raise_if_missing=True)
+    source, target = from_to.split(":")
+    obj.table_diff(
+        source=source,
+        target=target,
+        model_or_snapshot=model,
+        on=exp.condition(on or " and ".join([f"s.{col} = t.{col}" for col in model.grain])),
+        **kwargs,
+    )
 
 
 @cli.command("prompt")
