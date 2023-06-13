@@ -768,7 +768,7 @@ class ViewStrategy(PromotableStrategy):
         )
 
     def migrate(self, target_table_name: str, source_table_name: str) -> None:
-        pass
+        raise ConfigError(f"Cannot migrate a view '{target_table_name}'.")
 
     def delete(self, name: str) -> None:
         self.adapter.drop_view(name)
