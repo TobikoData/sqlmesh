@@ -27,7 +27,7 @@ jobs:
 
   gh-release:
     docker:
-      - image: cimg/node:18
+      - image: cimg/node:18.16
     resource_class: small
     steps:
       - run:
@@ -42,7 +42,7 @@ jobs:
 
   ide-build:
     docker:
-      - image: cimg/node:18
+      - image: cimg/node:18.16
     resource_class: medium
     steps:
       - checkout
