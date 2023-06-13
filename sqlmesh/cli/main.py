@@ -391,7 +391,7 @@ def create_external_models(obj: Context) -> None:
 @click.argument(
     "from_to",
     required=True,
-    help="The source and target environment to diff. Format: source:target",
+    metavar="ENV:ENV",
 )
 @click.argument("model_name", required=True)
 @click.option(
