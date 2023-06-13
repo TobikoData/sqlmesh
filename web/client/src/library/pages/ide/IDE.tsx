@@ -24,7 +24,7 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { useStoreFileTree } from '@context/fileTree'
-import { EnumErrorKey, useIDE } from './context'
+import { EnumErrorKey, ErrorIDE, useIDE } from './context'
 import { type Model } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
@@ -43,7 +43,7 @@ export default function PageIDE(): JSX.Element {
 
   const client = useQueryClient()
 
-  const { removeError } = useIDE()
+  const { removeError, addError } = useIDE()
 
   const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
@@ -98,6 +98,7 @@ export default function PageIDE(): JSX.Element {
   useEffect(() => {
     const unsubscribeTasks = subscribe<PlanProgress>('tasks', updateTasks)
     const unsubscribeModels = subscribe<Model[]>('models', updateModels)
+    const unsubscribeErrors = subscribe<ErrorIDE>('errors', displayErrors)
     const unsubscribePromote = subscribe<any>(
       'promote-environment',
       handlePromote,
@@ -125,6 +126,7 @@ export default function PageIDE(): JSX.Element {
       unsubscribeTasks?.()
       unsubscribeModels?.()
       unsubscribePromote?.()
+      unsubscribeErrors?.()
     }
   }, [])
 
@@ -190,6 +192,10 @@ export default function PageIDE(): JSX.Element {
     } else {
       setState(EnumPlanState.Applying)
     }
+  }
+
+  function displayErrors(data: ErrorIDE): void {
+    addError(EnumErrorKey.General, data)
   }
 
   function handlePromote(): void {

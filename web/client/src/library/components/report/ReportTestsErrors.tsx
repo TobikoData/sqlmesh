@@ -21,7 +21,7 @@ export default function ReportTestsErrors({
             className="flex mb-1"
           >
             <span className="inline-block mr-4">&mdash;</span>
-            <div className="mr-4">
+            <div className="overflow-hidden">
               <span className="inline-block mb-2">{item.message}</span>
               <code className="inline-block max-h-[50vh] bg-theme py-2 px-4 rounded-lg w-full overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
                 <pre>{item.details}</pre>
