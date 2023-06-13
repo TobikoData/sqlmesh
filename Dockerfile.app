@@ -10,4 +10,4 @@ RUN apt-get update && apt-get -y install libnss3 libatk-bridge2.0-0 libdrm-dev l
 COPY web/client/package*.json .
 
 RUN npm install -g npm@latest && \
-    npm install --no-audit --no-fund --no-package-lock
+    npm install --no-audit --no-fund --no-package-lock --legacy-peer-deps
