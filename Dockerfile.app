@@ -1,4 +1,3 @@
-FROM node:18.16
 FROM mcr.microsoft.com/playwright:v1.35.0-jammy
 
 WORKDIR /app

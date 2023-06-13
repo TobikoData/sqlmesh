@@ -27,7 +27,7 @@ jobs:
 
   gh-release:
     docker:
-      - image: cimg/node:18.16
+      - image: cimg/node:16.14
     resource_class: small
     steps:
       - run:
@@ -42,7 +42,7 @@ jobs:
 
   ide-build:
     docker:
-      - image: cimg/node:18.16
+      - image: cimg/node:18
     resource_class: medium
     steps:
       - checkout
@@ -51,7 +51,7 @@ jobs:
           command: npm --prefix web/client ci
       - run:
           name: Build IDE
-          command: npm --prefix web/client run build
+          command: npm --prefix web/client run build     
       - persist_to_workspace:
           root: web/client
           paths:
