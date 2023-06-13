@@ -6,6 +6,8 @@ import sys
 import typing as t
 
 import click
+from sqlglot import exp
+from sqlglot.helper import ensure_list
 
 from sqlmesh import debug_mode_enabled, enable_logging
 from sqlmesh.cli import error_handler
@@ -401,10 +403,14 @@ def create_external_models(obj: Context) -> None:
     help="The target environment or table.",
 )
 @click.option(
+    "--grain",
+    type=str,
+    multiple=True,
+    help="The list of columns to use as keys.",
+)
+@click.option(
     "--on",
     type=str,
-    nargs="+",
-    required=True,
     help='The SQL join condition or list of columns to use as keys. Table aliases must be "s" and "t" for source and target.',
 )
 @click.option(
@@ -430,6 +436,9 @@ def table_diff(obj: Context, **kwargs: t.Any) -> None:
     Can either be two tables or two environments and a model.
     """
     kwargs["model_or_snapshot"] = kwargs.pop("model", None)
+    on = kwargs.pop("on", None)
+    grain = ensure_list(kwargs.pop("grain", None))
+    kwargs["on"] = exp.condition(on) if on else grain
     obj.table_diff(**kwargs)
 
 

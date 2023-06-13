@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pandas as pd
 from pytest_mock.plugin import MockerFixture
-from ruamel.yaml import YAML
 from sqlglot import exp, parse_one
 
 from sqlmesh.core import constants as c
@@ -12,6 +11,7 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import SqlModel, load_model
 from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
+from sqlmesh.utils.yaml import YAML
 
 
 def test_create_external_models(tmpdir, assert_exp_eq):

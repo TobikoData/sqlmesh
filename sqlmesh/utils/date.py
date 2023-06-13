@@ -13,6 +13,8 @@ from datetime import date, datetime, timedelta, timezone
 import dateparser
 from sqlglot import exp
 
+from sqlmesh.utils import ttl_cache
+
 UTC = timezone.utc
 TimeLike = t.Union[date, datetime, str, int, float]
 MILLIS_THRESHOLD = time.time() + 100 * 365 * 24 * 3600
@@ -22,24 +24,35 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.scheduler import Interval
 
 
-def now() -> datetime:
+def now(minute_floor: bool = True) -> datetime:
     """
-    Current utc datetime.
+    Current utc datetime with optional minute level accuracy / granularity.
+
+    minute_floor is set to True by default
+
+    Args:
+        minute_floor: If true (default), removes the second and microseconds from the current datetime.
 
     Returns:
         A datetime object with tz utc.
     """
-    return datetime.utcnow().replace(tzinfo=UTC)
+    now = datetime.utcnow()
+    if minute_floor:
+        return now.replace(second=0, microsecond=0, tzinfo=UTC)
+    return now.replace(tzinfo=UTC)
 
 
-def now_timestamp() -> int:
+def now_timestamp(minute_floor: bool = False) -> int:
     """
     Current utc timestamp.
+
+    Args:
+        minute_floor: If true, removes the second and microseconds from the current datetime.
 
     Returns:
         UTC epoch millis timestamp
     """
-    return to_timestamp(now())
+    return to_timestamp(now(minute_floor))
 
 
 def now_ds() -> str:
@@ -96,6 +109,7 @@ def to_timestamp(value: TimeLike, relative_base: t.Optional[datetime] = None) ->
     return int(to_datetime(value, relative_base=relative_base).timestamp() * 1000)
 
 
+@ttl_cache()
 def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> datetime:
     """Converts a value into a UTC datetime object.
 
@@ -241,12 +255,6 @@ def make_inclusive_end(end: TimeLike) -> datetime:
     if is_date(end):
         end_dt = end_dt + timedelta(days=1)
     return end_dt - timedelta(milliseconds=1)
-
-
-def preserve_time_like_kind(input_value: TimeLike, output_value: TimeLike) -> TimeLike:
-    if is_date(input_value):
-        return to_date(output_value)
-    return output_value
 
 
 def validate_date_range(

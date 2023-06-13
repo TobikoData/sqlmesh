@@ -15,6 +15,8 @@ T = t.TypeVar("T", bound=t.Hashable)
 class DAG(t.Generic[T]):
     def __init__(self, graph: t.Optional[t.Dict[T, t.Set[T]]] = None):
         self._graph: t.Dict[T, t.Set[T]] = {}
+        self._sorted: t.Optional[t.List[T]] = None
+
         for node, dependencies in (graph or {}).items():
             self.add(node, dependencies)
 
@@ -25,6 +27,7 @@ class DAG(t.Generic[T]):
             node: The node to add.
             dependencies: Optional dependencies to add to the node.
         """
+        self._sorted = None
         if node not in self._graph:
             self._graph[node] = set()
         if dependencies:
@@ -66,7 +69,7 @@ class DAG(t.Generic[T]):
 
     def upstream(self, node: T) -> t.List[T]:
         """Returns all upstream dependencies in topologically sorted order."""
-        return self.subdag(node).sorted()[:-1]
+        return self.subdag(node).sorted[:-1]
 
     @property
     def leaves(self) -> t.Set[T]:
@@ -80,23 +83,25 @@ class DAG(t.Generic[T]):
             graph[node] = deps.copy()
         return graph
 
+    @property
     def sorted(self) -> t.List[T]:
         """Returns a list of nodes sorted in topological order."""
-        result: t.List[T] = []
+        if self._sorted is None:
+            self._sorted = []
 
-        unprocessed_nodes = self.graph
-        while unprocessed_nodes:
-            next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
+            unprocessed_nodes = self.graph
+            while unprocessed_nodes:
+                next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
 
-            for node in next_nodes:
-                unprocessed_nodes.pop(node)
+                for node in next_nodes:
+                    unprocessed_nodes.pop(node)
 
-            for deps in unprocessed_nodes.values():
-                deps -= next_nodes
+                for deps in unprocessed_nodes.values():
+                    deps -= next_nodes
 
-            result.extend(next_nodes)
+                self._sorted.extend(next_nodes)
 
-        return result
+        return self._sorted
 
     def downstream(self, node: T) -> t.List[T]:
         """Get all nodes that have the input node as an upstream dependency.
@@ -107,7 +112,7 @@ class DAG(t.Generic[T]):
         Returns:
             A list of descendant nodes sorted in topological order.
         """
-        sorted_nodes = self.sorted()
+        sorted_nodes = self.sorted
         try:
             node_index = sorted_nodes.index(node)
         except ValueError:

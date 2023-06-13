@@ -31,7 +31,7 @@ export default function PlanWizardStepOptions({
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
 
-  const syncronizedEnvironments = ModelEnvironment.getOnlySyncronized(
+  const synchronizedEnvironments = ModelEnvironment.getOnlySynchronized(
     Array.from(environments),
   )
 
@@ -69,7 +69,7 @@ export default function PlanWizardStepOptions({
                           <select
                             className={clsx(
                               'w-full bg-neutral-100 border-2 rounded-lg py-2 px-3 text-base leading-4',
-                              syncronizedEnvironments.length < 2 &&
+                              synchronizedEnvironments.length < 2 &&
                                 'opacity-50 cursor-not-allowed',
                               'flex w-full text-prose-lighter bg-theme-lighter border-theme-darker dark:border-theme-lighter dark:text-prose-darker rounded-md',
                               'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
@@ -81,10 +81,10 @@ export default function PlanWizardStepOptions({
                                 create_from: e.target.value,
                               })
                             }}
-                            disabled={syncronizedEnvironments.length < 2}
+                            disabled={synchronizedEnvironments.length < 2}
                             value={create_from}
                           >
-                            {ModelEnvironment.getOnlySyncronized(
+                            {ModelEnvironment.getOnlySynchronized(
                               Array.from(environments),
                             ).map(env => (
                               <option

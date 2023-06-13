@@ -27,6 +27,8 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable, prepare_env
 
 if t.TYPE_CHECKING:
+    from sqlglot._typing import E
+
     from sqlmesh.core.snapshot import Snapshot
 
 
@@ -98,7 +100,7 @@ class ExpressionRenderer:
         expression = self._expression
 
         render_kwargs = {
-            **date_dict(*_dates(start, end, latest), only_latest=self._only_latest),
+            **date_dict(*dates, only_latest=self._only_latest),
             **kwargs,
         }
 
@@ -108,7 +110,7 @@ class ExpressionRenderer:
         if isinstance(expression, d.Jinja):
             try:
                 rendered_expression = jinja_env.from_string(expression.name).render()
-                if not rendered_expression:
+                if not rendered_expression.strip():
                     self._cache[cache_key] = None
                     return None
 
@@ -223,7 +225,10 @@ class QueryRenderer(ExpressionRenderer):
         Returns:
             The rendered expression.
         """
-        query = super().render(start=start, end=end, latest=latest, **kwargs)  # type: ignore
+        query = t.cast(
+            t.Optional[exp.Subqueryable],
+            super().render(start=start, end=end, latest=latest, **kwargs),
+        )
         if not query:
             raise ConfigError(f"Failed to render query:\n{query}")
 
@@ -245,7 +250,7 @@ class QueryRenderer(ExpressionRenderer):
             dates = _dates(start, end, latest)
             with_ = query.args.pop("with", None)
             query = (
-                exp.select("*")
+                exp.select("*", copy=False)
                 .from_(
                     t.cast(exp.Subqueryable, query).subquery("_subquery", copy=False), copy=False
                 )
@@ -271,7 +276,7 @@ class QueryRenderer(ExpressionRenderer):
             self._time_converter(start), self._time_converter(end)  # type: ignore
         )
 
-    def _optimize_query(self, query: exp.Expression) -> exp.Expression:
+    def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
         schema = ensure_schema(self.schema, dialect=self._dialect, normalize=False)
         query = t.cast(exp.Subqueryable, query.copy())
@@ -303,13 +308,13 @@ class QueryRenderer(ExpressionRenderer):
 
 
 def _resolve_tables(
-    expression: exp.Expression,
+    expression: E,
     *,
     snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     expand: t.Iterable[str] = tuple(),
     is_dev: bool = False,
     **render_kwargs: t.Any,
-) -> exp.Expression:
+) -> E:
     from sqlmesh.core.snapshot import to_table_mapping
 
     snapshots = snapshots or {}

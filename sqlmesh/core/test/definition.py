@@ -130,7 +130,7 @@ class ModelTest(unittest.TestCase):
         raise TestError(f"Model '{model_name}' is an unsupported model type for testing at {path}")
 
     def __str__(self) -> str:
-        return f"{self.test_name} ({self.path}:{self.body.lc.line})"  # type: ignore
+        return f"{self.test_name} ({self.path})"
 
     def _get_rows(self, table: list[Row] | dict[str, list[Row]]) -> list[Row]:
         """Get a list of rows for input and output table data.

@@ -21,6 +21,7 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
 )
 from sqlmesh.dbt.context import DbtContext
+from sqlmesh.dbt.macros import dbt_utils_star
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
@@ -241,27 +242,30 @@ def test_this(assert_exp_eq, sushi_test_project: Project):
     )
 
 
-def test_statement(sushi_test_project: Project):
+def test_statement(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
-    assert context.render(
-        "{% set test_var = 'SELECT 1' %}{% call statement('something', fetch_result=True) %} {{ test_var }} {% endcall %}{{ load_result('something').table }}"
+    renderer = runtime_renderer(context)
+    assert renderer(
+        "{% set test_var = 'SELECT 1' %}{% call statement('something', fetch_result=True) %} {{ test_var }} {% endcall %}{{ load_result('something').table }}",
     ) == str(agate.Table([[1]], column_names=["1"], column_types=[agate.Number()]))
 
 
-def test_run_query(sushi_test_project: Project):
+def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
-    assert context.render("{{ run_query('SELECT 1 UNION ALL SELECT 2') }}") == str(
+    renderer = runtime_renderer(context)
+    assert renderer("{{ run_query('SELECT 1 UNION ALL SELECT 2') }}") == str(
         agate.Table([[1], [2]], column_names=["1"], column_types=[agate.Number()])
     )
 
 
-def test_logging(capsys, sushi_test_project: Project):
+def test_logging(capsys, sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
+    renderer = runtime_renderer(context)
 
-    assert context.render('{{ log("foo") }}') == ""
+    assert renderer('{{ log("foo") }}') == ""
     assert "foo" in capsys.readouterr().out
 
-    assert context.render('{{ print("bar") }}') == ""
+    assert renderer('{{ print("bar") }}') == ""
     assert "bar" in capsys.readouterr().out
 
 
@@ -394,3 +398,23 @@ def test_dbt_version(sushi_test_project: Project):
     context = sushi_test_project.context
 
     assert context.render("{{ dbt_version }}").startswith("1.")
+
+
+def test_dbt_utils_star_macro(sushi_test_project: Project):
+    context = sushi_test_project.context
+    context.jinja_macros.add_macros({"star": dbt_utils_star().info}, "dbt_utils")
+    context._jinja_environment = None
+
+    assert context.render("{{ dbt_utils.star(from='foo') }}") == "foo.*"
+    assert (
+        context.render("{{ dbt_utils.star(from='foo', except=['bar']) }}")
+        == """foo.* EXCEPT ("bar")"""
+    )
+    assert (
+        context.render("{{ dbt_utils.star(from='foo', except=['bar', 'baz']) }}")
+        == """foo.* EXCEPT ("bar", "baz")"""
+    )
+    with pytest.raises(CompilationError):
+        context.render("{{ dbt_utils.star(from='foo', prefix='pre') }}")
+    with pytest.raises(CompilationError):
+        context.render("{{ dbt_utils.star(from='foo', suffix='suf') }}")

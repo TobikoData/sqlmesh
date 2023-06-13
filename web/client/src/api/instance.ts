@@ -26,7 +26,7 @@ export interface FetchOptions<B extends object = any> {
     | 'no-cache'
     | 'force-cache'
     | 'only-if-cached'
-  params?: Record<string, string>
+  params?: Record<string, string | number>
 }
 
 export async function fetchAPI<T = any, B extends object = any>(
@@ -45,7 +45,7 @@ export async function fetchAPI<T = any, B extends object = any>(
       ...params,
     }).reduce((acc: Record<string, string>, [key, param]) => {
       if (param != null) {
-        acc[key] = param
+        acc[key] = String(param)
       }
 
       return acc

@@ -13,11 +13,11 @@ from web.server.sse import Event
 
 async def watch_project(queue: asyncio.Queue) -> None:
     context = await get_loaded_context(get_settings())
-    path = (context.path / c.MODELS).resolve()
+    paths = [(context.path / c.MODELS).resolve(), (context.path / c.SEEDS).resolve()]
     ignore_entity_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
     watch_filter = DefaultFilter(ignore_entity_patterns=ignore_entity_patterns)
 
-    async for _ in awatch(path, watch_filter=watch_filter):
+    async for _ in awatch(*paths, watch_filter=watch_filter):
         try:
             context.load()
         except Exception:

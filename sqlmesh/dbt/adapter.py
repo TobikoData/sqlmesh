@@ -23,10 +23,12 @@ class BaseAdapter(abc.ABC):
         self,
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
+        dialect: t.Optional[str] = None,
     ):
         self.jinja_macros = jinja_macros
         self.jinja_globals = jinja_globals.copy() if jinja_globals else {}
         self.jinja_globals["adapter"] = self
+        self.dialect = dialect
 
     @abc.abstractmethod
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
@@ -71,9 +73,9 @@ class BaseAdapter(abc.ABC):
     ) -> t.Optional[t.Tuple[AdapterResponse, agate.Table]]:
         """Executes the given SQL statement and returns the results as an agate table."""
 
-    @abc.abstractmethod
     def quote(self, identifier: str) -> str:
-        """Returns a quoted identifeir."""
+        """Returns a quoted identifier."""
+        return exp.to_column(identifier).sql(dialect=self.dialect, identify=True)
 
     def dispatch(self, name: str, package: t.Optional[str] = None) -> t.Callable:
         """Returns a dialect-specific version of a macro with the given name."""
@@ -124,9 +126,6 @@ class ParsetimeAdapter(BaseAdapter):
     ) -> t.Optional[t.Tuple[AdapterResponse, agate.Table]]:
         return None
 
-    def quote(self, identifier: str) -> str:
-        return identifier
-
 
 class RuntimeAdapter(BaseAdapter):
     def __init__(
@@ -137,7 +136,7 @@ class RuntimeAdapter(BaseAdapter):
     ):
         from dbt.adapters.base.relation import Policy
 
-        super().__init__(jinja_macros, jinja_globals=jinja_globals)
+        super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
 
         self.engine_adapter = engine_adapter
         # All engines quote by default except Snowflake
@@ -244,6 +243,3 @@ class RuntimeAdapter(BaseAdapter):
             assert isinstance(resp, pd.DataFrame)
             return AdapterResponse("Success"), pandas_to_agate(resp)
         return AdapterResponse("Success"), empty_table()
-
-    def quote(self, identifier: str) -> str:
-        return exp.to_column(identifier).sql(dialect=self.engine_adapter.dialect, identify=True)

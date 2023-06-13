@@ -641,23 +641,24 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         latest = make_inclusive_end(latest or now())
         missing = []
 
-        start_dt, end_dt = (
-            to_datetime(ts)
+        start_ts, end_ts = (
+            to_timestamp(ts)
             for ts in self.inclusive_exclusive(
                 start, end, latest, strict=False, for_removal=self.name in restatements
             )
         )
+        latest_ts = to_timestamp(latest)
 
-        croniter = self.model.croniter(start_dt)
-        dates = [start_dt]
+        croniter = self.model.croniter(start_ts)
+        dates = [start_ts]
 
         # get all individual dates with the addition of extra lookback dates up to the latest date
         # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
         while True:
-            date = to_datetime(croniter.get_next())
+            ts = to_timestamp(croniter.get_next())
 
-            if date < end_dt:
-                dates.append(date)
+            if ts < end_ts:
+                dates.append(ts)
             else:
                 croniter.get_prev()
                 break
@@ -665,29 +666,31 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         lookback = self.model.lookback
 
         for _ in range(lookback):
-            date = to_datetime(croniter.get_next())
-            if date < latest:
-                dates.append(date)
+            ts = to_timestamp(croniter.get_next())
+            if ts < latest_ts:
+                dates.append(ts)
             else:
                 break
 
         for i in range(len(dates)):
-            if dates[i] >= end_dt:
+            if dates[i] >= end_ts:
                 break
-            current_ts = to_timestamp(dates[i])
-            end_ts = to_timestamp(
-                dates[i + 1] if i + 1 < len(dates) else self.model.cron_next(current_ts)
+            current_ts = dates[i]
+            next_ts = (
+                dates[i + 1]
+                if i + 1 < len(dates)
+                else to_timestamp(self.model.cron_next(current_ts))
             )
-            compare_ts = to_timestamp(seq_get(dates, i + lookback) or dates[-1])
+            compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
             for low, high in self.intervals:
                 if compare_ts < low:
-                    missing.append((current_ts, end_ts))
+                    missing.append((current_ts, next_ts))
                     break
                 elif current_ts >= low and compare_ts < high:
                     break
             else:
-                missing.append((current_ts, end_ts))
+                missing.append((current_ts, next_ts))
 
         return missing
 

@@ -6,7 +6,6 @@ from collections import defaultdict
 from IPython.core.display import HTML, display
 from IPython.core.magic import Magics, line_cell_magic, line_magic, magics_class
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
-from ruamel.yaml import YAML
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
@@ -15,6 +14,7 @@ from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils.errors import MagicError, MissingContextException
+from sqlmesh.utils.yaml import YAML
 from sqlmesh.utils.yaml import dumps as yaml_dumps
 from sqlmesh.utils.yaml import load as yaml_load
 
