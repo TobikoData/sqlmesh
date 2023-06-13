@@ -456,6 +456,8 @@ def test_seed():
         "name": exp.DataType.build("varchar"),
     }
 
+    assert model.batch_size is None
+
 
 def test_seed_provided_columns():
     expressions = parse(

@@ -432,7 +432,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="3834815287",
-        metadata_hash="1624292983",
+        metadata_hash="1120323454",
     )
 
     model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
