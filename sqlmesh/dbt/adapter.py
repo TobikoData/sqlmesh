@@ -133,11 +133,10 @@ class RuntimeAdapter(BaseAdapter):
         engine_adapter: EngineAdapter,
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
-        dialect: t.Optional[str] = None,
     ):
         from dbt.adapters.base.relation import Policy
 
-        super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=dialect)
+        super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
 
         self.engine_adapter = engine_adapter
         # All engines quote by default except Snowflake
