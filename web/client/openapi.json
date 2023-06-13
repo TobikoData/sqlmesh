@@ -544,6 +544,69 @@
         }
       }
     },
+    "/api/table_diff": {
+      "get": {
+        "summary": "Get Table Diff",
+        "description": "Calculate differences between tables, taking into account schema and row level differences.",
+        "operationId": "get_table_diff_api_table_diff_get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "title": "Source", "type": "string" },
+            "name": "source",
+            "in": "query"
+          },
+          {
+            "required": true,
+            "schema": { "title": "Target", "type": "string" },
+            "name": "target",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": { "title": "On", "type": "string" },
+            "name": "on",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": { "title": "Model Or Snapshot", "type": "string" },
+            "name": "model_or_snapshot",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": { "title": "Where", "type": "string" },
+            "name": "where",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": { "title": "Limit", "type": "integer", "default": 20 },
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TableDiff" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health",
@@ -1047,6 +1110,7 @@
           "storage_format": { "title": "Storage Format", "type": "string" },
           "time_column": { "title": "Time Column", "type": "string" },
           "tags": { "title": "Tags", "type": "string" },
+          "grain": { "title": "Grain", "type": "string" },
           "partitioned_by": { "title": "Partitioned By", "type": "string" },
           "lookback": { "title": "Lookback", "type": "integer" },
           "cron_prev": {
@@ -1225,6 +1289,74 @@
           "dialect": { "title": "Dialect", "type": "string" }
         }
       },
+      "RowDiff": {
+        "title": "RowDiff",
+        "required": [
+          "source",
+          "target",
+          "stats",
+          "sample",
+          "source_count",
+          "target_count",
+          "count_pct_change"
+        ],
+        "type": "object",
+        "properties": {
+          "source": { "title": "Source", "type": "string" },
+          "target": { "title": "Target", "type": "string" },
+          "stats": {
+            "title": "Stats",
+            "type": "object",
+            "additionalProperties": { "type": "number" }
+          },
+          "sample": { "title": "Sample", "type": "object" },
+          "source_count": { "title": "Source Count", "type": "integer" },
+          "target_count": { "title": "Target Count", "type": "integer" },
+          "count_pct_change": { "title": "Count Pct Change", "type": "number" }
+        }
+      },
+      "SchemaDiff": {
+        "title": "SchemaDiff",
+        "required": [
+          "source",
+          "target",
+          "source_schema",
+          "target_schema",
+          "added",
+          "removed",
+          "modified"
+        ],
+        "type": "object",
+        "properties": {
+          "source": { "title": "Source", "type": "string" },
+          "target": { "title": "Target", "type": "string" },
+          "source_schema": {
+            "title": "Source Schema",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "target_schema": {
+            "title": "Target Schema",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "added": {
+            "title": "Added",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "modified": {
+            "title": "Modified",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      },
       "SnapshotChangeCategory": {
         "title": "SnapshotChangeCategory",
         "enum": [1, 2, 3, 4, 5],
@@ -1310,6 +1442,15 @@
           "kind_name": { "$ref": "#/components/schemas/ModelKindName" }
         },
         "additionalProperties": false
+      },
+      "TableDiff": {
+        "title": "TableDiff",
+        "required": ["schema_diff", "row_diff"],
+        "type": "object",
+        "properties": {
+          "schema_diff": { "$ref": "#/components/schemas/SchemaDiff" },
+          "row_diff": { "$ref": "#/components/schemas/RowDiff" }
+        }
       },
       "ValidationError": {
         "title": "ValidationError",
