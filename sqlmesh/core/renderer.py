@@ -110,7 +110,7 @@ class ExpressionRenderer:
         if isinstance(expression, d.Jinja):
             try:
                 rendered_expression = jinja_env.from_string(expression.name).render()
-                if not rendered_expression:
+                if not rendered_expression.strip():
                     self._cache[cache_key] = None
                     return None
 
