@@ -33,7 +33,7 @@ export function useSqlMeshExtension(): [
       const SQLKeywords = (options?.keywords ?? '') + WHITE_SPACE
       const SQLMeshModelDictionary = SQLMeshModelKeywords(dialects)
       const SQLMeshKeywords =
-        'audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
+        'columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
       const SQLMeshTypes =
         'seed full incremental_by_time_range incremental_by_unique_key view embedded'
 

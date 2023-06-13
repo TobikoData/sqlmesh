@@ -30,8 +30,8 @@ interface ContextStore {
     created_from: EnvironmentName,
   ) => void
   removeLocalEnvironment: (environments: ModelEnvironment) => void
-  addSyncronizedEnvironments: (environments: Environment[]) => void
-  hasSyncronizedEnvironments: () => boolean
+  addSynchronizedEnvironments: (environments: Environment[]) => void
+  hasSynchronizedEnvironments: () => boolean
   setInitialDates: (
     initialStartDate?: ContextEnvironmentStart,
     initialEndDate?: ContextEnvironmentEnd,
@@ -141,7 +141,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addSyncronizedEnvironments(envs = []) {
+  addSynchronizedEnvironments(envs = []) {
     set(s => {
       const environments = Array.from(s.environments)
 
@@ -153,13 +153,13 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
         if (environment == null) {
           environment = new ModelEnvironment(
             env,
-            EnumRelativeLocation.Syncronized,
+            EnumRelativeLocation.Synchronized,
           )
 
           environments.push(environment)
         } else {
           environment.update(env)
-          environment.setType(EnumRelativeLocation.Syncronized)
+          environment.setType(EnumRelativeLocation.Synchronized)
         }
 
         if (environment.isInitial && environment.isDefault) {
@@ -178,11 +178,11 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  hasSyncronizedEnvironments() {
+  hasSynchronizedEnvironments() {
     const s = get()
 
     return Array.from(s.environments).some(
-      ({ type }) => type === EnumRelativeLocation.Syncronized,
+      ({ type }) => type === EnumRelativeLocation.Synchronized,
     )
   },
 }))

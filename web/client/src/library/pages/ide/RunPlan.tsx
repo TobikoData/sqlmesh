@@ -9,24 +9,18 @@ import {
   useMemo,
   useCallback,
 } from 'react'
-import {
-  apiCancelGetEnvironments,
-  apiCancelPlanRun,
-  useApiEnvironments,
-  useApiPlanRun,
-} from '~/api'
+import { useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
-import { EnumSize, EnumVariant } from '~/types/enum'
+import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
 import {
   isArrayNotEmpty,
   includes,
   isFalse,
   isStringEmptyOrNil,
   debounceAsync,
-  isObjectEmpty,
 } from '~/utils'
 import { Button, makeButton, type ButtonSize } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
@@ -41,11 +35,8 @@ import {
 } from '@components/plan/context'
 import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { useIDE } from './context'
-import { useQueryClient } from '@tanstack/react-query'
 
 export default function RunPlan(): JSX.Element {
-  const client = useQueryClient()
-
   const { errors, setIsPlanOpen } = useIDE()
 
   const planState = useStorePlan(s => s.state)
@@ -54,36 +45,25 @@ export default function RunPlan(): JSX.Element {
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
-  const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const setInitialDates = useStoreContext(s => s.setInitialDates)
-  const addSyncronizedEnvironments = useStoreContext(
-    s => s.addSyncronizedEnvironments,
-  )
-  const hasSyncronizedEnvironments = useStoreContext(
-    s => s.hasSyncronizedEnvironments,
+  const hasSynchronizedEnvironments = useStoreContext(
+    s => s.hasSynchronizedEnvironments,
   )
 
+  const [hasChanges, setHasChanges] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [plan, setPlan] = useState<ContextEnvironment | undefined>()
   const [shouldStartPlanAutomatically, setShouldSartPlanAutomatically] =
     useState(false)
 
-  const { refetch: getEnvironments } = useApiEnvironments()
   const {
     refetch: planRun,
-    data: plan,
+    data: dataPlan,
     isFetching,
-  } = useApiPlanRun(environment.name, {
-    planOptions: {
-      skip_tests: true,
-    },
-  })
+  } = useApiPlanRun(environment.name, { planOptions: { skip_tests: true } })
 
-  const debouncedGetEnvironemnts = useCallback(
-    debounceAsync(getEnvironments, 1000, true),
-    [getEnvironments],
-  )
   const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
     planRun,
   ])
@@ -103,50 +83,31 @@ export default function RunPlan(): JSX.Element {
   }, [environment])
 
   useEffect(() => {
-    return () => {
-      debouncedGetEnvironemnts.cancel()
-      debouncedRunPlan.cancel()
-
-      apiCancelGetEnvironments(client)
-      apiCancelPlanRun(client)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (isFalse(environment.isSyncronized)) return
-
-    debouncedRunPlan().finally(() => {
-      if (shouldStartPlanAutomatically) {
-        startPlan()
-        setShouldSartPlanAutomatically(false)
-      }
-    })
-  }, [environment, shouldStartPlanAutomatically])
-
-  useEffect(() => {
-    if (planState === EnumPlanState.Finished) {
-      void debouncedRunPlan()
-      void debouncedGetEnvironemnts()
-    }
-  }, [planState])
-
-  useEffect(() => {
-    setInitialDates(plan?.start, plan?.end)
-  }, [plan])
-
-  useEffect(() => {
-    if (models.size > 0 && isFalse(hasSyncronizedEnvironments())) {
-      void debouncedGetEnvironemnts().then(({ data }) => {
-        if (data == null || isObjectEmpty(data)) return
-
-        addSyncronizedEnvironments(Object.values(data))
-      })
+    if (shouldStartPlanAutomatically) {
+      startPlan()
+      setShouldSartPlanAutomatically(false)
     }
 
-    if (hasSyncronizedEnvironments()) {
-      void debouncedRunPlan()
-    }
-  }, [models, environments])
+    if (isFalse(environment.isSynchronized)) return
+
+    void debouncedRunPlan()
+  }, [environment])
+
+  useEffect(() => {
+    if (dataPlan == null) return
+
+    setPlan(dataPlan)
+    setInitialDates(dataPlan.start, dataPlan.end)
+    setHasChanges(
+      [
+        dataPlan.changes?.added,
+        dataPlan.changes?.removed,
+        dataPlan.changes?.modified?.direct,
+        dataPlan.changes?.modified?.indirect,
+        dataPlan.changes?.modified?.metadata,
+      ].some(isArrayNotEmpty),
+    )
+  }, [dataPlan])
 
   function startPlan(): void {
     setActivePlan(undefined)
@@ -155,15 +116,12 @@ export default function RunPlan(): JSX.Element {
     setIsPlanOpen(true)
   }
 
-  const hasChanges = [
-    plan?.changes?.added,
-    plan?.changes?.removed,
-    plan?.changes?.modified?.direct,
-    plan?.changes?.modified?.indirect,
-    plan?.changes?.modified?.metadata,
-  ].some(isArrayNotEmpty)
-
   const hasErrors = errors.size > 0
+  const showRunButton =
+    (isFalse(environment.isInitial) && isFalse(environment.isDefault)) ||
+    hasSynchronizedEnvironments()
+  const showSelectEnvironmentButton =
+    isFalse(environment.isInitial) || isFalse(environment.isDefault)
 
   return (
     <div
@@ -173,57 +131,14 @@ export default function RunPlan(): JSX.Element {
           'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
-      <div className="flex items-center relative">
-        <Button
-          className={clsx(
-            'mx-0',
-            isFalse(environment.isInitial && environment.isDefault) &&
-              'rounded-none rounded-l-lg border-r',
-          )}
-          disabled={
-            hasErrors ||
-            isFetching ||
-            planAction !== EnumPlanAction.None ||
-            planState === EnumPlanState.Applying ||
-            planState === EnumPlanState.Running ||
-            planState === EnumPlanState.Cancelling
-          }
-          variant={EnumVariant.Alternative}
-          size={EnumSize.sm}
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
-
-            if (environment.isDefault && isFalse(environment.isInitial)) {
-              setShowConfirmation(true)
-            } else {
-              startPlan()
-            }
-          }}
-        >
-          {includes(
-            [
-              EnumPlanState.Applying,
-              EnumPlanState.Running,
-              EnumPlanState.Cancelling,
-            ],
-            planState,
-          ) && <Spinner className="w-3 h-3 mr-1" />}
-          <span className="inline-block">
-            {planState === EnumPlanState.Running
-              ? 'Running Plan...'
-              : planState === EnumPlanState.Applying
-              ? 'Applying Plan...'
-              : planState === EnumPlanState.Cancelling
-              ? 'Cancelling Plan...'
-              : planAction !== EnumPlanAction.None
-              ? 'Setting Plan...'
-              : 'Run Plan'}
-          </span>
-        </Button>
-        {(isFalse(environment.isInitial) || isFalse(environment.isDefault)) && (
-          <SelectEnvironemnt
-            className="rounded-none rounded-r-lg border-l mx-0"
-            environment={environment}
+      {showRunButton && (
+        <div className="flex items-center relative">
+          <Button
+            className={clsx(
+              'mx-0',
+              isFalse(environment.isInitial && environment.isDefault) &&
+                'rounded-none rounded-l-lg border-r',
+            )}
             disabled={
               hasErrors ||
               isFetching ||
@@ -232,9 +147,54 @@ export default function RunPlan(): JSX.Element {
               planState === EnumPlanState.Running ||
               planState === EnumPlanState.Cancelling
             }
-          />
-        )}
-      </div>
+            variant={EnumVariant.Alternative}
+            size={EnumSize.sm}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+
+              if (environment.isDefault && isFalse(environment.isInitial)) {
+                setShowConfirmation(true)
+              } else {
+                startPlan()
+              }
+            }}
+          >
+            {includes(
+              [
+                EnumPlanState.Applying,
+                EnumPlanState.Running,
+                EnumPlanState.Cancelling,
+              ],
+              planState,
+            ) && <Spinner className="w-3 h-3 mr-1" />}
+            <span className="inline-block">
+              {planState === EnumPlanState.Running
+                ? 'Running Plan...'
+                : planState === EnumPlanState.Applying
+                ? 'Applying Plan...'
+                : planState === EnumPlanState.Cancelling
+                ? 'Cancelling Plan...'
+                : planAction !== EnumPlanAction.None
+                ? 'Setting Plan...'
+                : 'Run Plan'}
+            </span>
+          </Button>
+          {showSelectEnvironmentButton && (
+            <SelectEnvironemnt
+              className="rounded-none rounded-r-lg border-l mx-0"
+              environment={environment}
+              disabled={
+                hasErrors ||
+                isFetching ||
+                planAction !== EnumPlanAction.None ||
+                planState === EnumPlanState.Applying ||
+                planState === EnumPlanState.Running ||
+                planState === EnumPlanState.Cancelling
+              }
+            />
+          )}
+        </div>
+      )}
       {planState !== EnumPlanState.Applying && (
         <PlanChanges
           environment={environment}
@@ -340,9 +300,9 @@ function PlanChanges({
   hasChanges: boolean
 }): JSX.Element {
   return (
-    <span className="flex align-center pr-2 h-full w-full">
+    <span className="flex align-center h-full w-full">
       <>
-        {environment.isInitial && environment.isSyncronized && (
+        {environment.isInitial && environment.isLocal && (
           <span
             title="New"
             className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
@@ -409,7 +369,7 @@ function SelectEnvironemnt({
   onSelect,
   environment,
   disabled,
-  side = 'right',
+  side = EnumSide.Right,
   className,
   showAddEnvironemnt = true,
   size = EnumSize.sm,
@@ -418,7 +378,7 @@ function SelectEnvironemnt({
   disabled: boolean
   className?: string
   size?: ButtonSize
-  side?: 'left' | 'right'
+  side?: Side
   onSelect?: () => void
   showAddEnvironemnt?: boolean
 }): JSX.Element {
@@ -438,7 +398,13 @@ function SelectEnvironemnt({
             disabled={disabled}
             className={clsx(className)}
           >
-            <span className="block overflow-hidden truncate">
+            <span
+              className={clsx(
+                'block overflow-hidden truncate',
+                (environment.isLocal || disabled) && 'text-neutral-500',
+                environment.isSynchronized && 'text-primary-500',
+              )}
+            >
               {environment.name}
             </span>
             <span className="pointer-events-none inset-y-0 right-0 flex items-center pl-2">
@@ -457,8 +423,8 @@ function SelectEnvironemnt({
             <div
               className={clsx(
                 'absolute top-9 overflow-hidden shadow-xl bg-theme border-2 border-primary-20 rounded-md flex flex-col z-10',
-                side === 'left' && 'left-0',
-                side === 'right' && 'right-0',
+                side === EnumSide.Left && 'left-0',
+                side === EnumSide.Right && 'right-0',
               )}
             >
               <Menu.Items className="overflow-auto max-h-80 py-2 scrollbar scrollbar--vertical">
@@ -493,7 +459,7 @@ function SelectEnvironemnt({
                               <span
                                 className={clsx(
                                   'block truncate ml-2',
-                                  env.isSyncronized && 'text-primary-500',
+                                  env.isSynchronized && 'text-primary-500',
                                 )}
                               >
                                 {env.name}

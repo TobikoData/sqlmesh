@@ -42,7 +42,7 @@ import {
   isNil,
   isTrue,
 } from '../../../utils'
-import { EnumSize, EnumVariant } from '~/types/enum'
+import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
 import {
   ArrowRightCircleIcon,
   InformationCircleIcon,
@@ -139,13 +139,13 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                   <CodeEditor.SQLMeshDialect
                     content={source}
                     type={EnumFileExtensions.SQL}
-                    className="scrollbar--vertical-md scrollbar--horizontal-md !h-[25vh] !max-w-[30rem]"
+                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !h-[25vh] !max-w-[30rem]"
                   >
                     {({ extensions, content }) => (
                       <CodeEditor
                         extensions={extensions.concat(modelExtensions)}
                         content={content}
-                        className="text-xs"
+                        className="text-xs pr-2"
                       />
                     )}
                   </CodeEditor.SQLMeshDialect>
@@ -209,11 +209,11 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
         className,
       )}
     >
-      {hasRight && (
+      {hasLeft && (
         <Handle
           type="target"
-          id={toNodeOrEdgeId('right', id)}
-          position={Position.Right}
+          id={toNodeOrEdgeId(EnumSide.Left, id)}
+          position={Position.Left}
           isConnectable={false}
           className={clsx(
             'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
@@ -221,11 +221,11 @@ const ModelNodeHandles = memo(function ModelNodeHandles({
         />
       )}
       {children}
-      {hasLeft && (
+      {hasRight && (
         <Handle
           type="source"
-          id={toNodeOrEdgeId('left', id)}
-          position={Position.Left}
+          id={toNodeOrEdgeId(EnumSide.Right, id)}
+          position={Position.Right}
           isConnectable={false}
           className={clsx(
             'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
@@ -261,16 +261,16 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
         className,
       )}
     >
-      {hasRight && (
+      {hasLeft && (
         <Handle
           type="target"
-          id={toNodeOrEdgeId('right', id)}
-          position={Position.Right}
+          id={toNodeOrEdgeId(EnumSide.Left, id)}
+          position={Position.Left}
           isConnectable={false}
-          className={clsx(
-            'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
-          )}
-        />
+          className={clsx('!bg-transparent -ml-2 dark:text-primary-500')}
+        >
+          <ArrowRightCircleIcon className="w-5 bg-theme rounded-full" />
+        </Handle>
       )}
       <span className="inline-block w-full">
         {type != null && (
@@ -288,6 +288,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
             {type === 'sql' && 'SQL'}
             {type === 'seed' && 'Seed'}
             {type === 'cte' && 'CTE'}
+            {type === 'external' && 'External'}
           </span>
         )}
         <span
@@ -300,16 +301,16 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           {label}
         </span>
       </span>
-      {hasLeft && (
+      {hasRight && (
         <Handle
           type="source"
-          id={toNodeOrEdgeId('left', id)}
-          position={Position.Left}
+          id={toNodeOrEdgeId(EnumSide.Right, id)}
+          position={Position.Right}
           isConnectable={false}
-          className={clsx('!bg-transparent -ml-2 dark:text-primary-500')}
-        >
-          <ArrowRightCircleIcon className="w-5 bg-theme rounded-full" />
-        </Handle>
+          className={clsx(
+            'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
+          )}
+        />
       )}
     </div>
   )
@@ -388,7 +389,7 @@ const ModelColumn = memo(function ModelColumn({
 
       debouncedGetColumnLineage(column.name)
         .then(data => {
-          setIsEmpty(hasNoModels())
+          setIsEmpty(hasNoModels(data))
           updateColumnLineage(data)
         })
         .catch(error => {
@@ -577,12 +578,22 @@ const ModelColumns = memo(function ModelColumns({
 
   const removeEdges = useCallback(
     function removeEdges(columnId: string): void {
+      const visited = new Set<string>()
+
       removeActiveEdges(
-        [columnId, walk(columnId, 'left'), walk(columnId, 'right')].flat(),
+        [
+          columnId,
+          walk(columnId, EnumSide.Left),
+          walk(columnId, EnumSide.Right),
+        ].flat(),
       )
 
-      function walk(id: string, side: 'left' | 'right'): string[] {
+      function walk(id: string, side: Side): string[] {
+        if (visited.has(id)) return []
+
         const edges = connections.get(id)?.[side] ?? []
+
+        visited.add(id)
 
         return [id, edges.map(edge => walk(edge, side))].flat(
           Infinity,
@@ -768,7 +779,6 @@ function ModelColumnLineage({
     void createGraphLayout(nodesAndEdges)
       .then(layout => {
         toggleEdgeAndNodes(layout.edges, layout.nodes)
-
         setIsBuildingLayout(
           isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
         )
@@ -806,7 +816,7 @@ function ModelColumnLineage({
 
         visibility.set(
           edge.source,
-          isFalse(visibility.get(edge.source)) ? false : edge.hidden,
+          isFalse(visibility.has(edge.source)) ? false : edge.hidden,
         )
       }
 
@@ -944,8 +954,8 @@ function ModelNode({
             showColumns ? 'rounded-t-lg' : 'rounded-lg',
             isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
           )}
-          hasLeft={sourcePosition === Position.Left}
-          hasRight={targetPosition === Position.Right}
+          hasLeft={targetPosition === Position.Left}
+          hasRight={sourcePosition === Position.Right}
           handleClick={isInteractive ? handleClick : undefined}
         />
       </div>

@@ -5,6 +5,7 @@ import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { type Connections } from './context'
+import { EnumSide } from '~/types/enum'
 
 export interface GraphNodeData {
   type: string
@@ -81,7 +82,7 @@ function getNodesAndEdges({
       Object.assign(acc, { [edge.id]: edge }),
     {},
   )
-  const targets = new Set(
+  const sources = new Set(
     Object.values(lineage)
       .map(l => l.models)
       .flat(),
@@ -92,51 +93,55 @@ function getNodesAndEdges({
     lineage,
     highlightedNodes,
     models,
-    targets,
+    sources,
     nodes,
     model,
     withColumns,
   })
   const outputEdges: Edge[] = []
 
-  for (const modelSource of modelNames) {
-    const modelLineage = lineage[modelSource]!
+  for (const targetModelName of modelNames) {
+    const targetModel = lineage[targetModelName]!
 
-    modelLineage.models.forEach(modelTarget => {
-      outputEdges.push(createGraphEdge(modelSource, modelTarget))
+    targetModel.models.forEach(sourceModelName => {
+      outputEdges.push(createGraphEdge(sourceModelName, targetModelName))
     })
 
-    if (isObjectEmpty(modelLineage?.columns) || isFalse(withColumns)) continue
+    if (isObjectEmpty(targetModel?.columns) || isFalse(withColumns)) continue
 
-    for (const columnSource in modelLineage.columns) {
-      const modelsTarget = modelLineage.columns[columnSource]?.models
+    for (const targetColumnName in targetModel.columns) {
+      const sourceModel = targetModel.columns[targetColumnName]
 
-      if (modelsTarget == null) continue
+      if (sourceModel == null || sourceModel.models == null) continue
 
-      for (const modelTarget in modelsTarget) {
-        const columnsTarget = modelsTarget[modelTarget]
+      for (const sourceModelName in sourceModel.models) {
+        const sourceColumns = sourceModel.models[sourceModelName]
 
-        if (columnsTarget == null) continue
+        if (sourceColumns == null) continue
 
-        for (const columnTarget of columnsTarget) {
-          const sourceHandle = toNodeOrEdgeId('left', modelSource, columnSource)
-          const targetHandle = toNodeOrEdgeId(
-            'right',
-            modelTarget,
-            columnTarget,
+        for (const sourceColumnName of sourceColumns) {
+          const sourceHandler = toNodeOrEdgeId(
+            EnumSide.Right,
+            sourceModelName,
+            sourceColumnName,
           )
-          const edgeId = toNodeOrEdgeId(sourceHandle, targetHandle)
+          const targetHandler = toNodeOrEdgeId(
+            EnumSide.Left,
+            targetModelName,
+            targetColumnName,
+          )
+          const edgeId = toNodeOrEdgeId(sourceHandler, targetHandler)
           const edge =
             currentEdges[edgeId] ??
             createGraphEdge(
-              modelSource,
-              modelTarget,
-              sourceHandle,
-              targetHandle,
+              sourceModelName,
+              targetModelName,
+              sourceHandler,
+              targetHandler,
               true,
               {
-                columnSource,
-                columnTarget,
+                columnSource: sourceColumnName,
+                columnTarget: targetColumnName,
               },
             )
 
@@ -158,7 +163,7 @@ function getNodeMap({
   lineage,
   highlightedNodes,
   models,
-  targets,
+  sources,
   nodes,
   model,
   withColumns,
@@ -167,7 +172,7 @@ function getNodeMap({
   lineage: Record<string, Lineage>
   highlightedNodes: Record<string, string[]>
   models: Map<string, Model>
-  targets: Set<string>
+  sources: Set<string>
   nodes: Node[]
   model: ModelSQLMeshModel
   withColumns: boolean
@@ -206,11 +211,11 @@ function getNodeMap({
     node.data.isInteractive = model.name !== label && models.has(label)
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
-      node.sourcePosition = Position.Left
+      node.targetPosition = Position.Left
     }
 
-    if (targets.has(node.id)) {
-      node.targetPosition = Position.Right
+    if (sources.has(node.id)) {
+      node.sourcePosition = Position.Right
     }
 
     acc[label] = node
@@ -254,11 +259,11 @@ function repositionNodes(
     if (output == null) return
 
     if (output.position.x === 0 && node.x != null) {
-      output.position.x = -node.x
+      output.position.x = node.x
     }
 
     if (output.position.y === 0 && node.y != null) {
-      output.position.y = -node.y
+      output.position.y = node.y
     }
 
     nodes.push(output)
@@ -346,23 +351,23 @@ function mergeLineageWithColumns(
   currentLineage: Record<string, Lineage> = {},
   newLineage: Record<string, Record<string, LineageColumn>> = {},
 ): Record<string, Lineage> {
-  for (const modelName in newLineage) {
-    if (currentLineage[modelName] == null) {
-      currentLineage[modelName] = { columns: {}, models: [] }
+  for (const targetModelName in newLineage) {
+    if (currentLineage[targetModelName] == null) {
+      currentLineage[targetModelName] = { columns: {}, models: [] }
     }
 
-    const currentLineageModel = currentLineage[modelName]!
-    const newLineageModel = newLineage[modelName]!
+    const currentLineageModel = currentLineage[targetModelName]!
+    const newLineageModel = newLineage[targetModelName]!
 
-    for (const columnName in newLineageModel) {
-      const newLineageModelColumn = newLineageModel[columnName]!
+    for (const targetColumnName in newLineageModel) {
+      const newLineageModelColumn = newLineageModel[targetColumnName]!
 
       if (currentLineageModel.columns == null) {
         currentLineageModel.columns = {}
       }
 
       // New Column Lineage delivers fresh data, so we can just assign it
-      currentLineageModel.columns[columnName] = {
+      currentLineageModel.columns[targetColumnName] = {
         expression: newLineageModelColumn.expression,
         source: newLineageModelColumn.source,
         models: {},
@@ -371,16 +376,17 @@ function mergeLineageWithColumns(
       // If there are no models in new lineage, skip
       if (isObjectEmpty(newLineageModelColumn.models)) continue
 
-      const currentLineageModelColumn = currentLineageModel.columns[columnName]!
+      const currentLineageModelColumn =
+        currentLineageModel.columns[targetColumnName]!
       const currentLineageModelColumnModels = currentLineageModelColumn.models!
 
-      for (const columnModelName in newLineageModelColumn.models) {
+      for (const sourceColumnName in newLineageModelColumn.models) {
         const currentLineageModelColumnModel =
-          currentLineageModelColumnModels[columnModelName]!
+          currentLineageModelColumnModels[sourceColumnName]!
         const newLineageModelColumnModel =
-          newLineageModelColumn.models[columnModelName]!
+          newLineageModelColumn.models[sourceColumnName]!
 
-        currentLineageModelColumnModels[columnModelName] =
+        currentLineageModelColumnModels[sourceColumnName] =
           currentLineageModelColumnModel == null
             ? newLineageModelColumnModel
             : Array.from(
@@ -398,19 +404,19 @@ function mergeLineageWithColumns(
 }
 
 function hasNoModels(
-  models: Record<string, Record<string, LineageColumn>> = {},
+  lineage: Record<string, Record<string, LineageColumn>> = {},
 ): boolean {
-  for (const modelName in models) {
-    const model = models[modelName]
+  for (const targetModelName in lineage) {
+    const model = lineage[targetModelName]
 
-    if (models[modelName] == null) continue
+    if (model == null) continue
 
-    for (const columnName in model) {
-      const lineage = model[columnName]
+    for (const targetColumnName in model) {
+      const column = model[targetColumnName]
 
-      if (lineage == null) continue
+      if (column == null) continue
 
-      return Object.keys(lineage.models ?? {}).length === 0
+      return Object.keys(column.models ?? {}).length === 0
     }
   }
 
@@ -422,48 +428,87 @@ function mergeConnections(
   lineage: Record<string, Record<string, LineageColumn>> = {},
   addActiveEdges: (edges: string[]) => void,
 ): Map<string, Connections> {
-  for (const modelName in lineage) {
-    const model = lineage[modelName]!
+  // We are getting lineage in format of target -> source
+  for (const targetModelName in lineage) {
+    const model = lineage[targetModelName]!
 
-    for (const columnName in model) {
-      const column = model[columnName]
+    for (const targetColumnName in model) {
+      const column = model[targetColumnName]
 
       // We don't have any connectins so we skip
       if (column?.models == null) continue
 
-      const columnId = toNodeOrEdgeId(modelName, columnName)
-      const connectionSource = connections.get(columnId) ?? {
+      // At this point our Node is model -> {modelName} and column -> {columnName}
+      // It is a target (left handler)
+      // but it can also be a source (right handler) for other connections
+      const modelColumnIdTarget = toNodeOrEdgeId(
+        targetModelName,
+        targetColumnName,
+      )
+
+      // We need to check if {modelColumnIdTarget} is already a source/target for other connections
+      // Left and Right coresponds to node's handlers for {columnName} column
+      const connectionsModelTarget = connections.get(modelColumnIdTarget) ?? {
         left: [],
         right: [],
       }
 
-      Object.entries(column.models).forEach(([id, columns]) => {
-        columns.forEach(column => {
-          const connectionTarget = connections.get(
-            toNodeOrEdgeId(id, column),
+      Object.entries(column.models).forEach(([sourceModelName, columns]) => {
+        columns.forEach(sourceColumnName => {
+          // It is a source (right handler)
+          // but it can also be a target (left handler) for other connections
+          const modelColumnIdSource = toNodeOrEdgeId(
+            sourceModelName,
+            sourceColumnName,
+          )
+
+          // We need to check if {modelColumnIdSource} is already a source/target for other connections
+          // Left and Right coresponds to node's handlers for {column} column
+          const connectionsModelSource = connections.get(
+            modelColumnIdSource,
           ) ?? { left: [], right: [] }
 
-          connectionTarget.right = Array.from(
-            new Set(connectionTarget.right.concat(columnId)),
-          )
-          connectionSource.left = Array.from(
-            new Set(connectionSource.left.concat(toNodeOrEdgeId(id, column))),
+          // we need to add {modelColumnIdTarget} to {connectionsModelSource}'s right handlers
+          connectionsModelSource.right = Array.from(
+            new Set(connectionsModelSource.right.concat(modelColumnIdTarget)),
           )
 
-          connections.set(toNodeOrEdgeId(id, column), connectionTarget)
-          connections.set(columnId, connectionSource)
+          // We need to add {modelColumnIdSource} to {connectionsModelTarget}'s right handlers
+          connectionsModelTarget.left = Array.from(
+            new Set(connectionsModelTarget.left.concat(modelColumnIdSource)),
+          )
+
+          connections.set(modelColumnIdSource, connectionsModelSource)
+          connections.set(modelColumnIdTarget, connectionsModelTarget)
+
+          // Now we need to update active edges from connections
+          // Left bucket contains references to all sources (right handlers)
+          // And right bucket contains references to all targets (left handlers)
+          addActiveEdges(
+            [
+              connectionsModelSource.left.map(id =>
+                toNodeOrEdgeId(EnumSide.Right, id),
+              ),
+              connectionsModelSource.right.map(id =>
+                toNodeOrEdgeId(EnumSide.Left, id),
+              ),
+            ].flat(),
+          )
         })
       })
 
-      const modelColumnConnectionsLeft = connectionSource.left.map(id =>
-        toNodeOrEdgeId('right', id),
-      )
-      const modelColumnConnectionsRight = connectionSource.right.map(id =>
-        toNodeOrEdgeId('left', id),
-      )
-
+      // Now we need to update active edges from connections
+      // Left bucket contains references to all sources (right handlers)
+      // And right bucket contains references to all targets (left handlers)
       addActiveEdges(
-        modelColumnConnectionsLeft.concat(modelColumnConnectionsRight),
+        [
+          connectionsModelTarget.left.map(id =>
+            toNodeOrEdgeId(EnumSide.Right, id),
+          ),
+          connectionsModelTarget.right.map(id =>
+            toNodeOrEdgeId(EnumSide.Left, id),
+          ),
+        ].flat(),
       )
     }
   }
