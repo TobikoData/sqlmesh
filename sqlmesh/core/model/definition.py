@@ -872,6 +872,13 @@ class SeedModel(_SqlBasedModel):
     def depends_on_past(self) -> bool:
         return False
 
+    @property
+    def batch_size(self) -> t.Optional[int]:
+        # Unlike other model kinds, the batch size provided in the SEED kind represents the
+        # maximum number of rows to insert in a single batch.
+        # We should never batch intervals for seed models.
+        return None
+
     def to_dehydrated(self) -> SeedModel:
         """Creates a dehydrated copy of this model.
 
