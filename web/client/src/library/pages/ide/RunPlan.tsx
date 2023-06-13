@@ -48,8 +48,8 @@ export default function RunPlan(): JSX.Element {
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const setInitialDates = useStoreContext(s => s.setInitialDates)
-  const hasSyncronizedEnvironments = useStoreContext(
-    s => s.hasSyncronizedEnvironments,
+  const hasSynchronizedEnvironments = useStoreContext(
+    s => s.hasSynchronizedEnvironments,
   )
 
   const [hasChanges, setHasChanges] = useState(false)
@@ -88,7 +88,7 @@ export default function RunPlan(): JSX.Element {
       setShouldSartPlanAutomatically(false)
     }
 
-    if (isFalse(environment.isSyncronized)) return
+    if (isFalse(environment.isSynchronized)) return
 
     void debouncedRunPlan()
   }, [environment])
@@ -119,7 +119,7 @@ export default function RunPlan(): JSX.Element {
   const hasErrors = errors.size > 0
   const showRunButton =
     (isFalse(environment.isInitial) && isFalse(environment.isDefault)) ||
-    hasSyncronizedEnvironments()
+    hasSynchronizedEnvironments()
   const showSelectEnvironmentButton =
     isFalse(environment.isInitial) || isFalse(environment.isDefault)
 
@@ -402,7 +402,7 @@ function SelectEnvironemnt({
               className={clsx(
                 'block overflow-hidden truncate',
                 (environment.isLocal || disabled) && 'text-neutral-500',
-                environment.isSyncronized && 'text-primary-500',
+                environment.isSynchronized && 'text-primary-500',
               )}
             >
               {environment.name}
@@ -459,7 +459,7 @@ function SelectEnvironemnt({
                               <span
                                 className={clsx(
                                   'block truncate ml-2',
-                                  env.isSyncronized && 'text-primary-500',
+                                  env.isSynchronized && 'text-primary-500',
                                 )}
                               >
                                 {env.name}

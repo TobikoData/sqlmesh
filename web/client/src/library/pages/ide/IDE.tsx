@@ -48,11 +48,11 @@ export default function PageIDE(): JSX.Element {
   const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
   const setModels = useStoreContext(s => s.setModels)
-  const addSyncronizedEnvironments = useStoreContext(
-    s => s.addSyncronizedEnvironments,
+  const addSynchronizedEnvironments = useStoreContext(
+    s => s.addSynchronizedEnvironments,
   )
-  const hasSyncronizedEnvironments = useStoreContext(
-    s => s.hasSyncronizedEnvironments,
+  const hasSynchronizedEnvironments = useStoreContext(
+    s => s.hasSynchronizedEnvironments,
   )
 
   const planState = useStorePlan(s => s.state)
@@ -141,7 +141,7 @@ export default function PageIDE(): JSX.Element {
   useEffect(() => {
     if (dataEnvironments == null || isObjectEmpty(dataEnvironments)) return
 
-    addSyncronizedEnvironments(Object.values(dataEnvironments))
+    addSynchronizedEnvironments(Object.values(dataEnvironments))
 
     // This use case is happening when user refreshes the page
     // while plan is still applying
@@ -151,11 +151,11 @@ export default function PageIDE(): JSX.Element {
   }, [dataEnvironments])
 
   useEffect(() => {
-    if (models.size > 0 && isFalse(hasSyncronizedEnvironments())) {
+    if (models.size > 0 && isFalse(hasSynchronizedEnvironments())) {
       void debouncedGetEnvironemnts()
     }
 
-    if (hasSyncronizedEnvironments()) {
+    if (hasSynchronizedEnvironments()) {
       void debouncedRunPlan()
     }
   }, [models])

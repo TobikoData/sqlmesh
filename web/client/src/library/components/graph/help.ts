@@ -82,7 +82,7 @@ function getNodesAndEdges({
       Object.assign(acc, { [edge.id]: edge }),
     {},
   )
-  const targets = new Set(
+  const sources = new Set(
     Object.values(lineage)
       .map(l => l.models)
       .flat(),
@@ -93,7 +93,7 @@ function getNodesAndEdges({
     lineage,
     highlightedNodes,
     models,
-    targets,
+    sources,
     nodes,
     model,
     withColumns,
@@ -163,7 +163,7 @@ function getNodeMap({
   lineage,
   highlightedNodes,
   models,
-  targets,
+  sources,
   nodes,
   model,
   withColumns,
@@ -172,7 +172,7 @@ function getNodeMap({
   lineage: Record<string, Lineage>
   highlightedNodes: Record<string, string[]>
   models: Map<string, Model>
-  targets: Set<string>
+  sources: Set<string>
   nodes: Node[]
   model: ModelSQLMeshModel
   withColumns: boolean
@@ -211,11 +211,11 @@ function getNodeMap({
     node.data.isInteractive = model.name !== label && models.has(label)
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
-      node.sourcePosition = Position.Right
+      node.targetPosition = Position.Left
     }
 
-    if (targets.has(node.id)) {
-      node.targetPosition = Position.Left
+    if (sources.has(node.id)) {
+      node.sourcePosition = Position.Right
     }
 
     acc[label] = node

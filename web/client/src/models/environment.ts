@@ -9,7 +9,7 @@ export const EnumDefaultEnvironment = {
 
 export const EnumRelativeLocation = {
   Local: 'local',
-  Syncronized: 'syncronized',
+  Synchronized: 'synchronized',
 } as const
 
 export type EnvironmentName = DefaultEnvironment | string
@@ -75,8 +75,8 @@ export class ModelEnvironment {
     return this._type === EnumRelativeLocation.Local
   }
 
-  get isSyncronized(): boolean {
-    return this._type === EnumRelativeLocation.Syncronized
+  get isSynchronized(): boolean {
+    return this._type === EnumRelativeLocation.Synchronized
   }
 
   setType(type: RelativeLocation): void {
@@ -125,9 +125,11 @@ export class ModelEnvironment {
     )
   }
 
-  static getOnlySyncronized(envs: ModelEnvironment[] = []): ModelEnvironment[] {
+  static getOnlySynchronized(
+    envs: ModelEnvironment[] = [],
+  ): ModelEnvironment[] {
     return envs.filter(
-      env => isFalse(isStringEmptyOrNil(env.name)) && env.isSyncronized,
+      env => isFalse(isStringEmptyOrNil(env.name)) && env.isSynchronized,
     )
   }
 
@@ -170,7 +172,7 @@ export class ModelEnvironment {
   }
 
   static sort(environments: ModelEnvironment[]): ModelEnvironment[] {
-    environments.sort(env => (env.isSyncronized ? -1 : 1))
+    environments.sort(env => (env.isSynchronized ? -1 : 1))
 
     return environments
   }

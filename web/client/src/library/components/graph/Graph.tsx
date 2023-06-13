@@ -954,8 +954,8 @@ function ModelNode({
             showColumns ? 'rounded-t-lg' : 'rounded-lg',
             isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
           )}
-          hasLeft={sourcePosition === Position.Right}
-          hasRight={targetPosition === Position.Left}
+          hasLeft={targetPosition === Position.Left}
+          hasRight={sourcePosition === Position.Right}
           handleClick={isInteractive ? handleClick : undefined}
         />
       </div>
