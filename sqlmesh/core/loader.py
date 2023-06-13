@@ -53,11 +53,10 @@ def update_model_schemas(
             continue
 
         model.update_schema(schema)
-        optimized_query_cache.with_optimized_query(model)
+        cache_hit = optimized_query_cache.with_optimized_query(model)
         schema.add_table(name, model.columns_to_types, dialect=model.dialect)
 
-        external = any(dep not in models for dep in model.depends_on)
-        if external:
+        if any(dep not in models for dep in model.depends_on):
             if "*" in model.columns_to_types:
                 raise ConfigError(
                     f"Can't expand SELECT * expression for model '{name}' at '{model._path}'."
@@ -65,7 +64,7 @@ def update_model_schemas(
                     ' add source tables as "external models" using the command'
                     " 'sqlmesh create_external_models'."
                 )
-        elif model.mapping_schema:
+        elif model.mapping_schema and not cache_hit:
             try:
                 validate_qualify_columns(model.render_query())
             except SqlglotError as e:

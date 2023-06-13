@@ -75,31 +75,31 @@ class OptimizedQueryCache:
             path, OptimizedQueryCacheEntry, prefix="optimized_query"
         )
 
-    def with_optimized_query(self, model: Model) -> Model:
+    def with_optimized_query(self, model: Model) -> bool:
         """Adds an optimized query to the model's in-memory cache.
 
         Args:
             model: The model to add the optimized query to.
         """
         if not isinstance(model, SqlModel):
-            return model
+            return True
 
         entry_id = self._entry_id(model)
         cache_entry = self._file_cache.get(model.name, entry_id)
         if cache_entry:
             model._query_renderer.update_cache(cache_entry.optimized_rendered_query, optimized=True)
-            return model
+            return True
 
         new_entry = OptimizedQueryCacheEntry(
             optimized_rendered_query=model.render_query(optimize=True)
         )
         self._file_cache.put(model.name, entry_id, new_entry)
-        return model
+        return False
 
     @staticmethod
     def _entry_id(model: SqlModel) -> str:
         data = OptimizedQueryCache._mapping_schema_hash_data(model.mapping_schema)
-        data.append(model.render_query(optimize=False).sql(comments=False))
+        data.append(model.render_query(optimize=False).sql())
         return crc32(data)
 
     @staticmethod
