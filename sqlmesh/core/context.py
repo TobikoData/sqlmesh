@@ -777,7 +777,7 @@ class Context(BaseContext):
         Returns:
             The TableDiff object containing schema and summary differences.
         """
-        source_env_name, target_env_name = "SOURCE", "TARGET"
+        source_alias, target_alias = source, target
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             source_env = self.state_reader.get_environment(source)
@@ -794,8 +794,8 @@ class Context(BaseContext):
             target = next(
                 snapshot for snapshot in target_env.snapshots if snapshot.name == model.name
             ).table_name()
-            source_env_name = source_env.name
-            target_env_name = target_env.name
+            source_alias = source_env.name
+            target_alias = target_env.name
 
             if not on and model.grain:
                 on = model.grain
@@ -809,8 +809,8 @@ class Context(BaseContext):
             target=target,
             on=on,
             where=where,
-            source_env=source_env_name,
-            target_env=target_env_name,
+            source_alias=source_alias,
+            target_alias=target_alias,
             limit=limit,
         )
         if show:

@@ -484,13 +484,16 @@ class TerminalConsole(Console):
         self.console.print(tree)
 
     def show_row_diff(self, row_diff: RowDiff) -> None:
+        source_name = row_diff.source
+        if row_diff.source_alias:
+            source_name = row_diff.source_alias.upper()
+        target_name = row_diff.target
+        if row_diff.target_alias:
+            target_name = row_diff.target_alias.upper()
+
         self.console.print("\n[b]Row Count:[/b]")
-        self.console.print(
-            f" [yellow]{row_diff.source_env.upper()}[/yellow]: {row_diff.source_count} rows"
-        )
-        self.console.print(
-            f" [green]{row_diff.target_env.upper()}[/green]: {row_diff.target_count} rows"
-        )
+        self.console.print(f" [yellow]{source_name}[/yellow]: {row_diff.source_count} rows")
+        self.console.print(f" [green]{target_name}[/green]: {row_diff.target_count} rows")
         self.console.print(f"\n[b]Row Diff[b]: {row_diff.count_pct_change:.1f}%")
         self.console.print("\n[b]Sample Rows:[/b]")
         self.console.print(row_diff.sample.to_string(index=False), end="\n\n")
