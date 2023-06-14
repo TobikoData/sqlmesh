@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import abc
 import contextlib
+import gc
 import typing as t
 import unittest.result
 from io import StringIO
@@ -356,11 +357,13 @@ class Context(BaseContext):
     def load(self, update_schemas: bool = True) -> Context:
         """Load all files in the context's path."""
         with sys_path(*self.configs):
+            gc.disable()
             project = self._loader.load(self, update_schemas)
             self._macros = project.macros
             self._models = project.models
             self._audits = project.audits
             self.dag = project.dag
+            gc.enable()
 
         return self
 
