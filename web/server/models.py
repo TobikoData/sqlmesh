@@ -117,6 +117,8 @@ class ModelsDiff(BaseModel):
                         change_category=current.change_category,
                     )
                 )
+            elif context_diff.indirectly_modified(snapshot_name):
+                continue
             elif context_diff.metadata_updated(snapshot_name):
                 metadata.add(snapshot_name)
 
