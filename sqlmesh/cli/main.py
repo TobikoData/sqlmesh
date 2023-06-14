@@ -388,7 +388,7 @@ def create_external_models(obj: Context) -> None:
 
 @cli.command("table_diff")
 @click.argument("from_to", required=True, metavar="FROM:TO",)
-@click.argument("model_name")
+@click.argument("model_name", required=False)
 @click.option(
     "--on",
     type=str,
