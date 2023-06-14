@@ -105,12 +105,13 @@ options:
 
 ## fetchdf
 ```
-%fetchdf [df_var]
+%%fetchdf [df_var]
 
-Fetches a dataframe from sql, optionally storing it in a variable.
+Fetch a dataframe with a cell's SQL query, optionally storing it in a variable.
 
 positional arguments:
-  df_var  An optional variable name to store the resulting dataframe.
+  df_var                An optional variable name to store the resulting 
+                        dataframe.
 ```
 
 ## test
