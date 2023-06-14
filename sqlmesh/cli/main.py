@@ -6,7 +6,6 @@ import sys
 import typing as t
 
 import click
-from sqlglot import exp
 
 from sqlmesh import debug_mode_enabled, enable_logging
 from sqlmesh.cli import error_handler
