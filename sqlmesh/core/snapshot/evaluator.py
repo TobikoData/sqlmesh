@@ -31,6 +31,7 @@ import pandas as pd
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
+from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.model import Model, ViewKind
@@ -629,7 +630,7 @@ class MaterializableStrategy(PromotableStrategy):
         if model.annotated:
             self.adapter.create_table(
                 table_name,
-                columns_to_types=model.columns_to_types,
+                columns_to_types=model.columns_to_types_or_raise,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit(),
@@ -687,7 +688,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         self.adapter.merge(
             name,
             query_or_df,
-            columns_to_types=model.columns_to_types,
+            columns_to_types=self._columns_to_types(model, query_or_df),
             unique_key=model.unique_key,
         )
 
@@ -703,8 +704,16 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         self.adapter.merge(
             table_name,
             query_or_df,
-            columns_to_types=model.columns_to_types,
+            columns_to_types=self._columns_to_types(model, query_or_df),
             unique_key=model.unique_key,
+        )
+
+    @staticmethod
+    def _columns_to_types(model: Model, query_or_df: QueryOrDF) -> t.Dict[str, exp.DataType]:
+        return (
+            d.extract_columns_to_types(query_or_df)
+            if isinstance(query_or_df, exp.Subqueryable)
+            else model.columns_to_types_or_raise
         )
 
 

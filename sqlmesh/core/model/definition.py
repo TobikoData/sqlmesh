@@ -234,7 +234,7 @@ class _Model(ModelMeta, frozen=True):
         return exp.select(
             *(
                 exp.cast(exp.Null(), column_type, copy=False).as_(name, copy=False)
-                for name, column_type in self.columns_to_types.items()
+                for name, column_type in (self.columns_to_types or {}).items()
             ),
             copy=False,
         ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]), copy=False)
@@ -400,7 +400,7 @@ class _Model(ModelMeta, frozen=True):
             if self.time_column.format:
                 time = to_datetime(time).strftime(self.time_column.format)
 
-            time_column_type = self.columns_to_types[self.time_column.column]
+            time_column_type = self.columns_to_types_or_raise[self.time_column.column]
             if time_column_type.this in exp.DataType.TEXT_TYPES:
                 return exp.Literal.string(time)
             elif time_column_type.this in exp.DataType.NUMERIC_TYPES:
@@ -437,18 +437,27 @@ class _Model(ModelMeta, frozen=True):
         return self._depends_on
 
     @property
-    def columns_to_types(self) -> t.Dict[str, exp.DataType]:
+    def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         """Returns the mapping of column names to types of this model."""
-        if self.columns_to_types_ is not None:
-            return self.columns_to_types_
-        raise SQLMeshError(f"Column information has not been provided for model '{self.name}'")
+        return self.columns_to_types_
+
+    @property
+    def columns_to_types_or_raise(self) -> t.Dict[str, exp.DataType]:
+        """Returns the mapping of column names to types of this model or raise if not available."""
+        columns_to_types = self.columns_to_types
+        if columns_to_types is None:
+            raise SQLMeshError(f"Column information is not available for model '{self.name}'")
+        return columns_to_types
 
     @property
     def annotated(self) -> bool:
         """Checks if all column projection types of this model are known."""
+        columns_to_types = self.columns_to_types
+        if columns_to_types is None:
+            return False
         return all(
             column_type.this != exp.DataType.Type.UNKNOWN
-            for column_type in self.columns_to_types.values()
+            for column_type in columns_to_types.values()
         )
 
     @property
@@ -502,14 +511,16 @@ class _Model(ModelMeta, frozen=True):
                     self._path,
                 )
 
-            column_names = {c.lower() for c in self.columns_to_types}
-            missing_keys = unique_partition_keys - column_names
-            if missing_keys:
-                missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
-                raise_config_error(
-                    f"Partition keys [{missing_keys_str}] are missing in the model definition",
-                    self._path,
-                )
+            columns_to_types = self.columns_to_types
+            if columns_to_types is not None:
+                column_names = {c.lower() for c in columns_to_types}
+                missing_keys = unique_partition_keys - column_names
+                if missing_keys:
+                    missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
+                    raise_config_error(
+                        f"Partition keys [{missing_keys_str}] are missing in the model definition",
+                        self._path,
+                    )
 
         if self.kind.is_incremental_by_time_range and not self.time_column:
             raise_config_error(
@@ -685,15 +696,12 @@ class SqlModel(_SqlBasedModel):
         return True
 
     @property
-    def columns_to_types(self) -> t.Dict[str, exp.DataType]:
+    def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
 
         if self._columns_to_types is None:
-            self._columns_to_types = {
-                expression.output_name: expression.type or exp.DataType.build("unknown")
-                for expression in self._query_renderer.render().selects
-            }
+            self._columns_to_types = d.extract_columns_to_types(self._query_renderer.render())
 
         return self._columns_to_types
 
@@ -856,7 +864,7 @@ class SeedModel(_SqlBasedModel):
         ).strip()
 
     @property
-    def columns_to_types(self) -> t.Dict[str, exp.DataType]:
+    def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
         self._ensure_hydrated()
@@ -1029,7 +1037,7 @@ class ExternalModel(_Model):
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         if not isinstance(previous, ExternalModel):
             return None
-        if not previous.columns_to_types.items() - self.columns_to_types.items():
+        if not previous.columns_to_types_or_raise.items() - self.columns_to_types_or_raise.items():
             return False
         return None
 

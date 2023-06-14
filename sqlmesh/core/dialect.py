@@ -604,3 +604,11 @@ def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) ->
     return exp.table_name(
         normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect)
     )
+
+
+def extract_columns_to_types(query: exp.Subqueryable) -> t.Dict[str, exp.DataType]:
+    """Extract the column names and types from a query."""
+    return {
+        expression.output_name: expression.type or exp.DataType.build("unknown")
+        for expression in query.selects
+    }

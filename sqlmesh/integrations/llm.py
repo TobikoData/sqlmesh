@@ -47,7 +47,7 @@ def _to_table_info(models: t.Iterable[Model]) -> str:
         if not model.kind.is_materialized:
             continue
 
-        columns_csv = ", ".join(model.columns_to_types)
+        columns_csv = ", ".join(model.columns_to_types_or_raise)
         infos.append(f"Table: {model.name}\nColumns: {columns_csv}\n")
 
     return "\n".join(infos)
