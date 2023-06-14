@@ -493,7 +493,7 @@ class TerminalConsole(Console):
         )
         self.console.print(f"\n[b]Row Diff[b]: {row_diff.count_pct_change:.1f}%")
         self.console.print("\n[b]Sample Rows:[/b]")
-        self.console.print(row_diff.sample.to_string(index=False) + "\n")
+        self.console.print(row_diff.sample.to_string(index=False), end="\n\n")
 
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool
