@@ -594,15 +594,22 @@ def test_seed_model_custom_types(tmp_path):
 
     with open(model_csv_path, "w") as fd:
         fd.write(
-            """key,ds,b,i
-123,2022-01-01,false,321
+            """key,ds,b_a,b_b,i,i_str
+123,2022-01-01,false,0,321,321
 """
         )
 
     model = create_seed_model(
         "test_db.test_model",
         SeedKind(path=str(model_csv_path)),
-        columns={"key": "string", "ds": "date", "b": "boolean", "i": "int"},
+        columns={
+            "key": "string",
+            "ds": "date",
+            "b_a": "boolean",
+            "b_b": "boolean",
+            "i": "int",
+            "i_str": "text",
+        },
     )
 
     df = next(model.render(context=None))
@@ -613,11 +620,17 @@ def test_seed_model_custom_types(tmp_path):
     assert df["key"].dtype == "object"
     assert df["key"].iloc[0] == "123"
 
-    assert df["b"].dtype == "bool"
-    assert not df["b"].iloc[0]
+    assert df["b_a"].dtype == "bool"
+    assert not df["b_a"].iloc[0]
+
+    assert df["b_b"].dtype == "bool"
+    assert not df["b_b"].iloc[0]
 
     assert df["i"].dtype == "int64"
     assert df["i"].iloc[0] == 321
+
+    assert df["i_str"].dtype == "object"
+    assert df["i_str"].iloc[0] == "321"
 
 
 def test_audits():
