@@ -389,7 +389,7 @@ def create_external_models(obj: Context) -> None:
 @click.argument("source_to_target", required=True, metavar="SOURCE:TARGET")
 @click.argument("model", required=False)
 @click.option(
-    "-O",
+    "-o",
     "--on",
     type=str,
     multiple=True,
