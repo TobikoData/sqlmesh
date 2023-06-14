@@ -4,7 +4,13 @@ import typing as t
 from collections import defaultdict
 
 from IPython.core.display import HTML, display
-from IPython.core.magic import Magics, line_cell_magic, line_magic, magics_class
+from IPython.core.magic import (
+    Magics,
+    cell_magic,
+    line_cell_magic,
+    line_magic,
+    magics_class,
+)
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 
 from sqlmesh.core import constants as c
@@ -32,7 +38,7 @@ class SQLMeshMagics(Magics):
         from sqlmesh import runtime_env
 
         if runtime_env.is_databricks:
-            # Use Databrick's special display instead of the normal IPython display
+            # Use Databricks' special display instead of the normal IPython display
             return self._shell.user_ns["display"]
         return display
 
@@ -271,7 +277,7 @@ class SQLMeshMagics(Magics):
     )
     @argument("--start", "-s", type=str, help="Start date to evaluate.")
     @argument("--end", "-e", type=str, help="End date to evaluate.")
-    @argument("--skip-janitor", action="store_true", help="Skip the jantitor task.")
+    @argument("--skip-janitor", action="store_true", help="Skip the janitor task.")
     @line_magic
     def run_dag(self, line: str) -> None:
         """Evaluate the DAG of models using the built-in scheduler."""
@@ -349,7 +355,7 @@ class SQLMeshMagics(Magics):
         type=str,
         help="An optional variable name to store the resulting dataframe.",
     )
-    @line_cell_magic
+    @cell_magic
     def fetchdf(self, line: str, sql: str) -> None:
         """Fetches a dataframe from sql, optionally storing it in a variable."""
         args = parse_argstring(self.fetchdf, line)
