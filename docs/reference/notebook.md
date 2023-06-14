@@ -33,9 +33,9 @@ init_example_project("path_to_project_directory")
 ```
 
 ### Databricks notebooks
-Update the `default_connection` and `test_connection` in the `config.yaml` file to use your Databricks cluster. 
+To use your Databricks cluster, update the `default_connection` and `test_connection` in the `config.yaml` file. 
 
-See the [Execution Engines](https://sqlmesh.readthedocs.io/en/stable/integrations/engines/) page for information on configuring a Databricks connection.
+See the [Execution Engines](../integrations/engines.md#databricks) page for information on configuring a Databricks connection.
 
 ## context
 ```
