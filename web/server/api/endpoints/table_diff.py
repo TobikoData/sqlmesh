@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
+import numpy as np
 from fastapi import APIRouter, Depends
 from sqlglot import exp
 
@@ -47,7 +48,7 @@ def get_table_diff(
         source=_row_diff.source,
         target=_row_diff.target,
         stats=_row_diff.stats,
-        sample=_row_diff.sample.to_dict(),
+        sample=_row_diff.sample.replace({np.nan: None}).to_dict(),
         source_count=_row_diff.source_count,
         target_count=_row_diff.target_count,
         count_pct_change=_row_diff.count_pct_change,

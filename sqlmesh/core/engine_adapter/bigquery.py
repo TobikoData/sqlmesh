@@ -148,9 +148,11 @@ class BigQueryEngineAdapter(EngineAdapter):
         of the table if `replace` is true.
         """
         assert isinstance(df, pd.DataFrame)
-        table = self.__get_bq_table(table_name, columns_to_types or columns_to_types_from_df(df))
+        if columns_to_types is None:
+            columns_to_types = columns_to_types_from_df(df)
+        table = self.__get_bq_table(table_name, columns_to_types)
         self.client.create_table(table, exists_ok=exists)
-        self.__load_pandas_to_table(table, df, replace=replace)
+        self.__load_pandas_to_table(table, df, columns_to_types, replace=replace)
 
     def _insert_append_pandas_df(
         self,
@@ -162,13 +164,16 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         Appends to a table from a pandas dataframe. Will create the table if it doesn't exist.
         """
-        table = self.__get_bq_table(table_name, columns_to_types or columns_to_types_from_df(df))
-        self.__load_pandas_to_table(table, df, replace=False)
+        if columns_to_types is None:
+            columns_to_types = columns_to_types_from_df(df)
+        table = self.__get_bq_table(table_name, columns_to_types)
+        self.__load_pandas_to_table(table, df, columns_to_types, replace=False)
 
     def __load_pandas_to_table(
         self,
         table: bigquery.Table,
         df: pd.DataFrame,
+        columns_to_types: t.Dict[str, exp.DataType],
         replace: bool = False,
     ) -> BigQueryQueryResult:
         """
@@ -177,7 +182,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         from google.cloud import bigquery
 
-        job_config = bigquery.job.LoadJobConfig()
+        job_config = bigquery.job.LoadJobConfig(schema=self.__get_bq_schema(columns_to_types))
         if replace:
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
         result = self.client.load_table_from_dataframe(df, table, job_config=job_config).result()
@@ -258,7 +263,7 @@ class BigQueryEngineAdapter(EngineAdapter):
 
             temp_bq_table = self.__get_temp_bq_table(table, columns_to_types)
             self.client.create_table(temp_bq_table, exists_ok=False)
-            result = self.__load_pandas_to_table(temp_bq_table, df, replace=False)
+            result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
             if result.errors:
                 raise SQLMeshError(result.errors)
 
