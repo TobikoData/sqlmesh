@@ -491,7 +491,7 @@ class TerminalConsole(Console):
         self.console.print(
             f" [green]{row_diff.target_env.upper()}[/green]: {row_diff.target_count} rows"
         )
-        self.console.print(f"\n[b]Rows Added/Removed[b]: {row_diff.count_pct_change:.1f}%")
+        self.console.print(f"\n[b]Row Diff[b]: {row_diff.count_pct_change:.1f}%")
         self.console.print("\n[b]Sample Rows:[/b]")
         self.console.print(row_diff.sample.to_string(index=False) + "\n")
 
