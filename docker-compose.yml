@@ -5,6 +5,7 @@ services:
     container_name: generate-openapi-spec
     working_dir: /sqlmesh
     build:
+      context: .
       dockerfile: Dockerfile.api
     command: python web/server/openapi.py
     volumes:
@@ -14,6 +15,7 @@ services:
     image: tobiko-app
     container_name: tobiko-app
     build:
+      context: .
       dockerfile: Dockerfile.app
     command: npm run dev -- --host 0.0.0.0 --port 8001
     working_dir: /app
@@ -33,6 +35,7 @@ services:
     container_name: tobiko-api
     working_dir: /home
     build:
+      context: .
       dockerfile: Dockerfile.api
     command: python -m uvicorn web.server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh --timeout-graceful-shutdown 1
     ports:
