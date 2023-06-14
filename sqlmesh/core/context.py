@@ -777,6 +777,7 @@ class Context(BaseContext):
         Returns:
             The TableDiff object containing schema and summary differences.
         """
+        source_alias, target_alias = source, target
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             source_env = self.state_reader.get_environment(source)
@@ -793,6 +794,8 @@ class Context(BaseContext):
             target = next(
                 snapshot for snapshot in target_env.snapshots if snapshot.name == model.name
             ).table_name()
+            source_alias = source_env.name
+            target_alias = target_env.name
 
             if not on and model.grain:
                 on = model.grain
@@ -801,7 +804,14 @@ class Context(BaseContext):
             raise SQLMeshError("Missing join condition 'on'")
 
         table_diff = TableDiff(
-            adapter=self._engine_adapter, source=source, target=target, on=on, where=where
+            adapter=self._engine_adapter,
+            source=source,
+            target=target,
+            on=on,
+            where=where,
+            source_alias=source_alias,
+            target_alias=target_alias,
+            limit=limit,
         )
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
