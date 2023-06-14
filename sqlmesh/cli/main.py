@@ -6,8 +6,6 @@ import sys
 import typing as t
 
 import click
-from sqlglot import exp
-from sqlglot.helper import ensure_list
 
 from sqlmesh import debug_mode_enabled, enable_logging
 from sqlmesh.cli import error_handler
@@ -388,35 +386,14 @@ def create_external_models(obj: Context) -> None:
 
 
 @cli.command("table_diff")
+@click.argument("source_to_target", required=True, metavar="SOURCE:TARGET")
+@click.argument("model", required=False)
 @click.option(
-    "--source",
-    "-s",
-    type=str,
-    required=True,
-    help="The source environment or table.",
-)
-@click.option(
-    "--target",
-    "-t",
-    type=str,
-    required=True,
-    help="The target environment or table.",
-)
-@click.option(
-    "--grain",
-    type=str,
-    multiple=True,
-    help="The list of columns to use as keys.",
-)
-@click.option(
+    "-o",
     "--on",
     type=str,
-    help='The SQL join condition or list of columns to use as keys. Table aliases must be "s" and "t" for source and target.',
-)
-@click.option(
-    "--model",
-    type=str,
-    help="The model to diff against when source and target are environments and not tables.",
+    multiple=True,
+    help="The column to join on. Can be specified multiple times. The model grain will be used if not specified.",
 )
 @click.option(
     "--where",
@@ -426,20 +403,22 @@ def create_external_models(obj: Context) -> None:
 @click.option(
     "--limit",
     type=int,
+    default=20,
     help="The limit of the sample dataframe.",
 )
 @click.pass_obj
 @error_handler
-def table_diff(obj: Context, **kwargs: t.Any) -> None:
-    """Show the diff between two tables.
-
-    Can either be two tables or two environments and a model.
-    """
-    kwargs["model_or_snapshot"] = kwargs.pop("model", None)
-    on = kwargs.pop("on", None)
-    grain = ensure_list(kwargs.pop("grain", None))
-    kwargs["on"] = exp.condition(on) if on else grain
-    obj.table_diff(**kwargs)
+def table_diff(
+    obj: Context, source_to_target: str, model: t.Optional[str], **kwargs: t.Any
+) -> None:
+    """Show the diff between two tables."""
+    source, target = source_to_target.split(":")
+    obj.table_diff(
+        source=source,
+        target=target,
+        model_or_snapshot=model,
+        **kwargs,
+    )
 
 
 @cli.command("prompt")
