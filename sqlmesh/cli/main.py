@@ -387,12 +387,14 @@ def create_external_models(obj: Context) -> None:
 
 
 @cli.command("table_diff")
-@click.argument("from_to", required=True, metavar="FROM:TO",)
-@click.argument("model_name", required=False)
+@click.argument("source_to_target", required=True, metavar="SOURCE:TARGET")
+@click.argument("model", required=False)
 @click.option(
+    "-O",
     "--on",
     type=str,
-    help='The SQL join condition or list of columns to use as keys. Table aliases must be "s" and "t" for source and target.',
+    multiple=True,
+    help="The column to join on. Can be specified multiple times. The model grain will be used if not specified.",
 )
 @click.option(
     "--where",
@@ -408,14 +410,14 @@ def create_external_models(obj: Context) -> None:
 @click.pass_obj
 @error_handler
 def table_diff(
-    obj: Context, from_to: str, model_name: t.Optional[str], **kwargs: t.Any
+    obj: Context, source_to_target: str, model: t.Optional[str], **kwargs: t.Any
 ) -> None:
     """Show the diff between two tables."""
-    source, target = from_to.split(":")
+    source, target = source_to_target.split(":")
     obj.table_diff(
         source=source,
         target=target,
-        model_or_snapshot=model_name,
+        model_or_snapshot=model,
         **kwargs,
     )
 

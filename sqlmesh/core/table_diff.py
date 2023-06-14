@@ -96,7 +96,7 @@ class TableDiff:
         self.source_env = source_env
         self.target_env = target_env
 
-        if isinstance(on, list):
+        if isinstance(on, (list, tuple)):
             self.on: exp.Condition = exp.and_(
                 *(
                     exp.column(c, "s").eq(exp.column(c, "t"))
