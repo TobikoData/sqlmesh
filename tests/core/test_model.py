@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -586,6 +587,37 @@ def test_seed_pre_statements_only():
     ]
     assert model.pre_statements == expected_pre
     assert not model.post_statements
+
+
+def test_seed_model_custom_types(tmp_path):
+    model_csv_path = (tmp_path / "model.csv").absolute()
+
+    with open(model_csv_path, "w") as fd:
+        fd.write(
+            """key,ds,b,i
+123,2022-01-01,false,321
+"""
+        )
+
+    model = create_seed_model(
+        "test_db.test_model",
+        SeedKind(path=str(model_csv_path)),
+        columns={"key": "string", "ds": "date", "b": "boolean", "i": "int"},
+    )
+
+    df = next(model.render(context=None))
+
+    assert df["ds"].dtype == "datetime64[ns]"
+    assert df["ds"].iloc[0].date() == date(2022, 1, 1)
+
+    assert df["key"].dtype == "object"
+    assert df["key"].iloc[0] == "123"
+
+    assert df["b"].dtype == "bool"
+    assert not df["b"].iloc[0]
+
+    assert df["i"].dtype == "int64"
+    assert df["i"].iloc[0] == 321
 
 
 def test_audits():
