@@ -387,12 +387,8 @@ def create_external_models(obj: Context) -> None:
 
 
 @cli.command("table_diff")
-@click.argument(
-    "from_to",
-    required=True,
-    metavar="ENV:ENV",
-)
-@click.argument("model_name", required=True)
+@click.argument("from_to", required=True, metavar="FROM:TO",)
+@click.argument("model_name")
 @click.option(
     "--on",
     type=str,
@@ -412,16 +408,14 @@ def create_external_models(obj: Context) -> None:
 @click.pass_obj
 @error_handler
 def table_diff(
-    obj: Context, from_to: str, model_name: str, on: t.Optional[str], **kwargs: t.Any
+    obj: Context, from_to: str, model_name: t.Optional[str], **kwargs: t.Any
 ) -> None:
     """Show the diff between two tables."""
-    model = obj.get_model(model_name, raise_if_missing=True)
     source, target = from_to.split(":")
     obj.table_diff(
         source=source,
         target=target,
-        model_or_snapshot=model,
-        on=exp.condition(on or " and ".join([f"s.{col} = t.{col}" for col in model.grain])),
+        model_or_snapshot=model_name,
         **kwargs,
     )
 

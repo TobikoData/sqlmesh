@@ -756,8 +756,8 @@ class Context(BaseContext):
         self,
         source: str,
         target: str,
-        model_or_snapshot: ModelOrSnapshot,
         on: t.List[str] | exp.Condition | None = None,
+        model_or_snapshot: t.Optional[ModelOrSnapshot] = None,
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
         show: bool = True,
@@ -765,11 +765,11 @@ class Context(BaseContext):
         """Show a diff between two tables.
 
         Args:
-            source: The source environment.
-            target: The target environment.
+            source: The source environment or table.
+            target: The target environment or table.
             on: The join condition, table aliases must be "s" and "t" for source and target.
                 If omitted, the table's grain will be used.
-            model_or_snapshot: The model or snapshot to use.
+            model_or_snapshot: The model or snapshot to use when environments are passed in.
             where: An optional where statement to filter results.
             limit: The limit of the sample dataframe.
             show: Show the table diff in the console.
@@ -777,24 +777,28 @@ class Context(BaseContext):
         Returns:
             The TableDiff object containing schema and summary differences.
         """
-        model = self.get_model(model_or_snapshot, raise_if_missing=True)
-        source_env = self.state_reader.get_environment(source)
-        target_env = self.state_reader.get_environment(target)
+        source_env_name, target_env_name = "SOURCE", "TARGET"
+        if model_or_snapshot:
+            model = self.get_model(model_or_snapshot, raise_if_missing=True)
+            source_env = self.state_reader.get_environment(source)
+            target_env = self.state_reader.get_environment(target)
 
-        if not source_env:
-            raise SQLMeshError(f"Could not find environment '{source}'")
-        if not target_env:
-            raise SQLMeshError(f"Could not find environment '{target}')")
+            if not source_env:
+                raise SQLMeshError(f"Could not find environment '{source}'")
+            if not target_env:
+                raise SQLMeshError(f"Could not find environment '{target}')")
 
-        source = next(
-            snapshot for snapshot in source_env.snapshots if snapshot.name == model.name
-        ).table_name()
-        target = next(
-            snapshot for snapshot in target_env.snapshots if snapshot.name == model.name
-        ).table_name()
+            source = next(
+                snapshot for snapshot in source_env.snapshots if snapshot.name == model.name
+            ).table_name()
+            target = next(
+                snapshot for snapshot in target_env.snapshots if snapshot.name == model.name
+            ).table_name()
+            source_env_name = source_env.name
+            target_env_name = target_env.name
 
-        if not on and model.grain:
-            on = model.grain
+            if not on and model.grain:
+                on = model.grain
 
         if not on:
             raise SQLMeshError("Missing join condition 'on'")
@@ -805,8 +809,8 @@ class Context(BaseContext):
             target=target,
             on=on,
             where=where,
-            source_env=source_env.name,
-            target_env=target_env.name,
+            source_env=source_env_name,
+            target_env=target_env_name,
             limit=limit,
         )
         if show:
