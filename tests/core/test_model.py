@@ -1146,14 +1146,14 @@ def test_star_expansion(assert_exp_eq) -> None:
         context.render("db.model2"),
         """
         SELECT
-          model1.id AS id,
-          model1.item_id AS item_id,
-          model1.ds AS ds
+          "model1"."id" AS "id",
+          "model1"."item_id" AS "item_id",
+          "model1"."ds" AS "ds"
         FROM (
           SELECT
-            CAST(id AS INT) AS id,
-            CAST(item_id AS INT) AS item_id,
-            CAST(ds AS TEXT) AS ds
+            CAST("t"."id" AS INT) AS "id",
+            CAST("t"."item_id" AS INT) AS "item_id",
+            CAST("t"."ds" AS TEXT) AS "ds"
           FROM (VALUES
             (1, 1, '2020-01-01'),
             (1, 2, '2020-01-01'),
@@ -1162,27 +1162,27 @@ def test_star_expansion(assert_exp_eq) -> None:
             (4, 1, '2020-01-04'),
             (5, 1, '2020-01-05'),
             (6, 1, '2020-01-06'),
-            (7, 1, '2020-01-07')) AS t(id, item_id, ds)
-        ) AS model1
+            (7, 1, '2020-01-07')) AS "t"("id", "item_id", "ds")
+        ) AS "model1"
         """,
     )
     assert_exp_eq(
         context.render("db.model3"),
         """
         SELECT
-          model2.id AS id,
-          model2.item_id AS item_id,
-          model2.ds AS ds
+          "model2"."id" AS "id",
+          "model2"."item_id" AS "item_id",
+          "model2"."ds" AS "ds"
         FROM (
           SELECT
-            model1.id AS id,
-            model1.item_id AS item_id,
-            model1.ds AS ds
+            "model1"."id" AS "id",
+            "model1"."item_id" AS "item_id",
+            "model1"."ds" AS "ds"
           FROM (
             SELECT
-              CAST(id AS INT) AS id,
-              CAST(item_id AS INT) AS item_id,
-              CAST(ds AS TEXT) AS ds
+              CAST("t"."id" AS INT) AS "id",
+              CAST("t"."item_id" AS INT) AS "item_id",
+              CAST("t"."ds" AS TEXT) AS "ds"
             FROM (VALUES
               (1, 1, '2020-01-01'),
               (1, 2, '2020-01-01'),
@@ -1191,9 +1191,9 @@ def test_star_expansion(assert_exp_eq) -> None:
               (4, 1, '2020-01-04'),
               (5, 1, '2020-01-05'),
               (6, 1, '2020-01-06'),
-              (7, 1, '2020-01-07')) AS t(id, item_id, ds)
-          ) AS model1
-        ) AS model2
+              (7, 1, '2020-01-07')) AS "t"("id", "item_id", "ds")
+          ) AS "model1"
+        ) AS "model2"
         """,
     )
 

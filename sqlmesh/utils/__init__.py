@@ -122,7 +122,7 @@ class registry_decorator:
 
 
 @contextmanager
-def sys_path(*paths: Path) -> t.Generator[None, None, None]:
+def sys_path(*paths: Path) -> t.Iterator[None]:
     """A context manager to temporarily add a path to 'sys.path'."""
     inserted = set()
 
