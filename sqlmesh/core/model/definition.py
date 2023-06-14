@@ -10,6 +10,7 @@ from itertools import zip_longest
 from pathlib import Path
 from textwrap import indent
 
+import pandas as pd
 from astor import to_source
 from pydantic import Field
 from sqlglot import diff, exp
@@ -27,6 +28,7 @@ from sqlmesh.core.model.kind import ModelKindName, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
+from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
@@ -814,7 +816,24 @@ class SeedModel(_SqlBasedModel):
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         self._ensure_hydrated()
-        yield from self.seed.read(batch_size=self.kind.batch_size)
+
+        date_or_time_columns = []
+        bool_columns = []
+        string_columns = []
+        for name, tpe in (self.columns_to_types_ or {}).items():
+            if tpe.this in exp.DataType.TEMPORAL_TYPES:
+                date_or_time_columns.append(name)
+            elif tpe.is_type("boolean"):
+                bool_columns.append(name)
+            elif tpe.this in exp.DataType.TEXT_TYPES:
+                string_columns.append(name)
+
+        for df in self.seed.read(batch_size=self.kind.batch_size):
+            for column in date_or_time_columns:
+                df[column] = pd.to_datetime(df[column])
+            df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
+            df[string_columns] = df[string_columns].astype(str)
+            yield df
 
     def text_diff(self, other: Model) -> str:
         if not isinstance(other, SeedModel):

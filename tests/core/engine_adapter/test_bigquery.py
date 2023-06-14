@@ -127,7 +127,9 @@ def test_replace_query_pandas(mocker: MockerFixture):
     load_result.result.return_value = AttributeDict({"errors": None})
     client_mock.load_table_from_dataframe.return_value = load_result
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
+    adapter.replace_query(
+        "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
+    )
 
     assert execute_mock.call_args_list == []
     assert client_mock.method_calls[0] == [
