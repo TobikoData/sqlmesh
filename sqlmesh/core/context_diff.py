@@ -94,9 +94,22 @@ class ContextDiff(PydanticModel):
             if name not in added and snapshot.fingerprint != existing_info[name].fingerprint
         }
 
+        modified_local_seed_snapshot_ids = {
+            s.snapshot_id for s in snapshots.values() if s.is_seed and s.name in modified_info
+        }
+        modified_remote_snapshot_ids = {s.snapshot_id for s in modified_info.values()}
+
         stored = {
-            **state_reader.get_snapshots([snapshot.snapshot_id for snapshot in snapshots.values()]),
-            **state_reader.get_snapshots(modified_info.values(), hydrate_seeds=True),
+            **state_reader.get_snapshots(
+                [
+                    snapshot.snapshot_id
+                    for snapshot in snapshots.values()
+                    if snapshot.snapshot_id not in modified_local_seed_snapshot_ids
+                ]
+            ),
+            **state_reader.get_snapshots(
+                modified_remote_snapshot_ids | modified_local_seed_snapshot_ids, hydrate_seeds=True
+            ),
         }
 
         merged_snapshots = {}
