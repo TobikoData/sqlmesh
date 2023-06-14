@@ -1343,3 +1343,21 @@ def test_parse_expression_list_with_jinja():
         "GRANT SELECT ON TABLE foo TO DEV",
     ]
     assert input == [val.sql() for val in parse_expression(input)]
+
+
+def test_depends_on_extras():
+    expressions = d.parse(
+        """
+        MODEL (
+          name test_db.test_model,
+          depends_on_extras tbl_b
+        );
+
+        SELECT 1 FROM tbl_a;
+    """
+    )
+    model = load_model(expressions)
+
+    assert model.depends_on_extras == {"tbl_b"}
+    assert model.depends_on_ is None
+    assert model.depends_on == {"tbl_a", "tbl_b"}

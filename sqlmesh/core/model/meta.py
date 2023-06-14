@@ -53,6 +53,7 @@ class ModelMeta(PydanticModel):
     storage_format: t.Optional[str]
     partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
+    depends_on_extras: t.Optional[t.Set[str]]
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
@@ -149,7 +150,7 @@ class ModelMeta(PydanticModel):
             }
         return v
 
-    @validator("depends_on_", pre=True)
+    @validator("depends_on_", "depends_on_extras", pre=True)
     def _depends_on_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
         dialect = values.get("dialect")
 

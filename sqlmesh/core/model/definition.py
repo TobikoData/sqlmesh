@@ -429,11 +429,12 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A list of all the upstream table names.
         """
+        extras = self.depends_on_extras or set()
         if self.depends_on_ is not None:
-            return self.depends_on_ - {self.name}
+            return (extras | self.depends_on_) - {self.name}
 
         if self._depends_on is None:
-            self._depends_on = _find_tables(self._render_all_sql()) - {self.name}
+            self._depends_on = (extras | _find_tables(self._render_all_sql())) - {self.name}
         return self._depends_on
 
     @property

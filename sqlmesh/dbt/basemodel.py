@@ -235,6 +235,9 @@ class BaseModelConfig(GeneralConfig):
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
+            "depends_on_extras": {model.sql_name for model in model_context.refs.values()}.union(
+                {source.sql_name for source in model_context.sources.values()}
+            ),
             "jinja_macros": jinja_macros,
             "path": self.path,
             "hash_raw_query": True,
