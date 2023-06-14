@@ -433,7 +433,7 @@ class _Model(ModelMeta, frozen=True):
             return self.depends_on_ - {self.name}
 
         if self._depends_on is None:
-            self._depends_on = _find_tables(self._render_all_sql()) - {self.name}
+            self._depends_on = _find_tables(self.render_query(optimize=False)) - {self.name}
         return self._depends_on
 
     @property
@@ -481,7 +481,7 @@ class _Model(ModelMeta, frozen=True):
         if self._depends_on_past is None:
             self._depends_on_past = (
                 self.kind.is_incremental_by_unique_key
-                or self.name in _find_tables([self.render_query()])
+                or self.name in _find_tables(self.render_query(optimize=False))
             )
         return self._depends_on_past
 
@@ -528,14 +528,6 @@ class _Model(ModelMeta, frozen=True):
             and None if the nature of the change can't be determined.
         """
         raise NotImplementedError
-
-    def _render_all_sql(self) -> t.List[exp.Expression]:
-        """Renders all the SQL expressions of this model."""
-        return [
-            *self.render_pre_statements(),
-            self.render_query(),
-            *self.render_post_statements(),
-        ]
 
 
 class _SqlBasedModel(_Model):
@@ -713,7 +705,7 @@ class SqlModel(_SqlBasedModel):
         if self._column_descriptions is None:
             self._column_descriptions = {
                 select.alias: "\n".join(comment.strip() for comment in select.comments)
-                for select in self.render_query().selects
+                for select in self.render_query(optimize=False).selects
                 if select.comments
             }
         return self._column_descriptions
@@ -721,9 +713,10 @@ class SqlModel(_SqlBasedModel):
     def update_schema(self, schema: MappingSchema) -> None:
         super().update_schema(schema)
         self._columns_to_types = None
+        self._query_renderer._optimized_cache = {}
 
     def validate_definition(self) -> None:
-        query = self._query_renderer.render()
+        query = self._query_renderer.render(optimize=False)
 
         if not isinstance(query, exp.Subqueryable):
             raise_config_error("Missing SELECT query in the model definition", self._path)
@@ -1444,7 +1437,7 @@ def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], p
         raise_config_error(f"Invalid extra fields {extra_fields} in the model definition", path)
 
 
-def _find_tables(expressions: t.List[exp.Expression]) -> t.Set[str]:
+def _find_tables(expression: exp.Expression) -> t.Set[str]:
     """Find all tables referenced in a query.
 
     Args:
@@ -1455,8 +1448,7 @@ def _find_tables(expressions: t.List[exp.Expression]) -> t.Set[str]:
     """
     return {
         exp.table_name(table)
-        for e in expressions
-        for scope in traverse_scope(e)
+        for scope in traverse_scope(expression)
         for table in scope.tables
         if isinstance(table.this, exp.Identifier) and exp.table_name(table) not in scope.cte_sources
     }
