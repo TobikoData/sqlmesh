@@ -189,9 +189,15 @@ def test_variables(assert_exp_eq, sushi_test_project):
     kwargs = {"context": context}
 
     # Case 2: using a defined variable without a default value
-    defined_variables["foo"] = 6
-    context.variables = defined_variables
-    assert_exp_eq(model_config.to_sqlmesh(**kwargs).render_query(), 'SELECT 6 AS "6"')
+    defined_variables["bar"] = "{{ 2 * 3 }}"
+    defined_variables["foo"] = "{{ var('bar') }}"
+    context.set_and_render_variables(defined_variables, "test_package")
+    assert context.variables == {"bar": "6", "foo": "6"}
+
+    sqlmesh_model = model_config.to_sqlmesh(**kwargs)
+    assert_exp_eq(sqlmesh_model.render_query(), 'SELECT 6 AS "6"')
+    assert sqlmesh_model.jinja_macros.global_objs["vars"]["bar"] == "6"
+    assert sqlmesh_model.jinja_macros.global_objs["vars"]["foo"] == "6"
 
     # Case 3: using a defined variable with a default value
     model_config.sql = "SELECT {{ var('foo', 5) }}"
@@ -207,6 +213,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
 
     # Finally, check that variable scoping & overwriting (some_var) works as expected
     expected_sushi_variables = {
+        "yet_another_var": 1,
         "top_waiters:limit": 10,
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
@@ -214,8 +221,12 @@ def test_variables(assert_exp_eq, sushi_test_project):
     expected_customer_variables = {
         "some_var": ["foo", "bar"],
         "some_other_var": 5,
+        "yet_another_var": 1,
         "customers:bla": False,
         "customers:customer_id": "customer_id",
+        "top_waiters:limit": 10,
+        "top_waiters:revenue": "revenue",
+        "customers:boo": ["a", "b"],
     }
 
     assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables
