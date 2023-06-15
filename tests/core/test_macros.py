@@ -70,7 +70,12 @@ def test_ast_correctness(macro_evaluator):
     "sql, expected, args",
     [
         (
-            """@UPPER(1 + 1) + 2""",
+            "select @each(['a', 'b'], x -> x = y as is_@{x})",
+            "SELECT 'a' = y as is_a, 'b' = y as is_b",
+            {},
+        ),
+        (
+            """@UPPER(@EVAL(1 + 1)) + 2""",
             "UPPER(2 + 1) + 2",
             {},
         ),
@@ -85,7 +90,7 @@ def test_ast_correctness(macro_evaluator):
             {},
         ),
         (
-            """@FILTER_COUNTRY(@'continent = ''NA''', 'USA')""",
+            """@FILTER_COUNTRY(continent = 'NA', 'USA')""",
             "continent = 'NA' AND country = 'USA'",
             {},
         ),
