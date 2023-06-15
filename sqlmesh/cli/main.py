@@ -351,12 +351,52 @@ def ide(
     host: t.Optional[str],
     port: t.Optional[int],
 ) -> None:
-    """Start a browser-based SQLMesh IDE."""
+    """
+    Start a browser-based SQLMesh IDE.
+
+    WARNING: soft-deprecated, please use `sqlmesh ui` instead.
+    """
     try:
         import uvicorn
     except ModuleNotFoundError as e:
         raise MissingDependencyError(
             "Missing IDE dependencies. Run `pip install 'sqlmesh[web]'` to install them."
+        ) from e
+
+    click.echo(
+        click.style("WARNING", fg="yellow") + ":  soft-deprecated, please use `sqlmesh ui` instead."
+    )
+
+    host = host or "127.0.0.1"
+    port = 8000 if port is None else port
+    os.environ["PROJECT_PATH"] = str(obj.path)
+    uvicorn.run("web.server.main:app", host=host, port=port, log_level="info")
+
+
+@cli.command("ui")
+@click.option(
+    "--host",
+    type=str,
+    help="Bind socket to this host. Default: 127.0.0.1",
+)
+@click.option(
+    "--port",
+    type=int,
+    help="Bind socket to this port. Default: 8000",
+)
+@click.pass_obj
+@error_handler
+def ui(
+    obj: Context,
+    host: t.Optional[str],
+    port: t.Optional[int],
+) -> None:
+    """Start a browser-based SQLMesh UI."""
+    try:
+        import uvicorn
+    except ModuleNotFoundError as e:
+        raise MissingDependencyError(
+            "Missing UI dependencies. Run `pip install 'sqlmesh[web]'` to install them."
         ) from e
 
     host = host or "127.0.0.1"
