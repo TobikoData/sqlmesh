@@ -936,3 +936,20 @@ def test_seed_hydration(
     assert isinstance(stored_snapshot.model, SeedModel)
     assert stored_snapshot.model.is_hydrated
     assert stored_snapshot.model.seed.content == "header\n1\n2"
+
+
+def test_models_exist(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+        )
+    )
+
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert not state_sync.models_exist([snapshot.name])
+
+    state_sync.push_snapshots([snapshot])
+
+    assert state_sync.models_exist([snapshot.name]) == {snapshot.name}
