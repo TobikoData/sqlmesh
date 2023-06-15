@@ -344,10 +344,10 @@ def info(obj: Context) -> None:
     type=int,
     help="Bind socket to this port. Default: 8000",
 )
-@click.pass_obj
+@click.pass_context
 @error_handler
 def ide(
-    obj: Context,
+    ctx: click.Context,
     host: t.Optional[str],
     port: t.Optional[int],
 ) -> None:
@@ -356,21 +356,11 @@ def ide(
 
     WARNING: soft-deprecated, please use `sqlmesh ui` instead.
     """
-    try:
-        import uvicorn
-    except ModuleNotFoundError as e:
-        raise MissingDependencyError(
-            "Missing IDE dependencies. Run `pip install 'sqlmesh[web]'` to install them."
-        ) from e
-
     click.echo(
         click.style("WARNING", fg="yellow") + ":  soft-deprecated, please use `sqlmesh ui` instead."
     )
 
-    host = host or "127.0.0.1"
-    port = 8000 if port is None else port
-    os.environ["PROJECT_PATH"] = str(obj.path)
-    uvicorn.run("web.server.main:app", host=host, port=port, log_level="info")
+    ctx.forward(ui)
 
 
 @cli.command("ui")
