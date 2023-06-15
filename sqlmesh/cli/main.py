@@ -83,7 +83,7 @@ def cli(
     "-t",
     "--template",
     type=str,
-    help="Project template. Support values: airflow, default.",
+    help="Project template. Support values: airflow, dbt, default.",
 )
 @click.pass_context
 @error_handler
@@ -325,7 +325,11 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
 @click.pass_obj
 @error_handler
 def info(obj: Context) -> None:
-    """Print info."""
+    """
+    Print information about a SQLMesh project.
+
+    Includes counts of project models and macros and connection tests for the data warehouse and test runner.
+    """
     obj.print_info()
 
 
