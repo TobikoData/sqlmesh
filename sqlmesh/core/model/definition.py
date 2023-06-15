@@ -141,7 +141,7 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A generator which yields eiether a query object or one of the supported dataframe objects.
         """
-        yield self.render_query(
+        yield self.render_query_or_raise(
             start=start,
             end=end,
             latest=latest,
@@ -213,7 +213,7 @@ class _Model(ModelMeta, frozen=True):
         is_dev: bool = False,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> t.Optional[exp.Subqueryable]:
         """Renders a model's query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -238,6 +238,49 @@ class _Model(ModelMeta, frozen=True):
             ),
             copy=False,
         ).from_(exp.values([tuple([1])], alias="t", columns=["dummy"]), copy=False)
+
+    def render_query_or_raise(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
+        engine_adapter: t.Optional[EngineAdapter] = None,
+        **kwargs: t.Any,
+    ) -> exp.Subqueryable:
+        """Same as `render_query()` but raises an exception if the query can't be rendered.
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
+                that depend on materialized tables.  Model definitions are inlined and can thus be run end to
+                end on the fly.
+            is_dev: Indicates whether the rendering happens in the development mode and temporary
+                tables / table clones should be used where applicable.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The rendered expression.
+        """
+        query = self.render_query(
+            start=start,
+            end=end,
+            latest=latest,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            engine_adapter=engine_adapter,
+            **kwargs,
+        )
+        if query is None:
+            raise SQLMeshError(f"Failed to render query for model '{self.name}'.")
+        return query
 
     def render_pre_statements(
         self,
@@ -305,9 +348,7 @@ class _Model(ModelMeta, frozen=True):
         """
         return []
 
-    def ctas_query(
-        self, snapshots: t.Dict[str, Snapshot], is_dev: bool = False
-    ) -> exp.Subqueryable:
+    def ctas_query(self, **render_kwarg: t.Any) -> exp.Subqueryable:
         """Return a dummy query to do a CTAS.
 
         If a model's column types are unknown, the only way to create the table is to
@@ -315,13 +356,11 @@ class _Model(ModelMeta, frozen=True):
         SELECTS and hopefully the optimizer is smart enough to not do anything.
 
         Args:
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
-            is_dev: Indicates whether the creation happens in the development mode and temporary
-                tables / table clones should be used where applicable.
+            render_kwarg: Additional kwargs to pass to the renderer.
         Return:
             The mocked out ctas query.
         """
-        query = self.render_query(snapshots=snapshots, is_dev=is_dev)
+        query = self.render_query_or_raise(**render_kwarg)
         # the query is expanded so it's been copied, it's safe to mutate.
         for select in query.find_all(exp.Select):
             if select.args.get("from"):
@@ -433,7 +472,11 @@ class _Model(ModelMeta, frozen=True):
             return self.depends_on_ - {self.name}
 
         if self._depends_on is None:
-            self._depends_on = _find_tables(self.render_query(optimize=False)) - {self.name}
+            query = self.render_query(optimize=False)
+            if query is None:
+                self._depends_on = set()
+            else:
+                self._depends_on = _find_tables(query) - {self.name}
         return self._depends_on
 
     @property
@@ -488,10 +531,14 @@ class _Model(ModelMeta, frozen=True):
     @property
     def depends_on_past(self) -> bool:
         if self._depends_on_past is None:
-            self._depends_on_past = (
-                self.kind.is_incremental_by_unique_key
-                or self.name in _find_tables(self.render_query(optimize=False))
-            )
+            if self.kind.is_incremental_by_unique_key:
+                return True
+
+            query = self.render_query(optimize=False)
+            if query is None:
+                return False
+            return self.name in _find_tables(query)
+
         return self._depends_on_past
 
     def validate_definition(self) -> None:
@@ -667,7 +714,7 @@ class SqlModel(_SqlBasedModel):
         is_dev: bool = False,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> t.Optional[exp.Subqueryable]:
         query = self._query_renderer.render(
             start=start,
             end=end,
@@ -678,7 +725,7 @@ class SqlModel(_SqlBasedModel):
             engine_adapter=engine_adapter,
             **kwargs,
         )
-        if logger.isEnabledFor(logging.DEBUG):
+        if query and engine_adapter and logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 f"Rendered query for '{self.name}':\n{indent(query.sql(dialect=self.dialect, pretty=True), '  ')}"
             )
@@ -701,7 +748,10 @@ class SqlModel(_SqlBasedModel):
             return self.columns_to_types_
 
         if self._columns_to_types is None:
-            self._columns_to_types = d.extract_columns_to_types(self._query_renderer.render())
+            query = self._query_renderer.render()
+            if query is None:
+                return None
+            self._columns_to_types = d.extract_columns_to_types(query)
 
         return self._columns_to_types
 
@@ -711,9 +761,13 @@ class SqlModel(_SqlBasedModel):
             return self.column_descriptions_
 
         if self._column_descriptions is None:
+            query = self.render_query(optimize=False)
+            if query is None:
+                return {}
+
             self._column_descriptions = {
                 select.alias: "\n".join(comment.strip() for comment in select.comments)
-                for select in self.render_query(optimize=False).selects
+                for select in query.selects
                 if select.comments
             }
         return self._column_descriptions
@@ -725,6 +779,9 @@ class SqlModel(_SqlBasedModel):
 
     def validate_definition(self) -> None:
         query = self._query_renderer.render(optimize=False)
+
+        if query is None:
+            return
 
         if not isinstance(query, exp.Subqueryable):
             raise_config_error("Missing SELECT query in the model definition", self._path)
@@ -757,6 +814,10 @@ class SqlModel(_SqlBasedModel):
 
         previous_query = previous.render_query()
         this_query = self.render_query()
+
+        if previous_query is None or this_query is None:
+            # Can't determine if there's a breaking change if we can't render the query.
+            return None
 
         edits = diff(previous_query, this_query, matchings=[(previous_query, this_query)])
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}

@@ -305,8 +305,6 @@ def create_builtin_globals(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config")}
     )
 
-    builtin_globals["execute"] = True
-
     adapter: BaseAdapter
     if engine_adapter is not None:
         adapter = RuntimeAdapter(

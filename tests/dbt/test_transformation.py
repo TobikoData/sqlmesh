@@ -26,7 +26,7 @@ from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.target import DuckDbConfig
-from sqlmesh.utils.errors import ConfigError, MacroEvalError
+from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
 
 def test_model_name():
@@ -211,7 +211,9 @@ def test_schema_jinja(sushi_test_project: Project):
         sql="SELECT 1 AS one FROM {{ schema }}",
     )
     context = sushi_test_project.context
-    model_config.to_sqlmesh(context).render_query().sql() == "SELECT 1 AS one FROM sushi AS sushi"
+    model_config.to_sqlmesh(
+        context
+    ).render_query_or_raise().sql() == "SELECT 1 AS one FROM sushi AS sushi"
 
 
 def test_config_jinja(sushi_test_project: Project):
@@ -238,7 +240,8 @@ def test_this(assert_exp_eq, sushi_test_project: Project):
     )
     context = sushi_test_project.context
     assert_exp_eq(
-        model_config.to_sqlmesh(context).render_query().sql(), "SELECT 1 AS one FROM test AS test"
+        model_config.to_sqlmesh(context).render_query_or_raise().sql(),
+        "SELECT 1 AS one FROM test AS test",
     )
 
 
@@ -418,3 +421,31 @@ def test_dbt_utils_star_macro(sushi_test_project: Project):
         context.render("{{ dbt_utils.star(from='foo', prefix='pre') }}")
     with pytest.raises(CompilationError):
         context.render("{{ dbt_utils.star(from='foo', suffix='suf') }}")
+
+
+def test_parsetime_adapter_call(
+    assert_exp_eq, sushi_test_project: Project, sushi_test_dbt_context: Context
+):
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        alias="test",
+        sql="""
+            {% set results = run_query('select 1 as one') %}
+            SELECT {{ results.columns[0].values()[0] }} AS one FROM {{ this.identifier }}
+        """,
+    )
+    context = sushi_test_project.context
+
+    sqlmesh_model = model_config.to_sqlmesh(context)
+    assert sqlmesh_model.render_query() is None
+    assert sqlmesh_model.columns_to_types is None
+    assert not sqlmesh_model.annotated
+    with pytest.raises(SQLMeshError):
+        sqlmesh_model.ctas_query()
+
+    engine_adapter = sushi_test_dbt_context.engine_adapter
+    assert_exp_eq(
+        sqlmesh_model.render_query_or_raise(engine_adapter=engine_adapter).sql(),
+        "SELECT 1 AS one FROM test AS test",
+    )

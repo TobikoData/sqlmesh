@@ -365,7 +365,7 @@ class SnapshotEvaluator:
 
         render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=self.adapter,
-            snapshots=snapshots,
+            snapshots=parent_snapshots_by_name,
             is_dev=is_dev,
         )
 
@@ -373,7 +373,7 @@ class SnapshotEvaluator:
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
             _evaluation_strategy(snapshot, self.adapter).create(
-                snapshot.model, table_name, parent_snapshots_by_name, is_dev
+                snapshot.model, table_name, **render_kwargs
             )
 
             self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
@@ -508,15 +508,17 @@ class EvaluationStrategy(abc.ABC):
 
     @abc.abstractmethod
     def create(
-        self, model: Model, name: str, snapshots: t.Dict[str, Snapshot], is_dev: bool
+        self,
+        model: Model,
+        name: str,
+        **render_kwargs: t.Any,
     ) -> None:
         """Creates the target table or view.
 
         Args:
             model: The target model.
             name: The name of a table or a view.
-            snapshots: Parent snapshots.
-            is_dev: Whether the table is for the dev table.
+            render_kwargs: Additional kwargs for model rendering.
         """
 
     @abc.abstractmethod
@@ -578,7 +580,10 @@ class SymbolicStrategy(EvaluationStrategy):
         pass
 
     def create(
-        self, model: Model, name: str, snapshots: t.Dict[str, Snapshot], is_dev: bool
+        self,
+        model: Model,
+        name: str,
+        **render_kwargs: t.Any,
     ) -> None:
         pass
 
@@ -624,12 +629,15 @@ class MaterializableStrategy(PromotableStrategy):
         self.adapter.insert_append(table_name, query_or_df, columns_to_types=model.columns_to_types)
 
     def create(
-        self, model: Model, table_name: str, snapshots: t.Dict[str, Snapshot], is_dev: bool
+        self,
+        model: Model,
+        name: str,
+        **render_kwargs: t.Any,
     ) -> None:
-        logger.info("Creating table '%s'", table_name)
+        logger.info("Creating table '%s'", name)
         if model.annotated:
             self.adapter.create_table(
-                table_name,
+                name,
                 columns_to_types=model.columns_to_types_or_raise,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
@@ -637,8 +645,8 @@ class MaterializableStrategy(PromotableStrategy):
             )
         else:
             self.adapter.ctas(
-                table_name,
-                model.ctas_query(snapshots, is_dev=is_dev),
+                name,
+                model.ctas_query(**render_kwargs),
                 model.columns_to_types,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
@@ -767,12 +775,15 @@ class ViewStrategy(PromotableStrategy):
         raise ConfigError(f"Cannot append to a view '{table_name}'.")
 
     def create(
-        self, model: Model, name: str, snapshots: t.Dict[str, Snapshot], is_dev: bool
+        self,
+        model: Model,
+        name: str,
+        **render_kwargs: t.Any,
     ) -> None:
         logger.info("Creating view '%s'", name)
         self.adapter.create_view(
             name,
-            model.render_query(snapshots=snapshots, is_dev=is_dev),
+            model.render_query_or_raise(**render_kwargs),
             materialized=self._is_materialized_view(model),
         )
 

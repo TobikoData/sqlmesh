@@ -88,7 +88,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
     assert isinstance(model, SqlModel)
     assert model.name == "database.custom.model"
     assert model.description == "test model"
-    assert model.render_query().sql() == 'SELECT 1 AS "a" FROM "foo" AS "foo"'
+    assert model.render_query_or_raise().sql() == 'SELECT 1 AS "a" FROM "foo" AS "foo"'
     assert model.start == "Jan 1 2023"
     assert model.partitioned_by == ["a"]
     assert model.cron == "@hourly"

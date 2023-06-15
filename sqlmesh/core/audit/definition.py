@@ -12,7 +12,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.model.definition import Model, _Model, expression_validator
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import AuditConfigError, raise_config_error
+from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -197,7 +197,7 @@ class Audit(AuditMeta, frozen=True):
             .subquery()
         )
 
-        return query_renderer.render(
+        rendered_query = query_renderer.render(
             start=start,
             end=end,
             latest=latest,
@@ -206,6 +206,13 @@ class Audit(AuditMeta, frozen=True):
             this_model=query,
             **kwargs,
         )
+
+        if rendered_query is None:
+            raise SQLMeshError(
+                f"Failed to render query for audit '{self.name}', model '{model.name}'."
+            )
+
+        return rendered_query
 
     @property
     def expressions(self) -> t.List[exp.Expression]:

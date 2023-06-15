@@ -1306,7 +1306,7 @@ def test_model_ctas_query():
         read="bigquery",
     )
 
-    assert load_model(expressions, dialect="bigquery").ctas_query({}).sql() == 'SELECT 1 AS "a"'
+    assert load_model(expressions, dialect="bigquery").ctas_query().sql() == 'SELECT 1 AS "a"'
 
     expressions = parse(
         """
@@ -1316,8 +1316,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_model(expressions).ctas_query({}).sql()
-        == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
+        load_model(expressions).ctas_query().sql() == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
     )
 
 
