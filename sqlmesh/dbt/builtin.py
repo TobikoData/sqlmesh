@@ -13,7 +13,7 @@ from dbt.contracts.relation import Policy
 from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.dbt.adapter import ParsetimeAdapter, RuntimeAdapter
+from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
@@ -66,7 +66,7 @@ class Modules:
 
 
 class SQLExecution:
-    def __init__(self, adapter: RuntimeAdapter):
+    def __init__(self, adapter: BaseAdapter):
         self.adapter = adapter
         self._results: t.Dict[str, AttributeDict] = {}
 
@@ -118,7 +118,6 @@ class SQLExecution:
             raise NotImplementedError(
                 "SQLMesh's dbt integration only supports SQL statements at this time."
             )
-        assert self.adapter is not None
         res, table = self.adapter.execute(sql, fetch=fetch_result, auto_begin=auto_begin)
         if name:
             self.store_result(name, res, table)
@@ -306,45 +305,37 @@ def create_builtin_globals(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config")}
     )
 
+    builtin_globals["execute"] = True
+
+    adapter: BaseAdapter
     if engine_adapter is not None:
         adapter = RuntimeAdapter(
             engine_adapter,
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
         )
-        sql_execution = SQLExecution(adapter)
-        builtin_globals.update(
-            {
-                "execute": True,
-                "adapter": adapter,
-                "load_relation": lambda r: adapter.get_relation(r.database, r.schema, r.identifier),
-                "store_result": sql_execution.store_result,
-                "load_result": sql_execution.load_result,
-                "run_query": sql_execution.run_query,
-                "statement": sql_execution.statement,
-                "log": log,
-                "print": log,
-            }
-        )
+        builtin_globals.update({"log": log, "print": log})
     else:
         target = jinja_globals.get("target")
-        builtin_globals.update(
-            {
-                "execute": False,
-                "adapter": ParsetimeAdapter(
-                    jinja_macros,
-                    jinja_globals={**builtin_globals, **jinja_globals},
-                    dialect=target.type if target else None,
-                ),
-                "load_relation": lambda *args, **kwargs: None,
-                "store_result": lambda *args, **kwargs: "",
-                "load_result": lambda *args, **kwargs: None,
-                "run_query": lambda *args, **kwargs: None,
-                "statement": lambda *args, **kwargs: "",
-                "log": no_log,
-                "print": no_log,
-            }
+        adapter = ParsetimeAdapter(
+            jinja_macros,
+            jinja_globals={**builtin_globals, **jinja_globals},
+            dialect=target.type if target else None,
         )
+        builtin_globals.update({"log": no_log, "print": no_log})
+
+    sql_execution = SQLExecution(adapter)
+    builtin_globals.update(
+        {
+            "adapter": adapter,
+            "execute": True,
+            "load_relation": lambda r: adapter.get_relation(r.database, r.schema, r.identifier),
+            "store_result": sql_execution.store_result,
+            "load_result": sql_execution.load_result,
+            "run_query": sql_execution.run_query,
+            "statement": sql_execution.statement,
+        }
+    )
 
     return {**builtin_globals, **jinja_globals}
 
