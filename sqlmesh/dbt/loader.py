@@ -94,7 +94,7 @@ class DbtLoader(Loader):
         logger.debug("Converting models to sqlmesh")
         # Now that config is rendered, create the sqlmesh models
         for package in project.packages.values():
-            context.variables = package.variables
+            context.set_and_render_variables(package.variables)
             package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
             models.update(
@@ -118,7 +118,7 @@ class DbtLoader(Loader):
 
         logger.debug("Converting audits to sqlmesh")
         for package in project.packages.values():
-            context.variables = package.variables
+            context.set_and_render_variables(package.variables)
             for test in package.tests.values():
                 logger.debug("Converting '%s' to sqlmesh format", test.name)
                 audits[test.name] = test.to_sqlmesh(context)

@@ -85,6 +85,11 @@ class DbtContext:
         self._variables.update(variables)
         self._jinja_environment = None
 
+    def set_and_render_variables(self, variables: t.Dict[str, t.Any]) -> None:
+        self.variables = variables
+        rendered_variables = {k: self.render(str(v)) for k, v in variables.items()}
+        self.variables = rendered_variables
+
     @property
     def models(self) -> t.Dict[str, ModelConfig]:
         return self._models
