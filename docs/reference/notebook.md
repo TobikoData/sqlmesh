@@ -1,6 +1,12 @@
 # Notebook
 
-SQLMesh supports Jupyter and Databricks Notebooks. Magics are loaded automatically and use the variable `context` to locate a SQLMesh project.
+SQLMesh supports Jupyter and Databricks Notebooks. Magics are loaded automatically when `sqlmesh` or one of its modules is imported.
+
+## SQLMesh project setup
+
+Notebooks locate a SQLMesh project by setting a `context` with either the Python API or a notebook magic.
+
+Set the context with the Python `Context` function as follows:
 
 ```python
 from sqlmesh import Context
@@ -8,14 +14,37 @@ from sqlmesh import Context
 context = Context(paths="path_to_sqlmesh_project")
 ```
 
-To create a fresh project in Databricks using the example project under Get Started, use the following.
+Alternatively, set the context with a notebook magic:
+
+``` python
+import sqlmesh
+
+%context path_to_sqlmesh_project
+```
+
+### Quick start project
+
+If desired, you can create the [quick start example project](../quick_start.md) with the `init_example_project` function:
 
 ```python
 from sqlmesh.cli.example_project import init_example_project
 
-init_example_project("local_dbfs_path")
+init_example_project("path_to_project_directory")
 ```
-Update the `default_connection` and `test_connection` in the config.yaml file to use your Databricks cluster. For Databricks connection configuration, see the [Execution Engines](https://sqlmesh.readthedocs.io/en/stable/integrations/engines/) page.
+
+### Databricks notebooks
+To use your Databricks cluster, update the `default_connection` and `test_connection` in the `config.yaml` file. 
+
+See the [Execution Engines](../integrations/engines.md#databricks) page for information on configuring a Databricks connection.
+
+## context
+```
+%context paths
+
+positional arguments:
+  paths                 Path(s) to one ore more directories containing SQLMesh 
+                        projects
+```
 
 ## plan
 ```
@@ -105,12 +134,13 @@ options:
 
 ## fetchdf
 ```
-%fetchdf [df_var]
+%%fetchdf [df_var]
 
-Fetches a dataframe from sql, optionally storing it in a variable.
+Fetch a dataframe with a cell's SQL query, optionally storing it in a variable.
 
 positional arguments:
-  df_var  An optional variable name to store the resulting dataframe.
+  df_var                An optional variable name to store the resulting 
+                        dataframe.
 ```
 
 ## test

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import abc
 import contextlib
+import gc
 import typing as t
 import unittest.result
 from io import StringIO
@@ -291,7 +292,7 @@ class Context(BaseContext):
 
         self._models.update({model.name: model})
         self.dag.add(model.name, model.depends_on)
-        update_model_schemas(self.dag, self._models)
+        update_model_schemas(self.dag, self._models, self.path)
 
         return model
 
@@ -356,11 +357,13 @@ class Context(BaseContext):
     def load(self, update_schemas: bool = True) -> Context:
         """Load all files in the context's path."""
         with sys_path(*self.configs):
+            gc.disable()
             project = self._loader.load(self, update_schemas)
             self._macros = project.macros
             self._models = project.models
             self._audits = project.audits
             self.dag = project.dag
+            gc.enable()
 
         return self
 
@@ -777,6 +780,7 @@ class Context(BaseContext):
         Returns:
             The TableDiff object containing schema and summary differences.
         """
+        source_alias, target_alias = source, target
         if model_or_snapshot:
             model = self.get_model(model_or_snapshot, raise_if_missing=True)
             source_env = self.state_reader.get_environment(source)
@@ -793,6 +797,8 @@ class Context(BaseContext):
             target = next(
                 snapshot for snapshot in target_env.snapshots if snapshot.name == model.name
             ).table_name()
+            source_alias = source_env.name
+            target_alias = target_env.name
 
             if not on and model.grain:
                 on = model.grain
@@ -801,7 +807,14 @@ class Context(BaseContext):
             raise SQLMeshError("Missing join condition 'on'")
 
         table_diff = TableDiff(
-            adapter=self._engine_adapter, source=source, target=target, on=on, where=where
+            adapter=self._engine_adapter,
+            source=source,
+            target=target,
+            on=on,
+            where=where,
+            source_alias=source_alias,
+            target_alias=target_alias,
+            limit=limit,
         )
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())

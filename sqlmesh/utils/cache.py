@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import logging
 import pickle
 import typing as t
@@ -70,7 +71,7 @@ class FileCache(t.Generic[T]):
         """
         cache_entry_path = self._cache_entry_path(name, entry_id)
         if cache_entry_path.exists():
-            with open(cache_entry_path, "rb") as fd:
+            with gzip.open(cache_entry_path, "rb") as fd:
                 try:
                     return self._entry_class.parse_obj(pickle.load(fd))
                 except Exception as ex:
@@ -94,7 +95,7 @@ class FileCache(t.Generic[T]):
         for obsolete_cache_file in self._path.glob(f"{name}__*"):
             obsolete_cache_file.unlink()
 
-        with open(self._cache_entry_path(name, entry_id), "wb") as fd:
+        with gzip.open(self._cache_entry_path(name, entry_id), "wb", compresslevel=1) as fd:
             pickle.dump(value.dict(), fd)
 
     def _cache_entry_path(self, name: str, entry_id: str) -> Path:

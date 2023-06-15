@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -588,6 +589,50 @@ def test_seed_pre_statements_only():
     assert not model.post_statements
 
 
+def test_seed_model_custom_types(tmp_path):
+    model_csv_path = (tmp_path / "model.csv").absolute()
+
+    with open(model_csv_path, "w") as fd:
+        fd.write(
+            """key,ds,b_a,b_b,i,i_str
+123,2022-01-01,false,0,321,321
+"""
+        )
+
+    model = create_seed_model(
+        "test_db.test_model",
+        SeedKind(path=str(model_csv_path)),
+        columns={
+            "key": "string",
+            "ds": "date",
+            "b_a": "boolean",
+            "b_b": "boolean",
+            "i": "int",
+            "i_str": "text",
+        },
+    )
+
+    df = next(model.render(context=None))
+
+    assert df["ds"].dtype == "datetime64[ns]"
+    assert df["ds"].iloc[0].date() == date(2022, 1, 1)
+
+    assert df["key"].dtype == "object"
+    assert df["key"].iloc[0] == "123"
+
+    assert df["b_a"].dtype == "bool"
+    assert not df["b_a"].iloc[0]
+
+    assert df["b_b"].dtype == "bool"
+    assert not df["b_b"].iloc[0]
+
+    assert df["i"].dtype == "int64"
+    assert df["i"].iloc[0] == 321
+
+    assert df["i_str"].dtype == "object"
+    assert df["i_str"].iloc[0] == "321"
+
+
 def test_audits():
     expressions = parse(
         """
@@ -1101,14 +1146,14 @@ def test_star_expansion(assert_exp_eq) -> None:
         context.render("db.model2"),
         """
         SELECT
-          model1.id AS id,
-          model1.item_id AS item_id,
-          model1.ds AS ds
+          "model1"."id" AS "id",
+          "model1"."item_id" AS "item_id",
+          "model1"."ds" AS "ds"
         FROM (
           SELECT
-            CAST(id AS INT) AS id,
-            CAST(item_id AS INT) AS item_id,
-            CAST(ds AS TEXT) AS ds
+            CAST("t"."id" AS INT) AS "id",
+            CAST("t"."item_id" AS INT) AS "item_id",
+            CAST("t"."ds" AS TEXT) AS "ds"
           FROM (VALUES
             (1, 1, '2020-01-01'),
             (1, 2, '2020-01-01'),
@@ -1117,27 +1162,27 @@ def test_star_expansion(assert_exp_eq) -> None:
             (4, 1, '2020-01-04'),
             (5, 1, '2020-01-05'),
             (6, 1, '2020-01-06'),
-            (7, 1, '2020-01-07')) AS t(id, item_id, ds)
-        ) AS model1
+            (7, 1, '2020-01-07')) AS "t"("id", "item_id", "ds")
+        ) AS "model1"
         """,
     )
     assert_exp_eq(
         context.render("db.model3"),
         """
         SELECT
-          model2.id AS id,
-          model2.item_id AS item_id,
-          model2.ds AS ds
+          "model2"."id" AS "id",
+          "model2"."item_id" AS "item_id",
+          "model2"."ds" AS "ds"
         FROM (
           SELECT
-            model1.id AS id,
-            model1.item_id AS item_id,
-            model1.ds AS ds
+            "model1"."id" AS "id",
+            "model1"."item_id" AS "item_id",
+            "model1"."ds" AS "ds"
           FROM (
             SELECT
-              CAST(id AS INT) AS id,
-              CAST(item_id AS INT) AS item_id,
-              CAST(ds AS TEXT) AS ds
+              CAST("t"."id" AS INT) AS "id",
+              CAST("t"."item_id" AS INT) AS "item_id",
+              CAST("t"."ds" AS TEXT) AS "ds"
             FROM (VALUES
               (1, 1, '2020-01-01'),
               (1, 2, '2020-01-01'),
@@ -1146,9 +1191,9 @@ def test_star_expansion(assert_exp_eq) -> None:
               (4, 1, '2020-01-04'),
               (5, 1, '2020-01-05'),
               (6, 1, '2020-01-06'),
-              (7, 1, '2020-01-07')) AS t(id, item_id, ds)
-          ) AS model1
-        ) AS model2
+              (7, 1, '2020-01-07')) AS "t"("id", "item_id", "ds")
+          ) AS "model1"
+        ) AS "model2"
         """,
     )
 

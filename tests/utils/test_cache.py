@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from pytest_mock.plugin import MockerFixture
+from sqlglot import parse_one
 
+from sqlmesh.core.model import SqlModel
+from sqlmesh.core.model.cache import OptimizedQueryCache
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -32,3 +35,16 @@ def test_file_cache(tmp_path: Path, mocker: MockerFixture):
     assert cache.get("different_name", "test_entry_b") is None
 
     loader.assert_called_once()
+
+
+def test_optimized_query_cache(tmp_path: Path, mocker: MockerFixture):
+    model = SqlModel(
+        name="test_model",
+        query=parse_one("SELECT a FROM tbl"),
+        mapping_schema={"tbl": {"a": "int"}},
+    )
+
+    cache = OptimizedQueryCache(tmp_path)
+
+    assert not cache.with_optimized_query(model)
+    assert cache.with_optimized_query(model)

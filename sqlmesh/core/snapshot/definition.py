@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import typing as t
-import zlib
 from collections import defaultdict
 from datetime import datetime
 from enum import IntEnum
@@ -37,6 +36,7 @@ from sqlmesh.utils.date import (
     to_timestamp,
 )
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.hashing import crc32
 from sqlmesh.utils.pydantic import PydanticModel
 
 Interval = t.Tuple[int, int]
@@ -1017,7 +1017,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
 
 
 def _hash(data: t.Iterable[t.Optional[str]]) -> str:
-    return str(zlib.crc32(";".join("" if d is None else d for d in data).encode("utf-8")))
+    return crc32(data)
 
 
 def _parents_from_model(
