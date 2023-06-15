@@ -244,7 +244,7 @@ class JinjaMacroRegistry(PydanticModel):
 
         context.update(root_macros)
         context.update(package_macros)
-        context.update(self._create_builtin_globals(kwargs, env))
+        context.update(self._create_builtin_globals(kwargs))
 
         env.globals.update(context)
         env.filters.update(self._environment.filters)
@@ -386,16 +386,14 @@ class JinjaMacroRegistry(PydanticModel):
 
         return template
 
-    def _create_builtin_globals(
-        self, global_vars: t.Dict[str, t.Any], env: Environment
-    ) -> t.Dict[str, t.Any]:
+    def _create_builtin_globals(self, global_vars: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         """Creates Jinja builtin globals using a factory function defined in the provided module."""
         engine_adapter = global_vars.pop("engine_adapter", None)
         global_vars = {**self.global_objs, **global_vars}
         if self.create_builtins_module is not None:
             module = importlib.import_module(self.create_builtins_module)
             if hasattr(module, "create_builtin_globals"):
-                return module.create_builtin_globals(self, global_vars, env, engine_adapter)
+                return module.create_builtin_globals(self, global_vars, engine_adapter)
         return global_vars
 
     def _create_builtin_filters(self) -> t.Dict[str, t.Any]:

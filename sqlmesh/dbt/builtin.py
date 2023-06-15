@@ -10,7 +10,6 @@ import jinja2
 from dbt import version
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
-from jinja2 import Environment
 from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -145,9 +144,9 @@ def no_log(msg: str, info: bool = False) -> str:
     return ""
 
 
-def generate_var(variables: t.Dict[str, t.Any], jinja_env: Environment) -> t.Callable:
-    def var(name: str, default: t.Optional[str] = None) -> str:
-        return jinja_env.from_string(str(variables.get(name, default))).render()
+def generate_var(variables: t.Dict[str, t.Any]) -> t.Callable:
+    def var(name: str, default: t.Optional[t.Any] = None) -> t.Any:
+        return variables.get(name, default)
 
     return var
 
@@ -279,7 +278,6 @@ BUILTIN_FILTERS = {
 def create_builtin_globals(
     jinja_macros: JinjaMacroRegistry,
     jinja_globals: t.Dict[str, t.Any],
-    jinja_env: Environment,
     engine_adapter: t.Optional[EngineAdapter],
 ) -> t.Dict[str, t.Any]:
     builtin_globals = BUILTIN_GLOBALS.copy()
@@ -302,7 +300,7 @@ def create_builtin_globals(
 
     variables = jinja_globals.pop("vars", None)
     if variables is not None:
-        builtin_globals["var"] = generate_var(variables, jinja_env)
+        builtin_globals["var"] = generate_var(variables)
 
     builtin_globals["builtins"] = AttributeDict(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config")}

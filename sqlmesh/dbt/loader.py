@@ -40,6 +40,7 @@ def sqlmesh_config(project_root: t.Optional[Path] = None, **kwargs: t.Any) -> Co
 class DbtLoader(Loader):
     def __init__(self) -> None:
         self._project: t.Optional[Project] = None
+        self._macros_max_mtime: t.Optional[float] = None
         super().__init__()
 
     def load(self, context: Context, update_schemas: bool = True) -> LoadedProject:
@@ -66,35 +67,14 @@ class DbtLoader(Loader):
         project = self._load_project()
         context = project.context.copy()
 
-        macros_mtimes: t.List[float] = []
-
-        for package_name, package in project.packages.items():
-            context.variables = package.variables
-            context.add_sources(package.sources)
-            context.add_seeds(package.seeds)
-            context.add_models(package.models)
-            macros_mtimes.extend(
-                [
-                    self._path_mtimes[m.path]
-                    for m in package.macros.values()
-                    if m.path in self._path_mtimes
-                ]
-            )
-
-        for package_name, macro_infos in context.manifest.all_macros.items():
-            context.jinja_macros.add_macros(
-                macro_infos,
-                package=package_name if package_name != context.project_name else None,
-            )
-
-        macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
+        macros_max_mtime = self._macros_max_mtime
         yaml_max_mtimes = self._compute_yaml_max_mtime_per_subfolder(self._context.path)
         cache = DbtLoader._Cache(self, project, macros_max_mtime, yaml_max_mtimes)
 
         logger.debug("Converting models to sqlmesh")
         # Now that config is rendered, create the sqlmesh models
         for package in project.packages.values():
-            context.set_and_render_variables(package.variables)
+            context.set_and_render_variables(package.variables, package.name)
             package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
             models.update(
@@ -118,7 +98,7 @@ class DbtLoader(Loader):
 
         logger.debug("Converting audits to sqlmesh")
         for package in project.packages.values():
-            context.set_and_render_variables(package.variables)
+            context.set_and_render_variables(package.variables, package.name)
             for test in package.tests.values():
                 logger.debug("Converting '%s' to sqlmesh format", test.name)
                 audits[test.name] = test.to_sqlmesh(context)
@@ -134,6 +114,30 @@ class DbtLoader(Loader):
         )
         for path in self._project.project_files:
             self._track_file(path)
+
+        context = self._project.context
+
+        macros_mtimes: t.List[float] = []
+
+        for package_name, package in self._project.packages.items():
+            context.add_sources(package.sources)
+            context.add_seeds(package.seeds)
+            context.add_models(package.models)
+            macros_mtimes.extend(
+                [
+                    self._path_mtimes[m.path]
+                    for m in package.macros.values()
+                    if m.path in self._path_mtimes
+                ]
+            )
+
+        for package_name, macro_infos in context.manifest.all_macros.items():
+            context.jinja_macros.add_macros(
+                macro_infos,
+                package=package_name if package_name != context.project_name else None,
+            )
+
+        self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 
         return self._project
 

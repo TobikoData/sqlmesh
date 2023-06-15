@@ -42,6 +42,8 @@ vars:
   # The following are only used for testing purposes
   customers:boo: ["a", "b"]
 
+  yet_another_var: 1
+
   customers:
     some_var: ["foo", "bar"]
     'customers:bla': false
