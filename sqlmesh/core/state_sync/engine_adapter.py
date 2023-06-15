@@ -241,6 +241,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         }
 
     def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+        names = set(names)
+
+        if not names:
+            return names
+
         query = (
             exp.select("name")
             .from_(self.snapshots_table)
