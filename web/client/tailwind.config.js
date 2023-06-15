@@ -120,6 +120,7 @@ module.exports = {
         900: 'var(--color-accent-900)',
       },
       success: {
+        5: 'var(--color-success-5)',
         10: 'var(--color-success-10)',
         20: 'var(--color-success-20)',
         30: 'var(--color-success-30)',
@@ -135,6 +136,7 @@ module.exports = {
         900: 'var(--color-success-900)',
       },
       danger: {
+        5: 'var(--color-danger-5)',
         10: 'var(--color-danger-10)',
         20: 'var(--color-danger-20)',
         30: 'var(--color-danger-30)',
@@ -169,4 +171,7 @@ module.exports = {
       serif: ['Publico', 'serif'],
     },
   },
+  // plugins: [
+  //   require('tailwindcss-filters'),
+  // ],
 }

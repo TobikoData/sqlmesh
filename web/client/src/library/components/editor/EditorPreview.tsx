@@ -10,7 +10,7 @@ import { isArrayEmpty } from '~/utils'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
-import { EnumVariant } from '~/types/enum'
+import { EnumSize, EnumVariant } from '~/types/enum'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from '@components/graph/context'
 import { EnumFileExtensions } from '@models/file'
@@ -18,6 +18,7 @@ import CodeEditor, { useSQLMeshModelExtensions } from './EditorCode'
 import { EnumRoutes } from '~/routes'
 import { useNavigate } from 'react-router-dom'
 import { DisplayError } from '@components/report/ReportErrors'
+import TableDiff from '@components/table/TableDiff'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -28,6 +29,7 @@ export const EnumEditorPreviewTabs = {
   Table: 'Data Preview',
   Console: 'Logs',
   Lineage: 'Lineage',
+  Diff: 'Diff',
 } as const
 
 export type EditorPreviewTabs = KeyOf<typeof EnumEditorPreviewTabs>
@@ -47,6 +49,7 @@ export default function EditorPreview({
   const previewQuery = useStoreEditor(s => s.previewQuery)
   const previewConsole = useStoreEditor(s => s.previewConsole)
   const previewTable = useStoreEditor(s => s.previewTable)
+  const previewDiff = useStoreEditor(s => s.previewDiff)
   const setDirection = useStoreEditor(s => s.setDirection)
 
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
@@ -64,6 +67,7 @@ export default function EditorPreview({
         previewConsole != null && EnumEditorPreviewTabs.Console,
         previewQuery != null && EnumEditorPreviewTabs.Query,
         tab.file.isSQLMeshModel && EnumEditorPreviewTabs.Lineage,
+        EnumEditorPreviewTabs.Diff,
       ].filter(Boolean) as string[],
     [tab.id, previewTable, previewConsole, previewQuery],
   )
@@ -118,35 +122,38 @@ export default function EditorPreview({
           onChange={setActiveTabIndex}
           selectedIndex={activeTabIndex}
         >
-          <Tab.List className="w-full whitespace-nowrap p-2 flex justify-between items-center">
-            <div className="w-full overflow-hidden overflow-x-auto py-1 scrollbar scrollbar--horizontal">
-              {tabs.map(tabName => (
-                <Tab
-                  key={tabName}
-                  className={({ selected }) =>
-                    clsx(
-                      'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
-                      selected
-                        ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                        : 'bg-secondary-10 cursor-pointer',
-                    )
-                  }
-                >
-                  {tabName}
-                </Tab>
-              ))}
+          <Tab.List className="w-full whitespace-nowrap px-2 flex justify-between items-center bg-primary-10">
+            <div className="flex w-full overflow-hidden overflow-x-auto py-1 scrollbar scrollbar--horizontal">
+              <div className="flex items-center bg-secondary-10 cursor-pointer rounded-full p-1 overflow-hidden">
+                {tabs.map(tabName => (
+                  <Tab
+                    key={tabName}
+                    className={({ selected }) =>
+                      clsx(
+                        'text-xs font-medium px-2 py-0.5 mr-2 last:mr-0 rounded-full relative align-middle',
+                        selected
+                          ? 'bg-secondary-500 text-secondary-100 cursor-default'
+                          : 'cursor-pointer',
+                      )
+                    }
+                  >
+                    {tabName}
+                  </Tab>
+                ))}
+              </div>
             </div>
             <div className="ml-2">
               <Button
                 className="!m-0 !py-0.5 px-[0.25rem] border-none"
                 variant={EnumVariant.Alternative}
+                size={EnumSize.sm}
                 onClick={() => {
                   setDirection(
                     direction === 'horizontal' ? 'vertical' : 'horizontal',
                   )
                 }}
               >
-                <ViewColumnsIcon className="text-primary-500 w-6" />
+                <ViewColumnsIcon className="text-primary-500 w-5" />
               </Button>
             </div>
           </Tab.List>
@@ -273,6 +280,16 @@ export default function EditorPreview({
                 />
               </Tab.Panel>
             )}
+            <Tab.Panel
+              unmount={false}
+              className={clsx(
+                'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
+              )}
+            >
+              {previewDiff?.row_diff != null && (
+                <TableDiff diff={previewDiff} />
+              )}
+            </Tab.Panel>
           </Tab.Panels>
         </Tab.Group>
       )}

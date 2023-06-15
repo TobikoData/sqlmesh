@@ -1,44 +1,69 @@
 import { Switch } from '@headlessui/react'
 import clsx from 'clsx'
-
-interface PropsToggle extends React.HTMLAttributes<HTMLElement> {
-  enabled: boolean
-  setEnabled: (enabled: boolean) => void
-  a11yTitle?: string
-  disabled?: boolean
-}
+import { EnumSize, type Size } from '~/types/enum'
 
 export default function Toggle({
+  label,
   enabled,
   setEnabled,
   a11yTitle,
-  className,
+  size = EnumSize.md,
   disabled = false,
-}: PropsToggle): JSX.Element {
+  className,
+}: {
+  enabled: boolean
+  setEnabled: (enabled: boolean) => void
+  size?: Size
+  label?: string
+  a11yTitle?: string
+  disabled?: boolean
+  className?: string
+}): JSX.Element {
   return (
-    <Switch
-      checked={disabled ? false : enabled}
-      onChange={setEnabled}
-      className={clsx(
-        'relative inline-flex h-8 w-16 shrink-0 rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-4 ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100 focus:border-secondary-500 focus-visible:ring-opacity-75',
-        'border-secondary-30',
-        enabled ? 'bg-secondary-500' : 'bg-secondary-10',
-        className,
-        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-      )}
-      disabled={disabled}
+    <Switch.Group
+      as="div"
+      className="flex items-center m-1"
     >
-      <span className="sr-only">{a11yTitle}</span>
-      <span
-        aria-hidden="true"
+      <Switch
+        checked={disabled ? false : enabled}
+        onChange={setEnabled}
         className={clsx(
-          'pointer-events-none inline-block h-6 w-6 transform rounded-full shadow-md  transition duration-200 ease-in-out',
-          'bg-light translate-y-[0.125rem]',
-          enabled
-            ? 'translate-x-8 shadow-primary-800'
-            : 'translate-x-1 shadow-neutral-300 dark:shadow-neutral-600',
+          'flex relative border-secondary-30 rounded-full m-0',
+          'shrink-0 focus:outline-none ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100 focus:border-secondary-500 focus-visible:ring-opacity-75',
+          'transition duration-200 ease-in-out',
+          enabled ? 'bg-secondary-500' : 'bg-secondary-20',
+          className,
+          disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+          size === EnumSize.sm && 'h-[14px] w-6 focus:ring-1 border',
+          size === EnumSize.md && 'h-5 w-10 focus:ring-2 border-2',
+          size === EnumSize.lg && 'h-7 w-14 focus:ring-4 border-2',
         )}
-      />
-    </Switch>
+        disabled={disabled}
+      >
+        <span className="sr-only">{a11yTitle}</span>
+        <span
+          aria-hidden="true"
+          className={clsx(
+            'pointer-events-none inline-block transform rounded-full shadow-md transition duration-200 ease-in-out',
+            'bg-light',
+            size === EnumSize.sm && 'h-3 w-3',
+            size === EnumSize.md && 'h-4 w-4',
+            size === EnumSize.lg && 'h-6 w-6',
+            enabled && size === EnumSize.sm && 'translate-x-[10px]',
+            enabled && size === EnumSize.md && 'translate-x-5',
+            enabled && size === EnumSize.lg && 'translate-x-7',
+          )}
+        />
+      </Switch>
+      {label != null && (
+        <Switch.Label
+          className={clsx(
+            'text-xs font-light ml-1 text-neutral-600 dark:text-neutral-400',
+          )}
+        >
+          {label}
+        </Switch.Label>
+      )}
+    </Switch.Group>
   )
 }

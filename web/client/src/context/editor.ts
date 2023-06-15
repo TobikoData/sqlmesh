@@ -26,6 +26,7 @@ interface EditorStore {
   previewQuery?: string
   previewTable?: any[]
   previewConsole?: [ErrorKey, ErrorIDE]
+  previewDiff?: any
   direction: 'vertical' | 'horizontal'
   setDirection: (direction: 'vertical' | 'horizontal') => void
   selectTab: (tab?: EditorTab) => void
@@ -38,6 +39,7 @@ interface EditorStore {
   setPreviewQuery: (previewQuery?: string) => void
   setPreviewTable: (previewTable?: any[]) => void
   setPreviewConsole: (previewConsole?: [ErrorKey, ErrorIDE]) => void
+  setPreviewDiff: (previewDiff?: any) => void
 }
 
 interface EditorPreview<TTable = any> {
@@ -78,6 +80,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   previewQuery: undefined,
   previewTable: undefined,
   previewConsole: undefined,
+  previewDiff: undefined,
   direction: 'vertical',
   updateStoredTabsIds() {
     const s = get()
@@ -161,6 +164,9 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   },
   setPreviewConsole(previewConsole) {
     set(() => ({ previewConsole }))
+  },
+  setPreviewDiff(previewDiff) {
+    set(() => ({ previewDiff }))
   },
   setDirection(direction) {
     set(() => ({ direction }))
