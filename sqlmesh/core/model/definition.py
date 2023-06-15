@@ -173,7 +173,7 @@ class _Model(ModelMeta, frozen=True):
                             value=field_value.to_expression(dialect=self.dialect),
                         )
                     )
-                else:
+                elif field.name != "column_descriptions_":
                     expressions.append(
                         exp.Property(
                             this=field.alias or field.name,
@@ -781,6 +781,11 @@ class SqlModel(_SqlBasedModel):
         query = self._query_renderer.render(optimize=False)
 
         if query is None:
+            if self.depends_on_ is None:
+                raise_config_error(
+                    "Dependencies must be provided explicitly for models that can be rendered only at runtime",
+                    self._path,
+                )
             return
 
         if not isinstance(query, exp.Subqueryable):

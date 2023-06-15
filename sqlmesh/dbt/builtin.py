@@ -305,9 +305,8 @@ def create_builtin_globals(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config")}
     )
 
-    adapter: BaseAdapter
     if engine_adapter is not None:
-        adapter = RuntimeAdapter(
+        adapter: BaseAdapter = RuntimeAdapter(
             engine_adapter,
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},

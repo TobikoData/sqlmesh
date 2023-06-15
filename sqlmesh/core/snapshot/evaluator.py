@@ -31,7 +31,6 @@ import pandas as pd
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
-from sqlmesh.core import dialect as d
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.model import Model, ViewKind
@@ -678,7 +677,7 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
             query_or_df,
             time_formatter=model.convert_to_time_column,
             time_column=model.time_column,
-            columns_to_types=_columns_to_types(model, query_or_df),
+            columns_to_types=model.columns_to_types,
             **kwargs,
         )
 
@@ -696,7 +695,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         self.adapter.merge(
             name,
             query_or_df,
-            columns_to_types=_columns_to_types(model, query_or_df),
+            columns_to_types=model.columns_to_types,
             unique_key=model.unique_key,
         )
 
@@ -712,7 +711,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         self.adapter.merge(
             table_name,
             query_or_df,
-            columns_to_types=_columns_to_types(model, query_or_df),
+            columns_to_types=model.columns_to_types,
             unique_key=model.unique_key,
         )
 
@@ -788,11 +787,3 @@ class ViewStrategy(PromotableStrategy):
 
     def _is_materialized_view(self, model: Model) -> bool:
         return isinstance(model.kind, ViewKind) and model.kind.materialized
-
-
-def _columns_to_types(model: Model, query_or_df: QueryOrDF) -> t.Dict[str, exp.DataType]:
-    return (
-        d.extract_columns_to_types(query_or_df)
-        if isinstance(query_or_df, exp.Subqueryable)
-        else model.columns_to_types_or_raise
-    )
