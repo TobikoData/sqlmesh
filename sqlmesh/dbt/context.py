@@ -30,7 +30,7 @@ class DbtContext:
     project_schema: t.Optional[str] = None
     jinja_macros: JinjaMacroRegistry = field(
         default_factory=lambda: JinjaMacroRegistry(
-            create_builtins_module="sqlmesh.dbt", top_level_packages=["dbt"]
+            create_builtins_module=SQLMESH_DBT_PACKAGE, top_level_packages=["dbt"]
         )
     )
 
@@ -84,6 +84,33 @@ class DbtContext:
     def add_variables(self, variables: t.Dict[str, t.Any]) -> None:
         self._variables.update(variables)
         self._jinja_environment = None
+
+    def set_and_render_variables(self, variables: t.Dict[str, t.Any], package: str) -> None:
+        self.variables = variables
+
+        jinja_registry = JinjaMacroRegistry(
+            create_builtins_module=SQLMESH_DBT_PACKAGE, top_level_packages=["dbt", package]
+        )
+        jinja_environment = jinja_registry.build_environment(**self.jinja_globals)
+
+        def _render_var(value: t.Any) -> t.Any:
+            if isinstance(value, str):
+                return jinja_environment.from_string(value).render()
+            if isinstance(value, list):
+                return [_render_var(v) for v in value]
+            if isinstance(value, dict):
+                return {k: _render_var(v) for k, v in value.items()}
+            return value
+
+        def _var(name: str, default: t.Optional[t.Any] = None) -> t.Any:
+            return _render_var(variables.get(name, default))
+
+        jinja_environment.globals["var"] = _var
+
+        rendered_variables = {
+            k: jinja_environment.from_string(str(v)).render() for k, v in variables.items()
+        }
+        self.variables = rendered_variables
 
     @property
     def models(self) -> t.Dict[str, ModelConfig]:
@@ -207,3 +234,6 @@ class DbtContext:
         dependency_context._refs = {**dependency_context._seeds, **dependency_context._models}  # type: ignore
 
         return dependency_context
+
+
+SQLMESH_DBT_PACKAGE = "sqlmesh.dbt"

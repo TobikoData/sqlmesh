@@ -240,11 +240,12 @@ class JinjaMacroRegistry(PydanticModel):
         for top_level_package_name in self.top_level_packages:
             root_macros.update(package_macros.get(top_level_package_name, {}))
 
+        env = environment()
+
         context.update(root_macros)
         context.update(package_macros)
         context.update(self._create_builtin_globals(kwargs))
 
-        env = environment()
         env.globals.update(context)
         env.filters.update(self._environment.filters)
         return env

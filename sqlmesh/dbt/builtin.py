@@ -145,7 +145,7 @@ def no_log(msg: str, info: bool = False) -> str:
 
 
 def generate_var(variables: t.Dict[str, t.Any]) -> t.Callable:
-    def var(name: str, default: t.Optional[str] = None) -> str:
+    def var(name: str, default: t.Optional[t.Any] = None) -> t.Any:
         return variables.get(name, default)
 
     return var
