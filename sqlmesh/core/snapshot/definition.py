@@ -932,7 +932,7 @@ def _model_data_hash(model: Model) -> str:
         macro_defs = []
 
     if isinstance(model, SqlModel):
-        query = model.query if model.hash_raw_query else model.render_query()
+        query = model.query if model.hash_raw_query else model.render_query() or model.query
 
         for e in (query, *pre_statements, *post_statements, *macro_defs):
             data.append(e.sql(comments=False))
@@ -995,6 +995,7 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
                 audit.query
                 if model.hash_raw_query
                 else audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args))
+                or audit.query
             )
             metadata.extend(
                 [
@@ -1009,9 +1010,11 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
 
     # Add comments from the model query.
     if model.is_sql:
-        for e, _, _ in model.render_query().walk():
-            if e.comments:
-                metadata.extend(e.comments)
+        rendered_query = model.render_query()
+        if rendered_query:
+            for e, _, _ in rendered_query.walk():
+                if e.comments:
+                    metadata.extend(e.comments)
 
     return _hash(metadata)
 

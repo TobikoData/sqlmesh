@@ -8,7 +8,7 @@ from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
 
 if t.TYPE_CHECKING:
@@ -70,7 +70,7 @@ class BaseAdapter(abc.ABC):
     @abc.abstractmethod
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> t.Optional[t.Tuple[AdapterResponse, agate.Table]]:
+    ) -> t.Tuple[AdapterResponse, agate.Table]:
         """Executes the given SQL statement and returns the results as an agate table."""
 
     def quote(self, identifier: str) -> str:
@@ -96,35 +96,45 @@ class BaseAdapter(abc.ABC):
 
 class ParsetimeAdapter(BaseAdapter):
     def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
-        return None
+        self._raise_parsetime_adapter_call_error("get relation")
+        raise
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        return []
+        self._raise_parsetime_adapter_call_error("list relation")
+        raise
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
-        return []
+        self._raise_parsetime_adapter_call_error("list relation")
+        raise
 
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
-        return []
+        self._raise_parsetime_adapter_call_error("get columns")
+        raise
 
     def get_missing_columns(
         self, from_relation: BaseRelation, to_relation: BaseRelation
     ) -> t.List[Column]:
-        return []
+        self._raise_parsetime_adapter_call_error("get missing columns")
+        raise
 
     def create_schema(self, relation: BaseRelation) -> None:
-        pass
+        self._raise_parsetime_adapter_call_error("create schema")
 
     def drop_schema(self, relation: BaseRelation) -> None:
-        pass
+        self._raise_parsetime_adapter_call_error("drop schema")
 
     def drop_relation(self, relation: BaseRelation) -> None:
-        pass
+        self._raise_parsetime_adapter_call_error("drop relation")
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
-    ) -> t.Optional[t.Tuple[AdapterResponse, agate.Table]]:
-        return None
+    ) -> t.Tuple[AdapterResponse, agate.Table]:
+        self._raise_parsetime_adapter_call_error("execute SQL")
+        raise
+
+    @staticmethod
+    def _raise_parsetime_adapter_call_error(action: str) -> None:
+        raise ParsetimeAdapterCallError(f"Can't {action} at parse time.")
 
 
 class RuntimeAdapter(BaseAdapter):

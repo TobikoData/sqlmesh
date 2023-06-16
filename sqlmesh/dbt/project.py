@@ -54,8 +54,8 @@ class Project:
         project_yaml = load_yaml(project_file_path)
 
         variables = project_yaml.get("vars", {})
-        context.variables = {
-            name: var for name, var in variables.items() if not isinstance(var, t.Dict)
+        global_variables = {
+            name: var for name, var in variables.items() if not isinstance(var, dict)
         }
 
         project_name = context.render(project_yaml.get("name", ""))
@@ -99,7 +99,7 @@ class Project:
             package_vars = variables.get(name)
 
             if isinstance(package_vars, dict):
-                package.variables.update(package_vars)
+                package.variables.update({**package_vars, **global_variables})
 
         return Project(context, profile, packages)
 

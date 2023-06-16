@@ -13,7 +13,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 class SqlModelCacheEntry(PydanticModel):
     model: SqlModel
-    rendered_query: exp.Expression
+    rendered_query: t.Optional[exp.Expression]
 
 
 class ModelCache:
@@ -45,7 +45,8 @@ class ModelCache:
         cache_entry = self._file_cache.get(name, entry_id)
         if cache_entry:
             model = cache_entry.model
-            model._query_renderer.update_cache(cache_entry.rendered_query, optimized=False)
+            if cache_entry.rendered_query is not None:
+                model._query_renderer.update_cache(cache_entry.rendered_query, optimized=False)
             return model
 
         loaded_model = loader()
@@ -82,24 +83,29 @@ class OptimizedQueryCache:
             model: The model to add the optimized query to.
         """
         if not isinstance(model, SqlModel):
-            return True
+            return False
 
-        entry_id = self._entry_id(model)
+        unoptimized_query = model.render_query(optimize=False)
+        if unoptimized_query is None:
+            return False
+
+        entry_id = self._entry_id(model, unoptimized_query)
         cache_entry = self._file_cache.get(model.name, entry_id)
         if cache_entry:
             model._query_renderer.update_cache(cache_entry.optimized_rendered_query, optimized=True)
             return True
 
-        new_entry = OptimizedQueryCacheEntry(
-            optimized_rendered_query=model.render_query(optimize=True)
-        )
-        self._file_cache.put(model.name, entry_id, new_entry)
+        optimized_query = model.render_query(optimize=True)
+        if optimized_query is not None:
+            new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
+            self._file_cache.put(model.name, entry_id, new_entry)
+
         return False
 
     @staticmethod
-    def _entry_id(model: SqlModel) -> str:
+    def _entry_id(model: SqlModel, unoptimized_query: exp.Expression) -> str:
         data = OptimizedQueryCache._mapping_schema_hash_data(model.mapping_schema)
-        data.append(model.render_query(optimize=False).sql())
+        data.append(unoptimized_query.sql())
         return crc32(data)
 
     @staticmethod

@@ -13,6 +13,7 @@ from IPython.core.magic import (
 )
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 
+from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
@@ -54,13 +55,38 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument(
-        "--paths", "-p", type=str, nargs="+", default="", help="The path to the SQLMesh project."
+        "--paths",
+        "-p",
+        type=str,
+        nargs="+",
+        default="",
+        help="The path(s) to the SQLMesh project(s).",
     )
     @line_magic
     def context(self, line: str) -> None:
         """Sets the context in the user namespace."""
         args = parse_argstring(self.context, line)
         self._shell.user_ns["context"] = Context(paths=args.paths)
+
+    @magic_arguments()
+    @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
+    @argument(
+        "--template",
+        "-t",
+        type=str,
+        help="Project template. Supported values: airflow, dbt, default.",
+    )
+    @line_magic
+    def init(self, line: str) -> None:
+        """Creates a SQLMesh project scaffold."""
+        args = parse_argstring(self.init, line)
+        try:
+            project_template = ProjectTemplate(
+                args.template.lower() if args.template else "default"
+            )
+        except ValueError:
+            raise MagicError(f"Invalid project template '{args.template}'")
+        init_example_project(args.path, project_template)
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")

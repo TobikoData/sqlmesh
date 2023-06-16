@@ -671,9 +671,12 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[str],
     ) -> None:
+        if columns_to_types is None:
+            columns_to_types = self.columns(target_table)
+
         column_names = list(columns_to_types or [])
         on = exp.and_(
             *(

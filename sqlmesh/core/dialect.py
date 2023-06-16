@@ -7,7 +7,7 @@ from difflib import unified_diff
 from enum import Enum, auto
 
 import pandas as pd
-from sqlglot import Dialect, Generator, Parser, TokenType, exp
+from sqlglot import Dialect, Generator, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.tokens import Token
@@ -68,6 +68,32 @@ class PythonCode(exp.Expression):
 
 class DColonCast(exp.Cast):
     pass
+
+
+def _scan_var(self: Tokenizer) -> None:
+    param = False
+    bracket = False
+
+    while True:
+        char = self._peek.strip()
+
+        if char and (
+            char in self.VAR_SINGLE_TOKENS
+            or (param and char == "{")
+            or (bracket and char == "}")
+            or char not in self.SINGLE_TOKENS
+        ):
+            param = char == "@"
+            bracket = (bracket and char != "}") or char == "{"
+            self._advance(alnum=True)
+        else:
+            break
+
+    self._add(
+        TokenType.VAR
+        if self.tokens and self.tokens[-1].token_type == TokenType.PARAMETER
+        else self.KEYWORDS.get(self._text.upper(), TokenType.VAR)
+    )
 
 
 def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
@@ -321,7 +347,7 @@ def _macro_func_sql(self: Generator, expression: MacroFunc) -> str:
     return f"@{name}({self.format_args(*expression.expressions)})"
 
 
-def _override(klass: t.Type[Parser], func: t.Callable) -> None:
+def _override(klass: t.Type[Tokenizer | Parser], func: t.Callable) -> None:
     name = func.__name__
     setattr(klass, f"_{name}", getattr(klass, name))
     setattr(klass, name, func)
@@ -498,14 +524,24 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
 
 def extend_sqlglot() -> None:
     """Extend SQLGlot with SQLMesh's custom macro aware dialect."""
+    tokenizers = {Tokenizer}
     parsers = {Parser}
     generators = {Generator}
 
     for dialect in Dialect.classes.values():
+        if hasattr(dialect, "Tokenizer"):
+            tokenizers.add(dialect.Tokenizer)
         if hasattr(dialect, "Parser"):
             parsers.add(dialect.Parser)
         if hasattr(dialect, "Generator"):
             generators.add(dialect.Generator)
+
+    for tokenizer in tokenizers:
+        tokenizer.VAR_SINGLE_TOKENS.update("@")
+
+    for parser in parsers:
+        parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list})
+        parser.PLACEHOLDER_PARSERS.update({TokenType.PARAMETER: _parse_macro})
 
     for generator in generators:
         if MacroFunc not in generator.TRANSFORMS:
@@ -528,10 +564,7 @@ def extend_sqlglot() -> None:
 
             generator.WITH_SEPARATED_COMMENTS = (*generator.WITH_SEPARATED_COMMENTS, Model)  # type: ignore
 
-    for parser in parsers:
-        parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list})
-        parser.PLACEHOLDER_PARSERS.update({TokenType.PARAMETER: _parse_macro})
-
+    _override(Tokenizer, _scan_var)
     _override(Parser, _parse_statement)
     _override(Parser, _parse_join)
     _override(Parser, _parse_order)
@@ -604,3 +637,11 @@ def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) ->
     return exp.table_name(
         normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect)
     )
+
+
+def extract_columns_to_types(query: exp.Subqueryable) -> t.Dict[str, exp.DataType]:
+    """Extract the column names and types from a query."""
+    return {
+        expression.output_name: expression.type or exp.DataType.build("unknown")
+        for expression in query.selects
+    }

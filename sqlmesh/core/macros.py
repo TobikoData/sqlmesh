@@ -129,11 +129,10 @@ class MacroEvaluator:
         def _transform_node(node: exp.Expression) -> exp.Expression:
             if isinstance(node, MacroVar):
                 return exp.convert(_norm_env_value(self.locals[node.name]))
-            elif node.is_string:
+            if node.is_string:
                 node.set("this", self.jinja_env.from_string(node.this).render())
                 return node
-            else:
-                return node
+            return node
 
         query = query.transform(_transform_node)
 
@@ -179,8 +178,6 @@ class MacroEvaluator:
             result: t.Optional[t.Union[exp.Expression | t.List[exp.Expression]]] = exp.convert(
                 self.eval_expression(node)
             )
-        elif not node.find(exp.Column, exp.Table):
-            result = self.eval_expression(node)
         else:
             func = t.cast(exp.Anonymous, node.this)
             result = self.send(func.name, *func.expressions)
@@ -280,18 +277,18 @@ def _norm_var_arg_lambda(
     """
 
     def substitute(
-        node: exp.Expression, arg_index: t.Dict[str, int], *items: exp.Expression
+        node: exp.Expression, args: t.Dict[str, exp.Expression]
     ) -> exp.Expression | t.List[exp.Expression] | None:
-        if (
-            isinstance(node, exp.Identifier)
-            and node.name in arg_index
-            and not isinstance(node.parent, exp.Column)
-        ):
-            return items[arg_index[node.name]].copy()
-        if isinstance(node, MacroFunc):
+        if isinstance(node, (exp.Identifier, exp.Var)):
+            if node.name in args and not isinstance(node.parent, exp.Column):
+                return args[node.name].copy()
+            if "@" in node.name:
+                return node.__class__(
+                    this=evaluator.template(node.name, {k: v.name for k, v in args.items()})
+                )
+        elif isinstance(node, MacroFunc):
             local_copy = evaluator.locals.copy()
-            for k, v in arg_index.items():
-                evaluator.locals[k] = items[v]
+            evaluator.locals.update(args)
             result = evaluator.transform(node)
             evaluator.locals = local_copy
             return result
@@ -304,9 +301,10 @@ def _norm_var_arg_lambda(
         expressions = items
 
     if not callable(func):
-        arg_index = {expression.name: i for i, expression in enumerate(func.expressions)}
-        body = func.this
-        return expressions, lambda *x: body.transform(substitute, arg_index, *x)
+        return expressions, lambda *args: func.this.transform(
+            substitute,
+            {expression.name: arg for expression, arg in zip(func.expressions, args)},
+        )
 
     return expressions, func
 
@@ -374,7 +372,7 @@ def reduce_(evaluator: MacroEvaluator, *args: t.Any) -> t.Any:
 
     Example:
         >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator, reduce_
+        >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@SQL(@REDUCE([100, 200, 300, 400], (x, y) -> x + y))"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         '1000'
@@ -398,10 +396,14 @@ def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
 
     Example:
         >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator, filter_
+        >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@REDUCE(@FILTER([1, 2, 3], x -> x > 1), (x, y) -> x + y)"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        '5'
+        '1 + 2 + 3'
+
+        >>> sql = "@EVAL(@REDUCE(@FILTER([1, 2, 3], x -> x > 1), (x, y) -> x + y))"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        '6'
 
     Args:
         evaluator: MacroEvaluator that invoked the macro
@@ -425,7 +427,7 @@ def with_(
 
     Example:
         >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator, with_
+        >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@WITH(True) all_cities as (select * from city) select all_cities"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'WITH all_cities AS (SELECT * FROM city) SELECT all_cities'
@@ -450,7 +452,7 @@ def join(
 
     Example:
         >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator, join
+        >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "select * from city @JOIN(True) country on city.country = country.name"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'SELECT * FROM city JOIN country ON city.country = country.name'
@@ -479,7 +481,7 @@ def where(
 
     Example:
         >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator, where
+        >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "select * from city @WHERE(True) population > 100 and country = 'Mexico'"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         "SELECT * FROM city WHERE population > 100 AND country = 'Mexico'"
@@ -529,7 +531,7 @@ def having(
 
     Example:
         >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator, having
+        >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "select * from city group by country @HAVING(True) population > 100 and country = 'Mexico'"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         "SELECT * FROM city GROUP BY country HAVING population > 100 AND country = 'Mexico'"
@@ -554,7 +556,7 @@ def order_by(
 
     Example:
         >>> from sqlglot import parse_one
-        >>> from sqlmesh.core.macros import MacroEvaluator, order_by
+        >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "select * from city @ORDER_BY(True) population, name DESC"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'SELECT * FROM city ORDER BY population, name DESC'
@@ -567,6 +569,20 @@ def order_by(
         Order expression if the condition is True; otherwise None
     """
     return expression if evaluator.eval_expression(condition) else None
+
+
+@macro("eval")
+def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
+    """Evaluate the given condition in a Python/SQL interpretor.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@EVAL(1 + 1)"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        '2'
+    """
+    return evaluator.eval_expression(condition)
 
 
 def normalize_macro_name(name: str) -> str:

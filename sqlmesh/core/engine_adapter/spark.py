@@ -83,9 +83,12 @@ class SparkEngineAdapter(EngineAdapter):
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[str],
     ) -> None:
+        if columns_to_types is None:
+            columns_to_types = self.columns(target_table)
+
         column_names = columns_to_types.keys()
         df = self.try_get_df(source_table)
         if self._use_spark_session and df is not None:

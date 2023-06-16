@@ -77,6 +77,10 @@ class CICDBotError(SQLMeshError):
     pass
 
 
+class ParsetimeAdapterCallError(SQLMeshError):
+    pass
+
+
 def raise_config_error(
     msg: str,
     location: t.Optional[str | Path] = None,

@@ -28,4 +28,5 @@ models:
 vars:
   some_var: 5
   some_other_var: 5
+  yet_another_var: 5
   'customers:customer_id': "bla"
