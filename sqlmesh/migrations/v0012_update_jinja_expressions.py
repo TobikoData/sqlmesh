@@ -1,10 +1,11 @@
 """Fix expressions that contain jinja."""
 import json
-import re
 import typing as t
 
 import pandas as pd
 from sqlglot import exp
+
+from sqlmesh.utils.jinja import has_jinja
 
 
 def migrate(state_sync):  # type: ignore
@@ -21,14 +22,14 @@ def migrate(state_sync):  # type: ignore
         audits = parsed_snapshot.get("audits", [])
         model = parsed_snapshot["model"]
 
-        if "query" in model and _has_jinja(model["query"]):
+        if "query" in model and has_jinja(model["query"]):
             model["query"] = _wrap_query(model["query"])
 
         _wrap_statements(model, "pre_statements")
         _wrap_statements(model, "post_statements")
 
         for audit in audits:
-            if _has_jinja(audit["query"]):
+            if has_jinja(audit["query"]):
                 audit["query"] = _wrap_query(audit["query"])
             _wrap_statements(audit, "expressions")
 
@@ -62,7 +63,7 @@ def migrate(state_sync):  # type: ignore
 def _wrap_statements(obj: t.Dict, key: str) -> None:
     updated_statements = []
     for statement in obj.get(key, []):
-        if _has_jinja(statement):
+        if has_jinja(statement):
             statement = _wrap_statement(statement)
         updated_statements.append(statement)
 
@@ -76,10 +77,3 @@ def _wrap_query(sql: str) -> str:
 
 def _wrap_statement(sql: str) -> str:
     return f"JINJA_STATEMENT_BEGIN;\n{sql}\nJINJA_END;"
-
-
-JINJA_REGEX = re.compile(r"({{|{%)")
-
-
-def _has_jinja(value: str) -> bool:
-    return JINJA_REGEX.search(value) is not None
