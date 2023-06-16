@@ -83,7 +83,7 @@ def cli(
     "-t",
     "--template",
     type=str,
-    help="Project template. Support values: airflow, default.",
+    help="Project template. Support values: airflow, dbt, default.",
 )
 @click.pass_context
 @error_handler
@@ -325,7 +325,11 @@ def fetchdf(ctx: click.Context, sql: str) -> None:
 @click.pass_obj
 @error_handler
 def info(obj: Context) -> None:
-    """Print info."""
+    """
+    Print information about a SQLMesh project.
+
+    Includes counts of project models and macros and connection tests for the data warehouse and test runner.
+    """
     obj.print_info()
 
 
@@ -340,19 +344,49 @@ def info(obj: Context) -> None:
     type=int,
     help="Bind socket to this port. Default: 8000",
 )
-@click.pass_obj
+@click.pass_context
 @error_handler
 def ide(
+    ctx: click.Context,
+    host: t.Optional[str],
+    port: t.Optional[int],
+) -> None:
+    """
+    Start a browser-based SQLMesh IDE.
+
+    WARNING: soft-deprecated, please use `sqlmesh ui` instead.
+    """
+    click.echo(
+        click.style("WARNING", fg="yellow") + ":  soft-deprecated, please use `sqlmesh ui` instead."
+    )
+
+    ctx.forward(ui)
+
+
+@cli.command("ui")
+@click.option(
+    "--host",
+    type=str,
+    help="Bind socket to this host. Default: 127.0.0.1",
+)
+@click.option(
+    "--port",
+    type=int,
+    help="Bind socket to this port. Default: 8000",
+)
+@click.pass_obj
+@error_handler
+def ui(
     obj: Context,
     host: t.Optional[str],
     port: t.Optional[int],
 ) -> None:
-    """Start a browser-based SQLMesh IDE."""
+    """Start a browser-based SQLMesh UI."""
     try:
         import uvicorn
     except ModuleNotFoundError as e:
         raise MissingDependencyError(
-            "Missing IDE dependencies. Run `pip install 'sqlmesh[web]'` to install them."
+            "Missing UI dependencies. Run `pip install 'sqlmesh[web]'` to install them."
         ) from e
 
     host = host or "127.0.0.1"
