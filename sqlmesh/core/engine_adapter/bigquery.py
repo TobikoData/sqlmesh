@@ -337,18 +337,13 @@ class BigQueryEngineAdapter(EngineAdapter):
             raise SQLMeshError("BigQuery does not support partitioning by minute")
         if len(partitioned_by) > 1:
             raise SQLMeshError("BigQuery only supports partitioning by a single column")
-        partition_col = exp.to_column(partitioned_by[0])
-        this: t.Union[exp.Func, exp.Column]
-        if partition_interval_unit == IntervalUnit.HOUR:
-            this = exp.func(
-                "TIMESTAMP_TRUNC",
-                partition_col,
-                exp.var(IntervalUnit.HOUR.value.upper()),
-                dialect=self.dialect,
-            )
-        else:
-            this = partition_col
-
+        # timestamp_trunc also works for date types
+        this = exp.func(
+            "TIMESTAMP_TRUNC",
+            exp.to_column(partitioned_by[0]),
+            exp.var(partition_interval_unit.value.upper()),
+            dialect=self.dialect,
+        )
         partition_columns_property = exp.PartitionedByProperty(this=this)
         return exp.Properties(expressions=[partition_columns_property])
 

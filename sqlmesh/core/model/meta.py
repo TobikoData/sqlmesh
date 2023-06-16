@@ -25,11 +25,12 @@ from sqlmesh.utils.pydantic import PydanticModel
 class IntervalUnit(str, Enum):
     """IntervalUnit is the inferred granularity of an incremental model.
 
-    IntervalUnit can be one of 4 types, DAY, HOUR, MINUTE. The unit is inferred
+    IntervalUnit can be one of 4 types, MONTH, DAY, HOUR, MINUTE. The unit is inferred
     based on the cron schedule of a model. The minimum time delta between a sample set of dates
     is used to determine which unit a model's schedule is.
     """
 
+    MONTH = "month"
     DAY = "day"
     HOUR = "hour"
     MINUTE = "minute"
@@ -213,6 +214,8 @@ class ModelMeta(PydanticModel):
         """The incremental lookback time delta."""
         if isinstance(self.kind, _Incremental):
             interval_unit = self.interval_unit()
+            if interval_unit == IntervalUnit.MONTH:
+                return timedelta(days=self.lookback * 28)
             if interval_unit == IntervalUnit.DAY:
                 return timedelta(days=self.lookback)
             if interval_unit == IntervalUnit.HOUR:
@@ -241,7 +244,9 @@ class ModelMeta(PydanticModel):
             croniter = CroniterCache(self.cron)
             samples = [croniter.get_next() for _ in range(sample_size)]
             min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-            if min_interval >= 86400:
+            if min_interval >= 2419200:
+                self._interval_unit = IntervalUnit.MONTH
+            elif min_interval >= 86400:
                 self._interval_unit = IntervalUnit.DAY
             elif min_interval >= 3600:
                 self._interval_unit = IntervalUnit.HOUR
@@ -252,8 +257,8 @@ class ModelMeta(PydanticModel):
     def normalized_cron(self) -> str:
         """Returns the UTC normalized cron based on sampling heuristics.
 
-        SQLMesh supports 3 interval units, daily, hourly, and minutes. If a job is scheduled
-        daily at 1PM, the actual intervals are shifted back to midnight UTC.
+        SQLMesh supports 4 interval units, monthly, daily, hourly, and minutes. If a job
+        is scheduled daily at 1PM, the actual intervals are shifted back to midnight UTC.
 
         Returns:
             The cron string representing either daily, hourly, or minutes.
@@ -265,6 +270,8 @@ class ModelMeta(PydanticModel):
             return "0 * * * *"
         if unit == IntervalUnit.DAY:
             return "0 0 * * *"
+        if unit == IntervalUnit.MONTH:
+            return "0 0 1 * *"
         return ""
 
     def croniter(self, value: TimeLike) -> CroniterCache:

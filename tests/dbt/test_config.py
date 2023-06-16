@@ -282,6 +282,40 @@ def test_quoting():
     assert str(BaseRelation.create(**source.relation_info)) == 'foo."bar"'
 
 
+def test_partitioned_by():
+    assert ModelConfig(partitioned_by="ds").sqlmesh_partitioned_by == ["ds"]
+    model = ModelConfig(partition_by={"field": "ds", "granularity": "hour"})
+    assert model.sqlmesh_partitioned_by == ["ds"]
+    assert model.partition_by == {"field": "ds", "granularity": "hour"}
+    model = ModelConfig(partition_by={"field": "ds"})
+    assert model.sqlmesh_partitioned_by == ["ds"]
+    assert model.partition_by == {"field": "ds", "granularity": "day"}
+    assert ModelConfig(
+        partitioned_by="ds", partition_by={"field": "ts"}
+    ).sqlmesh_partitioned_by == ["ds"]
+
+
+def test_cron_with_partition_by():
+    assert ModelConfig(cron="@daily").cron == "@daily"
+    assert ModelConfig(partition_by={"field": "ds", "granularity": "hour"}).cron == "0 * * * *"
+    assert (
+        ModelConfig(cron="@hourly", partition_by={"field": "ds", "granularity": "hour"}).cron
+        == "@hourly"
+    )
+    assert (
+        ModelConfig(
+            cron="@daily", partitioned_by="ds", partition_by={"field": "ds", "granularity": "hour"}
+        ).cron
+        == "@daily"
+    )
+
+    with pytest.raises(ConfigError):
+        assert (
+            ModelConfig(cron="@daily", partition_by={"field": "ds", "granularity": "hour"}).cron
+            == "@hourly"
+        )
+
+
 def _test_warehouse_config(config_yaml: str, target_class: t.Type[TargetConfig], *params_path: str):
     config_dict = yaml_load(config_yaml)
     for path in params_path:
