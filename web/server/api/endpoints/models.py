@@ -63,7 +63,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             models.Column(
                 name=name, type=str(data_type), description=model.column_descriptions.get(name)
             )
-            for name, data_type in model.columns_to_types.items()
+            for name, data_type in model.columns_to_types_or_raise.items()
         ]
         details = models.ModelDetails(
             owner=model.owner,
@@ -93,7 +93,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
                 columns=columns,
                 details=details,
                 description=model.description,
-                sql=model.render_query().sql(pretty=True, dialect=model.dialect),
+                sql=model.render_query_or_raise().sql(pretty=True, dialect=model.dialect),
                 type=type,
             )
         )

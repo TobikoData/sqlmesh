@@ -16,7 +16,7 @@ class LogicalMergeAdapter(EngineAdapter):
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        columns_to_types: t.Dict[str, exp.DataType],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[str],
     ) -> None:
         """
@@ -29,6 +29,9 @@ class LogicalMergeAdapter(EngineAdapter):
            within the temporary table are ommitted.
         4. Drop the temporary table.
         """
+        if columns_to_types is None:
+            columns_to_types = self.columns(target_table)
+
         temp_table = self._get_temp_table(target_table)
         unique_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *unique_key)
         column_names = list(columns_to_types or [])

@@ -36,6 +36,7 @@ def test_manifest_helper():
         macros={
             MacroReference(name="log_value"),
             MacroReference(package="customers", name="duckdb__current_engine"),
+            MacroReference(package="dbt", name="run_query"),
             MacroReference(package="dbt", name="is_incremental"),
         },
         sources={"streaming.items", "streaming.orders", "streaming.order_items"},
