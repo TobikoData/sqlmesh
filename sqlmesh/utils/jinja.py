@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import re
 import typing as t
 from collections import defaultdict
 
@@ -438,3 +439,10 @@ def _is_private_macro(name: str) -> bool:
 
 def _non_private_name(name: str) -> str:
     return name.lstrip("_")
+
+
+JINJA_REGEX = re.compile(r"({{|{%)")
+
+
+def has_jinja(value: str) -> bool:
+    return JINJA_REGEX.search(value) is not None
