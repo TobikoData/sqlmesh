@@ -281,6 +281,26 @@ def test_partition_key_is_missing_in_query():
     assert "['c', 'd'] are missing" in str(ex.value)
 
 
+def test_partition_key_and_select_star():
+    expressions = parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+            kind INCREMENTAL_BY_TIME_RANGE(
+              time_column a
+            ),
+            partitioned_by (b, c, d)
+        );
+
+        SELECT * FROM tbl;
+    """
+    )
+
+    load_model(expressions)
+
+
 def test_json_serde():
     model = SqlModel(
         name="test_model",
