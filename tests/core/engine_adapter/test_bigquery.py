@@ -168,7 +168,7 @@ def test_create_table_date_partition(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY `ds`"
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY TIMESTAMP_TRUNC(`ds`, DAY)"
     ]
 
 

@@ -181,7 +181,7 @@ class Plan:
         if end_and_units:
             end, unit = max(end_and_units)
 
-            if unit == IntervalUnit.DAY:
+            if unit in (IntervalUnit.DAY, IntervalUnit.MONTH):
                 return to_date(make_inclusive_end(end))
             return end
         return now()
