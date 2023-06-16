@@ -119,7 +119,6 @@ class ModelConfig(BaseModelConfig):
         granularity = values["partition_by"]["granularity"]
         if not values.get("cron"):
             values["cron"] = timespan_to_cron_expr(granularity)
-            print(values)
             return values
 
         cron = values["cron"]
