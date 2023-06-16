@@ -5,11 +5,12 @@ import CodeEditor, {
 import { Disclosure, Tab } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { EnumFileExtensions } from '@models/file'
-import { isFalse, isString, isTrue, toDateFormat } from '@utils/index'
+import { isString, isTrue, toDateFormat } from '@utils/index'
 import clsx from 'clsx'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { ModelColumns } from '@components/graph/Graph'
 import { useLineageFlow } from '@components/graph/context'
+import TabList from '@components/tab/Tab'
 
 const Documentation = function Documentation({
   model,
@@ -92,85 +93,59 @@ const Documentation = function Documentation({
         <Section headline="SQL">
           <CodeEditor.RemoteFile path={model.path}>
             {({ file }) => (
-              <>
-                <Tab.Group defaultIndex={withQuery ? 1 : 0}>
-                  <Tab.List className="w-full whitespace-nowrap px-2 pt-3 flex justify-center items-center">
-                    <Tab
-                      disabled={isFalse(withCode)}
-                      className={({ selected }) =>
-                        clsx(
-                          'inline-block font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
-                          selected
-                            ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                            : 'bg-secondary-10 ',
-                          isFalse(withCode)
-                            ? 'opacity-50 cursor-not-allowed'
-                            : 'cursor-pointer',
-                        )
-                      }
+              <Tab.Group defaultIndex={withQuery ? 1 : 0}>
+                <TabList
+                  list={
+                    [
+                      withCode && 'Source Code',
+                      withQuery && 'Compiled Query',
+                    ].filter(Boolean) as string[]
+                  }
+                  className="!justify-center"
+                />
+
+                <Tab.Panels className="h-full w-full overflow-hidden bg-neutral-10 mt-4 rounded-lg">
+                  <Tab.Panel
+                    unmount={false}
+                    className={clsx(
+                      'flex flex-col w-full h-full relative px-2 overflow-hidden p-2',
+                      'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+                    )}
+                  >
+                    <CodeEditor.SQLMeshDialect
+                      content={file.content}
+                      type={file.extension}
                     >
-                      Source Code
-                    </Tab>
-                    <Tab
-                      disabled={isFalse(withQuery)}
-                      className={({ selected }) =>
-                        clsx(
-                          'inline-block font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
-                          selected
-                            ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                            : 'bg-secondary-10 ',
-                          isFalse(withQuery)
-                            ? 'opacity-50 cursor-not-allowed'
-                            : 'cursor-pointer',
-                        )
-                      }
-                    >
-                      Compiled Query
-                    </Tab>
-                  </Tab.List>
-                  <Tab.Panels className="h-full w-full overflow-hidden bg-neutral-10 mt-4 rounded-lg">
-                    <Tab.Panel
-                      unmount={false}
-                      className={clsx(
-                        'flex flex-col w-full h-full relative px-2 overflow-hidden p-2',
-                        'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+                      {({ extensions, content }) => (
+                        <CodeEditor
+                          extensions={extensions.concat(modelExtensions)}
+                          content={content}
+                          className="text-xs"
+                        />
                       )}
+                    </CodeEditor.SQLMeshDialect>
+                  </Tab.Panel>
+                  <Tab.Panel
+                    unmount={false}
+                    className={clsx(
+                      'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+                    )}
+                  >
+                    <CodeEditor.Default
+                      type={EnumFileExtensions.SQL}
+                      content={model.sql ?? ''}
                     >
-                      <CodeEditor.SQLMeshDialect
-                        content={file.content}
-                        type={file.extension}
-                      >
-                        {({ extensions, content }) => (
-                          <CodeEditor
-                            extensions={extensions.concat(modelExtensions)}
-                            content={content}
-                            className="text-xs"
-                          />
-                        )}
-                      </CodeEditor.SQLMeshDialect>
-                    </Tab.Panel>
-                    <Tab.Panel
-                      unmount={false}
-                      className={clsx(
-                        'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
+                      {({ extensions, content }) => (
+                        <CodeEditor
+                          extensions={extensions.concat(modelExtensions)}
+                          content={content}
+                          className="text-xs"
+                        />
                       )}
-                    >
-                      <CodeEditor.Default
-                        type={EnumFileExtensions.SQL}
-                        content={model.sql ?? ''}
-                      >
-                        {({ extensions, content }) => (
-                          <CodeEditor
-                            extensions={extensions.concat(modelExtensions)}
-                            content={content}
-                            className="text-xs"
-                          />
-                        )}
-                      </CodeEditor.Default>
-                    </Tab.Panel>
-                  </Tab.Panels>
-                </Tab.Group>
-              </>
+                    </CodeEditor.Default>
+                  </Tab.Panel>
+                </Tab.Panels>
+              </Tab.Group>
             )}
           </CodeEditor.RemoteFile>
         </Section>

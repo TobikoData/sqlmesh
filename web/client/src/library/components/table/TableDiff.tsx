@@ -1,6 +1,5 @@
-import Toggle from '@components/toggle/Toggle'
 import clsx from 'clsx'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
   TEST_GRAIN,
   getCellContent,
@@ -13,28 +12,31 @@ import {
   isDeletedRow,
   isModified,
 } from './help'
-import Input from '@components/input/Input'
-import { EnumSize } from '~/types/enum'
+import { Disclosure, Listbox, Transition } from '@headlessui/react'
+import {
+  CheckIcon,
+  MinusCircleIcon,
+  PlusCircleIcon,
+} from '@heroicons/react/24/solid'
 
 export interface Filters {
+  [key: string]: boolean
+  modifiedRows: boolean
   addedRows: boolean
   removedRows: boolean
+  modifiedColumns: boolean
   addedColumns: boolean
   removedColumns: boolean
-  modifiedRows: boolean
-  modifiedColumns: boolean
-  search: string
 }
 
 export default function TableDiff({ diff }: { diff: any }): JSX.Element {
   const [filters, setFilters] = useState<Filters>({
+    modifiedRows: true,
     addedRows: true,
     removedRows: true,
+    modifiedColumns: true,
     addedColumns: true,
     removedColumns: true,
-    modifiedRows: true,
-    modifiedColumns: true,
-    search: '',
   })
 
   const headers = getHeaders(diff.schema_diff, filters)
@@ -46,18 +48,27 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
 
   return (
     <div className="p-2 h-full flex flex-col">
-      <TableDiffFilters
-        filters={filters}
-        setFilters={setFilters}
+      <TableDiffStats
+        diff={diff}
+        rows={rows}
+        columns={headers}
       />
+      <div className="mt-2 flex rounded-lg items-center px-2">
+        <div className="w-full flex justify-end items-center">
+          <SelectFilters
+            filters={filters}
+            setFilters={setFilters}
+          />
+        </div>
+      </div>
       <div className="overflow-auto h-full scrollbar scrollbar--horizontal scrollbar--vertical">
         <table className="w-full text-xs text-neutral-600 dark:text-neutral-200 font-normal border-separate ">
           <thead className="sticky top-0 bg-theme z-10">
             <tr>
-              {headers.map(header => (
+              {headers.all.map(header => (
                 <th
                   key={header}
-                  colSpan={hasModified(diff, rows, header) ? 2 : 1}
+                  colSpan={hasModified(diff, rows.all, header) ? 2 : 1}
                   className={clsx(
                     'text-left whitespace-nowrap py-1 px-2 font-bold bg-primary-10',
                     header in diff.schema_diff.added &&
@@ -81,10 +92,13 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {rows.map(rowKey => (
-              <tr key={rowKey}>
-                {headers.map(header =>
-                  hasModified(diff, rows, header) &&
+            {rows.all.map(rowKey => (
+              <tr
+                key={rowKey}
+                className="even:bg-neutral-10"
+              >
+                {headers.all.map(header =>
+                  hasModified(diff, rows.all, header) &&
                   isModified(diff, header, rowKey) ? (
                     <>
                       <td
@@ -140,8 +154,8 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
           </tbody>
           <tfoot className="sticky bg-theme bottom-0">
             <tr>
-              {headers.map(header =>
-                hasModified(diff, rows, header) ? (
+              {headers.all.map(header =>
+                hasModified(diff, rows.all, header) ? (
                   <>
                     <th
                       key={`${header}-source`}
@@ -190,70 +204,160 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
   )
 }
 
-function TableDiffFilters({
+function TableDiffStats({
+  diff,
+  rows,
+  columns,
+}: {
+  diff: any
+  rows: any
+  columns: any
+}): JSX.Element {
+  return (
+    <Disclosure defaultOpen={true}>
+      {({ open }) => (
+        <>
+          <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left text-sm px-4 pt-3 pb-2 bg-neutral-10 hover:bg-theme-darker dark:hover:bg-theme-lighter text-neutral-600 dark:text-neutral-400">
+            <h2 className="whitespace-nowrap text-xl font-bold mb-1">Stats</h2>
+            {open ? (
+              <MinusCircleIcon className="h-6 w-6 text-primary-500" />
+            ) : (
+              <PlusCircleIcon className="h-6 w-6 text-primary-500" />
+            )}
+          </Disclosure.Button>
+          <Disclosure.Panel className="px-4 pb-2 text-sm text-neutral-500">
+            <div className="p-2 grid grid-cols-3 gap-4 mb-3">
+              <div className="rounded-xl overflow-hidden px-3 py-6 bg-primary-10">
+                <h3 className="text-neutral-500 dark:text-neutral-300 text-sm font-bold">
+                  Row Count Change
+                </h3>
+                <p className="text-6xl font-light text-primary-500 mt-3">
+                  {Math.round(Math.abs(diff.row_diff.count_pct_change))}
+                  <small className="text-sm">%</small>
+                </p>
+              </div>
+              <div className="rounded-xl overflow-hidden px-3 py-6 bg-primary-10">
+                <div className="flex justify-between">
+                  <h3 className="text-neutral-500 dark:text-neutral-300 text-sm font-bold">
+                    Rows Change
+                  </h3>
+                  <small className="inline-block px-2 py-0.5 bg-neutral-10 rounded-full">
+                    {rows.all.length}
+                  </small>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <p className="text-center text-6xl font-light text-primary-500 mt-3">
+                    {rows.modified}
+                  </p>
+                  <p className="text-center text-6xl font-light text-success-500 mt-3">
+                    {rows.added}
+                  </p>
+                  <p className="text-center text-6xl font-light text-danger-500 mt-3">
+                    {rows.deleted}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-xl overflow-hidden px-3 py-6 bg-primary-10">
+                <div className="flex justify-between">
+                  <h3 className="text-neutral-500 dark:text-neutral-300 text-sm font-bold">
+                    Columns Change
+                  </h3>
+                  <small className="inline-block px-2 py-0.5 bg-neutral-10 rounded-full">
+                    {columns.all.length}
+                  </small>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <p className="text-center text-6xl font-light text-primary-500 mt-3">
+                    {columns.modified}
+                  </p>
+                  <p className="text-center text-6xl font-light text-success-500 mt-3">
+                    {columns.added}
+                  </p>
+                  <p className="text-center text-6xl font-light text-danger-500 mt-3">
+                    {columns.deleted}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Disclosure.Panel>
+        </>
+      )}
+    </Disclosure>
+  )
+}
+
+function SelectFilters({
   filters,
   setFilters,
 }: {
   filters: Filters
   setFilters: React.Dispatch<React.SetStateAction<Filters>>
 }): JSX.Element {
+  const [selected, setSelected] = useState(Object.keys(filters))
+
   return (
-    <div className="mb-3 p-1 bg-primary-10  rounded-lg">
-      <div className="w-full flex justify-between">
-        <Input
-          className="w-full mb-2"
-          size={EnumSize.sm}
-          value={filters.search}
-          placeholder="Filter Table"
-          onInput={e => {
-            setFilters({ ...filters, search: e.currentTarget.value })
-          }}
-        />
+    <Listbox
+      value={selected}
+      onChange={value => {
+        setSelected(value)
+        setFilters(
+          Object.keys(filters).reduce(
+            (acc: Filters, key) => {
+              acc[key] = value.includes(key)
+
+              return acc
+            },
+            { ...filters },
+          ),
+        )
+      }}
+      multiple
+    >
+      <div className="relative m-1 flex">
+        <Listbox.Button className="relative w-full cursor-default text-xs rounded-md bg-primary-500 py-1 px-2 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300 text-neutral-100">
+          <span className="block truncate">Show</span>
+        </Listbox.Button>
+        <Transition
+          as={Fragment}
+          leave="transition ease-in duration-100"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <Listbox.Options className="absolute right-0 z-50 mt-1 max-h-60 min-w-16 overflow-auto rounded-md bg-theme py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+            {Object.keys(filters).map(key => (
+              <Listbox.Option
+                key={key}
+                className={({ active }) =>
+                  `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                    active ? 'bg-warning-100 text-warning-900' : 'text-gray-900'
+                  }`
+                }
+                value={key}
+              >
+                {({ selected }) => (
+                  <>
+                    <span
+                      className={`block truncate ${
+                        selected ? 'font-medium' : 'font-normal'
+                      }`}
+                    >
+                      {key}
+                    </span>
+                    {selected ? (
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-warning-600">
+                        <CheckIcon
+                          className="h-5 w-5"
+                          aria-hidden="true"
+                        />
+                      </span>
+                    ) : null}
+                  </>
+                )}
+              </Listbox.Option>
+            ))}
+          </Listbox.Options>
+        </Transition>
       </div>
-      <div className="grid grid-cols-3">
-        <Toggle
-          label="Added Rows"
-          enabled={filters.addedRows}
-          setEnabled={(value: boolean) => {
-            setFilters({ ...filters, addedRows: value })
-          }}
-        />
-        <Toggle
-          label="Removed Rows"
-          enabled={filters.removedRows}
-          setEnabled={(value: boolean) => {
-            setFilters({ ...filters, removedRows: value })
-          }}
-        />
-        <Toggle
-          label="Modified Rows"
-          enabled={filters.modifiedRows}
-          setEnabled={(value: boolean) => {
-            setFilters({ ...filters, modifiedRows: value })
-          }}
-        />
-        <Toggle
-          label="Added Columns"
-          enabled={filters.addedColumns}
-          setEnabled={(value: boolean) => {
-            setFilters({ ...filters, addedColumns: value })
-          }}
-        />
-        <Toggle
-          label="Removed Columns"
-          enabled={filters.removedColumns}
-          setEnabled={(value: boolean) => {
-            setFilters({ ...filters, removedColumns: value })
-          }}
-        />
-        <Toggle
-          label="Modified Columns"
-          enabled={filters.modifiedColumns}
-          setEnabled={(value: boolean) => {
-            setFilters({ ...filters, modifiedColumns: value })
-          }}
-        />
-      </div>
-    </div>
+    </Listbox>
   )
 }

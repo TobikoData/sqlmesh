@@ -19,6 +19,7 @@ import { EnumRoutes } from '~/routes'
 import { useNavigate } from 'react-router-dom'
 import { DisplayError } from '@components/report/ReportErrors'
 import TableDiff from '@components/table/TableDiff'
+import TabList from '@components/tab/Tab'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -67,9 +68,9 @@ export default function EditorPreview({
         previewConsole != null && EnumEditorPreviewTabs.Console,
         previewQuery != null && EnumEditorPreviewTabs.Query,
         tab.file.isSQLMeshModel && EnumEditorPreviewTabs.Lineage,
-        EnumEditorPreviewTabs.Diff,
+        previewDiff != null && EnumEditorPreviewTabs.Diff,
       ].filter(Boolean) as string[],
-    [tab.id, previewTable, previewConsole, previewQuery],
+    [tab.id, previewTable, previewConsole, previewQuery, previewDiff],
   )
 
   const [headers, data] = useMemo(
@@ -91,6 +92,8 @@ export default function EditorPreview({
   useEffect(() => {
     if (previewConsole != null) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Console))
+    } else if (previewDiff != null) {
+      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Diff))
     } else if (previewTable != null) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Table))
     } else if (tab.file.isSQLMeshModel) {
@@ -122,26 +125,7 @@ export default function EditorPreview({
           onChange={setActiveTabIndex}
           selectedIndex={activeTabIndex}
         >
-          <Tab.List className="w-full whitespace-nowrap px-2 flex justify-between items-center bg-primary-10">
-            <div className="flex w-full overflow-hidden overflow-x-auto py-1 scrollbar scrollbar--horizontal">
-              <div className="flex items-center bg-secondary-10 cursor-pointer rounded-full p-1 overflow-hidden">
-                {tabs.map(tabName => (
-                  <Tab
-                    key={tabName}
-                    className={({ selected }) =>
-                      clsx(
-                        'text-xs font-medium px-2 py-0.5 mr-2 last:mr-0 rounded-full relative align-middle',
-                        selected
-                          ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                          : 'cursor-pointer',
-                      )
-                    }
-                  >
-                    {tabName}
-                  </Tab>
-                ))}
-              </div>
-            </div>
+          <TabList list={tabs}>
             <div className="ml-2">
               <Button
                 className="!m-0 !py-0.5 px-[0.25rem] border-none"
@@ -156,7 +140,7 @@ export default function EditorPreview({
                 <ViewColumnsIcon className="text-primary-500 w-5" />
               </Button>
             </div>
-          </Tab.List>
+          </TabList>
           <Tab.Panels className="h-full w-full overflow-hidden">
             {previewTable != null && (
               <Tab.Panel

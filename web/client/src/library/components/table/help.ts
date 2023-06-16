@@ -27,7 +27,12 @@ function getHeaders(
     target_schema: Record<string, string>
   },
   filters: Filters,
-): string[] {
+): {
+  all: string[]
+  modified: number
+  deleted: number
+  added: number
+} {
   const source = Object.keys(source_schema)
   const target = Object.keys(target_schema)
   const union = Array.from(new Set(source.concat(target)))
@@ -37,21 +42,34 @@ function getHeaders(
   const differenceSource = source.filter(s => !target.includes(s))
   const differenceTarget = target.filter(s => !source.includes(s))
 
-  return Array.from(
-    new Set(
-      [
-        TEST_GRAIN,
-        filters.modifiedColumns && intersection,
-        filters.addedColumns && differenceTarget,
-        filters.removedColumns && differenceSource,
-      ]
-        .filter(Boolean)
-        .flat(),
-    ),
-  ) as string[]
+  return {
+    all: Array.from(
+      new Set(
+        [
+          TEST_GRAIN,
+          filters.modifiedColumns && intersection,
+          filters.addedColumns && differenceTarget,
+          filters.removedColumns && differenceSource,
+        ]
+          .filter(Boolean)
+          .flat(),
+      ),
+    ) as string[],
+    added: differenceTarget.length,
+    deleted: differenceSource.length,
+    modified: intersection.length - TEST_GRAIN.length,
+  }
 }
 
-function getRows(diff: any, filters: Filters): string[] {
+function getRows(
+  diff: any,
+  filters: Filters,
+): {
+  all: string[]
+  modified: number
+  deleted: number
+  added: number
+} {
   const rows = Object.values(diff.row_diff.sample)[0]
   const deleted: string[] = []
   const added: string[] = []
@@ -63,13 +81,18 @@ function getRows(diff: any, filters: Filters): string[] {
     else rest.push(key)
   })
 
-  return [
-    filters.modifiedRows && rest,
-    filters.addedRows && added,
-    filters.removedRows && deleted,
-  ]
-    .filter(Boolean)
-    .flat() as string[]
+  return {
+    all: [
+      filters.modifiedRows && rest,
+      filters.addedRows && added,
+      filters.removedRows && deleted,
+    ]
+      .filter(Boolean)
+      .flat() as string[],
+    added: added.length,
+    deleted: deleted.length,
+    modified: rest.length,
+  }
 }
 
 function isModified(diff: any, header: string, key: string): boolean {

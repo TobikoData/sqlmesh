@@ -29,6 +29,7 @@ import {
   useApiTableDiff,
 } from '@api/index'
 import { EnumErrorKey } from '~/library/pages/ide/context'
+import TabList from '@components/tab/Tab'
 
 interface FormModel {
   model?: string
@@ -93,23 +94,7 @@ function InspectorModel({
 }): JSX.Element {
   return (
     <Tab.Group>
-      <Tab.List className="w-full whitespace-nowrap px-2 pt-3 flex justigy-between items-center">
-        {['Actions', 'Docs', 'Diff'].map(item => (
-          <Tab
-            key={item}
-            className={({ selected }) =>
-              clsx(
-                'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
-                selected
-                  ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                  : 'bg-secondary-10 cursor-pointer',
-              )
-            }
-          >
-            {item}
-          </Tab>
-        ))}
-      </Tab.List>
+      <TabList list={['Actions', 'Docs', 'Diff']} />
       <Tab.Panels className="h-full w-full overflow-hidden">
         <Tab.Panel
           unmount={false}
