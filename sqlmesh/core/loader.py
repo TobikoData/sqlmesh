@@ -24,6 +24,7 @@ from sqlmesh.core.model import (
     ModelCache,
     OptimizedQueryCache,
     SeedModel,
+    SqlModel,
     create_external_model,
     load_model,
 )
@@ -64,13 +65,15 @@ def update_model_schemas(
                     ' add source tables as "external models" using the command'
                     " 'sqlmesh create_external_models'."
                 )
-        elif model.mapping_schema and not cache_hit:
-            try:
-                validate_qualify_columns(model.render_query())
-            except SqlglotError as e:
-                raise ConfigError(
-                    f"Column references could not be resolved for model '{name}' at '{model._path}'. {e}"
-                )
+        elif isinstance(model, SqlModel) and model.mapping_schema and not cache_hit:
+            query = model.render_query()
+            if query is not None:
+                try:
+                    validate_qualify_columns(query)
+                except SqlglotError as e:
+                    raise ConfigError(
+                        f"Column references could not be resolved for model '{name}' at '{model._path}'. {e}"
+                    )
 
 
 @dataclass

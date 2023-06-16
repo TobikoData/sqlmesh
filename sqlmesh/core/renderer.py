@@ -24,6 +24,7 @@ from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
     ConfigError,
     MacroEvalError,
+    ParsetimeAdapterCallError,
     SQLMeshError,
     raise_config_error,
 )
@@ -123,6 +124,8 @@ class ExpressionRenderer:
                     if not parsed_expression:
                         raise ConfigError(f"Failed to parse a expression {expression}")
                     expression = parsed_expression
+                except ParsetimeAdapterCallError:
+                    raise
                 except Exception as ex:
                     raise ConfigError(f"Invalid expression. {ex} at '{self._path}'") from ex
 
@@ -221,7 +224,7 @@ class QueryRenderer(ExpressionRenderer):
         add_incremental_filter: bool = False,
         optimize: bool = True,
         **kwargs: t.Any,
-    ) -> exp.Subqueryable:
+    ) -> t.Optional[exp.Subqueryable]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
 
         Args:
@@ -246,18 +249,22 @@ class QueryRenderer(ExpressionRenderer):
         skip_cache = bool(snapshots or expand)
 
         if skip_cache or not optimize or cache_key not in self._optimized_cache:
-            query = t.cast(
-                exp.Subqueryable,
-                super().render(
-                    start=start,
-                    end=end,
-                    latest=latest,
-                    snapshots=snapshots,
-                    is_dev=is_dev,
-                    expand=expand,
-                    **kwargs,
-                ),
-            )
+            try:
+                query = t.cast(
+                    exp.Subqueryable,
+                    super().render(
+                        start=start,
+                        end=end,
+                        latest=latest,
+                        snapshots=snapshots,
+                        is_dev=is_dev,
+                        expand=expand,
+                        **kwargs,
+                    ),
+                )
+            except ParsetimeAdapterCallError:
+                logger.debug("Failed to render query at parse time:\n%s", self._expression)
+                return None
 
             if not query:
                 raise ConfigError(f"Failed to render query:\n{query}")
@@ -382,15 +389,19 @@ def _resolve_tables(
                 name = exp.table_name(node)
                 model = snapshots[name].model if name in snapshots else None
                 if name in expand and model and not model.is_seed and not model.kind.is_external:
-                    return model.render_query(
+                    nested_query = model.render_query(
                         snapshots=snapshots,
                         expand=expand,
                         is_dev=is_dev,
                         **render_kwargs,
-                    ).subquery(
-                        alias=node.alias or model.view_name,
-                        copy=False,
                     )
+                    if nested_query is not None:
+                        return nested_query.subquery(
+                            alias=node.alias or model.view_name,
+                            copy=False,
+                        )
+                    else:
+                        logger.warning("Failed to expand the nested model '%s'", name)
             return node
 
         expression = expression.transform(_expand, copy=False)

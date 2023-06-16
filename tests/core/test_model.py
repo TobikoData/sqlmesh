@@ -1306,7 +1306,7 @@ def test_model_ctas_query():
         read="bigquery",
     )
 
-    assert load_model(expressions, dialect="bigquery").ctas_query({}).sql() == 'SELECT 1 AS "a"'
+    assert load_model(expressions, dialect="bigquery").ctas_query().sql() == 'SELECT 1 AS "a"'
 
     expressions = parse(
         """
@@ -1316,8 +1316,7 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_model(expressions).ctas_query({}).sql()
-        == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
+        load_model(expressions).ctas_query().sql() == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
     )
 
 
@@ -1343,3 +1342,27 @@ def test_parse_expression_list_with_jinja():
         "GRANT SELECT ON TABLE foo TO DEV",
     ]
     assert input == [val.sql() for val in parse_expression(input)]
+
+
+def test_no_depends_on_runtime_jinja_query():
+    @macro()
+    def runtime_macro(**kwargs) -> None:
+        from sqlmesh.utils.errors import ParsetimeAdapterCallError
+
+        raise ParsetimeAdapterCallError("")
+
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        JINJA_QUERY_BEGIN;
+        SELECT {{ runtime_macro() }} as a FROM b
+        JINJA_QUERY_END;
+        """
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
+    ):
+        load_model(expressions)

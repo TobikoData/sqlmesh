@@ -580,12 +580,13 @@ class Context(BaseContext):
             )
             return next(pandas_to_sql(t.cast(pd.DataFrame, df), model.columns_to_types))
 
-        return model.render_query(
+        return model.render_query_or_raise(
             start=start,
             end=end,
             latest=latest,
             snapshots=self.snapshots,
             expand=expand,
+            engine_adapter=self.engine_adapter,
             **kwargs,
         )
 

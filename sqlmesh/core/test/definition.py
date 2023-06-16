@@ -167,7 +167,7 @@ class SqlModelTest(ModelTest):
         """
         super().__init__(body, test_name, model, models, engine_adapter, path)
 
-        self.query = model.render_query(
+        self.query = model.render_query_or_raise(
             add_incremental_filter=True,
             **self.body.get("vars", {}),
             engine_adapter=engine_adapter,
