@@ -32,6 +32,7 @@ Commands:
   run                     Evaluates the DAG of models using the built-in...
   table_diff              Show the diff between two tables.
   test                    Run model unit tests.
+  ui                      Start a browser-based SQLMesh UI.
 ```
 
 ## audit
@@ -124,6 +125,8 @@ Options:
 Usage: sqlmesh ide [OPTIONS]
 
   Start a browser-based SQLMesh IDE.
+
+  WARNING: soft-deprecated, please use `sqlmesh ui` instead.
 
 Options:
   --host TEXT     Bind socket to this host. Default: 127.0.0.1
@@ -288,4 +291,16 @@ Options:
   -k TEXT        Only run tests that match the pattern of substring.
   -v, --verbose  Verbose output.
   --help         Show this message and exit.
+```
+
+## ui
+```
+Usage: sqlmesh ui [OPTIONS]
+
+  Start a browser-based SQLMesh UI.
+
+Options:
+  --host TEXT     Bind socket to this host. Default: 127.0.0.1
+  --port INTEGER  Bind socket to this port. Default: 8000
+  --help          Show this message and exit.
 ```
