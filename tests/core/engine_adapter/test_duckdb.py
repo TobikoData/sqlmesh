@@ -1,3 +1,4 @@
+import typing as t
 from unittest.mock import call
 
 import pytest
@@ -84,7 +85,7 @@ def test_merge(mocker: MockerFixture):
     adapter = DuckDBEngineAdapter(lambda: connection_mock)  # type: ignore
     adapter.merge(
         target_table="target",
-        source_table=parse_one("SELECT id, ts, val FROM source"),
+        source_table=t.cast(exp.Select, parse_one("SELECT id, ts, val FROM source")),
         columns_to_types={
             "id": exp.DataType(this=exp.DataType.Type.INT),
             "ts": exp.DataType(this=exp.DataType.Type.TIMESTAMP),
@@ -109,7 +110,7 @@ def test_merge(mocker: MockerFixture):
     cursor_mock.reset_mock()
     adapter.merge(
         target_table="target",
-        source_table=parse_one("SELECT id, ts, val FROM source"),
+        source_table=t.cast(exp.Select, parse_one("SELECT id, ts, val FROM source")),
         columns_to_types={
             "id": exp.DataType(this=exp.DataType.Type.INT),
             "ts": exp.DataType(this=exp.DataType.Type.TIMESTAMP),
