@@ -57,15 +57,7 @@ def update_model_schemas(
         cache_hit = optimized_query_cache.with_optimized_query(model)
         schema.add_table(name, model.columns_to_types, dialect=model.dialect)
 
-        if any(dep not in models for dep in model.depends_on):
-            if "*" in model.columns_to_types:
-                raise ConfigError(
-                    f"Can't expand SELECT * expression for model '{name}' at '{model._path}'."
-                    " Either specify external source projections expliticly or"
-                    ' add source tables as "external models" using the command'
-                    " 'sqlmesh create_external_models'."
-                )
-        elif isinstance(model, SqlModel) and model.mapping_schema and not cache_hit:
+        if isinstance(model, SqlModel) and model.mapping_schema and not cache_hit:
             query = model.render_query()
             if query is not None:
                 try:

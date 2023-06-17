@@ -559,7 +559,7 @@ class _Model(ModelMeta, frozen=True):
                 )
 
             columns_to_types = self.columns_to_types
-            if columns_to_types is not None and "*" not in columns_to_types:
+            if columns_to_types is not None:
                 column_names = {c.lower() for c in columns_to_types}
                 missing_keys = unique_partition_keys - column_names
                 if missing_keys:
@@ -752,6 +752,9 @@ class SqlModel(_SqlBasedModel):
             if query is None:
                 return None
             self._columns_to_types = d.extract_columns_to_types(query)
+
+        if "*" in self._columns_to_types:
+            return None
 
         return self._columns_to_types
 
