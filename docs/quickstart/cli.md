@@ -3,7 +3,7 @@
 This page works through the SQLMesh example project using the SQLMesh command-line interface.
 
 ## 1. Create the SQLMesh project
-First, create a project directory and navigate to it,:
+First, create a project directory and navigate to it:
 
 ```bash
 mkdir sqlmesh-example
