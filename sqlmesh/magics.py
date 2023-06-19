@@ -55,8 +55,7 @@ class SQLMeshMagics(Magics):
 
     @magic_arguments()
     @argument(
-        "--paths",
-        "-p",
+        "paths",
         type=str,
         nargs="+",
         default="",
@@ -67,6 +66,7 @@ class SQLMeshMagics(Magics):
         """Sets the context in the user namespace."""
         args = parse_argstring(self.context, line)
         self._shell.user_ns["context"] = Context(paths=args.paths)
+        self.display("SQLMesh project context set")
 
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
@@ -87,6 +87,7 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(args.path, project_template)
+        self.display("SQLMesh project scaffold created")
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
