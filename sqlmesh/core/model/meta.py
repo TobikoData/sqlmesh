@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-from datetime import timedelta
 from enum import Enum
 
 from pydantic import Field, root_validator, validator
@@ -25,15 +24,20 @@ from sqlmesh.utils.pydantic import PydanticModel
 class IntervalUnit(str, Enum):
     """IntervalUnit is the inferred granularity of an incremental model.
 
-    IntervalUnit can be one of 4 types, MONTH, DAY, HOUR, MINUTE. The unit is inferred
+    IntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred
     based on the cron schedule of a model. The minimum time delta between a sample set of dates
     is used to determine which unit a model's schedule is.
     """
 
+    YEAR = "year"
     MONTH = "month"
     DAY = "day"
     HOUR = "hour"
     MINUTE = "minute"
+
+    @property
+    def is_date_type(self) -> bool:
+        return self in (IntervalUnit.YEAR, IntervalUnit.MONTH, IntervalUnit.DAY)
 
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
@@ -209,20 +213,13 @@ class ModelMeta(PydanticModel):
         """The incremental lookback window."""
         return (self.kind.lookback if isinstance(self.kind, _Incremental) else 0) or 0
 
-    @property
-    def lookback_delta(self) -> timedelta:
-        """The incremental lookback time delta."""
-        if isinstance(self.kind, _Incremental):
-            interval_unit = self.interval_unit()
-            if interval_unit == IntervalUnit.MONTH:
-                return timedelta(days=self.lookback * 28)
-            if interval_unit == IntervalUnit.DAY:
-                return timedelta(days=self.lookback)
-            if interval_unit == IntervalUnit.HOUR:
-                return timedelta(hours=self.lookback)
-            if interval_unit == IntervalUnit.MINUTE:
-                return timedelta(minutes=self.lookback)
-        return timedelta()
+    def lookback_start(self, start: TimeLike) -> TimeLike:
+        if self.lookback == 0:
+            return start
+
+        for _ in range(self.lookback):
+            start = self.cron_prev(start)
+        return start
 
     @property
     def batch_size(self) -> t.Optional[int]:
@@ -244,7 +241,9 @@ class ModelMeta(PydanticModel):
             croniter = CroniterCache(self.cron)
             samples = [croniter.get_next() for _ in range(sample_size)]
             min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-            if min_interval >= 2419200:
+            if min_interval >= 31536000:
+                self._interval_unit = IntervalUnit.YEAR
+            elif min_interval >= 2419200:
                 self._interval_unit = IntervalUnit.MONTH
             elif min_interval >= 86400:
                 self._interval_unit = IntervalUnit.DAY
@@ -257,8 +256,8 @@ class ModelMeta(PydanticModel):
     def normalized_cron(self) -> str:
         """Returns the UTC normalized cron based on sampling heuristics.
 
-        SQLMesh supports 4 interval units, monthly, daily, hourly, and minutes. If a job
-        is scheduled daily at 1PM, the actual intervals are shifted back to midnight UTC.
+        SQLMesh supports 5 interval units, yearly, monthly, daily, hourly, and minutes. If a
+        job is scheduled daily at 1PM, the actual intervals are shifted back to midnight UTC.
 
         Returns:
             The cron string representing either daily, hourly, or minutes.
@@ -272,6 +271,8 @@ class ModelMeta(PydanticModel):
             return "0 0 * * *"
         if unit == IntervalUnit.MONTH:
             return "0 0 1 * *"
+        if unit == IntervalUnit.YEAR:
+            return "0 0 1 1 *"
         return ""
 
     def croniter(self, value: TimeLike) -> CroniterCache:

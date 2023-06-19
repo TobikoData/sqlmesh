@@ -762,6 +762,57 @@ def test_cron():
         "2020-01-01 10:00:00"
     )
 
+    monthly = ModelMeta(name="x", cron="0 0 1 * *")
+    assert monthly.normalized_cron() == "0 0 1 * *"
+    assert to_timestamp(monthly.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
+        "2019-12-01 00:00:00"
+    )
+    assert to_timestamp(monthly.cron_prev("2020-02-01 00:00:00")) == to_timestamp(
+        "2020-01-01 00:00:00"
+    )
+    assert to_timestamp(monthly.cron_next("2020-01-01 00:00:00")) == to_timestamp(
+        "2020-02-01 00:00:00"
+    )
+    assert to_timestamp(monthly.cron_floor("2020-01-17 00:00:00")) == to_timestamp(
+        "2020-01-01 00:00:00"
+    )
+
+    yearly = ModelMeta(name="x", cron="0 0 1 1 *")
+    assert yearly.normalized_cron() == "0 0 1 1 *"
+    assert to_timestamp(yearly.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
+        "2019-01-01 00:00:00"
+    )
+    assert to_timestamp(yearly.cron_next("2020-01-01 00:00:00")) == to_timestamp(
+        "2021-01-01 00:00:00"
+    )
+    assert to_timestamp(yearly.cron_floor("2020-12-10 00:00:00")) == to_timestamp(
+        "2020-01-01 00:00:00"
+    )
+
+
+def test_lookback():
+    model = ModelMeta(
+        name="x", cron="@hourly", kind=IncrementalByTimeRangeKind(time_column="ts", lookback=2)
+    )
+    assert to_timestamp(model.lookback_start("Jan 8 2020 04:00:00")) == to_timestamp(
+        "Jan 8 2020 02:00:00"
+    )
+
+    model = ModelMeta(
+        name="x", cron="@daily", kind=IncrementalByTimeRangeKind(time_column="ds", lookback=2)
+    )
+    assert to_timestamp(model.lookback_start("Jan 8 2020")) == to_timestamp("Jan 6 2020")
+
+    model = ModelMeta(
+        name="x", cron="0 0 1 * *", kind=IncrementalByTimeRangeKind(time_column="ds", lookback=2)
+    )
+    assert to_timestamp(model.lookback_start("April 1 2020")) == to_timestamp("Feb 1 2020")
+
+    model = ModelMeta(
+        name="x", cron="0 0 1 1 *", kind=IncrementalByTimeRangeKind(time_column="ds", lookback=2)
+    )
+    assert to_timestamp(model.lookback_start("Jan 1 2020")) == to_timestamp("Jan 1 2018")
+
 
 def test_render_query(assert_exp_eq):
     model = SqlModel(
