@@ -251,24 +251,31 @@ class JinjaMacroRegistry(PydanticModel):
         env.filters.update(self._environment.filters)
         return env
 
-    def trim(self, dependencies: t.Iterable[MacroReference]) -> JinjaMacroRegistry:
+    def trim(
+        self, dependencies: t.Iterable[MacroReference], package: t.Optional[str] = None
+    ) -> JinjaMacroRegistry:
         """Trims the registry by keeping only macros with given references and their transitive dependencies.
 
         Args:
             dependencies: References to macros that should be kept.
+            package: The name of the package in the context of which the trimming should be performed.
 
         Returns:
             A new trimmed registry.
         """
         dependencies_by_package: t.Dict[t.Optional[str], t.Set[str]] = defaultdict(set)
         for dep in dependencies:
-            dependencies_by_package[dep.package].add(dep.name)
+            dependencies_by_package[dep.package or package].add(dep.name)
+
+        top_level_packages = self.top_level_packages.copy()
+        if package is not None:
+            top_level_packages.append(package)
 
         result = JinjaMacroRegistry(
             global_objs=self.global_objs.copy(),
             create_builtins_module=self.create_builtins_module,
             root_package_name=self.root_package_name,
-            top_level_packages=self.top_level_packages.copy(),
+            top_level_packages=top_level_packages,
         )
         for package, names in dependencies_by_package.items():
             result = result.merge(self._trim_macros(names, package))
