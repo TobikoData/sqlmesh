@@ -35,6 +35,7 @@ class TestConfig(GeneralConfig):
         column_name: The name of the column under test.
         dependencies: The macros, refs, and sources the test depends upon.
         dialect: The sql dialect of the test.
+        package_name: Name of the package that defines the test.
         alias: The alias for the materialized table where failures are stored (Not supported).
         schema: The schema for the materialized table where the failures are stored (Not supported).
         database: The database for the materilized table where the failures are stored (Not supported).
@@ -58,6 +59,7 @@ class TestConfig(GeneralConfig):
     dialect: str = ""
 
     # dbt fields
+    package_name: str = ""
     alias: t.Optional[str] = None
     schema_: t.Optional[str] = Field("", alias="schema")
     database: t.Optional[str] = None
@@ -89,7 +91,9 @@ class TestConfig(GeneralConfig):
         """
         test_context = context.context_for_dependencies(self.dependencies)
 
-        jinja_macros = test_context.jinja_macros.trim(self.dependencies.macros)
+        jinja_macros = test_context.jinja_macros.trim(
+            self.dependencies.macros, package=self.package_name
+        )
         jinja_macros.global_objs.update(
             {
                 "config": self.attribute_dict,

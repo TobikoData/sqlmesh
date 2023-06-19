@@ -16,10 +16,7 @@ def sushi_test_project() -> Project:
     delete_cache(project_root)
     project = Project.load(DbtContext(project_root=Path(project_root)))
     for package_name, package in project.packages.items():
-        project.context.jinja_macros.add_macros(
-            package.macro_infos,
-            package=package_name if package_name != project.context.project_name else None,
-        )
+        project.context.jinja_macros.add_macros(package.macro_infos, package=package_name)
     return project
 
 

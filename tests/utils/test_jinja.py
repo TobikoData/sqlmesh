@@ -159,6 +159,14 @@ def test_macro_registry_trim():
     )
     assert rendered == "macro_a_a macro_a_b"
 
+    trimmed_registry_for_package_b = registry.trim(
+        [MacroReference(name="macro_b_b")], package="package_b"
+    )
+    assert set(trimmed_registry_for_package_b.packages) == {"package_a", "package_b"}
+    assert set(trimmed_registry_for_package_b.packages["package_a"]) == {"macro_a_a"}
+    assert set(trimmed_registry_for_package_b.packages["package_b"]) == {"macro_b_a", "macro_b_b"}
+    assert not trimmed_registry_for_package_b.root_macros
+
 
 def test_macro_return():
     macros = "{% macro test_return() %}{{ macro_return([1, 2, 3]) }}{% endmacro %}"
