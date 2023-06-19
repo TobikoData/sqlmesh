@@ -1,4 +1,4 @@
-# Command-line interface quick start
+# CLI
 
 This page works through the SQLMesh example project using the SQLMesh command-line interface.
 
@@ -12,7 +12,7 @@ mkdir sqlmesh-example
 cd sqlmesh-example
 ```
 
-If using a python virtual environment, ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](installation.md).
+If using a python virtual environment, ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](../installation.md).
 
 Create a SQLMesh scaffold with the following command:
 
@@ -20,7 +20,7 @@ Create a SQLMesh scaffold with the following command:
 sqlmesh init
 ```
 
-See the [quick start overview](./overview.md#project-directories-and-files) for more information about the project directories, files, data, and models.
+See the [quick start overview](../quick_start.md#project-directories-and-files) for more information about the project directories, files, data, and models.
 
 ## 2. Plan and apply environments
 ### 2.1 Create a prod environment
@@ -53,7 +53,12 @@ Line 5 describes what environments the plan will affect when applied - a new `pr
 
 Lines 7-10 of the output show that SQLMesh detected three new models relative to the current empty environment.
 
-Lines 11-14 list each model that will be executed by the plan, along with the date intervals that will be run. Note that `full_model` and `incremental_model` both show `2020-01-01` as their start date because (i) the incremental model specifies that date in the `start` property of its `MODEL` statement and (ii) the full model depends on the incremental model. The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
+Lines 11-14 list each model that will be executed by the plan, along with the date intervals that will be run. Note that `full_model` and `incremental_model` both show `2020-01-01` as their start date because: 
+
+1. The incremental model specifies that date in the `start` property of its `MODEL` statement and 
+2. The full model depends on the incremental model. 
+
+The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
 
 Line 15 asks you whether to proceed with executing the model backfills described in lines 11-14. Enter `y` and press `Enter`, and SQLMesh will execute the models and return this output:
 
