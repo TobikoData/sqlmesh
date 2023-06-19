@@ -210,7 +210,9 @@ class BaseModelConfig(GeneralConfig):
     def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         model_context = context.context_for_dependencies(self.dependencies)
-        jinja_macros = model_context.jinja_macros.trim(self.dependencies.macros)
+        jinja_macros = model_context.jinja_macros.trim(
+            self.dependencies.macros, package=self.package_name
+        )
         jinja_macros.global_objs.update(
             {
                 "this": self.relation_info,
