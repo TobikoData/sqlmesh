@@ -107,7 +107,13 @@ class DbtContext:
 
         jinja_environment.globals["var"] = _var
 
-        rendered_variables = {k: _render_var(v) for k, v in variables.items()}
+        rendered_variables = {}
+        for k, v in variables.items():
+            try:
+                rendered_variables[k] = _render_var(v)
+            except Exception as ex:
+                raise ConfigError(f"Failed to render variable '{k}', value '{v}': {ex}") from ex
+
         self.variables = rendered_variables
 
     @property
