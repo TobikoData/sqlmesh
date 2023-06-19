@@ -460,6 +460,11 @@ class _Model(ModelMeta, frozen=True):
                     tuple(str(part) for part in table.parts),
                     {k: str(v) for k, v in mapping_schema.items()},
                 )
+            else:
+                # Reset the entire mapping if at least one upstream dependency is missing from the mapping
+                # to prevent partial mappings from being used.
+                self.mapping_schema.clear()
+                return
 
     @property
     def depends_on(self) -> t.Set[str]:

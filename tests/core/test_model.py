@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse, parse_one
+from sqlglot.schema import MappingSchema
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
@@ -1386,3 +1387,30 @@ def test_no_depends_on_runtime_jinja_query():
         match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
     ):
         load_model(expressions)
+
+
+def test_update_schema():
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        SELECT a, b FROM table_a JOIN table_b
+        """
+    )
+
+    model = load_model(expressions)
+
+    schema = MappingSchema(normalize=False)
+    schema.add_table("table_a", {"a": exp.DataType.build("int")})
+
+    # Make sure that the partial schema is not applied.
+    model.update_schema(schema)
+    assert not model.mapping_schema
+
+    schema.add_table("table_b", {"b": exp.DataType.build("int")})
+
+    model.update_schema(schema)
+    assert model.mapping_schema == {
+        "table_a": {"a": "INT"},
+        "table_b": {"b": "INT"},
+    }

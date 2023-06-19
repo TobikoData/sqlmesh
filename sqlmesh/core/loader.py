@@ -54,8 +54,12 @@ def update_model_schemas(
             continue
 
         model.update_schema(schema)
+
         cache_hit = optimized_query_cache.with_optimized_query(model)
-        schema.add_table(name, model.columns_to_types, dialect=model.dialect)
+
+        columns_to_types = model.columns_to_types
+        if columns_to_types is not None:
+            schema.add_table(name, columns_to_types, dialect=model.dialect)
 
         if isinstance(model, SqlModel) and model.mapping_schema and not cache_hit:
             query = model.render_query()
