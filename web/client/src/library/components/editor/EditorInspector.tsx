@@ -83,6 +83,7 @@ function InspectorModel({
   tab: EditorTab
   model: ModelSQLMeshModel
 }): JSX.Element {
+  const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const list = Array.from(environments)
     .filter(({ isSynchronized }) => isSynchronized)
@@ -92,9 +93,11 @@ function InspectorModel({
     <Tab.Group>
       <TabList
         list={
-          ['Actions', 'Docs', list.length > 1 && 'Diff'].filter(
-            Boolean,
-          ) as string[]
+          [
+            'Actions',
+            'Docs',
+            list.length > 1 && environment.isSynchronized && 'Diff',
+          ].filter(Boolean) as string[]
         }
       />
       <Tab.Panels className="h-full w-full overflow-hidden">
@@ -124,7 +127,7 @@ function InspectorModel({
             withDescription={false}
           />
         </Tab.Panel>
-        {list.length > 1 && (
+        {list.length > 1 && environment.isSynchronized && (
           <Tab.Panel
             unmount={false}
             className={clsx(
@@ -135,8 +138,8 @@ function InspectorModel({
             <FormDiffModel
               tab={tab}
               model={model}
-              list={list}
-              defaultSource="prod"
+              list={list.filter(({ value }) => environment.name !== value)}
+              target={{ text: environment.name, value: environment.name }}
             />
           </Tab.Panel>
         )}
@@ -442,11 +445,12 @@ function FormDiffModel({
   tab,
   model,
   list,
+  target,
 }: {
   tab: EditorTab
   model: ModelSQLMeshModel
   list: Array<{ text: string; value: string }>
-  defaultSource: string
+  target: { text: string; value: string }
 }): JSX.Element {
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
@@ -455,32 +459,23 @@ function FormDiffModel({
     text: string
     value: string
   }>(list[0]!)
-
-  const listTarget = useMemo(
-    () => list.filter(({ value }) => selectedSource?.value !== value),
-    [list, selectedSource],
-  )
-  const [selectedTarget, setSelectedTarget] = useState<{
-    text: string
-    value: string
-  }>(listTarget[0]!)
   const [limit, setLimit] = useState(LIMIT_DIFF)
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  useEffect(() => {
-    setSelectedTarget(listTarget[0]!)
-  }, [listTarget])
-
   const { refetch: getDiff } = useApiTableDiff({
     source: selectedSource.value,
-    target: selectedTarget.value,
+    target: target.value,
     model_or_snapshot: model.name,
     limit,
     on,
     where,
   })
   const debouncedGetDiff = debounceAsync(getDiff, 1000, true)
+
+  useEffect(() => {
+    setSelectedSource(list[0]!)
+  }, [list])
 
   function getTableDiff(): void {
     setPreviewConsole(undefined)
@@ -505,8 +500,7 @@ function FormDiffModel({
   }
 
   const shouldEnableAction =
-    tab.file.isSQLMeshModel &&
-    [selectedSource, selectedTarget, limit].every(Boolean)
+    tab.file.isSQLMeshModel && [selectedSource, target, limit].every(Boolean)
 
   return (
     <>
@@ -520,14 +514,6 @@ function FormDiffModel({
               label="Source"
               className="w-full mx-0"
               disabled={list.length < 2}
-            />
-            <Selector
-              list={listTarget}
-              item={selectedTarget}
-              onChange={setSelectedTarget}
-              label="Target"
-              className="w-full mx-0"
-              disabled={listTarget.length < 2}
             />
             <Input
               className="w-full mx-0"
@@ -571,7 +557,17 @@ function FormDiffModel({
       </InspectorForm>
       <Divider />
       <InspectorActions>
-        <div className="flex w-full justify-end">
+        <div className="flex w-full justify-between items-center px-2">
+          <span className="text-sm text-neutral-400">
+            Between current Environment{' '}
+            <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
+              {target.value}
+            </span>{' '}
+            and selected Source{' '}
+            <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
+              {selectedSource.value}
+            </span>
+          </span>
           {tab.file.isSQLMeshModel && (
             <Button
               size={EnumSize.sm}

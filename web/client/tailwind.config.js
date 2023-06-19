@@ -171,7 +171,4 @@ module.exports = {
       serif: ['Publico', 'serif'],
     },
   },
-  // plugins: [
-  //   require('tailwindcss-filters'),
-  // ],
 }
