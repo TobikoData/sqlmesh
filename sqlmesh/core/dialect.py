@@ -562,7 +562,7 @@ def extend_sqlglot() -> None:
                 }
             )
 
-            generator.WITH_SEPARATED_COMMENTS = (*generator.WITH_SEPARATED_COMMENTS, Model)  # type: ignore
+            generator.WITH_SEPARATED_COMMENTS = (*generator.WITH_SEPARATED_COMMENTS, Model)
 
     _override(Tokenizer, _scan_var)
     _override(Parser, _parse_statement)

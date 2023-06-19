@@ -12,7 +12,6 @@ from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
 
 from sqlmesh.core.dialect import (
-    Jinja,
     MacroDef,
     MacroFunc,
     MacroSQL,
@@ -21,7 +20,7 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.utils import UniqueKeyDict, registry_decorator
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
-from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
 
@@ -126,11 +125,19 @@ class MacroEvaluator:
             raise MacroEvalError(f"Error trying to eval macro.") from e
 
     def transform(self, query: exp.Expression) -> exp.Expression | t.List[exp.Expression] | None:
+        changed = False
+
         def _transform_node(node: exp.Expression) -> exp.Expression:
+            nonlocal changed
+
             if isinstance(node, MacroVar):
+                changed = True
                 return exp.convert(_norm_env_value(self.locals[node.name]))
             if node.is_string:
-                node.set("this", self.jinja_env.from_string(node.this).render())
+                text = node.this
+                if has_jinja(text):
+                    changed = True
+                    node.set("this", self.jinja_env.from_string(node.this).render())
                 return node
             return node
 
@@ -139,21 +146,25 @@ class MacroEvaluator:
         def evaluate_macros(
             node: exp.Expression,
         ) -> exp.Expression | t.List[exp.Expression] | None:
+            nonlocal changed
+
             exp.replace_children(
                 node, lambda n: n if isinstance(n, exp.Lambda) else evaluate_macros(n)
             )
             if isinstance(node, MacroFunc):
+                changed = True
                 return self.evaluate(node)
             return node
 
         transformed = evaluate_macros(query)
 
-        if isinstance(transformed, list):
-            return [self.parse_one(node.sql(dialect=self.dialect)) for node in transformed]
-        elif isinstance(transformed, Jinja):
-            return transformed
-        elif isinstance(transformed, exp.Expression):
-            return self.parse_one(transformed.sql(dialect=self.dialect))
+        if changed:
+            # the transformations could have corrupted the ast, turning this into sql and reparsing ensures
+            # that the ast is correct
+            if isinstance(transformed, list):
+                return [self.parse_one(node.sql(dialect=self.dialect)) for node in transformed]
+            elif isinstance(transformed, exp.Expression):
+                return self.parse_one(transformed.sql(dialect=self.dialect))
 
         return transformed
 
