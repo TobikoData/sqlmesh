@@ -41,6 +41,7 @@ The `New environment` line describes what environments the plan will affect when
 The `Summary of differences` section shows that SQLMesh detected three new models relative to the current empty environment.
 
 The `Models needing backfill` section lists each model that will be executed by the plan, along with the date intervals that will be run. Both `full_model` and `incremental_model` show `2020-01-01` as their start date because:
+
 1. The incremental model specifies that date in the `start` property of its `MODEL` statement and 
 2. The full model depends on the incremental model. 
 
