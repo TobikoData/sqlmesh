@@ -53,6 +53,9 @@ class SQLMeshMagics(Magics):
             f"Context must be defined and initialized with one of these names: {', '.join(CONTEXT_VARIABLE_NAMES)}"
         )
 
+    def success_message(self, message: str) -> str:
+        return f'<span style="color:green; font-weight:bold">{message}</span>'
+
     @magic_arguments()
     @argument(
         "--paths",
@@ -67,6 +70,12 @@ class SQLMeshMagics(Magics):
         """Sets the context in the user namespace."""
         args = parse_argstring(self.context, line)
         self._shell.user_ns["context"] = Context(paths=args.paths)
+        message = (
+            self.success_message("SQLMesh project context set to:")
+            + "<br>&emsp;"
+            + "<br>&emsp;".join(args.paths)
+        )
+        self.display(HTML(message))
 
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
@@ -87,6 +96,7 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(args.path, project_template)
+        self.display(HTML(self.success_message("SQLMesh project scaffold created")))
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
@@ -131,6 +141,9 @@ class SQLMeshMagics(Magics):
 
         with open(model._path, "w", encoding="utf-8") as file:
             file.write(formatted)
+
+        if sql:
+            self.display(HTML(self.success_message(f"Model `{args.model}` updated")))
 
         self._context.upsert_model(model)
         self._context.console.show_sql(
