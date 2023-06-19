@@ -16,7 +16,7 @@ export {
 const SOURCE_PREFIX = 's__'
 const TARGET_PREFIX = 't__'
 const EMTPY_TABLE_CELL = 'NULL'
-export const TEST_GRAIN = ['item_id']
+export const TEST_GRAIN = ['customer_id', 'ds']
 
 function getHeaders(
   {

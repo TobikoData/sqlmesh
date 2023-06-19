@@ -17,6 +17,7 @@ import {
   CheckIcon,
   MinusCircleIcon,
   PlusCircleIcon,
+  ChevronDownIcon,
 } from '@heroicons/react/24/solid'
 
 export interface Filters {
@@ -47,7 +48,7 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
     !filters.addedRows && filters.removedRows && !filters.modifiedRows
 
   return (
-    <div className="p-2 h-full flex flex-col">
+    <div className="px-2 h-full flex flex-col">
       <TableDiffStats
         diff={diff}
         rows={rows}
@@ -63,6 +64,12 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
       </div>
       <div className="overflow-auto h-full scrollbar scrollbar--horizontal scrollbar--vertical">
         <table className="w-full text-xs text-neutral-600 dark:text-neutral-200 font-normal border-separate ">
+          <colgroup>
+            <col
+              span={TEST_GRAIN.length}
+              className="bg-brand-10"
+            />
+          </colgroup>
           <thead className="sticky top-0 bg-theme z-10">
             <tr>
               {headers.all.map(header => (
@@ -75,9 +82,6 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                       'border-t-2 border-l-2 border-r-2 border-success-500',
                     header in diff.schema_diff.removed &&
                       'border-t-2 border-l-2 border-r-2 border-danger-500',
-                    TEST_GRAIN.includes(header)
-                      ? 'sticky top-0 left-0 z-10 border-r border-neutral-20 backdrop-filter backdrop-blur-lg'
-                      : 'sticky top-0',
                   )}
                 >
                   <span>{header}</span>&nbsp;
@@ -141,8 +145,6 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                           'bg-danger-5 !text-danger-500 font-bold',
                         isAddedRow(diff, rowKey) &&
                           'bg-success-10 text-success-500 font-bold',
-                        TEST_GRAIN.includes(header) &&
-                          'sticky left-0 border-r border-neutral-200 backdrop-filter backdrop-blur-lg font-bold',
                       )}
                     >
                       {getCellContent(diff, header, rowKey)}
@@ -183,9 +185,6 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                         'border-b-2 border-l-2 border-r-2 border-success-500',
                       header in diff.schema_diff.removed &&
                         'border-b-2 border-l-2 border-r-2 border-danger-500',
-                      TEST_GRAIN.includes(header)
-                        ? 'sticky top-0 left-0 z-20 border-r border-neutral-20 backdrop-filter backdrop-blur-lg'
-                        : 'sticky top-0',
                     )}
                   >
                     {(header in diff.schema_diff.removed ||
@@ -199,6 +198,32 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
             </tr>
           </tfoot>
         </table>
+      </div>
+      <div className="flex px-2 mt-2">
+        <div className="flex ml-2 items-center">
+          <span className="inline-block w-3 h-3 bg-brand-500 mr-2 rounded-full"></span>
+          <small className="text-neutral-600 dark:text-neutral-400">
+            Grain
+          </small>
+        </div>
+        <div className="flex ml-2 items-center">
+          <span className="inline-block w-3 h-3 bg-primary-500 mr-2 rounded-full"></span>
+          <small className="text-neutral-600 dark:text-neutral-400">
+            Changed
+          </small>
+        </div>
+        <div className="flex ml-2 items-center">
+          <span className="inline-block w-3 h-3 bg-success-500 mr-2 rounded-full"></span>
+          <small className="text-neutral-600 dark:text-neutral-400">
+            Added
+          </small>
+        </div>
+        <div className="flex ml-2 items-center">
+          <span className="inline-block w-3 h-3 bg-danger-500 mr-2 rounded-full"></span>
+          <small className="text-neutral-600 dark:text-neutral-400">
+            Deleted
+          </small>
+        </div>
       </div>
     </div>
   )
@@ -214,7 +239,7 @@ function TableDiffStats({
   columns: any
 }): JSX.Element {
   return (
-    <Disclosure defaultOpen={true}>
+    <Disclosure defaultOpen={false}>
       {({ open }) => (
         <>
           <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left text-sm px-4 pt-3 pb-2 bg-neutral-10 hover:bg-theme-darker dark:hover:bg-theme-lighter text-neutral-600 dark:text-neutral-400">
@@ -314,8 +339,12 @@ function SelectFilters({
       multiple
     >
       <div className="relative m-1 flex">
-        <Listbox.Button className="relative w-full cursor-default text-xs rounded-md bg-primary-500 py-1 px-2 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300 text-neutral-100">
+        <Listbox.Button className="flex items-center relative w-full cursor-default text-xs rounded-md text-primary-500 border-2 border-primary-500 py-1 px-2 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300">
           <span className="block truncate">Show</span>
+          <ChevronDownIcon
+            className="ml-2 h-4 w-4"
+            aria-hidden="true"
+          />
         </Listbox.Button>
         <Transition
           as={Fragment}
@@ -323,12 +352,12 @@ function SelectFilters({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <Listbox.Options className="absolute right-0 z-50 mt-1 max-h-60 min-w-16 overflow-auto rounded-md bg-theme py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+          <Listbox.Options className="absolute top-10 right-0 z-50 max-h-60 min-w-16 overflow-auto rounded-md bg-theme py-2 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
             {Object.keys(filters).map(key => (
               <Listbox.Option
                 key={key}
                 className={({ active }) =>
-                  `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                  `relative cursor-default select-none py-1 pl-10 pr-4 ${
                     active ? 'bg-warning-100 text-warning-900' : 'text-gray-900'
                   }`
                 }
@@ -346,7 +375,7 @@ function SelectFilters({
                     {selected ? (
                       <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-warning-600">
                         <CheckIcon
-                          className="h-5 w-5"
+                          className="h-4 w-4"
                           aria-hidden="true"
                         />
                       </span>

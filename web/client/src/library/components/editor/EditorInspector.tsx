@@ -1,7 +1,7 @@
 import { isCancelledError } from '@tanstack/react-query'
 import { type Table } from 'apache-arrow'
 import clsx from 'clsx'
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   type EvaluateInputStart,
   type RenderInputStart,
@@ -30,6 +30,7 @@ import {
 } from '@api/index'
 import { EnumErrorKey } from '~/library/pages/ide/context'
 import TabList from '@components/tab/Tab'
+import Selector from '@components/selector/Selector'
 
 interface FormModel {
   model?: string
@@ -43,17 +44,9 @@ interface FormArbitrarySql {
   limit: number
 }
 
-interface FormTableDiff {
-  target: string
-  source: string
-  model_or_snapshot: string
-  on?: string
-  where?: string
-  limit: number
-}
-
 const DAY = 24 * 60 * 60 * 1000
 const LIMIT = 1000
+const LIMIT_DIFF = 50
 
 export default function EditorInspector({
   tab,
@@ -70,14 +63,12 @@ export default function EditorInspector({
       )}
     >
       {tab.file.isSQLMeshModel ? (
-        <>
-          {model != null && (
-            <InspectorModel
-              tab={tab}
-              model={model}
-            />
-          )}
-        </>
+        model != null && (
+          <InspectorModel
+            tab={tab}
+            model={model}
+          />
+        )
       ) : (
         <InspectorSql tab={tab} />
       )}
@@ -92,9 +83,20 @@ function InspectorModel({
   tab: EditorTab
   model: ModelSQLMeshModel
 }): JSX.Element {
+  const environments = useStoreContext(s => s.environments)
+  const list = Array.from(environments)
+    .filter(({ isSynchronized }) => isSynchronized)
+    .map(({ name }) => ({ text: name, value: name }))
+
   return (
     <Tab.Group>
-      <TabList list={['Actions', 'Docs', 'Diff']} />
+      <TabList
+        list={
+          ['Actions', 'Docs', list.length > 1 && 'Diff'].filter(
+            Boolean,
+          ) as string[]
+        }
+      />
       <Tab.Panels className="h-full w-full overflow-hidden">
         <Tab.Panel
           unmount={false}
@@ -122,18 +124,22 @@ function InspectorModel({
             withDescription={false}
           />
         </Tab.Panel>
-        <Tab.Panel
-          unmount={false}
-          className={clsx(
-            'flex flex-col w-full h-full relative overflow-hidden',
-            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-          )}
-        >
-          <FormDiffModel
-            tab={tab}
-            model={model}
-          />
-        </Tab.Panel>
+        {list.length > 1 && (
+          <Tab.Panel
+            unmount={false}
+            className={clsx(
+              'flex flex-col w-full h-full relative overflow-hidden',
+              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+            )}
+          >
+            <FormDiffModel
+              tab={tab}
+              model={model}
+              list={list}
+              defaultSource="prod"
+            />
+          </Tab.Panel>
+        )}
       </Tab.Panels>
     </Tab.Group>
   )
@@ -435,21 +441,45 @@ function FormActionsModel({
 function FormDiffModel({
   tab,
   model,
+  list,
 }: {
   tab: EditorTab
   model: ModelSQLMeshModel
+  list: Array<{ text: string; value: string }>
+  defaultSource: string
 }): JSX.Element {
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
 
-  const [form, setForm] = useState<FormTableDiff>({
-    source: 'prod',
-    target: 'dev',
-    limit: 20,
-    model_or_snapshot: model.name,
-  })
+  const [selectedSource, setSelectedSource] = useState<{
+    text: string
+    value: string
+  }>(list[0]!)
 
-  const { refetch: getDiff } = useApiTableDiff(form)
+  const listTarget = useMemo(
+    () => list.filter(({ value }) => selectedSource?.value !== value),
+    [list, selectedSource],
+  )
+  const [selectedTarget, setSelectedTarget] = useState<{
+    text: string
+    value: string
+  }>(listTarget[0]!)
+  const [limit, setLimit] = useState(LIMIT_DIFF)
+  const [on, setOn] = useState('')
+  const [where, setWhere] = useState('')
+
+  useEffect(() => {
+    setSelectedTarget(listTarget[0]!)
+  }, [listTarget])
+
+  const { refetch: getDiff } = useApiTableDiff({
+    source: selectedSource.value,
+    target: selectedTarget.value,
+    model_or_snapshot: model.name,
+    limit,
+    on,
+    where,
+  })
   const debouncedGetDiff = debounceAsync(getDiff, 1000, true)
 
   function getTableDiff(): void {
@@ -476,44 +506,28 @@ function FormDiffModel({
 
   const shouldEnableAction =
     tab.file.isSQLMeshModel &&
-    [form.target, form.source, form.model_or_snapshot, form.limit].every(
-      Boolean,
-    )
+    [selectedSource, selectedTarget, limit].every(Boolean)
 
   return (
     <>
       <InspectorForm>
         <form>
           <fieldset className="my-3 px-3">
-            <Input
-              className="w-full mx-0"
-              size={EnumSize.sm}
+            <Selector
+              list={list}
+              item={selectedSource}
+              onChange={setSelectedSource}
               label="Source"
-              placeholder="dev"
-              value={form.source}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
-
-                setForm({
-                  ...form,
-                  source: e.target.value ?? '',
-                })
-              }}
-            />
-            <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
+              disabled={list.length < 2}
+            />
+            <Selector
+              list={listTarget}
+              item={selectedTarget}
+              onChange={setSelectedTarget}
               label="Target"
-              placeholder="prod"
-              value={form.target}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
-
-                setForm({
-                  ...form,
-                  target: e.target.value ?? '',
-                })
-              }}
+              className="w-full mx-0"
+              disabled={listTarget.length < 2}
             />
             <Input
               className="w-full mx-0"
@@ -521,14 +535,35 @@ function FormDiffModel({
               type="number"
               label="Limit"
               placeholder="1000"
-              value={form.limit}
+              value={limit}
               onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                 e.stopPropagation()
 
-                setForm({
-                  ...form,
-                  limit: e.target.valueAsNumber ?? LIMIT,
-                })
+                setLimit(e.target.valueAsNumber ?? LIMIT_DIFF)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="ON"
+              placeholder="s.id = t.id"
+              value={on}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setOn(e.target.value)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="WHERE"
+              placeholder="id > 10"
+              value={where}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setWhere(e.target.value)
               }}
             />
           </fieldset>
