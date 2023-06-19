@@ -741,7 +741,8 @@ class ViewStrategy(PromotableStrategy):
     ) -> None:
         if (
             isinstance(query_or_df, exp.Expression)
-            and model.render_query(snapshots=snapshots, is_dev=is_dev) == query_or_df
+            and model.render_query(snapshots=snapshots, is_dev=is_dev, engine_adapter=self.adapter)
+            == query_or_df
         ):
             logger.info("Skipping creation of the view '%s'", name)
             return

@@ -189,10 +189,17 @@ def test_variables(assert_exp_eq, sushi_test_project):
     kwargs = {"context": context}
 
     # Case 2: using a defined variable without a default value
+    defined_variables["empty_list_var"] = []
+    defined_variables["jinja_list_var"] = ["{{ 1 + 1 }}"]
     defined_variables["bar"] = "{{ 2 * 3 }}"
     defined_variables["foo"] = "{{ var('bar') }}"
     context.set_and_render_variables(defined_variables, "test_package")
-    assert context.variables == {"bar": "6", "foo": "6"}
+    assert context.variables == {
+        "empty_list_var": [],
+        "jinja_list_var": ["2"],
+        "bar": "6",
+        "foo": "6",
+    }
 
     sqlmesh_model = model_config.to_sqlmesh(**kwargs)
     assert_exp_eq(sqlmesh_model.render_query(), 'SELECT 6 AS "6"')

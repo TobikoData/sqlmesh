@@ -107,9 +107,7 @@ class DbtContext:
 
         jinja_environment.globals["var"] = _var
 
-        rendered_variables = {
-            k: jinja_environment.from_string(str(v)).render() for k, v in variables.items()
-        }
+        rendered_variables = {k: _render_var(v) for k, v in variables.items()}
         self.variables = rendered_variables
 
     @property

@@ -132,10 +132,7 @@ class DbtLoader(Loader):
             )
 
         for package_name, macro_infos in context.manifest.all_macros.items():
-            context.jinja_macros.add_macros(
-                macro_infos,
-                package=package_name if package_name != context.project_name else None,
-            )
+            context.jinja_macros.add_macros(macro_infos, package=package_name)
 
         self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 
