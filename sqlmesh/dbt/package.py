@@ -70,10 +70,12 @@ class PackageLoader:
 
         # Only include globally-scoped variables (i.e. filter out the package-scoped ones)
         logger.debug("Processing project variables.")
-        variables = {
-            var: value
-            for var, value in project_yaml.get("vars", {}).items()
-            if not isinstance(value, dict)
+
+        all_variables = project_yaml.get("vars", {})
+        all_variables.update(all_variables.pop(package_name, {}))
+
+        package_variables = {
+            var: value for var, value in all_variables.items() if not isinstance(value, dict)
         }
 
         tests = _fix_paths(self._context.manifest.tests(package_name), package_root)
@@ -96,7 +98,7 @@ class PackageLoader:
             models=models,
             sources=sources,
             seeds=seeds,
-            variables=variables,
+            variables=package_variables,
             macros=macros,
             files=config_paths,
         )
