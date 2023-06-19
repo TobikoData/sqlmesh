@@ -4,7 +4,10 @@ nav:
   - Get started:
     - prerequisites.md
     - installation.md
-    - quick_start.md
+    - Quick Start:
+      - quick_start.md
+      - quickstart/cli.md
+      - quickstart/notebook.md
   - Guides:
     - guides/projects.md
     - guides/models.md
