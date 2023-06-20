@@ -263,7 +263,6 @@ class QueryRenderer(ExpressionRenderer):
                     ),
                 )
             except ParsetimeAdapterCallError:
-                logger.debug("Failed to render query at parse time:\n%s", self._expression)
                 return None
 
             if not query:

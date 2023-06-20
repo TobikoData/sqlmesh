@@ -463,6 +463,13 @@ class _Model(ModelMeta, frozen=True):
             else:
                 # Reset the entire mapping if at least one upstream dependency is missing from the mapping
                 # to prevent partial mappings from being used.
+                logger.warning(
+                    "Missing schema for model '%s' referenced in model '%s'. Run `sqlmesh create_external_models` "
+                    "and / or make sure that model '%s' can be rendered at parse time",
+                    dep,
+                    self.name,
+                    dep,
+                )
                 self.mapping_schema.clear()
                 return
 
