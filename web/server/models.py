@@ -298,3 +298,11 @@ class RowDiff(BaseModel):
 class TableDiff(BaseModel):
     schema_diff: SchemaDiff
     row_diff: RowDiff
+    on: t.List[t.Tuple[str, str]]
+
+    @validator("on", pre=True)
+    def validate_schema(
+        cls,
+        v: list[tuple[str, str]] | list[tuple[exp.Column, exp.Column]],
+    ) -> list[tuple[str, str]]:
+        return [(str(s), str(t)) for s, t in v]
