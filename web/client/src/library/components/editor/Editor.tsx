@@ -132,6 +132,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewConsole = useStoreEditor(s => s.previewConsole)
+  const previewDiff = useStoreEditor(s => s.previewDiff)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const closeTab = useStoreEditor(s => s.closeTab)
@@ -175,11 +176,12 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const sizesCodeEditorAndPreview = useMemo(() => {
     const model = models.get(tab.file.path)
     const showPreview =
-      (tab.file.isLocal && [previewTable, previewConsole].some(Boolean)) ||
+      (tab.file.isLocal &&
+        [previewTable, previewConsole, previewDiff].some(Boolean)) ||
       (tab.file.isSQLMeshModel && model != null)
 
     return showPreview ? [70, 30] : [100, 0]
-  }, [tab, models, previewConsole, previewTable])
+  }, [tab, models, previewConsole, previewTable, previewDiff])
 
   const keymaps: KeyBinding[] = useMemo(
     () =>

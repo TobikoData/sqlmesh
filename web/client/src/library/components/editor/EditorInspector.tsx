@@ -149,7 +149,31 @@ function InspectorModel({
 }
 
 function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
-  return <FormActionsCustomSQL tab={tab} />
+  return (
+    <Tab.Group>
+      <TabList list={['Actions', 'Diff']} />
+      <Tab.Panels className="h-full w-full overflow-hidden">
+        <Tab.Panel
+          unmount={false}
+          className={clsx(
+            'flex flex-col w-full h-full relative overflow-hidden',
+            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+          )}
+        >
+          <FormActionsCustomSQL tab={tab} />
+        </Tab.Panel>
+        <Tab.Panel
+          unmount={false}
+          className={clsx(
+            'flex flex-col w-full h-full relative overflow-hidden',
+            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+          )}
+        >
+          <FormDiff tab={tab} />
+        </Tab.Panel>
+      </Tab.Panels>
+    </Tab.Group>
+  )
 }
 
 function FormFieldset({
@@ -558,18 +582,20 @@ function FormDiffModel({
       <Divider />
       <InspectorActions>
         <div className="flex w-full justify-between items-center px-2">
-          <span className="text-sm text-neutral-400">
-            Between current Environment{' '}
+          <span className="text-xs text-neutral-400 font-medium">
+            Compare current model using
             <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
               {target.value}
             </span>{' '}
-            and selected Source{' '}
+            as <b>Target</b> and{' '}
             <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
               {selectedSource.value}
-            </span>
+            </span>{' '}
+            as <b>Source</b>
           </span>
           {tab.file.isSQLMeshModel && (
             <Button
+              className="ml-2"
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
               disabled={isFalse(shouldEnableAction)}
@@ -583,6 +609,138 @@ function FormDiffModel({
             </Button>
           )}
         </div>
+      </InspectorActions>
+    </>
+  )
+}
+
+function FormDiff({ tab }: { tab: EditorTab }): JSX.Element {
+  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
+  const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
+
+  const [source, setSource] = useState('')
+  const [target, setTarget] = useState('')
+  const [limit, setLimit] = useState(LIMIT_DIFF)
+  const [on, setOn] = useState('')
+  const [where, setWhere] = useState('')
+
+  const { refetch: getDiff } = useApiTableDiff({
+    source,
+    target,
+    limit,
+    on,
+    where,
+  })
+  const debouncedGetDiff = debounceAsync(getDiff, 1000, true)
+
+  function getTableDiff(): void {
+    setPreviewConsole(undefined)
+    setPreviewDiff(undefined)
+
+    debouncedGetDiff({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        setPreviewDiff(data)
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log(
+            'renderApiCommandsRenderPost',
+            'Request aborted by React Query',
+          )
+        } else {
+          setPreviewConsole([EnumErrorKey.RenderModel, error])
+        }
+      })
+  }
+
+  const shouldEnableAction = [source, target, limit, on].every(Boolean)
+
+  return (
+    <>
+      <InspectorForm>
+        <form>
+          <fieldset className="my-3 px-3">
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="Source"
+              placeholder="exp.tst_model__dev"
+              value={source}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setSource(e.target.value)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="Target"
+              placeholder="exp.tst_snapshot__1353336088"
+              value={target}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setTarget(e.target.value)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              type="number"
+              label="Limit"
+              placeholder="1000"
+              value={limit}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setLimit(e.target.valueAsNumber ?? LIMIT_DIFF)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="ON"
+              placeholder="s.id = t.id"
+              value={on}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setOn(e.target.value)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="WHERE (Optional)"
+              placeholder="id > 10"
+              value={where}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setWhere(e.target.value)
+              }}
+            />
+          </fieldset>
+        </form>
+      </InspectorForm>
+      <Divider />
+      <InspectorActions>
+        <Button
+          className="ml-2"
+          size={EnumSize.sm}
+          variant={EnumVariant.Alternative}
+          disabled={isFalse(shouldEnableAction)}
+          onClick={e => {
+            e.stopPropagation()
+
+            getTableDiff()
+          }}
+        >
+          Get Diff
+        </Button>
       </InspectorActions>
     </>
   )

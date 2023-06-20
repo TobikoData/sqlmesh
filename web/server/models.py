@@ -306,4 +306,4 @@ class TableDiff(BaseModel):
         cls,
         v: list[tuple[str, str]] | list[tuple[exp.Column, exp.Column]],
     ) -> list[tuple[str, str]]:
-        return [(str(s), str(t)) for s, t in v]
+        return [(str(s).replace("s.", ""), str(t).replace("t.", "")) for s, t in v]
