@@ -102,7 +102,7 @@ The third block shows the modifications we made to the rendered query.
 
 The next block shows that we directly modified the incremental model. SQLMesh understood that the change was additive (added a column not used by `full_model`) and automatically classified it as a non-breaking change.
 
-The final block describes the models requiring backfill, including the full model since the date `dev` was created from `prod` and the incremental model from our start date `2020-01-01`. We can modify the backfill start and end dates for the incremental model with the date picker widget, if desired. 
+The final block describes the models requiring backfill, including the incremental model from our start date `2020-01-01`. We can modify the backfill start and end dates for the incremental model with the date picker widget, if desired. 
 
 Click the green `Apply - Backfill Tables` button to apply the plan and execute the backfill:
 
