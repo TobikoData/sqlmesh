@@ -81,7 +81,7 @@ We can modify the incremental SQL model using the `%model` *line* notebook magic
 
 ![%model line magic for sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-line.png)
 
-After we execute the cell, the contents will be replaced by the `%%model` *cell* notebook magic (note the double `%%`) and the model contents, along with a rendered version of the model SQL query. SQLMesh has automatically added explicit column aliases (e.g., `id AS id`):
+After we execute the cell, the contents will be replaced by the `%%model` *cell* notebook magic (note the double `%%`) and the model contents, along with a rendered version of the model SQL query. SQLMesh has automatically added explicit column aliases to the query (e.g., `id AS id`):
 
 ![%%model cell magic for sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-cell.png)
 
@@ -100,9 +100,11 @@ The second block "Summary of differences against `dev`" summarizes the differenc
 
 The third block shows the modifications we made to the rendered query.
 
-The next block shows that SQLMesh understood that the change was additive (added a column not used by `full_model`) and was automatically classified as a non-breaking change.
+The next block shows that we directly modified the incremental model. SQLMesh understood that the change was additive (added a column not used by `full_model`) and automatically classified it as a non-breaking change.
 
-The final block describes the models requiring backfill, including the full model since the date `dev` was created from `prod` and the incremental model from our start date `2020-01-01`. We can modify the backfill start and end dates for the incremental model with the date picker widget if desired. Click the green `Apply - Backfill Tables` button to apply the plan and execute the backfill:
+The final block describes the models requiring backfill, including the full model since the date `dev` was created from `prod` and the incremental model from our start date `2020-01-01`. We can modify the backfill start and end dates for the incremental model with the date picker widget, if desired. 
+
+Click the green `Apply - Backfill Tables` button to apply the plan and execute the backfill:
 
 ![Notebook output after model modification and applying the updated plan](./notebook/nb-quickstart_apply-plan-dev-modified.png)
 
