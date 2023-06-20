@@ -16,7 +16,6 @@ from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
-from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
@@ -465,7 +464,7 @@ class _Model(ModelMeta, frozen=True):
                 # to prevent partial mappings from being used.
                 logger.warning(
                     "Missing schema for model '%s' referenced in model '%s'. Run `sqlmesh create_external_models` "
-                    "and / or make sure that model '%s' can be rendered at parse time",
+                    "and / or make sure that the model '%s' can be rendered at parse time",
                     dep,
                     self.name,
                     dep,
@@ -480,16 +479,7 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             A list of all the upstream table names.
         """
-        if self.depends_on_ is not None:
-            return self.depends_on_ - {self.name}
-
-        if self._depends_on is None:
-            query = self.render_query(optimize=False)
-            if query is None:
-                self._depends_on = set()
-            else:
-                self._depends_on = _find_tables(query) - {self.name}
-        return self._depends_on
+        return self.depends_on_ or set()
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -549,7 +539,7 @@ class _Model(ModelMeta, frozen=True):
             query = self.render_query(optimize=False)
             if query is None:
                 return False
-            return self.name in _find_tables(query)
+            return self.name in d.find_tables(query, dialect=self.dialect)
 
         return self._depends_on_past
 
@@ -753,6 +743,18 @@ class SqlModel(_SqlBasedModel):
     @property
     def is_sql(self) -> bool:
         return True
+
+    @property
+    def depends_on(self) -> t.Set[str]:
+        if self._depends_on is None:
+            self._depends_on = self.depends_on_ or set()
+
+            query = self.render_query(optimize=False)
+            if query is not None:
+                self._depends_on |= d.find_tables(query, dialect=self.dialect)
+
+            self._depends_on -= {self.name}
+        return self._depends_on
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -1524,23 +1526,6 @@ def _validate_model_fields(klass: t.Type[_Model], provided_fields: t.Set[str], p
     extra_fields = klass.extra_fields(provided_fields)
     if extra_fields:
         raise_config_error(f"Invalid extra fields {extra_fields} in the model definition", path)
-
-
-def _find_tables(expression: exp.Expression) -> t.Set[str]:
-    """Find all tables referenced in a query.
-
-    Args:
-        expressions: The list of expressions to find tables for.
-
-    Returns:
-        A Set of all the table names.
-    """
-    return {
-        exp.table_name(table)
-        for scope in traverse_scope(expression)
-        for table in scope.tables
-        if isinstance(table.this, exp.Identifier) and exp.table_name(table) not in scope.cte_sources
-    }
 
 
 def _python_env(
