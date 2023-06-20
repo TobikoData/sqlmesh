@@ -8,6 +8,7 @@ nav:
       - quick_start.md
       - quickstart/cli.md
       - quickstart/notebook.md
+      - quickstart/ui.md
   - Guides:
     - guides/projects.md
     - guides/models.md
