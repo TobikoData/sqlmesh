@@ -652,7 +652,8 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
     """Find all tables referenced in a query.
 
     Args:
-        expressions: The list of expressions to find tables for.
+        expressions: The query to find the tables in.
+        dialect: The dialect to use for normalization of table names.
 
     Returns:
         A Set of all the table names.
