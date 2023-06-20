@@ -13,12 +13,19 @@ export default function SqlMeshModel(
   models: Map<string, ModelSQLMeshModel>,
   model: ModelSQLMeshModel,
   columns: Set<string>,
+  isActionMode: boolean,
 ): Extension {
   return ViewPlugin.fromClass(
     class SqlMeshModelView {
       decorations: DecorationSet = Decoration.set([])
       constructor(readonly view: EditorView) {
-        this.decorations = getDecorations(models, view, model, columns)
+        this.decorations = getDecorations(
+          models,
+          view,
+          model,
+          columns,
+          isActionMode,
+        )
       }
 
       update(viewUpdate: ViewUpdate): void {
@@ -27,6 +34,7 @@ export default function SqlMeshModel(
           viewUpdate.view,
           model,
           columns,
+          isActionMode,
         )
       }
     },

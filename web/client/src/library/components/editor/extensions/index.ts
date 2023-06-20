@@ -15,8 +15,10 @@ import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 
 export { HoverTooltip, events, useSqlMeshExtension, SqlMeshModel }
 
-function events(click: (event: MouseEvent) => void): Extension {
-  return EditorView.domEventHandlers({ click })
+function events(
+  events: Record<string, (event: MouseEvent) => void>,
+): Extension {
+  return EditorView.domEventHandlers(events)
 }
 
 function HoverTooltip(models: Map<string, ModelSQLMeshModel>): Extension {

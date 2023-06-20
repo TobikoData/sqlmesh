@@ -7,8 +7,13 @@ import { useStoreFileTree } from '@context/fileTree'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useQueryClient, isCancelledError } from '@tanstack/react-query'
 import { type Column, type File } from '~/api/client'
-import { debounceAsync, debounceSync, isStringEmptyOrNil } from '@utils/index'
-import { useMemo, useCallback, useEffect } from 'react'
+import {
+  debounceAsync,
+  debounceSync,
+  isFalse,
+  isStringEmptyOrNil,
+} from '@utils/index'
+import { useMemo, useCallback, useEffect, useState } from 'react'
 import { events, HoverTooltip, SqlMeshModel } from './extensions'
 import { dracula, tomorrow } from 'thememirror'
 import { python } from '@codemirror/lang-python'
@@ -40,6 +45,8 @@ export function useSQLMeshModelExtensions(
   const files = useStoreFileTree(s => s.files)
   const model = path == null ? undefined : models.get(path)
 
+  const [isActionMode, setIsActionMode] = useState(false)
+
   const extensions = useMemo(() => {
     const columns =
       lineage == null
@@ -52,30 +59,46 @@ export function useSQLMeshModelExtensions(
           )
 
     function handleEventModelClick(event: MouseEvent): void {
-      const model = findModel(event, models)
+      if (event.metaKey) {
+        const model = findModel(event, models)
 
-      if (model == null) return
+        if (model == null) return
 
-      handleModelClick?.(model)
+        handleModelClick?.(model)
+      }
     }
 
     function handleEventlColumnClick(event: MouseEvent): void {
-      if (model == null) return
+      if (event.metaKey) {
+        if (model == null) return
 
-      const column = findColumn(event, model)
+        const column = findColumn(event, model)
 
-      if (column == null) return
+        if (column == null) return
 
-      handleModelColumn?.(model, column)
+        handleModelColumn?.(model, column)
+      }
     }
 
     return [
-      models.size > 0 && HoverTooltip(models),
-      handleModelClick != null && events(handleEventModelClick),
-      handleModelColumn != null && events(handleEventlColumnClick),
-      model != null && SqlMeshModel(models, model, columns),
+      models.size > 0 && isActionMode && HoverTooltip(models),
+      events({
+        keydown: e => {
+          if (e.metaKey) {
+            setIsActionMode(true)
+          }
+        },
+        keyup: e => {
+          if (isFalse(e.metaKey)) {
+            setIsActionMode(false)
+          }
+        },
+      }),
+      handleModelClick != null && events({ click: handleEventModelClick }),
+      handleModelColumn != null && events({ click: handleEventlColumnClick }),
+      model != null && SqlMeshModel(models, model, columns, isActionMode),
     ].filter(Boolean) as Extension[]
-  }, [model, models, files, handleModelClick, handleModelColumn])
+  }, [model, models, files, handleModelClick, handleModelColumn, isActionMode])
 
   return extensions
 }

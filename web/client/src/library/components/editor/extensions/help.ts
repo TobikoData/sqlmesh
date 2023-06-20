@@ -7,6 +7,7 @@ import {
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { isFalse } from '@utils/index'
 import { type Column } from '@api/client'
+import clsx from 'clsx'
 
 export function findModel(
   event: MouseEvent,
@@ -43,6 +44,7 @@ export function getDecorations(
   view: EditorView,
   model: ModelSQLMeshModel,
   columns: Set<string>,
+  isActionMode: boolean,
 ): DecorationSet {
   const decorations: any = []
   const modelColumns = model.columns.map(c => c.name)
@@ -85,32 +87,39 @@ export function getDecorations(
         if (maybeModelOrColumn === model.name) {
           decoration = Decoration.mark({
             attributes: {
-              class: 'sqlmesh-model --is-active-model',
+              class: clsx(
+                'sqlmesh-model --is-active-model',
+                isActionMode && '--is-action-mode',
+              ),
               model: maybeModelOrColumn,
             },
           }).range(from, to)
         } else if (models.get(maybeModelOrColumn) != null) {
           decoration = Decoration.mark({
             attributes: {
-              class: 'sqlmesh-model',
+              class: clsx('sqlmesh-model', isActionMode && '--is-action-mode'),
               model: maybeModelOrColumn,
             },
           }).range(from, to)
         } else if (modelColumns.includes(maybeModelOrColumn)) {
           decoration = Decoration.mark({
             attributes: {
-              class: `sqlmesh-model__column --is-active-model ${
-                isOriginal ? '--is-original' : ' --is-derived'
-              }`,
+              class: clsx(
+                'sqlmesh-model__column --is-active-model',
+                isOriginal ? '--is-original' : ' --is-derived',
+                isActionMode && '--is-action-mode',
+              ),
               column: maybeModelOrColumn,
             },
           }).range(from, to)
         } else if (columns.has(maybeModelOrColumn)) {
           decoration = Decoration.mark({
             attributes: {
-              class: `sqlmesh-model__column ${
-                isOriginal ? '--is-original' : ' --is-derived'
-              }`,
+              class: clsx(
+                'sqlmesh-model__column',
+                isOriginal ? '--is-original' : ' --is-derived',
+                isActionMode && '--is-action-mode',
+              ),
               column: maybeModelOrColumn,
             },
           }).range(from, to)
