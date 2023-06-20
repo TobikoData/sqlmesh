@@ -59,7 +59,6 @@ def create_plan_dag_spec(
     if not request.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(
             all_snapshots.values(),
-            intervals=state_sync.get_snapshot_intervals(all_snapshots.values()),
             start=request.environment.start_at,
             end=end,
             latest=now(),

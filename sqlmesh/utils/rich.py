@@ -11,6 +11,7 @@ theme = Theme(
         "direct": "magenta",  # directly modified
         "indirect": "yellow",  # indirectly modified
         "metadata": "cyan",  # metadata updated
+        "invalid": "grey37",  # invalid snapshot
     }
 )
 

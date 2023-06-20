@@ -482,7 +482,7 @@ def setup_rebase(
     plan = context.plan("dev", start=start(context))
 
     assert plan.categorized == [context.snapshots["sushi.items"]]
-    assert plan.indirectly_modified == {
+    assert {k.name: {x.name for x in v} for k, v in plan.indirectly_modified.items()} == {
         "sushi.items": {
             "sushi.order_items",
             "sushi.waiter_revenue_by_day",
@@ -647,7 +647,7 @@ def test_multi(mocker):
     context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
     plan = context.plan()
     assert set(snapshot.name for snapshot in plan.directly_modified) == {"bronze.a", "bronze.b"}
-    assert list(plan.indirectly_modified.values())[0] == {"silver.c", "silver.d"}
+    assert [x.name for x in plan.indirectly_modified.values()][0] == {"silver.c", "silver.d"}
     assert len(plan.missing_intervals) == 2
     context.apply(plan)
     validate_apply_basics(context, c.PROD, plan.snapshots)

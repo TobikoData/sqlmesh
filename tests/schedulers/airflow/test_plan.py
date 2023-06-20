@@ -18,7 +18,6 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotFingerprint,
-    SnapshotIntervals,
     SnapshotTableInfo,
 )
 from sqlmesh.schedulers.airflow import common
@@ -34,6 +33,7 @@ def snapshot(make_snapshot, random_name) -> Snapshot:
             random_name(),
             parse_one("SELECT 1, ds"),
             kind=IncrementalByTimeRangeKind(time_column="ds"),
+            start="2022-01-01",
         ),
     )
     result.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -168,7 +168,10 @@ def test_create_plan_dag_spec(
         ),
         (
             lazy_fixture("depends_on_past_snapshot"),
-            [(to_timestamp("2022-01-01"), to_timestamp("2022-01-02"))],
+            [
+                (to_timestamp("2022-01-01"), to_timestamp("2022-01-02")),
+                (to_timestamp("2022-01-04"), to_timestamp("2022-01-08")),
+            ],
             [
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
                 (to_datetime("2022-01-03"), to_datetime("2022-01-04")),
@@ -176,10 +179,6 @@ def test_create_plan_dag_spec(
                 (to_datetime("2022-01-05"), to_datetime("2022-01-06")),
                 (to_datetime("2022-01-06"), to_datetime("2022-01-07")),
                 (to_datetime("2022-01-07"), to_datetime("2022-01-08")),
-                # Unexpected behavior: We restate up until "now" therefore we go until 2022-01-10.
-                # Ideally we would return to the "latest" which would be the largest we have ever loaded which is the
-                # 7th
-                (to_datetime("2022-01-08"), to_datetime("2022-01-09")),
             ],
         ),
     ],
@@ -226,15 +225,7 @@ def test_restatement(
     state_sync_mock = mocker.Mock()
     state_sync_mock.get_snapshots.return_value = {the_snapshot.snapshot_id: the_snapshot}
     state_sync_mock.get_environment.return_value = old_environment
-    state_sync_mock.get_snapshot_intervals.return_value = [
-        SnapshotIntervals(
-            name=the_snapshot.name,
-            identifier=the_snapshot.identifier,
-            version=the_snapshot.version,
-            intervals=intervals_after_restatement,
-            dev_intervals=[],
-        )
-    ]
+    the_snapshot.intervals_ = intervals_after_restatement
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now",
         side_effect=lambda: to_datetime("2022-01-10T00:00:00+00:00"),

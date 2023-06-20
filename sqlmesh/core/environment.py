@@ -5,6 +5,7 @@ import typing as t
 
 from pydantic import validator
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import SnapshotTableInfo
 from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike
@@ -59,3 +60,7 @@ class Environment(PydanticModel):
         if not isinstance(v, str):
             raise TypeError(f"Expected str or Environment, got {type(v).__name__}")
         return cls._normalize_name(v)
+
+    @property
+    def is_dev(self) -> bool:
+        return self.name != c.PROD

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import typing as t
+import zlib
 from collections import defaultdict
 from datetime import datetime
 from enum import IntEnum
@@ -33,6 +34,7 @@ from sqlmesh.utils.date import (
     now_timestamp,
     to_datetime,
     to_ds,
+    to_end_date,
     to_timestamp,
 )
 from sqlmesh.utils.errors import SQLMeshError
@@ -126,6 +128,23 @@ class SnapshotIntervals(PydanticModel, frozen=True):
     @property
     def snapshot_id(self) -> SnapshotId:
         return SnapshotId(name=self.name, identifier=self.identifier)
+
+    @classmethod
+    def from_snapshot(cls, snapshot: Snapshot, **kwargs: t.Any) -> SnapshotIntervals:
+        return cls(
+            **{
+                **{
+                    "name": snapshot.name,
+                    "identifier": snapshot.identifier,
+                    "version": snapshot.version,
+                    "intervals": snapshot.intervals.copy() if snapshot.intervals_ else [],
+                    "dev_intervals": snapshot.dev_intervals.copy()
+                    if snapshot.dev_intervals_
+                    else [],
+                },
+                **kwargs,
+            }
+        )
 
 
 class SnapshotDataVersion(PydanticModel, frozen=True):
@@ -352,8 +371,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             this snapshot is evaluated on a recurring basis. None indicates that this snapshot is paused.
         effective_from: The timestamp which indicates when this snapshot should be considered effective.
             Applicable for forward-only snapshots only.
-        _intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
-        _dev_intervals: List of [start, end) intervals showing development intervals (forward-only).
+        intervals_: List of [start, end) intervals showing which time ranges a snapshot has data for.
+        dev_intervals_: List of [start, end) intervals showing development intervals (forward-only).
     """
 
     name: str
@@ -373,9 +392,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
+    # The alias also helps with backwards compatibility when reading snapshots from prior releases of
+    # SQLMesh where the intervals were included in the snapshot model itself.
+    intervals_: t.Optional[Intervals] = Field(default=None, alias="intervals")
+    dev_intervals_: t.Optional[Intervals] = Field(default=None, alias="dev_intervals")
     _start: t.Optional[datetime] = None
-    intervals_: t.Optional[Intervals] = None
-    dev_intervals_: t.Optional[Intervals] = None
 
     @validator("ttl")
     @classmethod
@@ -386,71 +407,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 "Must be positive. Use the 'in' keyword to denote a positive time interval. For example, 'in 7 days'."
             )
         return v
-
-    @staticmethod
-    def hydrate_with_intervals_by_version(
-        snapshots: t.Iterable[Snapshot],
-        intervals: t.Iterable[SnapshotIntervals],
-        is_dev: bool = False,
-    ) -> t.List[Snapshot]:
-        """Hydrates target snapshots with given intervals.
-
-        This will match snapshots with intervals by name and version rather than identifiers.
-
-        Args:
-            snapshots: Target snapshots.
-            intervals: Target snapshot intervals.
-            is_dev: If in development mode ignores same version intervals for paused forward-only snapshots.
-
-        Returns:
-            List of target snapshots with hydrated intervals.
-        """
-        intervals_by_name_version = defaultdict(list)
-        for interval in intervals:
-            intervals_by_name_version[(interval.name, interval.version)].append(interval)
-
-        result = []
-        for snapshot in snapshots:
-            snapshot_intervals = intervals_by_name_version.get(
-                (snapshot.name, snapshot.version_get_or_generate()), []
-            )
-            for interval in snapshot_intervals:
-                if (
-                    not is_dev
-                    or not snapshot.is_forward_only
-                    or not snapshot.is_paused
-                    or snapshot.identifier == interval.identifier
-                ):
-                    snapshot.merge_intervals(interval)
-            result.append(snapshot)
-
-        return result
-
-    @staticmethod
-    def hydrate_with_intervals_by_identifier(
-        snapshots: t.Iterable[Snapshot],
-        intervals: t.Iterable[SnapshotIntervals],
-    ) -> t.List[Snapshot]:
-        """Hydrates target snapshots with given intervals.
-
-        This will match snapshots with intervals by name and identifier rather than versions.
-
-        Args:
-            snapshots: Target snapshots.
-            intervals: Target snapshot intervals.
-
-        Returns:
-            List of target snapshots with hydrated intervals.
-        """
-        intervals_by_snapshot_id = {i.snapshot_id: i for i in intervals}
-
-        result = []
-        for snapshot in snapshots:
-            if snapshot.snapshot_id in intervals_by_snapshot_id:
-                snapshot.merge_intervals(intervals_by_snapshot_id[snapshot.snapshot_id])
-            result.append(snapshot)
-
-        return result
 
     @classmethod
     def from_model(
@@ -463,6 +419,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         version: t.Optional[str] = None,
         audits: t.Optional[t.Dict[str, Audit]] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
+        **kwargs: t.Any,
     ) -> Snapshot:
         """Creates a new snapshot for a model.
 
@@ -481,36 +438,40 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         created_ts = now_timestamp()
 
         audits = audits or {}
-
         return cls(
-            name=model.name,
-            fingerprint=fingerprint_from_model(
-                model,
-                models=models,
-                audits=audits,
-                cache=cache,
-            ),
-            model=model,
-            parents=tuple(
-                SnapshotId(
-                    name=name,
-                    identifier=fingerprint_from_model(
-                        models[name],
+            **{
+                **dict(
+                    name=model.name,
+                    fingerprint=fingerprint_from_model(
+                        model,
                         models=models,
                         audits=audits,
                         cache=cache,
-                    ).to_identifier(),
-                )
-                for name in _parents_from_model(model, models)
-            ),
-            audits=tuple(model.referenced_audits(audits)),
-            project=project,
-            created_ts=created_ts,
-            updated_ts=created_ts,
-            ttl=ttl,
-            version=version,
-            intervals_=[],
-            dev_intervals_=[],
+                    ),
+                    model=model,
+                    parents=tuple(
+                        SnapshotId(
+                            name=name,
+                            identifier=fingerprint_from_model(
+                                models[name],
+                                models=models,
+                                audits=audits,
+                                cache=cache,
+                            ).to_identifier(),
+                        )
+                        for name in _parents_from_model(model, models)
+                    ),
+                    audits=tuple(model.referenced_audits(audits)),
+                    project=project,
+                    created_ts=created_ts,
+                    updated_ts=created_ts,
+                    ttl=ttl,
+                    version=version,
+                    intervals=[],
+                    dev_intervals=[],
+                ),
+                **kwargs,
+            },
         )
 
     def __eq__(self, other: t.Any) -> bool:
@@ -518,6 +479,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     def __hash__(self) -> int:
         return hash((self.__class__, self.name, self.fingerprint))
+
+    def init_intervals(self) -> None:
+        """
+        Initialize the snapshot intervals. This is useful when hydrating snapshots but some may
+        have no intervals at all
+        """
+        if self.intervals_ is None:
+            self.intervals_ = []
+        if self.dev_intervals_ is None:
+            self.dev_intervals_ = []
 
     def add_interval(self, start: TimeLike, end: TimeLike, is_dev: bool = False) -> None:
         """Add a newly processed time interval to the snapshot.
@@ -555,7 +526,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             end: End interval to remove.
             latest: The latest time to use for the end of the interval.
         """
-        interval = self.inclusive_exclusive(start, end, latest, for_removal=True)
+        interval = self.inclusive_exclusive(start, end)
         self.intervals_ = remove_interval(self.intervals, *interval)
         self.dev_intervals_ = remove_interval(self.dev_intervals, *interval)
 
@@ -563,22 +534,17 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         self,
         start: TimeLike,
         end: TimeLike,
-        latest: t.Optional[TimeLike] = None,
         strict: bool = True,
-        for_removal: bool = False,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
-            latest: The latest time to use for the end of the interval. Defaults to now if not provided.
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
-            for_removal: Whether the interval is being used for removal.
         Returns:
             A [start, end) pair.
         """
-        end = latest or now() if for_removal and self.depends_on_past else end
         start_ts = to_timestamp(self.model.cron_floor(start))
         end_ts = to_timestamp(
             self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
@@ -601,7 +567,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         for start, end in other.intervals:
             # If the effective_from is set, then intervals that come after it must come from
-            # the current snapshost.
+            # the current snapshot.
             if apply_effective_from and start < effective_from_ts:
                 end = min(end, effective_from_ts)
             if not apply_effective_from or end <= effective_from_ts:
@@ -616,6 +582,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         latest: t.Optional[TimeLike] = None,
+        is_dev: bool = False,
         restatements: t.Optional[t.Set[str]] = None,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
@@ -637,13 +604,19 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_symbolic or (self.is_seed and self.intervals):
             return []
 
-        latest = make_inclusive_end(latest or now())
+        # Latest can be none if the start date has not been set yet for the model
+        # so if that happens we just default to end if the model depends on past
+        end = (
+            max([self.latest, end], key=lambda x: to_timestamp(x))
+            if self.depends_on_past and self.latest
+            else end
+        )
         missing = []
 
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
-                start, end, latest, strict=False, for_removal=self.name in restatements
+                start, end, strict=False
             )
         )
         latest_ts = to_timestamp(latest)
@@ -682,7 +655,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
-            for low, high in self.intervals:
+            #  in missing intervals check if is and forward only and paused and if so use dev intervals
+            intervals = (
+                self.dev_intervals
+                if is_dev and self.is_paused and self.is_forward_only
+                else self.intervals
+            )
+            current_intervals = (
+                [] if self.depends_on_past and self.name in restatements else intervals
+            )
+            for low, high in current_intervals:
                 if compare_ts < low:
                     missing.append((current_ts, next_ts))
                     break
@@ -750,6 +732,37 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """Helper method to get the version or generate it from the fingerprint."""
         return self.version or self.fingerprint.to_version()
 
+    def is_valid_start(
+        self, start: t.Optional[TimeLike], snapshot_default_start: t.Optional[TimeLike] = None
+    ) -> bool:
+        """Checks if the given start and end are valid for this snapshot.
+
+        Args:
+            start: The start date/time of the interval (inclusive)
+            snapshot_default_start: The default start date/time of the snapshot if one is not defined (inclusive)
+        """
+        # The snapshot may not have a start defined. If so we use the provided default start.
+        snapshot_start = self.start or snapshot_default_start
+        if self.depends_on_past and start:
+            assert snapshot_start, "Snapshot must have a start defined if it depends on past"
+            start_ts = to_timestamp(self.model.cron_floor(start))
+            if not self.intervals and start_ts != to_timestamp(snapshot_start):
+                return False
+            # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
+            # provided start_ts. Otherwise we know that we are doing a non-contiguous load and therefore this is not
+            # a valid start.
+            missing_intervals = self.missing_intervals(snapshot_start, make_inclusive_end(now()))
+            earliest_interval = missing_intervals[0][0] if missing_intervals else None
+            if earliest_interval:
+                return earliest_interval >= start_ts
+        return True
+
+    @property
+    def latest(self) -> t.Optional[TimeLike]:
+        """The latest interval loaded for the snapshot. If empty, start for the model is used."""
+        latest = max(x[1] for x in self.intervals) if self.intervals else self.start
+        return to_end_date((to_timestamp(latest), self.model.interval_unit())) if latest else None
+
     @property
     def intervals(self) -> Intervals:
         """Gets the intervals for a Snapshot. Asserts that intervals have been hydrated."""
@@ -761,6 +774,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """Gets the dev intervals for a Snapshot. Asserts that intervals have been hydrated."""
         assert self.dev_intervals_ is not None, "Intervals have not been hydrated"
         return self.dev_intervals_
+
+    @property
+    def seed_is_hydrated(self) -> bool:
+        """
+        Indicates if the model is a seed and is hydrated. If the model is not a seed then we return True.
+        """
+        return getattr(self.model, "is_hydrated", True)
 
     @property
     def physical_schema(self) -> str:
@@ -801,13 +821,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def snapshot_intervals(self) -> SnapshotIntervals:
         self._ensure_categorized()
-        return SnapshotIntervals(
-            name=self.name,
-            identifier=self.identifier,
-            version=self.version,
-            intervals=self.intervals.copy(),
-            dev_intervals=self.dev_intervals.copy(),
-        )
+        return SnapshotIntervals.from_snapshot(self)
 
     @property
     def is_materialized_view(self) -> bool:
@@ -836,7 +850,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def start(self) -> t.Optional[datetime]:
         time = self.model.start or self._start
         if time:
-            return to_datetime(time)
+            return to_datetime(self.model.cron_floor(time))
         return None
 
     @property

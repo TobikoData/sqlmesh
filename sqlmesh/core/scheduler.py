@@ -7,12 +7,7 @@ from datetime import datetime
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.model import SeedModel
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotEvaluator,
-    SnapshotId,
-    SnapshotIntervals,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotId
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag
@@ -241,7 +236,6 @@ class Scheduler:
         """
         return compute_interval_params(
             snapshots,
-            intervals=self.state_sync.get_snapshot_intervals(snapshots),
             start=start or earliest_start_date(snapshots),
             end=end or now(),
             latest=latest or now(),
@@ -293,7 +287,6 @@ class Scheduler:
 def compute_interval_params(
     snapshots: t.Iterable[Snapshot],
     *,
-    intervals: t.Iterable[SnapshotIntervals],
     start: TimeLike,
     end: TimeLike,
     latest: TimeLike,
@@ -312,7 +305,6 @@ def compute_interval_params(
 
     Args:
         snapshots: A set of target snapshots for which intervals should be computed.
-        intervals: A list of all snapshot intervals that should be considered.
         start: Start of the interval.
         end: End of the interval.
         latest: The latest datetime to use for non-incremental queries.
@@ -326,12 +318,12 @@ def compute_interval_params(
 
     snapshots_to_batches = {}
 
-    for snapshot in Snapshot.hydrate_with_intervals_by_version(snapshots, intervals, is_dev=is_dev):
+    for snapshot in snapshots:
         model_start_dt = max(start_date(snapshot, snapshots) or start_dt, start_dt)
         snapshots_to_batches[snapshot] = [
             (to_datetime(s), to_datetime(e))
             for s, e in snapshot.missing_intervals(
-                model_start_dt, end, latest, restatements=restatements
+                model_start_dt, end, latest, is_dev=is_dev, restatements=restatements
             )
         ]
 

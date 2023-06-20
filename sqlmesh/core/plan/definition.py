@@ -24,10 +24,9 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    make_inclusive_end,
     now,
-    to_date,
     to_datetime,
+    to_end_date,
     to_timestamp,
     validate_date_range,
     yesterday_ds,
@@ -35,7 +34,7 @@ from sqlmesh.utils.date import (
 from sqlmesh.utils.errors import PlanError, SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
-SnapshotMapping = t.Dict[str, t.Set[str]]
+SnapshotMapping = t.Dict[Snapshot, t.Set[Snapshot]]
 
 
 class Plan:
@@ -97,10 +96,8 @@ class Plan:
         self._end = end if end or not is_dev else now()
         self._latest = latest or now()
         self._apply = apply
-        self._dag: DAG[str] = DAG()
 
-        for name, snapshot in self.context_diff.snapshots.items():
-            self._dag.add(name, snapshot.model.depends_on)
+        self._refresh_dag_and_invalid_snapshots()
 
         self._state_reader = state_reader
         self.__missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
@@ -176,15 +173,7 @@ class Plan:
     def set_start(self, new_start: TimeLike) -> None:
         self._start = new_start
         self.__missing_intervals = None
-
-    def _get_end_date(self, end_and_units: t.List[t.Tuple[int, IntervalUnit]]) -> TimeLike:
-        if end_and_units:
-            end, unit = max(end_and_units)
-
-            if unit == IntervalUnit.DAY:
-                return to_date(make_inclusive_end(end))
-            return end
-        return now()
+        self._refresh_dag_and_invalid_snapshots()
 
     @property
     def end(self) -> TimeLike:
@@ -238,13 +227,48 @@ class Plan:
 
     @property
     def snapshots(self) -> t.List[Snapshot]:
-        """Gets all the snapshots in the plan/environment."""
-        return list(self.context_diff.snapshots.values())
+        """Gets all the valid snapshots in the plan/environment."""
+        return [
+            snapshot
+            for snapshot in [
+                self._get_snapshot(snapshot_name)
+                for snapshot_name in self._dag
+                if snapshot_name not in self.invalid_snapshot_names
+            ]
+            if snapshot
+        ]
 
     @property
     def new_snapshots(self) -> t.List[Snapshot]:
         """Gets only new snapshots in the plan/environment."""
-        return list(self.context_diff.new_snapshots.values())
+        return [
+            snapshot
+            for snapshot in self.snapshots
+            if snapshot.snapshot_id in self.context_diff.new_snapshots
+        ]
+
+    @property
+    def has_changes(self) -> bool:
+        modified_names = (
+            set().union(
+                *[
+                    self.context_diff.added,
+                    self.context_diff.removed,
+                    self.context_diff.modified_snapshots,
+                ]
+            )
+            - self.invalid_snapshot_names
+        )
+        return (
+            self.context_diff.is_new_environment
+            or self.context_diff.is_unfinalized_environment
+            or bool(modified_names)
+        )
+
+    def is_valid_snapshot(self, snapshot_name: t.Union[str, Snapshot]) -> bool:
+        """Checks if a snapshot is valid. Valid meaning that it is not being ignored in the plan"""
+        snapshot_name = snapshot_name if isinstance(snapshot_name, str) else snapshot_name.name
+        return snapshot_name in self._dag
 
     @property
     def environment(self) -> Environment:
@@ -279,13 +303,25 @@ class Plan:
             if not snapshot.change_category:
                 continue
             loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
-            for downstream_indirect in self.indirectly_modified.get(snapshot.name, set()):
-                downstream_snapshot = self.context_diff.snapshots[downstream_indirect]
+            for downstream_snapshot in self.indirectly_modified.get(snapshot, set()):
                 # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                 if downstream_snapshot.is_indirect_non_breaking:
                     continue
                 loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(downstream_snapshot))
         return loaded_snapshots
+
+    def _refresh_dag_and_invalid_snapshots(self) -> None:
+        self.invalid_snapshot_names: t.Set[str] = set()
+        self._dag: DAG[str] = DAG()
+        snapshots = self.context_diff.snapshots.values()
+        for name, snapshot in self.context_diff.snapshots.items():
+            default_snapshot_start = scheduler.start_date(snapshot, snapshots)
+            if snapshot.is_valid_start(
+                self._start, default_snapshot_start
+            ) and snapshot.model.depends_on.isdisjoint(self.invalid_snapshot_names):
+                self._dag.add(name, snapshot.model.depends_on)
+            else:
+                self.invalid_snapshot_names.add(name)
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
@@ -314,9 +350,7 @@ class Plan:
 
         snapshot.categorize_as(choice)
 
-        for child in self.indirectly_modified[snapshot.name]:
-            child_snapshot = self.context_diff.snapshots[child]
-
+        for child_snapshot in self.indirectly_modified[snapshot]:
             if choice in (
                 SnapshotChangeCategory.BREAKING,
                 SnapshotChangeCategory.INDIRECT_BREAKING,
@@ -324,13 +358,13 @@ class Plan:
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
             else:
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
-            snapshot.indirect_versions[child] = child_snapshot.all_versions
+            snapshot.indirect_versions[child_snapshot.name] = child_snapshot.all_versions
 
             # If any other snapshot specified breaking this child, then that child
             # needs to be backfilled as a part of the plan.
             for upstream in self.directly_modified:
-                if child in upstream.indirect_versions:
-                    data_version = upstream.indirect_versions[child][-1]
+                if child_snapshot.name in upstream.indirect_versions:
+                    data_version = upstream.indirect_versions[child_snapshot.name][-1]
                     if data_version.is_new_version:
                         child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
                         break
@@ -398,28 +432,61 @@ class Plan:
                     start=self._start or scheduler.earliest_start_date(self.snapshots),
                     end=self._end or now(),
                     latest=self._latest,
+                    is_dev=self.is_dev,
                     restatements=self.restatements,
                 ).items()
             }
 
         return self.__missing_intervals
 
+    @classmethod
+    def _get_end_date(cls, end_and_units: t.List[t.Tuple[int, IntervalUnit]]) -> TimeLike:
+        if end_and_units:
+            return to_end_date(end_and_units)
+        return now()
+
+    def _get_snapshot(self, snapshot_name: str) -> t.Optional[Snapshot]:
+        return self.context_diff.snapshots.get(snapshot_name)
+
+    def _get_downstream_snapshots(self, snapshot: t.Union[str, Snapshot]) -> t.List[Snapshot]:
+        # We know that all downstream snapshots must exist since they can't be based on an external model since those
+        # only exist at the root level. Therefore we don't have to check for None here
+        return [self._get_snapshot(x) for x in self._dag.downstream(snapshot if isinstance(snapshot, str) else snapshot.name)]  # type: ignore
+
+    def _get_upstream_snapshots(self, snapshot: t.Union[str, Snapshot]) -> t.List[Snapshot]:
+        return [
+            snapshot
+            for snapshot in [
+                self._get_snapshot(snapshot_name)
+                for snapshot_name in self._dag.upstream(
+                    snapshot if isinstance(snapshot, str) else snapshot.name
+                )
+            ]
+            if snapshot
+        ]
+
     def _add_restatements(self, restate_models: t.Iterable[str]) -> None:
         for table in restate_models:
-            downstream = self._dag.downstream(table)
-            if table in self.context_diff.snapshots:
-                downstream.append(table)
+            snapshot = self._get_snapshot(table)
+            if snapshot is None:
+                raise PlanError(
+                    f"Cannot restate from '{table}'. Either the model is an external model or doesn't exist"
+                )
+            downstream_snapshots = self._get_downstream_snapshots(table)
+            if self.is_valid_snapshot(table):
+                downstream_snapshots.append(snapshot)
 
-            snapshots = self.context_diff.snapshots
-            downstream = [
-                d for d in downstream if snapshots[d].is_materialized and not snapshots[d].is_seed
+            downstream_snapshots = [
+                d for d in downstream_snapshots if d.is_materialized and not d.is_seed
             ]
 
-            if not downstream:
+            if not downstream_snapshots:
                 raise PlanError(
                     f"Cannot restate from '{table}'. Either such model doesn't exist or no other model references it."
                 )
-            self._restatements.update(downstream)
+            self._restatements.update(
+                [downstream_snapshot.name for downstream_snapshot in downstream_snapshots]
+            )
 
     def _build_directly_and_indirectly_modified(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
         """Builds collections of directly and indirectly modified snapshots.
@@ -431,20 +498,20 @@ class Plan:
         directly_modified = []
         all_indirectly_modified = set()
 
-        for model_name, snapshot in self.context_diff.snapshots.items():
-            if model_name in self.context_diff.modified_snapshots:
-                if self.context_diff.directly_modified(model_name):
+        for snapshot in self.snapshots:
+            if snapshot.name in self.context_diff.modified_snapshots:
+                if self.context_diff.directly_modified(snapshot.name):
                     directly_modified.append(snapshot)
                 else:
-                    all_indirectly_modified.add(model_name)
-            elif model_name in self.context_diff.added:
+                    all_indirectly_modified.add(snapshot)
+            elif snapshot.name in self.context_diff.added:
                 directly_modified.append(snapshot)
 
         indirectly_modified: SnapshotMapping = defaultdict(set)
         for snapshot in directly_modified:
-            for downstream in self._dag.downstream(snapshot.name):
+            for downstream in self._get_downstream_snapshots(snapshot):
                 if downstream in all_indirectly_modified:
-                    indirectly_modified[snapshot.name].add(downstream)
+                    indirectly_modified[snapshot].add(downstream)
 
         return (
             directly_modified,
@@ -456,18 +523,13 @@ class Plan:
         returns a list of added and directly modified snapshots as well as the mapping of
         indirectly modified snapshots.
         """
-        for model_name, snapshot in self.context_diff.snapshots.items():
-            upstream_model_names = self._dag.upstream(model_name)
-
-            if model_name in self.context_diff.modified_snapshots:
-                is_directly_modified = self.context_diff.directly_modified(model_name)
-
+        for snapshot in self.snapshots:
+            upstream_snapshots = self._get_upstream_snapshots(snapshot)
+            if snapshot.name in self.context_diff.modified_snapshots:
+                is_directly_modified = self.context_diff.directly_modified(snapshot.name)
                 if self.is_new_snapshot(snapshot):
                     if not self.forward_only:
-                        self._ensure_no_paused_forward_only_upstream(
-                            model_name, upstream_model_names
-                        )
-
+                        self._ensure_no_paused_forward_only_upstream(snapshot, upstream_snapshots)
                     if self.forward_only:
                         # In case of the forward only plan any modifications result in reuse of the
                         # previous version for non-seed models.
@@ -477,13 +539,12 @@ class Plan:
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
                     elif self.auto_categorization_enabled and is_directly_modified:
-                        new, old = self.context_diff.modified_snapshots[model_name]
+                        new, old = self.context_diff.modified_snapshots[snapshot.name]
                         change_category = categorize_change(
                             new, old, config=self.categorizer_config
                         )
                         if change_category is not None:
                             self.set_choice(new, change_category)
-
                 # set to breaking if an indirect child has no directly modified parents
                 # that need a decision. this can happen when a revert to a parent causes
                 # an indirectly modified snapshot to be created because of a new parent
@@ -491,21 +552,20 @@ class Plan:
                     not is_directly_modified
                     and not snapshot.version
                     and not any(
-                        self.context_diff.directly_modified(upstream)
-                        and not self.context_diff.snapshots[upstream].version
-                        for upstream in upstream_model_names
+                        self.context_diff.directly_modified(upstream_snapshot.name)
+                        and not upstream_snapshot.version
+                        for upstream_snapshot in upstream_snapshots
                     )
                 ):
                     snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
-
-            elif model_name in self.context_diff.added and self.is_new_snapshot(snapshot):
+            elif snapshot.name in self.context_diff.added and self.is_new_snapshot(snapshot):
                 snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
+    @classmethod
     def _ensure_no_paused_forward_only_upstream(
-        self, model_name: str, upstream_model_names: t.Iterable[str]
+        cls, snapshot: Snapshot, upstream_snapshots: t.Iterable[Snapshot]
     ) -> None:
-        for upstream in upstream_model_names:
-            upstream_snapshot = self.context_diff.snapshots.get(upstream)
+        for upstream_snapshot in upstream_snapshots:
             if (
                 upstream_snapshot
                 and upstream_snapshot.version
@@ -513,10 +573,10 @@ class Plan:
                 and upstream_snapshot.is_paused
             ):
                 raise PlanError(
-                    f"Model '{model_name}' depends on a paused version of model '{upstream}'. "
+                    f"Model '{snapshot.name}' depends on a paused version of model '{upstream_snapshot.name}'. "
                     "Possible remedies: "
                     "1) make sure your codebase is up-to-date; "
-                    f"2) promote the current version of model '{upstream}' in the production environment; "
+                    f"2) promote the current version of model '{upstream_snapshot.name}' in the production environment; "
                     "3) recreate this plan in a forward-only mode."
                 )
 
@@ -556,7 +616,7 @@ class Plan:
             raise PlanError("New models can't be added as part of the forward-only plan.")
 
     def _ensure_no_broken_references(self) -> None:
-        for snapshot in self.context_diff.snapshots.values():
+        for snapshot in self.snapshots:
             broken_references = self.context_diff.removed & snapshot.model.depends_on
             if broken_references:
                 raise PlanError(

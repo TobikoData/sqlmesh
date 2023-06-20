@@ -19,7 +19,13 @@ from sqlmesh.core.model import (
     SeedModel,
     SqlModel,
 )
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotTableInfo
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotFingerprint,
+    SnapshotIntervals,
+    SnapshotTableInfo,
+)
 from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.core.state_sync.base import SCHEMA_VERSION, SQLGLOT_VERSION, Versions
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_ds, to_timestamp
@@ -42,6 +48,7 @@ def snapshots(make_snapshot: t.Callable) -> t.List[Snapshot]:
                 query=parse_one("select 1, ds"),
             ),
             version="a",
+            change_category=SnapshotChangeCategory.BREAKING,
         ),
         make_snapshot(
             SqlModel(
@@ -49,6 +56,7 @@ def snapshots(make_snapshot: t.Callable) -> t.List[Snapshot]:
                 query=parse_one("select 2, ds"),
             ),
             version="b",
+            change_category=SnapshotChangeCategory.BREAKING,
         ),
     ]
 
@@ -135,33 +143,24 @@ def test_push_snapshots(
                     ),
                 ),
                 version="1",
+                change_category=SnapshotChangeCategory.BREAKING,
             )
         ]
     )
 
 
 def test_duplicates(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
-    snapshot_a = make_snapshot(
-        SqlModel(
+    shared_kwargs = {
+        "model": SqlModel(
             name="a",
             query=parse_one("select 1, ds"),
         ),
-        version="1",
-    )
-    snapshot_b = make_snapshot(
-        SqlModel(
-            name="a",
-            query=parse_one("select 1, ds"),
-        ),
-        version="1",
-    )
-    snapshot_c = make_snapshot(
-        SqlModel(
-            name="a",
-            query=parse_one("select 1, ds"),
-        ),
-        version="1",
-    )
+        "version": 1,
+        "change_category": SnapshotChangeCategory.BREAKING,
+    }
+    snapshot_a = make_snapshot(**shared_kwargs)
+    snapshot_b = make_snapshot(**shared_kwargs)
+    snapshot_c = make_snapshot(**shared_kwargs)
     snapshot_b.updated_ts = snapshot_a.updated_ts + 1
     snapshot_c.updated_ts = 0
     state_sync.push_snapshots([snapshot_a])
@@ -196,6 +195,7 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
             query=parse_one("select 1, ds"),
         ),
         version="a",
+        change_category=SnapshotChangeCategory.BREAKING,
     )
 
     state_sync.push_snapshots([snapshot])
@@ -226,6 +226,7 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
         ),
         version="a",
     )
+    snapshot_a.change_category = SnapshotChangeCategory.BREAKING
     snapshot_b = make_snapshot(
         SqlModel(
             name="a",
@@ -234,6 +235,7 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
         ),
         version="a",
     )
+    snapshot_b.change_category = SnapshotChangeCategory.BREAKING
     state_sync.push_snapshots([snapshot_a, snapshot_b])
     state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-10")
     state_sync.add_interval(snapshot_b, "2020-01-11", "2020-01-30")
@@ -263,7 +265,7 @@ def test_get_snapshot_intervals(
         ),
         version="a",
     )
-
+    snapshot_a.change_category = SnapshotChangeCategory.BREAKING
     state_sync.push_snapshots([snapshot_a])
     state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-01")
 
@@ -275,6 +277,7 @@ def test_get_snapshot_intervals(
         ),
         version="a",
     )
+    snapshot_b.change_category = SnapshotChangeCategory.BREAKING
     state_sync.push_snapshots([snapshot_b])
 
     assert state_sync.get_snapshot_intervals([snapshot_b])[0].intervals == [
@@ -290,6 +293,7 @@ def test_compact_intervals(state_sync: EngineAdapterStateSync, make_snapshot: t.
             query=parse_one("select 1, ds"),
         ),
         version="a",
+        change_category=SnapshotChangeCategory.BREAKING,
     )
 
     state_sync.push_snapshots([snapshot])
@@ -643,6 +647,7 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
         ),
         version="a",
     )
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
     assert not snapshot.unpaused_ts
     state_sync.push_snapshots([snapshot])
 
@@ -657,6 +662,7 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
         SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
         version="a",
     )
+    new_snapshot.change_category = SnapshotChangeCategory.BREAKING
     assert not new_snapshot.unpaused_ts
     state_sync.push_snapshots([new_snapshot])
     state_sync.unpause_snapshots([new_snapshot], unpaused_dt)
@@ -677,6 +683,7 @@ def test_unpause_snapshots_remove_intervals(
         ),
         version="a",
     )
+    snapshot.change_category = SnapshotChangeCategory.BREAKING
     state_sync.push_snapshots([snapshot])
     state_sync.add_interval(snapshot, "2023-01-01", "2023-01-05")
 
@@ -684,18 +691,18 @@ def test_unpause_snapshots_remove_intervals(
         SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
         version="a",
     )
+    new_snapshot.change_category = SnapshotChangeCategory.BREAKING
     new_snapshot.effective_from = "2023-01-03"
     state_sync.push_snapshots([new_snapshot])
     state_sync.unpause_snapshots([new_snapshot], "2023-01-06")
 
     actual_snapshots = {
-        s.snapshot_id: s
-        for s in Snapshot.hydrate_with_intervals_by_identifier(
-            [snapshot, new_snapshot],
-            state_sync.get_snapshot_intervals([snapshot, new_snapshot]),
-        )
+        snapshot.snapshot_id: snapshot,
+        new_snapshot.snapshot_id: new_snapshot,
     }
-    assert not actual_snapshots[new_snapshot.snapshot_id].intervals
+    assert actual_snapshots[new_snapshot.snapshot_id].intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+    ]
     assert actual_snapshots[snapshot.snapshot_id].intervals == [
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
     ]
@@ -839,8 +846,6 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     assert not state_sync.missing_intervals("dev")
     assert len(state_sync.missing_intervals("dev", start="2023-01-08", end="2023-01-10")) == 8
 
-    assert all(not s.intervals for s in state_sync.get_snapshots(None).values())
-
     customer_revenue_by_day = new_snapshots.loc[
         new_snapshots["name"] == "sushi.customer_revenue_by_day"
     ].iloc[0]
@@ -914,14 +919,16 @@ def test_seed_hydration(
             seed=Seed(content="header\n1\n2"),
             column_hashes={"header": "hash"},
             depends_on=set(),
-        )
+        ),
+        change_category=SnapshotChangeCategory.BREAKING,
     )
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     state_sync.push_snapshots([snapshot])
 
     assert snapshot.model.is_hydrated
     assert snapshot.model.seed.content == "header\n1\n2"
+    # Clear the cache since we will return hydrated seeds if they are in case even if unhydrated is requested
+    state_sync._snapshot_cache.clear()
 
     stored_snapshot = state_sync.get_snapshots([snapshot.snapshot_id], hydrate_seeds=False)[
         snapshot.snapshot_id
@@ -953,3 +960,70 @@ def test_models_exist(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
     state_sync.push_snapshots([snapshot])
 
     assert state_sync.models_exist([snapshot.name]) == {snapshot.name}
+
+
+def test_merged_intervals_by_id(
+    state_sync: EngineAdapterStateSync,
+    make_snapshot: t.Callable,
+):
+    model_a = SqlModel(
+        name="a",
+        query=parse_one("select 1, ds"),
+    )
+    snapshot_a = make_snapshot(
+        model_a,
+        models=[model_a],
+        version="1",
+    )
+    snapshot_a.change_category = SnapshotChangeCategory.BREAKING
+    snapshot_a.fingerprint = SnapshotFingerprint(data_hash="data", metadata_hash="metadata")
+
+    state_sync.push_snapshots([snapshot_a])
+    state_sync.add_interval(snapshot_a, "2022-01-10", "2022-01-15")
+
+    model_a_forward_only = SqlModel(
+        name="a",
+        query=parse_one("select 2, ds"),
+    )
+
+    snapshot_a_forward_only = make_snapshot(
+        model_a_forward_only,
+        models=[model_a, model_a_forward_only],
+        version="1",
+    )
+    snapshot_a_forward_only.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    state_sync.push_snapshots([snapshot_a_forward_only])
+    state_sync.add_interval(snapshot_a_forward_only, "2022-01-20", "2022-01-25")
+    by_id = state_sync._snapshot_cache.get_snapshots_merged_intervals_by_id(
+        state_sync.get_snapshot_intervals(None)
+    )
+    assert [x.snapshot_intervals for x in by_id.values()] == [
+        SnapshotIntervals.from_snapshot(
+            snapshot_a,
+            intervals=[(to_timestamp("2022-01-10"), to_timestamp("2022-01-16"))],
+            dev_intervals=[],
+        ),
+        SnapshotIntervals.from_snapshot(
+            snapshot_a_forward_only,
+            intervals=[(to_timestamp("2022-01-20"), to_timestamp("2022-01-26"))],
+            dev_intervals=[],
+        ),
+    ]
+    assert state_sync._snapshot_cache.snapshot_intervals == [
+        SnapshotIntervals.from_snapshot(
+            snapshot_a,
+            intervals=[
+                (to_timestamp("2022-01-10"), to_timestamp("2022-01-16")),
+                (to_timestamp("2022-01-20"), to_timestamp("2022-01-26")),
+            ],
+            dev_intervals=[],
+        ),
+        SnapshotIntervals.from_snapshot(
+            snapshot_a_forward_only,
+            intervals=[
+                (to_timestamp("2022-01-10"), to_timestamp("2022-01-16")),
+                (to_timestamp("2022-01-20"), to_timestamp("2022-01-26")),
+            ],
+            dev_intervals=[],
+        ),
+    ]

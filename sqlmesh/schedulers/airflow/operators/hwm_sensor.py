@@ -63,11 +63,4 @@ class HighWaterMarkSensor(BaseSensorOperator):
 
     def _get_target_snapshot(self) -> Snapshot:
         with util.scoped_state_sync() as state_sync:
-            target_snapshots = state_sync.get_snapshots([self.target_snapshot_info])
-            target_snapshot_intervals = state_sync.get_snapshot_intervals(
-                [self.target_snapshot_info]
-            )
-            return Snapshot.hydrate_with_intervals_by_version(
-                target_snapshots.values(),
-                target_snapshot_intervals,
-            )[0]
+            return next(iter(state_sync.get_snapshots([self.target_snapshot_info]).values()))

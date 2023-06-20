@@ -79,8 +79,8 @@ def test_json(snapshot: Snapshot):
         "created_ts": 1663891973000,
         "ttl": "in 1 week",
         "fingerprint": snapshot.fingerprint,
-        "intervals_": [],
-        "dev_intervals_": [],
+        "intervals": [],
+        "dev_intervals": [],
         "model": {
             "audits": [],
             "cron": "1 0 * * *",
@@ -958,3 +958,28 @@ def test_has_paused_forward_only(snapshot: Snapshot):
 
     snapshot.set_unpaused_ts("2023-01-01")
     assert not has_paused_forward_only([snapshot], [snapshot])
+
+
+def test_is_valid_start(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test",
+            query="SELECT 1 FROM test",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+        change_category=SnapshotChangeCategory.BREAKING,
+    )
+    assert snapshot.start is None
+    assert snapshot.depends_on_past
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert not snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")
+    snapshot.intervals_ = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert snapshot.is_valid_start("2023-01-02", "2023-01-01")
+    assert not snapshot.is_valid_start("2023-01-03", "2023-01-01")
+    snapshot._start = to_datetime("2023-01-01")
+    snapshot.intervals_ = []
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")

@@ -115,8 +115,6 @@ class StateReader(abc.ABC):
 
         Args:
             snapshots: Target snapshot IDs. If not specified all intervals will be fetched.
-            current_only: Whether to only fetch intervals for snapshots provided as input as opposed
-                to fetching intervals for all snapshots that share the same version as the input ones.
 
         Returns:
             The list of snapshot intervals, one per unique version.
@@ -128,6 +126,7 @@ class StateReader(abc.ABC):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        is_dev: bool = False,
         restatements: t.Optional[t.Iterable[str]] = None,
     ) -> t.Dict[Snapshot, Intervals]:
         """Find missing intervals for an environment or a list of snapshots.
@@ -169,28 +168,24 @@ class StateReader(abc.ABC):
             **snapshots_by_id,
             **(self.get_snapshots(unversioned) if unversioned else {}),
         }
-
-        snapshot_intervals = self.get_snapshot_intervals(snapshots_by_id.values())
+        snapshots: t.Iterable[Snapshot] = snapshots_by_id.values()
 
         missing = {}
-        start_date = to_datetime(start or scheduler.earliest_start_date(snapshots_by_id.values()))
+        start_date = to_datetime(start or scheduler.earliest_start_date(snapshots))
         end_date = end or now()
         restatements = set(restatements or [])
 
-        for snapshot in Snapshot.hydrate_with_intervals_by_version(
-            snapshots_by_id.values(), snapshot_intervals
-        ):
+        for snapshot in snapshots:
             if snapshot.name in restatements:
                 snapshot.remove_interval(start_date, end_date, latest)
             intervals = snapshot.missing_intervals(
                 max(
                     start_date,
-                    to_datetime(
-                        scheduler.start_date(snapshot, snapshots_by_id.values()) or start_date
-                    ),
+                    to_datetime(scheduler.start_date(snapshot, snapshots) or start_date),
                 ),
                 end_date,
                 latest=latest,
+                is_dev=is_dev,
                 restatements=restatements,
             )
             if intervals:

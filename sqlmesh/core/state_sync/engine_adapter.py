@@ -58,6 +58,108 @@ from sqlmesh.utils.errors import SQLMeshError
 logger = logging.getLogger(__name__)
 
 
+class SnapshotCache(t.MutableMapping[SnapshotId, Snapshot]):
+    def __init__(self, cache: t.Optional[t.Dict[SnapshotId, Snapshot]] = None) -> None:
+        self._cache: t.Dict[SnapshotId, Snapshot] = {}
+        for k, v in (cache or {}).items():
+            self._set_snapshot(k, v)
+
+    def __getitem__(self, key: SnapshotId) -> Snapshot:
+        return self._cache[key]
+
+    def __setitem__(self, key: SnapshotId, value: Snapshot) -> None:
+        existing_snapshot = self.get(key)
+        if existing_snapshot:
+            value = value if value.updated_ts > existing_snapshot.updated_ts else existing_snapshot
+        self._set_snapshot(key, value)
+        self.merge_intervals_by_name_version()
+
+    def __delitem__(self, key: SnapshotId) -> None:
+        del self._cache[key]
+        self.merge_intervals_by_name_version()
+
+    def __iter__(self) -> t.Iterator[SnapshotId]:
+        return iter(self._cache)
+
+    def __len__(self) -> int:
+        return len(self._cache)
+
+    @property
+    def snapshots(self) -> t.List[Snapshot]:
+        return list(self.values())
+
+    @property
+    def is_hydrated(self) -> bool:
+        return all(snapshot.seed_is_hydrated for snapshot in self.values())
+
+    @property
+    def snapshot_intervals(self) -> t.List[SnapshotIntervals]:
+        return [snapshot.snapshot_intervals for snapshot in self.values()]
+
+    def get_cached_snapshots(self, snapshots: t.List[Snapshot]) -> t.List[Snapshot]:
+        cached_snapshots = []
+        for snapshot in snapshots:
+            self[snapshot.snapshot_id] = snapshot
+            cached_snapshots.append(self[snapshot.snapshot_id])
+        return cached_snapshots
+
+    def add_snapshot(self, snapshot: Snapshot) -> None:
+        self[snapshot.snapshot_id] = snapshot
+
+    def remove_interval(
+        self, all_snapshots: t.Iterable[Snapshot], start: TimeLike, end: TimeLike
+    ) -> None:
+        for snapshot in all_snapshots:
+            self[snapshot.snapshot_id].remove_interval(start, end)
+
+    def get_snapshots_merged_intervals_by_id(
+        self, intervals: t.Optional[t.Iterable[SnapshotIntervals]] = None
+    ) -> t.Dict[SnapshotId, Snapshot]:
+        intervals_by_snapshot_id = {x.snapshot_id: x for x in intervals or self.snapshot_intervals}
+
+        result = {}
+        for snapshot in self.snapshots:
+            # We want to make sure that intervals for snapshots are not shared when doing the merge intervals
+            # so we do a deep copy of the snapshot
+            snapshot = snapshot.copy(deep=True, update={"intervals_": [], "dev_intervals_": []})
+            if snapshot.snapshot_id in intervals_by_snapshot_id:
+                snapshot.merge_intervals(intervals_by_snapshot_id[snapshot.snapshot_id])
+            result[snapshot.snapshot_id] = snapshot
+        return result
+
+    def contains(self, keys: t.Iterable[SnapshotIdLike]) -> bool:
+        return set(k.snapshot_id for k in keys).issubset(self)
+
+    def to_dict(self, keys: t.Optional[t.Iterable[SnapshotIdLike]]) -> t.Dict[SnapshotId, Snapshot]:
+        return (
+            {k: v for k, v in self.items() if k in {key.snapshot_id for key in keys}}
+            if keys is not None
+            else dict(self)
+        )
+
+    def merge_intervals_by_name_version(
+        self, intervals: t.Optional[t.Iterable[SnapshotIntervals]] = None
+    ) -> None:
+        interval_mapping: t.Dict[t.Tuple[str, str], t.List[SnapshotIntervals]] = defaultdict(list)
+        intervals = intervals or self.snapshot_intervals
+        for interval in intervals:
+            interval_mapping[(interval.name, interval.version)].append(interval)
+        for snapshot in self.snapshots:
+            snapshot.init_intervals()
+            assert snapshot.version
+            snapshot_intervals = interval_mapping.get((snapshot.name, snapshot.version), [])
+            for interval in snapshot_intervals:
+                snapshot.merge_intervals(interval)
+
+    def _set_snapshot(self, key: SnapshotId, value: Snapshot) -> None:
+        # Set all slots to None slots are private attributed and they are considered "ephemeral" and should not be
+        # persisted in cache. Currently this is just `_start` and ideally this is removed entirely
+        # removing the need for this
+        for attr in value.__slots__:
+            setattr(value, attr, None)
+        self._cache[key] = value
+
+
 class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     """Manages state of models and snapshot with an existing engine adapter.
 
@@ -81,6 +183,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.seeds_table = f"{schema}._seeds"
         self.intervals_table = f"{schema}._intervals"
         self.versions_table = f"{schema}._versions"
+        self._snapshot_cache: SnapshotCache = SnapshotCache()
 
         self._snapshot_columns_to_types = {
             "name": exp.DataType.build("text"),
@@ -134,7 +237,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         insert all the local snapshots. This can be made safer with locks or merge/upsert.
 
         Args:
-            snapshot_ids: Iterable of snapshot ids to bulk push.
+            snapshots: Iterable of snapshot to bulk push.
         """
         snapshots_by_id = {}
         for snapshot in snapshots:
@@ -163,6 +266,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots_to_store = []
 
         for snapshot in snapshots:
+            self._snapshot_cache[snapshot.snapshot_id] = snapshot
             if isinstance(snapshot.model, SeedModel):
                 seed_contents.append(
                     {
@@ -226,6 +330,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return environments
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
+        for snapshot_id_like in snapshot_ids:
+            snapshot_id = snapshot_id_like.snapshot_id
+            snapshot = self._snapshot_cache.get(snapshot_id)
+            if snapshot:
+                del self._snapshot_cache[snapshot_id]
         self.engine_adapter.delete_from(
             self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids)
         )
@@ -261,6 +370,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.drop_table(self.snapshots_table)
         self.engine_adapter.drop_table(self.environments_table)
         self.engine_adapter.drop_table(self.versions_table)
+        self._snapshot_cache = SnapshotCache()
         self.migrate()
 
     def _update_environment(self, environment: Environment) -> None:
@@ -280,6 +390,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
+        self._snapshot_cache[snapshot.snapshot_id] = snapshot
         self.engine_adapter.update_table(
             self.snapshots_table,
             {"snapshot": snapshot.json()},
@@ -317,11 +428,25 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return query.lock(copy=False)
         return query
 
+    def _hydrate_seeds(self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None) -> None:
+        query = (
+            exp.select("name", "identifier", "content")
+            .from_(self.seeds_table)
+            .where(None if not snapshot_ids else self._snapshot_id_filter(snapshot_ids))
+        )
+        for name, identifier, content in self.engine_adapter.fetchall(query):
+            snapshot = self._snapshot_cache.get(SnapshotId(name=name, identifier=identifier))
+            if snapshot and not snapshot.seed_is_hydrated:
+                assert isinstance(snapshot.model, SeedModel), "Must be seed model to hydrate"
+                snapshot.model = snapshot.model.to_hydrated(content)
+
     def _get_snapshots(
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
         hydrate_seeds: bool = False,
+        hydrate_intervals: bool = True,
+        intervals_by_id: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots or all snapshots.
 
@@ -329,20 +454,27 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             snapshot_ids: The collection of snapshot like objects to fetch.
             lock_for_update: Lock the snapshot rows for future update
             hydrate_seeds: Whether to hydrate seed snapshots with the content.
-
+            hydrate_intervals: Whether to hydrate interval snapshots.
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
+        if snapshot_ids is not None and len(list(snapshot_ids)) == 0:
+            return {}
+        if self._snapshot_cache and self._snapshot_cache.contains(snapshot_ids or set()):
+            if hydrate_seeds:
+                self._hydrate_seeds(snapshot_ids)
+            if hydrate_intervals:
+                self._snapshot_cache.merge_intervals_by_name_version(
+                    self._get_snapshot_intervals(snapshot_ids)[1]
+                )
+            return self._snapshot_cache.to_dict(snapshot_ids)
+
         query = (
             exp.select("snapshot")
             .from_(self.snapshots_table)
             .where(None if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids))
         )
-        if hydrate_seeds:
-            query = query.select("content").join(
-                self.seeds_table, using=["name", "identifier"], join_type="left outer"
-            )
-        elif lock_for_update:
+        if lock_for_update:
             query = query.lock(copy=False)
 
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
@@ -354,14 +486,22 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if snapshot_id in snapshots:
                 other = duplicates.get(snapshot_id, snapshots[snapshot_id])
                 duplicates[snapshot_id] = (
-                    snapshot if snapshot.updated_ts > other.updated_ts else other
+                    snapshot if snapshot.updated_ts >= other.updated_ts else other
                 )
                 snapshots[snapshot_id] = duplicates[snapshot_id]
             else:
                 snapshots[snapshot_id] = snapshot
-
-            if hydrate_seeds and isinstance(snapshot.model, SeedModel) and row[1]:
-                snapshot.model = snapshot.model.to_hydrated(row[1])
+        self._snapshot_cache = SnapshotCache(snapshots)
+        if hydrate_seeds:
+            self._hydrate_seeds(snapshots)
+        if hydrate_intervals and not intervals_by_id:
+            self._snapshot_cache.merge_intervals_by_name_version(
+                self._get_snapshot_intervals(snapshot_ids)[1]
+            )
+        if hydrate_intervals and intervals_by_id:
+            snapshots = self._snapshot_cache.get_snapshots_merged_intervals_by_id(
+                self._get_snapshot_intervals(snapshot_ids)[1]
+            )
 
         if duplicates:
             self._push_snapshots(duplicates.values(), overwrite=True)
@@ -397,7 +537,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             query = query.lock(copy=False)
 
         snapshot_rows = self.engine_adapter.fetchall(query, ignore_unsupported_errors=True)
-        return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
+        return self._snapshot_cache.get_cached_snapshots(
+            [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
+        )
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
         no_version = Versions(schema_version=0, sqlglot_version="0.0.0")
@@ -451,7 +593,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         is_dev: bool = False,
     ) -> None:
         logger.info("Adding interval for snapshot %s", snapshot.snapshot_id)
-
+        cached_snapshot = self._snapshot_cache.get(snapshot.snapshot_id, snapshot)
+        cached_snapshot.add_interval(start, end, is_dev)
+        self._snapshot_cache[cached_snapshot.snapshot_id] = cached_snapshot
         self.engine_adapter.insert_append(
             self.intervals_table,
             _intervals_to_df([snapshot], start, end, is_dev, False),
@@ -471,7 +615,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if logger.isEnabledFor(logging.INFO):
             snapshot_ids = ", ".join(str(s.snapshot_id) for s in all_snapshots)
             logger.info("Removing interval for snapshots: %s", snapshot_ids)
-
+        self._snapshot_cache.remove_interval(all_snapshots, start, end)
         self.engine_adapter.insert_append(
             self.intervals_table,
             _intervals_to_df(all_snapshots, start, end, False, True),
@@ -490,7 +634,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 using=["name", "identifier"],
             )
 
-        interval_ids, snapshot_intervals = self._get_snapshot_intervals(query_modifier)
+        interval_ids, snapshot_intervals = self._get_snapshot_intervals(
+            query_modifier=query_modifier
+        )
 
         logger.info(
             "Compacting %s intervals for %s snapshots", len(interval_ids), len(snapshot_intervals)
@@ -511,16 +657,19 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 return query
             return query.where(self._snapshot_name_version_filter(snapshots))
 
-        return self._get_snapshot_intervals(query_modifier)[1]
+        return self._get_snapshot_intervals(query_modifier=query_modifier)[1]
 
     def _get_snapshot_intervals(
-        self, query_modifier: t.Optional[t.Callable[[exp.Select], exp.Select]]
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
+        query_modifier: t.Optional[t.Callable[[exp.Select], exp.Select]] = None,
     ) -> t.Tuple[t.Set[str], t.List[SnapshotIntervals]]:
         query = (
             exp.select(
                 "id", "name", "identifier", "version", "start_ts", "end_ts", "is_dev", "is_removed"
             )
             .from_(self.intervals_table)
+            .where(None if not snapshot_ids else self._snapshot_id_filter(snapshot_ids))
             .order_by("name", "identifier", "created_ts", "is_removed")
         )
         if query_modifier is not None:
@@ -564,11 +713,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         new_intervals = []
         for snapshot in snapshots:
             logger.info("Pushing intervals for snapshot %s", snapshot.snapshot_id)
+            cached_snapshot = self._snapshot_cache.get(snapshot.snapshot_id)
+            if not cached_snapshot and isinstance(snapshot, Snapshot):
+                cached_snapshot = self._snapshot_cache[snapshot.snapshot_id] = snapshot
             for start_ts, end_ts in snapshot.intervals:
+                if cached_snapshot:
+                    cached_snapshot.add_interval(start_ts, end_ts, is_dev=False)
                 new_intervals.append(
                     _interval_to_df(snapshot, start_ts, end_ts, is_dev=False, is_compacted=True)
                 )
             for start_ts, end_ts in snapshot.dev_intervals:
+                if cached_snapshot:
+                    cached_snapshot.add_interval(start_ts, end_ts, is_dev=True)
                 new_intervals.append(
                     _interval_to_df(snapshot, start_ts, end_ts, is_dev=True, is_compacted=True)
                 )
@@ -627,13 +783,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     )
 
     def _migrate_rows(self) -> None:
-        all_snapshots = {
-            s.snapshot_id: s
-            for s in Snapshot.hydrate_with_intervals_by_identifier(
-                self._get_snapshots(lock_for_update=True, hydrate_seeds=True).values(),
-                self.get_snapshot_intervals(None),
-            )
-        }
+        # Fill cache with all hydrated snapshots  by id
+        all_snapshots = self._get_snapshots(
+            lock_for_update=True, hydrate_seeds=True, hydrate_intervals=True, intervals_by_id=True
+        )
         environments = self.get_environments()
 
         snapshot_mapping = {}
@@ -799,7 +952,7 @@ def _intervals_to_df(
         [
             _interval_to_df(
                 snapshot,
-                *snapshot.inclusive_exclusive(start, end, for_removal=is_removed),
+                *snapshot.inclusive_exclusive(start, end),
                 is_dev=is_dev,
                 is_removed=is_removed,
             )
@@ -837,7 +990,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "name": snapshot.name,
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
-                "snapshot": snapshot.json(exclude={"_intervals", "_dev_intervals"}),
+                "snapshot": snapshot.json(exclude={"intervals_", "dev_intervals_"}),
                 "kind_name": snapshot.model_kind_name.value,
             }
             for snapshot in snapshots

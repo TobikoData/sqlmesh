@@ -42,9 +42,14 @@ def transactional(
 
 class CommonStateSyncMixin(StateSync):
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        hydrate_seeds: bool = False,
+        hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
-        return self._get_snapshots(snapshot_ids, hydrate_seeds=hydrate_seeds)
+        return self._get_snapshots(
+            snapshot_ids, hydrate_seeds=hydrate_seeds, hydrate_intervals=hydrate_intervals
+        )
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         return self._get_environment(environment)
@@ -220,21 +225,13 @@ class CommonStateSyncMixin(StateSync):
             t for t in target_snapshots if t.name in changed_version_prev_snapshots_by_name
         ]
 
-        all_snapshot_intervals = self.get_snapshot_intervals(
-            [*changed_version_prev_snapshots_by_name.values(), *changed_version_target_snapshots],
-        )
+        prev_snapshots = self.get_snapshots(
+            changed_version_prev_snapshots_by_name.values(), hydrate_intervals=True
+        ).values()
+        target_snapshots_by_name = {s.name: s for s in changed_version_target_snapshots}
 
-        hydrated_prev_snapshots = Snapshot.hydrate_with_intervals_by_version(
-            self.get_snapshots(changed_version_prev_snapshots_by_name.values()).values(),
-            all_snapshot_intervals,
-        )
-        hydrated_target_snapshots = Snapshot.hydrate_with_intervals_by_version(
-            changed_version_target_snapshots, all_snapshot_intervals
-        )
-        hydrated_target_snapshots_by_name = {s.name: s for s in hydrated_target_snapshots}
-
-        for prev_snapshot in hydrated_prev_snapshots:
-            target_snapshot = hydrated_target_snapshots_by_name[prev_snapshot.name]
+        for prev_snapshot in prev_snapshots:
+            target_snapshot = target_snapshots_by_name[prev_snapshot.name]
             if (
                 target_snapshot.is_incremental_by_time_range
                 and prev_snapshot.is_incremental_by_time_range
@@ -244,6 +241,7 @@ class CommonStateSyncMixin(StateSync):
                     start_date(target_snapshot, target_snapshots_by_name.values())
                     or prev_snapshot.intervals[0][0],
                     prev_snapshot.intervals[-1][1],
+                    is_dev=target_environment.is_dev,
                 )
                 if missing_intervals:
                     raise SQLMeshError(
@@ -272,6 +270,7 @@ class CommonStateSyncMixin(StateSync):
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
         hydrate_seeds: bool = False,
+        hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots.
 
@@ -279,6 +278,7 @@ class CommonStateSyncMixin(StateSync):
             snapshot_ids: The collection of IDs of snapshots to fetch
             lock_for_update: Lock the snapshot rows for future update
             hydrate_seeds: Whether to hydrate seed snapshots with the content.
+            hydrate_intervals: Whether to hydrate snapshots with the intervals.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
