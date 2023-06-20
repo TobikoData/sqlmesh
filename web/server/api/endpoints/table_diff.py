@@ -53,4 +53,11 @@ def get_table_diff(
         target_count=_row_diff.target_count,
         count_pct_change=_row_diff.count_pct_change,
     )
-    return TableDiff(schema_diff=schema_diff, row_diff=row_diff)
+    return TableDiff(
+        schema_diff=schema_diff,
+        row_diff=row_diff,
+        on=[
+            (eq.left, eq.right) if eq.left.table == "s" else (eq.right, eq.left)
+            for eq in diff.on.find_all(exp.EQ)
+        ],
+    )
