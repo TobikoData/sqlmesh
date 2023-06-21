@@ -99,7 +99,7 @@ class SnapshotCache(t.MutableMapping[SnapshotId, Snapshot]):
     def get_cached_snapshots(self, snapshots: t.List[Snapshot]) -> t.List[Snapshot]:
         cached_snapshots = []
         for snapshot in snapshots:
-            self[snapshot.snapshot_id] = snapshot
+            self.add_snapshot(snapshot)
             cached_snapshots.append(self[snapshot.snapshot_id])
         return cached_snapshots
 
@@ -458,7 +458,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
-        if snapshot_ids is not None and len(list(snapshot_ids)) == 0:
+        snapshot_ids = list(snapshot_ids) if snapshot_ids else []
+        if not snapshot_ids:
             return {}
         if self._snapshot_cache and self._snapshot_cache.contains(snapshot_ids or set()):
             if hydrate_seeds:

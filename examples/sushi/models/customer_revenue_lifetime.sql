@@ -11,6 +11,7 @@ MODEL (
   ),
   owner jen,
   cron '@daily',
+  start "1 week ago",
   dialect hive,
   columns (
     customer_id INT,
