@@ -93,11 +93,10 @@ class SparkEngineAdapter(EngineAdapter):
         df = self.try_get_df(source_table)
         if self._use_spark_session and df is not None:
             pyspark_df = self._ensure_pyspark_df(df)
-            temp_view_name = self._get_temp_table(target_table, table_only=True).sql(
-                dialect=self.dialect
-            )
-            pyspark_df.createOrReplaceTempView(temp_view_name)
-            query = exp.select(*column_names).from_(temp_view_name)
+            temp_view = self._get_temp_table(target_table, table_only=True)
+            pyspark_df.createOrReplaceGlobalTempView(temp_view.sql(dialect=self.dialect))
+            temp_view.set("db", "global_temp")
+            query = exp.select(*column_names).from_(temp_view.sql(dialect=self.dialect))
             super().merge(target_table, query, columns_to_types, unique_key)
         else:
             super().merge(target_table, source_table, columns_to_types, unique_key)
