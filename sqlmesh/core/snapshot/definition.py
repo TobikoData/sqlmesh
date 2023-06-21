@@ -741,7 +741,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.depends_on_past and start:
             assert snapshot_start, "Snapshot must have a start defined if it depends on past"
             start_ts = to_timestamp(self.model.cron_floor(start))
-            if not self.intervals and start_ts != to_timestamp(snapshot_start):
+            if not self.intervals and start_ts > to_timestamp(snapshot_start):
                 return False
             # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
             # provided start_ts. Otherwise we know that we are doing a non-contiguous load and therefore this is not
@@ -755,8 +755,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def latest(self) -> t.Optional[TimeLike]:
         """The latest interval loaded for the snapshot. If empty, start for the model is used."""
-        latest = max(x[1] for x in self.intervals) if self.intervals else self.start
-        return to_end_date((to_timestamp(latest), self.model.interval_unit())) if latest else None
+        return (
+            to_end_date(
+                (to_timestamp(max(x[1] for x in self.intervals)), self.model.interval_unit())
+            )
+            if self.intervals
+            else self.start
+        )
 
     @property
     def intervals(self) -> Intervals:

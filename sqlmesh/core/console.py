@@ -74,7 +74,7 @@ class Console(abc.ABC):
         self,
         context_diff: ContextDiff,
         detailed: bool = False,
-        invalid_snapshot_names: t.Optional[t.Set[str]] = None,
+        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Displays a summary of differences for the given models"""
 
@@ -232,16 +232,16 @@ class TerminalConsole(Console):
         self,
         context_diff: ContextDiff,
         detailed: bool = False,
-        invalid_snapshot_names: t.Optional[t.Set[str]] = None,
+        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
         Args:
             context_diff: The context diff to use to print the summary
             detailed: Show the actual SQL differences if True.
-            invalid_snapshot_names: A set of snapshot names that are invalid and should be ignored.
+            ignored_snapshot_names: A set of snapshot names that are ignored
         """
-        invalid_snapshot_names = invalid_snapshot_names or set()
+        ignored_snapshot_names = ignored_snapshot_names or set()
         if context_diff.is_new_environment:
             self._print(
                 Tree(
@@ -260,14 +260,14 @@ class TerminalConsole(Console):
         if context_diff.added:
             added_tree = Tree(f"[bold][added]Added Models:")
             for model in context_diff.added:
-                if model not in invalid_snapshot_names:
+                if model not in ignored_snapshot_names:
                     added_tree.add(f"[added]{model}")
             tree.add(added_tree)
 
         if context_diff.removed:
             removed_tree = Tree(f"[bold][removed]Removed Models:")
             for model in context_diff.removed:
-                if model not in invalid_snapshot_names:
+                if model not in ignored_snapshot_names:
                     removed_tree.add(f"[removed]{model}")
             tree.add(removed_tree)
 
@@ -276,7 +276,7 @@ class TerminalConsole(Console):
             indirect = Tree(f"[bold][indirect]Indirectly Modified:")
             metadata = Tree(f"[bold][metadata]Metadata Updated:")
             for model in context_diff.modified_snapshots:
-                if model in invalid_snapshot_names:
+                if model in ignored_snapshot_names:
                     continue
                 if context_diff.directly_modified(model):
                     direct.add(
@@ -294,8 +294,8 @@ class TerminalConsole(Console):
                 tree.add(indirect)
             if metadata.children:
                 tree.add(metadata)
-        if invalid_snapshot_names:
-            tree.add(self._get_invalid_tree(invalid_snapshot_names))
+        if ignored_snapshot_names:
+            tree.add(self._get_ignored_tree(ignored_snapshot_names, context_diff.snapshots))
         self._print(tree)
 
     def plan(self, plan: Plan, auto_apply: bool) -> None:
@@ -314,11 +314,14 @@ class TerminalConsole(Console):
         if auto_apply:
             plan.apply()
 
-    def _get_invalid_tree(self, invalid_snapshot_names: t.Set[str]) -> Tree:
-        invalid = Tree(f"[bold][invalid]Invalid Snapshots:")
-        for model in invalid_snapshot_names:
-            invalid.add(f"[invalid]{model}")
-        return invalid
+    def _get_ignored_tree(
+        self, ignored_snapshot_names: t.Set[str], snapshots: t.Dict[str, Snapshot]
+    ) -> Tree:
+        ignored = Tree(f"[bold][ignored]Ignored Models (Valid Plan Start):")
+        for model in ignored_snapshot_names:
+            snapshot = snapshots[model]
+            ignored.add(f"[ignored]{model} ({snapshot.latest})")
+        return ignored
 
     def _show_options_after_categorization(self, plan: Plan, auto_apply: bool) -> None:
         if plan.forward_only and plan.new_snapshots:
@@ -333,7 +336,7 @@ class TerminalConsole(Console):
     def _prompt_categorize(self, plan: Plan, auto_apply: bool) -> None:
         """Get the user's change category for the directly modified models"""
         self.show_model_difference_summary(
-            plan.context_diff, invalid_snapshot_names=plan.invalid_snapshot_names
+            plan.context_diff, ignored_snapshot_names=plan.ignored_snapshot_names
         )
 
         self._show_categorized_snapshots(plan)
@@ -424,8 +427,10 @@ class TerminalConsole(Console):
                 )
                 if end:
                     plan.end = end
-        if plan.invalid_snapshot_names:
-            self._print(self._get_invalid_tree(plan.invalid_snapshot_names))
+        if plan.ignored_snapshot_names:
+            self._print(
+                self._get_ignored_tree(plan.ignored_snapshot_names, plan.context_diff.snapshots)
+            )
         if (
             plan.has_changes
             and not auto_apply
@@ -872,16 +877,16 @@ class MarkdownConsole(CaptureTerminalConsole):
         self,
         context_diff: ContextDiff,
         detailed: bool = False,
-        invalid_snapshot_names: t.Optional[t.Set[str]] = None,
+        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
         Args:
             context_diff: The context diff to use to print the summary
             detailed: Show the actual SQL differences if True.
-            invalid_snapshot_names: A set of snapshot names that are invalid and should be ignored.
+            ignored_snapshot_names: A set of snapshot names that are ignored
         """
-        invalid_snapshot_names = invalid_snapshot_names or set()
+        ignored_snapshot_names = ignored_snapshot_names or set()
         if context_diff.is_new_environment:
             self._print(
                 f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n\n"
@@ -898,7 +903,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         if context_diff.added:
             self._print(f"**Added Models:**\n")
             for model in context_diff.added:
-                if model not in invalid_snapshot_names:
+                if model not in ignored_snapshot_names:
                     self._print(f"- {model}\n")
                 self._print(f"- {model}\n")
             self._print("\n")
@@ -906,7 +911,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         if context_diff.removed:
             self._print(f"**Removed Models:**\n")
             for model in context_diff.removed:
-                if model not in invalid_snapshot_names:
+                if model not in ignored_snapshot_names:
                     self._print(f"- {model}\n")
             self._print("\n")
 
@@ -915,7 +920,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             indirectly_modified = []
             metadata_modified = []
             for model in context_diff.modified_snapshots:
-                if model in invalid_snapshot_names:
+                if model in ignored_snapshot_names:
                     continue
                 if context_diff.directly_modified(model):
                     directly_modified.append(model)
@@ -940,10 +945,11 @@ class MarkdownConsole(CaptureTerminalConsole):
                 for model in metadata_modified:
                     self._print(f"- `{model}`\n")
                 self._print("\n")
-        if invalid_snapshot_names:
-            self._print(f"**Invalid Snapshot Names:**\n")
-            for model in invalid_snapshot_names:
-                self._print(f"- `{model}`\n")
+        if ignored_snapshot_names:
+            self._print(f"**Ignored Models (Valid Plan Start):**\n")
+            for model in ignored_snapshot_names:
+                snapshot = context_diff.snapshots[model]
+                self._print(f"- `{model}` ({snapshot.latest})\n")
             self._print("\n")
 
     def _show_missing_dates(self, plan: Plan) -> None:

@@ -530,5 +530,5 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
     )
     assert len(dev_plan_start_ahead_of_model.new_snapshots) == 1
     assert [x.name for x in dev_plan_start_ahead_of_model.new_snapshots] == ["b"]
-    assert len(dev_plan_start_ahead_of_model.invalid_snapshot_names) == 2
-    assert sorted(list(dev_plan_start_ahead_of_model.invalid_snapshot_names)) == ["a", "a_child"]
+    assert len(dev_plan_start_ahead_of_model.ignored_snapshot_names) == 2
+    assert sorted(list(dev_plan_start_ahead_of_model.ignored_snapshot_names)) == ["a", "a_child"]

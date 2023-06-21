@@ -972,7 +972,7 @@ def test_is_valid_start(make_snapshot):
     assert snapshot.start is None
     assert snapshot.depends_on_past
     assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
-    assert not snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
     assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")
     snapshot.intervals_ = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
     assert snapshot.is_valid_start("2023-01-01", "2023-01-01")

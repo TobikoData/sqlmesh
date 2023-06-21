@@ -97,7 +97,7 @@ class Plan:
         self._latest = latest or now()
         self._apply = apply
 
-        self._refresh_dag_and_invalid_snapshots()
+        self._refresh_dag_and_ignored_snapshots()
 
         self._state_reader = state_reader
         self.__missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
@@ -173,7 +173,7 @@ class Plan:
     def set_start(self, new_start: TimeLike) -> None:
         self._start = new_start
         self.__missing_intervals = None
-        self._refresh_dag_and_invalid_snapshots()
+        self._refresh_dag_and_ignored_snapshots()
 
     @property
     def end(self) -> TimeLike:
@@ -233,7 +233,7 @@ class Plan:
             for snapshot in [
                 self._get_snapshot(snapshot_name)
                 for snapshot_name in self._dag
-                if snapshot_name not in self.invalid_snapshot_names
+                if snapshot_name not in self.ignored_snapshot_names
             ]
             if snapshot
         ]
@@ -257,7 +257,7 @@ class Plan:
                     self.context_diff.modified_snapshots,
                 ]
             )
-            - self.invalid_snapshot_names
+            - self.ignored_snapshot_names
         )
         return (
             self.context_diff.is_new_environment
@@ -310,18 +310,18 @@ class Plan:
                 loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(downstream_snapshot))
         return loaded_snapshots
 
-    def _refresh_dag_and_invalid_snapshots(self) -> None:
-        self.invalid_snapshot_names: t.Set[str] = set()
+    def _refresh_dag_and_ignored_snapshots(self) -> None:
+        self.ignored_snapshot_names: t.Set[str] = set()
         self._dag: DAG[str] = DAG()
         snapshots = self.context_diff.snapshots.values()
         for name, snapshot in self.context_diff.snapshots.items():
             default_snapshot_start = scheduler.start_date(snapshot, snapshots)
             if snapshot.is_valid_start(
                 self._start, default_snapshot_start
-            ) and snapshot.model.depends_on.isdisjoint(self.invalid_snapshot_names):
+            ) and snapshot.model.depends_on.isdisjoint(self.ignored_snapshot_names):
                 self._dag.add(name, snapshot.model.depends_on)
             else:
-                self.invalid_snapshot_names.add(name)
+                self.ignored_snapshot_names.add(name)
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
