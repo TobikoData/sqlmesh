@@ -741,8 +741,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.depends_on_past and start:
             assert snapshot_start, "Snapshot must have a start defined if it depends on past"
             start_ts = to_timestamp(self.model.cron_floor(start))
-            if not self.intervals and start_ts > to_timestamp(snapshot_start):
-                return False
+            if not self.intervals:
+                return to_timestamp(snapshot_start) >= start_ts
             # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
             # provided start_ts. Otherwise we know that we are doing a non-contiguous load and therefore this is not
             # a valid start.

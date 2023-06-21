@@ -314,11 +314,14 @@ class Plan:
         self.ignored_snapshot_names: t.Set[str] = set()
         full_dag: DAG[str] = DAG()
         self._dag: DAG[str] = DAG()
+        for name, context_snapshot in self.context_diff.snapshots.items():
+            full_dag.add(name, context_snapshot.model.depends_on)
         snapshots = self.context_diff.snapshots.values()
-        for name, snapshot in self.context_diff.snapshots.items():
-            full_dag.add(name, snapshot.model.depends_on)
         for snapshot_name in full_dag:
-            snapshot = self.context_diff.snapshots[snapshot_name]
+            snapshot = self.context_diff.snapshots.get(snapshot_name)
+            # If the snapshot doesn't exist then it must be an external model
+            if not snapshot:
+                continue
             default_snapshot_start = scheduler.start_date(snapshot, snapshots)
             if snapshot.is_valid_start(
                 self._start, default_snapshot_start
