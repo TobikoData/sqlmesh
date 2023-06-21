@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import typing as t
-import zlib
-from collections import defaultdict
 from datetime import datetime
 from enum import IntEnum
 
@@ -614,12 +612,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         missing = []
 
         start_ts, end_ts = (
-            to_timestamp(ts)
-            for ts in self.inclusive_exclusive(
-                start, end, strict=False
-            )
+            to_timestamp(ts) for ts in self.inclusive_exclusive(start, end, strict=False)
         )
-        latest_ts = to_timestamp(latest)
+        latest_ts = to_timestamp(make_inclusive_end(latest or now()))
 
         croniter = self.model.croniter(start_ts)
         dates = [start_ts]

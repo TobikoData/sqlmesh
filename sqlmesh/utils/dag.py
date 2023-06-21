@@ -144,5 +144,5 @@ class DAG(t.Generic[T]):
         return item in self._graph
 
     def __iter__(self) -> t.Iterator[T]:
-        for node in self.sorted():
+        for node in self.sorted:
             yield node
