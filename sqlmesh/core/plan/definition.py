@@ -312,16 +312,20 @@ class Plan:
 
     def _refresh_dag_and_ignored_snapshots(self) -> None:
         self.ignored_snapshot_names: t.Set[str] = set()
+        full_dag: DAG[str] = DAG()
         self._dag: DAG[str] = DAG()
         snapshots = self.context_diff.snapshots.values()
         for name, snapshot in self.context_diff.snapshots.items():
+            full_dag.add(name, snapshot.model.depends_on)
+        for snapshot_name in full_dag:
+            snapshot = self.context_diff.snapshots[snapshot_name]
             default_snapshot_start = scheduler.start_date(snapshot, snapshots)
             if snapshot.is_valid_start(
                 self._start, default_snapshot_start
             ) and snapshot.model.depends_on.isdisjoint(self.ignored_snapshot_names):
-                self._dag.add(name, snapshot.model.depends_on)
+                self._dag.add(snapshot_name, snapshot.model.depends_on)
             else:
-                self.ignored_snapshot_names.add(name)
+                self.ignored_snapshot_names.add(snapshot_name)
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
