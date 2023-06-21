@@ -3,7 +3,6 @@ import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
 import { useStoreFileTree } from '~/context/fileTree'
-import { useSqlMeshExtension } from './extensions'
 import { useApiFileByPath } from '~/api'
 import { debounceAsync, isFalse, isStringNotEmpty } from '~/utils'
 import { isCancelledError } from '@tanstack/react-query'
@@ -17,7 +16,11 @@ import {
 import clsx from 'clsx'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
-import { useDefaultExtensions, useSQLMeshModelKeymaps } from './hooks'
+import {
+  useDefaultExtensions,
+  useSQLMeshModelKeymaps,
+  useSqlMeshDialect,
+} from './hooks'
 
 function CodeEditorSQLMesh({
   type,
@@ -33,7 +36,7 @@ function CodeEditorSQLMesh({
     content: string
   }) => JSX.Element
 }): JSX.Element {
-  const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshExtension()
+  const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshDialect()
 
   const extensionsDefault = useDefaultExtensions(type)
 
@@ -62,7 +65,7 @@ function CodeEditorSQLMesh({
     return [
       ...extensionsDefault,
       type === EnumFileExtensions.SQL &&
-      SqlMeshDialect(models, dialectOptions, dialectsTitles),
+        SqlMeshDialect(models, dialectOptions, dialectsTitles),
     ]
       .filter(Boolean)
       .flat() as Extension[]

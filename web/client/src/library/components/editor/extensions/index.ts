@@ -1,19 +1,17 @@
-import { syntaxTree } from '@codemirror/language'
 import { RangeSetBuilder, type Extension } from '@codemirror/state'
 import {
-  ViewPlugin,
-  type DecorationSet,
-  Decoration,
-  type ViewUpdate,
   EditorView,
   type Tooltip,
   hoverTooltip,
+  Decoration,
+  type DecorationSet,
+  ViewPlugin,
+  type ViewUpdate,
 } from '@codemirror/view'
-import { useSqlMeshExtension } from './SqlMeshDialect'
-import { isFalse } from '@utils/index'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
+import SqlMeshModel from './SqlMeshModel'
 
-export { HoverTooltip, events, useSqlMeshExtension, SqlMeshModel }
+export { HoverTooltip, events, SqlMeshModel }
 
 function events(
   events: Record<string, (event: MouseEvent) => void>,
@@ -64,4 +62,51 @@ function HoverTooltip(models: Map<string, ModelSQLMeshModel>): Extension {
     },
     { hoverTime: 50 },
   )
+}
+
+export function SqlMeshExpression(expression: string): Extension {
+  return ViewPlugin.fromClass(
+    class SqlMeshModelView {
+      decorations: DecorationSet = Decoration.set([])
+
+      constructor(readonly view: EditorView) {
+        this.decorations = markExpressionLine(expression, view)
+      }
+
+      update(viewUpdate: ViewUpdate): void {
+        this.decorations = markExpressionLine(expression, viewUpdate.view)
+      }
+    },
+    {
+      decorations: value => value.decorations,
+    },
+  )
+}
+
+function markExpressionLine(
+  expression: string,
+  view: EditorView,
+): DecorationSet {
+  const mark = Decoration.line({
+    attributes: {
+      id: expression,
+      class: 'sqlmesh-expression',
+    },
+  })
+
+  const builder = new RangeSetBuilder<Decoration>()
+
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to; ) {
+      const line = view.state.doc.lineAt(pos)
+
+      if (line.text.includes(expression)) {
+        builder.add(line.from, line.from, mark)
+      }
+
+      pos = line.to + 1
+    }
+  }
+
+  return builder.finish()
 }

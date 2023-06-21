@@ -285,8 +285,8 @@ function DetailsItem({
               ? 'True'
               : 'False'
             : isDate
-              ? toDateFormat(maybeDate)
-              : value}
+            ? toDateFormat(maybeDate)
+            : value}
         </p>
       </div>
       <p className="text-xs ">{children}</p>
