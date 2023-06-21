@@ -1,9 +1,11 @@
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse, parse_one
+from sqlglot.schema import MappingSchema
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
@@ -1227,7 +1229,7 @@ def test_case_sensitivity(assert_exp_eq):
             """
             MODEL (name example.source, kind EMBEDDED);
 
-            SELECT "id", "name", "payload" FROM db.schema."table"
+            SELECT 'id' AS "id", 'name' AS "name", 'payload' AS "payload"
             """
         ),
         dialect="snowflake",
@@ -1258,10 +1260,9 @@ def test_case_sensitivity(assert_exp_eq):
           "SOURCE"."payload" AS "payload"
         FROM (
           SELECT
-            "id" AS "id",
-            "name" AS "name",
-            "payload" AS "payload"
-          FROM "DB"."SCHEMA"."table" AS "table"
+            'id' AS "id",
+            'name' AS "name",
+            'payload' AS "payload"
         ) AS "SOURCE"
         """,
     )
@@ -1386,3 +1387,72 @@ def test_no_depends_on_runtime_jinja_query():
         match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
     ):
         load_model(expressions)
+
+
+def test_update_schema():
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        SELECT a, b FROM table_a JOIN table_b
+        """
+    )
+
+    model = load_model(expressions)
+
+    schema = MappingSchema(normalize=False)
+    schema.add_table("table_a", {"a": exp.DataType.build("int")})
+
+    # Make sure that the partial schema is not applied.
+    model.update_schema(schema)
+    assert not model.mapping_schema
+
+    schema.add_table("table_b", {"b": exp.DataType.build("int")})
+
+    model.update_schema(schema)
+    assert model.mapping_schema == {
+        "table_a": {"a": "INT"},
+        "table_b": {"b": "INT"},
+    }
+
+
+def test_user_provided_depends_on():
+    expressions = d.parse(
+        """
+        MODEL (name db.table, depends_on [table_b]);
+
+        SELECT a FROM table_a
+        """
+    )
+
+    model = load_model(expressions)
+
+    assert model.depends_on == {"table_a", "table_b"}
+
+
+def test_check_schema_mapping_when_rendering_at_runtime(assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (name db.table, depends_on [table_b]);
+
+        SELECT * FROM table_a JOIN table_b
+        """
+    )
+
+    model = load_model(expressions)
+
+    # Simulate a query that cannot be rendered at parse time.
+    with patch.object(SqlModel, "render_query", return_value=None) as render_query_mock:
+        schema = MappingSchema(normalize=False)
+        schema.add_table("table_b", {"b": exp.DataType.build("int")})
+        model.update_schema(schema)
+
+    assert "table_b" in model.mapping_schema
+    assert model.depends_on == {"table_b"}
+
+    render_query_mock.assert_called_once()
+
+    # Simulate rendering at runtime.
+    assert_exp_eq(
+        model.render_query(), """SELECT * FROM "table_a" AS "table_a", "table_b" AS "table_b" """
+    )

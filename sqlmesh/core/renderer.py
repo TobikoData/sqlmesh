@@ -14,7 +14,7 @@ from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
-from sqlglot.schema import ensure_schema
+from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -263,7 +263,6 @@ class QueryRenderer(ExpressionRenderer):
                     ),
                 )
             except ParsetimeAdapterCallError:
-                logger.debug("Failed to render query at parse time:\n%s", self._expression)
                 return None
 
             if not query:
@@ -325,9 +324,20 @@ class QueryRenderer(ExpressionRenderer):
 
     def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
-        schema = ensure_schema(self.schema, dialect=self._dialect, normalize=False)
+        schema = MappingSchema(self.schema, dialect=self._dialect, normalize=False)
         original = query
         failure = False
+
+        if not schema.empty:
+            for dependency in d.find_tables(query, dialect=self._dialect):
+                if schema.find(exp.to_table(dependency, dialect=self._dialect)) is None:
+                    logger.warning(
+                        "Query cannot be optimized due to missing schema for model '%s'. "
+                        "Make sure that the model query can be rendered at parse time",
+                        dependency,
+                    )
+                    schema = MappingSchema(None, dialect=self._dialect, normalize=False)
+                    break
 
         try:
             if not schema.empty:
