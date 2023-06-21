@@ -96,6 +96,11 @@ def test_ast_correctness(macro_evaluator):
         ),
         ("""@SQL(@REDUCE([100, 200, 300, 400], (x,y) -> x + y))""", "1000", {}),
         (
+            """@SQL(@REDUCE(@FILTER([100, 200, 300, 400], x -> x > 250), (x,y) -> x + y))""",
+            "700",
+            {},
+        ),
+        (
             """select @EACH([a, b, c], x -> x and @SQL('@y'))""",
             "SELECT a AND z, b AND z, c AND z",
             {"y": "z"},

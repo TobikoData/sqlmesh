@@ -410,11 +410,11 @@ def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@REDUCE(@FILTER([1, 2, 3], x -> x > 1), (x, y) -> x + y)"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        '1 + 2 + 3'
+        '2 + 3'
 
         >>> sql = "@EVAL(@REDUCE(@FILTER([1, 2, 3], x -> x > 1), (x, y) -> x + y))"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        '6'
+        '5'
 
     Args:
         evaluator: MacroEvaluator that invoked the macro
@@ -425,7 +425,7 @@ def filter_(evaluator: MacroEvaluator, *args: t.Any) -> t.List[t.Any]:
     """
     *items, func = args
     items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
-    return list(filter(func, items))
+    return list(filter(lambda arg: evaluator.eval_expression(func(arg)), items))
 
 
 @macro("WITH")
