@@ -462,13 +462,14 @@ class _Model(ModelMeta, frozen=True):
             else:
                 # Reset the entire mapping if at least one upstream dependency is missing from the mapping
                 # to prevent partial mappings from being used.
-                logger.warning(
-                    "Missing schema for model '%s' referenced in model '%s'. Run `sqlmesh create_external_models` "
-                    "and / or make sure that the model '%s' can be rendered at parse time",
-                    dep,
-                    self.name,
-                    dep,
-                )
+                if self.contains_star_projection:
+                    logger.warning(
+                        "Missing schema for model '%s' referenced in model '%s'. Run `sqlmesh create_external_models` "
+                        "and / or make sure that the model '%s' can be rendered at parse time",
+                        dep,
+                        self.name,
+                        dep,
+                    )
                 self.mapping_schema.clear()
                 return
 
@@ -480,6 +481,12 @@ class _Model(ModelMeta, frozen=True):
             A list of all the upstream table names.
         """
         return self.depends_on_ or set()
+
+    @property
+    def contains_star_projection(self) -> t.Optional[bool]:
+        """Returns True if the model contains a star projection, False if it does not, and None if this
+        cannot be determined at parse time."""
+        return False
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -757,20 +764,21 @@ class SqlModel(_SqlBasedModel):
         return self._depends_on
 
     @property
+    def contains_star_projection(self) -> t.Optional[bool]:
+        columns_to_types = self._extract_columns_to_types()
+        if columns_to_types is None:
+            return None
+        return "*" in columns_to_types
+
+    @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
 
-        if self._columns_to_types is None:
-            query = self._query_renderer.render()
-            if query is None:
-                return None
-            self._columns_to_types = d.extract_columns_to_types(query)
-
-        if "*" in self._columns_to_types:
+        columns_to_types = self._extract_columns_to_types()
+        if columns_to_types and "*" in columns_to_types:
             return None
-
-        return self._columns_to_types
+        return columns_to_types
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
@@ -872,6 +880,13 @@ class SqlModel(_SqlBasedModel):
                 only_latest=self.kind.only_latest,
             )
         return self.__query_renderer
+
+    def _extract_columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
+        if self._columns_to_types is None:
+            query = self._query_renderer.render()
+            if query is not None:
+                self._columns_to_types = d.extract_columns_to_types(query)
+        return self._columns_to_types
 
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
