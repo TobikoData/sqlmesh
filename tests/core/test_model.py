@@ -25,6 +25,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
+from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
@@ -1443,6 +1444,8 @@ def test_check_schema_mapping_when_rendering_at_runtime(assert_exp_eq):
 
     # Simulate a query that cannot be rendered at parse time.
     with patch.object(SqlModel, "render_query", return_value=None) as render_query_mock:
+        assert not model.columns_to_types
+
         schema = MappingSchema(normalize=False)
         schema.add_table("table_b", {"b": exp.DataType.build("int")})
         model.update_schema(schema)
@@ -1456,3 +1459,33 @@ def test_check_schema_mapping_when_rendering_at_runtime(assert_exp_eq):
     assert_exp_eq(
         model.render_query(), """SELECT * FROM "table_a" AS "table_a", "table_b" AS "table_b" """
     )
+
+
+def test_contains_star_projection():
+    expression_with_star = d.parse(
+        """
+        MODEL (name db.table);
+        SELECT * FROM table_a
+        """
+    )
+
+    model = load_model(expression_with_star)
+    assert model.contains_star_projection
+    assert model.columns_to_types is None
+
+    # Simulate a query that cannot be rendered at parse time.
+    with patch.object(QueryRenderer, "render", return_value=None) as render_query_mock:
+        model._columns_to_types = None
+        assert model.contains_star_projection is None
+        assert model.columns_to_types is None
+
+    expression_without_star = d.parse(
+        """
+        MODEL (name db.table);
+        SELECT a FROM table_a
+        """
+    )
+
+    model = load_model(expression_without_star)
+    assert model.contains_star_projection is False
+    assert "a" in model.columns_to_types
