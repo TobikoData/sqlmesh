@@ -96,7 +96,7 @@ class SnapshotCache(t.MutableMapping[SnapshotId, Snapshot]):
     def snapshot_intervals(self) -> t.List[SnapshotIntervals]:
         return [snapshot.snapshot_intervals for snapshot in self.values()]
 
-    def get_cached_snapshots(self, snapshots: t.List[Snapshot]) -> t.List[Snapshot]:
+    def update_and_get_cached_snapshots(self, snapshots: t.List[Snapshot]) -> t.List[Snapshot]:
         cached_snapshots = []
         for snapshot in snapshots:
             self.add_snapshot(snapshot)
@@ -538,7 +538,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             query = query.lock(copy=False)
 
         snapshot_rows = self.engine_adapter.fetchall(query, ignore_unsupported_errors=True)
-        return self._snapshot_cache.get_cached_snapshots(
+        return self._snapshot_cache.update_and_get_cached_snapshots(
             [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
         )
 

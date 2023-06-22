@@ -650,7 +650,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
-            #  in missing intervals check if is and forward only and paused and if so use dev intervals
             intervals = (
                 self.dev_intervals
                 if is_dev and self.is_paused and self.is_forward_only
