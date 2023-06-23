@@ -765,20 +765,25 @@ class SqlModel(_SqlBasedModel):
 
     @property
     def contains_star_projection(self) -> t.Optional[bool]:
-        columns_to_types = self._extract_columns_to_types()
-        if columns_to_types is None:
+        query = self._query_renderer.render(optimize=False)
+        if query is None:
             return None
-        return "*" in columns_to_types
+        return any(isinstance(expression, exp.Star) for expression in query.expressions)
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
 
-        columns_to_types = self._extract_columns_to_types()
-        if columns_to_types and "*" in columns_to_types:
+        if self._columns_to_types is None:
+            query = self._query_renderer.render()
+            if query is None:
+                return None
+            self._columns_to_types = d.extract_columns_to_types(query)
+
+        if "*" in self._columns_to_types:
             return None
-        return columns_to_types
+        return self._columns_to_types
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
@@ -880,13 +885,6 @@ class SqlModel(_SqlBasedModel):
                 only_latest=self.kind.only_latest,
             )
         return self.__query_renderer
-
-    def _extract_columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
-        if self._columns_to_types is None:
-            query = self._query_renderer.render()
-            if query is not None:
-                self._columns_to_types = d.extract_columns_to_types(query)
-        return self._columns_to_types
 
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
