@@ -21,7 +21,7 @@ import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
 import {
   debounceAsync,
   debounceSync,
-  isFalse,
+  isNil,
   isStringEmptyOrNil,
   isStringNotEmpty,
 } from '~/utils'
@@ -360,7 +360,7 @@ const CodeEditor = function CodeEditor({
       value={content}
       extensions={extensionsAll}
       onChange={onChange}
-      readOnly={isFalse(Boolean(onChange))}
+      readOnly={isNil(onChange)}
     />
   )
 }
