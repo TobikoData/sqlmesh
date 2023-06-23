@@ -237,7 +237,7 @@ export default function EditorPreview({
                 )}
               >
                 <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
-                  <CodeEditor.Default
+                  <CodeEditor.SQLMeshDialect
                     type={EnumFileExtensions.SQL}
                     content={previewQuery ?? ''}
                   >
@@ -248,7 +248,7 @@ export default function EditorPreview({
                         className="text-xs"
                       />
                     )}
-                  </CodeEditor.Default>
+                  </CodeEditor.SQLMeshDialect>
                 </div>
               </Tab.Panel>
             )}
