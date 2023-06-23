@@ -795,6 +795,7 @@ class EngineAdapter:
         for e in ensure_list(expressions):
             sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
             logger.debug(f"Executing SQL:\n{sql}")
+            print(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager
