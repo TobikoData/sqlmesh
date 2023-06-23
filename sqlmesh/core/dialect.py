@@ -635,10 +635,10 @@ def pandas_to_sql(
 
 
 def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) -> str:
-    table = exp.to_table(table, dialect=dialect)
-    name = exp.table_name(normalize_identifiers(table, dialect=dialect))
-    quoted = any(not exp.SAFE_IDENTIFIER_RE.match(p.name) for p in table.parts if p) or None
-    return exp.Identifier(this=name, quoted=quoted).sql(dialect=dialect)
+    return exp.table_name(
+        normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect),
+        dialect=dialect,
+    )
 
 
 def extract_columns_to_types(query: exp.Subqueryable) -> t.Dict[str, exp.DataType]:
