@@ -132,6 +132,12 @@ class AirflowClient:
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
+    def invalidate_environment(self, environment: str) -> None:
+        response = self._session.delete(
+            urljoin(self._airflow_url, f"{ENVIRONMENTS_PATH}/{environment}")
+        )
+        self._raise_for_status(response)
+
     def get_versions(self) -> Versions:
         return Versions.parse_obj(self._get(VERSIONS_PATH))
 

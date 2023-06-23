@@ -49,9 +49,9 @@ from sqlmesh.core.snapshot.definition import (
     merge_intervals,
     remove_interval,
 )
-from sqlmesh.core.state_sync.base import SCHEMA_VERSION, StateSync, Versions
+from sqlmesh.core.state_sync.base import MIGRATIONS, SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
-from sqlmesh.utils import random_id
+from sqlmesh.utils import major_minor, random_id
 from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -200,6 +200,22 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.versions_table,
             pd.DataFrame([{"schema_version": schema_version, "sqlglot_version": sqlglot_version}]),
             columns_to_types=self._version_columns_to_types,
+        )
+
+    def invalidate_environment(self, name: str) -> None:
+        name = name.lower()
+        if name == c.PROD:
+            raise SQLMeshError("Cannot invalidate the production environment.")
+
+        filter_expr = exp.EQ(
+            this=exp.to_column("name"),
+            expression=exp.Literal.string(name),
+        )
+
+        self.engine_adapter.update_table(
+            self.environments_table,
+            {"expiration_ts": now_timestamp()},
+            where=filter_expr,
         )
 
     def delete_expired_environments(self) -> t.List[Environment]:
@@ -593,7 +609,22 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     @transactional()
     def migrate(self, skip_backup: bool = False) -> None:
-        super().migrate(skip_backup)
+        """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
+        versions = self.get_versions(validate=False)
+        migrations = MIGRATIONS[versions.schema_version :]
+
+        if not migrations and major_minor(SQLGLOT_VERSION) == versions.minor_sqlglot_version:
+            return
+
+        if not skip_backup:
+            self._backup_state()
+
+        for migration in migrations:
+            logger.info(f"Applying migration {migration}")
+            migration.migrate(self)
+
+        self._migrate_rows()
+        self._update_versions()
 
     @transactional()
     def rollback(self) -> None:

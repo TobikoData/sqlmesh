@@ -11,7 +11,7 @@ from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.console import Console
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
-from sqlmesh.core.state_sync import EngineAdapterStateSync, StateReader, StateSync
+from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 
 if t.TYPE_CHECKING:
@@ -36,7 +36,8 @@ class _SchedulerConfig(abc.ABC):
             context: The SQLMesh Context.
         """
 
-    def create_state_sync(self, context: Context) -> t.Optional[StateSync]:
+    @abc.abstractmethod
+    def create_state_sync(self, context: Context) -> StateSync:
         """Creates a State Sync instance.
 
         Args:
@@ -45,21 +46,6 @@ class _SchedulerConfig(abc.ABC):
         Returns:
             The StateSync instance.
         """
-        return None
-
-    def create_state_reader(self, context: Context) -> t.Optional[StateReader]:
-        """Creates a State Reader instance.
-
-        Functionality related to evaluation on a client side (Context.evaluate, Context.run, etc.)
-        will be unavailable if a State Reader instance is available but a State Sync instance is not.
-
-        Args:
-            context: The SQLMesh Context.
-
-        Returns:
-            The StateReader instance.
-        """
-        return None
 
 
 class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
@@ -67,7 +53,7 @@ class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
 
     type_: Literal["builtin"] = Field(alias="type", default="builtin")
 
-    def create_state_sync(self, context: Context) -> t.Optional[StateSync]:
+    def create_state_sync(self, context: Context) -> StateSync:
         state_connection = context.config.get_state_connection(context.gateway)
         engine_adapter = (
             state_connection.create_engine_adapter() if state_connection else context.engine_adapter
@@ -95,10 +81,10 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         """Constructs the Airflow Client instance."""
 
-    def create_state_reader(self, context: Context) -> t.Optional[StateReader]:
-        from sqlmesh.schedulers.airflow.state_sync import HttpStateReader
+    def create_state_sync(self, context: Context) -> StateSync:
+        from sqlmesh.schedulers.airflow.state_sync import HttpStateSync
 
-        return HttpStateReader(
+        return HttpStateSync(
             client=self.get_client(context.console),
             dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,
             console=context.console,

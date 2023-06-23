@@ -281,6 +281,14 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
+    def invalidate_environment(self, name: str) -> None:
+        """Invalidates the target environment by setting its expiration timestamp to now.
+
+        Args:
+            name: The name of the environment to invalidate.
+        """
+
+    @abc.abstractmethod
     def add_interval(
         self,
         snapshot: Snapshot,
@@ -380,40 +388,10 @@ class StateSync(StateReader, abc.ABC):
         then deleting the old ones.
         """
 
+    @abc.abstractmethod
     def migrate(self, skip_backup: bool = False) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
-        versions = self.get_versions(validate=False)
-        migrations = MIGRATIONS[versions.schema_version :]
-
-        if not migrations and major_minor(SQLGLOT_VERSION) == versions.minor_sqlglot_version:
-            return
-
-        if not skip_backup:
-            self._backup_state()
-
-        for migration in migrations:
-            logger.info(f"Applying migration {migration}")
-            migration.migrate(self)
-
-        self._migrate_rows()
-        self._update_versions()
 
     @abc.abstractmethod
     def rollback(self) -> None:
         """Rollback to previous backed up state."""
-
-    @abc.abstractmethod
-    def _backup_state(self) -> None:
-        """Backup snapshots, environments, and versions."""
-
-    @abc.abstractmethod
-    def _migrate_rows(self) -> None:
-        """Migrate all rows in the state sync, including snapshots and environments."""
-
-    @abc.abstractmethod
-    def _update_versions(
-        self,
-        schema_version: int = SCHEMA_VERSION,
-        sqlglot_version: str = SQLGLOT_VERSION,
-    ) -> None:
-        """Update the schema versions to the latest running versions."""

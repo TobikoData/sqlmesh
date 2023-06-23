@@ -67,6 +67,20 @@ def get_environments() -> Response:
     return _success(common.EnvironmentsResponse(environments=environments))
 
 
+@sqlmesh_api_v1.delete("/environments/<name>")
+@csrf.exempt
+@check_authentication
+def invalidate_environment(name: str) -> Response:
+    name = name.lower()
+    if name == c.PROD:
+        return _error("Cannot invalidate production environment", 400)
+
+    with util.scoped_state_sync() as state_sync:
+        state_sync.invalidate_environment(name)
+
+    return _success(common.InvalidateEnvironmentResponse(name=name))
+
+
 @sqlmesh_api_v1.get("/snapshots")
 @csrf.exempt
 @check_authentication

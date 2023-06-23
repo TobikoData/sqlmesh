@@ -248,7 +248,6 @@ class Context(BaseContext):
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
-        self._state_reader: t.Optional[StateReader] = None
 
         self._loader = (loader or self.config.loader or SqlMeshLoader)()
 
@@ -340,16 +339,7 @@ class Context(BaseContext):
 
     @property
     def state_reader(self) -> StateReader:
-        if not self._state_reader:
-            try:
-                self._state_reader = self.state_sync
-            except ConfigError:
-                self._state_reader = self._scheduler.create_state_reader(self)
-            if not self._state_reader:
-                raise ConfigError(
-                    "Invalid configuration: neither State Sync nor Reader has been configured"
-                )
-        return self._state_reader
+        return self.state_sync
 
     def refresh(self) -> None:
         """Refresh all models that have been updated."""
@@ -745,6 +735,15 @@ class Context(BaseContext):
             raise PlanError("Can't apply a plan with uncategorized changes.")
         self._scheduler.create_plan_evaluator(self).evaluate(plan)
 
+    def invalidate_environment(self, name: str) -> None:
+        """Invalidates the target environment by setting its expiration timestamp to now.
+
+        Args:
+            name: The name of the environment to invalidate.
+        """
+        self.state_sync.invalidate_environment(name)
+        self.console.log_success(f"Environment '{name}' has been invalidated.")
+
     def diff(self, environment: t.Optional[str] = None, detailed: bool = False) -> None:
         """Show a diff of the current context with a given environment.
 
@@ -1112,7 +1111,4 @@ class Context(BaseContext):
             self.console.log_error(f"{connection_name} connection failed. {ex}")
 
     def _new_state_sync(self) -> StateSync:
-        state_sync = self._provided_state_sync or self._scheduler.create_state_sync(self)
-        if not state_sync:
-            raise ConfigError("The operation is not supported when using a read-only state sync")
-        return state_sync
+        return self._provided_state_sync or self._scheduler.create_state_sync(self)
