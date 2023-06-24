@@ -80,7 +80,10 @@ class ModelTest(unittest.TestCase):
         """Compare two DataFrames"""
         try:
             pd.testing.assert_frame_equal(
-                df1, df2, check_dtype=False, check_datetimelike_compat=True
+                df1.sort_index(axis=1),
+                df2.sort_index(axis=1),
+                check_dtype=False,
+                check_datetimelike_compat=True,
             )
         except AssertionError as e:
             diff = "\n".join(
