@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
+    SUPPORTS_INSERT_OVERWRITE = False
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
