@@ -26,6 +26,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.common import parse_expression
 from sqlmesh.core.renderer import QueryRenderer
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
@@ -1174,9 +1175,9 @@ def test_star_expansion(assert_exp_eq) -> None:
           "model1"."ds" AS "ds"
         FROM (
           SELECT
-            CAST("t"."id" AS INT) AS "id",
-            CAST("t"."item_id" AS INT) AS "item_id",
-            CAST("t"."ds" AS TEXT) AS "ds"
+            CAST("id" AS INT) AS "id",
+            CAST("item_id" AS INT) AS "item_id",
+            CAST("ds" AS TEXT) AS "ds"
           FROM (VALUES
             (1, 1, '2020-01-01'),
             (1, 2, '2020-01-01'),
@@ -1203,9 +1204,9 @@ def test_star_expansion(assert_exp_eq) -> None:
             "model1"."ds" AS "ds"
           FROM (
             SELECT
-              CAST("t"."id" AS INT) AS "id",
-              CAST("t"."item_id" AS INT) AS "item_id",
-              CAST("t"."ds" AS TEXT) AS "ds"
+              CAST("id" AS INT) AS "id",
+              CAST("item_id" AS INT) AS "item_id",
+              CAST("ds" AS TEXT) AS "ds"
             FROM (VALUES
               (1, 1, '2020-01-01'),
               (1, 2, '2020-01-01'),
@@ -1217,6 +1218,33 @@ def test_star_expansion(assert_exp_eq) -> None:
               (7, 1, '2020-01-07')) AS "t"("id", "item_id", "ds")
           ) AS "model1"
         ) AS "model2"
+        """,
+    )
+
+    snapshots = context.snapshots
+    snapshots["db.model1"].categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshots["db.model2"].categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshots["db.model3"].categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert_exp_eq(
+        context.models["db.model2"].render_query(snapshots=snapshots),
+        """
+        SELECT
+          "model1"."id" AS "id",
+          "model1"."item_id" AS "item_id",
+          "model1"."ds" AS "ds"
+        FROM "sqlmesh__db"."db__model1__3720040680" AS "model1"
+        """,
+    )
+
+    assert_exp_eq(
+        context.models["db.model3"].render_query(snapshots=snapshots),
+        """
+        SELECT
+          "model2"."id" AS "id",
+          "model2"."item_id" AS "item_id",
+          "model2"."ds" AS "ds"
+        FROM "sqlmesh__db"."db__model2__1470437815" AS "model2"
         """,
     )
 

@@ -189,6 +189,7 @@ class QueryRenderer(ExpressionRenderer):
         dialect: str,
         macro_definitions: t.List[d.MacroDef],
         schema: t.Optional[t.Dict[str, t.Any]] = None,
+        model_name: t.Optional[str] = None,
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
@@ -206,6 +207,7 @@ class QueryRenderer(ExpressionRenderer):
             only_latest=only_latest,
         )
 
+        self._model_name = model_name
         self._time_column = time_column
         self._time_converter = time_converter or (lambda v: exp.convert(v))
 
@@ -256,9 +258,7 @@ class QueryRenderer(ExpressionRenderer):
                         start=start,
                         end=end,
                         latest=latest,
-                        snapshots=snapshots,
                         is_dev=is_dev,
-                        expand=expand,
                         **kwargs,
                     ),
                 )
@@ -274,6 +274,21 @@ class QueryRenderer(ExpressionRenderer):
                     self._optimized_cache[cache_key] = query
         else:
             query = t.cast(exp.Subqueryable, self._optimized_cache[cache_key])
+
+        # Table resolution MUST happen after optimization, otherwise the schema won't match the table names.
+        if snapshots or expand:
+            query = query.copy()
+            with _normalize_and_quote(query, self._dialect) as query:
+                query = _resolve_tables(
+                    query,
+                    snapshots=snapshots,
+                    expand=expand,
+                    is_dev=is_dev,
+                    start=start,
+                    end=end,
+                    latest=latest,
+                    **kwargs,
+                )
 
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
@@ -329,7 +344,7 @@ class QueryRenderer(ExpressionRenderer):
         failure = False
 
         if not schema.empty:
-            for dependency in d.find_tables(query, dialect=self._dialect):
+            for dependency in d.find_tables(query, dialect=self._dialect) - {self._model_name}:
                 if schema.find(exp.to_table(dependency, dialect=self._dialect)) is None:
                     logger.warning(
                         "Query cannot be optimized due to missing schema for model '%s'. "
@@ -377,13 +392,13 @@ def _normalize_and_quote(query: E, dialect: str) -> t.Iterator[E]:
 
 
 def _resolve_tables(
-    expression: exp.Expression,
+    expression: E,
     *,
     snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     expand: t.Iterable[str] = tuple(),
     is_dev: bool = False,
     **render_kwargs: t.Any,
-) -> exp.Expression:
+) -> E:
     from sqlmesh.core.snapshot import to_table_mapping
 
     snapshots = snapshots or {}
