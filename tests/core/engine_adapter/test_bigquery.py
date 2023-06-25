@@ -169,6 +169,7 @@ def test_create_table_date_partition(
         {"a": "int", "b": "int"},
         partitioned_by=partition_by_cols,
         partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=["b"],
     )
 
     sql_calls = [
@@ -179,7 +180,7 @@ def test_create_table_date_partition(
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement}"
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement} CLUSTER BY `b`"
     ]
 
 

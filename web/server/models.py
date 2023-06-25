@@ -189,6 +189,7 @@ class ModelDetails(BaseModel):
     tags: t.Optional[str] = None
     grain: t.Optional[str] = None
     partitioned_by: t.Optional[str] = None
+    clustered_by: t.Optional[str] = None
     lookback: t.Optional[int] = None
     cron_prev: t.Optional[TimeLike] = None
     cron_next: t.Optional[TimeLike] = None

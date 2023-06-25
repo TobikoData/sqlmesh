@@ -71,6 +71,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "dev_intervals": [],
                 "model": {
                     "audits": [],
+                    "clustered_by": [],
                     "cron": "@daily",
                     "dialect": "",
                     "pre_statements": ["@DEF(key, " "'value')"],

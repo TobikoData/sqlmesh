@@ -101,6 +101,7 @@ class _Model(ModelMeta, frozen=True):
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
         partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
+        clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
     """
@@ -556,28 +557,37 @@ class _Model(ModelMeta, frozen=True):
         Raises:
             ConfigError
         """
-        if self.partitioned_by:
-            unique_partition_keys = {
-                col.name.strip().lower()
-                for expr in self.partitioned_by
-                for col in expr.find_all(exp.Column)
-            }
-            if len(self.partitioned_by) != len(unique_partition_keys):
-                raise_config_error(
-                    "All partition keys must be unique in the model definition",
-                    self._path,
-                )
 
-            columns_to_types = self.columns_to_types
-            if columns_to_types is not None:
-                column_names = {c.lower() for c in columns_to_types}
-                missing_keys = unique_partition_keys - column_names
-                if missing_keys:
-                    missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
+        for field in ("partitioned_by", "clustered_by"):
+            values = getattr(self, field)
+
+            if values:
+                values = [
+                    col.name
+                    for expr in values
+                    for col in t.cast(
+                        exp.Expression, exp.maybe_parse(expr, dialect=self.dialect)
+                    ).find_all(exp.Column)
+                ]
+
+                unique_keys = set(values)
+
+                if len(values) != len(unique_keys):
                     raise_config_error(
-                        f"Partition keys [{missing_keys_str}] are missing in the model definition",
+                        "All keys in '{field}' must be unique in the model definition",
                         self._path,
                     )
+
+                columns_to_types = self.columns_to_types
+                if columns_to_types is not None:
+                    column_names = {c.lower() for c in columns_to_types}
+                    missing_keys = unique_keys - column_names
+                    if missing_keys:
+                        missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
+                        raise_config_error(
+                            f"{field} keys [{missing_keys_str}] are missing in the model definition",
+                            self._path,
+                        )
 
         if self.kind.is_incremental_by_time_range and not self.time_column:
             raise_config_error(
@@ -1658,6 +1668,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "cron": lambda value: exp.Literal.string(value),
     "batch_size": lambda value: exp.Literal.number(value),
     "partitioned_by_": _single_expr_or_tuple,
+    "clustered_by": _single_value_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=value),
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,
