@@ -877,6 +877,7 @@ class SqlModel(_SqlBasedModel):
                 self.dialect,
                 self.macro_definitions,
                 schema=self.mapping_schema,
+                model_name=self.name,
                 path=self._path,
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
