@@ -13,6 +13,7 @@ import itertools
 import logging
 import typing as t
 import uuid
+from enum import Enum
 
 import pandas as pd
 from sqlglot import Dialect, exp
@@ -47,6 +48,28 @@ MERGE_TARGET_ALIAS = "__MERGE_TARGET__"
 MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 
 
+class InsertOverwriteStrategy(Enum):
+    DELETE_INSERT = 1
+    INSERT_OVERWRITE = 2
+    REPLACE_WHERE = 3
+
+    @property
+    def is_delete_insert(self) -> bool:
+        return self == InsertOverwriteStrategy.DELETE_INSERT
+
+    @property
+    def is_insert_overwrite(self) -> bool:
+        return self == InsertOverwriteStrategy.INSERT_OVERWRITE
+
+    @property
+    def is_replace_where(self) -> bool:
+        return self == InsertOverwriteStrategy.REPLACE_WHERE
+
+    @property
+    def is_not_delete_insert(self) -> bool:
+        return not self.is_delete_insert
+
+
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.
 
@@ -65,7 +88,7 @@ class EngineAdapter:
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
     SUPPORTS_INDEXES = False
-    SUPPORTS_INSERT_OVERWRITE = False
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
     SCHEMA_DIFFER = SchemaDiffer()
 
@@ -612,7 +635,15 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         table = exp.to_table(table_name)
-        if self.SUPPORTS_INSERT_OVERWRITE:
+        if self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
+            if where is None:
+                raise SQLMeshError(
+                    "Where condition is required when doing a delete/insert for insert/overwrite"
+                )
+            with self.transaction():
+                self.delete_from(table_name, where=where)
+                self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
+        else:
             df = self.try_get_pandas_df(query_or_df)
             if df is not None:
                 query_or_df = next(
@@ -623,17 +654,19 @@ class EngineAdapter:
                     )
                 )
             query = t.cast("Query", query_or_df)
-            self.execute(
-                exp.insert(query, table, columns=list(columns_to_types or []), overwrite=True)
+            insert_exp = exp.insert(
+                query,
+                table,
+                columns=list(columns_to_types or []),
+                overwrite=self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite,
             )
-        else:
-            if where is None:
-                raise SQLMeshError(
-                    "Where condition is required when doing a delete/insert for insert/overwrite"
-                )
-            with self.transaction():
-                self.delete_from(table_name, where=where)
-                self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
+            if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
+                if where is None:
+                    raise SQLMeshError(
+                        "Where condition is required when doing a replace_where for insert/overwrite"
+                    )
+                insert_exp.set("where", where)
+            self.execute(insert_exp)
 
     def update_table(
         self,

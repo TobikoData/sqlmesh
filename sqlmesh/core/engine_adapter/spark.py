@@ -5,7 +5,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapter, InsertOverwriteStrategy
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
@@ -28,7 +28,7 @@ if t.TYPE_CHECKING:
 class SparkEngineAdapter(EngineAdapter):
     DIALECT = "spark"
     ESCAPE_JSON = True
-    SUPPORTS_INSERT_OVERWRITE = True
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
 
     @property
     def spark(self) -> PySparkSession:

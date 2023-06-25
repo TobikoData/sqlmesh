@@ -87,7 +87,7 @@ Note: If using Databricks Connect please note the [requirements](https://docs.da
 | `server_hostname`                    | Databricks instance host name                                                                                                                                                            | string |    N     |
 | `http_path`                          | HTTP path, either to a DBSQL endpoint (such as `/sql/1.0/endpoints/1234567890abcdef`) or to a DBR interactive cluster (such as `/sql/protocolv1/o/1234567890123456/1234-123456-slid123`) | string |    N     |
 | `access_token`                       | HTTP Bearer access token, such as Databricks Personal Access Token                                                                                                                       | string |    N     |
-| `catalog`                            | The name of the catalog to use for the connection. Defaults to use Databricks cluster default (most likely `hive_metastore`).                                                            | string |    N     |
+| `catalog`                            | Spark 3.4+ Only. The name of the catalog to use for the connection. Defaults to use Databricks cluster default (most likely `hive_metastore`).                                           | string |    N     |
 | `http_headers`                       | SQL Connector Only: An optional dictionary of HTTP headers that will be set on every request                                                                                             |  dict  |    N     |
 | `databricks_connect_server_hostname` | Databricks Connect Only: Databricks Connect server hostname. Uses `server_hostname` if not set.                                                                                          | string |    N     |
 | `databricks_connect_access_token`    | Databricks Connect Only: Databricks Connect access token. Uses `access_token` if not set.                                                                                                | string |    N     |
@@ -297,11 +297,11 @@ sqlmesh_airflow = SQLMeshAirflow(
 ## Spark - Local/Built-in Scheduler
 **Engine Adapter Type**: `spark`
 
-| Option          | Description                                          |  Type  | Required |
-|-----------------|------------------------------------------------------|:------:|:--------:|
-| `config_dir`    | Value to set for `SPARK_CONFIG_DIR`                  | string |    N     |
-| `catalog`       | The catalog to use when issuing commands             | string |    N     |
-| `config`        | Key/value pairs to set for the Spark Configuration.  |  dict  |    N     |
+| Option          | Description                                               |  Type  | Required |
+|-----------------|-----------------------------------------------------------|:------:|:--------:|
+| `config_dir`    | Value to set for `SPARK_CONFIG_DIR`                       | string |    N     |
+| `catalog`       | Spark 3.4+ Only. The catalog to use when issuing commands | string |    N     |
+| `config`        | Key/value pairs to set for the Spark Configuration.       |  dict  |    N     |
 
 ## Spark - Airflow Scheduler
 **Engine Name:** `spark`

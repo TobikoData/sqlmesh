@@ -6,6 +6,7 @@ import typing as t
 import pandas as pd
 from sqlglot import Dialect, exp
 
+from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
-    SUPPORTS_INSERT_OVERWRITE = False
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
