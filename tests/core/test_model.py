@@ -1233,7 +1233,7 @@ def test_star_expansion(assert_exp_eq) -> None:
           "model1"."id" AS "id",
           "model1"."item_id" AS "item_id",
           "model1"."ds" AS "ds"
-        FROM "sqlmesh__db"."db__model1__3720040680" AS "model1"
+        FROM "sqlmesh__db"."db__model1__3784582009" AS "model1"
         """,
     )
 
@@ -1244,7 +1244,7 @@ def test_star_expansion(assert_exp_eq) -> None:
           "model2"."id" AS "id",
           "model2"."item_id" AS "item_id",
           "model2"."ds" AS "ds"
-        FROM "sqlmesh__db"."db__model2__1470437815" AS "model2"
+        FROM "sqlmesh__db"."db__model2__1662907078" AS "model2"
         """,
     )
 
