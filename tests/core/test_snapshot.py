@@ -570,6 +570,8 @@ def test_table_name(snapshot: Snapshot):
     )
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
+    snapshot.physical_schema_ = "private"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "private.name__3078928823"
 
 
 def test_categorize_change_sql(make_snapshot):

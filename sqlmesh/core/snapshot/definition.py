@@ -463,18 +463,19 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         version: t.Optional[str] = None,
         audits: t.Optional[t.Dict[str, Audit]] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
+        physical_schema: t.Optional[str] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a model.
 
         Args:
             model: Model to snapshot.
-            physical_schema: The schema of the snapshot which represents where it is stored.
             models: Dictionary of all models in the graph to make the fingerprint dependent on parent changes.
                 If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
             version: The version that a snapshot is associated with. Usually set during the planning phase.
             audits: Available audits by name.
             cache: Cache of model name to fingerprints.
+            physical_schema: The schema of the snapshot which represents where it is stored.
 
         Returns:
             The newly created snapshot.
@@ -485,6 +486,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         return cls(
             name=model.name,
+            physical_schema=physical_schema,
             fingerprint=fingerprint_from_model(
                 model,
                 models=models,

@@ -60,7 +60,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
-from sqlmesh.core.model import Model
+from sqlmesh.core.model import Model, parse_model_name
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
@@ -510,6 +510,7 @@ class Context(BaseContext):
         snapshots = {}
 
         for model in models.values():
+            physical_schema = None
             if model.name in remote_snapshots:
                 snapshot = remote_snapshots[model.name]
                 ttl = snapshot.ttl
@@ -518,6 +519,7 @@ class Context(BaseContext):
                 config = self.config_for_model(model)
                 ttl = config.snapshot_ttl
                 project = config.project
+                physical_schema = config.physical_schema_map.get(parse_model_name(model.name)[1])
 
             snapshot = Snapshot.from_model(
                 model,
@@ -526,6 +528,7 @@ class Context(BaseContext):
                 cache=fingerprint_cache,
                 ttl=ttl,
                 project=project,
+                physical_schema=physical_schema,
             )
             snapshots[model.name] = snapshot
 

@@ -30,6 +30,12 @@ local_config = Config(
     default_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
 )
 
+# A DuckDB config with a physical schema map.
+map_config = Config(
+    default_connection=DuckDBConnectionConfig(),
+    physical_schema_map={"sushi": "company_internal"},
+)
+
 # Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
 airflow_config = Config(  # type: ignore
     default_scheduler=AirflowSchedulerConfig(),

@@ -58,6 +58,7 @@ class Config(BaseConfig):
     pinned_environments: t.Set[str] = set()
     loader: t.Type[Loader] = SqlMeshLoader
     env_vars: t.Dict[str, str] = {}
+    physical_schema_map: t.Dict[str, str] = {}
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
@@ -67,6 +68,7 @@ class Config(BaseConfig):
         "model_defaults": UpdateStrategy.NESTED_UPDATE,
         "auto_categorize_changes": UpdateStrategy.NESTED_UPDATE,
         "pinned_environments": UpdateStrategy.EXTEND,
+        "physical_schema_map": UpdateStrategy.KEY_UPDATE,
     }
 
     @validator("gateways", always=True)

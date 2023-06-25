@@ -322,3 +322,9 @@ def test_plan_apply(sushi_context) -> None:
     )
     sushi_context.apply(plan)
     assert sushi_context.state_reader.get_environment("dev")
+
+
+def test_physical_schema_map() -> None:
+    context = Context(paths="examples/sushi", config="map_config")
+    assert context.config.physical_schema_map == {"sushi": "company_internal"}
+    # TODO: test that the physical schema map is used
