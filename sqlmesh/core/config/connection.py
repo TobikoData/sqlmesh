@@ -185,9 +185,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     force_databricks_connect: bool = False
     disable_databricks_connect: bool = False
 
-    # Concurrent tasks can cause an issue due to simultaneous updates to intervals.
-    # Bump this back up when the separate table for intervals is implemented.
-    concurrent_tasks: Literal[1] = 1
+    concurrent_tasks: int = 1
 
     type_: Literal["databricks"] = Field(alias="type", default="databricks")
 
