@@ -343,19 +343,21 @@ class QueryRenderer(ExpressionRenderer):
         original = query
         failure = False
 
-        if not schema.empty:
-            for dependency in d.find_tables(query, dialect=self._dialect) - {self._model_name}:
-                if schema.find(exp.to_table(dependency, dialect=self._dialect)) is None:
-                    logger.warning(
-                        "Query cannot be optimized due to missing schema for model '%s'. "
-                        "Make sure that the model query can be rendered at parse time",
-                        dependency,
-                    )
-                    schema = MappingSchema(None, dialect=self._dialect, normalize=False)
-                    break
+        dependencies = d.find_tables(query, dialect=self._dialect) - {self._model_name}
+        for dependency in dependencies:
+            if schema.find(exp.to_table(dependency, dialect=self._dialect)) is None:
+                logger.warning(
+                    "Query cannot be optimized due to missing schema for model '%s'. "
+                    "Make sure that the model query can be rendered at parse time",
+                    dependency,
+                )
+                schema = MappingSchema(None, dialect=self._dialect, normalize=False)
+                break
+
+        should_optimize = not schema.empty or not dependencies
 
         try:
-            if not schema.empty:
+            if should_optimize:
                 query = query.copy()
 
                 qualify(
@@ -369,7 +371,7 @@ class QueryRenderer(ExpressionRenderer):
             failure = True
             logger.error("%s for '%s', the column may not exist or is ambiguous", ex, self._path)
         finally:
-            if failure or schema.empty:
+            if failure or not should_optimize:
                 query = original.copy()
 
                 with _normalize_and_quote(query, self._dialect) as query:

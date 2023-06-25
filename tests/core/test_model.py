@@ -1166,6 +1166,8 @@ def test_star_expansion(assert_exp_eq) -> None:
     context.upsert_model(model2)
     context.upsert_model(model3)
 
+    context.render("db.model1")
+
     assert_exp_eq(
         context.render("db.model2"),
         """
@@ -1175,9 +1177,9 @@ def test_star_expansion(assert_exp_eq) -> None:
           "model1"."ds" AS "ds"
         FROM (
           SELECT
-            CAST("id" AS INT) AS "id",
-            CAST("item_id" AS INT) AS "item_id",
-            CAST("ds" AS TEXT) AS "ds"
+            CAST("t"."id" AS INT) AS "id",
+            CAST("t"."item_id" AS INT) AS "item_id",
+            CAST("t"."ds" AS TEXT) AS "ds"
           FROM (VALUES
             (1, 1, '2020-01-01'),
             (1, 2, '2020-01-01'),
@@ -1204,9 +1206,9 @@ def test_star_expansion(assert_exp_eq) -> None:
             "model1"."ds" AS "ds"
           FROM (
             SELECT
-              CAST("id" AS INT) AS "id",
-              CAST("item_id" AS INT) AS "item_id",
-              CAST("ds" AS TEXT) AS "ds"
+              CAST("t"."id" AS INT) AS "id",
+              CAST("t"."item_id" AS INT) AS "item_id",
+              CAST("t"."ds" AS TEXT) AS "ds"
             FROM (VALUES
               (1, 1, '2020-01-01'),
               (1, 2, '2020-01-01'),
