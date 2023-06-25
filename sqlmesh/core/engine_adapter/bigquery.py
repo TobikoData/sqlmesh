@@ -99,7 +99,7 @@ class BigQueryEngineAdapter(EngineAdapter):
                     return
             raise e
 
-    def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
+    def columns(self, table_name: TableName, include_pseudo_columns: bool = True) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         from google.cloud.bigquery import TimePartitioningType
 
@@ -108,7 +108,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             field.name: exp.DataType.build(field.field_type, dialect=self.dialect)
             for field in table.schema
         }
-        if table.time_partitioning and not table.time_partitioning.field:
+        if include_pseudo_columns and table.time_partitioning and not table.time_partitioning.field:
             columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP")
             if table.time_partitioning.type_ == TimePartitioningType.DAY:
                 columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
