@@ -1166,8 +1166,6 @@ def test_star_expansion(assert_exp_eq) -> None:
     context.upsert_model(model2)
     context.upsert_model(model3)
 
-    context.render("db.model1")
-
     assert_exp_eq(
         context.render("db.model2"),
         """

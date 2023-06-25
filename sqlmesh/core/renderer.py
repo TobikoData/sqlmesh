@@ -153,23 +153,19 @@ class ExpressionRenderer:
             self._cache[cache_key] = expression
 
         expression = t.cast(exp.Expression, self._cache[cache_key])
+        if expression is None:
+            return None
 
-        if expression and (snapshots or expand):
-            expression = expression.copy()
-
-            with _normalize_and_quote(expression, self._dialect) as expression:
-                expression = _resolve_tables(
-                    expression,
-                    snapshots=snapshots,
-                    expand=expand,
-                    is_dev=is_dev,
-                    start=start,
-                    end=end,
-                    latest=latest,
-                    **kwargs,
-                )
-
-        return expression
+        return self._resolve_tables(
+            expression,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
 
     def update_cache(
         self,
@@ -180,6 +176,34 @@ class ExpressionRenderer:
         **kwargs: t.Any,
     ) -> None:
         self._cache[_dates(start, end, latest)] = expression
+
+    def _resolve_tables(
+        self,
+        expression: E,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
+        **kwargs: t.Any,
+    ) -> E:
+        if not snapshots and not expand:
+            return expression
+
+        expression = expression.copy()
+        with _normalize_and_quote(expression, self._dialect) as expression:
+            return _resolve_tables(
+                expression,
+                snapshots=snapshots,
+                expand=expand,
+                is_dev=is_dev,
+                start=start,
+                end=end,
+                latest=latest,
+                **kwargs,
+            )
 
 
 class QueryRenderer(ExpressionRenderer):
@@ -276,19 +300,16 @@ class QueryRenderer(ExpressionRenderer):
             query = t.cast(exp.Subqueryable, self._optimized_cache[cache_key])
 
         # Table resolution MUST happen after optimization, otherwise the schema won't match the table names.
-        if snapshots or expand:
-            query = query.copy()
-            with _normalize_and_quote(query, self._dialect) as query:
-                query = _resolve_tables(
-                    query,
-                    snapshots=snapshots,
-                    expand=expand,
-                    is_dev=is_dev,
-                    start=start,
-                    end=end,
-                    latest=latest,
-                    **kwargs,
-                )
+        query = self._resolve_tables(
+            query,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
 
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
