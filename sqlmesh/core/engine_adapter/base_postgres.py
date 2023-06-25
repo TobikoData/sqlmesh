@@ -21,7 +21,9 @@ class BasePostgresEngineAdapter(EngineAdapter):
     COLUMNS_TABLE = "information_schema.columns"
     SUPPORTS_MATERIALIZED_VIEWS = True
 
-    def columns(self, table_name: TableName, include_pseudo_columns: bool = True) -> t.Dict[str, exp.DataType]:
+    def columns(
+        self, table_name: TableName, include_pseudo_columns: bool = True
+    ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         table = exp.to_table(table_name)
         sql = (
