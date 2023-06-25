@@ -463,7 +463,7 @@ class EngineAdapter:
         )
 
     def columns(
-        self, table_name: TableName, include_pseudo_columns: bool = True
+        self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))

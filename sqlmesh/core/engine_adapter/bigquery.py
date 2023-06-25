@@ -100,7 +100,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             raise e
 
     def columns(
-        self, table_name: TableName, include_pseudo_columns: bool = True
+        self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         from google.cloud.bigquery import TimePartitioningType
