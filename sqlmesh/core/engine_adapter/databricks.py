@@ -100,7 +100,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             ).getOrCreate()
             catalog = self._extra_config.get("catalog")
             if catalog:
-                self._spark.sql(f"USE CATALOG {catalog}")
+                self._spark.catalog.setCurrentCatalog(catalog)
         return self._spark
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
