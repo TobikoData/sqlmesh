@@ -140,13 +140,18 @@ class ManifestHelper:
             package_name = node.package_name
             refs = _refs(node)
             for ref in refs:
-                ref_node_name = f"model.{ref}" if "." in ref else f"model.{package_name}.{ref}"
-                if ref_node_name in self._manifest.disabled:
-                    logger.info(
-                        "Skipping test '%s' which references a disabled model '%s'", node.name, ref
-                    )
-                    skip_test = True
-                    break
+                if "." not in ref:
+                    ref = f"{package_name}.{ref}"
+                for node_type in ("model", "seed", "snapshot"):
+                    ref_node_name = f"{node_type}.{ref}"
+                    if ref_node_name in self._manifest.disabled:
+                        logger.info(
+                            "Skipping test '%s' which references a disabled model '%s'",
+                            node.name,
+                            ref,
+                        )
+                        skip_test = True
+                        break
 
             if skip_test:
                 continue
