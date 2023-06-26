@@ -492,7 +492,7 @@ class Plan:
                     f"Cannot restate from '{table}'. Either such model doesn't exist or no other model references it."
                 )
             self._restatements.update(
-                [downstream_snapshot.name for downstream_snapshot in downstream_snapshots]
+                downstream_snapshot.name for downstream_snapshot in downstream_snapshots
             )
 
     def _build_directly_and_indirectly_modified(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
