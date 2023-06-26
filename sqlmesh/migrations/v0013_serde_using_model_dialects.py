@@ -20,7 +20,7 @@ def migrate(state_sync):  # type: ignore
         model = parsed_snapshot["model"]
         dialect = parsed_snapshot["dialect"]
 
-        # Read using the SQLGlot dialect, write using the model's dialect if it doesn't contain Jinja
+        # Read using the SQLGlot dialect, write using the model's dialect
         if "query" in model and not has_jinja(model["query"]):
             model["query"] = transpile(model["query"], read="", write=dialect, identity=False)[0]
 
