@@ -65,10 +65,6 @@ class InsertOverwriteStrategy(Enum):
     def is_replace_where(self) -> bool:
         return self == InsertOverwriteStrategy.REPLACE_WHERE
 
-    @property
-    def is_not_delete_insert(self) -> bool:
-        return not self.is_delete_insert
-
 
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.
@@ -635,12 +631,16 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         table = exp.to_table(table_name)
+        if (
+            self.INSERT_OVERWRITE_STRATEGY.is_delete_insert
+            or self.INSERT_OVERWRITE_STRATEGY.is_replace_where
+        ) and not where:
+            raise SQLMeshError(
+                "Where condition is required when doing a delete/insert or replace/where for insert/overwrite"
+            )
         if self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
-            if where is None:
-                raise SQLMeshError(
-                    "Where condition is required when doing a delete/insert for insert/overwrite"
-                )
             with self.transaction():
+                assert where is not None
                 self.delete_from(table_name, where=where)
                 self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
         else:
@@ -661,10 +661,6 @@ class EngineAdapter:
                 overwrite=self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite,
             )
             if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
-                if where is None:
-                    raise SQLMeshError(
-                        "Where condition is required when doing a replace_where for insert/overwrite"
-                    )
                 insert_exp.set("where", where)
             self.execute(insert_exp)
 
