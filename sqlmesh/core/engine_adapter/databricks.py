@@ -6,6 +6,7 @@ import typing as t
 import pandas as pd
 from sqlglot import Dialect, exp
 
+from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
+    # Change to REPLACE WHERE once column bug is fixed
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
@@ -99,7 +102,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             ).getOrCreate()
             catalog = self._extra_config.get("catalog")
             if catalog:
-                self._spark.sql(f"USE CATALOG {catalog}")
+                # Note: Spark 3.4+ Only API
+                self._spark.catalog.setCurrentCatalog(catalog)
         return self._spark
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:

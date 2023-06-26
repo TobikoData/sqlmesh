@@ -72,7 +72,8 @@ class SparkSessionConnection:
             # Databricks Connect does not support accessing the SparkContext
             pass
         if self.catalog:
-            self.spark.sql(f"USE CATALOG {self.catalog}")
+            # Note: Spark 3.4+ Only API
+            self.spark.catalog.setCurrentCatalog(self.catalog)
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:

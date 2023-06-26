@@ -7,6 +7,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse, parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
+from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -498,7 +499,7 @@ def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):
 )
 def test_snapshot_evaluator_yield_pd(adapter_mock, make_snapshot, input_dfs, output_dict):
     adapter_mock.is_pyspark_df.return_value = False
-    adapter_mock.SUPPORTS_INSERT_OVERWRITE = True
+    adapter_mock.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     adapter_mock.try_get_df = lambda x: x
     evaluator = SnapshotEvaluator(adapter_mock)
 
