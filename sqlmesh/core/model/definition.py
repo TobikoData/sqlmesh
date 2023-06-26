@@ -1489,7 +1489,6 @@ def _create_model(
 
     model._path = path
     model.set_time_format(time_column_format)
-    model.validate_definition()
 
     return t.cast(Model, model)
 
