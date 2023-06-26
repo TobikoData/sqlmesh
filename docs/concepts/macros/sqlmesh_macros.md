@@ -50,10 +50,10 @@ Define your own macro variables with the `@DEF` macro operator. For example, you
 SQLMesh has three basic requirements for using the `@DEF` operator:
 
 1. The `MODEL` statement must end with a semi-colon `;`
-2. All `@DEF` uses must come after the `MODEL` statement and before the SQL code
+2. All `@DEF` uses must come after the `MODEL` statement and before the SQL query
 3. Each `@DEF` use must end with a semi-colon `;`
 
-For example, consider the following model `sqlmesh_example.full_model` from the SQLMesh quickstart guide:
+For example, consider the following model `sqlmesh_example.full_model` from the [SQLMesh quickstart guide](../../quick_start.md):
 
 ```sql linenums="1"
 MODEL (
@@ -71,7 +71,7 @@ FROM
 GROUP BY item_id
 ```
 
-This model could be extended to use a user-defined macro variable to filter the query results based on `item_size` like this:
+This model could be extended with a user-defined macro variable to filter the query results based on `item_size` like this:
 
 ```sql linenums="1"
 MODEL (
@@ -159,7 +159,7 @@ SQLMesh macros use their semantic understanding of SQL code to take automatic ac
 1. It prints the item
 2. It knows fields are separated by commas in `SELECT`, so it automatically separates the printed items with commas
 
-Because of the automatic print and comma-separation, the anonymous function `number -> number` tells `@EACH` that for each item `number` it should print the item and separate the items with commas. Therefore, the complete output from the query is:
+Because of the automatic print and comma-separation, the anonymous function `number -> number` tells `@EACH` that for each item `number` it should print the item and separate the items with commas. Therefore, the complete output from the example above is:
 
 ```sql linenums="1"
 SELECT
@@ -228,7 +228,25 @@ SELECT
 FROM table
 ```
 
-More information to come on using macro variables as part of a column name.
+Now we can use the array values as part of a column name by using the SQLMesh macro operator `@` inside the `@EACH` operator:
+
+```sql linenums="1"
+SELECT
+  @EACH(['4','5','6'], x -> CASE WHEN favorite_number = x THEN 1 ELSE 0 END as column_@x)
+FROM table
+```
+
+This query will render to:
+
+```sql linenums="1"
+SELECT 
+  CASE WHEN favorite_number = '4' THEN 1 ELSE 0 END AS column_4, 
+  CASE WHEN favorite_number = '5' THEN 1 ELSE 0 END AS column_5,
+  CASE WHEN favorite_number = '6' THEN 1 ELSE 0 END AS column_6
+FROM table
+```
+
+This syntax works regardless of whether the array values are quoted or not.
 
 #### @IF
 
@@ -278,7 +296,53 @@ SELECT
 FROM table
 ```
 
-Note that `@IF(1 > 0, sensitive_col)` does not include the third argument specifying a value if `FALSE`, so only `col1` would be selected if the condition were `FALSE`.
+Note that `@IF(1 > 0, sensitive_col)` does not include the third argument specifying a value if `FALSE`. Had the condition evaluated to `FALSE`, `@IF` would return nothing and only `col1` would be selected.
+
+Alternatively, we could specify that `nonsensitive_col` be returned if the condition evaluates to `FALSE`:
+
+```sql linenums="1"
+SELECT
+  col1,
+  @IF(1 > 2, sensitive_col, nonsensitive_col)
+FROM table
+```
+
+Because `1 > 2` evaluates to `FALSE`, the query is rendered as:
+
+```sql linenums="1"
+SELECT
+  col1,
+  nonsensitive_col
+FROM table
+```
+
+#### @EVAL
+
+`@EVAL` evaluates its arguments with SQLGlot's SQL executor. 
+
+It allows you to execute mathematical or other calculations in SQL code. It behaves similarly to the first argument of the [`@IF` operator](#if), but it is not limited to logical conditions.
+
+For example, consider a query adding 5 to a macro variable:
+
+```sql linenums="1"
+MODEL (
+  ...
+);
+
+@DEF(x, 1);
+
+SELECT
+  @EVAL(5 + @x) as my_six
+FROM table
+```
+
+After macro variable substitution, this would render as `@EVAL(5 + 1)` and be evaluated to `6`, resulting in the final rendered query:
+
+```sql linenums="1"
+SELECT
+  6 as my_six
+FROM table
+```
 
 ### Helper macros
 
@@ -301,7 +365,6 @@ For example, consider this `@FILTER` call:
 ```
 
 It applies the condition `x > 1` to each item in the input array `[1,2,3]` and returns `[2,3]`.
-
 
 #### @REDUCE
 
@@ -348,13 +411,6 @@ WHERE
     (x, y) -> x AND y -- Combines individual predicates with `AND`
   )
 ```
-
-### Meta Operators
-@SQL
-
-@''
-
-More information to come.
 
 ### SQL clause operators
 
