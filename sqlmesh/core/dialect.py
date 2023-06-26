@@ -10,6 +10,7 @@ import pandas as pd
 from sqlglot import Dialect, Generator, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
@@ -635,7 +636,8 @@ def pandas_to_sql(
 
 def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) -> str:
     return exp.table_name(
-        normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect)
+        normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect),
+        dialect=dialect,
     )
 
 
@@ -644,4 +646,22 @@ def extract_columns_to_types(query: exp.Subqueryable) -> t.Dict[str, exp.DataTyp
     return {
         expression.output_name: expression.type or exp.DataType.build("unknown")
         for expression in query.selects
+    }
+
+
+def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Set[str]:
+    """Find all tables referenced in a query.
+
+    Args:
+        expressions: The query to find the tables in.
+        dialect: The dialect to use for normalization of table names.
+
+    Returns:
+        A Set of all the table names.
+    """
+    return {
+        normalize_model_name(table, dialect=dialect)
+        for scope in traverse_scope(expression)
+        for table in scope.tables
+        if isinstance(table.this, exp.Identifier) and exp.table_name(table) not in scope.cte_sources
     }
