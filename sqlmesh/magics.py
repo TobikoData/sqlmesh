@@ -60,10 +60,10 @@ class SQLMeshMagics(Magics):
                 "div",
                 h(
                     "span",
-                    messages["green-bold"],
+                    messages.get("green-bold"),
                     {"style": {"color": "green", "font-weight": "bold"}},
                 ),
-                h("span", messages["unstyled"]) if messages.get("unstyled") else "",
+                h("span", messages.get("unstyled")) if messages.get("unstyled") else "",
             )
         )
         return HTML(msg)
