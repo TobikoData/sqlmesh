@@ -191,7 +191,7 @@ class SparkEngineAdapter(EngineAdapter):
         # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
         # currently check for storage formats we will just do an insert/overwrite.
         return self._insert_overwrite_by_condition(
-            table_name, query_or_df, columns_to_types=columns_to_types
+            table_name, query_or_df, columns_to_types=columns_to_types, where=exp.condition("1=1")
         )
 
     def create_state_table(

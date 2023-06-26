@@ -9,6 +9,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
+from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 
 
@@ -144,7 +145,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite(mocker: Mo
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
-    adapter.SUPPORTS_INSERT_OVERWRITE = True
+    adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     adapter._insert_overwrite_by_condition(
         "test_table",
         parse_one("SELECT a, b FROM tbl"),
@@ -163,7 +164,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(moc
     connection_mock.cursor.return_value = cursor_mock
 
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
-    adapter.SUPPORTS_INSERT_OVERWRITE = True
+    adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter._insert_overwrite_by_condition(
         "test_table",
@@ -174,6 +175,45 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(moc
 
     cursor_mock.execute.assert_called_once_with(
         "INSERT OVERWRITE TABLE test_table (a, ds) SELECT CAST(a AS INT) AS a, CAST(ds AS TEXT) AS ds FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS test_table(a, ds)"
+    )
+
+
+def test_insert_overwrite_by_time_partition_replace_where(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
+    adapter._insert_overwrite_by_condition(
+        "test_table",
+        parse_one("SELECT a, b FROM tbl"),
+        where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
+    )
+
+    cursor_mock.execute.assert_called_once_with(
+        "INSERT INTO test_table (a, b) REPLACE WHERE b BETWEEN '2022-01-01' AND '2022-01-02' SELECT a, b FROM tbl"
+    )
+
+
+def test_insert_overwrite_by_time_partition_replace_where_pandas(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
+    df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
+    adapter._insert_overwrite_by_condition(
+        "test_table",
+        df,
+        where=parse_one("ds BETWEEN '2022-01-01' and '2022-01-02'"),
+        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+    )
+
+    cursor_mock.execute.assert_called_once_with(
+        "INSERT INTO test_table (a, ds) REPLACE WHERE ds BETWEEN '2022-01-01' AND '2022-01-02' SELECT CAST(a AS INT) AS a, CAST(ds AS TEXT) AS ds FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS test_table(a, ds)"
     )
 
 
