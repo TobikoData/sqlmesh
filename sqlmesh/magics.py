@@ -55,6 +55,7 @@ class SQLMeshMagics(Magics):
         )
 
     def success_message(self, messages: t.Dict[str, str]) -> HTML:
+        unstyled = messages.get("unstyled")
         msg = str(
             h(
                 "div",
@@ -63,7 +64,7 @@ class SQLMeshMagics(Magics):
                     messages.get("green-bold"),
                     {"style": {"color": "green", "font-weight": "bold"}},
                 ),
-                h("span", messages.get("unstyled")) if messages.get("unstyled") else "",
+                h("span", unstyled) if unstyled else "",
             )
         )
         return HTML(msg)
