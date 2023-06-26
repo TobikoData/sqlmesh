@@ -75,12 +75,12 @@ EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
     columns (
         id INTEGER,
         item_id INTEGER,
-        ds VARCHAR
+        ds DATE
     )
 );
 """
 
-EXAMPLE_AUDIT = f"""AUDIT (
+EXAMPLE_AUDIT = """AUDIT (
   name assert_positive_order_ids,
 );
 
@@ -90,7 +90,7 @@ WHERE
   item_id < 0
 """
 
-EXAMPLE_SEED_DATA = f"""id,item_id,ds
+EXAMPLE_SEED_DATA = """id,item_id,ds
 1,2,2020-01-01
 2,1,2020-01-01
 3,3,2020-01-03
