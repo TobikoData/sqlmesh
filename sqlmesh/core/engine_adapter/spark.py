@@ -5,7 +5,7 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapter, InsertOverwriteStrategy
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
@@ -28,7 +28,7 @@ if t.TYPE_CHECKING:
 class SparkEngineAdapter(EngineAdapter):
     DIALECT = "spark"
     ESCAPE_JSON = True
-    SUPPORTS_INSERT_OVERWRITE = True
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
 
     @property
     def spark(self) -> PySparkSession:
@@ -62,7 +62,9 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> None:
         df = self.try_get_df(query_or_df)
         if self._use_spark_session and df is not None:
-            self._insert_pyspark_df(table_name, self._ensure_pyspark_df(df), overwrite=True)
+            self._insert_pyspark_df(
+                table_name, self._ensure_pyspark_df(df), overwrite=True, where=where
+            )
         else:
             super()._insert_overwrite_by_condition(table_name, query_or_df, where, columns_to_types)
 
@@ -125,13 +127,21 @@ class SparkEngineAdapter(EngineAdapter):
         table_name: TableName,
         df: PySparkDataFrame,
         overwrite: bool = False,
+        where: t.Optional[exp.Condition] = None,
     ) -> None:
         if isinstance(table_name, exp.Table):
             table_name = table_name.sql(dialect=self.dialect)
 
-        df.select(*self.spark.table(table_name).columns).write.insertInto(  # type: ignore
-            table_name, overwrite=overwrite
-        )
+        df_writer = df.select(*self.spark.table(table_name).columns).write
+        if overwrite:
+            df_writer = df_writer.mode("overwrite")
+            if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
+                if where is None:
+                    raise SQLMeshError(
+                        "Cannot use Replace Where Insert/Overwrite without a where clause"
+                    )
+                df_writer = df_writer.option("replaceWhere", where.sql(dialect=self.dialect))
+        df_writer.insertInto(table_name)
 
     def _create_table_from_df(
         self,
@@ -181,7 +191,7 @@ class SparkEngineAdapter(EngineAdapter):
         # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
         # currently check for storage formats we will just do an insert/overwrite.
         return self._insert_overwrite_by_condition(
-            table_name, query_or_df, columns_to_types=columns_to_types
+            table_name, query_or_df, columns_to_types=columns_to_types, where=exp.condition("1=1")
         )
 
     def create_state_table(

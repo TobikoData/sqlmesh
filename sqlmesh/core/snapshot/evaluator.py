@@ -33,6 +33,7 @@ from sqlglot.executor import execute
 
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
+from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.model import Model, ViewKind
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -151,13 +152,17 @@ class SnapshotEvaluator:
                         )
                 return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
             # DataFrames, unlike SQL expressions, can provide partial results by yielding dataframes. As a result,
-            # if the engine supports INSERT OVERWRITE and the snapshot is incremental by time range, we risk
+            # if the engine supports INSERT OVERWRITE or REPLACE WHERE and the snapshot is incremental by time range, we risk
             # having a partial result since each dataframe write can re-truncate partitions. To avoid this, we
             # union all the dataframes together before writing. For pandas this could result in OOM and a potential
             # workaround for that would be to serialize pandas to disk and then read it back with Spark.
             # Note: We assume that if multiple things are yielded from `queries_or_dfs` that they are dataframes
             # and not SQL expressions.
-            elif self.adapter.SUPPORTS_INSERT_OVERWRITE and snapshot.is_incremental_by_time_range:
+            elif (
+                self.adapter.INSERT_OVERWRITE_STRATEGY
+                in (InsertOverwriteStrategy.INSERT_OVERWRITE, InsertOverwriteStrategy.REPLACE_WHERE)
+                and snapshot.is_incremental_by_time_range
+            ):
                 query_or_df = reduce(
                     lambda a, b: a.union_all(b)  # type: ignore
                     if self.adapter.is_pyspark_df(a)
