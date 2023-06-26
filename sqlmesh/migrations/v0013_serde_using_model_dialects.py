@@ -1,6 +1,7 @@
 """Serialize SQL using the dialect of each model."""
 import json
 
+import pandas as pd
 from sqlglot import exp, transpile
 
 from sqlmesh.utils.jinja import has_jinja
@@ -18,7 +19,7 @@ def migrate(state_sync):  # type: ignore
     ):
         parsed_snapshot = json.loads(snapshot)
         model = parsed_snapshot["model"]
-        dialect = parsed_snapshot["dialect"]
+        dialect = model["dialect"]
 
         # Read using the SQLGlot dialect, write using the model's dialect
         if "query" in model and not has_jinja(model["query"]):
