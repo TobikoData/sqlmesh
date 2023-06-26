@@ -294,6 +294,8 @@ class Context(BaseContext):
         self.dag.add(model.name, model.depends_on)
         update_model_schemas(self.dag, self._models, self.path)
 
+        model.validate_definition()
+
         return model
 
     def scheduler(self, environment: t.Optional[str] = None) -> Scheduler:
