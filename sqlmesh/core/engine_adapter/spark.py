@@ -62,7 +62,9 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> None:
         df = self.try_get_df(query_or_df)
         if self._use_spark_session and df is not None:
-            self._insert_pyspark_df(table_name, self._ensure_pyspark_df(df), overwrite=True)
+            self._insert_pyspark_df(
+                table_name, self._ensure_pyspark_df(df), overwrite=True, where=where
+            )
         else:
             super()._insert_overwrite_by_condition(table_name, query_or_df, where, columns_to_types)
 
@@ -125,13 +127,21 @@ class SparkEngineAdapter(EngineAdapter):
         table_name: TableName,
         df: PySparkDataFrame,
         overwrite: bool = False,
+        where: t.Optional[exp.Condition] = None,
     ) -> None:
         if isinstance(table_name, exp.Table):
             table_name = table_name.sql(dialect=self.dialect)
 
-        df.select(*self.spark.table(table_name).columns).write.insertInto(  # type: ignore
-            table_name, overwrite=overwrite
-        )
+        df_writer = df.select(*self.spark.table(table_name).columns).write
+        if overwrite:
+            df_writer = df_writer.mode("overwrite")
+            if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
+                if where is None:
+                    raise SQLMeshError(
+                        "Cannot use Replace Where Insert/Overwrite without a where clause"
+                    )
+                df_writer = df_writer.option("replaceWhere", where.sql(dialect=self.dialect))
+        df_writer.insertInto(table_name)
 
     def _create_table_from_df(
         self,
