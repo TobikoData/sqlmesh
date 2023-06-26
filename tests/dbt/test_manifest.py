@@ -60,3 +60,11 @@ def test_manifest_helper():
     assert helper.sources()["streaming.items"].sql_name == "raw.items"
     assert helper.sources()["streaming.orders"].sql_name == "raw.orders"
     assert helper.sources()["streaming.order_items"].sql_name == "raw.order_items"
+
+
+def test_tests_referencing_disabled_models():
+    project_path = Path("tests/fixtures/dbt/sushi_test")
+    helper = ManifestHelper(project_path, project_path, "sushi")
+
+    assert "disabled_model" not in helper.models()
+    assert "not_null_disabled_model_one" not in helper.tests()
