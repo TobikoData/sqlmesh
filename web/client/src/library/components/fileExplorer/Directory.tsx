@@ -20,11 +20,13 @@ import { isFalse, isStringEmptyOrNil } from '~/utils'
 import { type WithConfirmation } from '../modal/ModalConfirmation'
 import { toUniqueName, getAllFilesInDirectory } from './help'
 import { useStoreEditor } from '~/context/editor'
-import { useStoreFileTree } from '~/context/fileTree'
+import { useStoreFileExplorer } from '~/context/fileTree'
 import File from './File'
 
 interface PropsDirectory extends WithConfirmation {
   directory: ModelDirectory
+  className?: string
+  style?: React.CSSProperties
 }
 
 const CSS_ICON_SIZE = 'w-4 h-4'
@@ -32,12 +34,15 @@ const CSS_ICON_SIZE = 'w-4 h-4'
 export default function Directory({
   directory,
   setConfirmation,
+  className,
+  style,
 }: PropsDirectory): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
   const closeTab = useStoreEditor(s => s.closeTab)
 
-  const selectFile = useStoreFileTree(s => s.selectFile)
-  const refreshProject = useStoreFileTree(s => s.refreshProject)
+  const activeRange = useStoreFileExplorer(s => s.activeRange)
+  const selectFile = useStoreFileExplorer(s => s.selectFile)
+  const refreshProject = useStoreFileExplorer(s => s.refreshProject)
 
   const [isLoading, setIsLoading] = useState(false)
   const [newName, setNewName] = useState<string>()
@@ -228,48 +233,40 @@ export default function Directory({
       {directory.withParent && (
         <span
           className={clsx(
-            'w-full overflow-hidden group flex justify-between items-center rounded-md py-[0.125rem]',
-            'hover:bg-neutral-100 dark:hover:bg-dark-lighter text-neutral-600 dark:text-neutral-100',
+            'w-full overflow-hidden group flex justify-between items-center rounded-md py-[0.125rem] pr-2',
             isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
+            activeRange.has(directory) &&
+              'text-brand-100 bg-brand-500 dark:bg-brand-700',
+            className,
           )}
-        >
-          <div
-            className={clsx(
-              'mr-1 flex items-center',
-              directory.withDirectories || directory.withFiles
-                ? 'ml-0'
-                : 'ml-3',
-            )}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
+          style={style}
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
 
-              directory.toggle()
-            }}
-          >
-            {(directory.withDirectories || directory.withFiles) && (
-              <IconChevron
-                className={clsx(`inline-block ${CSS_ICON_SIZE} ml-1 mr-1`)}
-              />
-            )}
-            <IconFolder
-              className={`inline-block ${CSS_ICON_SIZE} mr-1 fill-primary-500`}
-            />
+            selectFile(directory)
+
+            directory.toggle()
+          }}
+        >
+          <div className="flex items-center">
+            <IconChevron className="inline-block w-5" />
+            <IconFolder className="inline-block w-4 fill-primary-500" />
           </div>
-          <span className="w-full overflow-hidden flex items-center justify-between pr-1">
+          <span className="w-full overflow-hidden flex items-center justify-between ml-1">
             {isStringEmptyOrNil(newName) ? (
               <span className="w-full flex overflow-hidden items-center cursor-default">
                 <span
                   className="w-full overflow-hidden overflow-ellipsis justify-between"
-                  onClick={(e: MouseEvent) => {
-                    e.stopPropagation()
+                  // onClick={(e: MouseEvent) => {
+                  //   e.stopPropagation()
 
-                    directory.toggle()
-                  }}
-                  onDoubleClick={(e: MouseEvent) => {
-                    e.stopPropagation()
+                  //   directory.toggle()
+                  // }}
+                  // onDoubleClick={(e: MouseEvent) => {
+                  //   e.stopPropagation()
 
-                    setNewName(directory.name)
-                  }}
+                  //   setNewName(directory.name)
+                  // }}
                 >
                   {directory.name}
                 </span>
@@ -324,7 +321,7 @@ export default function Directory({
                 />
                 <div className="flex">
                   <CheckCircleIcon
-                    className={`inline-block ${CSS_ICON_SIZE} ml-2 text-success-500 cursor-pointer`}
+                    className={`inline-block w-5 ml-2 text-success-500 cursor-pointer`}
                     onClick={(e: MouseEvent) => {
                       e.stopPropagation()
 
@@ -338,7 +335,7 @@ export default function Directory({
         </span>
       )}
       {(isOpen || !directory.withParent) && directory.withDirectories && (
-        <ul className={clsx(directory.withParent ? 'pl-3' : 'mt-1')}>
+        <ul className={clsx(activeRange.has(directory) && 'bg-brand-10')}>
           {directory.directories.map(dir => (
             <li
               key={dir.id}
@@ -347,13 +344,18 @@ export default function Directory({
               <Directory
                 directory={dir}
                 setConfirmation={setConfirmation}
+                style={{
+                  paddingLeft: directory.withParent
+                    ? `${directory.level / 2}rem`
+                    : 0,
+                }}
               />
             </li>
           ))}
         </ul>
       )}
       {(isOpen || !directory.withParent) && directory.withFiles && (
-        <ul className={clsx(directory.withParent ? 'pl-3' : 'mt-1')}>
+        <ul className={clsx(activeRange.has(directory) && 'bg-brand-10')}>
           {directory.files.map(file => (
             <li
               key={file.id}
@@ -362,6 +364,11 @@ export default function Directory({
               <File
                 file={file}
                 setConfirmation={setConfirmation}
+                style={{
+                  paddingLeft: directory.withParent
+                    ? `${directory.level / 2}rem`
+                    : 0,
+                }}
               />
             </li>
           ))}

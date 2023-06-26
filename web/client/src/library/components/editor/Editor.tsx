@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Divider } from '../divider/Divider'
-import { useStoreFileTree } from '../../../context/fileTree'
+import { useStoreFileExplorer } from '../../../context/fileTree'
 import SplitPane from '../splitPane/SplitPane'
 import {
   debounceSync,
@@ -23,8 +23,8 @@ import CodeEditor from './EditorCode'
 import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
 
 function Editor(): JSX.Element {
-  const files = useStoreFileTree(s => s.files)
-  const selectedFile = useStoreFileTree(s => s.selectedFile)
+  const files = useStoreFileExplorer(s => s.files)
+  const selected = useStoreFileExplorer(s => s.selected)
 
   const tab = useStoreEditor(s => s.tab)
   const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
@@ -67,8 +67,11 @@ function Editor(): JSX.Element {
   useEffect(() => {
     if (isNil(selectedFile) || tab?.file === selectedFile) return
 
-    selectTab(createTab(selectedFile))
-  }, [selectedFile])
+    const newTab = createTab(selected as ModelFile)
+
+    addTab(newTab)
+    selectTab(newTab)
+  }, [selected])
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -107,15 +110,14 @@ function EditorLoading(): JSX.Element {
 }
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
-  const files = useStoreFileTree(s => s.files)
-  const selectFile = useStoreFileTree(s => s.selectFile)
+  const files = useStoreFileExplorer(s => s.files)
+  const selectFile = useStoreFileExplorer(s => s.selectFile)
 
   const direction = useStoreEditor(s => s.direction)
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewConsole = useStoreEditor(s => s.previewConsole)
   const previewDiff = useStoreEditor(s => s.previewDiff)
-
   const refreshTab = useStoreEditor(s => s.refreshTab)
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)

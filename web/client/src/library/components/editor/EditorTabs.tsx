@@ -7,6 +7,7 @@ import { type EditorTab, useStoreEditor } from '~/context/editor'
 
 export default function EditorTabs(): JSX.Element {
   const tabs = useStoreEditor(s => s.tabs)
+  const addTab = useStoreEditor(s => s.addTab)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
 
@@ -27,8 +28,11 @@ export default function EditorTabs(): JSX.Element {
     return [local, remote]
   }, [tabs])
 
-  function addNewFileAndSelect(): void {
-    selectTab(createTab())
+  function addTabAndSelect(): void {
+    const tab = createTab()
+
+    addTab(tab)
+    selectTab(tab)
   }
 
   return (
@@ -40,7 +44,7 @@ export default function EditorTabs(): JSX.Element {
         onClick={(e: MouseEvent) => {
           e.stopPropagation()
 
-          addNewFileAndSelect()
+          addTabAndSelect()
         }}
       >
         <PlusIcon className="inline-block w-3 h-4 text-secondary-500 dark:text-primary-500" />

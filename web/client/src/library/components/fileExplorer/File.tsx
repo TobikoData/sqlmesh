@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, useEffect } from 'react'
+import { useState, type MouseEvent } from 'react'
 import {
   DocumentIcon,
   XCircleIcon,
@@ -9,35 +9,34 @@ import {
   deleteFileApiFilesPathDelete,
   writeFileApiFilesPathPost,
 } from '~/api/client'
-import { type ModelFile } from '~/models'
+import { ModelFile } from '~/models'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
 import { type WithConfirmation } from '../modal/ModalConfirmation'
 import { useStoreEditor } from '~/context/editor'
-import { useStoreFileTree } from '~/context/fileTree'
+import { useStoreFileExplorer } from '~/context/fileTree'
 
 interface PropsFile extends WithConfirmation {
   file: ModelFile
+  className?: string
+  style?: React.CSSProperties
 }
 
 export default function File({
   file,
   setConfirmation,
+  className,
+  style,
 }: PropsFile): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
-  const tabs = useStoreEditor(s => s.tabs)
   const closeTab = useStoreEditor(s => s.closeTab)
 
-  const files = useStoreFileTree(s => s.files)
-  const selectedFile = useStoreFileTree(s => s.selectedFile)
-  const selectFile = useStoreFileTree(s => s.selectFile)
-  const refreshProject = useStoreFileTree(s => s.refreshProject)
+  const files = useStoreFileExplorer(s => s.files)
+  const activeRange = useStoreFileExplorer(s => s.activeRange)
+
+  const refreshProject = useStoreFileExplorer(s => s.refreshProject)
 
   const [isLoading, setIsLoading] = useState(false)
   const [newName, setNewName] = useState<string>()
-
-  useEffect(() => {
-    selectFile(tab?.file)
-  }, [tab])
 
   function remove(): void {
     if (isLoading) return
@@ -67,9 +66,9 @@ export default function File({
 
   function removeWithConfirmation(): void {
     setConfirmation({
-      headline: 'Deleting File',
+      headline: 'Remove File',
       description: `Are you sure you want to remove the file "${file.name}"?`,
-      yesText: 'Yes, Delete',
+      yesText: 'Yes, Remove',
       noText: 'No, Cancel',
       action: remove,
     })
@@ -119,16 +118,22 @@ export default function File({
   return (
     <span
       className={clsx(
-        'whitespace-nowrap group/file pl-3 pr-2 py-[0.125rem] flex rounded-md',
-        'hover:bg-neutral-100 dark:hover:bg-dark-lighter',
-        file.is_supported &&
-          'group hover:bg-neutral-100 dark:hover:bg-dark-lighter',
+        'whitespace-nowrap group/file py-[0.125rem] flex rounded-md pr-2',
+        // 'hover:bg-neutral-100 dark:hover:bg-dark-lighter',
+        // file.is_supported &&
+        //   'group hover:bg-neutral-100 dark:hover:bg-dark-lighter',
         isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
-        tabs.has(file)
-          ? 'text-brand-500'
-          : 'text-neutral-500 dark:text-neutral-100',
-        file === selectedFile && 'bg-neutral-100 dark:bg-dark-lighter',
+        // tabs.has(file)
+        //   ? 'text-brand-500'
+        //   : 'text-neutral-500 dark:text-neutral-100',
+        // file === selected && 'bg-brand-500 text-brand-100',
+        activeRange.has(file) &&
+          'text-brand-100 bg-brand-500 dark:bg-brand-700 dark:text-brand-100',
+        tab?.file === file &&
+          'bg-neutral-200 text-neutral-900 dark:bg-dark-lighter dark:text-primary-500',
+        className,
       )}
+      style={style}
     >
       <span
         className={clsx(
@@ -138,10 +143,10 @@ export default function File({
         <div className="flex items-center">
           <DocumentIcon
             className={clsx(
-              `inline-block w-4 h-4 mr-2`,
-              file === selectedFile
-                ? 'text-brand-500'
-                : 'text-neutral-500 dark:text-neutral-100',
+              `inline-block w-3 ml-1`,
+              // file === selected
+              //   ? 'text-brand-500'
+              //   : 'text-neutral-500 dark:text-neutral-100',
             )}
           />
         </div>
@@ -173,16 +178,39 @@ function FileName({
   file: ModelFile
   setNewName: (name: string) => void
 }): JSX.Element {
-  const selectedFile = useStoreFileTree(s => s.selectedFile)
-  const selectFile = useStoreFileTree(s => s.selectFile)
+  const tabs = useStoreEditor(s => s.tabs)
+  const replaceTab = useStoreEditor(s => s.replaceTab)
 
+  const selected = useStoreFileExplorer(s => s.selected)
+  const selectFile = useStoreFileExplorer(s => s.selectFile)
+  const activeRange = useStoreFileExplorer(s => s.activeRange)
+  const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
   return (
     <span
       title={`${file.name}${file.is_supported ? '' : ' - unsupported format'}`}
       onClick={(e: MouseEvent) => {
         e.stopPropagation()
 
-        file !== selectedFile && selectFile(file)
+        if (e.shiftKey) {
+          e.preventDefault()
+        }
+
+        if (e.shiftKey && activeRange.size > 0) {
+          activeRange.add(file)
+          setActiveRange(activeRange)
+        } else if (file !== selected) {
+          selectFile(file)
+
+          const shouldReplaceTab =
+            selected instanceof ModelFile &&
+            isFalse(selected.isChanged) &&
+            selected.isRemote &&
+            isFalse(tabs.has(file))
+
+          if (shouldReplaceTab) {
+            replaceTab(selected, file)
+          }
+        }
       }}
       onDoubleClick={(e: MouseEvent) => {
         e.stopPropagation()
@@ -190,7 +218,7 @@ function FileName({
         setNewName(file.name)
       }}
       className={clsx(
-        'w-full overflow-hidden overflow-ellipsis cursor-default',
+        'w-full overflow-hidden overflow-ellipsis cursor-default ml-1',
         !file.is_supported && 'opacity-50',
       )}
     >

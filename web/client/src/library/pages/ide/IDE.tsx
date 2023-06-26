@@ -23,7 +23,7 @@ import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
-import { useStoreFileTree } from '@context/fileTree'
+import { useStoreFileExplorer } from '@context/fileTree'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
 import { type Model } from '@api/client'
 import { Button } from '@components/button/Button'
@@ -60,9 +60,9 @@ export default function PageIDE(): JSX.Element {
   const setState = useStorePlan(s => s.setState)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
-  const project = useStoreFileTree(s => s.project)
-  const setProject = useStoreFileTree(s => s.setProject)
-  const setFiles = useStoreFileTree(s => s.setFiles)
+  const project = useStoreFileExplorer(s => s.project)
+  const setProject = useStoreFileExplorer(s => s.setProject)
+  const setFiles = useStoreFileExplorer(s => s.setFiles)
 
   const subscribe = useChannelEvents()
 

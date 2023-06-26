@@ -2,9 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
-import { useStoreFileTree } from '~/context/fileTree'
+import { useStoreFileExplorer } from '~/context/fileTree'
 import { useApiFileByPath } from '~/api'
-import { debounceAsync, isNil, isStringNotEmpty } from '~/utils'
+import {
+  debounceAsync,
+  isNil,
+  isStringNotEmpty,
+} from '~/utils'
 import { isCancelledError } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
@@ -66,7 +70,7 @@ function CodeEditorSQLMesh({
     return [
       ...extensionsDefault,
       type === EnumFileExtensions.SQL &&
-        SQLMeshDialect(models, dialectOptions, dialectsTitles),
+      SQLMeshDialect(models, dialectOptions, dialectsTitles),
     ]
       .filter(Boolean)
       .flat() as Extension[]
@@ -118,7 +122,7 @@ function CodeEditorRemoteFile({
   path: string
   children: (options: { file: ModelFile; keymaps: KeyBinding[] }) => JSX.Element
 }): JSX.Element {
-  const files = useStoreFileTree(s => s.files)
+  const files = useStoreFileExplorer(s => s.files)
 
   const { refetch: getFileContent, isFetching } = useApiFileByPath(path)
   const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)

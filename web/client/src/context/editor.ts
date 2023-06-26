@@ -30,6 +30,7 @@ interface EditorStore {
   direction: 'vertical' | 'horizontal'
   setDirection: (direction: 'vertical' | 'horizontal') => void
   selectTab: (tab?: EditorTab) => void
+  replaceTab: (from: ModelFile, to: ModelFile) => void
   updateStoredTabsIds: () => void
   addTab: (tab: EditorTab) => void
   closeTab: (file: ModelFile) => void
@@ -82,6 +83,21 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   previewConsole: undefined,
   previewDiff: undefined,
   direction: 'vertical',
+  replaceTab(from, to) {
+    const s = get()
+
+    const newTab = createTab(to)
+    const tabs = Array.from(s.tabs.entries())
+    const indexAt = tabs.findIndex(([file]) => file === from)
+
+    tabs[indexAt] = [to, newTab]
+
+    set(() => ({
+      tabs: new Map(tabs),
+    }))
+
+    s.updateStoredTabsIds()
+  },
   updateStoredTabsIds() {
     const s = get()
     const id = s.tab?.file.id
@@ -113,21 +129,26 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   },
   selectTab(tab) {
     set(() => ({ tab }))
-
-    if (tab == null) return
-
-    get().addTab(tab)
   },
   addTab(tab) {
     const s = get()
 
-    s.tabs.set(tab.file, tab)
+    if (s.tabs.has(tab.file)) {
+      s.tabs.set(tab.file, tab)
 
-    const tabs = new Map(s.tabs)
+      set(() => ({
+        tabs: new Map(s.tabs),
+      }))
+    } else {
+      const tabs = Array.from(s.tabs.entries())
+      const indexAt = tabs.findIndex(([f]) => f === s.tab?.file)
 
-    set(() => ({
-      tabs,
-    }))
+      tabs.splice(indexAt < 0 ? tabs.length : indexAt + 1, 0, [tab.file, tab])
+
+      set(() => ({
+        tabs: new Map(tabs),
+      }))
+    }
 
     s.updateStoredTabsIds()
   },

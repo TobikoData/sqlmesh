@@ -1,6 +1,6 @@
 import SplitPane from '@components/splitPane/SplitPane'
 import { useStoreContext } from '@context/context'
-import { useStoreFileTree } from '@context/fileTree'
+import { useStoreFileExplorer } from '@context/fileTree'
 import LineageFlowProvider from '@components/graph/context'
 import { useStoreEditor } from '@context/editor'
 import { EnumErrorKey, type ErrorIDE } from '../ide/context'
@@ -8,14 +8,14 @@ import { Suspense, lazy, useCallback } from 'react'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 
-const FileTree = lazy(() => import('@components/fileTree/FileTree'))
+const FileExplorer = lazy(() => import('@components/fileExplorer/FileExplorer'))
 const Editor = lazy(() => import('@components/editor/Editor'))
 
 export default function PageEditor(): JSX.Element {
   const models = useStoreContext(s => s.models)
 
-  const files = useStoreFileTree(s => s.files)
-  const selectFile = useStoreFileTree(s => s.selectFile)
+  const files = useStoreFileExplorer(s => s.files)
+  const selectFile = useStoreFileExplorer(s => s.selectFile)
 
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
 
@@ -52,7 +52,7 @@ export default function PageEditor(): JSX.Element {
             </div>
           }
         >
-          <FileTree />
+          <FileExplorer />
         </Suspense>
       </div>
       <div className="h-full">

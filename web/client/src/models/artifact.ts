@@ -13,6 +13,7 @@ export class ModelArtifact<
   private _name: string
 
   parent: ModelDirectory | undefined
+  remove: boolean = false
 
   constructor(initial?: T | ModelArtifact, parent?: ModelDirectory) {
     super(

@@ -20,6 +20,8 @@ module.exports = {
     'no-use-before-define': OFF,
     '@typescript-eslint/promise-function-async': OFF,
     '@typescript-eslint/no-non-null-assertion': OFF,
+    'no-return-await': OFF,
+    '@typescript-eslint/return-await': OFF,
     '@typescript-eslint/no-use-before-define': [
       ERROR,
       {

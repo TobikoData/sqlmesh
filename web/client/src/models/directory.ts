@@ -13,6 +13,7 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
 
   directories: ModelDirectory[]
   files: ModelFile[]
+  level = 0
 
   syncStateOpen?: (state: boolean) => void
 
@@ -27,6 +28,10 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
           },
       parent,
     )
+
+    if (parent != null) {
+      this.level = parent.level + 1
+    }
 
     if ((initial as ModelDirectory)?.isModel) {
       this.directories = (initial as ModelDirectory).directories
