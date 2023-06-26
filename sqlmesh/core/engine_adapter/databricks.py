@@ -102,6 +102,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             ).getOrCreate()
             catalog = self._extra_config.get("catalog")
             if catalog:
+                # Note: Spark 3.4+ Only API
                 self._spark.catalog.setCurrentCatalog(catalog)
         return self._spark
 
