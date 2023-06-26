@@ -33,6 +33,7 @@ from sqlglot.executor import execute
 
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
+from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.model import Model, ViewKind
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -158,9 +159,10 @@ class SnapshotEvaluator:
             # Note: We assume that if multiple things are yielded from `queries_or_dfs` that they are dataframes
             # and not SQL expressions.
             elif (
-                self.adapter.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite
-                or self.adapter.INSERT_OVERWRITE_STRATEGY.is_replace_where
-            ) and snapshot.is_incremental_by_time_range:
+                self.adapter.INSERT_OVERWRITE_STRATEGY
+                in (InsertOverwriteStrategy.INSERT_OVERWRITE, InsertOverwriteStrategy.REPLACE_WHERE)
+                and snapshot.is_incremental_by_time_range
+            ):
                 query_or_df = reduce(
                     lambda a, b: a.union_all(b)  # type: ignore
                     if self.adapter.is_pyspark_df(a)
