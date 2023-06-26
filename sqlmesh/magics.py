@@ -53,13 +53,12 @@ class SQLMeshMagics(Magics):
             f"Context must be defined and initialized with one of these names: {', '.join(CONTEXT_VARIABLE_NAMES)}"
         )
 
-    def success_message(self, message: str) -> str:
-        return f'<span style="color:green; font-weight:bold">{message}</span>'
+    def success_message(self, message: str) -> HTML:
+        return HTML(f'<span style="color:green; font-weight:bold">{message}</span>')
 
     @magic_arguments()
     @argument(
-        "--paths",
-        "-p",
+        "paths",
         type=str,
         nargs="+",
         default="",
@@ -70,12 +69,10 @@ class SQLMeshMagics(Magics):
         """Sets the context in the user namespace."""
         args = parse_argstring(self.context, line)
         self._shell.user_ns["context"] = Context(paths=args.paths)
-        message = (
-            self.success_message("SQLMesh project context set to:")
-            + "<br>&emsp;"
-            + "<br>&emsp;".join(args.paths)
-        )
-        self.display(HTML(message))
+        message = self.success_message("SQLMesh project context set to:")
+        message.data = message.data + "<br>&emsp;" + "<br>&emsp;".join(args.paths)
+
+        self.display(message)
 
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
@@ -96,7 +93,7 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(args.path, project_template)
-        self.display(HTML(self.success_message("SQLMesh project scaffold created")))
+        self.display(self.success_message("SQLMesh project scaffold created"))
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
@@ -143,7 +140,7 @@ class SQLMeshMagics(Magics):
             file.write(formatted)
 
         if sql:
-            self.display(HTML(self.success_message(f"Model `{args.model}` updated")))
+            self.display(self.success_message(f"Model `{args.model}` updated"))
 
         self._context.upsert_model(model)
         self._context.console.show_sql(
