@@ -632,9 +632,10 @@ class EngineAdapter:
     ) -> None:
         table = exp.to_table(table_name)
         if (
-            self.INSERT_OVERWRITE_STRATEGY.is_delete_insert
-            or self.INSERT_OVERWRITE_STRATEGY.is_replace_where
-        ) and not where:
+            self.INSERT_OVERWRITE_STRATEGY
+            in (InsertOverwriteStrategy.DELETE_INSERT, InsertOverwriteStrategy.REPLACE_WHERE)
+            and not where
+        ):
             raise SQLMeshError(
                 "Where condition is required when doing a delete/insert or replace/where for insert/overwrite"
             )
