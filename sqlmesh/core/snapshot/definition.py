@@ -22,8 +22,8 @@ from sqlmesh.core.model import (
     parse_model_name,
 )
 from sqlmesh.core.model.definition import _SqlBasedModel
-from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.utils.date import (
+    IntervalUnit,
     TimeLike,
     is_date,
     make_inclusive,
@@ -131,15 +131,11 @@ class SnapshotIntervals(PydanticModel, frozen=True):
     def from_snapshot(cls, snapshot: Snapshot, **kwargs: t.Any) -> SnapshotIntervals:
         return cls(
             **{
-                **{
-                    "name": snapshot.name,
-                    "identifier": snapshot.identifier,
-                    "version": snapshot.version,
-                    "intervals": snapshot.intervals.copy() if snapshot.intervals_ else [],
-                    "dev_intervals": snapshot.dev_intervals.copy()
-                    if snapshot.dev_intervals_
-                    else [],
-                },
+                "name": snapshot.name,
+                "identifier": snapshot.identifier,
+                "version": snapshot.version,
+                "intervals": snapshot.intervals.copy() if snapshot.intervals_ else [],
+                "dev_intervals": snapshot.dev_intervals.copy() if snapshot.dev_intervals_ else [],
                 **kwargs,
             }
         )
@@ -738,7 +734,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         # The snapshot may not have a start defined. If so we use the provided default start.
         snapshot_start = self.start or snapshot_default_start
         if self.depends_on_past and start:
-            assert snapshot_start, "Snapshot must have a start defined if it depends on past"
+            if not snapshot_start:
+                raise SQLMeshError("Snapshot must have a start defined if it depends on past")
             start_ts = to_timestamp(self.model.cron_floor(start))
             if not self.intervals:
                 return to_timestamp(snapshot_start) >= start_ts
@@ -775,7 +772,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.dev_intervals_
 
     @property
-    def seed_is_hydrated(self) -> bool:
+    def is_seed_hydrated(self) -> bool:
         """
         Indicates if the model is a seed and is hydrated. If the model is not a seed then we return True.
         """

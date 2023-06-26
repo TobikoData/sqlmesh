@@ -256,38 +256,36 @@ class TerminalConsole(Console):
             return
 
         tree = Tree(f"[bold]Summary of differences against `{context_diff.environment}`:")
-
-        if context_diff.added:
+        added_model_names = context_diff.added - ignored_snapshot_names
+        if added_model_names:
             added_tree = Tree(f"[bold][added]Added Models:")
-            for model in context_diff.added:
-                if model not in ignored_snapshot_names:
-                    added_tree.add(f"[added]{model}")
+            for model_name in added_model_names:
+                added_tree.add(f"[added]{model_name}")
             tree.add(added_tree)
 
-        if context_diff.removed:
+        removed_model_names = context_diff.removed - ignored_snapshot_names
+        if removed_model_names:
             removed_tree = Tree(f"[bold][removed]Removed Models:")
-            for model in context_diff.removed:
-                if model not in ignored_snapshot_names:
-                    removed_tree.add(f"[removed]{model}")
+            for model_name in removed_model_names:
+                removed_tree.add(f"[removed]{model_name}")
             tree.add(removed_tree)
 
-        if context_diff.modified_snapshots:
+        modified_model_names = context_diff.modified_snapshots.keys() - ignored_snapshot_names
+        if modified_model_names:
             direct = Tree(f"[bold][direct]Directly Modified:")
             indirect = Tree(f"[bold][indirect]Indirectly Modified:")
             metadata = Tree(f"[bold][metadata]Metadata Updated:")
-            for model in context_diff.modified_snapshots:
-                if model in ignored_snapshot_names:
-                    continue
-                if context_diff.directly_modified(model):
+            for model_name in modified_model_names:
+                if context_diff.directly_modified(model_name):
                     direct.add(
-                        Syntax(f"{model}\n{context_diff.text_diff(model)}", "sql")
+                        Syntax(f"{model_name}\n{context_diff.text_diff(model_name)}", "sql")
                         if detailed
-                        else f"[direct]{model}"
+                        else f"[direct]{model_name}"
                     )
-                elif context_diff.indirectly_modified(model):
-                    indirect.add(f"[indirect]{model}")
-                elif context_diff.metadata_updated(model):
-                    metadata.add(f"[metadata]{model}")
+                elif context_diff.indirectly_modified(model_name):
+                    indirect.add(f"[indirect]{model_name}")
+                elif context_diff.metadata_updated(model_name):
+                    metadata.add(f"[metadata]{model_name}")
             if direct.children:
                 tree.add(direct)
             if indirect.children:
@@ -900,56 +898,54 @@ class MarkdownConsole(CaptureTerminalConsole):
 
         self._print(f"**Summary of differences against `{context_diff.environment}`:**\n\n")
 
-        if context_diff.added:
+        added_model_names = context_diff.added - ignored_snapshot_names
+        if added_model_names:
             self._print(f"**Added Models:**\n")
-            for model in context_diff.added:
-                if model not in ignored_snapshot_names:
-                    self._print(f"- {model}\n")
-                self._print(f"- {model}\n")
+            for model_name in added_model_names:
+                self._print(f"- {model_name}\n")
             self._print("\n")
 
-        if context_diff.removed:
+        removed_model_names = context_diff.removed - ignored_snapshot_names
+        if removed_model_names:
             self._print(f"**Removed Models:**\n")
-            for model in context_diff.removed:
-                if model not in ignored_snapshot_names:
-                    self._print(f"- {model}\n")
+            for model_name in removed_model_names:
+                self._print(f"- {model_name}\n")
             self._print("\n")
 
-        if context_diff.modified_snapshots:
+        modified_model_names = context_diff.modified_snapshots.keys() - ignored_snapshot_names
+        if modified_model_names:
             directly_modified = []
             indirectly_modified = []
             metadata_modified = []
-            for model in context_diff.modified_snapshots:
-                if model in ignored_snapshot_names:
-                    continue
-                if context_diff.directly_modified(model):
-                    directly_modified.append(model)
-                elif context_diff.indirectly_modified(model):
-                    indirectly_modified.append(model)
-                elif context_diff.metadata_updated(model):
-                    metadata_modified.append(model)
+            for model_name in modified_model_names:
+                if context_diff.directly_modified(model_name):
+                    directly_modified.append(model_name)
+                elif context_diff.indirectly_modified(model_name):
+                    indirectly_modified.append(model_name)
+                elif context_diff.metadata_updated(model_name):
+                    metadata_modified.append(model_name)
             if directly_modified:
                 self._print(f"**Directly Modified:**\n")
-                for model in directly_modified:
-                    self._print(f"- `{model}`\n")
+                for model_name in directly_modified:
+                    self._print(f"- `{model_name}`\n")
                     if detailed:
-                        self._print(f"```diff\n{context_diff.text_diff(model)}\n```\n")
+                        self._print(f"```diff\n{context_diff.text_diff(model_name)}\n```\n")
                 self._print("\n")
             if indirectly_modified:
                 self._print(f"**Indirectly Modified:**\n")
-                for model in indirectly_modified:
-                    self._print(f"- `{model}`\n")
+                for model_name in indirectly_modified:
+                    self._print(f"- `{model_name}`\n")
                 self._print("\n")
             if metadata_modified:
                 self._print(f"**Metadata Updated:**\n")
-                for model in metadata_modified:
-                    self._print(f"- `{model}`\n")
+                for model_name in metadata_modified:
+                    self._print(f"- `{model_name}`\n")
                 self._print("\n")
         if ignored_snapshot_names:
-            self._print(f"**Ignored Models (Valid Plan Start):**\n")
-            for model in ignored_snapshot_names:
-                snapshot = context_diff.snapshots[model]
-                self._print(f"- `{model}` ({snapshot.latest})\n")
+            self._print(f"**Ignored Models (Expected Plan Start):**\n")
+            for model_name in ignored_snapshot_names:
+                snapshot = context_diff.snapshots[model_name]
+                self._print(f"- `{model_name}` ({snapshot.latest})\n")
             self._print("\n")
 
     def _show_missing_dates(self, plan: Plan) -> None:

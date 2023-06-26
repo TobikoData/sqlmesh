@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import typing as t
 import warnings
+from enum import Enum
 
 warnings.filterwarnings(
     "ignore",
@@ -21,8 +22,19 @@ MILLIS_THRESHOLD = time.time() + 100 * 365 * 24 * 3600
 DATE_INT_FMT = "%Y%m%d"
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.model.meta import IntervalUnit
     from sqlmesh.core.scheduler import Interval
+
+
+class IntervalUnit(str, Enum):
+    """
+    IntervalUnit generally represents the lowest grain for a given item that has a time context.
+    Within the context of model the unit is inferred based on the cron schedule of a model.
+    The minimum time delta between a sample set of dates is used to determine which unit a model's schedule is.
+    """
+
+    DAY = "day"
+    HOUR = "hour"
+    MINUTE = "minute"
 
 
 def now(minute_floor: bool = True) -> datetime:
@@ -279,7 +291,7 @@ def time_like_to_str(time_like: TimeLike) -> str:
 def to_end_date(
     end_and_units: t.Union[t.Tuple[int, IntervalUnit], t.List[t.Tuple[int, IntervalUnit]]]
 ) -> TimeLike:
-    from sqlmesh.core.model.meta import IntervalUnit
+    from sqlmesh.utils.date import IntervalUnit
 
     end_and_units = [end_and_units] if isinstance(end_and_units, tuple) else end_and_units
     end, unit = max(end_and_units)

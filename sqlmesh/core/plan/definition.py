@@ -9,7 +9,6 @@ from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.snapshot import (
     Intervals,
     Snapshot,
@@ -23,6 +22,7 @@ from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
+    IntervalUnit,
     TimeLike,
     now,
     to_datetime,
@@ -462,14 +462,14 @@ class Plan:
 
     def _get_upstream_snapshots(self, snapshot: t.Union[str, Snapshot]) -> t.List[Snapshot]:
         return [
-            snapshot
-            for snapshot in [
-                self._get_snapshot(snapshot_name)
-                for snapshot_name in self._dag.upstream(
+            upstream_snapshot
+            for upstream_snapshot in [
+                self._get_snapshot(upstream_snapshot_name)
+                for upstream_snapshot_name in self._dag.upstream(
                     snapshot if isinstance(snapshot, str) else snapshot.name
                 )
             ]
-            if snapshot
+            if upstream_snapshot
         ]
 
     def _add_restatements(self, restate_models: t.Iterable[str]) -> None:

@@ -90,7 +90,7 @@ class SnapshotCache(t.MutableMapping[SnapshotId, Snapshot]):
 
     @property
     def is_hydrated(self) -> bool:
-        return all(snapshot.seed_is_hydrated for snapshot in self.values())
+        return all(snapshot.is_seed_hydrated for snapshot in self.values())
 
     @property
     def snapshot_intervals(self) -> t.List[SnapshotIntervals]:
@@ -436,7 +436,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
         for name, identifier, content in self.engine_adapter.fetchall(query):
             snapshot = self._snapshot_cache.get(SnapshotId(name=name, identifier=identifier))
-            if snapshot and not snapshot.seed_is_hydrated:
+            if snapshot and not snapshot.is_seed_hydrated:
                 assert isinstance(snapshot.model, SeedModel), "Must be seed model to hydrate"
                 snapshot.model = snapshot.model.to_hydrated(content)
 

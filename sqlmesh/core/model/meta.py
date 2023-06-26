@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing as t
 from datetime import timedelta
-from enum import Enum
 
 from pydantic import Field, root_validator, validator
 from sqlglot import exp
@@ -17,23 +16,9 @@ from sqlmesh.core.model.kind import (
 )
 from sqlmesh.utils import unique
 from sqlmesh.utils.cron import CroniterCache
-from sqlmesh.utils.date import TimeLike, to_datetime
+from sqlmesh.utils.date import IntervalUnit, TimeLike, to_datetime
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
-
-
-class IntervalUnit(str, Enum):
-    """IntervalUnit is the inferred granularity of an incremental model.
-
-    IntervalUnit can be one of 4 types, DAY, HOUR, MINUTE. The unit is inferred
-    based on the cron schedule of a model. The minimum time delta between a sample set of dates
-    is used to determine which unit a model's schedule is.
-    """
-
-    DAY = "day"
-    HOUR = "hour"
-    MINUTE = "minute"
-
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 

@@ -39,7 +39,7 @@ if t.TYPE_CHECKING:
         Query,
         QueryOrDF,
     )
-    from sqlmesh.core.model.meta import IntervalUnit
+    from sqlmesh.utils.date import IntervalUnit
 
 logger = logging.getLogger(__name__)
 

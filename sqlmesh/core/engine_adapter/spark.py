@@ -22,7 +22,7 @@ if t.TYPE_CHECKING:
         PySparkSession,
         QueryOrDF,
     )
-    from sqlmesh.core.model.meta import IntervalUnit
+    from sqlmesh.utils.date import IntervalUnit
 
 
 class SparkEngineAdapter(EngineAdapter):
