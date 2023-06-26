@@ -4,7 +4,7 @@ Audits are one of the tools SQLMesh provides to validate your models. Along with
 A comprehensive suite of audits can identify data issues upstream, whether they are from your vendors or other teams. Audits also empower your data engineers and analysts to work with confidence by catching problems early as they work on new features or make updates to your models.
 
 ## Example audit
-In SQLMesh, audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Audits are SQL queries that should not return any rows; in other words, they query for bad data, so returned rows indicates that something is wrong. In its simplest form, an audit is defined with the custom AUDIT expression along with a query, as in the following example:
+In SQLMesh, audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. Audits are SQL queries that should not return any rows; in other words, they query for bad data, so returned rows indicates that something is wrong. In its simplest form, an audit is defined with the custom `AUDIT` expression along with a query, as in the following example:
 
 ```sql linenums="1"
 AUDIT (
@@ -18,23 +18,24 @@ WHERE ds BETWEEN @start_ds AND @end_ds AND
 
 In the example, we defined an audit named `assert_item_price_is_not_null`, ensuring that every sushi item has a price.
 
-**Note:** If the query is in a different dialect than the rest of your project, you can specify it here as we did in the example, and SQLGlot will automatically understand how to execute the query.
+**Note:** If the query is in a different dialect than the rest of your project, you can specify it in the `AUDIT` statement. In the example above we set it to `spark`, so SQLGlot will automatically understand how to execute the query.
 
-In order for this audit to take effect it should first be included in the target model's definition:
+To run the audit, include it in a model's `MODEL` statement:
+
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits (
-    assert_item_price_is_not_null()
-  )
+  audits [assert_item_price_is_not_null]
 );
 ```
+
 Now the `assert_item_price_is_not_null` will run every time the `sushi.items` model is evaluated.
 
 ## Generic audits
 Audits can also be parameterized and implemented in a model-agnostic way.
 
-As an example consider the following audit definition which checks whether the target column exceeds a configured threshold:
+Consider the following audit definition that checks whether the target column exceeds a configured threshold:
+
 ```sql linenums="1"
 AUDIT (
   name does_not_exceed_threshold
@@ -42,33 +43,36 @@ AUDIT (
 SELECT * FROM @this_model
 WHERE @column >= @threshold;
 ```
-In the example above we utilized [macros](./macros/overview.md) to parameterize the audit implementation. `@this_model` is a special macro which refers to a model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
 
-The generic audit can now be applied to a model by being referenced in its definition:
+This example utilizes [macros](./macros/overview.md) to parameterize the audit. `@this_model` is a special macro which refers to the model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. `@column` and `@threshold` are generic parameters, values for which are set in the model definition.
+
+Apply the generic audit to a model by referencing it in the `MODEL` statement:
+
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits (
+  audits [
     does_not_exceed_threshold(column=id, threshold=1000),
     does_not_exceed_threshold(column=price, threshold=100)
-  )
+  ]
 );
 ```
-Notice how `column` and `threshold` parameters have been set at this point. These values will later be propagated into the audit query and returned by the `@column` and `@threshold` macros accordingly.
 
-Note that the same audit can be applied more than once to the same model with different sets of parameters.
+Notice how `column` and `threshold` parameters have been set. These values will be propagated into the audit query and substituted into the `@column` and `@threshold` macros variables.
+
+Note that the same audit can be applied more than once to the a model using different sets of parameters.
 
 ### Naming
-Note that it is recommended to avoid using SQL keywords when naming audit parameters.
-When an audit uses a SQL keyword, it can be necessary to use quotes when using it.
+We recommended avoiding SQL keywords when naming audit parameters. Quote any audit arguments that is also a SQL keyword.
+
 For example, assuming that `my_audit` uses a `values` parameter, invoking it will require quotes:
 
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits(
+  audits[
     my_audit(column=a, "values"=[1,2,3])
-  )
+  ]
 )
 ```
 
@@ -82,9 +86,9 @@ Example:
 ```sql linenums="1"
 MODEL (
   name sushi.orders,
-  audits (
+  audits [
     not_null(columns=[id, customer_id, waiter_id])
-  )
+  ]
 );
 ```
 
@@ -95,9 +99,9 @@ Example:
 ```sql linenums="1"
 MODEL (
   name sushi.orders,
-  audits (
+  audits [
     unique_values(columns=[id])
-  )
+  ]
 );
 ```
 
@@ -108,38 +112,42 @@ Example:
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits (
+  audits [
     accepted_values(column=name, is_in=['Hamachi', 'Unagi', 'Sake'])
-  )
+  ]
 );
 ```
 
 ### number_of_rows
-Ensures that the number of rows in the model's table exceeds the configured threshold. For incremental models, this check only applies to a data interval that is being evaluated, not to the entire table.
+Ensures that the number of rows in the model's table exceeds the configured threshold. 
+
+NOTE: For incremental models, this check only applies to a data interval that is being evaluated, not to the entire table.
 
 Example:
 ```sql linenums="1"
 MODEL (
   name sushi.orders,
-  audits (
+  audits [
     number_of_rows(threshold=10)
-  )
+  ]
 );
 ```
 
 ### forall
-Ensures that a set of arbitrary boolean expressions are upheld (evaluate to `true`) for all rows in the model. For incremental models, this check only applies to a data interval that is being evaluated, not to the entire table.
+Ensures that a set of arbitrary boolean expressions evaluate to `TRUE` for all rows in the model. 
+
+NOTE: For incremental models, this check only applies to a data interval that is being evaluated, not to the entire table.
 
 Example:
 ```sql linenums="1"
 MODEL (
   name sushi.items,
-  audits (
+  audits [
     forall(criteria=[
       price >= 0,
       LENGTH(name) > 0
     ])
-  )
+  ]
 );
 ```
 
@@ -147,6 +155,7 @@ MODEL (
 ### The CLI audit command
 
 You can execute audits with the `sqlmesh audit` command as follows:
+
 ```bash
 $ sqlmesh -p project audit -start 2022-01-01 -end 2022-01-02
 Found 1 audit(s).
@@ -161,7 +170,9 @@ Done.
 ```
 
 ### Automated auditing
-When you apply a plan, SQLMesh will automatically run each model's audits. By default, SQLMesh will halt the pipeline when an audit fails in order to prevent potentially invalid data from propagating further downstream. This behavior can be changed for individual audits. Refer to [Non-blocking audits](#non-blocking-audits).
+When you apply a plan, SQLMesh will automatically run each model's audits. By default, SQLMesh will halt the pipeline when an audit fails to prevent potentially invalid data from propagating further downstream. 
+
+This behavior can be changed for individual audits - refer to [Non-blocking audits](#non-blocking-audits).
 
 ## Advanced usage
 ### Skipping audits
@@ -178,7 +189,7 @@ WHERE ds BETWEEN @start_ds AND @end_ds AND
 ```
 
 ### Non-blocking audits
-By default, audits that fail will stop the execution of the pipeline in order to prevent bad data from propagating further. An audit can be configured to notify you when it fails without blocking the execution of the pipeline, as in the following example:
+By default, audits that fail will stop the execution of the pipeline to prevent bad data from propagating further. An audit can be configured to notify you when it fails without blocking the execution of the pipeline, as in the following example:
 
 ```sql linenums="1" hl_lines="3"
 AUDIT (
