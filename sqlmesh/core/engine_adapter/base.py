@@ -462,7 +462,9 @@ class EngineAdapter:
             exp.Drop(this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW")
         )
 
-    def columns(self, table_name: TableName) -> t.Dict[str, exp.DataType]:
+    def columns(
+        self, table_name: TableName, include_pseudo_columns: bool = False
+    ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
