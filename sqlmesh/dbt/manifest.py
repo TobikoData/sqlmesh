@@ -136,9 +136,24 @@ class ManifestHelper:
             if node.resource_type != "test":
                 continue
 
+            skip_test = False
+            package_name = node.package_name
+            refs = _refs(node)
+            for ref in refs:
+                ref_node_name = f"model.{ref}" if "." in ref else f"model.{package_name}.{ref}"
+                if ref_node_name in self._manifest.disabled:
+                    logger.info(
+                        "Skipping test '%s' which references a disabled model '%s'", node.name, ref
+                    )
+                    skip_test = True
+                    break
+
+            if skip_test:
+                continue
+
             dependencies = Dependencies(
                 macros=_macro_references(self._manifest, node),
-                refs=_refs(node),
+                refs=refs,
                 sources=_sources(node),
             )
             # Implicit dependencies for model test arg

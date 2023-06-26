@@ -5,6 +5,11 @@ models:
   - name: waiters
   - name: waiter_as_customer_by_day
   - name: waiter_revenue_by_day
+  - name: disabled_model
+    columns:
+      - name: one
+        tests:
+          - not_null
 
 sources:
   - name: streaming
