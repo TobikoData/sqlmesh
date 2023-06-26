@@ -207,10 +207,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if name == c.PROD:
             raise SQLMeshError("Cannot invalidate the production environment.")
 
-        filter_expr = exp.EQ(
-            this=exp.to_column("name"),
-            expression=exp.Literal.string(name),
-        )
+        filter_expr = exp.to_column("name").eq(name)
 
         self.engine_adapter.update_table(
             self.environments_table,

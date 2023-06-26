@@ -404,7 +404,7 @@ class GithubController:
 
     def delete_pr_environment(self) -> None:
         """
-        Deletes all the schemas for a given environment by checking all the schemas used by models.
+        Marks the PR environment for garbage collection.
         """
         self._context.invalidate_environment(self.pr_environment_name)
 

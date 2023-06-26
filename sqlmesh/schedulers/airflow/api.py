@@ -13,6 +13,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import SnapshotId, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 sqlmesh_api_v1 = Blueprint(
@@ -71,12 +72,11 @@ def get_environments() -> Response:
 @csrf.exempt
 @check_authentication
 def invalidate_environment(name: str) -> Response:
-    name = name.lower()
-    if name == c.PROD:
-        return _error("Cannot invalidate production environment", 400)
-
     with util.scoped_state_sync() as state_sync:
-        state_sync.invalidate_environment(name)
+        try:
+            state_sync.invalidate_environment(name)
+        except SQLMeshError as ex:
+            return _error(str(ex), 400)
 
     return _success(common.InvalidateEnvironmentResponse(name=name))
 
