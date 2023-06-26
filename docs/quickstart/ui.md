@@ -64,8 +64,8 @@ It also contains five buttons:
 
 1. Add new tab opens a new code editor window.
 2. Toggle Editor/Docs view toggles between the Code Editor (default) and Docs views.
-3. Run plan command executes the `sqlmesh plan` command.
-4. Run query command executes the `sqlmesh fetchdf` command.
+3. Run plan command executes the [`sqlmesh plan` command](../reference/cli.md#plan).
+4. Run query command executes the [`sqlmesh fetchdf` command](../reference/cli.md#fetchdf).
 5. Change SQL dialect specifies the SQL dialect of the current tab for custom SQL queries. It does not affect the SQL dialect for the project.
 
 ![SQLMesh web UI buttons](./ui/ui-quickstart_ui-startup-buttons.png)
@@ -150,7 +150,7 @@ The output confirms that the virtual update has completed. Click the blue `Done`
 Now that we have have populated both `prod` and `dev` environments, let's modify one of the SQL models, validate it in `dev`, and push it to `prod`.
 
 ### 3.1 Edit the configuration
-To modify the incremental SQL model, open it in the editor by clicking on it in the project directory pane:
+To modify the incremental SQL model, open it in the editor by clicking on it in the project directory pane.
 
 The inspector pane on the right now shows the `Actions` tab, where you can specify parameters and [`Evaluate`](../reference/cli.md#evaluate) the SQLMesh model. The `Docs` tab displays information about the model query, including its columns and the rendered query.
 
@@ -162,8 +162,12 @@ Modify the incremental SQL model by adding a new column to the query:
 
 ![Incremental model modified in editor](./ui/ui-quickstart_incremental-model-modified.png)
 
+Press `Cmd + S` (`Ctrl + S` on Windows) to save the modified model file.
+
 ## 4. Plan and apply updates
-Preview the impact of the change by clicking the `Run Plan` button in the top right. Click the blue `Run` button in the newly opened pane, and the updated plan information will appear:
+Preview the impact of the change by clicking the `Run Plan` button in the top right. 
+
+Click the blue `Run` button in the newly opened pane, and the updated plan information will appear:
 
 ![Plan pane after running plan with modified incremental model](./ui/ui-quickstart_run-plan-dev-modified.png)
 

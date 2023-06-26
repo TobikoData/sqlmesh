@@ -9,7 +9,7 @@ First, create a SQLMesh project directory with your operating system's graphical
 
 If using a python virtual environment, ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](../installation.md).
 
-First, import the SQLMesh library to load the notebook magic commands:
+Import the SQLMesh library to load the notebook magic commands:
 
 ![Cell importing the SQLMesh library](./notebook/nb-quickstart_import.png)
 
@@ -117,9 +117,9 @@ Note that the environment name `__dev` is appended to the schema namespace `sqlm
 
 ![Notebook output after executing %%fetchdf on `dev` incremental_model](./notebook/nb-quickstart_fetchdf-dev.png)
 
-You can see that `new_column` was added to the dataset. The production table was not modified; you can validate this by querying the production table using `%%fetchdf` and the query `select * from sqlmesh_example.incremental_model`.
+You can see that `new_column` was added to the dataset. 
 
-Note that nothing has been appended to the schema namespace `sqlmesh_example` because `prod` is the default environment.
+The production table was not modified; you can validate this by querying the production table using `%%fetchdf` and the query `select * from sqlmesh_example.incremental_model`. Note that nothing has been appended to the schema namespace `sqlmesh_example` because `prod` is the default environment.
 
 ![Notebook output after executing %%fetchdf on prod incremental_model before model update applied](./notebook/nb-quickstart_fetchdf-prod.png)
 

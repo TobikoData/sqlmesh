@@ -39,7 +39,7 @@ A [SQLMesh plan](./concepts/plans.md) contains a comparison of one environment t
 
 Breaking changes are those that invalidate data already existing in an environment. For example, if a `WHERE` clause was added to a model in the `dev` environment, existing data created by that model in the `prod` environment are now invalid because they may contain rows that would be filtered out by the new `WHERE` clause. Other changes, like adding a new column to a model in `dev`, are non-breaking because all the existing data in `prod` are still valid to use - only new data must be added to align the environments.
 
-After SQLMesh creates a plan, it summarizes the breaking and non-breaking changes so you can understand what will happen if you apply the plan. It will prompt you to "backfill" data to apply the plan - in this context, backfill is a generic term for updating or adding to a table's data.
+After SQLMesh creates a plan, it summarizes the breaking and non-breaking changes so you can understand what will happen if you apply the plan. It will prompt you to "backfill" data to apply the plan - in this context, backfill is a generic term for updating or adding to a table's data (including an initial load or full refresh).
 
 ### Model kinds
 
@@ -53,7 +53,7 @@ A plan's actions are determined by the [kinds](./concepts/models/model_kinds.md)
 
 SQLMesh uses a scaffold generator to initiate a new project. The generator will create multiple sub-directories and files for organizing your SQLMesh project code. 
 
-See the CLI, Notebook, or UI quickstart guides for details on how to initiate a SQLMesh project with the scaffold generator.
+See the [CLI](./quickstart/cli.md), [Notebook](./quickstart/notebook.md), or [UI](./quickstart/ui.md) quickstart guides for details on how to initiate a SQLMesh project with the scaffold generator.
 
 The scaffold generator will create the following configuration file and directories:
 
@@ -165,7 +165,7 @@ WHERE
     ds between @start_ds and @end_ds
 ```
 
-The final model in the project is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](./concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory that verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
+The final model in the project is a `FULL` model. In addition to properties used in the other models, its `MODEL` statement includes the [`audits`](./concepts/audits.md) property. The project includes a custom `assert_positive_order_ids` audit in the project `audits` directory; it verifies that all `item_id` values are positive numbers. It will be run every time the model is executed.
 
 ```sql linenums="1"
 MODEL (
