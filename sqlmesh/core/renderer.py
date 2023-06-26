@@ -14,7 +14,7 @@ from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.qualify_tables import qualify_tables
 from sqlglot.optimizer.simplify import simplify
-from sqlglot.schema import ensure_schema
+from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -153,23 +153,19 @@ class ExpressionRenderer:
             self._cache[cache_key] = expression
 
         expression = t.cast(exp.Expression, self._cache[cache_key])
+        if expression is None:
+            return None
 
-        if expression and (snapshots or expand):
-            expression = expression.copy()
-
-            with _normalize_and_quote(expression, self._dialect) as expression:
-                expression = _resolve_tables(
-                    expression,
-                    snapshots=snapshots,
-                    expand=expand,
-                    is_dev=is_dev,
-                    start=start,
-                    end=end,
-                    latest=latest,
-                    **kwargs,
-                )
-
-        return expression
+        return self._resolve_tables(
+            expression,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
 
     def update_cache(
         self,
@@ -181,6 +177,34 @@ class ExpressionRenderer:
     ) -> None:
         self._cache[_dates(start, end, latest)] = expression
 
+    def _resolve_tables(
+        self,
+        expression: E,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        expand: t.Iterable[str] = tuple(),
+        is_dev: bool = False,
+        **kwargs: t.Any,
+    ) -> E:
+        if not snapshots and not expand:
+            return expression
+
+        expression = expression.copy()
+        with _normalize_and_quote(expression, self._dialect) as expression:
+            return _resolve_tables(
+                expression,
+                snapshots=snapshots,
+                expand=expand,
+                is_dev=is_dev,
+                start=start,
+                end=end,
+                latest=latest,
+                **kwargs,
+            )
+
 
 class QueryRenderer(ExpressionRenderer):
     def __init__(
@@ -189,6 +213,7 @@ class QueryRenderer(ExpressionRenderer):
         dialect: str,
         macro_definitions: t.List[d.MacroDef],
         schema: t.Optional[t.Dict[str, t.Any]] = None,
+        model_name: t.Optional[str] = None,
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
@@ -206,6 +231,7 @@ class QueryRenderer(ExpressionRenderer):
             only_latest=only_latest,
         )
 
+        self._model_name = model_name
         self._time_column = time_column
         self._time_converter = time_converter or (lambda v: exp.convert(v))
 
@@ -256,14 +282,11 @@ class QueryRenderer(ExpressionRenderer):
                         start=start,
                         end=end,
                         latest=latest,
-                        snapshots=snapshots,
                         is_dev=is_dev,
-                        expand=expand,
                         **kwargs,
                     ),
                 )
             except ParsetimeAdapterCallError:
-                logger.debug("Failed to render query at parse time:\n%s", self._expression)
                 return None
 
             if not query:
@@ -275,6 +298,18 @@ class QueryRenderer(ExpressionRenderer):
                     self._optimized_cache[cache_key] = query
         else:
             query = t.cast(exp.Subqueryable, self._optimized_cache[cache_key])
+
+        # Table resolution MUST happen after optimization, otherwise the schema won't match the table names.
+        query = self._resolve_tables(
+            query,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
 
         # Ensure there is no data leakage in incremental mode by filtering out all
         # events that have data outside the time window of interest.
@@ -325,12 +360,25 @@ class QueryRenderer(ExpressionRenderer):
 
     def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
-        schema = ensure_schema(self.schema, dialect=self._dialect, normalize=False)
+        schema = MappingSchema(self.schema, dialect=self._dialect, normalize=False)
         original = query
         failure = False
 
+        dependencies = d.find_tables(query, dialect=self._dialect) - {self._model_name}
+        for dependency in dependencies:
+            if schema.find(exp.to_table(dependency, dialect=self._dialect)) is None:
+                logger.warning(
+                    "Query cannot be optimized due to missing schema for model '%s'. "
+                    "Make sure that the model query can be rendered at parse time",
+                    dependency,
+                )
+                schema = MappingSchema(None, dialect=self._dialect, normalize=False)
+                break
+
+        should_optimize = not schema.empty or not dependencies
+
         try:
-            if not schema.empty:
+            if should_optimize:
                 query = query.copy()
 
                 qualify(
@@ -344,7 +392,7 @@ class QueryRenderer(ExpressionRenderer):
             failure = True
             logger.error("%s for '%s', the column may not exist or is ambiguous", ex, self._path)
         finally:
-            if failure or schema.empty:
+            if failure or not should_optimize:
                 query = original.copy()
 
                 with _normalize_and_quote(query, self._dialect) as query:
@@ -367,13 +415,13 @@ def _normalize_and_quote(query: E, dialect: str) -> t.Iterator[E]:
 
 
 def _resolve_tables(
-    expression: exp.Expression,
+    expression: E,
     *,
     snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     expand: t.Iterable[str] = tuple(),
     is_dev: bool = False,
     **render_kwargs: t.Any,
-) -> exp.Expression:
+) -> E:
     from sqlmesh.core.snapshot import to_table_mapping
 
     snapshots = snapshots or {}

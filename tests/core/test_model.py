@@ -1,9 +1,11 @@
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse, parse_one
+from sqlglot.schema import MappingSchema
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
@@ -23,6 +25,8 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
+from sqlmesh.core.renderer import QueryRenderer
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
@@ -1217,6 +1221,33 @@ def test_star_expansion(assert_exp_eq) -> None:
         """,
     )
 
+    snapshots = context.snapshots
+    snapshots["db.model1"].categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshots["db.model2"].categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshots["db.model3"].categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert_exp_eq(
+        context.models["db.model2"].render_query(snapshots=snapshots),
+        """
+        SELECT
+          "model1"."id" AS "id",
+          "model1"."item_id" AS "item_id",
+          "model1"."ds" AS "ds"
+        FROM "sqlmesh__db"."db__model1__3784582009" AS "model1"
+        """,
+    )
+
+    assert_exp_eq(
+        context.models["db.model3"].render_query(snapshots=snapshots),
+        """
+        SELECT
+          "model2"."id" AS "id",
+          "model2"."item_id" AS "item_id",
+          "model2"."ds" AS "ds"
+        FROM "sqlmesh__db"."db__model2__1662907078" AS "model2"
+        """,
+    )
+
 
 def test_case_sensitivity(assert_exp_eq):
     config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
@@ -1227,7 +1258,7 @@ def test_case_sensitivity(assert_exp_eq):
             """
             MODEL (name example.source, kind EMBEDDED);
 
-            SELECT "id", "name", "payload" FROM db.schema."table"
+            SELECT 'id' AS "id", 'name' AS "name", 'payload' AS "payload"
             """
         ),
         dialect="snowflake",
@@ -1258,10 +1289,9 @@ def test_case_sensitivity(assert_exp_eq):
           "SOURCE"."payload" AS "payload"
         FROM (
           SELECT
-            "id" AS "id",
-            "name" AS "name",
-            "payload" AS "payload"
-          FROM "DB"."SCHEMA"."table" AS "table"
+            'id' AS "id",
+            'name' AS "name",
+            'payload' AS "payload"
         ) AS "SOURCE"
         """,
     )
@@ -1386,3 +1416,104 @@ def test_no_depends_on_runtime_jinja_query():
         match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
     ):
         load_model(expressions)
+
+
+def test_update_schema():
+    expressions = d.parse(
+        """
+        MODEL (name db.table);
+
+        SELECT a, b FROM table_a JOIN table_b
+        """
+    )
+
+    model = load_model(expressions)
+
+    schema = MappingSchema(normalize=False)
+    schema.add_table("table_a", {"a": exp.DataType.build("int")})
+
+    # Make sure that the partial schema is not applied.
+    model.update_schema(schema)
+    assert not model.mapping_schema
+
+    schema.add_table("table_b", {"b": exp.DataType.build("int")})
+
+    model.update_schema(schema)
+    assert model.mapping_schema == {
+        "table_a": {"a": "INT"},
+        "table_b": {"b": "INT"},
+    }
+
+
+def test_user_provided_depends_on():
+    expressions = d.parse(
+        """
+        MODEL (name db.table, depends_on [table_b]);
+
+        SELECT a FROM table_a
+        """
+    )
+
+    model = load_model(expressions)
+
+    assert model.depends_on == {"table_a", "table_b"}
+
+
+def test_check_schema_mapping_when_rendering_at_runtime(assert_exp_eq):
+    expressions = d.parse(
+        """
+        MODEL (name db.table, depends_on [table_b]);
+
+        SELECT * FROM table_a JOIN table_b
+        """
+    )
+
+    model = load_model(expressions)
+
+    # Simulate a query that cannot be rendered at parse time.
+    with patch.object(SqlModel, "render_query", return_value=None) as render_query_mock:
+        assert not model.columns_to_types
+
+        schema = MappingSchema(normalize=False)
+        schema.add_table("table_b", {"b": exp.DataType.build("int")})
+        model.update_schema(schema)
+
+    assert "table_b" in model.mapping_schema
+    assert model.depends_on == {"table_b"}
+
+    render_query_mock.assert_called_once()
+
+    # Simulate rendering at runtime.
+    assert_exp_eq(
+        model.render_query(), """SELECT * FROM "table_a" AS "table_a", "table_b" AS "table_b" """
+    )
+
+
+def test_contains_star_projection():
+    expression_with_star = d.parse(
+        """
+        MODEL (name db.table);
+        SELECT * FROM table_a
+        """
+    )
+
+    model = load_model(expression_with_star)
+    assert model.contains_star_projection
+    assert model.columns_to_types is None
+
+    # Simulate a query that cannot be rendered at parse time.
+    with patch.object(QueryRenderer, "render", return_value=None) as render_query_mock:
+        model._columns_to_types = None
+        assert model.contains_star_projection is None
+        assert model.columns_to_types is None
+
+    expression_without_star = d.parse(
+        """
+        MODEL (name db.table);
+        SELECT a FROM table_a
+        """
+    )
+
+    model = load_model(expression_without_star)
+    assert model.contains_star_projection is False
+    assert "a" in model.columns_to_types
