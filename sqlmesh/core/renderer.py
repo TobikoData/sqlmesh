@@ -367,11 +367,13 @@ class QueryRenderer(ExpressionRenderer):
         dependencies = d.find_tables(query, dialect=self._dialect) - {self._model_name}
         for dependency in dependencies:
             if schema.find(exp.to_table(dependency, dialect=self._dialect)) is None:
-                logger.warning(
-                    "Query cannot be optimized due to missing schema for model '%s'. "
-                    "Make sure that the model query can be rendered at parse time",
-                    dependency,
-                )
+                if self._model_name is not None:
+                    logger.warning(
+                        "Query cannot be optimized due to missing schema for model '%s'. "
+                        "Make sure that the model '%s' can be rendered at parse time",
+                        dependency,
+                        self._model_name,
+                    )
                 schema = MappingSchema(None, dialect=self._dialect, normalize=False)
                 break
 

@@ -9,6 +9,17 @@ from sqlmesh.core.test.definition import SqlModelTest
 from sqlmesh.utils.yaml import load as load_yaml
 
 
+def _run_test(body, test_name, model, sushi_context):
+    return SqlModelTest(
+        body=body[test_name],
+        test_name=test_name,
+        model=model,
+        models=sushi_context._models,
+        engine_adapter=sushi_context._test_engine_adapter,
+        path=None,
+    ).run()
+
+
 def test_ctes(sushi_context: Context) -> None:
     model = t.cast(
         SqlModel,
@@ -55,14 +66,7 @@ test_foo:
     latest: 2022-01-01
             """
     )
-    result = SqlModelTest(
-        body=body["test_foo"],
-        test_name="test_foo",
-        model=model,
-        models=sushi_context._models,
-        engine_adapter=sushi_context._test_engine_adapter,
-        path=None,
-    ).run()
+    result = _run_test(body, "test_foo", model, sushi_context)
     assert result and result.wasSuccessful()
 
 
@@ -110,14 +114,7 @@ test_foo:
     latest: 2022-01-01
             """
     )
-    result = SqlModelTest(
-        body=body["test_foo"],
-        test_name="test_foo",
-        model=model,
-        models=sushi_context._models,
-        engine_adapter=sushi_context._test_engine_adapter,
-        path=None,
-    ).run()
+    result = _run_test(body, "test_foo", model, sushi_context)
     assert result and result.wasSuccessful()
 
 
@@ -162,14 +159,7 @@ test_foo:
     latest: 2022-01-01
             """
     )
-    result = SqlModelTest(
-        body=body["test_foo"],
-        test_name="test_foo",
-        model=model,
-        models=sushi_context._models,
-        engine_adapter=sushi_context._test_engine_adapter,
-        path=None,
-    ).run()
+    result = _run_test(body, "test_foo", model, sushi_context)
     assert result and result.wasSuccessful()
 
 
@@ -217,14 +207,7 @@ test_foo:
     latest: 2022-01-01
             """
     )
-    result = SqlModelTest(
-        body=body["test_foo"],
-        test_name="test_foo",
-        model=model,
-        models=sushi_context._models,
-        engine_adapter=sushi_context._test_engine_adapter,
-        path=None,
-    ).run()
+    result = _run_test(body, "test_foo", model, sushi_context)
     assert result and result.wasSuccessful()
 
 
@@ -269,12 +252,48 @@ test_foo:
     latest: 2022-01-01
             """
     )
-    result = SqlModelTest(
-        body=body["test_foo"],
-        test_name="test_foo",
-        model=model,
-        models=sushi_context._models,
-        engine_adapter=sushi_context._test_engine_adapter,
-        path=None,
-    ).run()
+    result = _run_test(body, "test_foo", model, sushi_context)
+    assert result and result.wasSuccessful()
+
+
+def test_column_order(sushi_context: Context) -> None:
+    model = t.cast(
+        SqlModel,
+        sushi_context.upsert_model(
+            load_model(
+                parse(
+                    """
+        MODEL (
+            name sushi.foo,
+            kind FULL,
+        );
+
+        SELECT id, value, ds FROM raw;
+        """
+                )
+            )
+        ),
+    )
+
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 2
+        ds: 3
+  outputs:
+    query:
+      - id: 1
+        ds: 3
+        value: 2
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01
+    latest: 2022-01-01
+            """
+    )
+    result = _run_test(body, "test_foo", model, sushi_context)
     assert result and result.wasSuccessful()

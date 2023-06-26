@@ -156,8 +156,9 @@ def test_model_validation(query, error):
         """
     )
 
+    model = load_model(expressions)
     with pytest.raises(ConfigError) as ex:
-        load_model(expressions)
+        model.validate_definition()
     assert error in str(ex.value)
 
 
@@ -188,8 +189,9 @@ def test_model_validation_union_query():
         """
     )
 
+    model = load_model(expressions)
     with pytest.raises(ConfigError, match=r"Found duplicate outer select name 'a'"):
-        load_model(expressions)
+        model.validate_definition()
 
 
 def test_partitioned_by():
@@ -280,8 +282,9 @@ def test_partition_key_is_missing_in_query():
     """
     )
 
+    model = load_model(expressions)
     with pytest.raises(ConfigError) as ex:
-        load_model(expressions)
+        model.validate_definition()
     assert "['c', 'd'] are missing" in str(ex.value)
 
 
@@ -1411,11 +1414,12 @@ def test_no_depends_on_runtime_jinja_query():
         """
     )
 
+    model = load_model(expressions)
     with pytest.raises(
         ConfigError,
         match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
     ):
-        load_model(expressions)
+        model.validate_definition()
 
 
 def test_update_schema():

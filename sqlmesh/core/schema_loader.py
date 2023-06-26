@@ -54,7 +54,10 @@ def create_schema_file(
                 "columns": {c: t.sql(dialect=dialect) for c, t in columns.items()},
             }
             for table, columns in sorted(
-                pool.map(lambda table: (table, adapter.columns(table)), external_tables)
+                pool.map(
+                    lambda table: (table, adapter.columns(table, include_pseudo_columns=True)),
+                    external_tables,
+                )
             )
         ]
 

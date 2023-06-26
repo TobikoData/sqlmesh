@@ -553,9 +553,6 @@ class _Model(ModelMeta, frozen=True):
     def validate_definition(self) -> None:
         """Validates the model's definition.
 
-        Model's are not allowed to have duplicate column names, non-explicitly casted columns,
-        or non infererrable column names.
-
         Raises:
             ConfigError
         """
@@ -808,7 +805,7 @@ class SqlModel(_SqlBasedModel):
         self._query_renderer._optimized_cache = {}
 
     def validate_definition(self) -> None:
-        query = self._query_renderer.render(optimize=False)
+        query = self._query_renderer.render()
 
         if query is None:
             if self.depends_on_ is None:
@@ -1489,7 +1486,6 @@ def _create_model(
 
     model._path = path
     model.set_time_format(time_column_format)
-    model.validate_definition()
 
     return t.cast(Model, model)
 

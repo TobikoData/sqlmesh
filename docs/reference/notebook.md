@@ -24,12 +24,18 @@ import sqlmesh
 
 ### Quick start project
 
-If desired, you can create the [quick start example project](../quick_start.md) with the `init_example_project` function:
+If desired, you can create the [quick start example project](../quick_start.md) with the Python `init_example_project` function:
 
 ```python
 from sqlmesh.cli.example_project import init_example_project
 
 init_example_project("path_to_project_directory")
+```
+
+Alternatively, create the project with a notebook magic:
+
+```python
+%init path_to_project_directory
 ```
 
 ### Databricks notebooks
@@ -39,18 +45,37 @@ See the [Execution Engines](../integrations/engines.md#databricks) page for info
 
 ## context
 ```
-%context paths
+%context paths [paths ...]
+
+Sets the context in the user namespace.
 
 positional arguments:
-  paths                 Path(s) to one ore more directories containing SQLMesh 
-                        projects
+  paths  The path(s) to the SQLMesh project(s).
+```
+
+## init
+```
+%init [--template TEMPLATE] path
+
+Creates a SQLMesh project scaffold.
+
+positional arguments:
+  path                  The path where the new SQLMesh project should be
+                        created.
+
+options:
+  --template TEMPLATE, -t TEMPLATE
+                        Project template. Supported values: airflow, dbt,
+                        default.
 ```
 
 ## plan
 ```
-%plan [--start START] [--end END] [--create-from CREATE_FROM]
-            [--skip-tests] [--restate-model [RESTATE_MODEL ...]] [--no-gaps]
-            [--skip-backfill] [--forward-only] [--no-prompts] [--auto-apply]
+%plan [--start START] [--end END] [--latest LATEST]
+            [--create-from CREATE_FROM] [--skip-tests]
+            [--restate-model [RESTATE_MODEL ...]] [--no-gaps]
+            [--skip-backfill] [--forward-only]
+            [--effective-from EFFECTIVE_FROM] [--no-prompts] [--auto-apply]
             [--no-auto-categorization]
             [environment]
 
@@ -63,6 +88,8 @@ options:
   --start START, -s START
                         Start date to backfill.
   --end END, -e END     End date to backfill.
+  --latest LATEST, -l LATEST
+                        Latest date to backfill.
   --create-from CREATE_FROM
                         The environment to create the target environment from
                         if it doesn't exist. Default: prod.
@@ -79,8 +106,11 @@ options:
                         the target environment.
   --skip-backfill       Skip the backfill step.
   --forward-only        Create a plan for forward-only changes.
+  --effective-from EFFECTIVE_FROM
+                        The effective date from which to apply forward-only
+                        changes on production.
   --no-prompts          Disables interactive prompts for the backfill time
-                        range. Note that if this flag is set and there
+                        range. Please note that if this flag is set and there
                         are uncategorized changes, plan creation will fail.
   --auto-apply          Automatically applies the new plan after creation.
   --no-auto-categorization
@@ -89,11 +119,10 @@ options:
 
 ## evaluate
 ```
-
 %evaluate [--start START] [--end END] [--latest LATEST] [--limit LIMIT]
-            model
+                model
 
-Evaluate a model query and fetch a dataframe.
+Evaluate a model query and fetches a dataframe.
 
 positional arguments:
   model                 The model.
@@ -104,8 +133,8 @@ options:
   --end END, -e END     End date to render.
   --latest LATEST, -l LATEST
                         Latest date to render.
-  --limit LIMIT         The number of rows for which which the query
-                        should be limited.
+  --limit LIMIT         The number of rows which the query should be limited
+                        to.
 ```
 
 ## render
