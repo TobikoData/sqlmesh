@@ -10,7 +10,7 @@ from enum import Enum
 from pydantic import EmailStr, Field, SecretStr
 
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.utils.errors import AuditError, MissingDependencyError
+from sqlmesh.utils.errors import AuditError, ConfigError, MissingDependencyError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 8):
@@ -159,7 +159,7 @@ class ConsoleNotificationTarget(BaseNotificationTarget):
 
 
 class SlackWebhookNotificationTarget(BaseNotificationTarget):
-    url: str
+    url: t.Optional[str] = None
     type_: Literal["slack_webhook"] = Field(alias="type", default="slack_webhook")
     _client: t.Optional[WebhookClient] = None
 
@@ -173,6 +173,9 @@ class SlackWebhookNotificationTarget(BaseNotificationTarget):
                     "Missing Slack dependencies. Run `pip install 'sqlmesh[slack]'` to install them."
                 ) from e
 
+            if not self.url:
+                raise ConfigError("Missing Slack webhook URL")
+
             self._client = WebhookClient(url=self.url)
         return self._client
 
@@ -181,8 +184,8 @@ class SlackWebhookNotificationTarget(BaseNotificationTarget):
 
 
 class SlackApiNotificationTarget(BaseNotificationTarget):
-    token: str
-    channel: str
+    token: t.Optional[str] = None
+    channel: t.Optional[str] = None
     type_: Literal["slack_api"] = Field(alias="type", default="slack_api")
     _client: t.Optional[WebClient] = None
 
@@ -200,16 +203,19 @@ class SlackApiNotificationTarget(BaseNotificationTarget):
         return self._client
 
     def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
+        if not self.channel:
+            raise ConfigError("Missing Slack channel for notification")
+
         self.client.chat_postMessage(channel=self.channel, text=msg)
 
 
 class BasicSMTPNotificationTarget(BaseNotificationTarget):
-    host: str
+    host: t.Optional[str] = None
     port: int = 465
     user: t.Optional[str] = None
     password: t.Optional[SecretStr] = None
-    sender: EmailStr
-    recipients: t.FrozenSet[EmailStr]
+    sender: t.Optional[EmailStr] = None
+    recipients: t.Optional[t.FrozenSet[EmailStr]] = None
     subject: t.Optional[str] = "SQLMesh Notification"
     type_: Literal["smtp"] = Field(alias="type", default="smtp")
 
@@ -220,9 +226,12 @@ class BasicSMTPNotificationTarget(BaseNotificationTarget):
         subject: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> None:
+        if not self.host:
+            raise ConfigError("Missing SMTP host for notification")
+
         email = EmailMessage()
         email["Subject"] = subject or self.subject
-        email["To"] = ",".join(self.recipients)
+        email["To"] = ",".join(self.recipients or [])
         email["From"] = self.sender
         email.set_content(msg)
         with smtplib.SMTP_SSL(host=self.host, port=self.port) as smtp:
