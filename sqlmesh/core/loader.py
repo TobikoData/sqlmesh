@@ -125,6 +125,10 @@ class Loader(abc.ABC):
         if update_schemas:
             update_model_schemas(self._dag, models, self._context.path)
 
+        for model in models.values():
+            # The model definition can be validated correctly only after the schema is set.
+            model.validate_definition()
+
         audits = self._load_audits()
 
         project = LoadedProject(
