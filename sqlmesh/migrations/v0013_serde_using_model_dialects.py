@@ -27,7 +27,9 @@ def migrate(state_sync):  # type: ignore
         for statement_kind in ("pre_statements_", "post_statements_"):
             if statement_kind in model and not has_jinja(model[statement_kind]):
                 model[statement_kind] = [
-                    transpile(model[statement_kind], read="", write=dialect, identity=False)[0]
+                    transpile(statement, read="", write=dialect, identity=False)[0]
+                    for statement in model[statement_kind]
+                    if statement
                 ]
 
         new_snapshots.append(
