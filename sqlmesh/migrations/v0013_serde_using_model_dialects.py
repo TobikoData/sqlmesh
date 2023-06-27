@@ -23,8 +23,8 @@ def migrate(state_sync):  # type: ignore
         dialect = model["dialect"]
 
         _update_expression(model, "query", dialect)
-        _update_expression_list(model, "pre_statements")
-        _update_expression_list(model, "post_statements")
+        _update_expression_list(model, "pre_statements", dialect)
+        _update_expression_list(model, "post_statements", dialect)
 
         for audit in parsed_snapshot.get("audits", []):
             _update_expression(audit, "query", dialect)
