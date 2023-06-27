@@ -504,5 +504,16 @@ def test_partition_by(sushi_test_project: Project):
         sql="""SELECT 1 AS one, ds FROM foo""",
     )
     assert model_config.to_sqlmesh(context).partitioned_by == [
-        parse_one("TIMESTAMP_TRUNC(ds, MONTH)", read="bigquery")
+        parse_one("DATE_TRUNC(ds, MONTH)", read="bigquery")
     ]
+
+    model_config.partition_by = {"field": "ds", "data_type": "timestamp", "granularity": "day"}
+    assert model_config.to_sqlmesh(context).partitioned_by == [
+        parse_one("TIMESTAMP_TRUNC(ds, DAY)", read="bigquery")
+    ]
+
+    model_config.partition_by = {"field": "ds", "data_type": "int64", "granularity": "day"}
+    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+
+    model_config.partition_by = {"field": "ds", "data_type": "date", "granularity": "day"}
+    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
