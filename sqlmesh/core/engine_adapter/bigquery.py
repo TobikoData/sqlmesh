@@ -337,39 +337,45 @@ class BigQueryEngineAdapter(EngineAdapter):
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
-        if not partitioned_by:
-            return None
-        if partition_interval_unit is None:
-            raise SQLMeshError("partition_interval_unit is required when partitioning a table")
-        if len(partitioned_by) > 1:
-            raise SQLMeshError("BigQuery only supports partitioning by a single column")
+        properties: t.List[exp.Expression] = []
 
-        this: exp.Expression
-        if isinstance(partitioned_by[0], exp.Column):
-            if partition_interval_unit == IntervalUnit.MINUTE:
-                raise SQLMeshError("BigQuery does not support partitioning by minute")
+        if partitioned_by:
+            if partition_interval_unit is None:
+                raise SQLMeshError("partition_interval_unit is required when partitioning a table")
+            if len(partitioned_by) > 1:
+                raise SQLMeshError("BigQuery only supports partitioning by a single column")
 
-            trunc_func: t.Optional[str] = None
-            if partition_interval_unit == IntervalUnit.HOUR:
-                trunc_func = "TIMESTAMP_TRUNC"
-            elif partition_interval_unit in (IntervalUnit.MONTH, IntervalUnit.YEAR):
-                trunc_func = "DATE_TRUNC"
-
-            if trunc_func:
-                this = exp.func(
-                    trunc_func,
-                    partitioned_by[0],
-                    exp.var(partition_interval_unit.value.upper()),
-                    dialect=self.dialect,
-                )
-            else:
-                this = partitioned_by[0]
-        else:
             this = partitioned_by[0]
 
-        partition_columns_property = exp.PartitionedByProperty(this=this)
-        return exp.Properties(expressions=[partition_columns_property])
+            if isinstance(this, exp.Column):
+                if partition_interval_unit == IntervalUnit.MINUTE:
+                    raise SQLMeshError("BigQuery does not support partitioning by minute")
+
+                if partition_interval_unit == IntervalUnit.HOUR:
+                    trunc_func = "TIMESTAMP_TRUNC"
+                elif partition_interval_unit in (IntervalUnit.MONTH, IntervalUnit.YEAR):
+                    trunc_func = "DATE_TRUNC"
+                else:
+                    trunc_func = ""
+
+                if trunc_func:
+                    this = exp.func(
+                        trunc_func,
+                        this,
+                        exp.var(partition_interval_unit.value.upper()),
+                        dialect=self.dialect,
+                    )
+
+            properties.append(exp.PartitionedByProperty(this=this))
+
+        if clustered_by:
+            properties.append(exp.Cluster(expressions=[exp.column(col) for col in clustered_by]))
+
+        if properties:
+            return exp.Properties(expressions=properties)
+        return None
 
     def create_state_table(
         self,

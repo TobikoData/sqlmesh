@@ -20,6 +20,7 @@ def test_create_table_properties(mocker: MockerFixture):
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
+        "colc": exp.DataType.build("TEXT"),
     }
 
     adapter = SparkEngineAdapter(lambda: connection_mock)
@@ -27,11 +28,12 @@ def test_create_table_properties(mocker: MockerFixture):
         "test_table",
         columns_to_types,
         partitioned_by=[exp.to_column("colb")],
+        clustered_by=["colc"],
         storage_format="ICEBERG",
     )
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb STRING) USING ICEBERG PARTITIONED BY (colb)"
+        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb STRING, colc STRING) USING ICEBERG PARTITIONED BY (colb)"
     )
 
     cursor_mock.reset_mock()
@@ -43,7 +45,7 @@ def test_create_table_properties(mocker: MockerFixture):
     )
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb STRING) USING ICEBERG PARTITIONED BY (cola, colb)"
+        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb STRING, colc STRING) USING ICEBERG PARTITIONED BY (cola, colb)"
     )
 
     with pytest.raises(SQLMeshError):

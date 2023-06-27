@@ -857,7 +857,9 @@ class EngineAdapter:
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
+        """Creates a SQLGlot table properties expression for ddl."""
         return None
 
     def _to_sql(self, e: exp.Expression, **kwargs: t.Any) -> str:
