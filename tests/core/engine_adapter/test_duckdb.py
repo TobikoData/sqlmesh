@@ -54,7 +54,7 @@ def test_create_table(adapter: EngineAdapter, duck_conn):
         "test_table2",
         columns_to_types,
         storage_format="ICEBERG",
-        partitioned_by=["colb"],
+        partitioned_by=[exp.to_column("colb")],
     )
     assert duck_conn.execute("DESCRIBE test_table").fetchall() == expected_columns
 

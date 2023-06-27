@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse, parse_one
+from sqlglot import exp, parse_one
 from sqlglot.schema import MappingSchema
 
 import sqlmesh.core.dialect as d
@@ -33,7 +33,7 @@ from sqlmesh.utils.metaprogramming import Executable
 
 
 def test_load(assert_exp_eq):
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -67,8 +67,7 @@ def test_load(assert_exp_eq):
                 t1.a = t2.a;
 
         DROP TABLE x;
-    """,
-        read="spark",
+    """
     )
 
     model = load_model(expressions)
@@ -76,7 +75,7 @@ def test_load(assert_exp_eq):
     assert model.owner == "owner_name"
     assert model.dialect == "spark"
     assert model.storage_format == "iceberg"
-    assert model.partitioned_by == ["a", "d"]
+    assert [col.sql() for col in model.partitioned_by] == ["a", "d"]
     assert model.columns_to_types == {
         "a": exp.DataType.build("int"),
         "b": exp.DataType.build("double"),
@@ -87,15 +86,15 @@ def test_load(assert_exp_eq):
     }
     assert model.view_name == "table"
     assert model.macro_definitions == [
-        parse_one("@DEF(x, 1)"),
+        d.parse_one("@DEF(x, 1)"),
     ]
     assert list(model.pre_statements) == [
-        parse_one("@DEF(x, 1)"),
-        parse_one("CACHE TABLE x AS SELECT 1"),
-        parse_one("ADD JAR 's3://my_jar.jar'", read="spark"),
+        d.parse_one("@DEF(x, 1)"),
+        d.parse_one("CACHE TABLE x AS SELECT 1"),
+        d.parse_one("ADD JAR 's3://my_jar.jar'", dialect="spark"),
     ]
     assert list(model.post_statements) == [
-        parse_one("DROP TABLE x"),
+        d.parse_one("DROP TABLE x"),
     ]
     assert model.depends_on == {"db.other_table"}
     assert_exp_eq(
@@ -122,7 +121,7 @@ def test_load(assert_exp_eq):
 
 def test_model_multiple_select_statements():
     # Make sure the load_model raises an exception for model with multiple select statements.
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -145,7 +144,7 @@ def test_model_multiple_select_statements():
     ],
 )
 def test_model_validation(query, error):
-    expressions = parse(
+    expressions = d.parse(
         f"""
         MODEL (
             name db.table,
@@ -163,7 +162,7 @@ def test_model_validation(query, error):
 
 
 def test_model_union_query():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -178,7 +177,7 @@ def test_model_union_query():
 
 
 def test_model_validation_union_query():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -194,14 +193,22 @@ def test_model_validation_union_query():
         model.validate_definition()
 
 
-def test_partitioned_by():
-    expressions = parse(
-        """
+@pytest.mark.parametrize(
+    "partition_by_input, partition_by_output",
+    [
+        ("a", ["a"]),
+        ("(a, b)", ["a", "b"]),
+        ("TIMESTAMP_TRUNC(a, DAY)", ["TIMESTAMP_TRUNC(a, DAY)"]),
+    ],
+)
+def test_partitioned_by(partition_by_input, partition_by_output):
+    expressions = d.parse(
+        f"""
         MODEL (
             name db.table,
-            dialect spark,
+            dialect bigquery,
             owner owner_name,
-            partitioned_by (a, b),
+            partitioned_by {partition_by_input},
             kind INCREMENTAL_BY_TIME_RANGE(
                 time_column a,
             ),
@@ -212,11 +219,11 @@ def test_partitioned_by():
     )
 
     model = load_model(expressions)
-    assert model.partitioned_by == ["a", "b"]
+    assert [col.sql(dialect="bigquery") for col in model.partitioned_by] == partition_by_output
 
 
 def test_no_model_statement():
-    expressions = parse(
+    expressions = d.parse(
         """
         SELECT 1 AS x
     """
@@ -230,7 +237,7 @@ def test_no_model_statement():
 
 
 def test_unordered_model_statements():
-    expressions = parse(
+    expressions = d.parse(
         """
         SELECT 1 AS x;
 
@@ -248,7 +255,7 @@ def test_unordered_model_statements():
 
 
 def test_no_query():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -266,7 +273,7 @@ def test_no_query():
 
 
 def test_partition_key_is_missing_in_query():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -289,7 +296,7 @@ def test_partition_key_is_missing_in_query():
 
 
 def test_partition_key_and_select_star():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -317,9 +324,9 @@ def test_json_serde():
         cron="@daily",
         storage_format="parquet",
         partitioned_by=["a"],
-        query=parse_one("SELECT a FROM tbl"),
+        query=d.parse_one("SELECT a FROM tbl"),
         pre_statements=[
-            parse_one("@DEF(key, 'value')"),
+            d.parse_one("@DEF(key, 'value')"),
         ],
     )
     model_json_str = model.json()
@@ -335,7 +342,7 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         "ds": "Date",
     }
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -429,7 +436,7 @@ def test_model_pre_post_statements():
 
 
 def test_seed_hydration():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.seed,
@@ -459,7 +466,7 @@ def test_seed_hydration():
 
 
 def test_seed():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.seed,
@@ -488,7 +495,7 @@ def test_seed():
 
 
 def test_seed_provided_columns():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.seed,
@@ -661,7 +668,7 @@ def test_seed_model_custom_types(tmp_path):
 
 
 def test_audits():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.seed,
@@ -686,7 +693,7 @@ def test_description(sushi_context):
 
 
 def test_render_definition():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             dialect spark,
@@ -717,8 +724,7 @@ def test_render_definition():
             db.table t2
             ON
                 t1.a = t2.a
-    """,
-        read="spark",
+    """
     )
 
     model = load_model(
@@ -819,7 +825,7 @@ def test_render_query(assert_exp_eq):
         name="test",
         cron="1 0 * * *",
         kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="y")),
-        query=parse_one(
+        query=d.parse_one(
             """
         SELECT y
         FROM x
@@ -867,7 +873,7 @@ def test_render_query(assert_exp_eq):
 
 
 def test_time_column():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -884,7 +890,7 @@ def test_time_column():
     assert model.time_column.format == "%Y-%m-%d"
     assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -899,9 +905,9 @@ def test_time_column():
     model = load_model(expressions)
     assert model.time_column.column == "ds"
     assert model.time_column.format == "%Y-%m-%d"
-    assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
+    assert model.time_column.expression == d.parse_one("(ds, '%Y-%m-%d')")
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -917,11 +923,11 @@ def test_time_column():
     model = load_model(expressions)
     assert model.time_column.column == "ds"
     assert model.time_column.format == "%Y-%m"
-    assert model.time_column.expression == parse_one("(ds, '%Y-%m')")
+    assert model.time_column.expression == d.parse_one("(ds, '%Y-%m')")
 
 
 def test_default_time_column():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -936,7 +942,7 @@ def test_default_time_column():
     model = load_model(expressions, time_column_format="%Y")
     assert model.time_column.format == "%Y"
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -951,7 +957,7 @@ def test_default_time_column():
     model = load_model(expressions, time_column_format="%m")
     assert model.time_column.format == "%Y"
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -969,7 +975,7 @@ def test_default_time_column():
 
 
 def test_convert_to_time_column():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -982,10 +988,10 @@ def test_convert_to_time_column():
     """
     )
     model = load_model(expressions)
-    assert model.convert_to_time_column("2022-01-01") == parse_one("'2022-01-01'")
-    assert model.convert_to_time_column(to_datetime("2022-01-01")) == parse_one("'2022-01-01'")
+    assert model.convert_to_time_column("2022-01-01") == d.parse_one("'2022-01-01'")
+    assert model.convert_to_time_column(to_datetime("2022-01-01")) == d.parse_one("'2022-01-01'")
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -998,9 +1004,9 @@ def test_convert_to_time_column():
     """
     )
     model = load_model(expressions)
-    assert model.convert_to_time_column("2022-01-01") == parse_one("'01/01/2022'")
+    assert model.convert_to_time_column("2022-01-01") == d.parse_one("'01/01/2022'")
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -1013,9 +1019,9 @@ def test_convert_to_time_column():
     """
     )
     model = load_model(expressions)
-    assert model.convert_to_time_column("2022-01-01") == parse_one("20220101")
+    assert model.convert_to_time_column("2022-01-01") == d.parse_one("20220101")
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.table,
@@ -1028,11 +1034,11 @@ def test_convert_to_time_column():
     """
     )
     model = load_model(expressions)
-    assert model.convert_to_time_column("2022-01-01") == parse_one("CAST('20220101' AS date)")
+    assert model.convert_to_time_column("2022-01-01") == d.parse_one("CAST('20220101' AS date)")
 
 
 def test_filter_time_column(assert_exp_eq):
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
           name sushi.items,
@@ -1071,7 +1077,7 @@ def test_filter_time_column(assert_exp_eq):
         """,
     )
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
           name sushi.items,
@@ -1352,7 +1358,7 @@ def test_case_sensitivity(assert_exp_eq):
 
 
 def test_batch_size_validation():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.seed,
@@ -1376,7 +1382,7 @@ def test_batch_size_validation():
 def test_model_cache(tmp_path: Path, mocker: MockerFixture):
     cache = ModelCache(tmp_path)
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (
             name db.seed,
@@ -1402,17 +1408,16 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
 
 def test_model_ctas_query():
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
         SELECT 1 as a
-        """,
-        read="bigquery",
+        """
     )
 
     assert load_model(expressions, dialect="bigquery").ctas_query().sql() == 'SELECT 1 AS "a"'
 
-    expressions = parse(
+    expressions = d.parse(
         """
         MODEL (name db.table, kind FULL);
         SELECT 1 as a FROM b

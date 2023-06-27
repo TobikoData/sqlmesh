@@ -90,7 +90,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
     assert model.description == "test model"
     assert model.render_query_or_raise().sql() == 'SELECT 1 AS "a" FROM "foo" AS "foo"'
     assert model.start == "Jan 1 2023"
-    assert model.partitioned_by == ["a"]
+    assert [col.sql() for col in model.partitioned_by] == ["a"]
     assert model.cron == "@hourly"
     assert model.stamp == "bar"
     assert model.dialect == "duckdb"
@@ -287,40 +287,6 @@ def test_quoting():
 
     source.quoting.schema_ = False
     assert str(BaseRelation.create(**source.relation_info)) == 'foo."bar"'
-
-
-def test_partitioned_by():
-    assert ModelConfig(partitioned_by="ds").sqlmesh_partitioned_by == ["ds"]
-    model = ModelConfig(partition_by={"field": "ds", "granularity": "hour"})
-    assert model.sqlmesh_partitioned_by == ["ds"]
-    assert model.partition_by == {"field": "ds", "granularity": "hour"}
-    model = ModelConfig(partition_by={"field": "ds"})
-    assert model.sqlmesh_partitioned_by == ["ds"]
-    assert model.partition_by == {"field": "ds", "granularity": "day"}
-    assert ModelConfig(
-        partitioned_by="ds", partition_by={"field": "ts"}
-    ).sqlmesh_partitioned_by == ["ds"]
-
-
-def test_cron_with_partition_by():
-    assert ModelConfig(cron="@daily").cron == "@daily"
-    assert ModelConfig(partition_by={"field": "ds", "granularity": "hour"}).cron == "0 * * * *"
-    assert (
-        ModelConfig(cron="@hourly", partition_by={"field": "ds", "granularity": "hour"}).cron
-        == "@hourly"
-    )
-    assert (
-        ModelConfig(
-            cron="@daily", partitioned_by="ds", partition_by={"field": "ds", "granularity": "hour"}
-        ).cron
-        == "@daily"
-    )
-
-    with pytest.raises(ConfigError):
-        assert (
-            ModelConfig(cron="@daily", partition_by={"field": "ds", "granularity": "hour"}).cron
-            == "@hourly"
-        )
 
 
 def _test_warehouse_config(config_yaml: str, target_class: t.Type[TargetConfig], *params_path: str):

@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from croniter import croniter
-from pydantic import root_validator, validator
+from pydantic import validator
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
@@ -110,25 +109,6 @@ class ModelConfig(BaseModelConfig):
             v["granularity"] = "day"
         return v
 
-    @root_validator
-    def _cron_interval_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        # partition_by ignored if partitioned_by set
-        if values.get("partitioned_by") or not values.get("partition_by"):
-            return values
-
-        granularity = values["partition_by"]["granularity"]
-        if not values.get("cron"):
-            values["cron"] = timespan_to_cron_expr(granularity)
-            return values
-
-        cron = values["cron"]
-        if croniter.expand(cron) != croniter.expand(timespan_to_cron_expr(granularity)):
-            raise ConfigError(
-                "partitioned_by granularity '{granularity}' must match cron interval '{cron}' at {values.get('path')}."
-            )
-
-        return values
-
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **BaseModelConfig._FIELD_UPDATE_STRATEGY,
         **{
@@ -212,15 +192,6 @@ class ModelConfig(BaseModelConfig):
             self._extract_sql_config()
         return self._sql_embedded_config
 
-    @property
-    def sqlmesh_partitioned_by(self) -> t.Optional[t.List[str]]:
-        if self.partitioned_by:
-            return self.partitioned_by
-        elif self.partition_by:
-            return [self.partition_by["field"]]
-
-        return None
-
     def _extract_sql_config(self) -> None:
         no_config, embedded_config = extract_jinja_config(self.sql)
         self._sql_no_config = SqlStr(no_config)
@@ -233,9 +204,17 @@ class ModelConfig(BaseModelConfig):
 
         optional_kwargs: t.Dict[str, t.Any] = {}
 
-        partitioned_by = self.sqlmesh_partitioned_by
-        if partitioned_by:
-            optional_kwargs["partitioned_by"] = partitioned_by
+        if self.partitioned_by:
+            optional_kwargs["partitioned_by"] = [
+                d.parse_one(val, dialect=dialect) for val in self.partitioned_by
+            ]
+        elif self.partition_by:
+            optional_kwargs["partitioned_by"] = [
+                d.parse_one(
+                    f"TIMESTAMP_TRUNC(`{self.partition_by['field']}`, {self.partition_by['granularity']})",
+                    dialect=dialect,
+                )
+            ]
 
         for field in ["cron"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
@@ -254,18 +233,3 @@ class ModelConfig(BaseModelConfig):
             **optional_kwargs,
             **self.sqlmesh_model_kwargs(context),
         )
-
-
-def timespan_to_cron_expr(timespan: str) -> str:
-    if timespan == "year":
-        return "0 0 1 1 *"
-    elif timespan == "month":
-        return "0 0 1 * *"
-    elif timespan == "day":
-        return "0 0 * * *"
-    elif timespan == "hour":
-        return "0 * * * *"
-    elif timespan == "minute":
-        return "* * * * *"
-
-    raise ConfigError(f"{timespan} is an unsupported timespan.")

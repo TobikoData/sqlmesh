@@ -914,7 +914,7 @@ def _model_data_hash(model: Model) -> str:
         model.cron,
         model.storage_format,
         str(model.lookback),
-        *(model.partitioned_by or []),
+        *(expr.sql() for expr in (model.partitioned_by or [])),
         model.stamp,
     ]
 

@@ -237,7 +237,7 @@ class SparkEngineAdapter(EngineAdapter):
     def _create_table_properties(
         self,
         storage_format: t.Optional[str] = None,
-        partitioned_by: t.Optional[t.List[str]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
     ) -> t.Optional[exp.Properties]:
         format_property = None
@@ -247,7 +247,10 @@ class SparkEngineAdapter(EngineAdapter):
         if partitioned_by:
             partition_columns_property = exp.PartitionedByProperty(
                 this=exp.Schema(
-                    expressions=[exp.to_identifier(column) for column in partitioned_by]
+                    expressions=[
+                        column.this if isinstance(column, exp.Column) else column
+                        for column in partitioned_by
+                    ]
                 ),
             )
         return exp.Properties(

@@ -1,10 +1,12 @@
 # type: ignore
 import pandas as pd
+import pytest
 from google.cloud import bigquery
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
+import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.utils import AttributeDict
@@ -144,7 +146,16 @@ def test_replace_query_pandas(mocker: MockerFixture):
     )
 
 
-def test_create_table_date_partition(mocker: MockerFixture):
+@pytest.mark.parametrize(
+    "partition_by_cols, partition_by_statement",
+    [
+        ([exp.to_column("ds")], "`ds`"),
+        ([d.parse_one("DATE_TRUNC(ds, MONTH)", dialect="bigquery")], "DATE_TRUNC(`ds`, MONTH)"),
+    ],
+)
+def test_create_table_date_partition(
+    partition_by_cols, partition_by_statement, mocker: MockerFixture
+):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
@@ -156,7 +167,7 @@ def test_create_table_date_partition(mocker: MockerFixture):
     adapter.create_table(
         "test_table",
         {"a": "int", "b": "int"},
-        partitioned_by=["ds"],
+        partitioned_by=partition_by_cols,
         partition_interval_unit=IntervalUnit.DAY,
     )
 
@@ -168,11 +179,23 @@ def test_create_table_date_partition(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY TIMESTAMP_TRUNC(`ds`, DAY)"
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement}"
     ]
 
 
-def test_create_table_time_partition(mocker: MockerFixture):
+@pytest.mark.parametrize(
+    "partition_by_cols, partition_by_statement",
+    [
+        ([exp.to_column("ds")], "TIMESTAMP_TRUNC(`ds`, HOUR)"),
+        (
+            [d.parse_one("TIMESTAMP_TRUNC(ds, HOUR)", dialect="bigquery")],
+            "TIMESTAMP_TRUNC(`ds`, HOUR)",
+        ),
+    ],
+)
+def test_create_table_time_partition(
+    partition_by_cols, partition_by_statement, mocker: MockerFixture
+):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
@@ -184,7 +207,7 @@ def test_create_table_time_partition(mocker: MockerFixture):
     adapter.create_table(
         "test_table",
         {"a": "int", "b": "int"},
-        partitioned_by=["ds"],
+        partitioned_by=partition_by_cols,
         partition_interval_unit=IntervalUnit.HOUR,
     )
 
@@ -196,5 +219,5 @@ def test_create_table_time_partition(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY TIMESTAMP_TRUNC(`ds`, HOUR)"
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement}"
     ]

@@ -5,6 +5,7 @@ from enum import Enum
 
 from pydantic import Field, root_validator, validator
 from sqlglot import exp
+from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
@@ -14,7 +15,6 @@ from sqlmesh.core.model.kind import (
     ViewKind,
     _Incremental,
 )
-from sqlmesh.utils import unique
 from sqlmesh.utils.cron import CroniterCache
 from sqlmesh.utils.date import TimeLike, to_datetime
 from sqlmesh.utils.errors import ConfigError
@@ -56,7 +56,7 @@ class ModelMeta(PydanticModel):
     start: t.Optional[TimeLike]
     retention: t.Optional[int]  # not implemented yet
     storage_format: t.Optional[str]
-    partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
+    partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]]
@@ -115,7 +115,7 @@ class ModelMeta(PydanticModel):
             ]
         return v
 
-    @validator("partitioned_by_", "tags", "grain", pre=True)
+    @validator("tags", "grain", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [e.name for e in v.expressions]
@@ -140,6 +140,39 @@ class ModelMeta(PydanticModel):
             except CroniterBadCronError:
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
+
+    @validator("partitioned_by_", pre=True)
+    def _partition_by_validator(
+        cls, v: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.List[exp.Expression]:
+        partitions: t.List[exp.Expression]
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            partitions = v.expressions
+        elif isinstance(v, exp.Expression):
+            partitions = [v]
+        else:
+            dialect = values.get("dialect")
+            partitions = [
+                d.parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
+                for entry in ensure_list(v)
+            ]
+        partitions = [
+            exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
+            for expr in partitions
+        ]
+
+        for partition in partitions:
+            num_cols = len(list(partition.find_all(exp.Column)))
+            error_msg: t.Optional[str] = None
+            if num_cols == 0:
+                error_msg = "does not contain a column"
+            elif num_cols > 1:
+                error_msg = "contains multiple columns"
+
+            if error_msg:
+                raise ConfigError(f"partitioned_by field '{partition}' {error_msg}")
+
+        return partitions
 
     @validator("columns_to_types_", pre=True)
     def _columns_validator(
@@ -199,9 +232,12 @@ class ModelMeta(PydanticModel):
         return []
 
     @property
-    def partitioned_by(self) -> t.List[str]:
-        time_column = [self.time_column.column] if self.time_column else []
-        return unique([*time_column, *self.partitioned_by_])
+    def partitioned_by(self) -> t.List[exp.Expression]:
+        if self.time_column and self.time_column.column not in [
+            col.name for col in self._partition_by_columns
+        ]:
+            return [*[exp.to_column(self.time_column.column)], *self.partitioned_by_]
+        return self.partitioned_by_
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
@@ -317,3 +353,7 @@ class ModelMeta(PydanticModel):
             The timestamp floor.
         """
         return self.croniter(self.cron_next(value)).get_prev()
+
+    @property
+    def _partition_by_columns(self) -> t.List[exp.Column]:
+        return [col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)]
