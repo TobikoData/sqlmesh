@@ -194,14 +194,17 @@ def test_model_validation_union_query():
 
 
 @pytest.mark.parametrize(
-    "partition_by_input, partition_by_output",
+    "partition_by_input, partition_by_output, expected_exception",
     [
-        ("a", ["a"]),
-        ("(a, b)", ["a", "b"]),
-        ("TIMESTAMP_TRUNC(a, DAY)", ["TIMESTAMP_TRUNC(a, DAY)"]),
+        ("a", ["a"], None),
+        ("(a, b)", ["a", "b"], None),
+        ("TIMESTAMP_TRUNC(a, DAY)", ["TIMESTAMP_TRUNC(a, DAY)"], None),
+        ("c", "", ConfigError),
+        ("(a, c)", "", ConfigError),
+        ("(a, a)", "", ConfigError),
     ],
 )
-def test_partitioned_by(partition_by_input, partition_by_output):
+def test_partitioned_by(partition_by_input, partition_by_output, expected_exception):
     expressions = d.parse(
         f"""
         MODEL (
@@ -219,7 +222,12 @@ def test_partitioned_by(partition_by_input, partition_by_output):
     )
 
     model = load_model(expressions)
-    assert [col.sql(dialect="bigquery") for col in model.partitioned_by] == partition_by_output
+    if expected_exception:
+        with pytest.raises(expected_exception):
+            model.validate_definition()
+    else:
+        model.validate_definition()
+        assert [col.sql(dialect="bigquery") for col in model.partitioned_by] == partition_by_output
 
 
 def test_no_model_statement():

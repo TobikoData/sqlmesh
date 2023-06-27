@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import validator
+from sqlglot import exp
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
@@ -79,7 +80,7 @@ class ModelConfig(BaseModelConfig):
     materialized: str = Materialization.VIEW.value
     sql_header: t.Optional[str] = None
     unique_key: t.Optional[t.List[str]] = None
-    partition_by: t.Optional[t.Dict[str, t.Any]] = None
+    partition_by: t.Optional[t.List[str] | t.Dict[str, t.Any]] = None
 
     # redshift
     bind: t.Optional[bool] = None
@@ -102,12 +103,18 @@ class ModelConfig(BaseModelConfig):
         return SqlStr(v)
 
     @validator("partition_by", pre=True)
-    def _validate_partition_by(cls, v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if not v.get("field"):
-            raise ConfigError("'field' key required for partition_by.")
-        if not v.get("granularity"):
-            v["granularity"] = "day"
-        return v
+    def _validate_partition_by(cls, v: t.Any) -> t.List[str] | t.Dict[str, t.Any]:
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return v
+        if isinstance(v, dict):
+            if not v.get("field"):
+                raise ConfigError("'field' key required for partition_by.")
+            if not v.get("granularity"):
+                v["granularity"] = "day"
+            return v
+        raise ConfigError(f"Invalid format for partition_by '{v}'")
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **BaseModelConfig._FIELD_UPDATE_STRATEGY,
@@ -208,7 +215,9 @@ class ModelConfig(BaseModelConfig):
             optional_kwargs["partitioned_by"] = [
                 d.parse_one(val, dialect=dialect) for val in self.partitioned_by
             ]
-        elif self.partition_by:
+        elif self.partition_by and isinstance(self.partition_by, list):
+            optional_kwargs["partitioned_by"] = [exp.to_column(val) for val in self.partition_by]
+        elif self.partition_by and isinstance(self.partition_by, dict):
             optional_kwargs["partitioned_by"] = [
                 d.parse_one(
                     f"TIMESTAMP_TRUNC(`{self.partition_by['field']}`, {self.partition_by['granularity']})",

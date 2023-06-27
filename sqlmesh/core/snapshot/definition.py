@@ -1062,7 +1062,7 @@ def merge_intervals(intervals: Intervals) -> Intervals:
 
 
 def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
-    if unit is None or unit.is_date_type:
+    if unit is None or unit.is_date_granularity:
         return to_ds(time_like)
     return to_datetime(time_like).isoformat()[:19]
 

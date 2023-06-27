@@ -36,7 +36,7 @@ class IntervalUnit(str, Enum):
     MINUTE = "minute"
 
     @property
-    def is_date_type(self) -> bool:
+    def is_date_granularity(self) -> bool:
         return self in (IntervalUnit.YEAR, IntervalUnit.MONTH, IntervalUnit.DAY)
 
 

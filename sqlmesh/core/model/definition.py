@@ -1648,7 +1648,7 @@ def _single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
     )
 
 
-def _single_expr_or_tuple(values: t.Sequence) -> exp.Expression | exp.Tuple:
+def _single_expr_or_tuple(values: t.Sequence[exp.Expression]) -> exp.Expression | exp.Tuple:
     return values[0] if len(values) == 1 else exp.Tuple(expressions=values)
 
 

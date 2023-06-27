@@ -477,6 +477,23 @@ def test_partition_by(sushi_test_project: Project):
     ]
 
     model_config = ModelConfig(
+        dialect="spark",
+        name="model",
+        schema="test",
+        package_name="package",
+        materialized="table",
+        unique_key="ds",
+        partition_by="ds",
+        sql="""SELECT 1 AS one, ds FROM foo""",
+    )
+    assert model_config.partition_by == ["ds"]
+    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+
+    model_config.partition_by = ["ds"]
+    assert model_config.partition_by == ["ds"]
+    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+
+    model_config = ModelConfig(
         dialect="bigquery",
         name="model",
         schema="test",

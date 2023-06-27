@@ -245,13 +245,13 @@ class SparkEngineAdapter(EngineAdapter):
         if storage_format:
             format_property = exp.FileFormatProperty(this=exp.Var(this=storage_format))
         if partitioned_by:
+            for expr in partitioned_by:
+                if not isinstance(expr, exp.Column):
+                    raise SQLMeshError(
+                        f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
+                    )
             partition_columns_property = exp.PartitionedByProperty(
-                this=exp.Schema(
-                    expressions=[
-                        column.this if isinstance(column, exp.Column) else column
-                        for column in partitioned_by
-                    ]
-                ),
+                this=exp.Schema(expressions=partitioned_by),
             )
         return exp.Properties(
             expressions=[

@@ -3,11 +3,13 @@ import typing as t
 from unittest.mock import call
 
 import pandas as pd
+import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
+from sqlmesh.utils.errors import SQLMeshError
 
 
 def test_create_table_properties(mocker: MockerFixture):
@@ -31,6 +33,14 @@ def test_create_table_properties(mocker: MockerFixture):
     cursor_mock.execute.assert_called_once_with(
         "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb STRING) USING ICEBERG PARTITIONED BY (colb)"
     )
+
+    with pytest.raises(SQLMeshError):
+        adapter.create_table(
+            "test_table",
+            columns_to_types,
+            partitioned_by=[parse_one("DATE(cola)")],
+            storage_format="ICEBERG",
+        )
 
 
 def test_alter_table(mocker: MockerFixture):
