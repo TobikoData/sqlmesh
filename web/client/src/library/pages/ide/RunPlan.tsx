@@ -12,7 +12,13 @@ import {
 import { useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
-import { useStorePlan, EnumPlanState, EnumPlanAction } from '~/context/plan'
+import {
+  useStorePlan,
+  EnumPlanState,
+  EnumPlanAction,
+  type PlanAction,
+  type PlanState,
+} from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
 import {
@@ -118,10 +124,21 @@ export default function RunPlan(): JSX.Element {
 
   const hasErrors = errors.size > 0
   const showRunButton =
-    (isFalse(environment.isInitial) && isFalse(environment.isDefault)) ||
-    hasSynchronizedEnvironments()
+    isFalse(environment.isDefault) || hasSynchronizedEnvironments()
   const showSelectEnvironmentButton =
-    isFalse(environment.isInitial) || isFalse(environment.isDefault)
+    showRunButton &&
+    (isFalse(environment.isDefault) || isFalse(environment.isInitial))
+  const isProcessingPlan = includes(
+    [EnumPlanState.Applying, EnumPlanState.Running, EnumPlanState.Cancelling],
+    planState,
+  )
+  const shouldDisableActions =
+    hasErrors ||
+    isFetching ||
+    planAction !== EnumPlanAction.None ||
+    planState === EnumPlanState.Applying ||
+    planState === EnumPlanState.Running ||
+    planState === EnumPlanState.Cancelling
 
   return (
     <div
@@ -131,79 +148,45 @@ export default function RunPlan(): JSX.Element {
           'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
-      {showRunButton && (
-        <div className="flex items-center relative">
-          <Button
-            className={clsx(
-              'mx-0',
-              isFalse(environment.isInitial && environment.isDefault) &&
-                'rounded-none rounded-l-lg border-r',
-            )}
-            disabled={
-              hasErrors ||
-              isFetching ||
-              planAction !== EnumPlanAction.None ||
-              planState === EnumPlanState.Applying ||
-              planState === EnumPlanState.Running ||
-              planState === EnumPlanState.Cancelling
-            }
-            variant={EnumVariant.Alternative}
-            size={EnumSize.sm}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              if (environment.isDefault && isFalse(environment.isInitial)) {
-                setShowConfirmation(true)
-              } else {
-                startPlan()
-              }
-            }}
-          >
-            {includes(
-              [
-                EnumPlanState.Applying,
-                EnumPlanState.Running,
-                EnumPlanState.Cancelling,
-              ],
-              planState,
-            ) && <Spinner className="w-3 h-3 mr-1" />}
-            <span className="inline-block">
-              {planState === EnumPlanState.Running
-                ? 'Running Plan...'
-                : planState === EnumPlanState.Applying
-                ? 'Applying Plan...'
-                : planState === EnumPlanState.Cancelling
-                ? 'Cancelling Plan...'
-                : planAction !== EnumPlanAction.None
-                ? 'Setting Plan...'
-                : 'Run Plan'}
-            </span>
-          </Button>
-          {showSelectEnvironmentButton && (
-            <SelectEnvironemnt
-              className="rounded-none rounded-r-lg border-l mx-0"
-              environment={environment}
-              disabled={
-                hasErrors ||
-                isFetching ||
-                planAction !== EnumPlanAction.None ||
-                planState === EnumPlanState.Applying ||
-                planState === EnumPlanState.Running ||
-                planState === EnumPlanState.Cancelling
-              }
-            />
+      <div className="flex items-center relative">
+        <Button
+          className={clsx(
+            'mx-0',
+            isFalse(environment.isInitial && environment.isDefault) &&
+              'rounded-none rounded-l-lg border-r',
           )}
-        </div>
-      )}
-      {planState !== EnumPlanState.Applying && (
-        <PlanChanges
-          environment={environment}
-          plan={plan}
-          isLoading={isFetching}
-          hasChanges={hasChanges}
-        />
-      )}
+          disabled={shouldDisableActions}
+          variant={EnumVariant.Alternative}
+          size={EnumSize.sm}
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
 
+            if (environment.isDefault && isFalse(environment.isInitial)) {
+              setShowConfirmation(true)
+            } else {
+              startPlan()
+            }
+          }}
+        >
+          {isProcessingPlan && <Spinner className="w-3 h-3 mr-1" />}
+          <span className="inline-block">
+            {getPlanStatus(planState, planAction)}
+          </span>
+        </Button>
+        {showSelectEnvironmentButton && (
+          <SelectEnvironemnt
+            className="rounded-none rounded-r-lg border-l mx-0"
+            environment={environment}
+            disabled={shouldDisableActions}
+          />
+        )}
+      </div>
+      <PlanChanges
+        environment={environment}
+        plan={plan}
+        isLoading={isFetching}
+        hasChanges={hasChanges}
+      />
       <ModalConfirmation
         show={showConfirmation}
         onClose={() => undefined}
@@ -302,64 +285,65 @@ function PlanChanges({
   return (
     <span className="flex align-center h-full w-full">
       <>
-        {environment.isInitial && environment.isLocal && (
-          <span
-            title="New"
-            className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
-          >
-            New
-          </span>
-        )}
-        {isLoading && (
+        {isLoading ? (
           <span className="flex items-center ml-2">
             <Spinner className="w-3 h-3 mr-1" />
             <span className="inline-block text-xs text-neutral-500">
               Checking...
             </span>
           </span>
+        ) : (
+          <>
+            {environment.isInitial && environment.isLocal && (
+              <span
+                title="New"
+                className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
+              >
+                New
+              </span>
+            )}
+            {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
+              <span
+                title="Latest"
+                className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
+              >
+                <span>Latest</span>
+              </span>
+            )}
+            {isArrayNotEmpty(plan?.changes?.added) && (
+              <ChangesPreview
+                headline="Added Models"
+                type={EnumPlanChangeType.Add}
+                changes={plan!.changes!.added}
+              />
+            )}
+            {isArrayNotEmpty(plan?.changes?.modified.direct) && (
+              <ChangesPreview
+                headline="Direct Changes"
+                type={EnumPlanChangeType.Direct}
+                changes={plan!.changes!.modified.direct!.map(
+                  ({ model_name }) => model_name,
+                )}
+              />
+            )}
+            {isArrayNotEmpty(plan?.changes?.modified.indirect) && (
+              <ChangesPreview
+                headline="Indirectly Modified"
+                type={EnumPlanChangeType.Indirect}
+                changes={plan!.changes!.modified.indirect!.map(
+                  ci => ci.model_name,
+                )}
+              />
+            )}
+            {isArrayNotEmpty(plan?.changes?.removed) && (
+              <ChangesPreview
+                headline="Removed Models"
+                type={EnumPlanChangeType.Remove}
+                changes={plan!.changes!.removed}
+              />
+            )}
+          </>
         )}
-        {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
-          <span
-            title="Latest"
-            className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
-          >
-            <span>Latest</span>
-          </span>
-        )}
-        {plan?.changes?.added != null &&
-          isArrayNotEmpty(plan?.changes?.added) && (
-            <ChangesPreview
-              headline="Added Models"
-              type={EnumPlanChangeType.Add}
-              changes={plan.changes.added}
-            />
-          )}
-        {plan?.changes?.modified?.direct != null &&
-          isArrayNotEmpty(plan?.changes?.modified.direct) && (
-            <ChangesPreview
-              headline="Direct Changes"
-              type={EnumPlanChangeType.Direct}
-              changes={plan.changes.modified.direct.map(
-                ({ model_name }) => model_name,
-              )}
-            />
-          )}
-        {plan?.changes?.modified?.indirect != null &&
-          isArrayNotEmpty(plan?.changes?.modified.indirect) && (
-            <ChangesPreview
-              headline="Indirectly Modified"
-              type={EnumPlanChangeType.Indirect}
-              changes={plan.changes.modified.indirect.map(ci => ci.model_name)}
-            />
-          )}
-        {plan?.changes?.removed != null &&
-          isArrayNotEmpty(plan?.changes?.removed) && (
-            <ChangesPreview
-              headline="Removed Models"
-              type={EnumPlanChangeType.Remove}
-              changes={plan.changes.removed}
-            />
-          )}
       </>
     </span>
   )
@@ -635,4 +619,13 @@ function ChangesPreview({
       )}
     </Popover>
   )
+}
+
+function getPlanStatus(planState: PlanState, planAction: PlanAction): string {
+  if (planState === EnumPlanState.Running) return 'Running Plan...'
+  if (planState === EnumPlanState.Applying) return 'Applying Plan...'
+  if (planState === EnumPlanState.Cancelling) return 'Cancelling Plan...'
+  if (planAction === EnumPlanAction.None) return 'Run Plan'
+
+  return 'Setting Plan...'
 }

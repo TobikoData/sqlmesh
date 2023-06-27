@@ -25,6 +25,7 @@ function Editor(): JSX.Element {
 
   const tab = useStoreEditor(s => s.tab)
   const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
+  const storedTabsId = useStoreEditor(s => s.storedTabsId)
   const engine = useStoreEditor(s => s.engine)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
@@ -62,7 +63,13 @@ function Editor(): JSX.Element {
   useEffect(() => {
     files.forEach(file => {
       if (storedTabsIds.includes(file.id)) {
-        addTab(createTab(file))
+        const tab = createTab(file)
+
+        if (storedTabsId === file.id) {
+          selectTab(tab)
+        } else {
+          addTab(tab)
+        }
       }
     })
   }, [files])
