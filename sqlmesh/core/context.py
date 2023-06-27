@@ -233,6 +233,7 @@ class Context(BaseContext):
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
+        self.pinned_environments = Environment.normalize_names(self.config.pinned_environments)
         self.auto_categorize_changes = self.config.auto_categorize_changes
 
         connection_config = self.config.get_connection(self.gateway)
@@ -695,6 +696,10 @@ class Context(BaseContext):
 
         self._run_plan_tests(skip_tests=skip_tests)
 
+        environment_ttl = (
+            self.environment_ttl if environment not in self.pinned_environments else None
+        )
+
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, create_from=create_from),
             state_reader=self.state_reader,
@@ -707,7 +712,7 @@ class Context(BaseContext):
             skip_backfill=skip_backfill,
             is_dev=environment != c.PROD,
             forward_only=forward_only,
-            environment_ttl=self.environment_ttl,
+            environment_ttl=environment_ttl,
             categorizer_config=self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,

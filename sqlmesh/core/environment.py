@@ -59,3 +59,7 @@ class Environment(PydanticModel):
         if not isinstance(v, str):
             raise TypeError(f"Expected str or Environment, got {type(v).__name__}")
         return cls._normalize_name(v)
+
+    @classmethod
+    def normalize_names(cls, values: t.Iterable[str]) -> t.Set[str]:
+        return {cls.normalize_name(value) for value in values}
