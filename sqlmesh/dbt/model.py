@@ -106,8 +106,7 @@ class ModelConfig(BaseModelConfig):
         if isinstance(v, dict):
             if not v.get("field"):
                 raise ConfigError("'field' key required for partition_by.")
-            defaults = {"data_type": "date", "granularity": "day"}
-            return {**defaults, **v}
+            return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -206,9 +205,10 @@ class ModelConfig(BaseModelConfig):
             data_type == "date" and self.partition_by["granularity"].lower() == "day"
         ):
             return exp.to_column(self.partition_by["field"])
-        return d.parse_one(
-            f"""{data_type.upper()}_TRUNC({self.partition_by["field"]}, {self.partition_by["granularity"].upper()})""",
-            dialect="bigquery",
+
+        return TIME_TYPE_TO_TRUNC_EXPR[data_type](
+            this=exp.to_column(self.partition_by["field"]),
+            unit=exp.var(self.partition_by["granularity"].upper()),
         )
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
@@ -218,10 +218,12 @@ class ModelConfig(BaseModelConfig):
 
         optional_kwargs: t.Dict[str, t.Any] = {}
 
-        if self.partition_by and isinstance(self.partition_by, list):
-            optional_kwargs["partitioned_by"] = [exp.to_column(val) for val in self.partition_by]
-        elif self.partition_by and isinstance(self.partition_by, dict):
-            optional_kwargs["partitioned_by"] = self._big_query_partition_by_expr
+        if self.partition_by:
+            optional_kwargs["partitioned_by"] = (
+                [exp.to_column(val) for val in self.partition_by]
+                if isinstance(self.partition_by, list)
+                else self._big_query_partition_by_expr
+            )
 
         if self.cluster_by:
             optional_kwargs["clustered_by"] = self.cluster_by
@@ -243,3 +245,10 @@ class ModelConfig(BaseModelConfig):
             **optional_kwargs,
             **self.sqlmesh_model_kwargs(context),
         )
+
+
+TIME_TYPE_TO_TRUNC_EXPR = {
+    "date": exp.DateTrunc,
+    "datetime": exp.DatetimeTrunc,
+    "timestamp": exp.TimestampTrunc,
+}
