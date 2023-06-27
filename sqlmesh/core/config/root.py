@@ -55,6 +55,7 @@ class Config(BaseConfig):
     users: t.List[User] = []
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
     loader: t.Type[Loader] = SqlMeshLoader
+    env_vars: t.Dict[str, str] = {}
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
