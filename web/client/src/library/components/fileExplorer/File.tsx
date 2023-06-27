@@ -10,7 +10,7 @@ import { isFalse, isStringEmptyOrNil } from '~/utils'
 import { useStoreEditor } from '~/context/editor'
 import { useStoreFileExplorer } from '~/context/fileTree'
 import * as ContextMenu from '@radix-ui/react-context-menu'
-import { ModelArtifact } from '@models/artifact'
+import { type ModelArtifact } from '@models/artifact'
 
 interface PropsFile {
   file: ModelFile
@@ -40,7 +40,7 @@ export default function File({
     s => s.selectArtifactsInRange,
   )
 
-  function handleSelect(e: MouseEvent) {
+  function handleSelect(e: MouseEvent): void {
     e.stopPropagation()
 
     if (e.shiftKey) {

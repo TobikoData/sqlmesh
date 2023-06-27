@@ -39,6 +39,7 @@ module.exports = {
         format: ['camelCase', 'PascalCase', 'UPPER_CASE', 'snake_case'],
       },
     ],
+    '@typescript-eslint/no-confusing-void-expression': OFF,
   },
   ignorePatterns: [
     'src/api/client.ts',

@@ -180,9 +180,7 @@ export default function FileExplorer({
         return deleteFileApiFilesPathDelete(artifact.path)
       }
 
-      if (artifact instanceof ModelDirectory) {
-        return deleteDirectoryApiDirectoriesPathDelete(artifact.path)
-      }
+      return deleteDirectoryApiDirectoriesPathDelete(artifact.path)
     })
 
     Promise.all(promises)
@@ -265,7 +263,7 @@ export default function FileExplorer({
     setConfirmation(confirmation)
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: React.KeyboardEvent): void {
     if (e.key === 'Escape' && selected != null && activeRange.size > 1) {
       setActiveRange(new Set([selected]))
     }

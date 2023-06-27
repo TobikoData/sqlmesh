@@ -12,7 +12,7 @@ import { useStoreEditor } from '~/context/editor'
 import { useStoreFileExplorer } from '~/context/fileTree'
 import File from './File'
 import * as ContextMenu from '@radix-ui/react-context-menu'
-import { ModelArtifact } from '@models/artifact'
+import { type ModelArtifact } from '@models/artifact'
 
 interface PropsDirectory {
   directory: ModelDirectory
@@ -57,7 +57,7 @@ export default function Directory({
     }
   }, [tab])
 
-  function handleSelect(e: MouseEvent) {
+  function handleSelect(e: MouseEvent): void {
     e.stopPropagation()
 
     if (e.shiftKey || e.metaKey) {

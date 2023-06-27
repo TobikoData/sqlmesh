@@ -29,7 +29,7 @@ function Editor(): JSX.Element {
   const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
   const storedTabsId = useStoreEditor(s => s.storedTabsId)
   const engine = useStoreEditor(s => s.engine)
-
+  const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const addTab = useStoreEditor(s => s.addTab)
 
