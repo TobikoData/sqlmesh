@@ -292,7 +292,7 @@ def test_create_table_properties(mocker: MockerFixture):
     adapter.create_table(
         "test_table",
         columns_to_types,
-        partitioned_by=["colb"],
+        partitioned_by=[exp.to_column("colb")],
         storage_format="ICEBERG",
     )
 

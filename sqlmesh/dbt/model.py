@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import validator
+from sqlglot import exp
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
@@ -59,12 +60,14 @@ class ModelConfig(BaseModelConfig):
         materialized: How the model will be materialized in the database
         sql_header: SQL statement to inject above create table/view as
         unique_key: List of columns that define row uniqueness for the model
+        partition_by: Dictionary of bigquery partition by parameters ([dbt bigquery config](https://docs.getdbt.com/reference/resource-configs/bigquery-configs)).
+            If partitioned_by is set, this field will be ignored.
     """
 
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
     time_column: t.Optional[str] = None
-    partitioned_by: t.Optional[t.Union[t.List[str], str]] = None
+    partitioned_by: t.Optional[t.List[str]] = None
     cron: t.Optional[str] = None
     dialect: t.Optional[str] = None
     batch_size: t.Optional[int] = None
@@ -77,6 +80,7 @@ class ModelConfig(BaseModelConfig):
     materialized: str = Materialization.VIEW.value
     sql_header: t.Optional[str] = None
     unique_key: t.Optional[t.List[str]] = None
+    partition_by: t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]] = None
 
     # redshift
     bind: t.Optional[bool] = None
@@ -97,6 +101,20 @@ class ModelConfig(BaseModelConfig):
     @validator("sql", pre=True)
     def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:
         return SqlStr(v)
+
+    @validator("partition_by", pre=True)
+    def _validate_partition_by(cls, v: t.Any) -> t.Union[t.List[str], t.Dict[str, t.Any]]:
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return v
+        if isinstance(v, dict):
+            if not v.get("field"):
+                raise ConfigError("'field' key required for partition_by.")
+            if not v.get("granularity"):
+                v["granularity"] = "day"
+            return v
+        raise ConfigError(f"Invalid format for partition_by '{v}'")
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **BaseModelConfig._FIELD_UPDATE_STRATEGY,
@@ -192,8 +210,21 @@ class ModelConfig(BaseModelConfig):
         query = d.jinja_query(self.sql_no_config)
 
         optional_kwargs: t.Dict[str, t.Any] = {}
+
         if self.partitioned_by:
-            optional_kwargs["partitioned_by"] = self.partitioned_by
+            optional_kwargs["partitioned_by"] = [
+                d.parse_one(val, dialect=dialect) for val in self.partitioned_by
+            ]
+        elif self.partition_by and isinstance(self.partition_by, list):
+            optional_kwargs["partitioned_by"] = [exp.to_column(val) for val in self.partition_by]
+        elif self.partition_by and isinstance(self.partition_by, dict):
+            optional_kwargs["partitioned_by"] = [
+                d.parse_one(
+                    f"TIMESTAMP_TRUNC(`{self.partition_by['field']}`, {self.partition_by['granularity']})",
+                    dialect=dialect,
+                )
+            ]
+
         for field in ["cron"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:

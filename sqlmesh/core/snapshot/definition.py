@@ -914,7 +914,7 @@ def _model_data_hash(model: Model) -> str:
         model.cron,
         model.storage_format,
         str(model.lookback),
-        *(model.partitioned_by or []),
+        *(expr.sql() for expr in (model.partitioned_by or [])),
         model.stamp,
     ]
 
@@ -1062,7 +1062,7 @@ def merge_intervals(intervals: Intervals) -> Intervals:
 
 
 def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
-    if unit is None or unit == IntervalUnit.DAY:
+    if unit is None or unit.is_date_granularity:
         return to_ds(time_like)
     return to_datetime(time_like).isoformat()[:19]
 

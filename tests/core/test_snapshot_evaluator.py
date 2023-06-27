@@ -136,7 +136,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         snapshot.table_name(),
         columns_to_types={"a": exp.DataType.build("int")},
         storage_format="parquet",
-        partitioned_by=["a"],
+        partitioned_by=[exp.to_column("a")],
         partition_interval_unit=IntervalUnit.DAY,
     )
 
