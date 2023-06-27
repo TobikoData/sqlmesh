@@ -113,9 +113,9 @@ class SnapshotCache(t.MutableMapping[SnapshotId, Snapshot]):
             self[snapshot.snapshot_id].remove_interval(start, end)
 
     def get_snapshots_merged_intervals_by_id(
-        self, intervals: t.Optional[t.Iterable[SnapshotIntervals]] = None
+        self, intervals: t.Iterable[SnapshotIntervals]
     ) -> t.Dict[SnapshotId, Snapshot]:
-        intervals_by_snapshot_id = {x.snapshot_id: x for x in intervals or self.snapshot_intervals}
+        intervals_by_snapshot_id = {x.snapshot_id: x for x in intervals}
 
         result = {}
         for snapshot in self.snapshots:
@@ -457,9 +457,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
-        snapshot_ids = list(snapshot_ids) if snapshot_ids else []
-        if not snapshot_ids:
-            return {}
+        snapshot_ids = list(snapshot_ids) if snapshot_ids else None
         if self._snapshot_cache and self._snapshot_cache.contains(snapshot_ids or set()):
             if hydrate_seeds:
                 self._hydrate_seeds(snapshot_ids)
@@ -816,16 +814,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for audit in s.audits:
                     audits[audit.name] = audit
 
-            new_snapshot = deepcopy(snapshot)
+            original_snapshot = deepcopy(snapshot)
 
             fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
 
-            new_snapshot.fingerprint = fingerprint_from_model(
+            snapshot.fingerprint = fingerprint_from_model(
                 model,
                 models=models,
                 audits=audits,
             )
-            new_snapshot.parents = tuple(
+            snapshot.parents = tuple(
                 SnapshotId(
                     name=name,
                     identifier=fingerprint_from_model(
@@ -840,25 +838,25 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
             # Infer the missing change category to account for SQLMesh versions in which
             # we didn't assign a change category to indirectly modified snapshots.
-            if not new_snapshot.change_category:
-                new_snapshot.change_category = (
+            if not snapshot.change_category:
+                snapshot.change_category = (
                     SnapshotChangeCategory.INDIRECT_BREAKING
                     if snapshot.fingerprint.to_version() == snapshot.version
                     else SnapshotChangeCategory.INDIRECT_NON_BREAKING
                 )
 
-            if not new_snapshot.temp_version:
-                new_snapshot.temp_version = snapshot.fingerprint.to_version()
+            if not snapshot.temp_version:
+                snapshot.temp_version = snapshot.fingerprint.to_version()
 
-            if new_snapshot == snapshot:
-                logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
+            if snapshot == original_snapshot:
+                logger.debug(f"{snapshot.snapshot_id} is unchanged.")
                 continue
-            if new_snapshot.snapshot_id in all_snapshots:
-                logger.debug(f"{new_snapshot.snapshot_id} exists.")
+            if snapshot.snapshot_id in all_snapshots:
+                logger.debug(f"{snapshot.snapshot_id} exists.")
                 continue
 
-            snapshot_mapping[snapshot.snapshot_id] = new_snapshot
-            logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot.snapshot_id}.")
+            snapshot_mapping[original_snapshot.snapshot_id] = snapshot
+            logger.debug(f"{original_snapshot.snapshot_id} mapped to {snapshot.snapshot_id}.")
 
         if not snapshot_mapping:
             logger.debug("No changes to snapshots detected.")
