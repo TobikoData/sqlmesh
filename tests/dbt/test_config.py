@@ -72,7 +72,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
         description="test model",
         sql="SELECT 1 AS a FROM foo",
         start="Jan 1 2023",
-        partitioned_by=["a"],
+        partition_by=["a"],
         cluster_by=["a"],
         cron="@hourly",
         batch_size=5,
