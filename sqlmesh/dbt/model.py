@@ -80,7 +80,7 @@ class ModelConfig(BaseModelConfig):
     materialized: str = Materialization.VIEW.value
     sql_header: t.Optional[str] = None
     unique_key: t.Optional[t.List[str]] = None
-    partition_by: t.Optional[t.List[str] | t.Dict[str, t.Any]] = None
+    partition_by: t.Optional[t.Union[t.List[str], t.Dict[str, t.Any]]] = None
 
     # redshift
     bind: t.Optional[bool] = None
@@ -103,7 +103,7 @@ class ModelConfig(BaseModelConfig):
         return SqlStr(v)
 
     @validator("partition_by", pre=True)
-    def _validate_partition_by(cls, v: t.Any) -> t.List[str] | t.Dict[str, t.Any]:
+    def _validate_partition_by(cls, v: t.Any) -> t.Union[t.List[str], t.Dict[str, t.Any]]:
         if isinstance(v, str):
             return [v]
         if isinstance(v, list):
