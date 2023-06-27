@@ -57,6 +57,7 @@
     --color-neutral: hsla(0, 0%, 50%, 1);
 
     /* Brand */
+    --color-brand-5: hsla(24, 100%, 60%, 0.05);
     --color-brand-10: hsla(24, 100%, 60%, 0.1);
     --color-brand-20: hsla(24, 100%, 60%, 0.2);
     --color-brand-30: hsla(24, 100%, 60%, 0.3);

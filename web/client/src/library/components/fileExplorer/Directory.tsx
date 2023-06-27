@@ -3,53 +3,48 @@ import {
   FolderOpenIcon,
   FolderIcon,
   CheckCircleIcon,
-  DocumentPlusIcon,
-  FolderPlusIcon,
-  XCircleIcon,
-  ArrowsUpDownIcon,
 } from '@heroicons/react/24/solid'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
-import {
-  writeDirectoryApiDirectoriesPathPost,
-  writeFileApiFilesPathPost,
-  deleteDirectoryApiDirectoriesPathDelete,
-} from '~/api/client'
-import { ModelDirectory, ModelFile } from '~/models'
-import { isFalse, isStringEmptyOrNil } from '~/utils'
+import { writeDirectoryApiDirectoriesPathPost } from '~/api/client'
+import { ModelDirectory } from '~/models'
+import { isFalse, isNotNil, isStringEmptyOrNil } from '~/utils'
 import { type WithConfirmation } from '../modal/ModalConfirmation'
-import { toUniqueName, getAllFilesInDirectory } from './help'
 import { useStoreEditor } from '~/context/editor'
 import { useStoreFileExplorer } from '~/context/fileTree'
 import File from './File'
+import * as ContextMenu from '@radix-ui/react-context-menu'
+import { ModelArtifact } from '@models/artifact'
 
 interface PropsDirectory extends WithConfirmation {
   directory: ModelDirectory
   className?: string
   style?: React.CSSProperties
+  createFile: (parent: ModelDirectory) => void
+  createDirectory: (parent: ModelDirectory) => void
+  removeArtifact: (parent: ModelDirectory, artifact: ModelArtifact) => void
 }
-
-const CSS_ICON_SIZE = 'w-4 h-4'
 
 export default function Directory({
   directory,
   setConfirmation,
+  createDirectory,
+  createFile,
+  removeArtifact,
   className,
   style,
 }: PropsDirectory): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
-  const closeTab = useStoreEditor(s => s.closeTab)
 
   const activeRange = useStoreFileExplorer(s => s.activeRange)
+  const selected = useStoreFileExplorer(s => s.selected)
   const selectFile = useStoreFileExplorer(s => s.selectFile)
-  const refreshProject = useStoreFileExplorer(s => s.refreshProject)
+  const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
 
   const [isLoading, setIsLoading] = useState(false)
   const [newName, setNewName] = useState<string>()
   const [isOpen, setIsOpen] = useState<boolean>(directory.isOpen)
-
-  const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
-  const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
+  const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
 
   useEffect(() => {
     // Update component every time ModelDirectory's state "isOpen" is changing
@@ -62,118 +57,17 @@ export default function Directory({
     }
   }, [tab])
 
-  function createDirectory(e: MouseEvent): void {
-    e.stopPropagation()
-
-    if (isLoading) return
-
-    setIsLoading(true)
-
-    const name = toUniqueName('new_directory')
-
-    writeDirectoryApiDirectoriesPathPost(`${directory.path}/${name}`, {})
-      .then(created => {
-        if (isFalse((created as any).ok)) {
-          console.warn([
-            `Directory: ${directory.path}`,
-            (created as any).detail,
-          ])
-
-          return
-        }
-
-        directory.addDirectory(new ModelDirectory(created, directory))
-        directory.open()
-
-        refreshProject()
-      })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log(error)
-      })
-      .finally(() => {
-        setIsLoading(false)
-      })
-  }
-
-  function createFile(e: MouseEvent): void {
-    e.stopPropagation()
-
-    if (isLoading) return
-
-    setIsLoading(true)
-
-    const extension = directory.isModels ? '.sql' : '.py'
-    const name = toUniqueName('new_file', extension)
-
-    writeFileApiFilesPathPost(`${directory.path}/${name}`, { content: '' })
-      .then(created => {
-        if (isFalse((created as any).ok)) {
-          console.warn([`File: ${directory.path}`, (created as any).detail])
-
-          return
-        }
-
-        const file = new ModelFile(created, directory)
-
-        directory.addFile(file)
-        directory.open()
-
-        refreshProject()
-      })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log(error)
-      })
-      .finally(() => {
-        setIsLoading(false)
-      })
-  }
-
-  function remove(): void {
-    if (isLoading) return
-
-    setIsLoading(true)
-
-    deleteDirectoryApiDirectoriesPathDelete(directory.path)
-      .then(response => {
-        if (isFalse((response as any).ok)) {
-          console.warn([
-            `Directory: ${directory.path}`,
-            (response as any).detail,
-          ])
-
-          return
-        }
-
-        if (directory.isNotEmpty) {
-          const files = getAllFilesInDirectory(directory)
-
-          files.forEach(file => {
-            closeTab(file)
-          })
-        }
-
-        directory.parent?.removeDirectory(directory)
-
-        refreshProject()
-      })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log({ error })
-      })
-      .finally(() => {
-        setIsLoading(false)
-      })
-  }
-
   function removeWithConfirmation(): void {
     setConfirmation({
       headline: 'Removing Directory',
       description: `Are you sure you want to remove the directory "${directory.name}"?`,
       yesText: 'Yes, Remove',
       noText: 'No, Cancel',
-      action: remove,
+      action: () => {
+        if (directory.parent != null) {
+          removeArtifact(directory.parent, directory)
+        }
+      },
     })
   }
 
@@ -228,114 +122,69 @@ export default function Directory({
     }
   }
 
+  const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
+  const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
+
   return (
-    <>
+    <div className="h-full">
       {directory.withParent && (
         <span
           className={clsx(
-            'w-full overflow-hidden group flex justify-between items-center rounded-md py-[0.125rem] pr-2',
+            'w-full overflow-hidden group flex rounded-md',
             isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
+            isOpenContextMenu && 'bg-primary-10',
             activeRange.has(directory) &&
               'text-brand-100 bg-brand-500 dark:bg-brand-700',
             className,
           )}
           style={style}
+          onContextMenu={(e: MouseEvent) => {
+            e.stopPropagation()
+          }}
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
 
-            selectFile(directory)
+            if (e.shiftKey) {
+              e.preventDefault()
+            } else {
+              if (isNotNil(newName)) return
 
-            directory.toggle()
+              directory.toggle()
+            }
+
+            if (e.shiftKey && activeRange.size > 0) {
+              activeRange.add(directory)
+              setActiveRange(activeRange)
+            } else if (directory !== selected) {
+              selectFile(directory)
+            }
           }}
         >
-          <div className="flex items-center">
+          <div className="flex items-center mr-2">
             <IconChevron className="inline-block w-5" />
             <IconFolder className="inline-block w-4 fill-primary-500" />
           </div>
-          <span className="w-full overflow-hidden flex items-center justify-between ml-1">
-            {isStringEmptyOrNil(newName) ? (
-              <span className="w-full flex overflow-hidden items-center cursor-default">
-                <span
-                  className="w-full overflow-hidden overflow-ellipsis justify-between"
-                  // onClick={(e: MouseEvent) => {
-                  //   e.stopPropagation()
-
-                  //   directory.toggle()
-                  // }}
-                  // onDoubleClick={(e: MouseEvent) => {
-                  //   e.stopPropagation()
-
-                  //   setNewName(directory.name)
-                  // }}
-                >
-                  {directory.name}
-                </span>
-                <span className="hidden w-full group-hover:flex items-center justify-end">
-                  <ArrowsUpDownIcon
-                    onClick={(e: MouseEvent) => {
-                      e.stopPropagation()
-
-                      if (directory.isCollapsed) {
-                        directory.expand()
-                      } else {
-                        directory.collapse()
-                      }
-                    }}
-                    className={clsx(
-                      `cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1`,
-                      directory.isCollapsed &&
-                        'text-neutral-500 dark:text-neutral-100',
-                      directory.isExpanded &&
-                        'text-secondary-500 dark:text-primary-500',
-                    )}
-                  />
-                  <DocumentPlusIcon
-                    onClick={createFile}
-                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-neutral-500 dark:text-neutral-100`}
-                  />
-                  <FolderPlusIcon
-                    onClick={createDirectory}
-                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} mr-1 text-neutral-500 dark:text-neutral-100`}
-                  />
-                  <XCircleIcon
-                    onClick={(e: MouseEvent) => {
-                      e.stopPropagation()
-
-                      removeWithConfirmation()
-                    }}
-                    className={`cursor-pointer inline-block ${CSS_ICON_SIZE} ml-2 text-danger-500`}
-                  />
-                </span>
-              </span>
-            ) : (
-              <div className="flex w-full items-center">
-                <input
-                  type="text"
-                  className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
-                  value={newName ?? directory.name}
-                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    e.stopPropagation()
-
-                    setNewName(e.target.value)
-                  }}
-                />
-                <div className="flex">
-                  <CheckCircleIcon
-                    className={`inline-block w-5 ml-2 text-success-500 cursor-pointer`}
-                    onClick={(e: MouseEvent) => {
-                      e.stopPropagation()
-
-                      renameWithConfirmation()
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </span>
+          {isStringEmptyOrNil(newName) ? (
+            <ContextMenuDirectory
+              onOpenChange={setIsOpenContextMenu}
+              directory={directory}
+              createDirectory={() => createDirectory(directory)}
+              createFile={() => createFile(directory)}
+              removeWithConfirmation={removeWithConfirmation}
+              setNewName={setNewName}
+            />
+          ) : (
+            <DirectoryRename
+              directory={directory}
+              newName={newName}
+              setNewName={setNewName}
+              renameWithConfirmation={renameWithConfirmation}
+            />
+          )}
         </span>
       )}
       {(isOpen || !directory.withParent) && directory.withDirectories && (
-        <ul className={clsx(activeRange.has(directory) && 'bg-brand-10')}>
+        <ul className={clsx(activeRange.has(directory) && 'bg-brand-5')}>
           {directory.directories.map(dir => (
             <li
               key={dir.id}
@@ -344,9 +193,12 @@ export default function Directory({
               <Directory
                 directory={dir}
                 setConfirmation={setConfirmation}
+                createFile={createFile}
+                createDirectory={createDirectory}
+                removeArtifact={removeArtifact}
                 style={{
                   paddingLeft: directory.withParent
-                    ? `${directory.level / 2}rem`
+                    ? `${directory.level / 2 + 0.25}rem`
                     : 0,
                 }}
               />
@@ -355,7 +207,7 @@ export default function Directory({
         </ul>
       )}
       {(isOpen || !directory.withParent) && directory.withFiles && (
-        <ul className={clsx(activeRange.has(directory) && 'bg-brand-10')}>
+        <ul className={clsx(activeRange.has(directory) && 'bg-brand-5')}>
           {directory.files.map(file => (
             <li
               key={file.id}
@@ -364,9 +216,10 @@ export default function Directory({
               <File
                 file={file}
                 setConfirmation={setConfirmation}
+                removeArtifact={removeArtifact}
                 style={{
                   paddingLeft: directory.withParent
-                    ? `${directory.level / 2}rem`
+                    ? `${directory.level / 2 + 0.25}rem`
                     : 0,
                 }}
               />
@@ -374,6 +227,140 @@ export default function Directory({
           ))}
         </ul>
       )}
-    </>
+    </div>
+  )
+}
+
+function ContextMenuDirectory({
+  directory,
+  createFile,
+  createDirectory,
+  setNewName,
+  removeWithConfirmation,
+  onOpenChange,
+}: {
+  directory: ModelDirectory
+  createFile: () => void
+  createDirectory: () => void
+  removeWithConfirmation: () => void
+  setNewName: (newName: string) => void
+  onOpenChange: (isOpen: boolean) => void
+}): JSX.Element {
+  return (
+    <ContextMenu.Root onOpenChange={onOpenChange}>
+      <ContextMenu.Trigger className="w-full overflow-hidden overflow-ellipsis py-[0.125rem] pr-2">
+        {directory.name}
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content
+          className="bg-light rounded-md overflow-hiddin shadow-lg py-2 px-1"
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+          }}
+        >
+          <ContextMenu.Item
+            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            onSelect={(e: Event) => {
+              e.stopPropagation()
+
+              if (directory.isCollapsed) {
+                directory.expand()
+              } else {
+                directory.collapse()
+              }
+            }}
+          >
+            {directory.isCollapsed ? 'Expand' : 'Collapse'}
+            <div className="ml-auto pl-5"></div>
+          </ContextMenu.Item>
+          <ContextMenu.Separator className="h-[1px] bg-accent-200 m-2" />
+          <ContextMenu.Item
+            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            onSelect={(e: Event) => {
+              e.stopPropagation()
+
+              createFile()
+            }}
+          >
+            New File
+            <div className="ml-auto pl-5"></div>
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            onSelect={(e: Event) => {
+              e.stopPropagation()
+
+              createDirectory()
+            }}
+          >
+            New Folder
+            <div className="ml-auto pl-5"></div>
+          </ContextMenu.Item>
+          <ContextMenu.Separator className="h-[1px] bg-accent-200 m-2" />
+          <ContextMenu.Item
+            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation()
+            }}
+            onSelect={(e: Event) => {
+              e.stopPropagation()
+
+              setNewName(directory.name)
+            }}
+          >
+            Rename
+            <div className="ml-auto pl-5"></div>
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-danger-500 hover:bg-danger-500 hover:text-light"
+            onSelect={(e: Event) => {
+              e.stopPropagation()
+
+              removeWithConfirmation()
+            }}
+          >
+            Remove
+            <div className="ml-auto pl-5"></div>
+          </ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
+  )
+}
+
+function DirectoryRename({
+  directory,
+  newName,
+  setNewName,
+  renameWithConfirmation,
+}: {
+  directory: ModelDirectory
+  setNewName: (newName: string) => void
+  renameWithConfirmation: () => void
+  newName?: string
+}): JSX.Element {
+  return (
+    <div className="flex w-full items-center py-[0.125rem] pr-2">
+      <input
+        type="text"
+        className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
+        value={newName ?? directory.name}
+        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+          e.stopPropagation()
+
+          setNewName(e.target.value)
+        }}
+      />
+      <div className="flex">
+        <CheckCircleIcon
+          className={`inline-block w-5 ml-2 text-success-500 cursor-pointer`}
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+
+            renameWithConfirmation()
+          }}
+        />
+      </div>
+    </div>
   )
 }

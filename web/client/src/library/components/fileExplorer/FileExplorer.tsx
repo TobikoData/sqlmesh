@@ -1,20 +1,27 @@
-import { type MouseEvent, useEffect, useState } from 'react'
+import React, { type MouseEvent, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import ModalConfirmation from '../modal/ModalConfirmation'
 import type { Confirmation } from '../modal/ModalConfirmation'
 import { Button } from '../button/Button'
-import { isNotNil } from '~/utils'
+import { isFalse, isNotNil } from '~/utils'
 import Directory from './Directory'
 import { useStoreFileExplorer } from '@context/fileTree'
 import { ModelFile } from '@models/file'
-import { deleteFileApiFilesPathDelete } from '@api/client'
+import {
+  deleteDirectoryApiDirectoriesPathDelete,
+  deleteFileApiFilesPathDelete,
+  writeDirectoryApiDirectoriesPathPost,
+  writeFileApiFilesPathPost,
+} from '@api/client'
 import { useStoreEditor } from '@context/editor'
 import { type ModelArtifact } from '@models/artifact'
 import { ModelDirectory } from '@models/directory'
+import * as ContextMenu from '@radix-ui/react-context-menu'
+import { getAllFilesInDirectory, toUniqueName } from './help'
 
 /* TODO:
   - add ability to create file or directory on top level
-  - add context menu
+  + add context menu
   - add drag and drop
   - add copy and paste
   - add move
@@ -30,12 +37,13 @@ export default function FileExplorer({
   const activeRange = useStoreFileExplorer(s => s.activeRange)
   const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
   const project = useStoreFileExplorer(s => s.project)
-  const refreshProject = useStoreFileExplorer(s => s.refreshProject)
   const selectFile = useStoreFileExplorer(s => s.selectFile)
+  const setFiles = useStoreFileExplorer(s => s.setFiles)
 
   const tab = useStoreEditor(s => s.tab)
   const closeTab = useStoreEditor(s => s.closeTab)
 
+  const [isLoading, setIsLoading] = useState(false)
   const [confirmation, setConfirmation] = useState<Confirmation | undefined>()
   const [showConfirmation, setShowConfirmation] = useState(false)
 
@@ -48,58 +56,233 @@ export default function FileExplorer({
     selectFile(tab?.file)
   }, [tab])
 
-  async function removeFile(file: ModelFile): Promise<void> {
-    return deleteFileApiFilesPathDelete(file.path).then(response => {
-      if ((response as unknown as { ok: boolean }).ok) {
-        closeTab(file)
+  function createDirectory(parent: ModelDirectory): void {
+    if (isLoading) return
 
-        file.parent?.removeFile(file)
+    setIsLoading(true)
 
-        refreshProject()
-      } else {
+    const name = toUniqueName('new_directory')
+
+    writeDirectoryApiDirectoriesPathPost(`${parent.path}/${name}`, {})
+      .then(created => {
+        if (isFalse((created as any).ok)) {
+          console.warn([`Directory: ${parent.path}`, (created as any).detail])
+
+          return
+        }
+
+        parent.addDirectory(new ModelDirectory(created, parent))
+        parent.open()
+      })
+      .catch(error => {
         // TODO: Show error notification
-        throw new Error('Unable to delete file')
-      }
-    })
+        console.log(error)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
   }
 
-  async function removeArtifacts(artifacts: Set<ModelArtifact>): Promise<void> {
-    const promises = Array.from(artifacts).map(artifact => {
+  function createFile(parent: ModelDirectory, extension = '.py'): void {
+    if (isLoading) return
+
+    setIsLoading(true)
+
+    const name = toUniqueName('new_file', extension)
+
+    writeFileApiFilesPathPost(`${parent.path}/${name}`, { content: '' })
+      .then(created => {
+        if (isFalse((created as any).ok)) {
+          console.warn([`File: ${parent.path}`, (created as any).detail])
+
+          return
+        }
+
+        const file = new ModelFile(created, parent)
+
+        parent.addFile(file)
+        parent.open()
+
+        setFiles(project?.allFiles ?? [])
+        selectFile(file)
+      })
+      .catch(error => {
+        // TODO: Show error notification
+        console.log(error)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
+  }
+
+  function removeArtifact(
+    parent: ModelDirectory,
+    artifact: ModelArtifact,
+  ): void {
+    if (isLoading) return
+
+    setIsLoading(true)
+
+    if (artifact instanceof ModelFile) {
+      deleteFileApiFilesPathDelete(artifact.path)
+        .then(response => {
+          if (isFalse(response as unknown as { ok: boolean })) {
+            console.warn([`File: ${artifact.path}`, (response as any).detail])
+
+            return
+          }
+
+          removeFile(parent, artifact)
+          setFiles(project?.allFiles ?? [])
+        })
+        .catch(error => {
+          // TODO: Show error notification
+          console.log({ error })
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
+    }
+
+    if (artifact instanceof ModelDirectory) {
+      deleteDirectoryApiDirectoriesPathDelete(artifact.path)
+        .then(response => {
+          if (isFalse((response as any).ok)) {
+            console.warn([
+              `Directory: ${artifact.path}`,
+              (response as any).detail,
+            ])
+
+            return
+          }
+
+          removeDirectory(parent, artifact)
+          setFiles(project?.allFiles ?? [])
+        })
+        .catch(error => {
+          // TODO: Show error notification
+          console.log({ error })
+        })
+        .finally(() => {
+          setIsLoading(false)
+        })
+    }
+  }
+
+  function removeFile(parent: ModelDirectory, file: ModelFile): void {
+    closeTab(file)
+
+    parent.removeFile(file)
+  }
+
+  function removeDirectory(
+    parent: ModelDirectory,
+    directory: ModelDirectory,
+  ): void {
+    if (directory.isNotEmpty) {
+      const files = getAllFilesInDirectory(directory)
+
+      files.forEach(file => {
+        closeTab(file)
+      })
+    }
+
+    parent.removeDirectory(directory)
+  }
+
+  function removeArtifacts(
+    parent: ModelDirectory,
+    artifacts: Set<ModelArtifact>,
+  ): void {
+    if (isLoading) return
+
+    setIsLoading(true)
+
+    const list = Array.from(artifacts)
+    const promises = list.map(artifact => {
       if (artifact instanceof ModelFile) {
-        return removeFile(artifact)
+        return deleteFileApiFilesPathDelete(artifact.path)
       }
 
       if (artifact instanceof ModelDirectory) {
-        return removeFile(artifact)
+        return deleteDirectoryApiDirectoriesPathDelete(artifact.path)
       }
-
-      return Promise.resolve()
     })
 
-    return Promise.all(promises).then(() => {
-      setActiveRange(new Set())
-    })
+    Promise.all(promises)
+      .then(list => {
+        list.forEach((_, index) => {
+          const artifact = list[index]
+
+          if (artifact instanceof ModelFile) {
+            removeFile(parent, artifact)
+          }
+
+          if (artifact instanceof ModelDirectory) {
+            removeDirectory(parent, artifact)
+          }
+        })
+
+        setActiveRange(new Set())
+        setFiles(project?.allFiles ?? [])
+      })
+      .catch(error => {
+        // TODO: Show error notification
+        console.log(error)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
   }
-
-  console.log(project)
 
   return (
     <div
       className={clsx(
-        'h-full py-2 px-2 overflow-hidden overflow-y-auto text-sm text-neutral-500 dark:text-neutral-400  font-regular hover:scrollbar scrollbar--vertical select-none',
+        'h-full py-2 overflow-hidden  text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
         className,
       )}
-      tabIndex={1}
-      onKeyDown={(e: KeyboardEvent) => {
-        if (e.key === 'Escape' && selected != null && activeRange.size > 1) {
-          setActiveRange(new Set([selected]))
-        }
-
-        if (e.key === 'Backspace' && activeRange.size > 0) {
-          void removeArtifacts(activeRange)
-        }
-      }}
     >
+      {project != null && (
+        <div
+          className="h-full px-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
+          tabIndex={1}
+          onKeyDown={(e: React.KeyboardEvent) => {
+            if (
+              e.key === 'Escape' &&
+              selected != null &&
+              activeRange.size > 1
+            ) {
+              setActiveRange(new Set([selected]))
+            }
+
+            if (e.metaKey && e.key === 'Backspace' && activeRange.size > 0) {
+              setConfirmation({
+                headline: 'Removing Files/Directories',
+                description: `Are you sure you want to remove ${activeRange.size} items?`,
+                yesText: 'Yes, Remove',
+                noText: 'No, Cancel',
+                action: () => {
+                  removeArtifacts(project, activeRange)
+                },
+              })
+            }
+          }}
+        >
+          <ContextMenuDirectory
+            createFile={() => createFile(project)}
+            createDirectory={() => createDirectory(project)}
+          >
+            <Directory
+              directory={project}
+              createFile={createFile}
+              createDirectory={createDirectory}
+              setConfirmation={setConfirmation}
+              removeArtifact={removeArtifact}
+              className="h-full"
+            />
+          </ContextMenuDirectory>
+        </div>
+      )}
       <ModalConfirmation
         show={showConfirmation}
         onClose={() => undefined}
@@ -146,13 +329,59 @@ export default function FileExplorer({
           </Button>
         </ModalConfirmation.Actions>
       </ModalConfirmation>
-      {project != null && (
-        <Directory
-          directory={project}
-          setConfirmation={setConfirmation}
-          removeFile={removeFile}
-        />
-      )}
     </div>
+  )
+}
+
+function ContextMenuDirectory({
+  children,
+  createFile,
+  createDirectory,
+}: {
+  children: React.ReactNode
+  createFile: () => void
+  createDirectory: () => void
+}): JSX.Element {
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger
+        onContextMenu={(e: MouseEvent) => {
+          e.stopPropagation()
+        }}
+      >
+        {children}
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content
+          className="bg-light rounded-md overflow-hiddin shadow-lg py-2 px-1"
+          onClick={(e: MouseEvent) => {
+            e.stopPropagation()
+          }}
+        >
+          <ContextMenu.Item
+            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            onSelect={(e: Event) => {
+              e.stopPropagation()
+
+              createFile()
+            }}
+          >
+            New File
+            <div className="ml-auto pl-5"></div>
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            onSelect={(e: Event) => {
+              e.stopPropagation()
+
+              createDirectory()
+            }}
+          >
+            New Folder
+            <div className="ml-auto pl-5"></div>
+          </ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   )
 }

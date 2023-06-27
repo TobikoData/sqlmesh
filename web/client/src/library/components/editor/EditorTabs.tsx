@@ -49,7 +49,7 @@ export default function EditorTabs(): JSX.Element {
       >
         <PlusIcon className="inline-block w-3 h-4 text-secondary-500 dark:text-primary-500" />
       </Button>
-      <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto scrollbar scrollbar--horizontal">
+      <ul className="w-full whitespace-nowrap min-h-[2rem] max-h-[2rem] overflow-hidden overflow-x-auto hover:scrollbar scrollbar--horizontal">
         {tabsLocal.map((tab, idx) => (
           <Tab
             key={tab.id}
