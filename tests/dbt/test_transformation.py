@@ -454,29 +454,6 @@ def test_parsetime_adapter_call(
 def test_partition_by(sushi_test_project: Project):
     context = sushi_test_project.context
     model_config = ModelConfig(
-        dialect="bigquery",
-        name="model",
-        schema="test",
-        package_name="package",
-        materialized="table",
-        unique_key="ds",
-        partitioned_by="ds",
-        sql="""SELECT 1 AS one, ds, ts FROM foo""",
-    )
-    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
-
-    model_config.partitioned_by = "DATE_TRUNC(ds, MONTH)"  # type: ignore
-    assert model_config.to_sqlmesh(context).partitioned_by == [
-        parse_one(model_config.partitioned_by[0], read="bigquery")  # type: ignore
-    ]
-
-    model_config.partitioned_by = ["ds", "ts"]
-    assert model_config.to_sqlmesh(context).partitioned_by == [
-        exp.to_column("ds"),
-        exp.to_column("ts"),
-    ]
-
-    model_config = ModelConfig(
         dialect="spark",
         name="model",
         schema="test",
@@ -484,14 +461,18 @@ def test_partition_by(sushi_test_project: Project):
         materialized="table",
         unique_key="ds",
         partition_by="ds",
-        sql="""SELECT 1 AS one, ds FROM foo""",
+        sql="""SELECT 1 AS one, ds, ts FROM foo""",
     )
+    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+
     assert model_config.partition_by == ["ds"]
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
 
-    model_config.partition_by = ["ds"]
-    assert model_config.partition_by == ["ds"]
-    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+    model_config.partition_by = ["ds", "ts"]
+    assert model_config.to_sqlmesh(context).partitioned_by == [
+        exp.to_column("ds"),
+        exp.to_column("ts"),
+    ]
 
     model_config = ModelConfig(
         dialect="bigquery",
