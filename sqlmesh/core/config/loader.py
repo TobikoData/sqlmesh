@@ -13,7 +13,10 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 
 def load_config_from_paths(
-    *paths: Path, config_name: str = "config", load_from_env: bool = True
+    *paths: Path,
+    config_name: str = "config",
+    load_from_env: bool = True,
+    config_defaults: Config | None = None,
 ) -> Config:
     config: t.Optional[Config] = None
 
@@ -34,7 +37,7 @@ def load_config_from_paths(
         if extension in ("yml", "yaml"):
             if config_name != "config":
                 raise ConfigError(
-                    f"YAML configs do not support multiple configs. Use Python instead."
+                    "YAML configs do not support multiple configs. Use Python instead."
                 )
             next_config = load_config_from_yaml(path)
         elif extension == "py":
@@ -53,6 +56,9 @@ def load_config_from_paths(
 
     if load_from_env:
         config = config.update_with(load_config_from_env())
+
+    if config_defaults:
+        config = config_defaults.update_with(config)
 
     return config
 
