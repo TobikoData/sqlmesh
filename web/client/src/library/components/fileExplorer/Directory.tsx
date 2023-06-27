@@ -8,29 +8,27 @@ import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { ModelDirectory } from '~/models'
 import { isFalse, isNotNil, isStringEmptyOrNil } from '~/utils'
-import { type WithConfirmation } from '../modal/ModalConfirmation'
 import { useStoreEditor } from '~/context/editor'
 import { useStoreFileExplorer } from '~/context/fileTree'
 import File from './File'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import { ModelArtifact } from '@models/artifact'
 
-interface PropsDirectory extends WithConfirmation {
+interface PropsDirectory {
   directory: ModelDirectory
-  className?: string
-  style?: React.CSSProperties
   createFile: (parent: ModelDirectory) => void
   createDirectory: (parent: ModelDirectory) => void
-  removeArtifacts: (artifacts: Set<ModelArtifact>) => void
+  removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
   renameAtrifact: (artifact: ModelArtifact, newName?: string) => void
+  className?: string
+  style?: React.CSSProperties
 }
 
 export default function Directory({
   directory,
-  setConfirmation,
   createDirectory,
   createFile,
-  removeArtifacts,
+  removeArtifactWithConfirmation,
   renameAtrifact,
   className,
   style,
@@ -57,46 +55,6 @@ export default function Directory({
     }
   }, [tab])
 
-  const removeWithConfirmation = useCallback(
-    function removeWithConfirmation(): void {
-      setConfirmation({
-        headline: 'Removing Directory',
-        description: `Are you sure you want to remove the directory "${directory.name}"?`,
-        yesText: 'Yes, Remove',
-        noText: 'No, Cancel',
-        action: () => {
-          if (directory.parent != null) {
-            removeArtifacts(new Set([directory]))
-          }
-        },
-      })
-    },
-    [directory],
-  )
-
-  const renameWithConfirmation = useCallback(
-    function renameWithConfirmation(): void {
-      if (directory.name === newName) {
-        setNewName(undefined)
-      } else {
-        setConfirmation({
-          headline: 'Renaming Directory',
-          description: `Are you sure you want to rename the directory "${directory.name}"?`,
-          yesText: 'Yes, Rename',
-          noText: 'No, Cancel',
-          action: () => {
-            renameAtrifact(directory, newName)
-            setNewName(undefined)
-          },
-          cancel: () => {
-            setNewName(undefined)
-          },
-        })
-      }
-    },
-    [directory, newName],
-  )
-
   const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
   const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
 
@@ -119,7 +77,7 @@ export default function Directory({
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
 
-            if (e.shiftKey) {
+            if (e.shiftKey || e.metaKey) {
               e.preventDefault()
             } else {
               if (isNotNil(newName)) return
@@ -127,7 +85,14 @@ export default function Directory({
               directory.toggle()
             }
 
-            if (e.shiftKey && activeRange.size > 0) {
+            if (e.metaKey) {
+              if (activeRange.has(directory)) {
+                activeRange.delete(directory)
+              } else {
+                activeRange.add(directory)
+              }
+              setActiveRange(activeRange)
+            } else if (e.shiftKey && activeRange.size > 0) {
               activeRange.add(directory)
               setActiveRange(activeRange)
             } else if (directory !== selected) {
@@ -145,7 +110,9 @@ export default function Directory({
               directory={directory}
               createDirectory={() => createDirectory(directory)}
               createFile={() => createFile(directory)}
-              removeWithConfirmation={removeWithConfirmation}
+              removeWithConfirmation={() =>
+                removeArtifactWithConfirmation(directory)
+              }
               setNewName={setNewName}
             />
           ) : (
@@ -153,7 +120,7 @@ export default function Directory({
               directory={directory}
               newName={newName}
               setNewName={setNewName}
-              renameWithConfirmation={renameWithConfirmation}
+              rename={() => renameAtrifact(directory, newName)}
             />
           )}
         </span>
@@ -167,10 +134,9 @@ export default function Directory({
             >
               <Directory
                 directory={dir}
-                setConfirmation={setConfirmation}
                 createFile={createFile}
                 createDirectory={createDirectory}
-                removeArtifacts={removeArtifacts}
+                removeArtifactWithConfirmation={removeArtifactWithConfirmation}
                 renameAtrifact={renameAtrifact}
                 style={{
                   paddingLeft: directory.withParent
@@ -191,8 +157,7 @@ export default function Directory({
             >
               <File
                 file={file}
-                setConfirmation={setConfirmation}
-                removeArtifacts={removeArtifacts}
+                removeArtifactWithConfirmation={removeArtifactWithConfirmation}
                 renameAtrifact={renameAtrifact}
                 style={{
                   paddingLeft: directory.withParent
@@ -220,7 +185,7 @@ function ContextMenuDirectory({
   createFile: () => void
   createDirectory: () => void
   removeWithConfirmation: () => void
-  setNewName: (newName: string) => void
+  setNewName: (newName?: string) => void
   onOpenChange: (isOpen: boolean) => void
 }): JSX.Element {
   return (
@@ -314,11 +279,11 @@ function DirectoryRename({
   directory,
   newName,
   setNewName,
-  renameWithConfirmation,
+  rename,
 }: {
   directory: ModelDirectory
-  setNewName: (newName: string) => void
-  renameWithConfirmation: () => void
+  setNewName: (newName?: string) => void
+  rename: () => void
   newName?: string
 }): JSX.Element {
   return (
@@ -339,7 +304,8 @@ function DirectoryRename({
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
 
-            renameWithConfirmation()
+            rename()
+            setNewName(undefined)
           }}
         />
       </div>

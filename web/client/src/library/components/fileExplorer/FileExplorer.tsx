@@ -20,12 +20,10 @@ import * as ContextMenu from '@radix-ui/react-context-menu'
 import { getAllFilesInDirectory, toUniqueName } from './help'
 
 /* TODO:
-  - add ability to create file or directory on top level
-  + add context menu
-  - add drag and drop
-  - add copy and paste
-  - add move
+  - add move files/directories
   - add search
+  - add drag and drop files/directories from desktop
+  - add copy and paste
 */
 
 export default function FileExplorer({
@@ -222,6 +220,50 @@ export default function FileExplorer({
       })
   }
 
+  function removeArtifactWithConfirmation(artifact: ModelArtifact): void {
+    let confirmation: Confirmation = {
+      headline: `Removing ${
+        artifact instanceof ModelDirectory ? 'Directory' : 'File'
+      }`,
+      description: `Are you sure you want to remove the ${
+        artifact instanceof ModelDirectory ? 'directory' : 'file'
+      } "${artifact.name}"?`,
+      yesText: 'Yes, Remove',
+      noText: 'No, Cancel',
+      action: () => {
+        if (artifact instanceof ModelDirectory) {
+          if (artifact.parent != null) {
+            removeArtifacts(new Set([artifact]))
+          }
+        }
+
+        if (artifact instanceof ModelFile) {
+          if (artifact.parent != null) {
+            removeArtifacts(new Set([artifact]))
+          }
+        }
+      },
+    }
+
+    if (activeRange.has(artifact)) {
+      // User selected multiple including current directory
+      // so here we should prompt to delete all selected
+
+      confirmation = {
+        headline: 'Removing Selected Files/Directories',
+        description: `Are you sure you want to remove ${activeRange.size} items?`,
+        yesText: 'Yes, Remove',
+        noText: 'No, Cancel',
+        details: Array.from(activeRange).map(artifact => artifact.path),
+        action: () => {
+          removeArtifacts(activeRange)
+        },
+      }
+    }
+
+    setConfirmation(confirmation)
+  }
+
   return (
     <div
       className={clsx(
@@ -244,7 +286,7 @@ export default function FileExplorer({
 
             if (e.metaKey && e.key === 'Backspace' && activeRange.size > 0) {
               setConfirmation({
-                headline: 'Removing Files/Directories',
+                headline: 'Removing Selected Files/Directories',
                 description: `Are you sure you want to remove ${activeRange.size} items?`,
                 yesText: 'Yes, Remove',
                 noText: 'No, Cancel',
@@ -264,8 +306,7 @@ export default function FileExplorer({
               directory={project}
               createFile={createFile}
               createDirectory={createDirectory}
-              setConfirmation={setConfirmation}
-              removeArtifacts={removeArtifacts}
+              removeArtifactWithConfirmation={removeArtifactWithConfirmation}
               renameAtrifact={renameAtrifact}
               className="h-full"
             />

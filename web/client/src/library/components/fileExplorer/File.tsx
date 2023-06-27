@@ -7,24 +7,22 @@ import {
 import clsx from 'clsx'
 import { ModelFile } from '~/models'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
-import { type WithConfirmation } from '../modal/ModalConfirmation'
 import { useStoreEditor } from '~/context/editor'
 import { useStoreFileExplorer } from '~/context/fileTree'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import { ModelArtifact } from '@models/artifact'
 
-interface PropsFile extends WithConfirmation {
+interface PropsFile {
   file: ModelFile
+  removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
+  renameAtrifact: (artifact: ModelArtifact, newName?: string) => void
   className?: string
   style?: React.CSSProperties
-  removeArtifacts: (artifacts: Set<ModelArtifact>) => void
-  renameAtrifact: (artifact: ModelArtifact, newName?: string) => void
 }
 
 export default function File({
   file,
-  setConfirmation,
-  removeArtifacts,
+  removeArtifactWithConfirmation,
   renameAtrifact,
   className,
   style,
@@ -41,20 +39,6 @@ export default function File({
 
   const [newName, setNewName] = useState<string>()
   const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
-
-  function removeWithConfirmation(): void {
-    setConfirmation({
-      headline: 'Remove File',
-      description: `Are you sure you want to remove the file "${file.name}"?`,
-      yesText: 'Yes, Remove',
-      noText: 'No, Cancel',
-      action: () => {
-        if (file.parent != null) {
-          removeArtifacts(new Set([file]))
-        }
-      },
-    })
-  }
 
   return (
     <span
@@ -79,7 +63,14 @@ export default function File({
           e.preventDefault()
         }
 
-        if (e.shiftKey && activeRange.size > 0) {
+        if (e.metaKey) {
+          if (activeRange.has(file)) {
+            activeRange.delete(file)
+          } else {
+            activeRange.add(file)
+          }
+          setActiveRange(activeRange)
+        } else if (e.shiftKey && activeRange.size > 0) {
           activeRange.add(file)
           setActiveRange(activeRange)
         } else if (file !== selected) {
@@ -106,7 +97,7 @@ export default function File({
             onOpenChange={setIsOpenContextMenu}
             file={file}
             setNewName={setNewName}
-            removeWithConfirmation={removeWithConfirmation}
+            removeWithConfirmation={() => removeArtifactWithConfirmation(file)}
           />
         ) : (
           <FileRename
@@ -143,7 +134,7 @@ function FileRename({
 }: {
   file: ModelFile
   newName?: string
-  setNewName: (name: string | undefined) => void
+  setNewName: (name?: string) => void
   rename: () => void
 }): JSX.Element {
   return (
