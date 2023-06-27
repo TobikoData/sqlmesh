@@ -13,6 +13,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import SnapshotId, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 sqlmesh_api_v1 = Blueprint(
@@ -65,6 +66,19 @@ def get_environments() -> Response:
     with util.scoped_state_sync() as state_sync:
         environments = state_sync.get_environments()
     return _success(common.EnvironmentsResponse(environments=environments))
+
+
+@sqlmesh_api_v1.delete("/environments/<name>")
+@csrf.exempt
+@check_authentication
+def invalidate_environment(name: str) -> Response:
+    with util.scoped_state_sync() as state_sync:
+        try:
+            state_sync.invalidate_environment(name)
+        except SQLMeshError as ex:
+            return _error(str(ex), 400)
+
+    return _success(common.InvalidateEnvironmentResponse(name=name))
 
 
 @sqlmesh_api_v1.get("/snapshots")

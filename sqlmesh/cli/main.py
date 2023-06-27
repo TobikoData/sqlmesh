@@ -259,6 +259,16 @@ def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any
     context.run(environment, **kwargs)
 
 
+@cli.command("invalidate")
+@click.argument("environment", required=True)
+@click.pass_context
+@error_handler
+def invalidate(ctx: click.Context, environment: str) -> None:
+    """Invalidates the target environment, forcing its removal during the next run of the janitor process."""
+    context = ctx.obj
+    context.invalidate_environment(environment)
+
+
 @cli.command("dag")
 @opt.file
 @click.pass_context

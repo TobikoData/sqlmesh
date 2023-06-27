@@ -287,3 +287,18 @@ def test_get_dag_run_state(mocker: MockerFixture):
     get_snapshot_mock.assert_called_once_with(
         "http://localhost:8080/api/v1/dags/test_dag_id/dagRuns/test_dag_run_id"
     )
+
+
+def test_invalidat_environment(mocker: MockerFixture):
+    delete_environment_response_mock = mocker.Mock()
+    delete_environment_response_mock.status_code = 200
+    delete_environment_response_mock.json.return_value = {"name": "test_environment"}
+    delete_environment_mock = mocker.patch("requests.Session.delete")
+    delete_environment_mock.return_value = delete_environment_response_mock
+
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
+    client.invalidate_environment("test_environment")
+
+    delete_environment_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/environments/test_environment"
+    )

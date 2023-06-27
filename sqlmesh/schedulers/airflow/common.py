@@ -100,6 +100,10 @@ class ExistingModelsResponse(PydanticModel):
     names: t.List[str]
 
 
+class InvalidateEnvironmentResponse(PydanticModel):
+    name: str
+
+
 def snapshot_key(snapshot: SnapshotIdLike) -> str:
     return snapshot_key_from_name_identifier(snapshot.name, snapshot.identifier)
 
