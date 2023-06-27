@@ -953,3 +953,42 @@ def test_models_exist(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
     state_sync.push_snapshots([snapshot])
 
     assert state_sync.models_exist([snapshot.name]) == {snapshot.name}
+
+
+def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    original_expiration_ts = now_timestamp() + 100000
+
+    env = Environment(
+        name="test_environment",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+        expiration_ts=original_expiration_ts,
+    )
+    state_sync.promote(env)
+
+    assert not state_sync.delete_expired_environments()
+    state_sync.invalidate_environment("test_environment")
+
+    stored_env = state_sync.get_environment("test_environment")
+    assert stored_env
+    assert stored_env.expiration_ts and stored_env.expiration_ts < original_expiration_ts
+
+    deleted_environments = state_sync.delete_expired_environments()
+    assert len(deleted_environments) == 1
+    assert deleted_environments[0].name == "test_environment"
+
+    with pytest.raises(SQLMeshError, match="Cannot invalidate the production environment."):
+        state_sync.invalidate_environment("prod")

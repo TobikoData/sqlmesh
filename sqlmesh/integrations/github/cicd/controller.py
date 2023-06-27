@@ -18,7 +18,6 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import MarkdownConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import parse_model_name
 from sqlmesh.core.plan import LoadedSnapshotIntervals, Plan
 from sqlmesh.core.user import User
 from sqlmesh.utils.date import now
@@ -405,17 +404,9 @@ class GithubController:
 
     def delete_pr_environment(self) -> None:
         """
-        Deletes all the schemas for a given environment by checking all the schemas used by models.
+        Marks the PR environment for garbage collection.
         """
-        schemas = {parse_model_name(model.name)[1] for model in self._context.models.values()}
-        for schema in schemas:
-            assert schema
-            self._context.engine_adapter.drop_schema(
-                schema_name="__".join([schema, self.pr_environment_name]),
-                ignore_if_not_exists=True,
-                cascade=True,
-            )
-        return
+        self._context.invalidate_environment(self.pr_environment_name)
 
     def get_loaded_snapshot_intervals(self) -> t.List[LoadedSnapshotIntervals]:
         return self.prod_plan_with_gaps.loaded_snapshot_intervals
