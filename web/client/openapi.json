@@ -1445,11 +1445,21 @@
       },
       "TableDiff": {
         "title": "TableDiff",
-        "required": ["schema_diff", "row_diff"],
+        "required": ["schema_diff", "row_diff", "on"],
         "type": "object",
         "properties": {
           "schema_diff": { "$ref": "#/components/schemas/SchemaDiff" },
-          "row_diff": { "$ref": "#/components/schemas/RowDiff" }
+          "row_diff": { "$ref": "#/components/schemas/RowDiff" },
+          "on": {
+            "title": "On",
+            "type": "array",
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array",
+              "items": [{ "type": "string" }, { "type": "string" }]
+            }
+          }
         }
       },
       "ValidationError": {

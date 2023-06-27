@@ -754,6 +754,7 @@ function ModelColumnLineage({
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [isBuildingLayout, setIsBuildingLayout] = useState(true)
+  const [isEmpty, setIsEmpty] = useState(true)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
 
@@ -775,16 +776,20 @@ function ModelColumnLineage({
 
   useEffect(() => {
     setIsBuildingLayout(isArrayEmpty(nodes) || isArrayEmpty(edges))
+    setIsEmpty(isArrayEmpty(nodesAndEdges.nodes))
+
+    if (isArrayEmpty(nodesAndEdges.nodes)) return
 
     void createGraphLayout(nodesAndEdges)
       .then(layout => {
         toggleEdgeAndNodes(layout.edges, layout.nodes)
-        setIsBuildingLayout(
-          isArrayEmpty(layout.nodes) || isArrayEmpty(layout.edges),
-        )
+        setIsEmpty(isArrayEmpty(layout.nodes))
       })
       .catch(error => {
         handleError?.(error)
+      })
+      .finally(() => {
+        setIsBuildingLayout(false)
       })
   }, [nodesAndEdges])
 
@@ -861,6 +866,12 @@ function ModelColumnLineage({
           <Loading className="inline-block">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
             <h3 className="text-md">Building Lineage...</h3>
+          </Loading>
+        </div>
+      ) : isEmpty ? (
+        <div className="flex justify-center items-center w-full h-full">
+          <Loading className="inline-block">
+            <h3 className="text-md">Empty</h3>
           </Loading>
         </div>
       ) : (

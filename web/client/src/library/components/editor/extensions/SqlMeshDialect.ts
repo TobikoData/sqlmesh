@@ -78,13 +78,11 @@ export function useSqlMeshExtension(): [
         lang.language.data.of({
           async autocomplete(ctx: CompletionContext) {
             const match = ctx.matchBefore(/\w*$/)?.text.trim() ?? ''
-            const text = ctx.state.doc.toJSON().join('\n')
+            const text = ctx.state.doc.toString()
             const keywordFrom = ctx.matchBefore(/from.+/i)
             const keywordKind = ctx.matchBefore(/kind.+/i)
             const keywordDialect = ctx.matchBefore(/dialect.+/i)
-            const matchModels =
-              text.match(/MODEL \((?:[^)(]+|\((?:[^)(]+|\([^)(]*\))*\))*\)/g) ??
-              []
+            const matchModels = text.match(/MODEL \(([\s\S]*?)\);/gi) ?? []
             const isInsideModel = matchModels
               .filter(str => str.includes(match))
               .map<[number, number]>(str => [
@@ -95,7 +93,6 @@ export function useSqlMeshExtension(): [
                 ([start, end]: [number, number]) =>
                   ctx.pos >= start && ctx.pos <= end,
               )
-
             let suggestions: Completion[] = tables
 
             if (isFalse(isInsideModel)) {

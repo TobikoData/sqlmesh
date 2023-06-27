@@ -17,6 +17,7 @@ export interface Lineage {
 }
 
 interface EditorStore {
+  storedTabsId?: ID
   storedTabsIds: ID[]
   tabs: Map<ModelFile, EditorTab>
   tab?: EditorTab
@@ -59,14 +60,17 @@ export interface EditorTab {
   preview?: EditorPreview
 }
 
-const [getStoredTabs, setStoredTabs] = useLocalStorage<{ ids: ID[] }>('tabs')
+const [getStoredTabs, setStoredTabs] = useLocalStorage<{ ids: ID[]; id: ID }>(
+  'tabs',
+)
 
 const initialFile = createLocalFile()
 const initialTab: EditorTab = createTab(initialFile)
 const initialTabs = new Map([[initialFile, initialTab]])
 
 export const useStoreEditor = create<EditorStore>((set, get) => ({
-  storedTabsIds: getStoredTabsIds(),
+  storedTabsIds: getStoredTabs()?.ids ?? [],
+  storedTabsId: getStoredTabs()?.id,
   tab: initialTab,
   tabs: initialTabs,
   engine: sqlglotWorker,
@@ -76,14 +80,20 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   previewConsole: undefined,
   direction: 'vertical',
   updateStoredTabsIds() {
+    const s = get()
+    const id = s.tab?.file.id
+    const ids = Array.from(get().tabs.values())
+      .filter(tab => tab.file.isRemote)
+      .map(tab => tab.file.id)
+
     setStoredTabs({
-      ids: Array.from(get().tabs.values())
-        .filter(tab => tab.file.isRemote)
-        .map(tab => tab.file.id),
+      id,
+      ids,
     })
 
     set(() => ({
-      storedTabsIds: getStoredTabsIds(),
+      storedTabsId: id,
+      storedTabsIds: ids,
     }))
   },
   refreshTab() {
@@ -173,8 +183,4 @@ function createLocalFile(): ModelFile {
     content:
       '-- Create arbitrary SQL queries\n-- and execute them against different environments\n\n',
   })
-}
-
-function getStoredTabsIds(): ID[] {
-  return getStoredTabs()?.ids ?? []
 }
