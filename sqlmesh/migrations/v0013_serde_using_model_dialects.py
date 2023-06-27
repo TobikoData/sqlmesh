@@ -22,17 +22,13 @@ def migrate(state_sync):  # type: ignore
         model = parsed_snapshot["model"]
         dialect = model["dialect"]
 
-        # Read using the SQLGlot dialect, write using the model's dialect
-        if "query" in model and not has_jinja(model["query"]):
-            model["query"] = parse_one(model["query"]).sql(dialect=dialect)
+        _update_expression(model, "query", dialect)
 
         for statement_kind in ("pre_statements", "post_statements"):
             _update_expression_list(model, statement_kind, dialect)
 
         for audit in parsed_snapshot.get("audits", []):
-            if not has_jinja(audit["query"]):
-                audit["query"] = parse_one(audit["query"]).sql(dialect=dialect)
-
+            _update_expression(audit, "query", dialect)
             _update_expression_list(audit, "expressions", dialect)
 
         new_snapshots.append(
@@ -60,6 +56,14 @@ def migrate(state_sync):  # type: ignore
             },
             contains_json=True,
         )
+
+
+# Note: previously we used to do serde using the SQLGlot dialect, so we need to parse
+# the stored queries using that dialect and then write them back using the model's dialect
+
+def _update_expression(obj: t.Dict, key: str, dialect: str) -> None:
+    if key in obj and not has_jinja(obj[key]):
+        obj[key] = parse_one(obj[key]).sql(dialect=dialect)
 
 
 def _update_expression_list(obj: t.Dict, key: str, dialect: str) -> None:
