@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from collections import defaultdict
 
+from hyperscript import h
 from IPython.core.display import HTML, display
 from IPython.core.magic import (
     Magics,
@@ -53,6 +54,21 @@ class SQLMeshMagics(Magics):
             f"Context must be defined and initialized with one of these names: {', '.join(CONTEXT_VARIABLE_NAMES)}"
         )
 
+    def success_message(self, messages: t.Dict[str, str]) -> HTML:
+        unstyled = messages.get("unstyled")
+        msg = str(
+            h(
+                "div",
+                h(
+                    "span",
+                    messages.get("green-bold"),
+                    {"style": {"color": "green", "font-weight": "bold"}},
+                ),
+                h("span", unstyled) if unstyled else "",
+            )
+        )
+        return HTML(msg)
+
     @magic_arguments()
     @argument(
         "paths",
@@ -66,7 +82,14 @@ class SQLMeshMagics(Magics):
         """Sets the context in the user namespace."""
         args = parse_argstring(self.context, line)
         self._shell.user_ns["context"] = Context(paths=args.paths)
-        self.display("SQLMesh project context set")
+        message = self.success_message(
+            {
+                "green-bold": "SQLMesh project context set to:",
+                "unstyled": "<br>&emsp;" + "<br>&emsp;".join(args.paths),
+            }
+        )
+
+        self.display(message)
 
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
@@ -87,7 +110,7 @@ class SQLMeshMagics(Magics):
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
         init_example_project(args.path, project_template)
-        self.display("SQLMesh project scaffold created")
+        self.display(self.success_message({"green-bold": "SQLMesh project scaffold created"}))
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
@@ -132,6 +155,9 @@ class SQLMeshMagics(Magics):
 
         with open(model._path, "w", encoding="utf-8") as file:
             file.write(formatted)
+
+        if sql:
+            self.display(self.success_message({"green-bold": f"Model `{args.model}` updated"}))
 
         self._context.upsert_model(model)
         self._context.console.show_sql(
