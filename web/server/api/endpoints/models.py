@@ -62,6 +62,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             if model.partitioned_by
             else None
         )
+        clustered_by = ", ".join(model.clustered_by) if model.clustered_by else None
         lookback = model.lookback if model.lookback > 0 else None
         columns = [
             models.Column(
@@ -82,6 +83,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             tags=tags,
             grain=grain,
             partitioned_by=partitioned_by,
+            clustered_by=clustered_by,
             lookback=lookback,
             cron_prev=to_datetime(model.cron_prev(value=now())),
             cron_next=to_datetime(model.cron_next(value=now())),

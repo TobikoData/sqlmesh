@@ -219,12 +219,13 @@ class ModelConfig(BaseModelConfig):
             optional_kwargs["partitioned_by"] = [exp.to_column(val) for val in self.partition_by]
         elif self.partition_by and isinstance(self.partition_by, dict):
             optional_kwargs["partitioned_by"] = [
-                d.parse_one(
-                    f"TIMESTAMP_TRUNC(`{self.partition_by['field']}`, {self.partition_by['granularity']})",
-                    dialect=dialect,
+                exp.TimestampTrunc(
+                    this=exp.to_column(self.partition_by["field"]),
+                    unit=exp.var(self.partition_by["granularity"]),
                 )
             ]
-
+        if self.cluster_by:
+            optional_kwargs["clustered_by"] = self.cluster_by
         for field in ["cron"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:

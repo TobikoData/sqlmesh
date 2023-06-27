@@ -915,6 +915,7 @@ def _model_data_hash(model: Model) -> str:
         model.storage_format,
         str(model.lookback),
         *(expr.sql() for expr in (model.partitioned_by or [])),
+        *(model.clustered_by or []),
         model.stamp,
     ]
 

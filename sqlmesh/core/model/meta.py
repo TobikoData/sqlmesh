@@ -57,6 +57,7 @@ class ModelMeta(PydanticModel):
     retention: t.Optional[int]  # not implemented yet
     storage_format: t.Optional[str]
     partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
+    clustered_by: t.List[str] = []
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]]
@@ -115,7 +116,7 @@ class ModelMeta(PydanticModel):
             ]
         return v
 
-    @validator("tags", "grain", pre=True)
+    @validator("clustered_by", "tags", "grain", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [e.name for e in v.expressions]
@@ -215,8 +216,9 @@ class ModelMeta(PydanticModel):
     def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         kind = values.get("kind")
         if kind:
-            if values.get("partitioned_by_") and not kind.is_materialized:
-                raise ValueError(f"partitioned_by field cannot be set for {kind} models")
+            for field in ("partitioned_by_", "clustered_by"):
+                if values.get(field) and not kind.is_materialized:
+                    raise ValueError(f"{field} field cannot be set for {kind} models")
 
         return values
 

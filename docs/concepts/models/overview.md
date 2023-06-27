@@ -95,6 +95,9 @@ Name is ***required*** and must be ***unique***.
 ### partitioned_by
 - Partitioned by is an optional property for engines such as Spark or Hive that support partitioning. Use this to add additional columns to the time column partition key.
 
+### clustered_by
+- Clustered by is an optional property for engines such as Bigquery that support clustering.
+
 ### tags
 - Tags are one or more labels used to organize your models.
 

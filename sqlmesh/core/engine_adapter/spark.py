@@ -239,27 +239,26 @@ class SparkEngineAdapter(EngineAdapter):
         storage_format: t.Optional[str] = None,
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
+        clustered_by: t.Optional[t.List[str]] = None,
     ) -> t.Optional[exp.Properties]:
-        format_property = None
-        partition_columns_property = None
+        properties: t.List[exp.Expression] = []
+
         if storage_format:
-            format_property = exp.FileFormatProperty(this=exp.Var(this=storage_format))
+            properties.append(exp.FileFormatProperty(this=exp.Var(this=storage_format)))
         if partitioned_by:
             for expr in partitioned_by:
                 if not isinstance(expr, exp.Column):
                     raise SQLMeshError(
                         f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
                     )
-            partition_columns_property = exp.PartitionedByProperty(
-                this=exp.Schema(expressions=partitioned_by),
+            properties.append(
+                exp.PartitionedByProperty(
+                    this=exp.Schema(expressions=partitioned_by),
+                )
             )
-        return exp.Properties(
-            expressions=[
-                table_property
-                for table_property in [format_property, partition_columns_property]
-                if table_property
-            ]
-        )
+        if properties:
+            return exp.Properties(expressions=properties)
+        return None
 
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         return False

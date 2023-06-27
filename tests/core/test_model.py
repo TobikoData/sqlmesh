@@ -41,6 +41,7 @@ def test_load(assert_exp_eq):
             owner owner_name,
             storage_format iceberg,
             partitioned_by d,
+            clustered_by e,
             kind INCREMENTAL_BY_TIME_RANGE(
                 time_column a,
             ),
@@ -76,6 +77,7 @@ def test_load(assert_exp_eq):
     assert model.dialect == "spark"
     assert model.storage_format == "iceberg"
     assert [col.sql() for col in model.partitioned_by] == ["a", "d"]
+    assert model.clustered_by == ["e"]
     assert model.columns_to_types == {
         "a": exp.DataType.build("int"),
         "b": exp.DataType.build("double"),
@@ -199,8 +201,8 @@ def test_model_validation_union_query():
         ("a", ["a"], None),
         ("(a, b)", ["a", "b"], None),
         ("TIMESTAMP_TRUNC(a, DAY)", ["TIMESTAMP_TRUNC(a, DAY)"], None),
-        ("c", "", ConfigError),
-        ("(a, c)", "", ConfigError),
+        ("e", "", ConfigError),
+        ("(a, e)", "", ConfigError),
         ("(a, a)", "", ConfigError),
     ],
 )
@@ -212,16 +214,18 @@ def test_partitioned_by(partition_by_input, partition_by_output, expected_except
             dialect bigquery,
             owner owner_name,
             partitioned_by {partition_by_input},
+            clustered_by (c, d),
             kind INCREMENTAL_BY_TIME_RANGE(
                 time_column a,
             ),
         );
 
-        SELECT 1::int AS a, 2::int AS b;
+        SELECT 1::int AS a, 2::int AS b, 3 AS c, 4 as d;
     """
     )
 
     model = load_model(expressions)
+    assert model.clustered_by == ["c", "d"]
     if expected_exception:
         with pytest.raises(expected_exception):
             model.validate_definition()
@@ -291,6 +295,29 @@ def test_partition_key_is_missing_in_query():
               time_column a
             ),
             partitioned_by (b, c, d)
+        );
+
+        SELECT 1::int AS a, 2::int AS b;
+    """
+    )
+
+    model = load_model(expressions)
+    with pytest.raises(ConfigError) as ex:
+        model.validate_definition()
+    assert "['c', 'd'] are missing" in str(ex.value)
+
+
+def test_cluster_key_is_missing_in_query():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+            kind INCREMENTAL_BY_TIME_RANGE(
+              time_column a
+            ),
+            clustered_by (b, c, d)
         );
 
         SELECT 1::int AS a, 2::int AS b;
@@ -1296,23 +1323,23 @@ def test_star_expansion(assert_exp_eq) -> None:
 
     assert_exp_eq(
         context.models["db.model2"].render_query(snapshots=snapshots),
-        """
+        f"""
         SELECT
           "model1"."id" AS "id",
           "model1"."item_id" AS "item_id",
           "model1"."ds" AS "ds"
-        FROM "sqlmesh__db"."db__model1__3784582009" AS "model1"
+        FROM "sqlmesh__db"."db__model1__{snapshots['db.model1'].version}" AS "model1"
         """,
     )
 
     assert_exp_eq(
         context.models["db.model3"].render_query(snapshots=snapshots),
-        """
+        f"""
         SELECT
           "model2"."id" AS "id",
           "model2"."item_id" AS "item_id",
           "model2"."ds" AS "ds"
-        FROM "sqlmesh__db"."db__model2__1662907078" AS "model2"
+        FROM "sqlmesh__db"."db__model2__{snapshots['db.model2'].version}" AS "model2"
         """,
     )
 

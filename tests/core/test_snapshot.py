@@ -78,11 +78,12 @@ def test_json(snapshot: Snapshot):
     assert json.loads(snapshot.json()) == {
         "created_ts": 1663891973000,
         "ttl": "in 1 week",
-        "fingerprint": snapshot.fingerprint,
+        "fingerprint": snapshot.fingerprint.dict(),
         "intervals": [],
         "dev_intervals": [],
         "model": {
             "audits": [],
+            "clustered_by": [],
             "cron": "1 0 * * *",
             "kind": {
                 "name": "INCREMENTAL_BY_TIME_RANGE",
