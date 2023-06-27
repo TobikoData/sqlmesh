@@ -44,8 +44,6 @@ class ModelConfig(BaseModelConfig):
     Args:
         sql: The model sql
         time_column: The name of the time column
-        partitioned_by: List of columns to partition by. time_column will automatically be
-            included, if specified.
         cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
         dialect: The SQL dialect that the model's query is written in. By default,
@@ -60,14 +58,12 @@ class ModelConfig(BaseModelConfig):
         materialized: How the model will be materialized in the database
         sql_header: SQL statement to inject above create table/view as
         unique_key: List of columns that define row uniqueness for the model
-        partition_by: Dictionary of bigquery partition by parameters ([dbt bigquery config](https://docs.getdbt.com/reference/resource-configs/bigquery-configs)).
-            If partitioned_by is set, this field will be ignored.
+        partition_by: List of partition columns or dictionary of bigquery partition by parameters ([dbt bigquery config](https://docs.getdbt.com/reference/resource-configs/bigquery-configs)).
     """
 
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
     time_column: t.Optional[str] = None
-    partitioned_by: t.Optional[t.List[str]] = None
     cron: t.Optional[str] = None
     dialect: t.Optional[str] = None
     batch_size: t.Optional[int] = None
@@ -92,7 +88,6 @@ class ModelConfig(BaseModelConfig):
     @validator(
         "unique_key",
         "cluster_by",
-        "partitioned_by",
         pre=True,
     )
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
@@ -111,9 +106,7 @@ class ModelConfig(BaseModelConfig):
         if isinstance(v, dict):
             if not v.get("field"):
                 raise ConfigError("'field' key required for partition_by.")
-            if not v.get("granularity"):
-                v["granularity"] = "day"
-            return v
+            return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
@@ -204,6 +197,20 @@ class ModelConfig(BaseModelConfig):
         self._sql_no_config = SqlStr(no_config)
         self._sql_embedded_config = SqlStr(embedded_config)
 
+    @property
+    def _big_query_partition_by_expr(self) -> exp.Expression:
+        assert isinstance(self.partition_by, dict)
+        data_type = self.partition_by["data_type"].lower()
+        if data_type == "int64" or (
+            data_type == "date" and self.partition_by["granularity"].lower() == "day"
+        ):
+            return exp.to_column(self.partition_by["field"])
+
+        return TIME_TYPE_TO_TRUNC_EXPR[data_type](
+            this=exp.to_column(self.partition_by["field"]),
+            unit=exp.var(self.partition_by["granularity"].upper()),
+        )
+
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         dialect = self.model_dialect or context.dialect
@@ -211,21 +218,16 @@ class ModelConfig(BaseModelConfig):
 
         optional_kwargs: t.Dict[str, t.Any] = {}
 
-        if self.partitioned_by:
-            optional_kwargs["partitioned_by"] = [
-                d.parse_one(val, dialect=dialect) for val in self.partitioned_by
-            ]
-        elif self.partition_by and isinstance(self.partition_by, list):
-            optional_kwargs["partitioned_by"] = [exp.to_column(val) for val in self.partition_by]
-        elif self.partition_by and isinstance(self.partition_by, dict):
-            optional_kwargs["partitioned_by"] = [
-                exp.TimestampTrunc(
-                    this=exp.to_column(self.partition_by["field"]),
-                    unit=exp.var(self.partition_by["granularity"]),
-                )
-            ]
+        if self.partition_by:
+            optional_kwargs["partitioned_by"] = (
+                [exp.to_column(val) for val in self.partition_by]
+                if isinstance(self.partition_by, list)
+                else self._big_query_partition_by_expr
+            )
+
         if self.cluster_by:
             optional_kwargs["clustered_by"] = self.cluster_by
+
         for field in ["cron"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
@@ -243,3 +245,10 @@ class ModelConfig(BaseModelConfig):
             **optional_kwargs,
             **self.sqlmesh_model_kwargs(context),
         )
+
+
+TIME_TYPE_TO_TRUNC_EXPR = {
+    "date": exp.DateTrunc,
+    "datetime": exp.DatetimeTrunc,
+    "timestamp": exp.TimestampTrunc,
+}
