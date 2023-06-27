@@ -1,10 +1,4 @@
-import {
-  useMemo,
-  type MouseEvent,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from 'react'
+import { useMemo, type MouseEvent, useEffect, useRef } from 'react'
 import { PlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { Button } from '../button/Button'

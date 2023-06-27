@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import ModalConfirmation from '../modal/ModalConfirmation'
 import type { Confirmation } from '../modal/ModalConfirmation'
 import { Button } from '../button/Button'
-import { isFalse, isNotNil } from '~/utils'
+import { isFalse, isNotNil, isStringEmptyOrNil } from '~/utils'
 import Directory from './Directory'
 import { useStoreFileExplorer } from '@context/fileTree'
 import { ModelFile } from '@models/file'
@@ -33,10 +33,11 @@ export default function FileExplorer({
 }: {
   className?: string
 }): JSX.Element {
+  const project = useStoreFileExplorer(s => s.project)
+  const files = useStoreFileExplorer(s => s.files)
   const selected = useStoreFileExplorer(s => s.selected)
   const activeRange = useStoreFileExplorer(s => s.activeRange)
   const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
-  const project = useStoreFileExplorer(s => s.project)
   const selectFile = useStoreFileExplorer(s => s.selectFile)
   const setFiles = useStoreFileExplorer(s => s.setFiles)
 
@@ -115,22 +116,58 @@ export default function FileExplorer({
       })
   }
 
-  function removeFile(file: ModelFile): void {
-    closeTab(file)
+  function renameAtrifact(artifact: ModelArtifact, newName?: string): void {
+    if (isLoading || isStringEmptyOrNil(newName)) return
 
-    file.parent?.removeFile(file)
-  }
+    setIsLoading(true)
 
-  function removeDirectory(directory: ModelDirectory): void {
-    if (directory.isNotEmpty) {
-      const files = getAllFilesInDirectory(directory)
+    const currentName = artifact.name
+    const currentPath = artifact.path
 
-      files.forEach(file => {
-        closeTab(file)
+    artifact.rename(newName!.trim())
+
+    if (artifact instanceof ModelDirectory) {
+      writeDirectoryApiDirectoriesPathPost(currentPath, {
+        new_path: artifact.path,
       })
+        .catch(error => {
+          // TODO: Show error notification
+          console.log(error)
+
+          artifact.rename(currentName)
+        })
+        .finally(() => {
+          setIsLoading(false)
+
+          if (tab != null && artifact.hasFile(tab.file)) {
+            selectFile(tab.file)
+          }
+
+          setFiles(project?.allFiles ?? [])
+        })
     }
 
-    directory.parent?.removeDirectory(directory)
+    if (artifact instanceof ModelFile) {
+      void writeFileApiFilesPathPost(currentPath, {
+        new_path: artifact.path,
+      })
+        .then(response => {
+          artifact.update(response)
+
+          files.set(artifact.path, artifact)
+          files.delete(currentPath)
+        })
+        .catch(error => {
+          // TODO: Show error notification
+          console.log(error)
+
+          artifact.rename(currentName)
+        })
+        .finally(() => {
+          setIsLoading(false)
+          setFiles(project?.allFiles ?? [])
+        })
+    }
   }
 
   function removeArtifacts(artifacts: Set<ModelArtifact>): void {
@@ -155,11 +192,21 @@ export default function FileExplorer({
           const artifact = list[index]
 
           if (artifact instanceof ModelFile) {
-            removeFile(artifact)
+            closeTab(artifact)
+
+            artifact.parent?.removeFile(artifact)
           }
 
           if (artifact instanceof ModelDirectory) {
-            removeDirectory(artifact)
+            if (artifact.isNotEmpty) {
+              const files = getAllFilesInDirectory(artifact)
+
+              files.forEach(file => {
+                closeTab(file)
+              })
+            }
+
+            artifact.parent?.removeDirectory(artifact)
           }
         })
 
@@ -218,6 +265,7 @@ export default function FileExplorer({
               createDirectory={createDirectory}
               setConfirmation={setConfirmation}
               removeArtifacts={removeArtifacts}
+              renameAtrifact={renameAtrifact}
               className="h-full"
             />
           </ContextMenuDirectory>

@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, useEffect } from 'react'
+import { useState, type MouseEvent, useEffect, useCallback } from 'react'
 import {
   FolderOpenIcon,
   FolderIcon,
@@ -6,7 +6,6 @@ import {
 } from '@heroicons/react/24/solid'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
-import { writeDirectoryApiDirectoriesPathPost } from '~/api/client'
 import { ModelDirectory } from '~/models'
 import { isFalse, isNotNil, isStringEmptyOrNil } from '~/utils'
 import { type WithConfirmation } from '../modal/ModalConfirmation'
@@ -23,6 +22,7 @@ interface PropsDirectory extends WithConfirmation {
   createFile: (parent: ModelDirectory) => void
   createDirectory: (parent: ModelDirectory) => void
   removeArtifacts: (artifacts: Set<ModelArtifact>) => void
+  renameAtrifact: (artifact: ModelArtifact, newName?: string) => void
 }
 
 export default function Directory({
@@ -31,6 +31,7 @@ export default function Directory({
   createDirectory,
   createFile,
   removeArtifacts,
+  renameAtrifact,
   className,
   style,
 }: PropsDirectory): JSX.Element {
@@ -41,7 +42,6 @@ export default function Directory({
   const selectFile = useStoreFileExplorer(s => s.selectFile)
   const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
 
-  const [isLoading, setIsLoading] = useState(false)
   const [newName, setNewName] = useState<string>()
   const [isOpen, setIsOpen] = useState<boolean>(directory.isOpen)
   const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
@@ -57,70 +57,45 @@ export default function Directory({
     }
   }, [tab])
 
-  function removeWithConfirmation(): void {
-    setConfirmation({
-      headline: 'Removing Directory',
-      description: `Are you sure you want to remove the directory "${directory.name}"?`,
-      yesText: 'Yes, Remove',
-      noText: 'No, Cancel',
-      action: () => {
-        if (directory.parent != null) {
-          removeArtifacts(new Set([directory]))
-        }
-      },
-    })
-  }
-
-  function rename(): void {
-    if (
-      isLoading ||
-      directory == null ||
-      isStringEmptyOrNil(newName) ||
-      newName == null
-    )
-      return
-
-    setIsLoading(true)
-
-    const currentName = directory.name
-    const currentPath = directory.path
-
-    directory.rename(newName.trim())
-
-    void writeDirectoryApiDirectoriesPathPost(currentPath, {
-      new_path: directory.path,
-    })
-      .catch(error => {
-        console.log(error)
-
-        directory.rename(currentName)
-      })
-      .finally(() => {
-        setNewName(undefined)
-        setIsLoading(false)
-
-        if (tab != null && directory.hasFile(tab.file)) {
-          selectFile(tab.file)
-        }
-      })
-  }
-
-  function renameWithConfirmation(): void {
-    if (directory.name === newName) {
-      setNewName(undefined)
-    } else {
+  const removeWithConfirmation = useCallback(
+    function removeWithConfirmation(): void {
       setConfirmation({
-        headline: 'Renaming Directory',
-        description: `Are you sure you want to rename the directory "${directory.name}"?`,
-        yesText: 'Yes, Rename',
+        headline: 'Removing Directory',
+        description: `Are you sure you want to remove the directory "${directory.name}"?`,
+        yesText: 'Yes, Remove',
         noText: 'No, Cancel',
-        action: rename,
-        cancel: () => {
-          setNewName(undefined)
+        action: () => {
+          if (directory.parent != null) {
+            removeArtifacts(new Set([directory]))
+          }
         },
       })
-    }
-  }
+    },
+    [directory],
+  )
+
+  const renameWithConfirmation = useCallback(
+    function renameWithConfirmation(): void {
+      if (directory.name === newName) {
+        setNewName(undefined)
+      } else {
+        setConfirmation({
+          headline: 'Renaming Directory',
+          description: `Are you sure you want to rename the directory "${directory.name}"?`,
+          yesText: 'Yes, Rename',
+          noText: 'No, Cancel',
+          action: () => {
+            renameAtrifact(directory, newName)
+            setNewName(undefined)
+          },
+          cancel: () => {
+            setNewName(undefined)
+          },
+        })
+      }
+    },
+    [directory, newName],
+  )
 
   const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
   const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
@@ -196,6 +171,7 @@ export default function Directory({
                 createFile={createFile}
                 createDirectory={createDirectory}
                 removeArtifacts={removeArtifacts}
+                renameAtrifact={renameAtrifact}
                 style={{
                   paddingLeft: directory.withParent
                     ? `${directory.level / 2 + 0.25}rem`
@@ -217,6 +193,7 @@ export default function Directory({
                 file={file}
                 setConfirmation={setConfirmation}
                 removeArtifacts={removeArtifacts}
+                renameAtrifact={renameAtrifact}
                 style={{
                   paddingLeft: directory.withParent
                     ? `${directory.level / 2 + 0.25}rem`
@@ -248,8 +225,13 @@ function ContextMenuDirectory({
 }): JSX.Element {
   return (
     <ContextMenu.Root onOpenChange={onOpenChange}>
-      <ContextMenu.Trigger className="w-full overflow-hidden overflow-ellipsis py-[0.125rem] pr-2">
-        {directory.name}
+      <ContextMenu.Trigger className="w-full flex justify-between items-center overflow-hidden overflow-ellipsis py-[0.125rem] pr-2">
+        <span className="overflow-hidden overflow-ellipsis">
+          {directory.name}
+        </span>
+        <span className="inline-block text-xs rounded-full px-2 bg-primary-10 ml-2">
+          {directory.directories.length + directory.files.length}
+        </span>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content

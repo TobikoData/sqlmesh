@@ -5,8 +5,7 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { writeFileApiFilesPathPost } from '~/api/client'
-import { ModelDirectory, ModelFile } from '~/models'
+import { ModelFile } from '~/models'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
 import { type WithConfirmation } from '../modal/ModalConfirmation'
 import { useStoreEditor } from '~/context/editor'
@@ -19,18 +18,19 @@ interface PropsFile extends WithConfirmation {
   className?: string
   style?: React.CSSProperties
   removeArtifacts: (artifacts: Set<ModelArtifact>) => void
+  renameAtrifact: (artifact: ModelArtifact, newName?: string) => void
 }
 
 export default function File({
   file,
   setConfirmation,
   removeArtifacts,
+  renameAtrifact,
   className,
   style,
 }: PropsFile): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
 
-  const files = useStoreFileExplorer(s => s.files)
   const activeRange = useStoreFileExplorer(s => s.activeRange)
   const tabs = useStoreEditor(s => s.tabs)
   const replaceTab = useStoreEditor(s => s.replaceTab)
@@ -38,9 +38,7 @@ export default function File({
   const selected = useStoreFileExplorer(s => s.selected)
   const selectFile = useStoreFileExplorer(s => s.selectFile)
   const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
-  const refreshProject = useStoreFileExplorer(s => s.refreshProject)
 
-  const [isLoading, setIsLoading] = useState(false)
   const [newName, setNewName] = useState<string>()
   const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
 
@@ -56,47 +54,6 @@ export default function File({
         }
       },
     })
-  }
-
-  function rename(): void {
-    if (
-      isLoading ||
-      file == null ||
-      isStringEmptyOrNil(newName) ||
-      newName == null
-    ) {
-      setNewName(undefined)
-
-      return
-    }
-
-    setIsLoading(true)
-
-    const currentName = file.name
-    const currentPath = file.path
-
-    file.rename(newName.trim())
-
-    void writeFileApiFilesPathPost(currentPath, {
-      new_path: file.path,
-    })
-      .then(response => {
-        file.update(response)
-
-        files.set(file.path, file)
-        files.delete(currentPath)
-      })
-      .catch(error => {
-        console.log(error)
-
-        file.rename(currentName)
-      })
-      .finally(() => {
-        setNewName(undefined)
-        setIsLoading(false)
-
-        refreshProject()
-      })
   }
 
   return (
@@ -156,7 +113,7 @@ export default function File({
             file={file}
             newName={newName}
             setNewName={setNewName}
-            rename={rename}
+            rename={() => renameAtrifact(file, newName)}
           />
         )}
       </span>
@@ -218,6 +175,7 @@ function FileRename({
               e.stopPropagation()
 
               rename()
+              setNewName(undefined)
             }}
           />
         )}
