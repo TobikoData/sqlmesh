@@ -47,7 +47,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.config import Config, load_config_from_paths
+from sqlmesh.core.config import Config, load_config_from_paths, load_config_from_yaml
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
@@ -75,7 +75,7 @@ from sqlmesh.core.state_sync import StateReader, StateSync
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict, sys_path
+from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, yesterday_ds
 from sqlmesh.utils.errors import (
@@ -1082,15 +1082,23 @@ class Context(BaseContext):
         if isinstance(config, Config):
             return {path: config for path in paths}
 
-        lookup_paths = [self.sqlmesh_path / "config.yml", self.sqlmesh_path / "config.yaml"]
+        config_defaults = None
+        for path in (self.sqlmesh_path / "config.yml", self.sqlmesh_path / "config.yaml"):
+            if path.exists():
+                config_defaults = load_config_from_yaml(path)
+                break
 
-        return {
-            path: load_config_from_paths(
-                *(lookup_paths + [path / "config.py", path / "config.yml", path / "config.yaml"]),
-                config_name=config,
-            )
-            for path in paths
-        }
+        with env_vars(config_defaults.env_vars if config_defaults else {}):
+            return {
+                path: load_config_from_paths(
+                    path / "config.py",
+                    path / "config.yml",
+                    path / "config.yaml",
+                    config_name=config,
+                    config_defaults=config_defaults,
+                )
+                for path in paths
+            }
 
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()

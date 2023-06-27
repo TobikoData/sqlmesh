@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import re
 import sys
 import time
@@ -218,3 +219,16 @@ class classproperty(property):
 
     def __get__(self, obj: t.Any, owner: t.Any = None) -> t.Any:
         return classmethod(self.fget).__get__(None, owner)()  # type: ignore
+
+
+@contextmanager
+def env_vars(environ: dict[str, str]) -> t.Iterator[None]:
+    """A context manager to temporarily modify environment variables."""
+    old_environ = os.environ.copy()
+    os.environ.update(environ)
+
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(old_environ)
