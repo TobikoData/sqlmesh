@@ -18,13 +18,13 @@ interface PropsFile extends WithConfirmation {
   file: ModelFile
   className?: string
   style?: React.CSSProperties
-  removeArtifact: (parent: ModelDirectory, artifact: ModelArtifact) => void
+  removeArtifacts: (artifacts: Set<ModelArtifact>) => void
 }
 
 export default function File({
   file,
   setConfirmation,
-  removeArtifact,
+  removeArtifacts,
   className,
   style,
 }: PropsFile): JSX.Element {
@@ -52,7 +52,7 @@ export default function File({
       noText: 'No, Cancel',
       action: () => {
         if (file.parent != null) {
-          removeArtifact(file.parent, file)
+          removeArtifacts(new Set([file]))
         }
       },
     })

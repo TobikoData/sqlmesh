@@ -115,70 +115,13 @@ export default function FileExplorer({
       })
   }
 
-  function removeArtifact(
-    parent: ModelDirectory,
-    artifact: ModelArtifact,
-  ): void {
-    if (isLoading) return
-
-    setIsLoading(true)
-
-    if (artifact instanceof ModelFile) {
-      deleteFileApiFilesPathDelete(artifact.path)
-        .then(response => {
-          if (isFalse(response as unknown as { ok: boolean })) {
-            console.warn([`File: ${artifact.path}`, (response as any).detail])
-
-            return
-          }
-
-          removeFile(parent, artifact)
-          setFiles(project?.allFiles ?? [])
-        })
-        .catch(error => {
-          // TODO: Show error notification
-          console.log({ error })
-        })
-        .finally(() => {
-          setIsLoading(false)
-        })
-    }
-
-    if (artifact instanceof ModelDirectory) {
-      deleteDirectoryApiDirectoriesPathDelete(artifact.path)
-        .then(response => {
-          if (isFalse((response as any).ok)) {
-            console.warn([
-              `Directory: ${artifact.path}`,
-              (response as any).detail,
-            ])
-
-            return
-          }
-
-          removeDirectory(parent, artifact)
-          setFiles(project?.allFiles ?? [])
-        })
-        .catch(error => {
-          // TODO: Show error notification
-          console.log({ error })
-        })
-        .finally(() => {
-          setIsLoading(false)
-        })
-    }
-  }
-
-  function removeFile(parent: ModelDirectory, file: ModelFile): void {
+  function removeFile(file: ModelFile): void {
     closeTab(file)
 
-    parent.removeFile(file)
+    file.parent?.removeFile(file)
   }
 
-  function removeDirectory(
-    parent: ModelDirectory,
-    directory: ModelDirectory,
-  ): void {
+  function removeDirectory(directory: ModelDirectory): void {
     if (directory.isNotEmpty) {
       const files = getAllFilesInDirectory(directory)
 
@@ -187,13 +130,10 @@ export default function FileExplorer({
       })
     }
 
-    parent.removeDirectory(directory)
+    directory.parent?.removeDirectory(directory)
   }
 
-  function removeArtifacts(
-    parent: ModelDirectory,
-    artifacts: Set<ModelArtifact>,
-  ): void {
+  function removeArtifacts(artifacts: Set<ModelArtifact>): void {
     if (isLoading) return
 
     setIsLoading(true)
@@ -210,16 +150,16 @@ export default function FileExplorer({
     })
 
     Promise.all(promises)
-      .then(list => {
-        list.forEach((_, index) => {
+      .then(resolvedList => {
+        resolvedList.forEach((_, index) => {
           const artifact = list[index]
 
           if (artifact instanceof ModelFile) {
-            removeFile(parent, artifact)
+            removeFile(artifact)
           }
 
           if (artifact instanceof ModelDirectory) {
-            removeDirectory(parent, artifact)
+            removeDirectory(artifact)
           }
         })
 
@@ -262,7 +202,7 @@ export default function FileExplorer({
                 yesText: 'Yes, Remove',
                 noText: 'No, Cancel',
                 action: () => {
-                  removeArtifacts(project, activeRange)
+                  removeArtifacts(activeRange)
                 },
               })
             }
@@ -277,7 +217,7 @@ export default function FileExplorer({
               createFile={createFile}
               createDirectory={createDirectory}
               setConfirmation={setConfirmation}
-              removeArtifact={removeArtifact}
+              removeArtifacts={removeArtifacts}
               className="h-full"
             />
           </ContextMenuDirectory>

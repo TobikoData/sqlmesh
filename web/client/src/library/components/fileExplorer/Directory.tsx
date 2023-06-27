@@ -22,7 +22,7 @@ interface PropsDirectory extends WithConfirmation {
   style?: React.CSSProperties
   createFile: (parent: ModelDirectory) => void
   createDirectory: (parent: ModelDirectory) => void
-  removeArtifact: (parent: ModelDirectory, artifact: ModelArtifact) => void
+  removeArtifacts: (artifacts: Set<ModelArtifact>) => void
 }
 
 export default function Directory({
@@ -30,7 +30,7 @@ export default function Directory({
   setConfirmation,
   createDirectory,
   createFile,
-  removeArtifact,
+  removeArtifacts,
   className,
   style,
 }: PropsDirectory): JSX.Element {
@@ -65,7 +65,7 @@ export default function Directory({
       noText: 'No, Cancel',
       action: () => {
         if (directory.parent != null) {
-          removeArtifact(directory.parent, directory)
+          removeArtifacts(new Set([directory]))
         }
       },
     })
@@ -195,7 +195,7 @@ export default function Directory({
                 setConfirmation={setConfirmation}
                 createFile={createFile}
                 createDirectory={createDirectory}
-                removeArtifact={removeArtifact}
+                removeArtifacts={removeArtifacts}
                 style={{
                   paddingLeft: directory.withParent
                     ? `${directory.level / 2 + 0.25}rem`
@@ -216,7 +216,7 @@ export default function Directory({
               <File
                 file={file}
                 setConfirmation={setConfirmation}
-                removeArtifact={removeArtifact}
+                removeArtifacts={removeArtifacts}
                 style={{
                   paddingLeft: directory.withParent
                     ? `${directory.level / 2 + 0.25}rem`

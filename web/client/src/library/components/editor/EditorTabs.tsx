@@ -1,11 +1,23 @@
-import { useMemo, type MouseEvent } from 'react'
+import {
+  useMemo,
+  type MouseEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react'
 import { PlusIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { Button } from '../button/Button'
 import clsx from 'clsx'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
+import { useStoreFileExplorer } from '@context/fileTree'
+import { ModelDirectory } from '@models/directory'
+import { ModelFile } from '@models/file'
 
 export default function EditorTabs(): JSX.Element {
+  const selected = useStoreFileExplorer(s => s.selected)
+
+  const tab = useStoreEditor(s => s.tab)
   const tabs = useStoreEditor(s => s.tabs)
   const addTab = useStoreEditor(s => s.addTab)
   const selectTab = useStoreEditor(s => s.selectTab)
@@ -27,6 +39,29 @@ export default function EditorTabs(): JSX.Element {
 
     return [local, remote]
   }, [tabs])
+
+  useEffect(() => {
+    if (
+      selected == null ||
+      tab?.file === selected ||
+      selected instanceof ModelDirectory
+    )
+      return
+
+    const newTab = createTab(selected as ModelFile)
+
+    addTab(newTab)
+    selectTab(newTab)
+  }, [selected])
+
+  useEffect(() => {
+    setTimeout(() => {
+      tab?.el?.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+      })
+    }, 100)
+  }, [tab?.id])
 
   function addTabAndSelect(): void {
     const tab = createTab()
@@ -70,9 +105,17 @@ export default function EditorTabs(): JSX.Element {
 }
 
 function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
+  const elTab = useRef<HTMLLIElement>(null)
+
   const activeTab = useStoreEditor(s => s.tab)
   const selectTab = useStoreEditor(s => s.selectTab)
   const closeTab = useStoreEditor(s => s.closeTab)
+
+  useEffect(() => {
+    if (elTab.current == null) return
+
+    tab.el = elTab.current
+  }, [elTab])
 
   function closeEditorTab(tab: EditorTab): void {
     closeTab(tab.file)
@@ -80,6 +123,7 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
 
   return (
     <li
+      ref={elTab}
       className={clsx(
         'inline-block py-1 pr-2 last-child:pr-0 overflow-hidden text-center overflow-ellipsis cursor-pointer',
       )}

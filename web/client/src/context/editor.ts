@@ -61,6 +61,7 @@ export interface EditorTab {
     types: string
   }
   preview?: EditorPreview
+  el?: HTMLElement
 }
 
 const [getStoredTabs, setStoredTabs] = useLocalStorage<{ ids: ID[]; id: ID }>(
