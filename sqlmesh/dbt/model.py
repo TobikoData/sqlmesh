@@ -232,6 +232,9 @@ class ModelConfig(BaseModelConfig):
         elif self.partition_by and isinstance(self.partition_by, dict):
             optional_kwargs["partitioned_by"] = self._big_query_partition_by_expr
 
+        if self.cluster_by:
+            optional_kwargs["clustered_by"] = self.cluster_by
+
         for field in ["cron"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
