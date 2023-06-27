@@ -100,7 +100,7 @@ class _Model(ModelMeta, frozen=True):
         lookback: The number of previous incremental intervals in the lookback window.
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
-        partitioned_by: The partition columns, only applicable in certain engines. (eg. (ds, hour))
+        partitioned_by: The partition columns or engine specific expressions, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
     """
@@ -557,7 +557,11 @@ class _Model(ModelMeta, frozen=True):
             ConfigError
         """
         if self.partitioned_by:
-            unique_partition_keys = {k.strip().lower() for k in self.partitioned_by}
+            unique_partition_keys = {
+                col.name.strip().lower()
+                for expr in self.partitioned_by
+                for col in expr.find_all(exp.Column)
+            }
             if len(self.partitioned_by) != len(unique_partition_keys):
                 raise_config_error(
                     "All partition keys must be unique in the model definition",
@@ -1644,12 +1648,16 @@ def _single_value_or_tuple(values: t.Sequence) -> exp.Identifier | exp.Tuple:
     )
 
 
+def _single_expr_or_tuple(values: t.Sequence[exp.Expression]) -> exp.Expression | exp.Tuple:
+    return values[0] if len(values) == 1 else exp.Tuple(expressions=values)
+
+
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),
     "start": lambda value: exp.Literal.string(value),
     "cron": lambda value: exp.Literal.string(value),
     "batch_size": lambda value: exp.Literal.number(value),
-    "partitioned_by_": _single_value_or_tuple,
+    "partitioned_by_": _single_expr_or_tuple,
     "depends_on_": lambda value: exp.Tuple(expressions=value),
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,

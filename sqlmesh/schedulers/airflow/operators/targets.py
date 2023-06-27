@@ -1,5 +1,6 @@
 import abc
 import typing as t
+from datetime import datetime
 
 from airflow.exceptions import AirflowSkipException
 from airflow.utils.context import Context
@@ -154,9 +155,8 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
         )
 
     def _get_start(self, context: Context) -> TimeLike:
-        return (
-            self.start
-            or context["dag_run"].data_interval_start - self.snapshot.model.lookback_delta
+        return self.start or self.snapshot.model.lookback_start(
+            t.cast(datetime, context["dag_run"].data_interval_start)
         )
 
     def _get_end(self, context: Context) -> TimeLike:

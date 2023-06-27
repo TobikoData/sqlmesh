@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import typing as t
-from datetime import timedelta
 from enum import Enum
 
 from pydantic import Field, root_validator, validator
 from sqlglot import exp
+from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
@@ -15,7 +15,6 @@ from sqlmesh.core.model.kind import (
     ViewKind,
     _Incremental,
 )
-from sqlmesh.utils import unique
 from sqlmesh.utils.cron import CroniterCache
 from sqlmesh.utils.date import TimeLike, to_datetime
 from sqlmesh.utils.errors import ConfigError
@@ -25,14 +24,20 @@ from sqlmesh.utils.pydantic import PydanticModel
 class IntervalUnit(str, Enum):
     """IntervalUnit is the inferred granularity of an incremental model.
 
-    IntervalUnit can be one of 4 types, DAY, HOUR, MINUTE. The unit is inferred
+    IntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred
     based on the cron schedule of a model. The minimum time delta between a sample set of dates
     is used to determine which unit a model's schedule is.
     """
 
+    YEAR = "year"
+    MONTH = "month"
     DAY = "day"
     HOUR = "hour"
     MINUTE = "minute"
+
+    @property
+    def is_date_granularity(self) -> bool:
+        return self in (IntervalUnit.YEAR, IntervalUnit.MONTH, IntervalUnit.DAY)
 
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
@@ -51,7 +56,7 @@ class ModelMeta(PydanticModel):
     start: t.Optional[TimeLike]
     retention: t.Optional[int]  # not implemented yet
     storage_format: t.Optional[str]
-    partitioned_by_: t.List[str] = Field(default=[], alias="partitioned_by")
+    partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]]
@@ -110,7 +115,7 @@ class ModelMeta(PydanticModel):
             ]
         return v
 
-    @validator("partitioned_by_", "tags", "grain", pre=True)
+    @validator("tags", "grain", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [e.name for e in v.expressions]
@@ -135,6 +140,39 @@ class ModelMeta(PydanticModel):
             except CroniterBadCronError:
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
+
+    @validator("partitioned_by_", pre=True)
+    def _partition_by_validator(
+        cls, v: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.List[exp.Expression]:
+        partitions: t.List[exp.Expression]
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            partitions = v.expressions
+        elif isinstance(v, exp.Expression):
+            partitions = [v]
+        else:
+            dialect = values.get("dialect")
+            partitions = [
+                d.parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
+                for entry in ensure_list(v)
+            ]
+        partitions = [
+            exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
+            for expr in partitions
+        ]
+
+        for partition in partitions:
+            num_cols = len(list(partition.find_all(exp.Column)))
+            error_msg: t.Optional[str] = None
+            if num_cols == 0:
+                error_msg = "does not contain a column"
+            elif num_cols > 1:
+                error_msg = "contains multiple columns"
+
+            if error_msg:
+                raise ConfigError(f"partitioned_by field '{partition}' {error_msg}")
+
+        return partitions
 
     @validator("columns_to_types_", pre=True)
     def _columns_validator(
@@ -194,9 +232,12 @@ class ModelMeta(PydanticModel):
         return []
 
     @property
-    def partitioned_by(self) -> t.List[str]:
-        time_column = [self.time_column.column] if self.time_column else []
-        return unique([*time_column, *self.partitioned_by_])
+    def partitioned_by(self) -> t.List[exp.Expression]:
+        if self.time_column and self.time_column.column not in [
+            col.name for col in self._partition_by_columns
+        ]:
+            return [*[exp.to_column(self.time_column.column)], *self.partitioned_by_]
+        return self.partitioned_by_
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
@@ -208,18 +249,13 @@ class ModelMeta(PydanticModel):
         """The incremental lookback window."""
         return (self.kind.lookback if isinstance(self.kind, _Incremental) else 0) or 0
 
-    @property
-    def lookback_delta(self) -> timedelta:
-        """The incremental lookback time delta."""
-        if isinstance(self.kind, _Incremental):
-            interval_unit = self.interval_unit()
-            if interval_unit == IntervalUnit.DAY:
-                return timedelta(days=self.lookback)
-            if interval_unit == IntervalUnit.HOUR:
-                return timedelta(hours=self.lookback)
-            if interval_unit == IntervalUnit.MINUTE:
-                return timedelta(minutes=self.lookback)
-        return timedelta()
+    def lookback_start(self, start: TimeLike) -> TimeLike:
+        if self.lookback == 0:
+            return start
+
+        for _ in range(self.lookback):
+            start = self.cron_prev(start)
+        return start
 
     @property
     def batch_size(self) -> t.Optional[int]:
@@ -241,7 +277,11 @@ class ModelMeta(PydanticModel):
             croniter = CroniterCache(self.cron)
             samples = [croniter.get_next() for _ in range(sample_size)]
             min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-            if min_interval >= 86400:
+            if min_interval >= 31536000:
+                self._interval_unit = IntervalUnit.YEAR
+            elif min_interval >= 2419200:
+                self._interval_unit = IntervalUnit.MONTH
+            elif min_interval >= 86400:
                 self._interval_unit = IntervalUnit.DAY
             elif min_interval >= 3600:
                 self._interval_unit = IntervalUnit.HOUR
@@ -252,8 +292,8 @@ class ModelMeta(PydanticModel):
     def normalized_cron(self) -> str:
         """Returns the UTC normalized cron based on sampling heuristics.
 
-        SQLMesh supports 3 interval units, daily, hourly, and minutes. If a job is scheduled
-        daily at 1PM, the actual intervals are shifted back to midnight UTC.
+        SQLMesh supports 5 interval units, yearly, monthly, daily, hourly, and minutes. If a
+        job is scheduled daily at 1PM, the actual intervals are shifted back to midnight UTC.
 
         Returns:
             The cron string representing either daily, hourly, or minutes.
@@ -265,6 +305,10 @@ class ModelMeta(PydanticModel):
             return "0 * * * *"
         if unit == IntervalUnit.DAY:
             return "0 0 * * *"
+        if unit == IntervalUnit.MONTH:
+            return "0 0 1 * *"
+        if unit == IntervalUnit.YEAR:
+            return "0 0 1 1 *"
         return ""
 
     def croniter(self, value: TimeLike) -> CroniterCache:
@@ -309,3 +353,7 @@ class ModelMeta(PydanticModel):
             The timestamp floor.
         """
         return self.croniter(self.cron_next(value)).get_prev()
+
+    @property
+    def _partition_by_columns(self) -> t.List[exp.Column]:
+        return [col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)]

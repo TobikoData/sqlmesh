@@ -14,6 +14,7 @@ from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.tokens import Token
 
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 
@@ -461,6 +462,15 @@ class ChunkType(Enum):
     JINJA_QUERY = auto()
     JINJA_STATEMENT = auto()
     SQL = auto()
+
+
+def parse_one(sql: str, dialect: t.Optional[str] = None) -> exp.Expression:
+    expressions = parse(sql, default_dialect=dialect)
+    if not expressions:
+        raise SQLMeshError(f"No expressions found in '{sql}'")
+    elif len(expressions) > 1:
+        raise SQLMeshError(f"Multiple expressions found in '{sql}'")
+    return expressions[0]
 
 
 def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expression]:

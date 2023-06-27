@@ -855,7 +855,7 @@ class EngineAdapter:
     def _create_table_properties(
         self,
         storage_format: t.Optional[str] = None,
-        partitioned_by: t.Optional[t.List[str]] = None,
+        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
     ) -> t.Optional[exp.Properties]:
         return None
