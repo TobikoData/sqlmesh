@@ -248,6 +248,7 @@ export default function FileExplorer({
                 description: `Are you sure you want to remove ${activeRange.size} items?`,
                 yesText: 'Yes, Remove',
                 noText: 'No, Cancel',
+                details: Array.from(activeRange).map(artifact => artifact.path),
                 action: () => {
                   removeArtifacts(activeRange)
                 },
@@ -285,6 +286,9 @@ export default function FileExplorer({
             <ModalConfirmation.Description>
               {confirmation?.description}
             </ModalConfirmation.Description>
+          )}
+          {confirmation?.details != null && (
+            <ModalConfirmation.Details details={confirmation?.details} />
           )}
         </ModalConfirmation.Main>
         <ModalConfirmation.Actions>
