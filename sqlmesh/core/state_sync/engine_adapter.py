@@ -121,7 +121,7 @@ class SnapshotCache(t.MutableMapping[SnapshotId, Snapshot]):
         for snapshot in self.snapshots:
             # We want to make sure that intervals for snapshots are not shared when doing the merge intervals
             # so we do a deep copy of the snapshot
-            snapshot = snapshot.copy(deep=True, update={"intervals_": [], "dev_intervals_": []})
+            snapshot = snapshot.copy(deep=True, update={"intervals": [], "dev_intervals": []})
             if snapshot.snapshot_id in intervals_by_snapshot_id:
                 snapshot.merge_intervals(intervals_by_snapshot_id[snapshot.snapshot_id])
             result[snapshot.snapshot_id] = snapshot
@@ -145,7 +145,6 @@ class SnapshotCache(t.MutableMapping[SnapshotId, Snapshot]):
         for interval in intervals:
             interval_mapping[(interval.name, interval.version)].append(interval)
         for snapshot in self.snapshots:
-            snapshot.init_intervals()
             assert snapshot.version
             snapshot_intervals = interval_mapping.get((snapshot.name, snapshot.version), [])
             for interval in snapshot_intervals:
@@ -991,7 +990,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "name": snapshot.name,
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
-                "snapshot": snapshot.json(exclude={"intervals_", "dev_intervals_"}),
+                "snapshot": snapshot.json(exclude={"intervals", "dev_intervals"}),
                 "kind_name": snapshot.model_kind_name.value,
             }
             for snapshot in snapshots

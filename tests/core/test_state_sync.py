@@ -23,7 +23,6 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotFingerprint,
-    SnapshotIntervals,
     SnapshotTableInfo,
 )
 from sqlmesh.core.state_sync import EngineAdapterStateSync
@@ -965,6 +964,7 @@ def test_models_exist(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
 def test_merged_intervals_by_id(
     state_sync: EngineAdapterStateSync,
     make_snapshot: t.Callable,
+    make_snapshot_intervals: t.Callable,
 ):
     model_a = SqlModel(
         name="a",
@@ -998,19 +998,19 @@ def test_merged_intervals_by_id(
         state_sync.get_snapshot_intervals(None)
     )
     assert [x.snapshot_intervals for x in by_id.values()] == [
-        SnapshotIntervals.from_snapshot(
+        make_snapshot_intervals(
             snapshot_a,
             intervals=[(to_timestamp("2022-01-10"), to_timestamp("2022-01-16"))],
             dev_intervals=[],
         ),
-        SnapshotIntervals.from_snapshot(
+        make_snapshot_intervals(
             snapshot_a_forward_only,
             intervals=[(to_timestamp("2022-01-20"), to_timestamp("2022-01-26"))],
             dev_intervals=[],
         ),
     ]
     assert state_sync._snapshot_cache.snapshot_intervals == [
-        SnapshotIntervals.from_snapshot(
+        make_snapshot_intervals(
             snapshot_a,
             intervals=[
                 (to_timestamp("2022-01-10"), to_timestamp("2022-01-16")),
@@ -1018,7 +1018,7 @@ def test_merged_intervals_by_id(
             ],
             dev_intervals=[],
         ),
-        SnapshotIntervals.from_snapshot(
+        make_snapshot_intervals(
             snapshot_a_forward_only,
             intervals=[
                 (to_timestamp("2022-01-10"), to_timestamp("2022-01-16")),
