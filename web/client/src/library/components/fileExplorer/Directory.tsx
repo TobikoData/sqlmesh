@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, useEffect, useCallback } from 'react'
+import { useState, type MouseEvent, useEffect, useMemo } from 'react'
 import {
   FolderOpenIcon,
   FolderIcon,
@@ -36,9 +36,11 @@ export default function Directory({
   const tab = useStoreEditor(s => s.tab)
 
   const activeRange = useStoreFileExplorer(s => s.activeRange)
-  const selected = useStoreFileExplorer(s => s.selected)
-  const selectFile = useStoreFileExplorer(s => s.selectFile)
+  const setSelected = useStoreFileExplorer(s => s.setSelected)
   const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
+  const selectArtifactsInRange = useStoreFileExplorer(
+    s => s.selectArtifactsInRange,
+  )
 
   const [newName, setNewName] = useState<string>()
   const [isOpen, setIsOpen] = useState<boolean>(directory.isOpen)
@@ -54,6 +56,35 @@ export default function Directory({
       directory.open()
     }
   }, [tab])
+
+  function handleSelect(e: MouseEvent) {
+    e.stopPropagation()
+
+    if (e.shiftKey || e.metaKey) {
+      e.preventDefault()
+    } else {
+      if (isNotNil(newName)) return
+
+      directory.toggle()
+    }
+
+    if (e.metaKey) {
+      if (activeRange.has(directory)) {
+        activeRange.delete(directory)
+      } else {
+        activeRange.add(directory)
+      }
+      setActiveRange(activeRange)
+    } else if (e.shiftKey) {
+      selectArtifactsInRange(directory)
+    } else {
+      if (activeRange.size > 0) {
+        setActiveRange(new Set([directory]))
+      } else {
+        setSelected(directory)
+      }
+    }
+  }
 
   const IconChevron = isOpen ? ChevronDownIcon : ChevronRightIcon
   const IconFolder = isOpen ? FolderOpenIcon : FolderIcon
@@ -74,31 +105,7 @@ export default function Directory({
           onContextMenu={(e: MouseEvent) => {
             e.stopPropagation()
           }}
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
-
-            if (e.shiftKey || e.metaKey) {
-              e.preventDefault()
-            } else {
-              if (isNotNil(newName)) return
-
-              directory.toggle()
-            }
-
-            if (e.metaKey) {
-              if (activeRange.has(directory)) {
-                activeRange.delete(directory)
-              } else {
-                activeRange.add(directory)
-              }
-              setActiveRange(activeRange)
-            } else if (e.shiftKey && activeRange.size > 0) {
-              activeRange.add(directory)
-              setActiveRange(activeRange)
-            } else if (directory !== selected) {
-              selectFile(directory)
-            }
-          }}
+          onClick={handleSelect}
         >
           <div className="flex items-center mr-2">
             <IconChevron className="inline-block w-5" />
@@ -188,6 +195,40 @@ function ContextMenuDirectory({
   setNewName: (newName?: string) => void
   onOpenChange: (isOpen: boolean) => void
 }): JSX.Element {
+  const activeRange = useStoreFileExplorer(s => s.activeRange)
+  const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
+
+  const disabled = activeRange.size > 1 && activeRange.has(directory)
+  const [isAllDirectories, shouldCollapse, shouldExpand, shouldToggle] =
+    useMemo(() => {
+      if (activeRange.size < 2) return [false, false, false, false]
+
+      let isAllDirectories = true
+      let isAllCollapsed = true
+      let isAllsExpanded = true
+
+      for (const atrifact of Array.from(activeRange)) {
+        if (atrifact instanceof ModelDirectory && isAllDirectories) {
+          if (isAllCollapsed) {
+            isAllCollapsed = atrifact.isCollapsed
+          }
+
+          if (isAllsExpanded) {
+            isAllsExpanded = atrifact.isExpanded
+          }
+        } else {
+          isAllDirectories = false
+        }
+      }
+
+      return [
+        isAllDirectories,
+        isAllsExpanded,
+        isAllCollapsed,
+        isFalse(isAllCollapsed) && isFalse(isAllsExpanded),
+      ]
+    }, [activeRange])
+
   return (
     <ContextMenu.Root onOpenChange={onOpenChange}>
       <ContextMenu.Trigger className="w-full flex justify-between items-center overflow-hidden overflow-ellipsis py-[0.125rem] pr-2">
@@ -206,23 +247,57 @@ function ContextMenuDirectory({
           }}
         >
           <ContextMenu.Item
-            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            className={clsx(
+              'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
+              disabled && isFalse(isAllDirectories)
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-accent-500 hover:text-light',
+            )}
+            disabled={disabled && isFalse(isAllDirectories)}
             onSelect={(e: Event) => {
               e.stopPropagation()
 
-              if (directory.isCollapsed) {
-                directory.expand()
+              if (activeRange.size > 1 && activeRange.has(directory)) {
+                ;(activeRange as Set<ModelDirectory>).forEach(artifact => {
+                  if (shouldCollapse) {
+                    artifact.collapse()
+                  } else if (shouldExpand) {
+                    artifact.expand()
+                  } else if (shouldToggle) {
+                    if (artifact.isCollapsed) {
+                      artifact.expand()
+                    } else {
+                      artifact.collapse()
+                    }
+                  }
+                })
               } else {
-                directory.collapse()
+                if (directory.isCollapsed) {
+                  directory.expand()
+                } else {
+                  directory.collapse()
+                }
               }
+
+              setActiveRange(new Set())
             }}
           >
-            {directory.isCollapsed ? 'Expand' : 'Collapse'}
+            {isAllDirectories && shouldCollapse && 'Collapse All'}
+            {isAllDirectories && shouldExpand && 'Expand All'}
+            {isAllDirectories && shouldToggle && 'Toggle All'}
+            {isFalse(isAllDirectories) && directory.isCollapsed && 'Expand'}
+            {isFalse(isAllDirectories) && directory.isExpanded && 'Collapse'}
             <div className="ml-auto pl-5"></div>
           </ContextMenu.Item>
           <ContextMenu.Separator className="h-[1px] bg-accent-200 m-2" />
           <ContextMenu.Item
-            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            className={clsx(
+              'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
+              disabled
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-accent-500 hover:text-light',
+            )}
+            disabled={disabled}
             onSelect={(e: Event) => {
               e.stopPropagation()
 
@@ -233,7 +308,13 @@ function ContextMenuDirectory({
             <div className="ml-auto pl-5"></div>
           </ContextMenu.Item>
           <ContextMenu.Item
-            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            className={clsx(
+              'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
+              disabled
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-accent-500 hover:text-light',
+            )}
+            disabled={disabled}
             onSelect={(e: Event) => {
               e.stopPropagation()
 
@@ -245,7 +326,13 @@ function ContextMenuDirectory({
           </ContextMenu.Item>
           <ContextMenu.Separator className="h-[1px] bg-accent-200 m-2" />
           <ContextMenu.Item
-            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            className={clsx(
+              'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
+              disabled
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-accent-500 hover:text-light',
+            )}
+            disabled={disabled}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
             }}
@@ -266,7 +353,7 @@ function ContextMenuDirectory({
               removeWithConfirmation()
             }}
           >
-            Remove
+            Remove {activeRange.has(directory) ? activeRange.size : ''}
             <div className="ml-auto pl-5"></div>
           </ContextMenu.Item>
         </ContextMenu.Content>

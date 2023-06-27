@@ -110,7 +110,7 @@ function EditorLoading(): JSX.Element {
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const files = useStoreFileExplorer(s => s.files)
-  const selectFile = useStoreFileExplorer(s => s.selectFile)
+  const setSelected = useStoreFileExplorer(s => s.setSelected)
 
   const direction = useStoreEditor(s => s.direction)
   const engine = useStoreEditor(s => s.engine)
@@ -129,7 +129,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const modelExtensions = useSQLMeshModelExtensions(
     tab.file.path,
     model => {
-      selectFile(files.get(model.path))
+      setSelected(files.get(model.path))
     },
     (model, column) => {
       setManuallySelectedColumn([model, column])

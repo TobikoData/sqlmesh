@@ -76,7 +76,7 @@ function ModalConfirmationDetails({
   details: string[]
 }): JSX.Element {
   return (
-    <ul className="mt-2 p-4 bg-primary-10 rounded-md max-h-[20vh]  overflow-y-auto hover:scrollbar scrollbar--vertical">
+    <ul className="mt-2 p-4 bg-warning-10 rounded-md max-h-[20vh]  overflow-y-auto hover:scrollbar scrollbar--vertical">
       {details.map(detail => (
         <li
           key={detail}

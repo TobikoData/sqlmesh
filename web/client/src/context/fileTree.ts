@@ -8,11 +8,11 @@ interface FileTreeStore {
   files: Map<ID, ModelFile>
   selected?: ModelArtifact
   activeRange: Set<ModelArtifact>
-  selectFile: (selected?: ModelArtifact) => void
+  setSelected: (selected?: ModelArtifact) => void
   setFiles: (files: ModelFile[]) => void
   setProject: (project?: Directory) => void
   setActiveRange: (activeRange: Set<ModelArtifact>) => void
-  refreshProject: () => void
+  selectArtifactsInRange: (to: ModelArtifact) => void
 }
 
 export const useStoreFileExplorer = create<FileTreeStore>((set, get) => ({
@@ -30,18 +30,40 @@ export const useStoreFileExplorer = create<FileTreeStore>((set, get) => ({
       files: files.reduce((acc, file) => acc.set(file.id, file), new Map()),
     }))
   },
-  selectFile(selected) {
+  setSelected(selected) {
     set(() => ({
       selected,
       activeRange: selected == null ? new Set() : new Set([selected]),
     }))
   },
   setActiveRange(activeRange) {
+    const s = get()
+
     set(() => ({
-      activeRange: new Set(activeRange),
+      activeRange: new Set(
+        (s.project?.allArtifacts ?? []).filter(artifact =>
+          activeRange.has(artifact),
+        ),
+      ),
     }))
   },
-  refreshProject() {
-    get().setProject(get().project)
+  selectArtifactsInRange(to) {
+    const s = get()
+    const acitveAtrifacts = Array.from(s.activeRange)
+    const first = acitveAtrifacts[0]
+    const last = acitveAtrifacts[s.activeRange.size - 1]
+    const artifacts = s.project?.allArtifacts ?? []
+    const indexTo = artifacts.indexOf(to)
+    const indexFirst = first == null ? 0 : artifacts.indexOf(first)
+    const indexLast =
+      last == null ? s.activeRange.size - 1 : artifacts.indexOf(last)
+
+    let indexStart = indexTo > indexFirst ? indexFirst : indexTo
+    let indexEnd =
+      indexTo > indexLast || (indexTo > indexFirst && indexTo < indexLast)
+        ? indexTo
+        : indexLast
+
+    s.setActiveRange(new Set(artifacts.slice(indexStart, indexEnd + 1)))
   },
 }))

@@ -24,6 +24,7 @@ import { getAllFilesInDirectory, toUniqueName } from './help'
   - add search
   - add drag and drop files/directories from desktop
   - add copy and paste
+  - add accessability support
 */
 
 export default function FileExplorer({
@@ -36,14 +37,14 @@ export default function FileExplorer({
   const selected = useStoreFileExplorer(s => s.selected)
   const activeRange = useStoreFileExplorer(s => s.activeRange)
   const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
-  const selectFile = useStoreFileExplorer(s => s.selectFile)
+  const setSelected = useStoreFileExplorer(s => s.setSelected)
   const setFiles = useStoreFileExplorer(s => s.setFiles)
 
   const tab = useStoreEditor(s => s.tab)
   const closeTab = useStoreEditor(s => s.closeTab)
 
   const [isLoading, setIsLoading] = useState(false)
-  const [confirmation, setConfirmation] = useState<Confirmation | undefined>()
+  const [confirmation, setConfirmation] = useState<Confirmation>()
   const [showConfirmation, setShowConfirmation] = useState(false)
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function FileExplorer({
 
   useEffect(() => {
     setActiveRange(new Set())
-    selectFile(tab?.file)
+    setSelected(tab?.file)
   }, [tab])
 
   function createDirectory(parent: ModelDirectory): void {
@@ -103,7 +104,7 @@ export default function FileExplorer({
         parent.open()
 
         setFiles(project?.allFiles ?? [])
-        selectFile(file)
+        setSelected(file)
       })
       .catch(error => {
         // TODO: Show error notification
@@ -138,7 +139,7 @@ export default function FileExplorer({
           setIsLoading(false)
 
           if (tab != null && artifact.hasFile(tab.file)) {
-            selectFile(tab.file)
+            setSelected(tab.file)
           }
 
           setFiles(project?.allFiles ?? [])
@@ -264,6 +265,25 @@ export default function FileExplorer({
     setConfirmation(confirmation)
   }
 
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape' && selected != null && activeRange.size > 1) {
+      setActiveRange(new Set([selected]))
+    }
+
+    if (e.metaKey && e.key === 'Backspace' && activeRange.size > 0) {
+      setConfirmation({
+        headline: 'Removing Selected Files/Directories',
+        description: `Are you sure you want to remove ${activeRange.size} items?`,
+        yesText: 'Yes, Remove',
+        noText: 'No, Cancel',
+        details: Array.from(activeRange).map(artifact => artifact.path),
+        action: () => {
+          removeArtifacts(activeRange)
+        },
+      })
+    }
+  }
+
   return (
     <div
       className={clsx(
@@ -272,35 +292,14 @@ export default function FileExplorer({
       )}
     >
       {project != null && (
-        <div
-          className="h-full px-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
-          tabIndex={1}
-          onKeyDown={(e: React.KeyboardEvent) => {
-            if (
-              e.key === 'Escape' &&
-              selected != null &&
-              activeRange.size > 1
-            ) {
-              setActiveRange(new Set([selected]))
-            }
-
-            if (e.metaKey && e.key === 'Backspace' && activeRange.size > 0) {
-              setConfirmation({
-                headline: 'Removing Selected Files/Directories',
-                description: `Are you sure you want to remove ${activeRange.size} items?`,
-                yesText: 'Yes, Remove',
-                noText: 'No, Cancel',
-                details: Array.from(activeRange).map(artifact => artifact.path),
-                action: () => {
-                  removeArtifacts(activeRange)
-                },
-              })
-            }
-          }}
+        <ContextMenuProject
+          createFile={() => createFile(project)}
+          createDirectory={() => createDirectory(project)}
         >
-          <ContextMenuDirectory
-            createFile={() => createFile(project)}
-            createDirectory={() => createDirectory(project)}
+          <div
+            className="h-full px-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
+            tabIndex={1}
+            onKeyDown={handleKeyDown}
           >
             <Directory
               directory={project}
@@ -308,10 +307,10 @@ export default function FileExplorer({
               createDirectory={createDirectory}
               removeArtifactWithConfirmation={removeArtifactWithConfirmation}
               renameAtrifact={renameAtrifact}
-              className="h-full"
+              className="z-20 relative"
             />
-          </ContextMenuDirectory>
-        </div>
+          </div>
+        </ContextMenuProject>
       )}
       <ModalConfirmation
         show={showConfirmation}
@@ -366,7 +365,7 @@ export default function FileExplorer({
   )
 }
 
-function ContextMenuDirectory({
+function ContextMenuProject({
   children,
   createFile,
   createDirectory,

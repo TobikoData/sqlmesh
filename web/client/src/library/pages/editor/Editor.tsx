@@ -15,7 +15,7 @@ export default function PageEditor(): JSX.Element {
   const models = useStoreContext(s => s.models)
 
   const files = useStoreFileExplorer(s => s.files)
-  const selectFile = useStoreFileExplorer(s => s.selectFile)
+  const setSelected = useStoreFileExplorer(s => s.setSelected)
 
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
 
@@ -25,7 +25,7 @@ export default function PageEditor(): JSX.Element {
 
       if (model == null) return
 
-      selectFile(files.get(model.path))
+      setSelected(files.get(model.path))
     },
     [files, models],
   )

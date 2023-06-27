@@ -1,3 +1,4 @@
+import { isNil } from '@utils/index'
 import type { Directory, File } from '../api/client'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { ModelFile } from './file'
@@ -42,6 +43,8 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
       )
       this.files = this.initial.files?.map(f => new ModelFile(f, this))
     }
+
+    this._isOpen = isNil(parent)
   }
 
   get isChanged(): boolean {
@@ -70,20 +73,21 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
 
   get allDirectories(): ModelDirectory[] {
     return this.directories.concat(
-      this.directories.map(d => d.allDirectories).flat(),
+      this.directories.map(d => d.allDirectories).flat(100),
     )
   }
 
   get allFiles(): ModelFile[] {
     return this.files.concat(
-      this.allDirectories.map(directory => directory.files).flat(),
+      this.allDirectories.map(directory => directory.files).flat(100),
     )
   }
 
   get allArtifacts(): ModelArtifact[] {
-    return ([] as ModelArtifact[])
-      .concat(this.allFiles)
-      .concat(this.allDirectories)
+    return this.directories
+      .map(d => [d, d.allArtifacts])
+      .flat(100)
+      .concat(this.isOpen ? this.files : [])
   }
 
   get isOpen(): boolean {

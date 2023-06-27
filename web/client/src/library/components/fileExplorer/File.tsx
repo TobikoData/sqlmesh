@@ -34,8 +34,42 @@ export default function File({
   const replaceTab = useStoreEditor(s => s.replaceTab)
 
   const selected = useStoreFileExplorer(s => s.selected)
-  const selectFile = useStoreFileExplorer(s => s.selectFile)
+  const setSelected = useStoreFileExplorer(s => s.setSelected)
   const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
+  const selectArtifactsInRange = useStoreFileExplorer(
+    s => s.selectArtifactsInRange,
+  )
+
+  function handleSelect(e: MouseEvent) {
+    e.stopPropagation()
+
+    if (e.shiftKey) {
+      e.preventDefault()
+    }
+
+    if (e.metaKey) {
+      if (activeRange.has(file)) {
+        activeRange.delete(file)
+      } else {
+        activeRange.add(file)
+      }
+      setActiveRange(activeRange)
+    } else if (e.shiftKey && activeRange.size > 0) {
+      selectArtifactsInRange(file)
+    } else if (file !== selected) {
+      setSelected(file)
+
+      const shouldReplaceTab =
+        selected instanceof ModelFile &&
+        isFalse(selected.isChanged) &&
+        selected.isRemote &&
+        isFalse(tabs.has(file))
+
+      if (shouldReplaceTab) {
+        replaceTab(selected, file)
+      }
+    }
+  }
 
   const [newName, setNewName] = useState<string>()
   const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
@@ -56,37 +90,7 @@ export default function File({
       onContextMenu={(e: MouseEvent) => {
         e.stopPropagation()
       }}
-      onClick={(e: MouseEvent) => {
-        e.stopPropagation()
-
-        if (e.shiftKey) {
-          e.preventDefault()
-        }
-
-        if (e.metaKey) {
-          if (activeRange.has(file)) {
-            activeRange.delete(file)
-          } else {
-            activeRange.add(file)
-          }
-          setActiveRange(activeRange)
-        } else if (e.shiftKey && activeRange.size > 0) {
-          activeRange.add(file)
-          setActiveRange(activeRange)
-        } else if (file !== selected) {
-          selectFile(file)
-
-          const shouldReplaceTab =
-            selected instanceof ModelFile &&
-            isFalse(selected.isChanged) &&
-            selected.isRemote &&
-            isFalse(tabs.has(file))
-
-          if (shouldReplaceTab) {
-            replaceTab(selected, file)
-          }
-        }
-      }}
+      onClick={handleSelect}
     >
       <span className="flex w-full items-center overflow-hidden overflow-ellipsis">
         <div className="flex items-center">
@@ -187,6 +191,9 @@ function ContextMenuFile({
   onOpenChange: (isOpen: boolean) => void
   newName?: string
 }): JSX.Element {
+  const activeRange = useStoreFileExplorer(s => s.activeRange)
+
+  const disabled = activeRange.size > 1 && activeRange.has(file)
   return (
     <ContextMenu.Root onOpenChange={onOpenChange}>
       <ContextMenu.Trigger className="w-full overflow-hidden flex items-center justify-between">
@@ -200,7 +207,13 @@ function ContextMenuFile({
           }}
         >
           <ContextMenu.Item
-            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+            className={clsx(
+              'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
+              disabled
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-accent-500 hover:text-light',
+            )}
+            disabled={disabled}
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
             }}
@@ -221,7 +234,7 @@ function ContextMenuFile({
               removeWithConfirmation()
             }}
           >
-            Remove
+            Remove {activeRange.has(file) ? activeRange.size : ''}
             <div className="ml-auto pl-5"></div>
           </ContextMenu.Item>
         </ContextMenu.Content>
