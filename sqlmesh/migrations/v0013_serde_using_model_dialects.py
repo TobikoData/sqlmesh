@@ -1,8 +1,9 @@
 """Serialize SQL using the dialect of each model."""
 import json
+import typing as t
 
 import pandas as pd
-from sqlglot import exp, transpile
+from sqlglot import exp, parse_one
 
 from sqlmesh.utils.jinja import has_jinja
 
@@ -23,15 +24,16 @@ def migrate(state_sync):  # type: ignore
 
         # Read using the SQLGlot dialect, write using the model's dialect
         if "query" in model and not has_jinja(model["query"]):
-            model["query"] = transpile(model["query"], read="", write=dialect, identity=False)[0]
+            model["query"] = parse_one(model["query"]).sql(dialect=dialect)
 
         for statement_kind in ("pre_statements_", "post_statements_"):
-            if statement_kind in model and not has_jinja(model[statement_kind]):
-                model[statement_kind] = [
-                    transpile(statement, read="", write=dialect, identity=False)[0]
-                    for statement in model[statement_kind]
-                    if statement
-                ]
+            _update_expression_list(model, statement_kind, dialect)
+
+        for audit in parsed_snapshot.get("audits", []):
+            if not has_jinja(audit["query"]):
+                audit["query"] = parse_one(audit["query"]).sql(dialect=dialect)
+
+            _update_expression_list(audit, "expressions", dialect)
 
         new_snapshots.append(
             {
@@ -58,3 +60,16 @@ def migrate(state_sync):  # type: ignore
             },
             contains_json=True,
         )
+
+
+def _update_expression_list(obj: t.Dict, key: str, dialect: str) -> None:
+    if key in obj:
+        obj[key] = [
+            (
+                parse_one(expression).sql(dialect=dialect)
+                if not has_jinja(expression)
+                else expression
+            )
+            for expression in obj[key]
+            if expression
+        ]
