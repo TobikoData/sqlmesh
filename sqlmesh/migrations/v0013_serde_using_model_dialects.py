@@ -26,7 +26,7 @@ def migrate(state_sync):  # type: ignore
         if "query" in model and not has_jinja(model["query"]):
             model["query"] = parse_one(model["query"]).sql(dialect=dialect)
 
-        for statement_kind in ("pre_statements_", "post_statements_"):
+        for statement_kind in ("pre_statements", "post_statements"):
             _update_expression_list(model, statement_kind, dialect)
 
         for audit in parsed_snapshot.get("audits", []):
