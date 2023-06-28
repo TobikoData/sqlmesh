@@ -156,6 +156,10 @@ class Scheduler:
             )
         except AuditError as e:
             self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, e)
+            if not is_dev and snapshot.model.owner:
+                self.notification_target_manager.notify_user(
+                    NotificationEvent.AUDIT_FAILURE, snapshot.model.owner, e
+                )
             raise e
         self.state_sync.add_interval(snapshot, start, end, is_dev=is_dev)
         self.console.update_snapshot_progress(snapshot.name, 1)

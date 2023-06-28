@@ -145,7 +145,7 @@ class NotificationTargetManager:
         self, event: NotificationEvent, username: str, *args: t.Any, **kwargs: t.Any
     ) -> None:
         """Call the 'notify_`event`' function of the user's notification targets that care about the event."""
-        notification_targets = self.user_notification_targets.get(self.username, set())
+        notification_targets = self.user_notification_targets.get(username, set())
         for notification_target in notification_targets:
             if event in notification_target.notify_on:
                 notify_func = self._get_notification_function(notification_target, event)
