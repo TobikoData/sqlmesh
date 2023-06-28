@@ -37,6 +37,7 @@ class Config(BaseConfig):
         auto_categorize_changes: Indicates whether SQLMesh should attempt to automatically categorize model changes (breaking / non-breaking)
             during plan creation.
         users: A list of users that can be used for approvals/notifications.
+        pinned_environments: A list of development environment names that should not be deleted by the janitor task.
         model_defaults: Default values for model definitions.
     """
 
@@ -54,6 +55,7 @@ class Config(BaseConfig):
     auto_categorize_changes: CategorizerConfig = CategorizerConfig()
     users: t.List[User] = []
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
+    pinned_environments: t.Set[str] = set()
     loader: t.Type[Loader] = SqlMeshLoader
     env_vars: t.Dict[str, str] = {}
 
@@ -64,6 +66,7 @@ class Config(BaseConfig):
         "users": UpdateStrategy.EXTEND,
         "model_defaults": UpdateStrategy.NESTED_UPDATE,
         "auto_categorize_changes": UpdateStrategy.NESTED_UPDATE,
+        "pinned_environments": UpdateStrategy.EXTEND,
     }
 
     @validator("gateways", always=True)
