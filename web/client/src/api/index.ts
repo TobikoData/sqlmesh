@@ -35,6 +35,9 @@ import {
   evaluateApiCommandsEvaluatePost,
   type EvaluateInput,
   type Model,
+  getTableDiffApiTableDiffGet,
+  type GetTableDiffApiTableDiffGetParams,
+  type TableDiff,
 } from './client'
 import {
   useIDE,
@@ -213,6 +216,18 @@ export function useApiRender(options: RenderInput): UseQueryResult<Query> {
     queryKey: ['/api/commands/render'],
     queryFn: async ({ signal }) =>
       await renderApiCommandsRenderPost(options, { signal }),
+    enabled: false,
+    cacheTime: 0,
+  })
+}
+
+export function useApiTableDiff(
+  options: GetTableDiffApiTableDiffGetParams,
+): UseQueryResult<TableDiff> {
+  return useQuery<TableDiff, ErrorIDE>({
+    queryKey: ['/api/commands/table_diff'],
+    queryFn: async ({ signal }) =>
+      await getTableDiffApiTableDiffGet(options, { signal }),
     enabled: false,
     cacheTime: 0,
   })

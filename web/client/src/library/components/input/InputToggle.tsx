@@ -1,3 +1,4 @@
+import { EnumSize } from '~/types/enum'
 import Toggle from '../toggle/Toggle'
 
 interface PropsInputToggle {
@@ -23,9 +24,9 @@ export default function InputToggle({
       </label>
       <Toggle
         disabled={disabled}
-        className="mt-2"
         enabled={enabled}
         setEnabled={setEnabled}
+        size={EnumSize.lg}
       />
     </div>
   )
