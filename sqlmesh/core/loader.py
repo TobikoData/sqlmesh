@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sqlglot.errors import SqlglotError
-from sqlglot.optimizer.qualify_columns import validate_qualify_columns
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
@@ -24,7 +23,6 @@ from sqlmesh.core.model import (
     ModelCache,
     OptimizedQueryCache,
     SeedModel,
-    SqlModel,
     create_external_model,
     load_model,
 )
@@ -54,22 +52,11 @@ def update_model_schemas(
             continue
 
         model.update_schema(schema)
-
-        cache_hit = optimized_query_cache.with_optimized_query(model)
+        optimized_query_cache.with_optimized_query(model)
 
         columns_to_types = model.columns_to_types
         if columns_to_types is not None:
             schema.add_table(name, columns_to_types, dialect=model.dialect)
-
-        if isinstance(model, SqlModel) and model.mapping_schema and not cache_hit:
-            query = model.render_query()
-            if query is not None:
-                try:
-                    validate_qualify_columns(query)
-                except SqlglotError as e:
-                    raise ConfigError(
-                        f"Column references could not be resolved for model '{name}' at '{model._path}'. {e}"
-                    )
 
 
 @dataclass

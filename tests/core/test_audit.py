@@ -144,7 +144,7 @@ def test_no_query():
 
 
 def test_macro(model: Model):
-    expected_query = """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0" WHERE "a" IS NULL"""
+    expected_query = """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL"""
 
     audit = Audit(
         name="test_audit",
@@ -167,7 +167,7 @@ def test_not_null_audit(model: Model):
     )
     assert (
         rendered_query_a.sql()
-        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0" WHERE "a" IS NULL"""
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL"""
     )
 
     rendered_query_a_and_b = builtin.not_null_audit.render_query(
@@ -176,7 +176,7 @@ def test_not_null_audit(model: Model):
     )
     assert (
         rendered_query_a_and_b.sql()
-        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0" WHERE "a" IS NULL OR "b" IS NULL"""
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL OR "b" IS NULL"""
     )
 
 
@@ -184,7 +184,7 @@ def test_unique_values_audit(model: Model):
     rendered_query_a = builtin.unique_values_audit.render_query(model, columns=[exp.to_column("a")])
     assert (
         rendered_query_a.sql()
-        == """SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "a_rank" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0") AS "_q_1" WHERE "a_rank" > 1"""
+        == """SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "a_rank" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0") AS "_q_1" WHERE "a_rank" > 1"""
     )
 
     rendered_query_a_and_b = builtin.unique_values_audit.render_query(
@@ -192,7 +192,7 @@ def test_unique_values_audit(model: Model):
     )
     assert (
         rendered_query_a_and_b.sql()
-        == """SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "a_rank", ROW_NUMBER() OVER (PARTITION BY "b" ORDER BY 1) AS "b_rank" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0") AS "_q_1" WHERE "a_rank" > 1 OR "b_rank" > 1"""
+        == """SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "a_rank", ROW_NUMBER() OVER (PARTITION BY "b" ORDER BY 1) AS "b_rank" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0") AS "_q_1" WHERE "a_rank" > 1 OR "b_rank" > 1"""
     )
 
 
@@ -204,7 +204,7 @@ def test_accepted_values_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0" WHERE NOT "a" IN ('value_a', 'value_b')"""
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE NOT "a" IN ('value_a', 'value_b')"""
     )
 
 
@@ -215,7 +215,7 @@ def test_number_of_rows_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == """SELECT 1 AS "1" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0" HAVING COUNT(*) <= 0 LIMIT 1"""
+        == """SELECT 1 AS "1" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" HAVING COUNT(*) <= 0 LIMIT 0 + 1"""
     )
 
 
@@ -226,7 +226,7 @@ def test_forall_audit(model: Model):
     )
     assert (
         rendered_query_a.sql()
-        == '''SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0" WHERE NOT "a" >= "b"'''
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE NOT ("a" >= "b")"""
     )
 
     rendered_query_a = builtin.forall_audit.render_query(
@@ -235,5 +235,5 @@ def test_forall_audit(model: Model):
     )
     assert (
         rendered_query_a.sql()
-        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= '1970-01-01' AND "ds" >= '1970-01-01') AS "_q_0" WHERE NOT "a" >= "b" OR NOT "c" + "d" - "e" < 1.0"""
+        == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE NOT ("a" >= "b") OR NOT ("c" + "d" - "e" < 1.0)"""
     )

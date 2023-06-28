@@ -228,7 +228,7 @@ def test_config_jinja(sushi_test_project: Project):
     context = sushi_test_project.context
     model = t.cast(SqlModel, model_config.to_sqlmesh(context))
     assert hook in model.pre_statements[0].sql()
-    assert model.render_pre_statements()[0].sql() == "bar"
+    assert model.render_pre_statements()[0].sql() == '"bar"'
 
 
 def test_this(assert_exp_eq, sushi_test_project: Project):

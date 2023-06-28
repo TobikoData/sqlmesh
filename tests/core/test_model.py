@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 from pathlib import Path
 from unittest.mock import patch
@@ -193,6 +194,27 @@ def test_model_validation_union_query():
     model = load_model(expressions)
     with pytest.raises(ConfigError, match=r"Found duplicate outer select name 'a'"):
         model.validate_definition()
+
+
+def test_model_qualification():
+    logger = logging.getLogger("sqlmesh.core.renderer")
+    with patch.object(logger, "error") as mock_logger:
+        expressions = d.parse(
+            """
+            MODEL (
+                name db.table,
+                kind FULL,
+            );
+
+            SELECT a
+            """
+        )
+
+        model = load_model(expressions)
+        model.render_query(optimize=True)
+        assert (
+            mock_logger.call_args[0][0] == "%s for '%s', the column may not exist or is ambiguous"
+        )
 
 
 @pytest.mark.parametrize(
@@ -877,10 +899,8 @@ def test_render_query(assert_exp_eq):
           y AS y
         FROM x AS x
         WHERE
-          y <= '2020-10-28'
-          AND y <= DATE_STR_TO_DATE('2020-10-28')
-          AND y >= '2020-10-28'
-          AND y >= DATE_STR_TO_DATE('2020-10-28')
+          y BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
+          AND y BETWEEN '2020-10-28' AND '2020-10-28'
         """,
     )
     assert_exp_eq(
@@ -895,10 +915,8 @@ def test_render_query(assert_exp_eq):
             y AS y
           FROM x AS x
           WHERE
-            y <= '2020-10-28'
-            AND y <= DATE_STR_TO_DATE('2020-10-28')
-            AND y >= '2020-10-28'
-            AND y >= DATE_STR_TO_DATE('2020-10-28')
+            y BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
+            AND y BETWEEN '2020-10-28' AND '2020-10-28'
         ) AS _subquery
         WHERE
           y BETWEEN TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00') AND TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
@@ -1190,7 +1208,7 @@ def test_parse(assert_exp_eq):
         ds AS ds
       FROM x AS x
       WHERE
-        ds <= '1970-01-01' AND ds >= '1970-01-01'
+        ds BETWEEN '1970-01-01' AND '1970-01-01'
     """,
     )
 
