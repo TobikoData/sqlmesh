@@ -3,6 +3,8 @@ from pathlib import Path
 
 import agate
 import pytest
+from dbt.adapters.base import BaseRelation
+from dbt.contracts.relation import Policy
 from dbt.exceptions import CompilationError
 from sqlglot import exp, parse_one
 
@@ -15,6 +17,7 @@ from sqlmesh.core.model import (
     SqlModel,
     ViewKind,
 )
+from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
     ColumnConfig,
     column_descriptions_to_sqlmesh,
@@ -507,3 +510,35 @@ def test_partition_by(sushi_test_project: Project):
 
     model_config.partition_by = {"field": "ds", "data_type": "date", "granularity": "day"}
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+
+
+def test_relation_info_to_relation():
+    assert _relation_info_to_relation(
+        {"quote_policy": {}},
+        BaseRelation,
+        Policy(database=True, schema=True, identifier=True),
+    ).quote_policy == Policy(database=True, schema=True, identifier=True)
+
+    assert _relation_info_to_relation(
+        {"quote_policy": {"database": None, "schema": None, "identifier": None}},
+        BaseRelation,
+        Policy(database=True, schema=True, identifier=True),
+    ).quote_policy == Policy(database=True, schema=True, identifier=True)
+
+    assert _relation_info_to_relation(
+        {"quote_policy": {"database": False, "schema": None, "identifier": None}},
+        BaseRelation,
+        Policy(database=True, schema=True, identifier=True),
+    ).quote_policy == Policy(database=False, schema=True, identifier=True)
+
+    assert _relation_info_to_relation(
+        {"quote_policy": {"database": False}},
+        BaseRelation,
+        Policy(database=True, schema=True, identifier=True),
+    ).quote_policy == Policy(database=False, schema=True, identifier=True)
+
+    assert _relation_info_to_relation(
+        {"quote_policy": {"database": False, "schema": False, "identifier": False}},
+        BaseRelation,
+        Policy(database=True, schema=True, identifier=True),
+    ).quote_policy == Policy(database=False, schema=False, identifier=False)

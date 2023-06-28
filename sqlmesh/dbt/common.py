@@ -61,9 +61,9 @@ class DbtConfig(BaseConfig):
 
 
 class QuotingConfig(DbtConfig):
-    database: bool = True
-    schema_: bool = Field(True, alias="schema")
-    identifier: bool = True
+    database: t.Optional[bool] = None
+    schema_: t.Optional[bool] = Field(default=None, alias="schema")
+    identifier: t.Optional[bool] = None
 
     @validator("database", "schema_", "identifier", pre=True)
     def _validate_bool(cls, v: str) -> bool:
