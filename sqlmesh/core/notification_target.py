@@ -21,7 +21,7 @@ else:
 if t.TYPE_CHECKING:
     from slack_sdk import WebClient, WebhookClient
 
-NOTIFICATION_FUNCTIONS: dict[NotificationEvent, str] = {}
+NOTIFICATION_FUNCTIONS: t.Dict[NotificationEvent, str] = {}
 
 
 class NotificationStatus(str, Enum):
@@ -128,9 +128,10 @@ class NotificationTargetManager:
 
     def __init__(
         self,
-        notification_targets: dict[NotificationEvent, set[BaseNotificationTarget]] | None = None,
-        user_notification_targets: dict[str, set[BaseNotificationTarget]] | None = None,
-        username: str = "",
+        notification_targets: t.Dict[NotificationEvent, t.Set[BaseNotificationTarget]]
+        | None = None,
+        user_notification_targets: t.Dict[str, t.Set[BaseNotificationTarget]] | None = None,
+        username: str | None = None,
     ) -> None:
         self.notification_targets = notification_targets or {}
         self.user_notification_targets = user_notification_targets or {}

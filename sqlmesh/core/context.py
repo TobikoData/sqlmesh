@@ -386,10 +386,10 @@ class Context(BaseContext):
             skip_janitor: Whether to skip the janitor task.
         """
         environment = environment or c.PROD
+        self.notification_target_manager.notify(
+            NotificationEvent.RUN_START, environment=environment
+        )
         try:
-            self.notification_target_manager.notify(
-                NotificationEvent.RUN_START, environment=environment
-            )
             self.scheduler(environment=environment).run(environment, start, end, latest)
         except Exception as e:
             self.notification_target_manager.notify(NotificationEvent.RUN_FAILURE, e)
@@ -763,10 +763,10 @@ class Context(BaseContext):
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
+        self.notification_target_manager.notify(
+            NotificationEvent.APPLY_START, environment=plan.environment.name
+        )
         try:
-            self.notification_target_manager.notify(
-                NotificationEvent.APPLY_START, environment=plan.environment.name
-            )
             self._scheduler.create_plan_evaluator(self).evaluate(plan)
         except Exception as e:
             self.notification_target_manager.notify(NotificationEvent.APPLY_FAILURE, e)
