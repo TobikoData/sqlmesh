@@ -306,7 +306,7 @@ function TableDiffStats({
               <div className="rounded-xl overflow-hidden px-3 py-6 bg-primary-10">
                 <div className="flex justify-between">
                   <h3 className="text-neutral-500 dark:text-neutral-300 text-sm font-bold">
-                    Columns Change
+                    Column Changes
                   </h3>
                   <small className="inline-block px-2 py-0.5 bg-neutral-10 rounded-full">
                     {columns.all.length}
