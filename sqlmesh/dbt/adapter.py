@@ -4,6 +4,7 @@ import abc
 import typing as t
 
 import pandas as pd
+from dbt.contracts.relation import Policy
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
@@ -143,19 +144,17 @@ class RuntimeAdapter(BaseAdapter):
         engine_adapter: EngineAdapter,
         jinja_macros: JinjaMacroRegistry,
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
+        relation_type: t.Optional[t.Type[BaseRelation]] = None,
+        quote_policy: t.Optional[Policy] = None,
     ):
+        from dbt.adapters.base import BaseRelation
         from dbt.adapters.base.relation import Policy
 
         super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
 
         self.engine_adapter = engine_adapter
-        # All engines quote by default except Snowflake
-        quote_param = engine_adapter.DIALECT != "snowflake"
-        self.quote_policy = Policy(
-            database=quote_param,
-            schema=quote_param,
-            identifier=quote_param,
-        )
+        self.relation_type = relation_type or BaseRelation
+        self.quote_policy = quote_policy or Policy()
 
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str
@@ -171,16 +170,13 @@ class RuntimeAdapter(BaseAdapter):
         return seq_get(matching_relations, 0)
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        from dbt.adapters.base import BaseRelation
-
-        reference_relation = BaseRelation.create(
+        reference_relation = self.relation_type.create(
             database=database,
             schema=schema,
         )
         return self.list_relations_without_caching(reference_relation)
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
-        from dbt.adapters.base import BaseRelation
         from dbt.contracts.relation import RelationType
 
         assert schema_relation.schema is not None
@@ -188,7 +184,7 @@ class RuntimeAdapter(BaseAdapter):
             schema_name=schema_relation.schema, catalog_name=schema_relation.database
         )
         relations = [
-            BaseRelation.create(
+            self.relation_type.create(
                 database=do.catalog,
                 schema=do.schema_name,
                 identifier=do.name,

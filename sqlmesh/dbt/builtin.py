@@ -4,6 +4,7 @@ import json
 import os
 import typing as t
 from ast import literal_eval
+from dataclasses import asdict
 
 import agate
 import jinja2
@@ -43,9 +44,11 @@ class Api:
             config = TargetConfig.load(target)
             self.Relation = config.relation_class
             self.Column = config.column_class
+            self.quote_policy = config.quote_policy
         else:
             self.Relation = BaseRelation
             self.Column = Column
+            self.quote_policy = Policy()
 
 
 class Flags:
@@ -166,7 +169,7 @@ def generate_ref(refs: t.Dict[str, t.Any], api: Api) -> t.Callable:
         if relation_info is None:
             return None
 
-        return api.Relation.create(**relation_info)
+        return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
 
     return ref
 
@@ -177,13 +180,9 @@ def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
         if relation_info is None:
             return None
 
-        return api.Relation.create(**relation_info)
+        return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
 
     return source
-
-
-def quote_policy() -> Policy:
-    return Policy(database=False, schema=False, identifier=False)
 
 
 def return_val(val: t.Any) -> None:
@@ -323,6 +322,8 @@ def create_builtin_globals(
             engine_adapter,
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
+            relation_type=api.Relation,
+            quote_policy=api.quote_policy,
         )
         builtin_globals.update({"log": log, "print": log})
     else:
@@ -351,3 +352,17 @@ def create_builtin_globals(
 
 def create_builtin_filters() -> t.Dict[str, t.Callable]:
     return BUILTIN_FILTERS
+
+
+def _relation_info_to_relation(
+    relation_info: t.Dict[str, t.Any],
+    relation_type: t.Type[BaseRelation],
+    target_quote_policy: Policy,
+) -> BaseRelation:
+    quote_policy = Policy(
+        **{
+            **asdict(target_quote_policy),
+            **{k: v for k, v in relation_info.pop("quote_policy", {}).items() if v is not None},
+        }
+    )
+    return relation_type.create(**relation_info, quote_policy=quote_policy)
