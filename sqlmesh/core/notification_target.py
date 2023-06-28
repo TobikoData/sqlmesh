@@ -114,6 +114,10 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         """Notify in the case of an audit failure."""
         self.send(NotificationStatus.FAILURE, str(audit_error))
 
+    @property
+    def is_configured(self) -> bool:
+        return True
+
 
 class NotificationTargetManager:
     """Wrapper around a list of notification targets.
@@ -206,6 +210,10 @@ class SlackWebhookNotificationTarget(BaseNotificationTarget):
     def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
         self.client.send(text=msg)
 
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.url)
+
 
 class SlackApiNotificationTarget(BaseNotificationTarget):
     token: t.Optional[str] = None
@@ -231,6 +239,10 @@ class SlackApiNotificationTarget(BaseNotificationTarget):
             raise ConfigError("Missing Slack channel for notification")
 
         self.client.chat_postMessage(channel=self.channel, text=msg)
+
+    @property
+    def is_configured(self) -> bool:
+        return all((self.token, self.channel))
 
 
 class BasicSMTPNotificationTarget(BaseNotificationTarget):
@@ -262,3 +274,7 @@ class BasicSMTPNotificationTarget(BaseNotificationTarget):
             if self.user and self.password:
                 smtp.login(user=self.user, password=self.password.get_secret_value())
             smtp.send_message(email)
+
+    @property
+    def is_configured(self) -> bool:
+        return all((self.host, self.user, self.password, self.sender))

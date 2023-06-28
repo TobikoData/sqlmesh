@@ -1161,10 +1161,14 @@ class Context(BaseContext):
     def _register_notification_targets(self) -> None:
         event_notifications = collections.defaultdict(set)
         for target in self.notification_targets:
-            for event in target.notify_on:
-                event_notifications[event].add(target)
+            if target.is_configured:
+                for event in target.notify_on:
+                    event_notifications[event].add(target)
         user_notification_targets = {
-            user.username: set(user.notification_targets) for user in self.users
+            user.username: set(
+                target for target in user.notification_targets if target.is_configured
+            )
+            for user in self.users
         }
         self.notification_target_manager = NotificationTargetManager(
             event_notifications, user_notification_targets, username=self.config.username
