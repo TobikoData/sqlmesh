@@ -234,14 +234,14 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         from google.cloud import bigquery
 
-        table_name = ".".join([self.client.project, exp.to_table(table).sql(dialect=self.dialect)])
-        return bigquery.Table(table_ref=table_name, schema=self.__get_bq_schema(columns_to_type))
+        table_ = exp.to_table(table, dialect=self.dialect).copy()
 
-    @classmethod
-    def __convert_bq_table_to_table(cls, bq_table: bigquery.Table) -> exp.Table:
-        return exp.to_table(
-            ".".join([bq_table.project, bq_table.dataset_id, bq_table.table_id]),
-            dialect=cls.DIALECT,
+        if not table_.catalog:
+            table_.set("catalog", self.client.project)
+
+        return bigquery.Table(
+            table_ref=self._table_name(table_),
+            schema=self.__get_bq_schema(columns_to_type),
         )
 
     def _insert_overwrite_by_condition(
@@ -260,7 +260,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         target table. This temporary table is deleted after the merge is complete or after it's expiration time has
         passed.
         """
-        table = exp.to_table(table_name)
+        table = exp.to_table(table_name, dialect=self.dialect)
         query: t.Union[Query, exp.Select]
         temp_table: t.Optional[exp.Table] = None
         df = self.try_get_pandas_df(query_or_df)
@@ -276,7 +276,11 @@ class BigQueryEngineAdapter(EngineAdapter):
             if result.errors:
                 raise SQLMeshError(result.errors)
 
-            temp_table = self.__convert_bq_table_to_table(temp_bq_table)
+            temp_table = exp.table_(
+                temp_bq_table.table_id,
+                db=temp_bq_table.dataset_id,
+                catalog=temp_bq_table.project,
+            )
             query = exp.select(*columns_to_types).from_(temp_table)
         else:
             query = t.cast("Query", query_or_df)
@@ -323,11 +327,11 @@ class BigQueryEngineAdapter(EngineAdapter):
 
         Raises: `google.cloud.exceptions.NotFound` if the table does not exist.
         """
-        if isinstance(table_name, exp.Table):
-            # the api doesn't support backticks, so we can't call exp.table_name or sql
-            table_name = ".".join(part.name for part in table_name.parts)
+        return self.client.get_table(self._table_name(table_name))
 
-        return self.client.get_table(table_name)
+    def _table_name(self, table_name: TableName) -> str:
+        # the api doesn't support backticks, so we can't call exp.table_name or sql
+        return ".".join(part.name for part in exp.to_table(table_name, dialect=self.dialect).parts)
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         self.execute(query)
