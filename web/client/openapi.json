@@ -1039,9 +1039,9 @@
       },
       "IntervalUnit": {
         "title": "IntervalUnit",
-        "enum": ["day", "hour", "minute"],
+        "enum": ["year", "month", "day", "hour", "minute"],
         "type": "string",
-        "description": "IntervalUnit is the inferred granularity of an incremental model.\n\nIntervalUnit can be one of 4 types, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a model. The minimum time delta between a sample set of dates\nis used to determine which unit a model's schedule is."
+        "description": "IntervalUnit is the inferred granularity of an incremental model.\n\nIntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a model. The minimum time delta between a sample set of dates\nis used to determine which unit a model's schedule is."
       },
       "LineageColumn": {
         "title": "LineageColumn",
@@ -1112,6 +1112,7 @@
           "tags": { "title": "Tags", "type": "string" },
           "grain": { "title": "Grain", "type": "string" },
           "partitioned_by": { "title": "Partitioned By", "type": "string" },
+          "clustered_by": { "title": "Clustered By", "type": "string" },
           "lookback": { "title": "Lookback", "type": "integer" },
           "cron_prev": {
             "title": "Cron Prev",
