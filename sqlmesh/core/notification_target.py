@@ -123,16 +123,40 @@ class NotificationTargetManager:
     """
 
     def __init__(
-        self, notification_targets: dict[NotificationEvent, set[BaseNotificationTarget]]
+        self,
+        notification_targets: dict[NotificationEvent, set[BaseNotificationTarget]] | None = None,
+        user_notification_targets: dict[str, set[BaseNotificationTarget]] | None = None,
+        username: str = "",
     ) -> None:
-        self.notification_targets = notification_targets
+        self.notification_targets = notification_targets or {}
+        self.user_notification_targets = user_notification_targets or {}
+        self.username = username
 
     def notify(self, event: NotificationEvent, *args: t.Any, **kwargs: t.Any) -> None:
         """Call the 'notify_`event`' function of all notification targets that care about the event."""
-        for notification_target in self.notification_targets[event]:
-            func_name = NOTIFICATION_FUNCTIONS[event]
-            notify_func = getattr(notification_target, func_name)
-            notify_func(*args, **kwargs)
+        if self.username:
+            self.notify_user(event, self.username, *args, **kwargs)
+        else:
+            for notification_target in self.notification_targets.get(event, set()):
+                notify_func = self._get_notification_function(notification_target, event)
+                notify_func(*args, **kwargs)
+
+    def notify_user(
+        self, event: NotificationEvent, username: str, *args: t.Any, **kwargs: t.Any
+    ) -> None:
+        """Call the 'notify_`event`' function of the user's notification targets that care about the event."""
+        notification_targets = self.user_notification_targets.get(self.username, set())
+        for notification_target in notification_targets:
+            if event in notification_target.notify_on:
+                notify_func = self._get_notification_function(notification_target, event)
+                notify_func(*args, **kwargs)
+
+    def _get_notification_function(
+        self, notification_target: BaseNotificationTarget, event: NotificationEvent
+    ) -> t.Callable:
+        """Lookup the registered function for a notification event"""
+        func_name = NOTIFICATION_FUNCTIONS[event]
+        return getattr(notification_target, func_name)
 
 
 class ConsoleNotificationTarget(BaseNotificationTarget):

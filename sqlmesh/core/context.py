@@ -36,7 +36,6 @@ import abc
 import collections
 import contextlib
 import gc
-import itertools
 import typing as t
 import unittest.result
 from io import StringIO
@@ -1161,9 +1160,12 @@ class Context(BaseContext):
 
     def _register_notification_targets(self) -> None:
         event_notifications = collections.defaultdict(set)
-        for target in itertools.chain(
-            self.notification_targets, *(user.notification_targets for user in self.users)
-        ):
+        for target in self.notification_targets:
             for event in target.notify_on:
                 event_notifications[event].add(target)
-        self.notification_target_manager = NotificationTargetManager(event_notifications)
+        user_notification_targets = {
+            user.username: set(user.notification_targets) for user in self.users
+        }
+        self.notification_target_manager = NotificationTargetManager(
+            event_notifications, user_notification_targets, username=self.config.username
+        )

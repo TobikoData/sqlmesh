@@ -69,8 +69,8 @@ class Scheduler:
         self.state_sync = state_sync
         self.max_workers = max_workers
         self.console: Console = console or get_console()
-        self.notification_target_manager = notification_target_manager or NotificationTargetManager(
-            {}
+        self.notification_target_manager = (
+            notification_target_manager or NotificationTargetManager()
         )
 
     def batches(

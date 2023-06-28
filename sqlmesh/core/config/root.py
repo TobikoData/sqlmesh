@@ -58,6 +58,7 @@ class Config(BaseConfig):
     pinned_environments: t.Set[str] = set()
     loader: t.Type[Loader] = SqlMeshLoader
     env_vars: t.Dict[str, str] = {}
+    username: str = ""
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
