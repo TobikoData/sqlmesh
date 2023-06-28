@@ -21,8 +21,8 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils import major_minor
-from sqlmesh.utils.date import TimeLike, now, to_datetime
+from sqlmesh.utils import major_minor, random_id
+from sqlmesh.utils.date import TimeLike, now, to_datetime, now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -108,7 +108,7 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_snapshot_intervals(
+    def get_snapshot_intervals_by_name_version(
         self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
     ) -> t.List[SnapshotIntervals]:
         """Fetch intervals for given snapshots as well as for snapshots that share a version with the given ones.
@@ -412,3 +412,52 @@ class StateSync(StateReader, abc.ABC):
         sqlglot_version: str = SQLGLOT_VERSION,
     ) -> None:
         """Update the schema versions to the latest running versions."""
+
+
+class IntervalRow(PydanticModel):
+    id: str = random_id()
+    created_ts: int = now_timestamp()
+    name: str
+    identifier: str
+    version: str
+    start_ts: int
+    end_ts: int
+    is_dev: bool
+    is_removed: bool
+    is_compacted: bool
+
+    @classmethod
+    def from_snapshot(
+        cls,
+        snapshot: t.Union[Snapshot, SnapshotIntervals],
+        start_ts: int,
+        end_ts: int,
+        *,
+        is_dev: bool = False,
+        is_removed: bool = False,
+        is_compacted: bool = False
+    ) -> IntervalRow:
+        return cls(
+            name=snapshot.name,
+            identifier=snapshot.identifier,
+            version=snapshot.version,
+            start_ts=start_ts,
+            end_ts=end_ts,
+            is_dev=is_dev,
+            is_removed=is_removed,
+            is_compacted=is_compacted,
+        )
+
+    @property
+    def snapshot_id(self) -> SnapshotId:
+        return SnapshotId(name=self.name, identifier=self.identifier)
+
+    @property
+    def name_id_version_key(self) -> t.Tuple[str, str, str]:
+        return (self.name, self.identifier, self.version)
+
+    def __hash__(self):
+        return self.id
+
+    def __eq__(self, other: IntervalRow):
+        return self.id == other.id

@@ -104,7 +104,7 @@ class HttpStateReader(StateReader):
         """
         return self._client.models_exist(names, exclude_external=exclude_external)
 
-    def get_snapshot_intervals(
+    def get_snapshot_intervals_by_name_version(
         self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
     ) -> t.List[SnapshotIntervals]:
         """Fetch intervals for given snapshots as well as for snapshots that share a version with the given ones.

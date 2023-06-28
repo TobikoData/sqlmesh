@@ -120,7 +120,7 @@ def test_create_plan_dag_spec(
     state_sync_mock = mocker.Mock()
     state_sync_mock.get_snapshots.return_value = {}
     state_sync_mock.get_environment.return_value = old_environment
-    state_sync_mock.get_snapshot_intervals.return_value = []
+    state_sync_mock.get_snapshot_intervals_by_name_version.return_value = []
 
     plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(
@@ -344,7 +344,7 @@ def test_create_plan_dag_spec_unbounded_end(
         unrelated_snapshot.snapshot_id: unrelated_snapshot,
     }
     state_sync_mock.get_environment.return_value = None
-    state_sync_mock.get_snapshot_intervals.return_value = []
+    state_sync_mock.get_snapshot_intervals_by_name_version.return_value = []
 
     create_plan_dag_spec(plan_request, state_sync_mock)
 

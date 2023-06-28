@@ -200,17 +200,17 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
     state_sync.push_snapshots([snapshot])
 
     state_sync.add_interval(snapshot, "2020-01-01", "20200101")
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == [
+    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-02")),
     ]
 
     state_sync.add_interval(snapshot, "20200101", to_datetime("2020-01-04"))
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == [
+    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
     ]
 
     state_sync.add_interval(snapshot, to_datetime("2020-01-05"), "2020-01-10")
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == [
+    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
@@ -241,7 +241,7 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
 
     state_sync.remove_interval([snapshot_a], "2020-01-15", "2020-01-17")
 
-    intervals = state_sync.get_snapshot_intervals([snapshot_a, snapshot_b])
+    intervals = state_sync.get_snapshot_intervals_by_name_version([snapshot_a, snapshot_b])
     intervals_by_snapshot_id = {i.snapshot_id: i for i in intervals}
 
     assert intervals_by_snapshot_id[snapshot_a.snapshot_id].intervals == [
@@ -279,7 +279,7 @@ def test_get_snapshot_intervals(
     snapshot_b.change_category = SnapshotChangeCategory.BREAKING
     state_sync.push_snapshots([snapshot_b])
 
-    assert state_sync.get_snapshot_intervals([snapshot_b])[0].intervals == [
+    assert state_sync.get_snapshot_intervals_by_name_version([snapshot_b])[0].intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-02")),
     ]
 
@@ -308,14 +308,14 @@ def test_compact_intervals(state_sync: EngineAdapterStateSync, make_snapshot: t.
         (to_timestamp("2020-01-12"), to_timestamp("2020-01-14")),
     ]
 
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == expected_intervals
+    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == expected_intervals
 
     state_sync.compact_intervals()
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == expected_intervals
+    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == expected_intervals
 
     # Make sure compaction is idempotent.
     state_sync.compact_intervals()
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == expected_intervals
+    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == expected_intervals
 
 
 def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -995,7 +995,7 @@ def test_merged_intervals_by_id(
     state_sync.push_snapshots([snapshot_a_forward_only])
     state_sync.add_interval(snapshot_a_forward_only, "2022-01-20", "2022-01-25")
     by_id = state_sync._snapshot_cache.get_snapshots_merged_intervals_by_id(
-        state_sync.get_snapshot_intervals(None)
+        state_sync.get_snapshot_intervals_by_name_version(None)
     )
     assert [x.snapshot_intervals for x in by_id.values()] == [
         make_snapshot_intervals(

@@ -96,7 +96,7 @@ def get_snapshot_intervals() -> Response:
         snapshot_name_versions = _snapshot_name_versions_from_request()
         return _success(
             common.SnapshotIntervalsResponse(
-                snapshot_intervals=state_sync.get_snapshot_intervals(snapshot_name_versions)
+                snapshot_intervals=state_sync.get_snapshot_intervals_by_name_version(snapshot_name_versions)
             )
         )
 

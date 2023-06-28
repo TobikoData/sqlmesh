@@ -15,8 +15,10 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotNameVersionLike,
     SnapshotTableInfo,
+    SnapshotIntervals,
 )
-from sqlmesh.core.state_sync.base import StateSync
+from sqlmesh.core.snapshot.definition import remove_interval, merge_intervals, Intervals
+from sqlmesh.core.state_sync.base import StateSync, IntervalRow
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -45,10 +47,9 @@ class CommonStateSyncMixin(StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
         hydrate_seeds: bool = False,
-        hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         return self._get_snapshots(
-            snapshot_ids, hydrate_seeds=hydrate_seeds, hydrate_intervals=hydrate_intervals
+            snapshot_ids, hydrate_seeds=hydrate_seeds
         )
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
@@ -225,9 +226,7 @@ class CommonStateSyncMixin(StateSync):
             t for t in target_snapshots if t.name in changed_version_prev_snapshots_by_name
         ]
 
-        prev_snapshots = self.get_snapshots(
-            changed_version_prev_snapshots_by_name.values(), hydrate_intervals=True
-        ).values()
+        prev_snapshots = self.get_snapshots(changed_version_prev_snapshots_by_name.values()).values()
         target_snapshots_by_name = {s.name: s for s in changed_version_target_snapshots}
 
         for prev_snapshot in prev_snapshots:
@@ -270,7 +269,6 @@ class CommonStateSyncMixin(StateSync):
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
         hydrate_seeds: bool = False,
-        hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots.
 
@@ -278,7 +276,6 @@ class CommonStateSyncMixin(StateSync):
             snapshot_ids: The collection of IDs of snapshots to fetch
             lock_for_update: Lock the snapshot rows for future update
             hydrate_seeds: Whether to hydrate seed snapshots with the content.
-            hydrate_intervals: Whether to hydrate snapshots with the intervals.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
@@ -315,3 +312,74 @@ class CommonStateSyncMixin(StateSync):
         Returns:
             The target environment.
         """
+
+
+def merge_snapshot_with_intervals_by_name_version(
+    snapshots: t.Iterable[Snapshot],
+    intervals: t.Iterable[SnapshotIntervals]
+) -> t.Dict[SnapshotId, Snapshot]:
+    """Merges snapshots with intervals.
+
+    Args:
+        snapshots: The collection of snapshots.
+        intervals: The collection of intervals.
+
+    Returns:
+        A dictionary of snapshot ids to snapshots for ones that could be found.
+    """
+    interval_mapping: t.Dict[t.Tuple[str, str], t.List[SnapshotIntervals]] = defaultdict(list)
+    intervals = intervals
+    for interval in intervals:
+        interval_mapping[(interval.name, interval.version)].append(interval)
+    result = {}
+    for snapshot in snapshots:
+        assert snapshot.version
+        snapshot_intervals = interval_mapping.get((snapshot.name, snapshot.version), [])
+        for interval in snapshot_intervals:
+            snapshot.merge_intervals(interval)
+        result[snapshot.snapshot_id] = snapshot
+    return result
+
+
+def merge_snapshot_with_intervals_by_id(
+    snapshots: t.Iterable[Snapshot],
+    intervals: t.Iterable[SnapshotIntervals]
+) -> t.Dict[SnapshotId, Snapshot]:
+    intervals_by_snapshot_id = {x.snapshot_id: x for x in intervals}
+    result = {}
+    for snapshot in snapshots:
+        if snapshot.snapshot_id in intervals_by_snapshot_id:
+            snapshot.merge_intervals(intervals_by_snapshot_id[snapshot.snapshot_id])
+        result[snapshot.snapshot_id] = snapshot
+    return result
+
+
+def interval_rows_to_snapshot_intervals(
+    interval_rows: t.Iterable[IntervalRow],
+) -> t.List[SnapshotIntervals]:
+    intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+    dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+    for row in interval_rows:
+        intervals_key = row.name_id_version_key
+        target_intervals = intervals if not row.is_dev else dev_intervals
+        if row.is_removed:
+            target_intervals[intervals_key] = remove_interval(
+                target_intervals[intervals_key], row.start_ts, row.end_ts
+            )
+        else:
+            target_intervals[intervals_key] = merge_intervals(
+                [*target_intervals[intervals_key], (row.start_ts, row.end_ts)]
+            )
+
+    snapshot_intervals = []
+    for name, identifier, version in {**intervals, **dev_intervals}:
+        snapshot_intervals.append(
+            SnapshotIntervals(
+                name=name,
+                identifier=identifier,
+                version=version,
+                intervals=intervals.get((name, identifier, version), []),
+                dev_intervals=dev_intervals.get((name, identifier, version), []),
+            )
+        )
+    return snapshot_intervals
