@@ -5,6 +5,7 @@ import sys
 import typing as t
 
 from dbt.adapters.base import BaseRelation, Column
+from dbt.contracts.relation import Policy
 from pydantic import Field, root_validator, validator
 
 from sqlmesh.core.config.connection import (
@@ -19,7 +20,7 @@ from sqlmesh.core.config.connection import (
     SnowflakeConnectionConfig,
 )
 from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKeyKind
-from sqlmesh.dbt.common import DbtConfig, QuotingConfig
+from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 
@@ -92,8 +93,8 @@ class TargetConfig(abc.ABC, DbtConfig):
         return AttributeDict(fields)
 
     @property
-    def quoting(self) -> QuotingConfig:
-        return QuotingConfig()
+    def quote_policy(self) -> Policy:
+        return Policy()
 
     @property
     def extra(self) -> t.Set[str]:
@@ -193,8 +194,8 @@ class SnowflakeConfig(TargetConfig):
         )
 
     @property
-    def quoting(self) -> QuotingConfig:
-        return QuotingConfig(database=False, schema=False, identifier=False)
+    def quote_policy(self) -> Policy:
+        return Policy(database=False, schema=False, identifier=False)
 
 
 class PostgresConfig(TargetConfig):
