@@ -21,6 +21,7 @@ def test_format_model_expressions():
     , 1);
 
     SELECT
+    *,
     CAST(a AS int),
     CAST(b AS int) AS b,
     CAST(c + 1 AS int) AS c,
@@ -50,6 +51,7 @@ def test_format_model_expressions():
 @DEF(x, 1);
 
 SELECT
+  *,
   a::INT AS a,
   b::INT AS b,
   CAST(c + 1 AS INT) AS c,

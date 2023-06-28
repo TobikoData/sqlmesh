@@ -379,9 +379,8 @@ def format_model_expressions(
         comments = expression.comments
         expression.comments = None
 
-        if not isinstance(expression, exp.Alias):
-            if expression.name:
-                expression = expression.replace(exp.alias_(expression, expression.name))
+        if not isinstance(expression, exp.Alias) and expression.output_name not in ("", "*"):
+            expression = expression.replace(exp.alias_(expression, expression.output_name))
 
         column = column or expression
         expression = expression.this
