@@ -392,7 +392,7 @@ class Context(BaseContext):
             )
             self.scheduler(environment=environment).run(environment, start, end, latest)
         except Exception as e:
-            self.notification_target_manager.notify(NotificationEvent.RUN_FAILURE)
+            self.notification_target_manager.notify(NotificationEvent.RUN_FAILURE, e)
             raise e
 
         if not skip_janitor and environment.lower() == c.PROD:
@@ -769,7 +769,7 @@ class Context(BaseContext):
             )
             self._scheduler.create_plan_evaluator(self).evaluate(plan)
         except Exception as e:
-            self.notification_target_manager.notify(NotificationEvent.APPLY_FAILURE)
+            self.notification_target_manager.notify(NotificationEvent.APPLY_FAILURE, e)
             raise e
 
     def invalidate_environment(self, name: str) -> None:

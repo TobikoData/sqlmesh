@@ -49,5 +49,5 @@ class User(PydanticModel):
             if isinstance(target, BasicSMTPNotificationTarget) and target.recipients != {
                 values["email"]
             }:
-                raise ValueError("Receipient emails does not match user email")
+                raise ValueError("Receipient emails do not match user email")
         return v
