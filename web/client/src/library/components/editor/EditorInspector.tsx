@@ -1,7 +1,7 @@
 import { isCancelledError } from '@tanstack/react-query'
 import { type Table } from 'apache-arrow'
 import clsx from 'clsx'
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   type EvaluateInputStart,
   type RenderInputStart,
@@ -22,8 +22,15 @@ import { Tab } from '@headlessui/react'
 import Banner from '@components/banner/Banner'
 import Documentation from '@components/documentation/Documentation'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { useApiEvaluate, useApiFetchdf, useApiRender } from '@api/index'
+import {
+  useApiEvaluate,
+  useApiFetchdf,
+  useApiRender,
+  useApiTableDiff,
+} from '@api/index'
 import { EnumErrorKey } from '~/library/pages/ide/context'
+import TabList from '@components/tab/Tab'
+import Selector from '@components/selector/Selector'
 
 interface FormModel {
   model?: string
@@ -39,6 +46,7 @@ interface FormArbitrarySql {
 
 const DAY = 24 * 60 * 60 * 1000
 const LIMIT = 1000
+const LIMIT_DIFF = 50
 
 export default function EditorInspector({
   tab,
@@ -55,14 +63,12 @@ export default function EditorInspector({
       )}
     >
       {tab.file.isSQLMeshModel ? (
-        <>
-          {model != null && (
-            <InspectorModel
-              tab={tab}
-              model={model}
-            />
-          )}
-        </>
+        model != null && (
+          <InspectorModel
+            tab={tab}
+            model={model}
+          />
+        )
       ) : (
         <InspectorSql tab={tab} />
       )}
@@ -77,98 +83,23 @@ function InspectorModel({
   tab: EditorTab
   model: ModelSQLMeshModel
 }): JSX.Element {
-  const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
-  const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
-
-  const [form, setForm] = useState<FormModel>({
-    start: toDateFormat(toDate(Date.now() - DAY)),
-    end: toDateFormat(new Date()),
-    latest: toDateFormat(toDate(Date.now() - DAY)),
-    limit: 1000,
-  })
-
-  const { refetch: getRender } = useApiRender(
-    Object.assign(form, { model: model.name }),
-  )
-  const debouncedGetRender = debounceAsync(getRender, 1000, true)
-
-  const { refetch: getEvaluate } = useApiEvaluate(
-    Object.assign(form, { model: model.name }),
-  )
-  const debouncedGetEvaluate = debounceAsync(getEvaluate, 1000, true)
-
-  const shouldEvaluate =
-    tab.file.isSQLMeshModel && Object.values(form).every(Boolean)
-
-  function evaluateModel(): void {
-    setPreviewQuery(undefined)
-    setPreviewConsole(undefined)
-    setPreviewTable(undefined)
-
-    debouncedGetRender({
-      throwOnError: true,
-    })
-      .then(({ data }) => {
-        setPreviewQuery(data?.sql)
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log(
-            'renderApiCommandsRenderPost',
-            'Request aborted by React Query',
-          )
-        } else {
-          setPreviewConsole([EnumErrorKey.RenderModel, error])
-        }
-      })
-
-    debouncedGetEvaluate({
-      throwOnError: true,
-    })
-      .then(({ data }) => {
-        setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log(
-            'fetchdfApiCommandsFetchdfPost',
-            'Request aborted by React Query',
-          )
-        } else {
-          setPreviewConsole([EnumErrorKey.EvaluateModel, error])
-        }
-      })
-  }
+  const environment = useStoreContext(s => s.environment)
+  const environments = useStoreContext(s => s.environments)
+  const list = Array.from(environments)
+    .filter(({ isSynchronized }) => isSynchronized)
+    .map(({ name }) => ({ text: name, value: name }))
 
   return (
     <Tab.Group>
-      <Tab.List className="w-full whitespace-nowrap px-2 pt-3 flex justigy-between items-center">
-        <Tab
-          className={({ selected }) =>
-            clsx(
-              'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
-              selected
-                ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                : 'bg-secondary-10 cursor-pointer',
-            )
-          }
-        >
-          Actions
-        </Tab>
-        <Tab
-          className={({ selected }) =>
-            clsx(
-              'inline-block text-sm font-medium px-3 py-1 mr-2 last-child:mr-0 rounded-md relative',
-              selected
-                ? 'bg-secondary-500 text-secondary-100 cursor-default'
-                : 'bg-secondary-10 cursor-pointer',
-            )
-          }
-        >
-          Docs
-        </Tab>
-      </Tab.List>
+      <TabList
+        list={
+          [
+            'Actions',
+            'Docs',
+            list.length > 1 && environment.isSynchronized && 'Diff',
+          ].filter(Boolean) as string[]
+        }
+      />
       <Tab.Panels className="h-full w-full overflow-hidden">
         <Tab.Panel
           unmount={false}
@@ -177,101 +108,10 @@ function InspectorModel({
             'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
           )}
         >
-          <InspectorForm>
-            <form>
-              {isFalse(shouldEvaluate) && (
-                <FormFieldset>
-                  <Banner variant={EnumVariant.Warning}>
-                    <Banner.Description className="w-full mr-2 text-sm">
-                      Please fill out all fields to <b>evaluate the model</b>.
-                    </Banner.Description>
-                  </Banner>
-                </FormFieldset>
-              )}
-              <fieldset className="my-3 px-3">
-                <Input
-                  className="w-full mx-0"
-                  size={EnumSize.sm}
-                  label="Start Date"
-                  placeholder="02/11/2023"
-                  value={form.start}
-                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    e.stopPropagation()
-
-                    setForm({
-                      ...form,
-                      start: e.target.value ?? '',
-                    })
-                  }}
-                />
-                <Input
-                  className="w-full mx-0"
-                  size={EnumSize.sm}
-                  label="End Date"
-                  placeholder="02/13/2023"
-                  value={form.end}
-                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    e.stopPropagation()
-
-                    setForm({
-                      ...form,
-                      end: e.target.value ?? '',
-                    })
-                  }}
-                />
-                <Input
-                  className="w-full mx-0"
-                  size={EnumSize.sm}
-                  label="Latest Date"
-                  placeholder="02/13/2023"
-                  value={form.latest}
-                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    e.stopPropagation()
-
-                    setForm({
-                      ...form,
-                      latest: e.target.value ?? '',
-                    })
-                  }}
-                />
-                <Input
-                  className="w-full mx-0"
-                  size={EnumSize.sm}
-                  type="number"
-                  label="Limit"
-                  placeholder="1000"
-                  value={form.limit}
-                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    e.stopPropagation()
-
-                    setForm({
-                      ...form,
-                      limit: e.target.valueAsNumber ?? LIMIT,
-                    })
-                  }}
-                />
-              </fieldset>
-            </form>
-          </InspectorForm>
-          <Divider />
-          <InspectorActions>
-            <div className="flex w-full justify-end">
-              {tab.file.isSQLMeshModel && (
-                <Button
-                  size={EnumSize.sm}
-                  variant={EnumVariant.Alternative}
-                  disabled={isFalse(shouldEvaluate)}
-                  onClick={e => {
-                    e.stopPropagation()
-
-                    evaluateModel()
-                  }}
-                >
-                  Evaluate
-                </Button>
-              )}
-            </div>
-          </InspectorActions>
+          <FormActionsModel
+            tab={tab}
+            model={model}
+          />
         </Tab.Panel>
         <Tab.Panel
           unmount={false}
@@ -287,12 +127,84 @@ function InspectorModel({
             withDescription={false}
           />
         </Tab.Panel>
+        {list.length > 1 && environment.isSynchronized && (
+          <Tab.Panel
+            unmount={false}
+            className={clsx(
+              'flex flex-col w-full h-full relative overflow-hidden',
+              'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+            )}
+          >
+            <FormDiffModel
+              tab={tab}
+              model={model}
+              list={list.filter(({ value }) => environment.name !== value)}
+              target={{ text: environment.name, value: environment.name }}
+            />
+          </Tab.Panel>
+        )}
       </Tab.Panels>
     </Tab.Group>
   )
 }
 
 function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
+  return (
+    <Tab.Group>
+      <TabList list={['Actions', 'Diff']} />
+      <Tab.Panels className="h-full w-full overflow-hidden">
+        <Tab.Panel
+          unmount={false}
+          className={clsx(
+            'flex flex-col w-full h-full relative overflow-hidden',
+            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+          )}
+        >
+          <FormActionsCustomSQL tab={tab} />
+        </Tab.Panel>
+        <Tab.Panel
+          unmount={false}
+          className={clsx(
+            'flex flex-col w-full h-full relative overflow-hidden',
+            'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
+          )}
+        >
+          <FormDiff tab={tab} />
+        </Tab.Panel>
+      </Tab.Panels>
+    </Tab.Group>
+  )
+}
+
+function FormFieldset({
+  children,
+}: {
+  children: React.ReactNode
+}): JSX.Element {
+  return <fieldset className="flex my-3">{children}</fieldset>
+}
+
+function InspectorForm({
+  children,
+}: {
+  children: React.ReactNode
+}): JSX.Element {
+  return (
+    <div className="flex w-full h-full py-1 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
+      {children}
+    </div>
+  )
+}
+
+function InspectorActions({
+  children,
+}: {
+  children: React.ReactNode
+}): JSX.Element {
+  return <div className="flex w-full py-1 px-1 justify-end">{children}</div>
+}
+
+function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
@@ -381,30 +293,455 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
   )
 }
 
-function FormFieldset({
-  children,
+function FormActionsModel({
+  tab,
+  model,
 }: {
-  children: React.ReactNode
+  tab: EditorTab
+  model: ModelSQLMeshModel
 }): JSX.Element {
-  return <fieldset className="flex my-3">{children}</fieldset>
-}
+  const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
+  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
+  const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
-function InspectorForm({
-  children,
-}: {
-  children: React.ReactNode
-}): JSX.Element {
+  const [form, setForm] = useState<FormModel>({
+    start: toDateFormat(toDate(Date.now() - DAY)),
+    end: toDateFormat(new Date()),
+    latest: toDateFormat(toDate(Date.now() - DAY)),
+    limit: 1000,
+  })
+
+  const { refetch: getRender } = useApiRender(
+    Object.assign(form, { model: model.name }),
+  )
+  const debouncedGetRender = debounceAsync(getRender, 1000, true)
+
+  const { refetch: getEvaluate } = useApiEvaluate(
+    Object.assign(form, { model: model.name }),
+  )
+  const debouncedGetEvaluate = debounceAsync(getEvaluate, 1000, true)
+
+  const shouldEvaluate =
+    tab.file.isSQLMeshModel && Object.values(form).every(Boolean)
+
+  function evaluateModel(): void {
+    setPreviewQuery(undefined)
+    setPreviewConsole(undefined)
+    setPreviewTable(undefined)
+
+    debouncedGetRender({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        setPreviewQuery(data?.sql)
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log(
+            'renderApiCommandsRenderPost',
+            'Request aborted by React Query',
+          )
+        } else {
+          setPreviewConsole([EnumErrorKey.RenderModel, error])
+        }
+      })
+
+    debouncedGetEvaluate({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log(
+            'fetchdfApiCommandsFetchdfPost',
+            'Request aborted by React Query',
+          )
+        } else {
+          setPreviewConsole([EnumErrorKey.EvaluateModel, error])
+        }
+      })
+  }
+
   return (
-    <div className="flex w-full h-full py-1 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
-      {children}
-    </div>
+    <>
+      <InspectorForm>
+        <form>
+          {isFalse(shouldEvaluate) && (
+            <FormFieldset>
+              <Banner variant={EnumVariant.Warning}>
+                <Banner.Description className="w-full mr-2 text-sm">
+                  Please fill out all fields to <b>evaluate the model</b>.
+                </Banner.Description>
+              </Banner>
+            </FormFieldset>
+          )}
+          <fieldset className="my-3 px-3">
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="Start Date"
+              placeholder="02/11/2023"
+              value={form.start}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setForm({
+                  ...form,
+                  start: e.target.value ?? '',
+                })
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="End Date"
+              placeholder="02/13/2023"
+              value={form.end}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setForm({
+                  ...form,
+                  end: e.target.value ?? '',
+                })
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="Latest Date"
+              placeholder="02/13/2023"
+              value={form.latest}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setForm({
+                  ...form,
+                  latest: e.target.value ?? '',
+                })
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              type="number"
+              label="Limit"
+              placeholder="1000"
+              value={form.limit}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setForm({
+                  ...form,
+                  limit: e.target.valueAsNumber ?? LIMIT,
+                })
+              }}
+            />
+          </fieldset>
+        </form>
+      </InspectorForm>
+      <Divider />
+      <InspectorActions>
+        <div className="flex w-full justify-end">
+          {tab.file.isSQLMeshModel && (
+            <Button
+              size={EnumSize.sm}
+              variant={EnumVariant.Alternative}
+              disabled={isFalse(shouldEvaluate)}
+              onClick={e => {
+                e.stopPropagation()
+
+                evaluateModel()
+              }}
+            >
+              Evaluate
+            </Button>
+          )}
+        </div>
+      </InspectorActions>
+    </>
   )
 }
 
-function InspectorActions({
-  children,
+function FormDiffModel({
+  tab,
+  model,
+  list,
+  target,
 }: {
-  children: React.ReactNode
+  tab: EditorTab
+  model: ModelSQLMeshModel
+  list: Array<{ text: string; value: string }>
+  target: { text: string; value: string }
 }): JSX.Element {
-  return <div className="flex w-full py-1 px-1 justify-end">{children}</div>
+  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
+  const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
+
+  const [selectedSource, setSelectedSource] = useState<{
+    text: string
+    value: string
+  }>(list[0]!)
+  const [limit, setLimit] = useState(LIMIT_DIFF)
+  const [on, setOn] = useState('')
+  const [where, setWhere] = useState('')
+
+  const { refetch: getDiff } = useApiTableDiff({
+    source: selectedSource.value,
+    target: target.value,
+    model_or_snapshot: model.name,
+    limit,
+    on,
+    where,
+  })
+  const debouncedGetDiff = debounceAsync(getDiff, 1000, true)
+
+  useEffect(() => {
+    setSelectedSource(list[0]!)
+  }, [list])
+
+  function getTableDiff(): void {
+    setPreviewConsole(undefined)
+    setPreviewDiff(undefined)
+
+    debouncedGetDiff({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        setPreviewDiff(data)
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log(
+            'renderApiCommandsRenderPost',
+            'Request aborted by React Query',
+          )
+        } else {
+          setPreviewConsole([EnumErrorKey.RenderModel, error])
+        }
+      })
+  }
+
+  const shouldEnableAction =
+    tab.file.isSQLMeshModel && [selectedSource, target, limit].every(Boolean)
+
+  return (
+    <>
+      <InspectorForm>
+        <form>
+          <fieldset className="my-3 px-3">
+            <Selector
+              list={list}
+              item={selectedSource}
+              onChange={setSelectedSource}
+              label="Source"
+              className="w-full mx-0"
+              disabled={list.length < 2}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              type="number"
+              label="Limit"
+              placeholder="1000"
+              value={limit}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setLimit(e.target.valueAsNumber ?? LIMIT_DIFF)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="ON"
+              placeholder="s.id = t.id"
+              value={on}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setOn(e.target.value)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="WHERE"
+              placeholder="id > 10"
+              value={where}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setWhere(e.target.value)
+              }}
+            />
+          </fieldset>
+        </form>
+      </InspectorForm>
+      <Divider />
+      <InspectorActions>
+        <div className="flex w-full justify-between items-center px-2">
+          <span className="text-xs text-neutral-400 font-medium">
+            Compare current model using
+            <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
+              {target.value}
+            </span>{' '}
+            as <b>Target</b> and{' '}
+            <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
+              {selectedSource.value}
+            </span>{' '}
+            as <b>Source</b>
+          </span>
+          {tab.file.isSQLMeshModel && (
+            <Button
+              className="ml-2"
+              size={EnumSize.sm}
+              variant={EnumVariant.Alternative}
+              disabled={isFalse(shouldEnableAction)}
+              onClick={e => {
+                e.stopPropagation()
+
+                getTableDiff()
+              }}
+            >
+              Get Diff
+            </Button>
+          )}
+        </div>
+      </InspectorActions>
+    </>
+  )
+}
+
+function FormDiff({ tab }: { tab: EditorTab }): JSX.Element {
+  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
+  const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
+
+  const [source, setSource] = useState('')
+  const [target, setTarget] = useState('')
+  const [limit, setLimit] = useState(LIMIT_DIFF)
+  const [on, setOn] = useState('')
+  const [where, setWhere] = useState('')
+
+  const { refetch: getDiff } = useApiTableDiff({
+    source,
+    target,
+    limit,
+    on,
+    where,
+  })
+  const debouncedGetDiff = debounceAsync(getDiff, 1000, true)
+
+  function getTableDiff(): void {
+    setPreviewConsole(undefined)
+    setPreviewDiff(undefined)
+
+    debouncedGetDiff({
+      throwOnError: true,
+    })
+      .then(({ data }) => {
+        setPreviewDiff(data)
+      })
+      .catch(error => {
+        if (isCancelledError(error)) {
+          console.log(
+            'renderApiCommandsRenderPost',
+            'Request aborted by React Query',
+          )
+        } else {
+          setPreviewConsole([EnumErrorKey.RenderModel, error])
+        }
+      })
+  }
+
+  const shouldEnableAction = [source, target, limit, on].every(Boolean)
+
+  return (
+    <>
+      <InspectorForm>
+        <form>
+          <fieldset className="my-3 px-3">
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="Source"
+              placeholder="exp.tst_model__dev"
+              value={source}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setSource(e.target.value)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="Target"
+              placeholder="exp.tst_snapshot__1353336088"
+              value={target}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setTarget(e.target.value)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              type="number"
+              label="Limit"
+              placeholder="1000"
+              value={limit}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setLimit(e.target.valueAsNumber ?? LIMIT_DIFF)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="ON"
+              placeholder="s.id = t.id"
+              value={on}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setOn(e.target.value)
+              }}
+            />
+            <Input
+              className="w-full mx-0"
+              size={EnumSize.sm}
+              label="WHERE (Optional)"
+              placeholder="id > 10"
+              value={where}
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                e.stopPropagation()
+
+                setWhere(e.target.value)
+              }}
+            />
+          </fieldset>
+        </form>
+      </InspectorForm>
+      <Divider />
+      <InspectorActions>
+        <Button
+          className="ml-2"
+          size={EnumSize.sm}
+          variant={EnumVariant.Alternative}
+          disabled={isFalse(shouldEnableAction)}
+          onClick={e => {
+            e.stopPropagation()
+
+            getTableDiff()
+          }}
+        >
+          Get Diff
+        </Button>
+      </InspectorActions>
+    </>
+  )
 }

@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { EnumSize, type Size } from '~/types/enum'
-import { isTrue } from '~/utils'
+import { isFalse, isTrue } from '~/utils'
 
 export interface PropsInput extends React.HTMLAttributes<HTMLElement> {
   value?: string | number
@@ -10,7 +10,7 @@ export interface PropsInput extends React.HTMLAttributes<HTMLElement> {
   placeholder?: string
   size?: Size
   disabled?: boolean
-  onInput: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
 }
 
 function Input({
@@ -43,6 +43,7 @@ function Input({
         onInput={onInput}
         disabled={disabled}
         autoFocus={autoFocus}
+        readOnly={isFalse(Boolean(onInput))}
       />
       {info != null && <InputInfo>{info}</InputInfo>}
     </div>

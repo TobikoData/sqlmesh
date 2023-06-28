@@ -123,7 +123,9 @@
     --color-accent-900: hsla(264, 100%, 8%, 1);
 
     /* Success */
+    --color-success-5: hsla(111, 66%, 55%, 0.05);
     --color-success-10: hsla(111, 66%, 55%, 0.1);
+    --color-success-20: hsla(111, 66%, 55%, 0.2);
     --color-success-100: hsla(92, 90%, 92%, 1);
     --color-success-200: hsla(98, 90%, 84%, 1);
     --color-success-300: hsla(102, 81%, 75%, 1);
@@ -147,7 +149,9 @@
     --color-warning-900: hsla(18, 82%, 26%, 1);
 
     /* Danger */
+    --color-danger-5: hsla(21, 100%, 50%, 0.05);
     --color-danger-10: hsla(21, 100%, 50%, 0.1);
+    --color-danger-20: hsla(21, 100%, 50%, 0.2);
     --color-danger-100: hsla(21, 100%, 93%, 1);
     --color-danger-200: hsla(16, 100%, 86%, 1);
     --color-danger-300: hsla(11, 100%, 78%, 1);

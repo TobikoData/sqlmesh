@@ -50,7 +50,7 @@ export default function PlanWizardStepOptions({
           <Disclosure>
             {({ open }) => (
               <>
-                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left text-sm px-4 pt-3 pb-2 hover:bg-theme-darker dark:hover:bg-theme-lighter">
+                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left text-sm px-4 pt-3 pb-2 bg-neutral-10 hover:bg-theme-darker dark:hover:bg-theme-lighter">
                   <h2 className="whitespace-nowrap text-xl font-bold mb-1">
                     Additional Options
                   </h2>
