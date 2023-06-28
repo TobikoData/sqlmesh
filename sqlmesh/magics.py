@@ -21,10 +21,8 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
+from sqlmesh.utils import yaml
 from sqlmesh.utils.errors import MagicError, MissingContextException
-from sqlmesh.utils.yaml import YAML
-from sqlmesh.utils.yaml import dumps as yaml_dumps
-from sqlmesh.utils.yaml import load as yaml_load
 
 CONTEXT_VARIABLE_NAMES = [
     "context",
@@ -208,8 +206,8 @@ class SQLMeshMagics(Magics):
             return
 
         test = tests[model.name][args.test_name]
-        test_def = yaml_load(test_def_raw) if test_def_raw else test.body
-        test_def_output = yaml_dumps(test_def)
+        test_def = yaml.load(test_def_raw) if test_def_raw else test.body
+        test_def_output = yaml.dump(test_def)
 
         self._shell.set_next_input(
             "\n".join(
@@ -222,10 +220,10 @@ class SQLMeshMagics(Magics):
         )
 
         with open(test.path, "r+", encoding="utf-8") as file:
-            content = yaml_load(file.read())
+            content = yaml.load(file.read())
             content[args.test_name] = test_def
             file.seek(0)
-            YAML().dump(content, file)
+            yaml.dump(content, file)
             file.truncate()
 
     @magic_arguments()
