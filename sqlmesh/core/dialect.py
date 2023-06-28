@@ -673,5 +673,5 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
         normalize_model_name(table, dialect=dialect)
         for scope in traverse_scope(expression)
         for table in scope.tables
-        if isinstance(table.this, exp.Identifier) and exp.table_name(table) not in scope.cte_sources
+        if not isinstance(table.this, exp.Func) and exp.table_name(table) not in scope.cte_sources
     }

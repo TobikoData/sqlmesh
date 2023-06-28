@@ -148,7 +148,9 @@ class ExpressionRenderer:
             except MacroEvalError as ex:
                 raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
 
-            _normalize_and_quote(expression, self._dialect)
+            if expression:
+                with _normalize_and_quote(expression, self._dialect) as expression:
+                    pass
 
             self._cache[cache_key] = expression
 
@@ -383,12 +385,13 @@ class QueryRenderer(ExpressionRenderer):
             if should_optimize:
                 query = query.copy()
 
-                qualify(
-                    query,
-                    dialect=self._dialect,
-                    schema=schema,
-                    infer_schema=False,
-                    validate_qualify_columns=False,
+                simplify(
+                    qualify(
+                        query,
+                        dialect=self._dialect,
+                        schema=schema,
+                        infer_schema=False,
+                    )
                 )
         except SqlglotError as ex:
             failure = True
@@ -405,13 +408,13 @@ class QueryRenderer(ExpressionRenderer):
                         ):
                             select.replace(exp.alias_(select, select.output_name))
 
-        return annotate_types(simplify(query), schema=schema)
+        return annotate_types(query, schema=schema)
 
 
 @contextmanager
 def _normalize_and_quote(query: E, dialect: str) -> t.Iterator[E]:
-    normalize_identifiers(query, dialect=dialect)
     qualify_tables(query)
+    normalize_identifiers(query, dialect=dialect)
     yield query
     quote_identifiers(query, dialect=dialect)
 
