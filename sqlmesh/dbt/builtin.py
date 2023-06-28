@@ -14,6 +14,7 @@ from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
@@ -21,9 +22,14 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
 
 class Exceptions:
     def raise_compiler_error(self, msg: str) -> None:
-        from dbt.exceptions import CompilationError
+        if DBT_VERSION >= (1, 4):
+            from dbt.exceptions import CompilationError
 
-        raise CompilationError(msg)
+            raise CompilationError(msg)
+        else:
+            from dbt.exceptions import CompilationException  # type: ignore
+
+            raise CompilationException(msg)
 
     def warn(self, msg: str) -> str:
         print(msg)

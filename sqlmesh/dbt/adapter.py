@@ -157,12 +157,16 @@ class RuntimeAdapter(BaseAdapter):
             identifier=quote_param,
         )
 
-    def get_relation(self, database: str, schema: str, identifier: str) -> t.Optional[BaseRelation]:
+    def get_relation(
+        self, database: t.Optional[str], schema: str, identifier: str
+    ) -> t.Optional[BaseRelation]:
         relations_list = self.list_relations(database, schema)
         matching_relations = [
             r
             for r in relations_list
-            if r.identifier == identifier and r.schema == schema and r.database == database
+            if r.identifier == identifier
+            and r.schema == schema
+            and (r.database == database or database is None)
         ]
         return seq_get(matching_relations, 0)
 
