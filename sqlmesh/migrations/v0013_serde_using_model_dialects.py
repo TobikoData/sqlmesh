@@ -58,8 +58,8 @@ def migrate(state_sync):  # type: ignore
         )
 
 
-# Note: previously we used to do serde using the SQLGlot dialect, so we need to parse
-# the stored queries using that dialect and then write them back using the model's dialect
+# Note: previously we used to do serde using the SQLGlot dialect, so we need to parse the
+# stored queries using that dialect and then write them back using the correct dialect.
 
 
 def _update_expression(obj: t.Dict, key: str, dialect: str) -> None:
