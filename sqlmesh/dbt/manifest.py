@@ -14,7 +14,6 @@ from dbt.config.profile import read_profile
 from dbt.config.renderer import DbtProjectYamlRenderer, ProfileRenderer
 from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
-from dbt.version import get_installed_version
 
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.macros import MACRO_OVERRIDES
@@ -23,6 +22,7 @@ from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.test import TestConfig
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroInfo, MacroReference
 
@@ -310,11 +310,6 @@ def _model_node_id(model_name: str, package: str) -> str:
     return f"model.{package}.{model_name}"
 
 
-def _get_dbt_version() -> t.Tuple[int, int]:
-    dbt_version = get_installed_version()
-    return (int(dbt_version.major or "0"), int(dbt_version.minor or "0"))
-
-
 def _test_owner(node: ManifestNode) -> t.Optional[str]:
     attached_node = getattr(node, "attached_node", None)
     if attached_node:
@@ -357,6 +352,3 @@ def _convert_jinja_test_to_macro(test_jinja: str) -> str:
 
     macro = "{% macro test_" + test_jinja[match.span()[-1] :]
     return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)
-
-
-DBT_VERSION = _get_dbt_version()
