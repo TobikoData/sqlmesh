@@ -34,7 +34,7 @@ JINJA_ONLY = {
 }
 
 
-def load_yaml(source: str | Path) -> t.OrderedDict:
+def load_yaml(source: str | Path) -> t.Dict:
     try:
         return load(source, render_jinja=False)
     except DuplicateKeyError as ex:
