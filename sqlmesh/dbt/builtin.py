@@ -8,12 +8,13 @@ from ast import literal_eval
 import agate
 import jinja2
 from dbt import version
-from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import BaseRelation, Column
 from dbt.contracts.relation import Policy
 from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
+from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
@@ -37,12 +38,15 @@ class Exceptions:
 
 
 class Api:
-    def __init__(self) -> None:
-        from dbt.adapters.base.column import Column
-        from dbt.adapters.base.relation import BaseRelation
+    def __init__(self, target: t.Optional[AttributeDict] = None) -> None:
+        if not target:
+            self.Relation = BaseRelation
+            self.Column = Column
+            return
 
-        self.Relation = BaseRelation
-        self.Column = Column
+        config = TargetConfig.load(target)
+        self.Relation = config.relation_class
+        self.Column = config.column_class
 
 
 class Flags:
@@ -156,25 +160,25 @@ def generate_var(variables: t.Dict[str, t.Any]) -> t.Callable:
     return var
 
 
-def generate_ref(refs: t.Dict[str, t.Any]) -> t.Callable:
+def generate_ref(refs: t.Dict[str, t.Any], api: Api) -> t.Callable:
     def ref(package: str, name: t.Optional[str] = None) -> t.Optional[BaseRelation]:
         ref_name = f"{package}.{name}" if name else package
         relation_info = refs.get(ref_name)
         if relation_info is None:
             return None
 
-        return BaseRelation.create(**relation_info)
+        return api.Relation.create(**relation_info)
 
     return ref
 
 
-def generate_source(sources: t.Dict[str, t.Any]) -> t.Callable:
+def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
     def source(package: str, name: str) -> t.Optional[BaseRelation]:
         relation_info = sources.get(f"{package}.{name}")
         if relation_info is None:
             return None
 
-        return BaseRelation.create(**relation_info)
+        return api.Relation.create(**relation_info)
 
     return source
 
@@ -251,7 +255,6 @@ def _try_literal_eval(value: str) -> t.Any:
 
 
 BUILTIN_GLOBALS = {
-    "api": Api(),
     "dbt_version": version.__version__,
     "env_var": env_var,
     "exceptions": Exceptions(),
@@ -288,20 +291,25 @@ def create_builtin_globals(
     builtin_globals = BUILTIN_GLOBALS.copy()
     jinja_globals = jinja_globals.copy()
 
+    target: t.Optional[AttributeDict] = jinja_globals.get("target", None)
+    api = Api(target)
+
+    builtin_globals["api"] = api
+
     this = jinja_globals.pop("this", None)
     if this is not None:
-        if not isinstance(this, BaseRelation):
-            builtin_globals["this"] = BaseRelation.create(**this)
+        if not isinstance(this, api.Relation):
+            builtin_globals["this"] = api.Relation.create(**this)
         else:
             builtin_globals["this"] = this
 
     sources = jinja_globals.pop("sources", None)
     if sources is not None:
-        builtin_globals["source"] = generate_source(sources)
+        builtin_globals["source"] = generate_source(sources, api)
 
     refs = jinja_globals.pop("refs", None)
     if refs is not None:
-        builtin_globals["ref"] = generate_ref(refs)
+        builtin_globals["ref"] = generate_ref(refs, api)
 
     variables = jinja_globals.pop("vars", None)
     if variables is not None:
@@ -319,11 +327,10 @@ def create_builtin_globals(
         )
         builtin_globals.update({"log": log, "print": log})
     else:
-        target = jinja_globals.get("target")
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
-            dialect=target.type if target else None,
+            dialect=target.type if target else None,  # type: ignore
         )
         builtin_globals.update({"log": no_log, "print": no_log})
 

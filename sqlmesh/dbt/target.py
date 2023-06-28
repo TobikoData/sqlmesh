@@ -4,6 +4,7 @@ import abc
 import sys
 import typing as t
 
+from dbt.adapters.base import BaseRelation, Column
 from pydantic import Field, root_validator, validator
 
 from sqlmesh.core.config.connection import (
@@ -98,6 +99,14 @@ class TargetConfig(abc.ABC, DbtConfig):
     def extra(self) -> t.Set[str]:
         return self.extra_fields(set(self.dict()))
 
+    @property
+    def relation_class(self) -> t.Type[BaseRelation]:
+        return BaseRelation
+
+    @property
+    def column_class(self) -> t.Type[Column]:
+        return Column
+
 
 class DuckDbConfig(TargetConfig):
     """
@@ -114,6 +123,12 @@ class DuckDbConfig(TargetConfig):
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert"
+
+    @property
+    def relation_class(self) -> t.Type[BaseRelation]:
+        from dbt.adapters.duckdb.relation import DuckDBRelation
+
+        return DuckDBRelation
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return DuckDBConnectionConfig(database=self.path, concurrent_tasks=self.threads)
@@ -153,6 +168,18 @@ class SnowflakeConfig(TargetConfig):
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
+
+    @property
+    def relation_class(self) -> t.Type[BaseRelation]:
+        from dbt.adapters.snowflake import SnowflakeRelation
+
+        return SnowflakeRelation
+
+    @property
+    def column_class(self) -> t.Type[Column]:
+        from dbt.adapters.snowflake import SnowflakeColumn
+
+        return SnowflakeColumn
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return SnowflakeConnectionConfig(
@@ -274,6 +301,18 @@ class RedshiftConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "append"
 
+    @property
+    def relation_class(self) -> t.Type[BaseRelation]:
+        from dbt.adapters.redshift import RedshiftRelation
+
+        return RedshiftRelation
+
+    @property
+    def column_class(self) -> t.Type[Column]:
+        from dbt.adapters.redshift import RedshiftColumn
+
+        return RedshiftColumn
+
     def to_sqlmesh(self) -> ConnectionConfig:
         return RedshiftConnectionConfig(
             user=self.user,
@@ -308,6 +347,18 @@ class DatabricksConfig(TargetConfig):
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
+
+    @property
+    def relation_class(self) -> t.Type[BaseRelation]:
+        from dbt.adapters.databricks.relation import DatabricksRelation
+
+        return DatabricksRelation
+
+    @property
+    def column_class(self) -> t.Type[Column]:
+        from dbt.adapters.databricks.column import DatabricksColumn
+
+        return DatabricksColumn
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return DatabricksConnectionConfig(
@@ -375,6 +426,18 @@ class BigQueryConfig(TargetConfig):
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
+
+    @property
+    def relation_class(self) -> t.Type[BaseRelation]:
+        from dbt.adapters.bigquery.relation import BigQueryRelation
+
+        return BigQueryRelation
+
+    @property
+    def column_class(self) -> t.Type[Column]:
+        from dbt.adapters.bigquery import BigQueryColumn
+
+        return BigQueryColumn
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return BigQueryConnectionConfig(
