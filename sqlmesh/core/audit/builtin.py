@@ -129,17 +129,10 @@ WHERE
 at_least_one_audit = Audit(
     name="at_least_one",
     query="""
-WITH src AS (
-  SELECT count(*) as cnt_nulls
-  FROM @this_model
-  WHERE @column IS NULL
-), tgt AS (
-  SELECT count(*) as cnt_tot
-  FROM @this_model
-)
-SELECT *
-FROM src
-INNER JOIN tgt ON src.cnt_nulls = tgt.cnt_tot
+SELECT 1
+FROM @this_model
+GROUP BY 1
+HAVING COUNT(@column) = 0
     """,
 )
 
