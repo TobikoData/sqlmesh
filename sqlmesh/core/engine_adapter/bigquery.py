@@ -324,7 +324,8 @@ class BigQueryEngineAdapter(EngineAdapter):
         Raises: `google.cloud.exceptions.NotFound` if the table does not exist.
         """
         if isinstance(table_name, exp.Table):
-            table_name = table_name.sql(dialect=self.dialect)
+            # the api doesn't support backticks, so we can't call exp.table_name or sql
+            table_name = ".".join(part.name for part in table_name.parts)
 
         return self.client.get_table(table_name)
 
