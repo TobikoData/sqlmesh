@@ -95,8 +95,8 @@ def test_create_external_models(tmpdir, assert_exp_eq):
 def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.return_value = {
-        "a": exp.DataType.build("bigint"),
         "b": exp.DataType.build("text"),
+        "a": exp.DataType.build("bigint"),
     }
 
     state_reader_mock = mocker.Mock()
@@ -112,3 +112,4 @@ def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
 
     assert len(schema) == 1
     assert schema[0]["name"] == "tbl_c"
+    assert list(schema[0]["columns"]) == ["b", "a"]

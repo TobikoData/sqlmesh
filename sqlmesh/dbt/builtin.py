@@ -204,7 +204,7 @@ def from_json(value: str, default: t.Optional[t.Any] = None) -> t.Optional[t.Any
 
 def to_yaml(value: t.Any, default: t.Optional[t.Any] = None) -> t.Optional[t.Any]:
     try:
-        return yaml.dumps(value)
+        return yaml.dump(value)
     except (TypeError, YAMLError):
         return default
 

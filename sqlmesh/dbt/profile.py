@@ -8,8 +8,8 @@ from pathlib import Path
 from sqlmesh.dbt.common import PROJECT_FILENAME, load_yaml
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.target import TargetConfig
+from sqlmesh.utils import yaml
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.yaml import dumps as dump_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class Profile:
                 f"Target '{target_name}' not specified in profiles for '{context.profile_name}'."
             )
 
-        target_fields = load_yaml(context.render(dump_yaml(outputs[target_name])))
+        target_fields = load_yaml(context.render(yaml.dump(outputs[target_name])))
         target = TargetConfig.load(
             {"name": target_name, "profile_name": context.profile_name, **target_fields}
         )

@@ -17,7 +17,7 @@ def test_yaml() -> None:
       password: "{{ env_var('__SQLMESH_TEST_ENV_PASSWORD__') }}"
 """
 
-    assert contents == yaml.dumps(yaml.load(contents, render_jinja=False))
+    assert contents == yaml.dump(yaml.load(contents, render_jinja=False))
 
     expected_contents = """profile:
   target: prod
@@ -32,7 +32,7 @@ def test_yaml() -> None:
     os.environ["__SQLMESH_TEST_ENV_USER__"] = "user"
     os.environ["__SQLMESH_TEST_ENV_PASSWORD__"] = "password"
 
-    assert expected_contents == yaml.dumps(yaml.load(contents))
+    assert expected_contents == yaml.dump(yaml.load(contents))
 
     # Return the environment to its previous state
     del os.environ["__SQLMESH_TEST_ENV_USER__"]

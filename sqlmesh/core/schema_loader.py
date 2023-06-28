@@ -10,7 +10,7 @@ from sqlglot.dialects.dialect import DialectType
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
 from sqlmesh.core.state_sync import StateReader
-from sqlmesh.utils.yaml import YAML
+from sqlmesh.utils import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -62,4 +62,4 @@ def create_schema_file(
         ]
 
         with open(path, "w", encoding="utf-8") as file:
-            YAML().dump(schemas, file)
+            yaml.dump(schemas, file)
