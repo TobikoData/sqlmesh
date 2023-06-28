@@ -315,6 +315,11 @@ def test_flags(sushi_test_project: Project):
 def test_relation(sushi_test_project: Project):
     context = sushi_test_project.context
 
+    assert (
+        context.render("{{ api.Relation }}")
+        == "<class 'dbt.adapters.duckdb.relation.DuckDBRelation'>"
+    )
+
     jinja = (
         "{% set relation = api.Relation.create(schema='sushi', identifier='waiters') %}"
         "{{ relation.schema }} {{ relation.identifier}}"
@@ -325,6 +330,8 @@ def test_relation(sushi_test_project: Project):
 
 def test_column(sushi_test_project: Project):
     context = sushi_test_project.context
+
+    assert context.render("{{ api.Column }}") == "<class 'dbt.adapters.base.column.Column'>"
 
     jinja = (
         "{% set col = api.Column('foo', 'integer') %}" "{{ col.is_integer() }} {{ col.is_string()}}"
