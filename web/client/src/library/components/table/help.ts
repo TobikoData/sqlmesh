@@ -43,8 +43,6 @@ function getHeaders(
   const differenceSource = source.filter(s => !target.includes(s))
   const differenceTarget = target.filter(s => !source.includes(s))
 
-  console.log({ grain })
-
   return {
     all: Array.from(
       new Set(
