@@ -160,6 +160,42 @@ def test_macro(model: Model):
     assert audit_jinja.render_query(model).sql() == expected_query
 
 
+def test_load_with_defaults(model: Model, assert_exp_eq):
+    expressions = parse(
+        """
+        Audit (
+            name my_audit,
+            defaults (
+                field1 = some_column,
+                field2 = 3,
+                field3 = other_column,
+                field4 = 'some string'
+            )
+        );
+
+        SELECT
+            *
+        FROM
+            db.table
+        WHERE 1=1
+            AND @IF(@field4 = 'overridden', @field4 IN ('some string', 'other string'), 1=1)
+            AND @field1 = @field2 
+            AND @field3 != @field4
+    """
+    )
+    audit = Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
+    assert audit.defaults == {
+        "field1": exp.to_column("some_column"),
+        "field2": exp.Literal.number(3),
+        "field3": exp.to_column("other_column"),
+        "field4": exp.Literal.string("some string"),
+    }
+    assert_exp_eq(
+        audit.render_query(model, field4=exp.Literal.string("overridden")),
+        'SELECT * FROM "db"."table" AS "table" WHERE "other_column" <> \'overridden\' AND "some_column" = 3 AND \'overridden\' IN (\'some string\', \'other string\')',
+    )
+
+
 def test_not_null_audit(model: Model):
     rendered_query_a = builtin.not_null_audit.render_query(
         model,
@@ -236,4 +272,64 @@ def test_forall_audit(model: Model):
     assert (
         rendered_query_a.sql()
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE NOT ("a" >= "b") OR NOT ("c" + "d" - "e" < 1.0)"""
+    )
+
+
+def test_accepted_range_audit(model: Model):
+    rendered_query = builtin.accepted_range_audit.render_query(
+        model, column=exp.to_column("a"), min_v=0
+    )
+    assert (
+        rendered_query.sql()
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE "a" <= 0'
+    )
+    rendered_query = builtin.accepted_range_audit.render_query(
+        model, column=exp.to_column("a"), max_v=100, inclusive=exp.false()
+    )
+    assert (
+        rendered_query.sql()
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE "a" > 100'
+    )
+    rendered_query = builtin.accepted_range_audit.render_query(
+        model, column=exp.to_column("a"), min_v=100, max_v=100
+    )
+    assert (
+        rendered_query.sql()
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE "a" <= 100 OR "a" >= 100'
+    )
+
+
+def test_at_least_one_audit(model: Model):
+    rendered_query = builtin.at_least_one_audit.render_query(
+        model,
+        column=exp.to_column("a"),
+    )
+    assert (
+        rendered_query.sql()
+        == 'WITH "src" AS (SELECT COUNT(*) AS "cnt_nulls" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE "a" IS NULL), "tgt" AS (SELECT COUNT(*) AS "cnt_tot" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_1") SELECT * FROM "src" INNER JOIN "tgt" ON "src"."cnt_nulls" = "tgt"."cnt_tot"'
+    )
+
+
+def test_relationship_audit(model: Model):
+    rendered_query = builtin.relationship_audit.render_query(
+        model,
+        source_column=exp.to_column("a"),
+        target_column=exp.to_column("a"),
+        to=exp.to_table("db.test_model"),
+    )
+    assert (
+        rendered_query.sql()
+        == 'SELECT "child"."source_column" AS "source_column" FROM (SELECT "a" AS "source_column" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE NOT "a" IS NULL) AS "child" LEFT JOIN (SELECT "a" AS "target_column" FROM "db"."test_model" AS "test_model") AS "parent" ON "child"."source_column" = "parent"."target_column" WHERE "parent"."target_column" IS NULL'
+    )
+
+
+def test_mutually_exclusive_ranges_audit(model: Model):
+    rendered_query = builtin.mutually_exclusive_ranges_audit.render_query(
+        model,
+        lower_bound_column=exp.to_column("a"),
+        upper_bound_column=exp.to_column("a"),
+    )
+    assert (
+        rendered_query.sql()
+        == 'WITH "window_functions" AS (SELECT "a" AS "lower_bound", "a" AS "upper_bound", LEAD("a") OVER (ORDER BY "a", "a") AS "next_lower_bound", ROW_NUMBER() OVER (ORDER BY "a" DESC, "a" DESC) = 1 AS "is_last_record" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0"), "calc" AS (SELECT *, COALESCE("lower_bound" <= "upper_bound", FALSE) AS "lower_bound_comp_upper_bound", COALESCE("upper_bound" <= "next_lower_bound", "is_last_record", FALSE) AS "upper_bound_comp_next_lower_bound" FROM "window_functions"), "validation_errors" AS (SELECT * FROM "calc" WHERE NOT "lower_bound_comp_upper_bound" OR NOT "upper_bound_comp_next_lower_bound") SELECT * FROM "validation_errors"'
     )
