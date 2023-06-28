@@ -4,6 +4,7 @@ import json
 import os
 import typing as t
 from ast import literal_eval
+from dataclasses import asdict
 
 import agate
 import jinja2
@@ -358,10 +359,10 @@ def _relation_info_to_relation(
     relation_type: t.Type[BaseRelation],
     target_quote_policy: Policy,
 ) -> BaseRelation:
-    merged_quote_policy_dict = {}
-    for k, v in (relation_info.pop("quote_policy", {})).items():
-        v = getattr(target_quote_policy, k, None) if v is None else v
-        if v is not None:
-            merged_quote_policy_dict[k] = v
-    quote_policy = Policy(**merged_quote_policy_dict)
+    quote_policy = Policy(
+        **{
+            **asdict(target_quote_policy),
+            **{k: v for k, v in relation_info.pop("quote_policy", {}).items() if v is not None},
+        }
+    )
     return relation_type.create(**relation_info, quote_policy=quote_policy)
