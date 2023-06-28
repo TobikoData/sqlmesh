@@ -39,14 +39,13 @@ class Exceptions:
 
 class Api:
     def __init__(self, target: t.Optional[AttributeDict] = None) -> None:
-        if not target:
+        if target:
+            config = TargetConfig.load(target)
+            self.Relation = config.relation_class
+            self.Column = config.column_class
+        else:
             self.Relation = BaseRelation
             self.Column = Column
-            return
-
-        config = TargetConfig.load(target)
-        self.Relation = config.relation_class
-        self.Column = config.column_class
 
 
 class Flags:
