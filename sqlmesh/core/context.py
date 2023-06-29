@@ -510,7 +510,6 @@ class Context(BaseContext):
         snapshots = {}
 
         for model in models.values():
-            physical_schema = None
             if model.name in remote_snapshots:
                 snapshot = remote_snapshots[model.name]
                 ttl = snapshot.ttl
@@ -519,8 +518,11 @@ class Context(BaseContext):
                 config = self.config_for_model(model)
                 ttl = config.snapshot_ttl
                 project = config.project
-                physical_schema = config.physical_schema_map.get(parse_model_name(model.name)[1])
 
+            physical_schema = None
+            _, schema, _ = parse_model_name(model.name)
+            if schema and schema in config.physical_schema_map:
+                physical_schema = config.physical_schema_map[schema]
             snapshot = Snapshot.from_model(
                 model,
                 models=models,
