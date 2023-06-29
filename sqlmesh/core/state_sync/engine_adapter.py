@@ -21,6 +21,7 @@ import logging
 import typing as t
 from collections import defaultdict
 from copy import deepcopy
+from functools import reduce
 
 import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
@@ -43,12 +44,20 @@ from sqlmesh.core.snapshot import (
     SnapshotNameVersionLike,
     fingerprint_from_model,
 )
-from sqlmesh.core.snapshot.definition import (
-    _parents_from_model,
+from sqlmesh.core.snapshot.definition import _parents_from_model
+from sqlmesh.core.state_sync.base import (
+    SCHEMA_VERSION,
+    IntervalRow,
+    StateSync,
+    Versions,
 )
-from sqlmesh.core.state_sync.base import SCHEMA_VERSION, StateSync, Versions, IntervalRow
-from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional, merge_snapshot_with_intervals_by_name_version, merge_snapshot_with_intervals_by_id, interval_rows_to_snapshot_intervals
-from sqlmesh.utils import random_id
+from sqlmesh.core.state_sync.common import (
+    CommonStateSyncMixin,
+    interval_rows_to_snapshot_intervals,
+    merge_snapshot_with_intervals_by_id,
+    merge_snapshot_with_intervals_by_name_version,
+    transactional,
+)
 from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -56,7 +65,11 @@ logger = logging.getLogger(__name__)
 
 
 class IntervalRowCache:
-    def __init__(self, cache: t.Optional[t.Dict[SnapshotId, t.Set[IntervalRow]]] = None, is_complete: bool = False) -> None:
+    def __init__(
+        self,
+        cache: t.Optional[t.Dict[SnapshotId, t.Set[IntervalRow]]] = None,
+        is_complete: bool = False,
+    ) -> None:
         self._cache: t.Dict[SnapshotId, t.Set[IntervalRow]] = cache or defaultdict(set)
         self.is_complete = is_complete
 
@@ -66,13 +79,34 @@ class IntervalRowCache:
     def __len__(self) -> int:
         return len(self._cache)
 
-    def has_all_snapshot_intervals(self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]) -> bool:
-        return all(snapshot_id in self._cache for snapshot_id in snapshot_ids) if snapshot_ids is not None else self.is_complete
+    @property
+    def interval_rows(self) -> t.Set[IntervalRow]:
+        return reduce(lambda x, y: x.union(y), self._cache.values(), set())
 
-    def get_interval_rows(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.List[IntervalRow]:
-        return [interval_row for snapshot_id in snapshot_ids for interval_row in self._cache[snapshot_id]]
+    def has_all_snapshot_intervals(
+        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
+    ) -> bool:
+        return (
+            all(snapshot_id in self._cache for snapshot_id in snapshot_ids)
+            if snapshot_ids is not None
+            else self.is_complete
+        )
 
-    def update_interval_rows(self, interval_rows: t.Iterable[IntervalRow], *, is_complete: bool) -> None:
+    def get_interval_rows(
+        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]]
+    ) -> t.Set[IntervalRow]:
+        """
+        Interval Rows are sorted in an order that is ready to be compacted/merged if needed.
+        """
+        return set().union(
+            *[self._cache[snapshot_id.snapshot_id] for snapshot_id in snapshot_ids]
+            if snapshot_ids
+            else self._cache.values()
+        )
+
+    def update_interval_rows(
+        self, interval_rows: t.Iterable[IntervalRow], *, is_complete: bool
+    ) -> None:
         for interval_row in interval_rows:
             self._cache[interval_row.snapshot_id].add(interval_row)
         self.is_complete = self.is_complete or is_complete
@@ -83,10 +117,12 @@ class IntervalRowCache:
 
 
 class SnapshotCache:
-    def __init__(self, cache: t.Optional[t.Dict[SnapshotId, Snapshot]] = None, is_complete: bool = False) -> None:
+    def __init__(
+        self, cache: t.Optional[t.Dict[SnapshotId, Snapshot]] = None, is_complete: bool = False
+    ) -> None:
         self._cache: t.Dict[SnapshotId, Snapshot] = {}
-        for k, v in (cache or {}).items():
-            self._set_snapshot(k, v)
+        for v in (cache or {}).values():
+            self._set_snapshot(v)
         self.is_complete = is_complete
 
     def __getitem__(self, key: SnapshotId) -> Snapshot:
@@ -102,42 +138,63 @@ class SnapshotCache:
     def snapshots(self) -> t.List[Snapshot]:
         return list(self._cache.values())
 
+    def clear(self) -> None:
+        self._cache.clear()
+
     def is_hydrated(self, snapshot_ids: t.Optional[t.List[SnapshotIdLike]] = None) -> bool:
-        snapshot_ids = snapshot_ids or self._cache.keys()
-        return all(snapshot.is_seed_hydrated for snapshot in self.snapshots if snapshot.snapshot_id in snapshot_ids)
+        snapshot_ids = (
+            [x.snapshot_id for x in snapshot_ids] if snapshot_ids is not None else list(self._cache)
+        )
+        return all(
+            snapshot.is_seed_hydrated
+            for snapshot in self.snapshots
+            if snapshot.snapshot_id in snapshot_ids
+        )
 
     def get_snapshot(self, snapshot: SnapshotIdLike) -> t.Optional[Snapshot]:
         return self._cache.get(snapshot.snapshot_id)
 
-    def update_and_get_cached_snapshots(self, snapshots: t.List[Snapshot]) -> t.List[Snapshot]:
+    def get_cached_snapshots(
+        self, snapshots: t.List[Snapshot], *, add_if_not_exists: bool
+    ) -> t.List[Snapshot]:
         cached_snapshots = []
         for snapshot in snapshots:
-            self.add_snapshot(snapshot)
-            cached_snapshots.append(self._cache[snapshot.snapshot_id])
+            cached_snapshot = self.get_snapshot(snapshot)
+            if not cached_snapshot and add_if_not_exists:
+                self.upsert_snapshot(snapshot)
+            cached_snapshots.append(cached_snapshot or snapshot)
         return cached_snapshots
 
-    def add_snapshot(self, snapshot: Snapshot) -> None:
-        self._cache[snapshot.snapshot_id] = snapshot
+    def upsert_snapshot(self, snapshot: Snapshot) -> None:
+        existing_snapshot = self.get_snapshot(snapshot)
+        if existing_snapshot:
+            snapshot = (
+                snapshot
+                if snapshot.updated_ts > existing_snapshot.updated_ts
+                else existing_snapshot
+            )
+        self._set_snapshot(snapshot)
 
     def remove_snapshot(self, snapshot: SnapshotIdLike, error_if_missing: bool = False) -> None:
         if error_if_missing and snapshot.snapshot_id not in self:
             raise SQLMeshError(f"Snapshot {snapshot} not found in cache")
-        del self._cache[snapshot.snapshot_id]
-
-    def update_snapshot(self, snapshot: Snapshot) -> None:
-        self._set_snapshot(snapshot.snapshot_id, snapshot)
+        self._cache.pop(snapshot.snapshot_id, None)
 
     def remove_interval(
         self, all_snapshots: t.Iterable[Snapshot], start: TimeLike, end: TimeLike
     ) -> None:
         for snapshot in all_snapshots:
-            snapshot = self.get_snapshot(snapshot)
-            if not snapshot:
+            cached_snapshot = self.get_snapshot(snapshot)
+            if not cached_snapshot:
                 continue
-            snapshot.remove_interval(start, end)
+            cached_snapshot.remove_interval(start, end)
 
     def contains(self, keys: t.Optional[t.Iterable[SnapshotIdLike]]) -> bool:
-        return set(k.snapshot_id for k in keys).issubset(self) if keys is not None else self.is_complete
+        return (
+            set(k.snapshot_id for k in keys).issubset(self)
+            if keys is not None
+            else self.is_complete
+        )
 
     def to_dict(self, keys: t.Optional[t.Iterable[SnapshotIdLike]]) -> t.Dict[SnapshotId, Snapshot]:
         return (
@@ -146,13 +203,13 @@ class SnapshotCache:
             else self._cache
         )
 
-    def _set_snapshot(self, key: SnapshotId, value: Snapshot) -> None:
+    def _set_snapshot(self, snapshot: Snapshot) -> None:
         # Set all slots to None slots are private attributed and they are considered "ephemeral" and should not be
         # persisted in cache. Currently this is just `_start` and ideally this is removed entirely
         # removing the need for this
-        for attr in value.__slots__:
-            setattr(value, attr, None)
-        self._cache[key] = value
+        for attr in snapshot.__slots__:
+            setattr(snapshot, attr, None)
+        self._cache[snapshot.snapshot_id] = snapshot
 
 
 class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
@@ -262,7 +319,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots_to_store = []
 
         for snapshot in snapshots:
-            self._snapshot_cache[snapshot.snapshot_id] = snapshot
+            self._snapshot_cache.upsert_snapshot(snapshot)
             if isinstance(snapshot.model, SeedModel):
                 seed_contents.append(
                     {
@@ -383,7 +440,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
-        self._snapshot_cache.update_snapshot(snapshot)
+        self._snapshot_cache.upsert_snapshot(snapshot)
         self.engine_adapter.update_table(
             self.snapshots_table,
             {"snapshot": snapshot.json()},
@@ -428,7 +485,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             .where(None if not snapshot_ids else self._snapshot_id_filter(snapshot_ids))
         )
         for name, identifier, content in self.engine_adapter.fetchall(query):
-            snapshot = self._snapshot_cache.get_snapshot(SnapshotId(name=name, identifier=identifier))
+            snapshot = self._snapshot_cache.get_snapshot(
+                SnapshotId(name=name, identifier=identifier)
+            )
             if snapshot and not snapshot.is_seed_hydrated:
                 assert isinstance(snapshot.model, SeedModel), "Must be seed model to hydrate"
                 snapshot.model = snapshot.model.to_hydrated(content)
@@ -449,16 +508,20 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
+        if snapshot_ids is not None and not snapshot_ids:
+            return {}
         snapshot_ids = list(snapshot_ids) if snapshot_ids else None
         if self._snapshot_cache and self._snapshot_cache.contains(snapshot_ids):
             if hydrate_seeds and not self._snapshot_cache.is_hydrated(snapshot_ids):
                 self._hydrate_seeds(snapshot_ids)
-            snapshots = self._snapshot_cache.to_dict(snapshot_ids)
+            cached_snapshots = self._snapshot_cache.to_dict(snapshot_ids)
             if intervals_by_id:
-                return merge_snapshot_with_intervals_by_id(snapshots.values(),
-                                                           self._get_snapshot_intervals(snapshot_ids)[1])
-            return merge_snapshot_with_intervals_by_name_version(snapshots.values(),
-                                                                 self._get_snapshot_intervals(snapshot_ids)[1])
+                return merge_snapshot_with_intervals_by_id(
+                    cached_snapshots.values(), self._get_snapshot_intervals(snapshot_ids)[1]
+                )
+            return merge_snapshot_with_intervals_by_name_version(
+                cached_snapshots.values(), self._get_snapshot_intervals(snapshot_ids)[1]
+            )
 
         query = (
             exp.select("snapshot")
@@ -491,8 +554,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             logger.error("Found duplicate snapshots in the state store.")
 
         if intervals_by_id:
-            return merge_snapshot_with_intervals_by_id(snapshots.values(), self._get_snapshot_intervals(snapshot_ids)[1])
-        return merge_snapshot_with_intervals_by_name_version(snapshots.values(), self._get_snapshot_intervals(snapshot_ids)[1])
+            return merge_snapshot_with_intervals_by_id(
+                snapshots.values(),
+                self._get_snapshot_intervals(snapshot_ids)[1],
+                keep_existing_intervals=True,
+            )
+        return merge_snapshot_with_intervals_by_name_version(
+            snapshots.values(), self._get_snapshot_intervals(snapshot_ids)[1]
+        )
 
     def _get_snapshots_with_same_version(
         self,
@@ -522,8 +591,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             query = query.lock(copy=False)
 
         snapshot_rows = self.engine_adapter.fetchall(query, ignore_unsupported_errors=True)
-        return self._snapshot_cache.update_and_get_cached_snapshots(
-            [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
+        return self._snapshot_cache.get_cached_snapshots(
+            [Snapshot(**json.loads(row[0])) for row in snapshot_rows], add_if_not_exists=True
         )
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
@@ -580,9 +649,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         logger.info("Adding interval for snapshot %s", snapshot.snapshot_id)
         cached_snapshot = self._snapshot_cache.get_snapshot(snapshot) or snapshot
         cached_snapshot.add_interval(start, end, is_dev)
-        self._snapshot_cache.update_snapshot(cached_snapshot)
-        interval_row = IntervalRow.from_snapshot(snapshot, start, end, is_dev=is_dev)
+        self._snapshot_cache.upsert_snapshot(cached_snapshot)
+        interval_row = IntervalRow.from_snapshot(
+            snapshot, *snapshot.inclusive_exclusive(start, end), is_dev=is_dev
+        )
         self._interval_row_cache.update_interval_rows([interval_row], is_complete=False)
+        merge_snapshot_with_intervals_by_name_version(
+            self._snapshot_cache.snapshots, self._get_snapshot_intervals(force_use_cache=True)[1]
+        )
         self.engine_adapter.insert_append(
             self.intervals_table,
             pd.DataFrame([interval_row.dict()]),
@@ -603,8 +677,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             snapshot_ids = ", ".join(str(s.snapshot_id) for s in all_snapshots)
             logger.info("Removing interval for snapshots: %s", snapshot_ids)
         self._snapshot_cache.remove_interval(all_snapshots, start, end)
-        interval_rows = [IntervalRow.from_snapshot(s, start, end, is_removed=True) for s in all_snapshots]
+        interval_rows = [
+            IntervalRow.from_snapshot(s, *s.inclusive_exclusive(start, end), is_removed=True)
+            for s in all_snapshots
+        ]
         self._interval_row_cache.update_interval_rows(interval_rows, is_complete=False)
+        merge_snapshot_with_intervals_by_name_version(
+            self._snapshot_cache.snapshots, self._get_snapshot_intervals(force_use_cache=True)[1]
+        )
         self.engine_adapter.insert_append(
             self.intervals_table,
             pd.DataFrame([row.dict() for row in interval_rows]),
@@ -653,13 +733,28 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         query_modifier: t.Optional[t.Callable[[exp.Select], exp.Select]] = None,
+        force_use_cache: bool = False,
     ) -> t.Tuple[t.Set[str], t.List[SnapshotIntervals]]:
-        if not query_modifier and self._interval_row_cache.has_all_snapshot_intervals(snapshot_ids):
-            interval_rows = self._interval_row_cache.get_interval_rows(snapshot_ids)
-            return {row.id for row in interval_rows}, interval_rows_to_snapshot_intervals(interval_rows)
+        if (
+            not query_modifier and self._interval_row_cache.has_all_snapshot_intervals(snapshot_ids)
+        ) or force_use_cache:
+            # Sort to match the order that would exist if we got the values from the state
+            interval_rows = sorted(self._interval_row_cache.get_interval_rows(snapshot_ids))
+            return {row.id for row in interval_rows}, interval_rows_to_snapshot_intervals(
+                interval_rows
+            )
         query = (
             exp.select(
-                "id", "created_ts", "name", "identifier", "version", "start_ts", "end_ts", "is_dev", "is_removed", "is_compacted"
+                "id",
+                "created_ts",
+                "name",
+                "identifier",
+                "version",
+                "start_ts",
+                "end_ts",
+                "is_dev",
+                "is_removed",
+                "is_compacted",
             )
             .from_(self.intervals_table)
             .where(None if not snapshot_ids else self._snapshot_id_filter(snapshot_ids))
@@ -669,8 +764,13 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             query = query_modifier(query)
 
         rows = self.engine_adapter.fetchall(query)
-        interval_rows = [IntervalRow(**{key: row[i] for i, key in enumerate(IntervalRow.__fields__.keys())}) for row in rows]
-        self._interval_row_cache.update_interval_rows(interval_rows, is_complete=not query_modifier and not snapshot_ids)
+        interval_rows = [
+            IntervalRow(**{key: row[i] for i, key in enumerate(IntervalRow.__fields__.keys())})
+            for row in rows
+        ]
+        self._interval_row_cache.update_interval_rows(
+            interval_rows, is_complete=not query_modifier and not snapshot_ids
+        )
         return {row.id for row in interval_rows}, interval_rows_to_snapshot_intervals(interval_rows)
 
     def _push_snapshot_intervals(
@@ -682,15 +782,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             cached_snapshot = self._snapshot_cache.get_snapshot(snapshot.snapshot_id)
             if not cached_snapshot and isinstance(snapshot, Snapshot):
                 cached_snapshot = snapshot
-                self._snapshot_cache.update_snapshot(snapshot)
+                self._snapshot_cache.upsert_snapshot(snapshot)
             for start_ts, end_ts in snapshot.intervals:
                 if cached_snapshot:
                     cached_snapshot.add_interval(start_ts, end_ts, is_dev=False)
-                new_interval_rows.append(IntervalRow.from_snapshot(snapshot, start_ts, end_ts, is_dev=False, is_compacted=True))
+                new_interval_rows.append(
+                    IntervalRow.from_snapshot(
+                        snapshot, start_ts, end_ts, is_dev=False, is_compacted=True
+                    )
+                )
             for start_ts, end_ts in snapshot.dev_intervals:
                 if cached_snapshot:
                     cached_snapshot.add_interval(start_ts, end_ts, is_dev=True)
-                new_interval_rows.append(IntervalRow.from_snapshot(snapshot, start_ts, end_ts, is_dev=True, is_compacted=True))
+                new_interval_rows.append(
+                    IntervalRow.from_snapshot(
+                        snapshot, start_ts, end_ts, is_dev=True, is_compacted=True
+                    )
+                )
         if new_interval_rows:
             self._interval_row_cache.update_interval_rows(new_interval_rows, is_complete=False)
             self.engine_adapter.insert_append(

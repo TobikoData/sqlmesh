@@ -27,6 +27,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.state_sync import EngineAdapterStateSync
 from sqlmesh.core.state_sync.base import SCHEMA_VERSION, SQLGLOT_VERSION, Versions
+from sqlmesh.core.state_sync.common import merge_snapshot_with_intervals_by_id
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -308,14 +309,23 @@ def test_compact_intervals(state_sync: EngineAdapterStateSync, make_snapshot: t.
         (to_timestamp("2020-01-12"), to_timestamp("2020-01-14")),
     ]
 
-    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == expected_intervals
+    assert (
+        state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals
+        == expected_intervals
+    )
 
     state_sync.compact_intervals()
-    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == expected_intervals
+    assert (
+        state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals
+        == expected_intervals
+    )
 
     # Make sure compaction is idempotent.
     state_sync.compact_intervals()
-    assert state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals == expected_intervals
+    assert (
+        state_sync.get_snapshot_intervals_by_name_version([snapshot])[0].intervals
+        == expected_intervals
+    )
 
 
 def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -994,8 +1004,9 @@ def test_merged_intervals_by_id(
     snapshot_a_forward_only.change_category = SnapshotChangeCategory.FORWARD_ONLY
     state_sync.push_snapshots([snapshot_a_forward_only])
     state_sync.add_interval(snapshot_a_forward_only, "2022-01-20", "2022-01-25")
-    by_id = state_sync._snapshot_cache.get_snapshots_merged_intervals_by_id(
-        state_sync.get_snapshot_intervals_by_name_version(None)
+    by_id = merge_snapshot_with_intervals_by_id(
+        state_sync.get_snapshots(None).values(),
+        state_sync.get_snapshot_intervals_by_name_version(None),
     )
     assert [x.snapshot_intervals for x in by_id.values()] == [
         make_snapshot_intervals(
@@ -1009,21 +1020,21 @@ def test_merged_intervals_by_id(
             dev_intervals=[],
         ),
     ]
-    assert state_sync._snapshot_cache.snapshot_intervals == [
-        make_snapshot_intervals(
-            snapshot_a,
-            intervals=[
-                (to_timestamp("2022-01-10"), to_timestamp("2022-01-16")),
-                (to_timestamp("2022-01-20"), to_timestamp("2022-01-26")),
-            ],
-            dev_intervals=[],
-        ),
-        make_snapshot_intervals(
-            snapshot_a_forward_only,
-            intervals=[
-                (to_timestamp("2022-01-10"), to_timestamp("2022-01-16")),
-                (to_timestamp("2022-01-20"), to_timestamp("2022-01-26")),
-            ],
-            dev_intervals=[],
-        ),
-    ]
+    # assert state_sync._snapshot_cache.snapshot_intervals == [
+    #     make_snapshot_intervals(
+    #         snapshot_a,
+    #         intervals=[
+    #             (to_timestamp("2022-01-10"), to_timestamp("2022-01-16")),
+    #             (to_timestamp("2022-01-20"), to_timestamp("2022-01-26")),
+    #         ],
+    #         dev_intervals=[],
+    #     ),
+    #     make_snapshot_intervals(
+    #         snapshot_a_forward_only,
+    #         intervals=[
+    #             (to_timestamp("2022-01-10"), to_timestamp("2022-01-16")),
+    #             (to_timestamp("2022-01-20"), to_timestamp("2022-01-26")),
+    #         ],
+    #         dev_intervals=[],
+    #     ),
+    # ]

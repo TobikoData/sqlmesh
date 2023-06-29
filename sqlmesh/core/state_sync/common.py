@@ -13,12 +13,12 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
+    SnapshotIntervals,
     SnapshotNameVersionLike,
     SnapshotTableInfo,
-    SnapshotIntervals,
 )
-from sqlmesh.core.snapshot.definition import remove_interval, merge_intervals, Intervals
-from sqlmesh.core.state_sync.base import StateSync, IntervalRow
+from sqlmesh.core.snapshot.definition import Intervals, merge_intervals, remove_interval
+from sqlmesh.core.state_sync.base import IntervalRow, StateSync
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -48,9 +48,7 @@ class CommonStateSyncMixin(StateSync):
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
         hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
-        return self._get_snapshots(
-            snapshot_ids, hydrate_seeds=hydrate_seeds
-        )
+        return self._get_snapshots(snapshot_ids, hydrate_seeds=hydrate_seeds)
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         return self._get_environment(environment)
@@ -226,7 +224,9 @@ class CommonStateSyncMixin(StateSync):
             t for t in target_snapshots if t.name in changed_version_prev_snapshots_by_name
         ]
 
-        prev_snapshots = self.get_snapshots(changed_version_prev_snapshots_by_name.values()).values()
+        prev_snapshots = set(
+            self.get_snapshots(changed_version_prev_snapshots_by_name.values()).values()
+        )
         target_snapshots_by_name = {s.name: s for s in changed_version_target_snapshots}
 
         for prev_snapshot in prev_snapshots:
@@ -315,8 +315,7 @@ class CommonStateSyncMixin(StateSync):
 
 
 def merge_snapshot_with_intervals_by_name_version(
-    snapshots: t.Iterable[Snapshot],
-    intervals: t.Iterable[SnapshotIntervals]
+    snapshots: t.Iterable[Snapshot], intervals: t.Iterable[SnapshotIntervals]
 ) -> t.Dict[SnapshotId, Snapshot]:
     """Merges snapshots with intervals.
 
@@ -334,7 +333,9 @@ def merge_snapshot_with_intervals_by_name_version(
     result = {}
     for snapshot in snapshots:
         assert snapshot.version
-        snapshot_intervals = interval_mapping.get((snapshot.name, snapshot.version), [])
+        snapshot_intervals = interval_mapping.get(
+            (snapshot.name, snapshot.version_get_or_generate()), []
+        )
         for interval in snapshot_intervals:
             snapshot.merge_intervals(interval)
         result[snapshot.snapshot_id] = snapshot
@@ -343,11 +344,17 @@ def merge_snapshot_with_intervals_by_name_version(
 
 def merge_snapshot_with_intervals_by_id(
     snapshots: t.Iterable[Snapshot],
-    intervals: t.Iterable[SnapshotIntervals]
+    intervals: t.Iterable[SnapshotIntervals],
+    keep_existing_intervals: bool = False,
 ) -> t.Dict[SnapshotId, Snapshot]:
     intervals_by_snapshot_id = {x.snapshot_id: x for x in intervals}
     result = {}
     for snapshot in snapshots:
+        snapshot = (
+            snapshot.copy(deep=True)
+            if keep_existing_intervals
+            else snapshot.copy(deep=True, update={"intervals": [], "dev_intervals": []})
+        )
         if snapshot.snapshot_id in intervals_by_snapshot_id:
             snapshot.merge_intervals(intervals_by_snapshot_id[snapshot.snapshot_id])
         result[snapshot.snapshot_id] = snapshot

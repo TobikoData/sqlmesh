@@ -6,6 +6,7 @@ import logging
 import pkgutil
 import typing as t
 
+from pydantic import Field
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
@@ -22,7 +23,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.utils import major_minor, random_id
-from sqlmesh.utils.date import TimeLike, now, to_datetime, now_timestamp
+from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -415,8 +416,8 @@ class StateSync(StateReader, abc.ABC):
 
 
 class IntervalRow(PydanticModel):
-    id: str = random_id()
-    created_ts: int = now_timestamp()
+    id: str = Field(default_factory=random_id)
+    created_ts: int = Field(default_factory=now_timestamp)
     name: str
     identifier: str
     version: str
@@ -435,7 +436,7 @@ class IntervalRow(PydanticModel):
         *,
         is_dev: bool = False,
         is_removed: bool = False,
-        is_compacted: bool = False
+        is_compacted: bool = False,
     ) -> IntervalRow:
         return cls(
             name=snapshot.name,
@@ -456,8 +457,23 @@ class IntervalRow(PydanticModel):
     def name_id_version_key(self) -> t.Tuple[str, str, str]:
         return (self.name, self.identifier, self.version)
 
-    def __hash__(self):
-        return self.id
+    @property
+    def _sort_key(self) -> str:
+        return f"{self.name}_{self.identifier}_{self.created_ts}_{self.is_removed}"
 
-    def __eq__(self, other: IntervalRow):
-        return self.id == other.id
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Supports comparing against both an interval row and an interval row id.
+        """
+        if not isinstance(other, (IntervalRow, str)):
+            return NotImplemented
+        return hash(self.id) == hash(other.id if isinstance(other, IntervalRow) else other)
+
+    def __lt__(self, other: IntervalRow) -> bool:
+        """
+        Supports comparing against another interval row.
+        """
+        return self._sort_key < other._sort_key
