@@ -628,6 +628,14 @@ class Context(BaseContext):
                 expressions = parse(
                     file.read(), default_dialect=self.config_for_model(model).dialect
                 )
+                for prop in expressions[0].expressions:
+                    p = t.cast(exp.Property, prop)
+                    if p.name.lower() == "dialect":
+                        p.replace(
+                            exp.Property(
+                                this="dialect", value=exp.Literal.string(transpile or model.dialect)
+                            )
+                        )
                 file.seek(0)
                 file.write(format_model_expressions(expressions, transpile or model.dialect))
                 file.truncate()
