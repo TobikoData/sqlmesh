@@ -619,7 +619,7 @@ class Context(BaseContext):
 
         return df
 
-    def format(self, transpile: t.Optional[str] = None) -> None:
+    def format(self, transpile: t.Optional[str] = None, newline: bool = False) -> None:
         """Format all models in a given directory."""
         for model in self._models.values():
             if not model.is_sql:
@@ -639,6 +639,8 @@ class Context(BaseContext):
                             )
                 file.seek(0)
                 file.write(format_model_expressions(expressions, transpile or model.dialect))
+                if newline:
+                    file.write("\n")
                 file.truncate()
 
     def plan(

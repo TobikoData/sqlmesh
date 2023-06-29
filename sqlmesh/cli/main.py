@@ -169,11 +169,16 @@ def evaluate(
     type=str,
     help="Transpile project models to the specified dialect.",
 )
+@click.option(
+    "--new-line",
+    is_flag=True,
+    help="Include a new line at the end of each file.",
+)
 @click.pass_context
 @error_handler
-def format(ctx: click.Context, transpile: t.Optional[str] = None) -> None:
+def format(ctx: click.Context, transpile: t.Optional[str] = None, new_line: bool = False) -> None:
     """Format all models in a given directory."""
-    ctx.obj.format(transpile)
+    ctx.obj.format(transpile, new_line)
 
 
 @cli.command("diff")
