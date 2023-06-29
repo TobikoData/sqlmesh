@@ -29,14 +29,14 @@ FROM (
   SELECT
     @EACH(
       @columns,
-      c -> row_number() OVER (PARTITION BY c ORDER BY 1) AS "@{c}_rank"
+      c -> row_number() OVER (PARTITION BY c ORDER BY 1) AS rank_@c
     )
   FROM @this_model
 )
 WHERE @REDUCE(
   @EACH(
     @columns,
-    c -> "@{c}_rank" > 1
+    c -> rank_@c > 1
   ),
   (l, r) -> l OR r
 )
@@ -95,10 +95,10 @@ SELECT *
 FROM @this_model
 WHERE
   False
-  OR @IF(@min_v IS NOT NULL AND @inclusive, @column <= @min_v, 1=2)
-  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, @column < @min_v, 1=2)
-  OR @IF(@max_v IS NOT NULL AND @inclusive, @column >= @max_v, 1=2)
-  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, @column > @max_v, 1=2)
+  OR @IF(@min_v IS NOT NULL AND @inclusive, @column <= @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, @column < @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, @column >= @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, @column > @max_v, False)
     """,
 )
 

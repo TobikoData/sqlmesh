@@ -177,7 +177,7 @@ def test_load_with_defaults(model, assert_exp_eq):
             *
         FROM
             db.table
-        WHERE 1=1
+        WHERE True
             AND @IF(@field4 = 'overridden', @field4 IN ('some string', 'other string'), 1=1)
             AND @field1 = @field2 
             AND @field3 != @field4
@@ -192,7 +192,7 @@ def test_load_with_defaults(model, assert_exp_eq):
     }
     assert_exp_eq(
         audit.render_query(model, field4=exp.Literal.string("overridden")),
-        'SELECT * FROM "db"."table" AS "table" WHERE "other_column" <> \'overridden\' AND "some_column" = 3 AND \'overridden\' IN (\'some string\', \'other string\')',
+        'SELECT * FROM "db"."table" AS "table" WHERE TRUE AND \'overridden\' IN (\'some string\', \'other string\') AND "some_column" = 3 AND "other_column" <> \'overridden\''
     )
 
 
@@ -220,7 +220,7 @@ def test_unique_values_audit(model: Model):
     rendered_query_a = builtin.unique_values_audit.render_query(model, columns=[exp.to_column("a")])
     assert (
         rendered_query_a.sql()
-        == """SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "a_rank" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0") AS "_q_1" WHERE "a_rank" > 1"""
+        == 'SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "rank_a" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0") AS "_q_1" WHERE "rank_a" > 1'
     )
 
     rendered_query_a_and_b = builtin.unique_values_audit.render_query(
@@ -228,7 +228,7 @@ def test_unique_values_audit(model: Model):
     )
     assert (
         rendered_query_a_and_b.sql()
-        == """SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "a_rank", ROW_NUMBER() OVER (PARTITION BY "b" ORDER BY 1) AS "b_rank" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0") AS "_q_1" WHERE "a_rank" > 1 OR "b_rank" > 1"""
+        == 'SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "rank_a", ROW_NUMBER() OVER (PARTITION BY "b" ORDER BY 1) AS "rank_b" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0") AS "_q_1" WHERE "rank_a" > 1 OR "rank_b" > 1'
     )
 
 
@@ -281,21 +281,21 @@ def test_accepted_range_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE "a" <= 0'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR "a" <= 0 OR FALSE OR FALSE OR FALSE'
     )
     rendered_query = builtin.accepted_range_audit.render_query(
         model, column=exp.to_column("a"), max_v=100, inclusive=exp.false()
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE "a" > 100'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR FALSE OR FALSE OR FALSE OR "a" > 100'
     )
     rendered_query = builtin.accepted_range_audit.render_query(
         model, column=exp.to_column("a"), min_v=100, max_v=100
     )
     assert (
         rendered_query.sql()
-        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE "a" <= 100 OR "a" >= 100'
+        == 'SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE FALSE OR "a" <= 100 OR FALSE OR "a" >= 100 OR FALSE'
     )
 
 
@@ -306,7 +306,7 @@ def test_at_least_one_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == 'SELECT 1 AS "1" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" GROUP BY 1 HAVING COUNT("a") = 0'
+        == 'SELECT 1 AS "1" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" GROUP BY 1 HAVING COUNT("a") = 0'
     )
 
 
@@ -318,7 +318,7 @@ def test_mutually_exclusive_ranges_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == 'WITH "window_functions" AS (SELECT "a" AS "lower_bound", "a" AS "upper_bound", LEAD("a") OVER (ORDER BY "a", "a") AS "next_lower_bound", ROW_NUMBER() OVER (ORDER BY "a" DESC, "a" DESC) = 1 AS "is_last_record" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0"), "calc" AS (SELECT *, COALESCE("lower_bound" <= "upper_bound", FALSE) AS "lower_bound_lte_upper_bound", COALESCE("upper_bound" <= "next_lower_bound", "is_last_record", FALSE) AS "upper_bound_lte_next_lower_bound" FROM "window_functions"), "validation_errors" AS (SELECT * FROM "calc" WHERE NOT "lower_bound_lte_upper_bound" OR NOT "upper_bound_lte_next_lower_bound") SELECT * FROM "validation_errors"'
+        == 'WITH "window_functions" AS (SELECT "a" AS "lower_bound", "a" AS "upper_bound", LEAD("a") OVER (ORDER BY "a", "a") AS "next_lower_bound", ROW_NUMBER() OVER (ORDER BY "a" DESC, "a" DESC) = 1 AS "is_last_record" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0"), "calc" AS (SELECT *, COALESCE("lower_bound" <= "upper_bound", FALSE) AS "lower_bound_lte_upper_bound", COALESCE("upper_bound" <= "next_lower_bound", "is_last_record", FALSE) AS "upper_bound_lte_next_lower_bound" FROM "window_functions"), "validation_errors" AS (SELECT * FROM "calc" WHERE NOT ("lower_bound_lte_upper_bound" AND "upper_bound_lte_next_lower_bound")) SELECT * FROM "validation_errors"'
     )
 
 
@@ -329,5 +329,5 @@ def test_sequential_values_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == 'WITH "windowed" AS (SELECT "a", LAG("a") OVER (ORDER BY "a") AS "prv" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0"), "validation_errors" AS (SELECT * FROM "windowed" WHERE NOT "a" = "prv" + 1) SELECT * FROM "validation_errors"'
+        == 'WITH "windowed" AS (SELECT "a", LAG("a") OVER (ORDER BY "a") AS "prv" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0"), "validation_errors" AS (SELECT * FROM "windowed" WHERE NOT ("a" = "prv" + 1)) SELECT * FROM "validation_errors"'
     )
