@@ -1,7 +1,7 @@
+import React, { useMemo } from 'react'
 import Input from '@components/input/Input'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { isFalse, isArrayEmpty, isArrayNotEmpty } from '@utils/index'
-import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { EnumSize } from '~/types/enum'
@@ -25,13 +25,20 @@ export default function Search({
     : filterModelsBySearch(indices, search)
 
   return (
-    <div className="p-2 relative">
+    <div
+      className="p-2 relative"
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          setSearch('')
+        }
+      }}
+    >
       <Input
         className="w-full !m-0"
         size={EnumSize.md}
         value={search}
         placeholder="Search"
-        onInput={e => {
+        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
           setSearch(e.target.value.trim())
         }}
         autoFocus

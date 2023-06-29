@@ -1,8 +1,11 @@
 import { type XYCoord, useDragLayer } from 'react-dnd'
 import { useMemo, type CSSProperties } from 'react'
 import Directory from './Directory'
-import { useStoreFileExplorer } from '@context/fileTree'
+import File from './File'
 import { ModelDirectory } from '@models/directory'
+import { useFileExplorer } from './context'
+import FileExplorer from './FileExplorer'
+import { ModelFile } from '@models/file'
 
 const layerStyles: CSSProperties = {
   position: 'fixed',
@@ -15,7 +18,7 @@ const layerStyles: CSSProperties = {
 }
 
 export default function DragLayer(): JSX.Element {
-  const activeRange = useStoreFileExplorer(s => s.activeRange)
+  const { activeRange } = useFileExplorer()
 
   const { isDragging, currentOffset, artifact } = useDragLayer(monitor => ({
     artifact: monitor.getItem(),
@@ -35,19 +38,30 @@ export default function DragLayer(): JSX.Element {
       {isDragging && (
         <div style={layerStyles}>
           <div style={getItemStyles(currentOffset)}>
-            {artifacts.map(
-              artifact =>
-                artifact instanceof ModelDirectory && (
-                  <Directory.Container
+            {artifacts.map(artifact => (
+              <span key={artifact.id}>
+                {artifact instanceof ModelDirectory && (
+                  <FileExplorer.Container
                     key={artifact.path}
-                    directory={artifact}
+                    artifact={artifact}
                     className="bg-theme"
                   >
                     <Directory.Icons hasChevron={false} />
                     <Directory.Display directory={artifact} />
-                  </Directory.Container>
-                ),
-            )}
+                  </FileExplorer.Container>
+                )}
+                {artifact instanceof ModelFile && (
+                  <FileExplorer.Container
+                    key={artifact.path}
+                    artifact={artifact}
+                    className="bg-theme"
+                  >
+                    <File.Icons />
+                    <File.Display file={artifact} />
+                  </FileExplorer.Container>
+                )}
+              </span>
+            ))}
           </div>
         </div>
       )}

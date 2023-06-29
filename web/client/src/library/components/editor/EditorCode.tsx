@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
-import { useStoreFileExplorer } from '~/context/fileTree'
 import { useApiFileByPath } from '~/api'
 import {
   debounceAsync,
@@ -122,7 +121,7 @@ function CodeEditorRemoteFile({
   path: string
   children: (options: { file: ModelFile; keymaps: KeyBinding[] }) => JSX.Element
 }): JSX.Element {
-  const files = useStoreFileExplorer(s => s.files)
+  const files = useStoreProject(s => s.files)
 
   const { refetch: getFileContent, isFetching } = useApiFileByPath(path)
   const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)

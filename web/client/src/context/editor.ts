@@ -30,7 +30,7 @@ interface EditorStore {
   direction: 'vertical' | 'horizontal'
   setDirection: (direction: 'vertical' | 'horizontal') => void
   selectTab: (tab?: EditorTab) => void
-  replaceTab: (from: ModelFile, to: ModelFile) => void
+  replaceTab: (from: EditorTab, to: EditorTab) => void
   updateStoredTabsIds: () => void
   addTab: (tab: EditorTab) => void
   closeTab: (file: ModelFile) => void
@@ -87,11 +87,10 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   replaceTab(from, to) {
     const s = get()
 
-    const newTab = createTab(to)
     const tabs = Array.from(s.tabs.entries())
-    const indexAt = tabs.findIndex(([file]) => file === from)
+    const indexAt = tabs.findIndex(([file]) => file === from.file)
 
-    tabs[indexAt] = [to, newTab]
+    tabs[indexAt] = [to.file, to]
 
     set(() => ({
       tabs: new Map(tabs),

@@ -5,7 +5,7 @@ import { useStoreContext } from '@context/context'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import Container from '@components/container/Container'
 import SplitPane from '@components/splitPane/SplitPane'
-import Search from './Search'
+import Search from '../../components/search/Search'
 import SourceList from './SourceList'
 
 export default function PageDocs(): JSX.Element {

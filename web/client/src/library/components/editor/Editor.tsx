@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Divider } from '../divider/Divider'
-import { useStoreFileExplorer } from '../../../context/fileTree'
+import { useStoreProject } from '../../../context/project'
 import SplitPane from '../splitPane/SplitPane'
 import {
   debounceSync,
@@ -107,8 +107,8 @@ function EditorLoading(): JSX.Element {
 }
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
-  const files = useStoreFileExplorer(s => s.files)
-  const setSelected = useStoreFileExplorer(s => s.setSelected)
+  const files = useStoreProject(s => s.files)
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const direction = useStoreEditor(s => s.direction)
   const engine = useStoreEditor(s => s.engine)
@@ -127,7 +127,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const modelExtensions = useSQLMeshModelExtensions(
     tab.file.path,
     model => {
-      setSelected(files.get(model.path))
+      setSelectedFile(files.get(model.path))
     },
     (model, column) => {
       setManuallySelectedColumn([model, column])

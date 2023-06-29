@@ -1,40 +1,56 @@
-import { useState, type MouseEvent } from 'react'
-import {
-  DocumentIcon,
-  XCircleIcon,
-  CheckCircleIcon,
-} from '@heroicons/react/24/solid'
+import { useState, type MouseEvent, useEffect } from 'react'
+import { DocumentIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { ModelFile } from '~/models'
 import { isFalse, isStringEmptyOrNil } from '~/utils'
-import { useStoreEditor } from '~/context/editor'
-import { useStoreFileExplorer } from '~/context/fileTree'
+import { useStoreProject } from '@context/project'
 import * as ContextMenu from '@radix-ui/react-context-menu'
-import { type PropsArtifact } from './FileExplorer'
+import FileExplorer from './FileExplorer'
+import { useFileExplorer } from './context'
+import { type ModelFile } from '@models/file'
+import { useDrag } from 'react-dnd'
+import { getEmptyImage } from 'react-dnd-html5-backend'
 
-interface PropsFile extends PropsArtifact {
-  file: ModelFile
-}
-
-export default function File({
+function File({
   file,
-  removeArtifactWithConfirmation,
-  renameAtrifact,
   className,
   style,
-}: PropsFile): JSX.Element {
-  const tab = useStoreEditor(s => s.tab)
+}: {
+  file: ModelFile
+  className?: string
+  style?: React.CSSProperties
+}): JSX.Element {
+  const selectedFile = useStoreProject(s => s.selectedFile)
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
-  const activeRange = useStoreFileExplorer(s => s.activeRange)
-  const tabs = useStoreEditor(s => s.tabs)
-  const replaceTab = useStoreEditor(s => s.replaceTab)
+  const {
+    activeRange,
+    setActiveRange,
+    selectArtifactsInRange,
+    removeArtifactWithConfirmation,
+  } = useFileExplorer()
 
-  const selected = useStoreFileExplorer(s => s.selected)
-  const setSelected = useStoreFileExplorer(s => s.setSelected)
-  const setActiveRange = useStoreFileExplorer(s => s.setActiveRange)
-  const selectArtifactsInRange = useStoreFileExplorer(
-    s => s.selectArtifactsInRange,
+  const [newName, setNewName] = useState<string>()
+  const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
+
+  const [{ isDragging }, drag, preview] = useDrag(
+    () => ({
+      type: 'artifact',
+      item: file,
+      canDrag() {
+        return isStringEmptyOrNil(newName)
+      },
+      collect(monitor) {
+        return {
+          isDragging: monitor.isDragging(),
+        }
+      },
+    }),
+    [file, newName],
   )
+
+  useEffect(() => {
+    preview(getEmptyImage(), { captureDraggingState: true })
+  }, [preview])
 
   function handleSelect(e: MouseEvent): void {
     e.stopPropagation()
@@ -49,75 +65,97 @@ export default function File({
       } else {
         activeRange.add(file)
       }
+
       setActiveRange(activeRange)
     } else if (e.shiftKey && activeRange.size > 0) {
       selectArtifactsInRange(file)
-    } else if (file !== selected) {
-      setSelected(file)
-
-      const shouldReplaceTab =
-        selected instanceof ModelFile &&
-        isFalse(selected.isChanged) &&
-        selected.isRemote &&
-        isFalse(tabs.has(file))
-
-      if (shouldReplaceTab) {
-        replaceTab(selected, file)
+    } else {
+      if (activeRange.size > 0) {
+        activeRange.clear()
       }
+
+      activeRange.add(file)
+
+      setActiveRange(activeRange)
+      setSelectedFile(file)
     }
   }
 
-  const [newName, setNewName] = useState<string>()
-  const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
+  const disabled = activeRange.size > 1 && activeRange.has(file)
 
   return (
-    <span
-      className={clsx(
-        'whitespace-nowrap group/file flex rounded-md',
-        isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
-        isOpenContextMenu && 'bg-primary-10',
-        activeRange.has(file)
-          ? 'text-brand-100 bg-brand-500 dark:bg-brand-700 dark:text-brand-100'
-          : tab?.file === file &&
-              'bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
-        className,
-      )}
-      style={style}
-      onContextMenu={(e: MouseEvent) => {
-        e.stopPropagation()
-      }}
-      onClick={handleSelect}
-    >
-      <span className="flex w-full items-center overflow-hidden overflow-ellipsis">
-        <div className="flex items-center">
-          <DocumentIcon className="inline-block w-3 ml-1 mr-2" />
-        </div>
+    <div ref={drag}>
+      <FileExplorer.Container
+        artifact={file}
+        isSelected={selectedFile === file}
+        className={clsx(
+          isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
+          isOpenContextMenu && 'bg-primary-10',
+          isDragging && 'opacity-50',
+          className,
+        )}
+        style={style}
+        handleSelect={handleSelect}
+      >
+        <File.Icons />
         {isStringEmptyOrNil(newName) ? (
-          <ContextMenuFile
+          <FileExplorer.ContextMenu
+            trigger={
+              <FileExplorer.ContextMenuTrigger>
+                <File.Display file={file} />
+              </FileExplorer.ContextMenuTrigger>
+            }
             onOpenChange={setIsOpenContextMenu}
-            file={file}
-            setNewName={setNewName}
-            removeWithConfirmation={() => removeArtifactWithConfirmation(file)}
-          />
+          >
+            <ContextMenu.Item
+              className={clsx(
+                'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
+                disabled
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:bg-accent-500 hover:text-light',
+              )}
+              disabled={disabled}
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation()
+              }}
+              onSelect={(e: Event) => {
+                e.stopPropagation()
+
+                setNewName(file.name)
+              }}
+            >
+              Rename
+              <div className="ml-auto pl-5"></div>
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-danger-500 hover:bg-danger-500 hover:text-light"
+              onSelect={(e: Event) => {
+                e.stopPropagation()
+
+                removeArtifactWithConfirmation(file)
+              }}
+            >
+              Remove {activeRange.has(file) ? activeRange.size : ''}
+              <div className="ml-auto pl-5"></div>
+            </ContextMenu.Item>
+          </FileExplorer.ContextMenu>
         ) : (
-          <FileRename
-            file={file}
+          <FileExplorer.Rename
+            atrifact={file}
             newName={newName}
             setNewName={setNewName}
-            rename={() => renameAtrifact(file, newName)}
           />
         )}
-      </span>
-    </span>
+      </FileExplorer.Container>
+    </div>
   )
 }
 
-function FileName({ file }: { file: ModelFile }): JSX.Element {
+function FileDisplay({ file }: { file: ModelFile }): JSX.Element {
   return (
     <span
-      title={`${file.name}${file.is_supported ? '' : ' - unsupported format'}`}
       className={clsx(
-        'w-full overflow-hidden overflow-ellipsis cursor-default py-[0.125rem] pr-2',
+        'inline-block overflow-hidden overflow-ellipsis py-[0.125rem]',
         !file.is_supported && 'opacity-50',
       )}
     >
@@ -126,115 +164,15 @@ function FileName({ file }: { file: ModelFile }): JSX.Element {
   )
 }
 
-function FileRename({
-  file,
-  newName,
-  setNewName,
-  rename,
-}: {
-  file: ModelFile
-  newName?: string
-  setNewName: (name?: string) => void
-  rename: () => void
-}): JSX.Element {
+function FileIcons(): JSX.Element {
   return (
-    <div className="w-full flex items-center py-[0.125rem] pr-2">
-      <input
-        type="text"
-        className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
-        value={newName}
-        onInput={(e: any) => {
-          e.stopPropagation()
-
-          setNewName(e.target.value)
-        }}
-      />
-      <div className="flex">
-        {file.name === newName?.trim() || newName === '' ? (
-          <XCircleIcon
-            className="inline-block w-4 h-4 ml-2 text-neutral-100 cursor-pointer"
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              setNewName(undefined)
-            }}
-          />
-        ) : (
-          <CheckCircleIcon
-            className={`inline-block w-4 h-4 ml-2 text-success-500 cursor-pointer`}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              rename()
-              setNewName(undefined)
-            }}
-          />
-        )}
-      </div>
+    <div className="flex items-center">
+      <DocumentIcon className="inline-block w-3 ml-1 mr-2" />
     </div>
   )
 }
 
-function ContextMenuFile({
-  file,
-  setNewName,
-  removeWithConfirmation,
-  onOpenChange,
-}: {
-  file: ModelFile
-  removeWithConfirmation: () => void
-  setNewName: (newName: string) => void
-  onOpenChange: (isOpen: boolean) => void
-  newName?: string
-}): JSX.Element {
-  const activeRange = useStoreFileExplorer(s => s.activeRange)
+File.Display = FileDisplay
+File.Icons = FileIcons
 
-  const disabled = activeRange.size > 1 && activeRange.has(file)
-  return (
-    <ContextMenu.Root onOpenChange={onOpenChange}>
-      <ContextMenu.Trigger className="w-full overflow-hidden flex items-center justify-between">
-        <FileName file={file} />
-      </ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenu.Content
-          className="bg-light rounded-md overflow-hiddin shadow-lg py-2 px-1"
-          onClick={(e: MouseEvent) => {
-            e.stopPropagation()
-          }}
-        >
-          <ContextMenu.Item
-            className={clsx(
-              'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
-              disabled
-                ? 'opacity-50 cursor-not-allowed'
-                : 'hover:bg-accent-500 hover:text-light',
-            )}
-            disabled={disabled}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-            }}
-            onSelect={(e: Event) => {
-              e.stopPropagation()
-
-              setNewName(file.name)
-            }}
-          >
-            Rename
-            <div className="ml-auto pl-5"></div>
-          </ContextMenu.Item>
-          <ContextMenu.Item
-            className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-danger-500 hover:bg-danger-500 hover:text-light"
-            onSelect={(e: Event) => {
-              e.stopPropagation()
-
-              removeWithConfirmation()
-            }}
-          >
-            Remove {activeRange.has(file) ? activeRange.size : ''}
-            <div className="ml-auto pl-5"></div>
-          </ContextMenu.Item>
-        </ContextMenu.Content>
-      </ContextMenu.Portal>
-    </ContextMenu.Root>
-  )
-}
+export default File

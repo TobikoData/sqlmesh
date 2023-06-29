@@ -4,18 +4,20 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { Button } from '../button/Button'
 import clsx from 'clsx'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
-import { useStoreFileExplorer } from '@context/fileTree'
+import { useStoreProject } from '@context/project'
 import { ModelDirectory } from '@models/directory'
-import { type ModelFile } from '@models/file'
+import { ModelFile } from '@models/file'
+import { isFalse } from '@utils/index'
 
 export default function EditorTabs(): JSX.Element {
-  const selected = useStoreFileExplorer(s => s.selected)
+  const selectedFile = useStoreProject(s => s.selectedFile)
 
   const tab = useStoreEditor(s => s.tab)
   const tabs = useStoreEditor(s => s.tabs)
   const addTab = useStoreEditor(s => s.addTab)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
+  const replaceTab = useStoreEditor(s => s.replaceTab)
 
   const [tabsLocal, tabsRemote] = useMemo(() => {
     const local: EditorTab[] = []
@@ -36,17 +38,28 @@ export default function EditorTabs(): JSX.Element {
 
   useEffect(() => {
     if (
-      selected == null ||
-      tab?.file === selected ||
-      selected instanceof ModelDirectory
+      tab == null ||
+      selectedFile == null ||
+      tab?.file === selectedFile ||
+      selectedFile instanceof ModelDirectory
     )
       return
 
-    const newTab = createTab(selected as ModelFile)
+    const newTab = createTab(selectedFile)
+    const shouldReplaceTab =
+      tab.file instanceof ModelFile &&
+      isFalse(tab.file.isChanged) &&
+      tab.file.isRemote &&
+      isFalse(tabs.has(selectedFile))
 
-    addTab(newTab)
+    if (shouldReplaceTab) {
+      replaceTab(tab, newTab)
+    } else {
+      addTab(newTab)
+    }
+
     selectTab(newTab)
-  }, [selected])
+  }, [selectedFile])
 
   useEffect(() => {
     setTimeout(() => {

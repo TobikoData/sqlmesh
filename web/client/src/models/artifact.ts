@@ -1,3 +1,4 @@
+import { isStringEmptyOrNil } from '@utils/index'
 import { type ModelDirectory } from './directory'
 import { ModelInitial } from './initial'
 
@@ -33,7 +34,7 @@ export class ModelArtifact<
   }
 
   get id(): ID {
-    return this.path === '' ? this.initial.id : this.path
+    return isStringEmptyOrNil(this.path) ? this.initial.id : this.path
   }
 
   get name(): string {
