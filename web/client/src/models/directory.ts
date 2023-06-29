@@ -1,4 +1,4 @@
-import { isNil } from '@utils/index'
+import { isFalse, isNil } from '@utils/index'
 import type { Directory, File } from '../api/client'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { ModelFile } from './file'
@@ -87,19 +87,15 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     return this.directories
       .map(d => [d, d.allArtifacts])
       .flat(100)
-      .concat(this.isOpen ? this.files : [])
+      .concat(this.isOpened ? this.files : [])
   }
 
-  get isOpen(): boolean {
+  get isOpened(): boolean {
     return this._isOpen
   }
 
-  get isExpanded(): boolean {
-    return this.isOpen && this.allDirectories.every(d => d.isExpanded)
-  }
-
-  get isCollapsed(): boolean {
-    return !this.isOpen && this.allDirectories.every(d => d.isCollapsed)
+  get isClosed(): boolean {
+    return isFalse(this._isOpen)
   }
 
   get isModels(): boolean {
@@ -109,17 +105,17 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
   open(): void {
     this._isOpen = true
 
-    this.syncStateOpen?.(this.isOpen)
+    this.syncStateOpen?.(this.isOpened)
   }
 
   close(): void {
     this._isOpen = false
 
-    this.syncStateOpen?.(this.isOpen)
+    this.syncStateOpen?.(this.isOpened)
   }
 
   toggle(): void {
-    this.isOpen ? this.close() : this.open()
+    this.isOpened ? this.close() : this.open()
   }
 
   expand(): void {
@@ -137,22 +133,35 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
   }
 
   hasFile(file: ModelFile): boolean {
-    return this.allFiles.some(f => f.id === file.id)
+    return this.allFiles.includes(file)
+  }
+
+  hasDirectory(directory: ModelDirectory): boolean {
+    return this.allDirectories.includes(directory)
   }
 
   addFile(file: ModelFile): void {
     this.files.push(file)
+
+    file.parent = this
   }
 
   addDirectory(directory: ModelDirectory): void {
     this.directories.push(directory)
+
+    directory.parent = this
+    directory.level = this.level + 1
   }
 
   removeFile(file: ModelFile): void {
     this.files = this.files.filter(f => f !== file)
+
+    file.parent = undefined
   }
 
   removeDirectory(directory: ModelDirectory): void {
     this.directories = this.directories.filter(d => d !== directory)
+
+    directory.parent = undefined
   }
 }

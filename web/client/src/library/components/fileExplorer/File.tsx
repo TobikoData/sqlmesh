@@ -10,14 +10,10 @@ import { isFalse, isStringEmptyOrNil } from '~/utils'
 import { useStoreEditor } from '~/context/editor'
 import { useStoreFileExplorer } from '~/context/fileTree'
 import * as ContextMenu from '@radix-ui/react-context-menu'
-import { type ModelArtifact } from '@models/artifact'
+import { type PropsArtifact } from './FileExplorer'
 
-interface PropsFile {
+interface PropsFile extends PropsArtifact {
   file: ModelFile
-  removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
-  renameAtrifact: (artifact: ModelArtifact, newName?: string) => void
-  className?: string
-  style?: React.CSSProperties
 }
 
 export default function File({
@@ -83,7 +79,7 @@ export default function File({
         activeRange.has(file)
           ? 'text-brand-100 bg-brand-500 dark:bg-brand-700 dark:text-brand-100'
           : tab?.file === file &&
-              'bg-neutral-200 text-neutral-900 dark:bg-dark-lighter dark:text-primary-500',
+              'bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
         className,
       )}
       style={style}

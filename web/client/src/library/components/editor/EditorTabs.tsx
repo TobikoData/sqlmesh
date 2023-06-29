@@ -6,7 +6,7 @@ import clsx from 'clsx'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { useStoreFileExplorer } from '@context/fileTree'
 import { ModelDirectory } from '@models/directory'
-import { ModelFile } from '@models/file'
+import { type ModelFile } from '@models/file'
 
 export default function EditorTabs(): JSX.Element {
   const selected = useStoreFileExplorer(s => s.selected)
@@ -131,7 +131,7 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
         className={clsx(
           'flex border-2 justify-between items-center pl-2 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent border-r border-r-theme-darker dark:border-r-theme-lighter',
           tab.file.id === activeTab?.file.id
-            ? 'bg-neutral-200 border-neutral-200 text-neutral-900 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
+            ? 'bg-neutral-200 border-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
             : 'bg-trasparent hover:bg-theme-darker dark:hover:bg-theme-lighter',
         )}
       >

@@ -29,6 +29,8 @@ import { type Model } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
+import { useStoreEditor } from '@context/editor'
+import { type ModelFile } from '@models/file'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -63,6 +65,12 @@ export default function PageIDE(): JSX.Element {
   const project = useStoreFileExplorer(s => s.project)
   const setProject = useStoreFileExplorer(s => s.setProject)
   const setFiles = useStoreFileExplorer(s => s.setFiles)
+
+  const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
+  const storedTabsId = useStoreEditor(s => s.storedTabsId)
+  const selectTab = useStoreEditor(s => s.selectTab)
+  const createTab = useStoreEditor(s => s.createTab)
+  const addTab = useStoreEditor(s => s.addTab)
 
   const subscribe = useChannelEvents()
 
@@ -137,7 +145,10 @@ export default function PageIDE(): JSX.Element {
   }, [location])
 
   useEffect(() => {
-    setFiles(project?.allFiles ?? [])
+    const files = project?.allFiles ?? []
+
+    setFiles(files)
+    restoreEditorTabsFromSaved(files)
   }, [project])
 
   useEffect(() => {
@@ -202,6 +213,20 @@ export default function PageIDE(): JSX.Element {
     setActivePlan(undefined)
 
     void debouncedGetEnvironemnts()
+  }
+
+  function restoreEditorTabsFromSaved(files: ModelFile[]): void {
+    files.forEach(file => {
+      if (storedTabsIds.includes(file.id)) {
+        const tab = createTab(file)
+
+        if (storedTabsId === file.id) {
+          selectTab(tab)
+        } else {
+          addTab(tab)
+        }
+      }
+    })
   }
 
   const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor

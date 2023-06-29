@@ -23,15 +23,13 @@ import CodeEditor from './EditorCode'
 import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
 
 function Editor(): JSX.Element {
-  const files = useStoreFileExplorer(s => s.files)
-
   const tab = useStoreEditor(s => s.tab)
-  const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
-  const storedTabsId = useStoreEditor(s => s.storedTabsId)
   const engine = useStoreEditor(s => s.engine)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const addTab = useStoreEditor(s => s.addTab)
+  const setDialects = useStoreEditor(s => s.setDialects)
+  const refreshTab = useStoreEditor(s => s.refreshTab)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
 

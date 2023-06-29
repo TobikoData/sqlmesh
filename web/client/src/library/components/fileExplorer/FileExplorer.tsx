@@ -14,10 +14,13 @@ import {
   writeFileApiFilesPathPost,
 } from '@api/client'
 import { useStoreEditor } from '@context/editor'
-import { type ModelArtifact } from '@models/artifact'
+import { ModelArtifact } from '@models/artifact'
 import { ModelDirectory } from '@models/directory'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import { getAllFilesInDirectory, toUniqueName } from './help'
+import { DndProvider } from 'react-dnd'
+import { HTML5Backend } from 'react-dnd-html5-backend'
+import DragLayer from './DragLayer'
 
 /* TODO:
   - add move files/directories
@@ -26,6 +29,13 @@ import { getAllFilesInDirectory, toUniqueName } from './help'
   - add copy and paste
   - add accessability support
 */
+
+export interface PropsArtifact {
+  removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
+  renameAtrifact: (artifact: ModelArtifact, newName?: string) => void
+  className?: string
+  style?: React.CSSProperties
+}
 
 export default function FileExplorer({
   className,
@@ -103,8 +113,8 @@ export default function FileExplorer({
         parent.addFile(file)
         parent.open()
 
-        setFiles(project?.allFiles ?? [])
         setSelected(file)
+        setFiles(project?.allFiles ?? [])
       })
       .catch(error => {
         // TODO: Show error notification
@@ -147,7 +157,7 @@ export default function FileExplorer({
     }
 
     if (artifact instanceof ModelFile) {
-      void writeFileApiFilesPathPost(currentPath, {
+      writeFileApiFilesPathPost(currentPath, {
         new_path: artifact.path,
       })
         .then(response => {
@@ -247,7 +257,6 @@ export default function FileExplorer({
     if (activeRange.has(artifact)) {
       // User selected multiple including current directory
       // so here we should prompt to delete all selected
-
       confirmation = {
         headline: 'Removing Selected Files/Directories',
         description: `Are you sure you want to remove ${activeRange.size} items?`,
@@ -261,6 +270,61 @@ export default function FileExplorer({
     }
 
     setConfirmation(confirmation)
+  }
+
+  function moveArtifacts(
+    artifacts: Set<ModelArtifact>,
+    target: ModelDirectory,
+  ): void {
+    if (isLoading) return
+
+    setIsLoading(true)
+
+    const list = Array.from(artifacts)
+    const promises = list.map(artifact => {
+      const new_path = ModelArtifact.toPath(target.path, artifact.name)
+
+      console.log({ new_path })
+
+      if (artifact instanceof ModelFile) {
+        return writeFileApiFilesPathPost(artifact.path, {
+          new_path,
+        })
+      }
+
+      return writeDirectoryApiDirectoriesPathPost(artifact.path, {
+        new_path,
+      })
+    })
+
+    Promise.all(promises)
+      .then(resolvedList => {
+        resolvedList.forEach((_, index) => {
+          const artifact = list[index]
+
+          if (artifact instanceof ModelFile) {
+            target.addFile(artifact)
+            artifact.parent?.removeFile(artifact)
+          }
+
+          if (artifact instanceof ModelDirectory) {
+            artifact.parent?.removeDirectory(artifact)
+            target.addDirectory(artifact)
+          }
+        })
+
+        setActiveRange(new Set())
+      })
+      .catch(error => {
+        // TODO: Show error notification
+        console.log(error)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
+
+    setIsLoading(false)
+    setActiveRange(new Set())
   }
 
   function handleKeyDown(e: React.KeyboardEvent): void {
@@ -294,20 +358,24 @@ export default function FileExplorer({
           createFile={() => createFile(project)}
           createDirectory={() => createDirectory(project)}
         >
-          <div
-            className="h-full px-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
-            tabIndex={1}
-            onKeyDown={handleKeyDown}
-          >
-            <Directory
-              directory={project}
-              createFile={createFile}
-              createDirectory={createDirectory}
-              removeArtifactWithConfirmation={removeArtifactWithConfirmation}
-              renameAtrifact={renameAtrifact}
-              className="z-20 relative"
-            />
-          </div>
+          <DndProvider backend={HTML5Backend}>
+            <div
+              className="relative h-full px-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
+              tabIndex={1}
+              onKeyDown={handleKeyDown}
+            >
+              <DragLayer />
+              <Directory
+                className="z-20 relative"
+                directory={project}
+                createFile={createFile}
+                createDirectory={createDirectory}
+                renameAtrifact={renameAtrifact}
+                removeArtifactWithConfirmation={removeArtifactWithConfirmation}
+                moveArtifacts={moveArtifacts}
+              />
+            </div>
+          </DndProvider>
         </ContextMenuProject>
       )}
       <ModalConfirmation

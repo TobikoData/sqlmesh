@@ -69,9 +69,12 @@ export class ModelArtifact<
   }
 
   private toPath(name: string, fallback: string = ''): string {
-    return (this.withParent ? `${this.parent?.path ?? ''}/${name}` : fallback)
-      .split('/')
-      .filter(Boolean)
-      .join('/')
+    return ModelArtifact.toPath(
+      this.withParent ? `${this.parent?.path ?? ''}/${name}` : fallback,
+    )
+  }
+
+  static toPath(...paths: string[]): string {
+    return paths.join('/').split('/').filter(Boolean).join('/')
   }
 }
