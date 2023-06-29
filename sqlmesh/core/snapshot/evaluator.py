@@ -36,6 +36,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.model import Model, ViewKind
 from sqlmesh.core.snapshot import (
+    QualifiedViewName,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
@@ -356,8 +357,6 @@ class SnapshotEvaluator:
             logger.exception("Failed to close Snapshot Evaluator")
 
     def _create_snapshot(self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]) -> None:
-        self.adapter.create_schema(snapshot.physical_schema)
-
         # If a snapshot reuses an existing version we assume that the table for that version
         # has already been created, so we only need to create a temporary table or a clone.
         is_dev = snapshot.is_forward_only or snapshot.is_indirect_non_breaking
@@ -397,14 +396,10 @@ class SnapshotEvaluator:
         is_dev: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        qualified_view_name = snapshot.qualified_view_name
-        schema = qualified_view_name.schema_for_environment(environment=environment)
-        if schema is not None:
-            self.adapter.create_schema(schema)
-
-        view_name = qualified_view_name.for_environment(environment=environment)
         table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
-        _evaluation_strategy(snapshot, self.adapter).promote(view_name, table_name)
+        _evaluation_strategy(snapshot, self.adapter).promote(
+            snapshot.qualified_view_name, environment, table_name
+        )
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -415,8 +410,9 @@ class SnapshotEvaluator:
         environment: str,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        view_name = snapshot.qualified_view_name.for_environment(environment=environment)
-        _evaluation_strategy(snapshot, self.adapter).demote(view_name)
+        _evaluation_strategy(snapshot, self.adapter).demote(
+            snapshot.qualified_view_name, environment
+        )
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -543,20 +539,22 @@ class EvaluationStrategy(abc.ABC):
         """
 
     @abc.abstractmethod
-    def promote(self, view_name: str, table_name: str) -> None:
+    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
         """Updates the target view to point to the target table.
 
         Args:
             view_name: The name of the target view.
+            environment: The target environment.
             table_name: The name of the target table.
         """
 
     @abc.abstractmethod
-    def demote(self, view_name: str) -> None:
+    def demote(self, view_name: QualifiedViewName, environment: str) -> None:
         """Deletes the target view.
 
         Args:
             view_name: The name of the target view.
+            environment: The target environment.
         """
 
 
@@ -597,27 +595,34 @@ class SymbolicStrategy(EvaluationStrategy):
     def delete(self, name: str) -> None:
         pass
 
-    def promote(self, view_name: str, table_name: str) -> None:
+    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
         pass
 
-    def demote(self, view_name: str) -> None:
+    def demote(self, view_name: QualifiedViewName, environment: str) -> None:
         pass
 
 
 class EmbeddedStrategy(SymbolicStrategy):
-    def promote(self, view_name: str, table_name: str) -> None:
-        logger.info("Dropping view '%s' for non-materialized table", view_name)
-        self.adapter.drop_view(view_name)
+    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
+        target_name = view_name.for_environment(environment)
+        logger.info("Dropping view '%s' for non-materialized table", target_name)
+        self.adapter.drop_view(target_name)
 
 
 class PromotableStrategy(EvaluationStrategy):
-    def promote(self, view_name: str, table_name: str) -> None:
-        logger.info("Updating view '%s' to point at table '%s'", view_name, table_name)
-        self.adapter.create_view(view_name, exp.select("*").from_(table_name))
+    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
+        schema = view_name.schema_for_environment(environment=environment)
+        if schema is not None:
+            self.adapter.create_schema(schema)
 
-    def demote(self, view_name: str) -> None:
-        logger.info("Dropping view '%s'", view_name)
-        self.adapter.drop_view(view_name)
+        target_name = view_name.for_environment(environment)
+        logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
+        self.adapter.create_view(target_name, exp.select("*").from_(table_name))
+
+    def demote(self, view_name: QualifiedViewName, environment: str) -> None:
+        target_name = view_name.for_environment(environment)
+        logger.info("Dropping view '%s'", target_name)
+        self.adapter.drop_view(target_name)
 
 
 class MaterializableStrategy(PromotableStrategy):
@@ -638,6 +643,8 @@ class MaterializableStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
+        self.adapter.create_schema(exp.to_table(name).db)
+
         logger.info("Creating table '%s'", name)
         if model.annotated:
             self.adapter.create_table(
