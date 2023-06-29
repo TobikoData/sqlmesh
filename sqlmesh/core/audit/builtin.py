@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sqlglot.expressions as exp
+from sqlglot import exp
 
 from sqlmesh.core.audit.definition import Audit
 
@@ -85,27 +85,27 @@ WHERE @REDUCE(
 )
 
 # relationship(to=some.model, source_column=id, target_column=id)
-relationship_audit = Audit(
-    name="relationship",
-    defaults={"from_condition": exp.null(), "to_condition": exp.null()},
-    query="""
-SELECT
-  child.source_column
-FROM (
-  SELECT @source_column as source_column
-  FROM @this_model
-  WHERE NOT @source_column IS NULL
-  AND @IF(@from_condition IS NOT NULL, @from_condition, 1=1)
-) AS child
-LEFT JOIN (
-  SELECT @target_column AS target_column
-  FROM @to
-  @WHERE(@to_condition IS NOT NULL) @to_condition
-) AS parent
-ON child.source_column = parent.target_column
-WHERE parent.target_column IS NULL
-    """,
-)
+# relationship_audit = Audit(
+#     name="relationship",
+#     defaults={"from_condition": exp.true(), "to_condition": exp.true()},
+#     query="""
+# SELECT
+#   child.source_column
+# FROM (
+#   SELECT @source_column as source_column
+#   FROM @this_model
+#   WHERE NOT @source_column IS NULL
+#   AND @from_condition
+# ) AS child
+# LEFT JOIN (
+#   SELECT @target_column AS target_column
+#   FROM @to
+#   WHERE @to_condition
+# ) AS parent
+# ON child.source_column = parent.target_column
+# WHERE parent.target_column IS NULL
+#     """,
+# )
 
 # accepted_range(column=age, min_v=0, max_v=100)
 # accepted_range(column=age, min_v=10)
@@ -117,7 +117,7 @@ accepted_range_audit = Audit(
 SELECT *
 FROM @this_model
 WHERE
-  1=2
+  false
   OR @IF(@min_v IS NOT NULL AND @inclusive, @column <= @min_v, 1=2)
   OR @IF(@min_v IS NOT NULL AND NOT @inclusive, @column < @min_v, 1=2)
   OR @IF(@max_v IS NOT NULL AND @inclusive, @column >= @max_v, 1=2)
@@ -137,57 +137,59 @@ HAVING COUNT(@column) = 0
 )
 
 # equality(columns=[column_1, column_2], to=some.model)
-equality_audit = Audit(
-    name="equality",
-    query="""
-SELECT @EACH(@columns, c -> c)
-FROM @this_model
-EXCEPT
-SELECT @EACH(@columns, c -> c)
-FROM @to
-    """,
-)
+# equality_audit = Audit(
+#     name="equality",
+#     query="""
+# SELECT @EACH(@columns, c -> c)
+# FROM @this_model
+# EXCEPT
+# SELECT @EACH(@columns, c -> c)
+# FROM @to
+#     """,
+# )
 
 # equal_row_count(to=some.model)
-equal_row_count_audit = Audit(
-    name="equal_row_count",
-    query="""
-SELECT 1
-FROM (
-  SELECT count(*) as cnt
-  FROM @this_model
-) AS src
-INNER JOIN (
-  SELECT count(*) as cnt
-  FROM @to
-) AS tgt ON src.cnt != tgt.cnt
-    """,
-)
+# equal_row_count_audit = Audit(
+#     name="equal_row_count",
+#     query="""
+# SELECT 1
+# FROM (
+#   SELECT count(*) as cnt
+#   FROM @this_model
+# ) AS src
+# INNER JOIN (
+#   SELECT count(*) as cnt
+#   FROM @to
+# ) AS tgt ON src.cnt != tgt.cnt
+#     """,
+# )
 
 # fewer_rows_than(to=some.model)
-fewer_rows_than_audit = Audit(
-    name="fewer_rows_than",
-    query="""
-SELECT 1
-FROM (
-  SELECT count(*) as cnt
-  FROM @this_model
-) AS src
-INNER JOIN (
-  SELECT count(*) as cnt
-  FROM @to
-) AS tgt ON src.cnt >= tgt.cnt
-    """,
-)
+# fewer_rows_than_audit = Audit(
+#     name="fewer_rows_than",
+#     query="""
+# SELECT 1
+# FROM (
+#   SELECT count(*) as cnt
+#   FROM @this_model
+# ) AS src
+# INNER JOIN (
+#   SELECT count(*) as cnt
+#   FROM @to
+# ) AS tgt ON src.cnt >= tgt.cnt
+#     """,
+# )
 
 # not_constant(column=column_name)
 not_constant_audit = Audit(
     name="not_constant",
     query="""
 SELECT 1
-FROM @this_model
-GROUP BY 1
-HAVING COUNT(DISTINCT @column) <= 1
+FROM (
+  SELECT COUNT(DISTINCT @column) AS t_cardinality
+  FROM @this_model
+) AS r
+WHERE r.t_cardinality <= 1
     """,
 )
 
@@ -202,63 +204,61 @@ WHERE @column = ''
 )
 
 # cardinality_equality(source_column=column_1, target_column=column_2, to=some.model)
-cardinality_equality_audit = Audit(
-    name="cardinality_equality",
-    query="""
-WITH table_a AS (
-  SELECT
-    @source_column,
-    count(*) AS num_rows
-  FROM @this_model
-  GROUP BY @source_column
-),
-table_b AS (
-  SELECT
-    @target_column,
-    count(*) AS num_rows
-  FROM @to
-  GROUP BY @target_column
-),
-except_a AS (
-  SELECT *
-  FROM table_a
-  EXCEPT
-  SELECT *
-  FROM table_b
-),
-except_b as (
-  SELECT *
-  FROM table_b
-  EXCEPT
-  SELECT *
-  FROM table_a
-),
-unioned as (
-  SELECT *
-  FROM except_a
-  UNION ALL
-  SELECT *
-  FROM except_b
-)
-SELECT * FROM unioned
-    """,
-)
+# cardinality_equality_audit = Audit(
+#     name="cardinality_equality",
+#     query="""
+# WITH table_a AS (
+#   SELECT
+#     @source_column,
+#     count(*) AS num_rows
+#   FROM @this_model
+#   GROUP BY @source_column
+# ),
+# table_b AS (
+#   SELECT
+#     @target_column,
+#     count(*) AS num_rows
+#   FROM @to
+#   GROUP BY @target_column
+# ),
+# except_a AS (
+#   SELECT *
+#   FROM table_a
+#   EXCEPT
+#   SELECT *
+#   FROM table_b
+# ),
+# except_b AS (
+#   SELECT *
+#   FROM table_b
+#   EXCEPT
+#   SELECT *
+#   FROM table_a
+# ),
+# unioned AS (
+#   SELECT *
+#   FROM except_a
+#   UNION ALL
+#   SELECT *
+#   FROM except_b
+# )
+# SELECT * FROM unioned
+#     """,
+# )
 
 # not_null_proportion(column=column_name, threshold=0.9)
 not_null_proportion_audit = Audit(
     name="not_null_proportion",
     query="""
-WITH src AS (
-  SELECT count(*) as cnt_nulls
-  FROM @this_model
-  WHERE @column IS NULL
-), tgt AS (
-  SELECT count(*) as cnt_tot
-  FROM @this_model
-)
 SELECT *
-FROM src
-INNER JOIN tgt ON src.cnt_nulls >= tgt.cnt_tot * @threshold
+FROM (
+  SELECT
+    count(*) as cnt_tot,
+    count(@column) as cnt_not_null,
+    count(*) - count(@column) as cnt_null
+  FROM @this_model
+) AS s
+WHERE s.cnt_not_null <= s.cnt_tot * @threshold
     """,
 )
 
@@ -278,43 +278,42 @@ mutually_exclusive_ranges_audit = Audit(
     name="mutually_exclusive_ranges",
     defaults={"partition_clause": exp.null()},
     query="""
-with window_functions as (
-    select
-        @lower_bound_column as lower_bound,
-        @upper_bound_column as upper_bound,
-        lead(@lower_bound_column) over (
-            @if(@partition_clause is not null, @partition_clause)
-            order by @lower_bound_column, @upper_bound_column
-        ) as next_lower_bound,
-        row_number() over (
-            @if(@partition_clause is not null, @partition_clause)
-            order by @lower_bound_column desc, @upper_bound_column desc
-        ) = 1 as is_last_record
-    from @this_model
+WITH window_functions AS (
+  SELECT
+    @lower_bound_column AS lower_bound,
+    @upper_bound_column AS upper_bound,
+    LEAD(@lower_bound_column) OVER (
+      @if(@partition_clause IS NOT NULL, @partition_clause)
+      ORDER BY @lower_bound_column, @upper_bound_column
+    ) AS next_lower_bound,
+    row_number() OVER (
+      @if(@partition_clause IS NOT NULL, @partition_clause)
+      ORDER BY @lower_bound_column desc, @upper_bound_column desc
+    ) = 1 AS is_last_record
+  FROM @this_model
 ),
-calc as (
-    select
-        *,
-        coalesce(
-            lower_bound <= upper_bound,
-            false
-        ) as lower_bound_comp_upper_bound,
-        coalesce(
-            upper_bound <= next_lower_bound,
-            is_last_record,
-            false
-        ) as upper_bound_comp_next_lower_bound
-    from window_functions
+calc AS (
+  SELECT
+    *,
+    COALESCE(
+      lower_bound <= upper_bound,
+      False
+    ) AS lower_bound_comp_upper_bound,
+    COALESCE(
+      upper_bound <= next_lower_bound,
+      is_last_record,
+      False
+    ) AS upper_bound_comp_next_lower_bound
+  FROM window_functions
 ),
-validation_errors as (
-    select
-        *
-    from calc
-    where not(
-        lower_bound_comp_upper_bound
-        and upper_bound_comp_next_lower_bound
+validation_errors AS (
+    SELECT *
+    FROM calc
+    WHERE NOT (
+      lower_bound_comp_upper_bound
+      AND upper_bound_comp_next_lower_bound
     )
 )
-select * from validation_errors
+SELECT * FROM validation_errors
     """,
 )
