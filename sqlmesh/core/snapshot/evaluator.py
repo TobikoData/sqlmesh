@@ -617,7 +617,9 @@ class PromotableStrategy(EvaluationStrategy):
 
         target_name = view_name.for_environment(environment)
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
-        self.adapter.create_view(target_name, exp.select("*").from_(table_name))
+        self.adapter.create_view(
+            target_name, exp.select("*").from_(table_name, dialect=self.adapter.dialect)
+        )
 
     def demote(self, view_name: QualifiedViewName, environment: str) -> None:
         target_name = view_name.for_environment(environment)
@@ -643,7 +645,7 @@ class MaterializableStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
-        self.adapter.create_schema(exp.to_table(name).db)
+        self.adapter.create_schema(exp.to_table(name, dialect=self.adapter.dialect).db)
 
         logger.info("Creating table '%s'", name)
         if model.annotated:
@@ -786,6 +788,8 @@ class ViewStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
+        self.adapter.create_schema(exp.to_table(name, dialect=self.adapter.dialect).db)
+
         logger.info("Creating view '%s'", name)
         self.adapter.create_view(
             name,
