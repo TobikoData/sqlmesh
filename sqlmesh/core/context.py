@@ -630,9 +630,8 @@ class Context(BaseContext):
                 )
                 if transpile:
                     for prop in expressions[0].expressions:
-                        p = t.cast(exp.Property, prop)
-                        if p.name.lower() == "dialect":
-                            p.replace(
+                        if prop.name.lower() == "dialect":
+                            prop.replace(
                                 exp.Property(
                                     this="dialect",
                                     value=exp.Literal.string(transpile or model.dialect),
