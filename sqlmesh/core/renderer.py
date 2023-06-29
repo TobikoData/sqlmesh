@@ -61,6 +61,7 @@ class ExpressionRenderer:
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_latest: bool = False,
+        resolve_tables: bool = True,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -69,6 +70,7 @@ class ExpressionRenderer:
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
         self._only_latest = only_latest
+        self._should_resolve_tables = resolve_tables
 
         self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.Optional[exp.Expression]] = {}
 
@@ -111,7 +113,9 @@ class ExpressionRenderer:
             }
 
             env = prepare_env(self._python_env)
-            jinja_env = self._jinja_macro_registry.build_environment(**{**render_kwargs, **env})
+            jinja_env = self._jinja_macro_registry.build_environment(
+                **{**render_kwargs, **env}, snapshots=(snapshots or {}), is_dev=is_dev
+            )
 
             if isinstance(expression, d.Jinja):
                 try:
@@ -155,8 +159,8 @@ class ExpressionRenderer:
             self._cache[cache_key] = expression
 
         expression = t.cast(exp.Expression, self._cache[cache_key])
-        if expression is None:
-            return None
+        if expression is None or not self._should_resolve_tables:
+            return expression
 
         return self._resolve_tables(
             expression,
@@ -231,6 +235,7 @@ class QueryRenderer(ExpressionRenderer):
             jinja_macro_registry=jinja_macro_registry,
             python_env=python_env,
             only_latest=only_latest,
+            resolve_tables=False,
         )
 
         self._model_name = model_name
@@ -284,6 +289,7 @@ class QueryRenderer(ExpressionRenderer):
                         start=start,
                         end=end,
                         latest=latest,
+                        snapshots=snapshots,
                         is_dev=is_dev,
                         **kwargs,
                     ),
