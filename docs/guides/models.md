@@ -4,7 +4,7 @@
 
 ---
 
-Before adding a model, ensure that you have [already created your project](/guides/projects) and that you are working in a [dev environment](/concepts/environments).
+Before adding a model, ensure that you have [already created your project](./projects.md) and that you are working in a [dev environment](../concepts/environments.md).
 
 ---
 
@@ -12,18 +12,18 @@ Before adding a model, ensure that you have [already created your project](/guid
 
 To add a model:
 
-1. Within your `models` folder, create a new file. For example, `example_new_model.sql`.
-2. Within the file, define your model as follows:
+1. Within your `models` folder, create a new file. For example, we might add `new_model.sql` to the [quickstart](../quick_start.md) project.
+2. Within the file, define a model. For example:
 
         MODEL (
-            name sqlmesh_example.example_new_model,
+            name sqlmesh_example.new_model,
             kind incremental_by_time_range (
                 time_column (ds, '%Y-%m-%d'),
             ),
         );
 
         SELECT *
-        FROM sqlmesh_example.example_incremental_model
+        FROM sqlmesh_example.incremental_model
         WHERE ds BETWEEN @start_ds and @end_ds
 
     **Note:** The last line in this file is required if your model is incremental. Refer to [model kinds](../concepts/models/model_kinds.md) for more information about the kinds of models you can create.
@@ -33,8 +33,8 @@ To add a model:
 To edit an existing model:
 
 1. Open the model file you wish to edit in your preferred editor and make a change.
-2. To preview an example of what your change looks like without actually creating a table, use the `sqlmesh evaluate` command. Refer to [evaluating a model](#evaluating-a-model).
-3. To materialize this change, use the `sqlmesh plan` command. Refer to [previewing changes using the `plan` command](#previewing-changes-using-the-plan-command).
+2. To preview an example of what your change looks like without actually creating a table, use the `sqlmesh evaluate` command. Refer to [evaluating a model](#evaluating-a-model) below.
+3. To materialize this change, use the `sqlmesh plan` command. Refer to [previewing changes using the `plan` command](#previewing-changes-using-the-plan-command) below.
 
 ### Evaluating a model
 
@@ -42,9 +42,9 @@ The `evaluate` command will run a query against your database or engine and retu
 
 To evaluate a model:
 
-1. Run the `evaluate` command using either the [CLI](../reference/cli.md) or [Notebook](../reference/notebook.md). An example of the `evaluate` command using the `example_incremental_model` from the [quickstart](../quick_start.md) is below:
+1. Run the `evaluate` command using either the [CLI](../reference/cli.md) or [Notebook](../reference/notebook.md). For example, running the `evaluate` command on `incremental_model` from the [quickstart](../quick_start.md) project:
 
-        $ sqlmesh evaluate sqlmesh_example.example_incremental_model --start=2020-01-07 --end=2020-01-07
+        $ sqlmesh evaluate sqlmesh_example.incremental_model --start=2020-01-07 --end=2020-01-07
 
         id  item_id          ds
         0   7        1  2020-01-07
@@ -67,9 +67,9 @@ Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
 Summary of differences against `dev`:
 ├── Directly Modified:
-│   └── sqlmesh_example.example_incremental_model
+│   └── sqlmesh_example.incremental_model
 └── Indirectly Modified:
-    └── sqlmesh_example.example_full_model
+    └── sqlmesh_example.full_model
 ---
 +++
 @@ -1,6 +1,7 @@
@@ -80,18 +80,18 @@ item_id,
 ds
 FROM (VALUES
 (1, 1, '2020-01-01'),
-Directly Modified: sqlmesh_example.example_incremental_model
+Directly Modified: sqlmesh_example.incremental_model
 └── Indirectly Modified Children:
-    └── sqlmesh_example.example_full_model
-[1] [Breaking] Backfill sqlmesh_example.example_incremental_model and indirectly modified children
-[2] [Non-breaking] Backfill sqlmesh_example.example_incremental_model but not indirectly modified children: 2
+    └── sqlmesh_example.full_model
+[1] [Breaking] Backfill sqlmesh_example.incremental_model and indirectly modified children
+[2] [Non-breaking] Backfill sqlmesh_example.incremental_model but not indirectly modified children: 2
 Models needing backfill (missing dates):
-└── sqlmesh_example.example_incremental_model: (2020-01-01, 2023-02-17)
+└── sqlmesh_example.incremental_model: (2020-01-01, 2023-02-17)
 Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
 Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
 
-sqlmesh_example__dev.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
+sqlmesh_example__dev.incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 
 All model batches have been executed successfully
 
@@ -122,9 +122,9 @@ Successfully Ran 1 tests against duckdb
 ----------------------------------------------------------------------
 Summary of differences against `dev`:
 ├── Directly Modified:
-│   └── sqlmesh_example.example_incremental_model
+│   └── sqlmesh_example.incremental_model
 └── Indirectly Modified:
-    └── sqlmesh_example.example_full_model
+    └── sqlmesh_example.full_model
 ---
 +++
 @@ -1,7 +1,6 @@
@@ -136,9 +136,9 @@ item_id,
 ds
 FROM (VALUES
     (1, 1, '2020-01-01'),
-Directly Modified: sqlmesh_example.example_incremental_model (Non-breaking)
+Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
 └── Indirectly Modified Children:
-    └── sqlmesh_example.example_full_model
+    └── sqlmesh_example.full_model
 Apply - Virtual Update [y/n]: y
 
 Virtual Update executed successfully
@@ -169,7 +169,60 @@ To manually validate your models, you can perform one or more of the following t
 * [Auditing a model](../guides/testing.md#auditing-changes-to-models)
 * [Previewing changes using the `plan` command](#previewing-changes-using-the-plan-command)
 
-## Viewing the DAG
+## Deleting a model
+
+---
+
+Before deleting a model, ensure that you have already run `sqlmesh plan`.
+
+---
+
+To delete a model:
+
+1. Within your `models` directory, delete the file containing the model and any associated tests in the `tests` directory. For this example, we'll delete the `models/full_model.sql` and `tests/test_full_model.yaml` files from our [quickstart](../quick_start.md) project.
+2. Run the `sqlmesh plan <environment>` command, specifying the environment to which you want to apply the change. In this example, we apply the change to our development environment `dev`:
+
+        ```bash linenums="1"
+        $ sqlmesh plan dev
+        ======================================================================
+        Successfully Ran 0 tests against duckdb
+        ----------------------------------------------------------------------
+        Summary of differences against `dev`:
+        └── Removed Models:
+            └── sqlmesh_example.full_model
+        Apply - Virtual Update [y/n]: y
+        Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+
+        The target environment has been updated successfully
+
+
+        Virtual Update executed successfully 
+        ```
+
+    **Note:** If you have other files that reference the model you wish to delete (such as tests), an error message will note the file(s) containing the reference. You must also delete these files to apply the change.
+
+3. Plan and apply your changes to production, and enter `y` for the Virtual Update. By default, the `sqlmesh plan` command targets your production environment:
+
+        ```
+        $ sqlmesh plan    
+        ======================================================================
+        Successfully Ran 0 tests against duckdb
+        ----------------------------------------------------------------------
+        Summary of differences against `prod`:
+        └── Removed Models:
+            └── sqlmesh_example.full_model
+        Apply - Virtual Update [y/n]: y
+        Virtually Updating 'prod' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 0:00:00
+
+        The target environment has been updated successfully
+
+
+        Virtual Update executed successfully
+        ```
+
+4. Verify that the `full_model.sql` model was removed from the output.
+
+## Viewing the DAG of a project's models
 
 ---
 
@@ -194,54 +247,3 @@ To view the DAG, enter the following command:
 `sqlmesh dag`
 
 The generated files (.gv and .jpeg formats) will be placed at the root of your project folder.
-
-## Deleting a model
-
----
-
-Before deleting a model, ensure that you have already run `sqlmesh plan`.
-
----
-
-To delete a model:
-
-1. Within your `models` folder, delete the file containing the model you wish to remove. For this example, we'll delete the `example_full_model.sql` file from our [quickstart](../quick_start.md) project.
-2. Run the `sqlmesh plan <environment>` command, specifying the environment to which you want to apply the change. In the following example, we apply the change to our development environment `dev`:
-
-        ```
-        $ sqlmesh plan dev
-        ======================================================================
-        Successfully Ran 0 tests against duckdb
-        ----------------------------------------------------------------------
-        Summary of differences against `dev`:
-        └── Added Models:
-            └── sqlmesh_example.example_incremental_model
-        Models needing backfill (missing dates):
-        └── sqlmesh_example.example_incremental_model: (2020-01-01, 2023-02-17)
-        Enter the backfill start date (eg. '1 year', '2020-01-01') or blank for the beginning of history:
-        Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
-        Apply - Backfill Tables [y/n]: y
-
-        All model batches have been executed successfully
-
-        sqlmesh_example__dev.example_incremental_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
-        ```
-
-    **Note:** If you have other files that reference the model you wish to delete, an error message will note the file(s) containing the reference. You will need to also delete these files in order to apply the change.
-
-3. Plan and apply your changes to production, and enter `y` for the Virtual Update. By default, the `sqlmesh plan` command targets your production environment:
-
-        ```
-        $ sqlmesh plan
-        ======================================================================
-        Successfully Ran 0 tests against duckdb
-        ----------------------------------------------------------------------
-        Summary of differences against `prod`:
-        └── Removed Models:
-            └── sqlmesh_example.example_full_model
-        Apply - Virtual Update [y/n]: y
-
-        Virtual Update executed successfully
-        ```
-
-4. Verify that the `example_full_model.sql` model was removed from the output.
