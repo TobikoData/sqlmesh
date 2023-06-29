@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react'
 import {
+  Directory,
   deleteDirectoryApiDirectoriesPathDelete,
   deleteFileApiFilesPathDelete,
   writeDirectoryApiDirectoriesPathPost,
@@ -13,6 +14,7 @@ import { isFalse, isNotNil, isStringEmptyOrNil } from '@utils/index'
 import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
 import { type Confirmation } from '@components/modal/ModalConfirmation'
+import { ResponseWithDetail } from '@api/instance'
 
 interface FileExplorer {
   confirmation?: Confirmation
@@ -308,38 +310,41 @@ export default function FileExplorerProvider({
 
     setIsLoading(true)
 
-    const list = Array.from(artifacts)
-    const promises = list.map(artifact => {
+    const moveArtifactCallbacks: Array<() => void> = []
+    const promises: Array<
+      Promise<
+        | (Directory & ResponseWithDetail)
+        | typeof writeDirectoryApiDirectoriesPathPost
+      >
+    > = []
+
+    artifacts.forEach(artifact => {
       const new_path = ModelArtifact.toPath(target.path, artifact.name)
 
-      if (artifact instanceof ModelFile) {
-        return writeFileApiFilesPathPost(artifact.path, {
-          new_path,
+      if (artifact instanceof ModelDirectory) {
+        moveArtifactCallbacks.push(() => {
+          artifact.parent?.removeDirectory(artifact)
+          target.addDirectory(artifact)
         })
+        promises.push(
+          writeDirectoryApiDirectoriesPathPost(artifact.path, { new_path }),
+        )
+
+        artifact.allArtifacts.forEach(a => artifacts.delete(a))
       }
 
-      return writeDirectoryApiDirectoriesPathPost(artifact.path, {
-        new_path,
-      })
+      if (artifact instanceof ModelFile) {
+        moveArtifactCallbacks.push(() => {
+          artifact.parent?.removeFile(artifact)
+          target.addFile(artifact)
+        })
+        promises.push(writeFileApiFilesPathPost(artifact.path, { new_path }))
+      }
     })
 
     Promise.all(promises)
       .then(resolvedList => {
-        resolvedList.forEach((_, index) => {
-          const artifact = list[index]
-
-          if (artifact instanceof ModelFile) {
-            artifact.parent?.removeFile(artifact)
-            target.addFile(artifact)
-          }
-
-          if (artifact instanceof ModelDirectory) {
-            artifact.parent?.removeDirectory(artifact)
-            target.addDirectory(artifact)
-          }
-        })
-
-        setActiveRange(new Set())
+        resolvedList.forEach((_, index) => moveArtifactCallbacks[index]?.())
       })
       .catch(error => {
         // TODO: Show error notification
@@ -347,10 +352,8 @@ export default function FileExplorerProvider({
       })
       .finally(() => {
         setIsLoading(false)
+        setActiveRange(new Set())
       })
-
-    setIsLoading(false)
-    setActiveRange(new Set())
   }
 
   return (
