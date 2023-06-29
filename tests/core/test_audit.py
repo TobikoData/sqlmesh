@@ -160,7 +160,7 @@ def test_macro(model: Model):
     assert audit_jinja.render_query(model).sql() == expected_query
 
 
-def test_load_with_defaults(model: Model, assert_exp_eq):
+def test_load_with_defaults(model, assert_exp_eq):
     expressions = parse(
         """
         Audit (
@@ -306,20 +306,7 @@ def test_at_least_one_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == 'WITH "src" AS (SELECT COUNT(*) AS "cnt_nulls" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE "a" IS NULL), "tgt" AS (SELECT COUNT(*) AS "cnt_tot" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_1") SELECT * FROM "src" INNER JOIN "tgt" ON "src"."cnt_nulls" = "tgt"."cnt_tot"'
-    )
-
-
-def test_relationship_audit(model: Model):
-    rendered_query = builtin.relationship_audit.render_query(
-        model,
-        source_column=exp.to_column("a"),
-        target_column=exp.to_column("a"),
-        to=exp.to_table("db.test_model"),
-    )
-    assert (
-        rendered_query.sql()
-        == 'SELECT "child"."source_column" AS "source_column" FROM (SELECT "a" AS "source_column" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" WHERE NOT "a" IS NULL) AS "child" LEFT JOIN (SELECT "a" AS "target_column" FROM "db"."test_model" AS "test_model") AS "parent" ON "child"."source_column" = "parent"."target_column" WHERE "parent"."target_column" IS NULL'
+        == 'SELECT 1 AS "1" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0" GROUP BY 1 HAVING COUNT("a") = 0'
     )
 
 
@@ -331,5 +318,16 @@ def test_mutually_exclusive_ranges_audit(model: Model):
     )
     assert (
         rendered_query.sql()
-        == 'WITH "window_functions" AS (SELECT "a" AS "lower_bound", "a" AS "upper_bound", LEAD("a") OVER (ORDER BY "a", "a") AS "next_lower_bound", ROW_NUMBER() OVER (ORDER BY "a" DESC, "a" DESC) = 1 AS "is_last_record" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0"), "calc" AS (SELECT *, COALESCE("lower_bound" <= "upper_bound", FALSE) AS "lower_bound_comp_upper_bound", COALESCE("upper_bound" <= "next_lower_bound", "is_last_record", FALSE) AS "upper_bound_comp_next_lower_bound" FROM "window_functions"), "validation_errors" AS (SELECT * FROM "calc" WHERE NOT "lower_bound_comp_upper_bound" OR NOT "upper_bound_comp_next_lower_bound") SELECT * FROM "validation_errors"'
+        == 'WITH "window_functions" AS (SELECT "a" AS "lower_bound", "a" AS "upper_bound", LEAD("a") OVER (ORDER BY "a", "a") AS "next_lower_bound", ROW_NUMBER() OVER (ORDER BY "a" DESC, "a" DESC) = 1 AS "is_last_record" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0"), "calc" AS (SELECT *, COALESCE("lower_bound" <= "upper_bound", FALSE) AS "lower_bound_lte_upper_bound", COALESCE("upper_bound" <= "next_lower_bound", "is_last_record", FALSE) AS "upper_bound_lte_next_lower_bound" FROM "window_functions"), "validation_errors" AS (SELECT * FROM "calc" WHERE NOT "lower_bound_lte_upper_bound" OR NOT "upper_bound_lte_next_lower_bound") SELECT * FROM "validation_errors"'
+    )
+
+
+def test_sequential_values_audit(model: Model):
+    rendered_query = builtin.sequential_values_audit.render_query(
+        model,
+        column=exp.to_column("a"),
+    )
+    assert (
+        rendered_query.sql()
+        == 'WITH "windowed" AS (SELECT "a", LAG("a") OVER (ORDER BY "a") AS "prv" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" <= \'1970-01-01\' AND "ds" >= \'1970-01-01\') AS "_q_0"), "validation_errors" AS (SELECT * FROM "windowed" WHERE NOT "a" = "prv" + 1) SELECT * FROM "validation_errors"'
     )
