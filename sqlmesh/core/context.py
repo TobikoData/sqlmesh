@@ -394,6 +394,7 @@ class Context(BaseContext):
         except Exception as e:
             self.notification_target_manager.notify(NotificationEvent.RUN_FAILURE, e)
             raise e
+        self.notification_target_manager.notify(NotificationEvent.RUN_END, environment=environment)
 
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
@@ -771,6 +772,9 @@ class Context(BaseContext):
         except Exception as e:
             self.notification_target_manager.notify(NotificationEvent.APPLY_FAILURE, e)
             raise e
+        self.notification_target_manager.notify(
+            NotificationEvent.APPLY_END, environment=plan.environment.name
+        )
 
     def invalidate_environment(self, name: str) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
