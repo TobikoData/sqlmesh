@@ -1,6 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react'
 import {
-  Directory,
+  type Directory,
   deleteDirectoryApiDirectoriesPathDelete,
   deleteFileApiFilesPathDelete,
   writeDirectoryApiDirectoriesPathPost,
@@ -14,7 +14,7 @@ import { isFalse, isNotNil, isStringEmptyOrNil } from '@utils/index'
 import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
 import { type Confirmation } from '@components/modal/ModalConfirmation'
-import { ResponseWithDetail } from '@api/instance'
+import { type ResponseWithDetail } from '@api/instance'
 
 interface FileExplorer {
   confirmation?: Confirmation
