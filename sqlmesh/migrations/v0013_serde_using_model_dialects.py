@@ -1,0 +1,80 @@
+"""Serialize SQL using the dialect of each model."""
+import json
+import typing as t
+
+import pandas as pd
+from sqlglot import exp, parse_one
+
+from sqlmesh.utils.jinja import has_jinja
+
+
+def migrate(state_sync):  # type: ignore
+    engine_adapter = state_sync.engine_adapter
+    schema = state_sync.schema
+    snapshots_table = f"{schema}._snapshots"
+
+    new_snapshots = []
+
+    for name, identifier, version, snapshot, kind_name in engine_adapter.fetchall(
+        exp.select("name", "identifier", "version", "snapshot", "kind_name").from_(snapshots_table)
+    ):
+        parsed_snapshot = json.loads(snapshot)
+        model = parsed_snapshot["model"]
+        dialect = model["dialect"]
+
+        _update_expression(model, "query", dialect)
+        _update_expression_list(model, "pre_statements", dialect)
+        _update_expression_list(model, "post_statements", dialect)
+
+        for audit in parsed_snapshot.get("audits", []):
+            dialect = audit["dialect"]
+            _update_expression(audit, "query", dialect)
+            _update_expression_list(audit, "expressions", dialect)
+
+        new_snapshots.append(
+            {
+                "name": name,
+                "identifier": identifier,
+                "version": version,
+                "snapshot": json.dumps(parsed_snapshot),
+                "kind_name": kind_name,
+            }
+        )
+
+    if new_snapshots:
+        engine_adapter.delete_from(snapshots_table, "TRUE")
+
+        engine_adapter.insert_append(
+            snapshots_table,
+            pd.DataFrame(new_snapshots),
+            columns_to_types={
+                "name": exp.DataType.build("text"),
+                "identifier": exp.DataType.build("text"),
+                "version": exp.DataType.build("text"),
+                "snapshot": exp.DataType.build("text"),
+                "kind_name": exp.DataType.build("text"),
+            },
+            contains_json=True,
+        )
+
+
+# Note: previously we used to do serde using the SQLGlot dialect, so we need to parse the
+# stored queries using that dialect and then write them back using the correct dialect.
+
+
+def _update_expression(obj: t.Dict, key: str, dialect: str) -> None:
+    if key in obj and not has_jinja(obj[key]):
+        obj[key] = parse_one(obj[key]).sql(dialect=dialect)
+
+
+def _update_expression_list(obj: t.Dict, key: str, dialect: str) -> None:
+    if key in obj:
+        obj[key] = [
+            (
+                parse_one(expression).sql(dialect=dialect)
+                if not has_jinja(expression)
+                else expression
+            )
+            for expression in obj[key]
+            if expression
+        ]

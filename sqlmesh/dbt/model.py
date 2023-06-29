@@ -226,7 +226,9 @@ class ModelConfig(BaseModelConfig):
             )
 
         if self.cluster_by:
-            optional_kwargs["clustered_by"] = self.cluster_by
+            optional_kwargs["clustered_by"] = [
+                d.parse_one(c, dialect=dialect).name for c in self.cluster_by
+            ]
 
         for field in ["cron"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)

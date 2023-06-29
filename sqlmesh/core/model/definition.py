@@ -899,7 +899,7 @@ class SqlModel(_SqlBasedModel):
         return self.__query_renderer
 
     def __repr__(self) -> str:
-        return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
+        return f"Model<name: {self.name}, query: {self.query.sql(dialect=self.dialect)[0:30]}>"
 
 
 class SeedModel(_SqlBasedModel):
