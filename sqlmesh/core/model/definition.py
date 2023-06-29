@@ -1215,8 +1215,8 @@ def load_model(
     jinja_macro_references: t.Set[MacroReference] = {
         r
         for references in [
-            *[extract_macro_references(e.sql(dialect=dialect)) for e in pre_statements],
-            *[extract_macro_references(e.sql(dialect=dialect)) for e in post_statements],
+            *[extract_macro_references(e.sql()) for e in pre_statements],
+            *[extract_macro_references(e.sql()) for e in post_statements],
         ]
         for r in references
     }
@@ -1237,9 +1237,7 @@ def load_model(
     if query_or_seed_insert is not None and isinstance(
         query_or_seed_insert, (exp.Subqueryable, d.JinjaQuery)
     ):
-        jinja_macro_references.update(
-            extract_macro_references(query_or_seed_insert.sql(dialect=dialect))
-        )
+        jinja_macro_references.update(extract_macro_references(query_or_seed_insert.sql()))
         return create_sql_model(
             name,
             query_or_seed_insert,
