@@ -12,6 +12,7 @@ import sqlmesh.core.dialect as d
 from sqlmesh.core.config import Config
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.context import Context
+from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -373,22 +374,29 @@ def test_partition_key_and_select_star():
 
 
 def test_json_serde():
-    model = SqlModel(
-        name="test_model",
-        kind=IncrementalByTimeRangeKind(time_column="ds"),
-        owner="test_owner",
-        dialect="spark",
-        cron="@daily",
-        storage_format="parquet",
-        partitioned_by=["a"],
-        query=d.parse_one("SELECT a FROM tbl"),
-        pre_statements=[
-            d.parse_one("@DEF(key, 'value')"),
-        ],
-    )
-    model_json_str = model.json()
+    expressions = parse(
+        """
+        MODEL (
+            name test_model,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds
+            ),
+            owner test_owner,
+            dialect spark,
+            cron '@daily',
+            storage_format parquet,
+            partitioned_by a,
+        );
 
-    deserialized_model = SqlModel.parse_raw(model_json_str)
+        @DEF(key, 'value');
+
+        SELECT a, ds FROM `tbl`
+    """
+    )
+
+    model = load_model(expressions)
+    deserialized_model = SqlModel.parse_raw(model.json())
+
     assert deserialized_model == model
 
 
@@ -1465,7 +1473,7 @@ def test_model_ctas_query():
         """
         MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
         SELECT 1 as a
-        """
+    """
     )
 
     assert load_model(expressions, dialect="bigquery").ctas_query().sql() == 'SELECT 1 AS "a"'
@@ -1503,7 +1511,7 @@ def test_parse_expression_list_with_jinja():
         "JINJA_STATEMENT_BEGIN;\n{{ log('log message') }}\nJINJA_END;",
         "GRANT SELECT ON TABLE foo TO DEV",
     ]
-    assert input == [val.sql() for val in parse_expression(input)]
+    assert input == [val.sql() for val in parse_expression(input, {})]
 
 
 def test_no_depends_on_runtime_jinja_query():

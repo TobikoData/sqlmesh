@@ -24,6 +24,7 @@ def parse_model_name(name: str) -> t.Tuple[t.Optional[str], t.Optional[str], str
 
 def parse_expression(
     v: t.Union[t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None],
+    values: t.Dict[str, t.Any],
 ) -> t.List[exp.Expression] | exp.Expression | t.Callable | None:
     """Helper method to deserialize SQLGlot expressions in Pydantic Models."""
     if v is None:
@@ -32,15 +33,20 @@ def parse_expression(
     if callable(v):
         return v
 
+    dialect = values.get("dialect")
+
     if isinstance(v, list):
         return [
             e
-            for expressions in (parse(i) if not isinstance(i, exp.Expression) else [i] for i in v)
+            for expressions in (
+                parse(i, default_dialect=dialect) if not isinstance(i, exp.Expression) else [i]
+                for i in v
+            )
             for e in expressions
         ]
 
     if isinstance(v, str):
-        return seq_get(parse(v), 0)
+        return seq_get(parse(v, default_dialect=dialect), 0)
 
     if not v:
         raise ConfigError(f"Could not parse {v}")
