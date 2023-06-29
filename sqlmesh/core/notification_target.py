@@ -99,7 +99,9 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
     @notify(NotificationEvent.APPLY_END)
     def notify_apply_end(self, environment: str) -> None:
         """Notify when an apply ends."""
-        self.send(NotificationStatus.INFO, f"Plan apply finished for environment `{environment}`.")
+        self.send(
+            NotificationStatus.SUCCESS, f"Plan apply finished for environment `{environment}`."
+        )
 
     @notify(NotificationEvent.RUN_START)
     def notify_run_start(self, environment: str) -> None:
@@ -109,7 +111,9 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
     @notify(NotificationEvent.RUN_END)
     def notify_run_end(self, environment: str) -> None:
         """Notify when an apply starts."""
-        self.send(NotificationStatus.INFO, f"SQLMesh run finished for environment `{environment}`.")
+        self.send(
+            NotificationStatus.SUCCESS, f"SQLMesh run finished for environment `{environment}`."
+        )
 
     @notify(NotificationEvent.APPLY_FAILURE)
     def notify_apply_failure(self, exc: Exception) -> None:
