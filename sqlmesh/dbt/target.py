@@ -153,12 +153,20 @@ class SnowflakeConfig(TargetConfig):
         retry_all: A boolean flag to retry on all Snowflake connector errors
     """
 
-    # TODO add other forms of authentication
     type: Literal["snowflake"] = "snowflake"
     account: str
-    warehouse: str
     user: str
-    password: str
+
+    # User and password authentication
+    password: t.Optional[str]
+
+    # SSO authentication
+    authenticator: t.Optional[str]
+
+    # TODO add other forms of authentication
+
+    # Optional
+    warehouse: t.Optional[str]
     role: t.Optional[str]
     client_session_keep_alive: bool = False
     query_tag: t.Optional[str]
@@ -166,6 +174,14 @@ class SnowflakeConfig(TargetConfig):
     connect_timeout: int = 10
     retry_on_database_errors: bool = False
     retry_all: bool = False
+
+    @root_validator(pre=True)
+    def validate_authentication(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        if values.get("password") or values.get("authenticator"):
+            return values
+        raise ConfigError("No supported Snowflake authentication method found in target profile.")
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
@@ -186,6 +202,7 @@ class SnowflakeConfig(TargetConfig):
         return SnowflakeConnectionConfig(
             user=self.user,
             password=self.password,
+            authenticator=self.authenticator,
             account=self.account,
             warehouse=self.warehouse,
             database=self.database,
