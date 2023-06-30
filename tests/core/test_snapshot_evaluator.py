@@ -62,6 +62,7 @@ def adapter_mock(mocker: MockerFixture):
 
     adapter_mock = mocker.Mock()
     adapter_mock.transaction.return_value = transaction_mock
+    adapter_mock.dialect = "duckdb"
     return adapter_mock
 
 
@@ -293,6 +294,7 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
 
 def test_promote_model_info(mocker: MockerFixture):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
+    adapter_mock.dialect = "duckdb"
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
