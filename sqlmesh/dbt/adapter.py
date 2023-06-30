@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import abc
+import logging
 import typing as t
 
 import pandas as pd
 from dbt.contracts.relation import Policy
-from sqlglot import exp
+from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
+from sqlmesh.core.snapshot import Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
 
@@ -17,6 +19,9 @@ if t.TYPE_CHECKING:
     from dbt.adapters.base import BaseRelation
     from dbt.adapters.base.column import Column
     from dbt.adapters.base.impl import AdapterResponse
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAdapter(abc.ABC):
@@ -146,6 +151,8 @@ class RuntimeAdapter(BaseAdapter):
         jinja_globals: t.Optional[t.Dict[str, t.Any]] = None,
         relation_type: t.Optional[t.Type[BaseRelation]] = None,
         quote_policy: t.Optional[Policy] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        is_dev: bool = False,
     ):
         from dbt.adapters.base import BaseRelation
         from dbt.adapters.base.relation import Policy
@@ -155,10 +162,14 @@ class RuntimeAdapter(BaseAdapter):
         self.engine_adapter = engine_adapter
         self.relation_type = relation_type or BaseRelation
         self.quote_policy = quote_policy or Policy()
+        self.table_mapping = to_table_mapping((snapshots or {}).values(), is_dev)
 
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str
     ) -> t.Optional[BaseRelation]:
+        mapped_table = self._map_table_name(database, schema, identifier)
+        schema, identifier = mapped_table.db, mapped_table.name
+
         relations_list = self.list_relations(database, schema)
         matching_relations = [
             r
@@ -198,11 +209,13 @@ class RuntimeAdapter(BaseAdapter):
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
         from dbt.adapters.base.column import Column
 
+        mapped_table = self._map_table_name(relation.database, relation.schema, relation.identifier)
+
         return [
             Column.from_description(
                 name=name, raw_data_type=dtype.sql(dialect=self.engine_adapter.dialect)
             )
-            for name, dtype in self.engine_adapter.columns(table_name=relation.render()).items()
+            for name, dtype in self.engine_adapter.columns(table_name=mapped_table).items()
         ]
 
     def get_missing_columns(
@@ -237,19 +250,34 @@ class RuntimeAdapter(BaseAdapter):
         from sqlmesh.dbt.util import pandas_to_agate
 
         # mypy bug: https://github.com/python/mypy/issues/10740
-        exec_func: t.Callable[[str], None | pd.DataFrame] = (
+        exec_func: t.Callable[[exp.Expression], None | pd.DataFrame] = (
             self.engine_adapter.fetchdf if fetch else self.engine_adapter.execute  # type: ignore
         )
+
+        expression = parse_one(sql, read=self.engine_adapter.dialect)
+        expression = exp.replace_tables(expression, self.table_mapping, copy=False)
 
         if auto_begin:
             # TODO: This could be a bug. I think dbt leaves the transaction open while we close immediately.
             with self.engine_adapter.transaction(TransactionType.DML):
-                resp = exec_func(sql)
+                resp = exec_func(expression)
         else:
-            resp = exec_func(sql)
+            resp = exec_func(expression)
 
         # TODO: Properly fill in adapter response
         if fetch:
             assert isinstance(resp, pd.DataFrame)
             return AdapterResponse("Success"), pandas_to_agate(resp)
         return AdapterResponse("Success"), empty_table()
+
+    def _map_table_name(
+        self, database: t.Optional[str], schema: t.Optional[str], identifier: t.Optional[str]
+    ) -> exp.Table:
+        name = ".".join(p for p in (database, schema, identifier) if p is not None)
+        if name not in self.table_mapping:
+            return exp.to_table(name, dialect=self.engine_adapter.dialect)
+
+        physical_table_name = self.table_mapping[name]
+        logger.debug("Resolved ref '%s' to snapshot table '%s'", name, physical_table_name)
+
+        return exp.to_table(physical_table_name, dialect=self.engine_adapter.dialect)

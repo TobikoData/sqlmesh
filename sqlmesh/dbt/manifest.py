@@ -24,7 +24,7 @@ from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroInfo, MacroReference
+from sqlmesh.utils.jinja import MacroInfo, MacroReference, extract_macro_references
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
@@ -120,13 +120,17 @@ class ManifestHelper:
             if macro.name.startswith("test_"):
                 macro.macro_sql = _convert_jinja_test_to_macro(macro.macro_sql)
 
+            macro_references = _macro_references(self._manifest, macro)
+            if not macro.name.startswith("materialization_") and not macro.name.startswith("test_"):
+                macro_references |= _extra_macro_references(macro.macro_sql)
+
             package_overrides = MACRO_OVERRIDES.get(macro.package_name, {})
             self._macros_per_package[macro.package_name][macro.name] = package_overrides.get(
                 macro.name
             ) or MacroConfig(
                 info=MacroInfo(
                     definition=macro.macro_sql,
-                    depends_on=list(_macro_references(self._manifest, macro)),
+                    depends_on=list(macro_references),
                 ),
                 path=Path(macro.original_file_path),
             )
@@ -210,8 +214,10 @@ class ManifestHelper:
             )
 
             if node.resource_type == "model":
+                sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
+                macro_references |= _extra_macro_references(sql)
                 self._models_per_package[node.package_name][node.name] = ModelConfig(
-                    sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
+                    sql=sql,
                     dependencies=Dependencies(
                         macros=macro_references,
                         refs=_refs(node),
@@ -352,3 +358,10 @@ def _convert_jinja_test_to_macro(test_jinja: str) -> str:
 
     macro = "{% macro test_" + test_jinja[match.span()[-1] :]
     return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)
+
+
+def _extra_macro_references(target: str) -> t.Set[MacroReference]:
+    # We sometimes observe that the manifest doesn't capture certain macros referenced in the model.
+    # This behavior has been observed with macros like dbt.current_timestamp() and dbt_utils.slugify().
+    # Here we apply our custom extractor in addition to referenced extracted from the manifest to mitigate this.
+    return {r for r in extract_macro_references(target) if r.package in ("dbt", "dbt_utils")}

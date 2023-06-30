@@ -1,89 +1,25 @@
-import { syntaxTree } from '@codemirror/language'
 import { RangeSetBuilder, type Extension } from '@codemirror/state'
 import {
-  ViewPlugin,
-  type DecorationSet,
-  Decoration,
-  type ViewUpdate,
   EditorView,
   type Tooltip,
   hoverTooltip,
+  Decoration,
+  type DecorationSet,
+  ViewPlugin,
+  type ViewUpdate,
 } from '@codemirror/view'
-import { useSqlMeshExtension } from './SqlMeshDialect'
-import { isFalse } from '@utils/index'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { type Column } from '@api/client'
+import SqlMeshModel from './SqlMeshModel'
 
-export { useSqlMeshExtension }
+export { HoverTooltip, events, SqlMeshModel }
 
-export function SqlMeshModel(
-  models: Map<string, ModelSQLMeshModel>,
-  model: ModelSQLMeshModel,
-  columns: Set<string>,
+function events(
+  events: Record<string, (event: MouseEvent) => void>,
 ): Extension {
-  return ViewPlugin.fromClass(
-    class SqlMeshModelView {
-      decorations: DecorationSet = Decoration.set([])
-      constructor(readonly view: EditorView) {
-        this.decorations = getDecorations(models, view, model, columns)
-      }
-
-      update(viewUpdate: ViewUpdate): void {
-        this.decorations = getDecorations(
-          models,
-          viewUpdate.view,
-          model,
-          columns,
-        )
-      }
-    },
-    {
-      decorations: value => value.decorations,
-    },
-  )
+  return EditorView.domEventHandlers(events)
 }
 
-export function events(handler: (event: MouseEvent) => void): Extension {
-  return EditorView.domEventHandlers({
-    click(event: MouseEvent) {
-      handler(event)
-    },
-  })
-}
-
-export function findModel(
-  event: MouseEvent,
-  models: Map<string, ModelSQLMeshModel>,
-): ModelSQLMeshModel | undefined {
-  if (event.target == null) return
-
-  const el = event.target as HTMLElement
-  const modelName =
-    el.getAttribute('model') ?? el.parentElement?.getAttribute('model')
-
-  if (modelName == null) return
-
-  return models.get(modelName)
-}
-
-export function findColumn(
-  event: MouseEvent,
-  model: ModelSQLMeshModel,
-): Column | undefined {
-  if (event.target == null) return
-
-  const el = event.target as HTMLElement
-  const columnName =
-    el.getAttribute('column') ?? el.parentElement?.getAttribute('column')
-
-  if (columnName == null) return
-
-  return model.columns.find(c => c.name === columnName)
-}
-
-export function HoverTooltip(
-  models: Map<string, ModelSQLMeshModel>,
-): Extension {
+function HoverTooltip(models: Map<string, ModelSQLMeshModel>): Extension {
   return hoverTooltip(
     (view: EditorView, pos: number, side: number): Tooltip | null => {
       const { from, to, text } = view.state.doc.lineAt(pos)
@@ -173,90 +109,4 @@ function markExpressionLine(
   }
 
   return builder.finish()
-}
-
-function getDecorations(
-  models: Map<string, ModelSQLMeshModel>,
-  view: EditorView,
-  model: ModelSQLMeshModel,
-  columns: Set<string>,
-): DecorationSet {
-  const decorations: any = []
-  const modelColumns = model.columns.map(c => c.name)
-
-  for (const range of view.visibleRanges) {
-    syntaxTree(view.state).iterate({
-      from: range.from,
-      to: range.to,
-      enter({ from, to }) {
-        // In case model name represented in qoutes
-        // like in python files, we need to remove qoutes
-        let maybeModelOrColumn = view.state.doc
-          .sliceString(from - 1, to + 1)
-          .replaceAll('"', '')
-          .replaceAll("'", '')
-        let isOriginal = false
-
-        if (
-          maybeModelOrColumn.startsWith('.') ||
-          maybeModelOrColumn.endsWith(':')
-        ) {
-          isOriginal = true
-        }
-
-        maybeModelOrColumn = maybeModelOrColumn.slice(
-          1,
-          maybeModelOrColumn.length - 1,
-        )
-
-        if (
-          isFalse(isOriginal) &&
-          columns.has(maybeModelOrColumn) &&
-          !modelColumns.includes(maybeModelOrColumn)
-        ) {
-          isOriginal = true
-        }
-
-        let decoration
-
-        if (maybeModelOrColumn === model.name) {
-          decoration = Decoration.mark({
-            attributes: {
-              class: 'sqlmesh-model --is-active-model',
-              model: maybeModelOrColumn,
-            },
-          }).range(from, to)
-        } else if (models.get(maybeModelOrColumn) != null) {
-          decoration = Decoration.mark({
-            attributes: {
-              class: 'sqlmesh-model',
-              model: maybeModelOrColumn,
-            },
-          }).range(from, to)
-        } else if (modelColumns.includes(maybeModelOrColumn)) {
-          decoration = Decoration.mark({
-            attributes: {
-              class: `sqlmesh-model__column --is-active-model ${
-                isOriginal ? '--is-original' : ' --is-derived'
-              }`,
-              column: maybeModelOrColumn,
-            },
-          }).range(from, to)
-        } else if (columns.has(maybeModelOrColumn)) {
-          decoration = Decoration.mark({
-            attributes: {
-              class: `sqlmesh-model__column ${
-                isOriginal ? '--is-original' : ' --is-derived'
-              }`,
-              column: maybeModelOrColumn,
-            },
-          }).range(from, to)
-        }
-
-        decoration != null && decorations.push(decoration)
-      },
-    })
-  }
-
-  return Decoration.set(decorations)
 }

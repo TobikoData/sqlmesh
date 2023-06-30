@@ -94,9 +94,8 @@ class BigQueryEngineAdapter(EngineAdapter):
         try:
             super().create_schema(schema_name, ignore_if_exists=ignore_if_exists)
         except Conflict as e:
-            for arg in e.args:
-                if ignore_if_exists and "Already Exists: " in arg.message:
-                    return
+            if "Already Exists:" in str(e):
+                return
             raise e
 
     def columns(
@@ -237,7 +236,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         table_ = exp.to_table(table, dialect=self.dialect).copy()
 
         if not table_.catalog:
-            table_.set("catalog", self.client.project)
+            table_.set("catalog", exp.to_identifier(self.client.project))
 
         return bigquery.Table(
             table_ref=self._table_name(table_),

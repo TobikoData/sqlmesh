@@ -1,7 +1,7 @@
 .PHONY: docs
 
 install-dev:
-	pip3 install -e ".[dev,web]"
+	pip3 install -e ".[dev,web,slack]"
 
 install-pre-commit:
 	pre-commit install

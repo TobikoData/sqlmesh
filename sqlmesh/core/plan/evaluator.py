@@ -18,6 +18,7 @@ import typing as t
 
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.notification_target import NotificationTargetManager
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
@@ -56,11 +57,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         snapshot_evaluator: SnapshotEvaluator,
         backfill_concurrent_tasks: int = 1,
         console: t.Optional[Console] = None,
+        notification_target_manager: t.Optional[NotificationTargetManager] = None,
     ):
         self.state_sync = state_sync
         self.snapshot_evaluator = snapshot_evaluator
         self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.console = console or get_console()
+        self.notification_target_manager = notification_target_manager
 
     def evaluate(self, plan: Plan) -> None:
         tasks = (
@@ -91,6 +94,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.state_sync,
             max_workers=self.backfill_concurrent_tasks,
             console=self.console,
+            notification_target_manager=self.notification_target_manager,
         )
         is_run_successful = scheduler.run(
             plan.environment_name, plan.start, plan.end, restatements=plan.restatements

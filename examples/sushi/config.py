@@ -9,6 +9,11 @@ from sqlmesh.core.config import (
     GatewayConfig,
     SparkConnectionConfig,
 )
+from sqlmesh.core.notification_target import (
+    BasicSMTPNotificationTarget,
+    SlackApiNotificationTarget,
+    SlackWebhookNotificationTarget,
+)
 from sqlmesh.core.user import User, UserRole
 
 CURRENT_FILE_PATH = os.path.abspath(__file__)
@@ -53,5 +58,33 @@ airflow_config_docker = Config(  # type: ignore
 
 required_approvers_config = Config(
     default_connection=DuckDBConnectionConfig(),
-    users=[User(username="test", roles=[UserRole.REQUIRED_APPROVER])],
+    users=[
+        User(
+            username="admin",
+            roles=[UserRole.REQUIRED_APPROVER],
+            notification_targets=[
+                SlackApiNotificationTarget(
+                    notify_on=["apply_start", "apply_failure", "apply_end", "audit_failure"],
+                    token=os.getenv("ADMIN_SLACK_API_TOKEN"),
+                    channel="UXXXXXXXXX",  # User's Slack member ID
+                ),
+            ],
+        )
+    ],
+    notification_targets=[
+        SlackWebhookNotificationTarget(
+            notify_on=["apply_start", "apply_failure", "run_start"],
+            url=os.getenv("SLACK_WEBHOOK_URL"),
+        ),
+        BasicSMTPNotificationTarget(
+            notify_on=["run_failure"],
+            host=os.getenv("SMTP_HOST"),
+            user=os.getenv("SMTP_USER"),
+            password=os.getenv("SMTP_PASSWORD"),
+            sender="sushi@example.com",
+            recipients=[
+                "team@example.com",
+            ],
+        ),
+    ],
 )

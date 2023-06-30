@@ -691,7 +691,7 @@ class _SqlBasedModel(_Model):
             for statement in statements
             if not isinstance(statement, d.MacroDef)
         )
-        return [r for r in rendered if r is not None]
+        return [r for expressions in rendered for r in expressions]
 
     def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         expression_key = id(expression)
@@ -899,7 +899,7 @@ class SqlModel(_SqlBasedModel):
         return self.__query_renderer
 
     def __repr__(self) -> str:
-        return f"Model<name: {self.name}, query: {str(self.query)[0:30]}>"
+        return f"Model<name: {self.name}, query: {self.query.sql(dialect=self.dialect)[0:30]}>"
 
 
 class SeedModel(_SqlBasedModel):
@@ -1215,8 +1215,8 @@ def load_model(
     jinja_macro_references: t.Set[MacroReference] = {
         r
         for references in [
-            *[extract_macro_references(e.sql(dialect=dialect)) for e in pre_statements],
-            *[extract_macro_references(e.sql(dialect=dialect)) for e in post_statements],
+            *[extract_macro_references(e.sql()) for e in pre_statements],
+            *[extract_macro_references(e.sql()) for e in post_statements],
         ]
         for r in references
     }
@@ -1237,9 +1237,7 @@ def load_model(
     if query_or_seed_insert is not None and isinstance(
         query_or_seed_insert, (exp.Subqueryable, d.JinjaQuery)
     ):
-        jinja_macro_references.update(
-            extract_macro_references(query_or_seed_insert.sql(dialect=dialect))
-        )
+        jinja_macro_references.update(extract_macro_references(query_or_seed_insert.sql()))
         return create_sql_model(
             name,
             query_or_seed_insert,

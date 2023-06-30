@@ -73,7 +73,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
         sql="SELECT 1 AS a FROM foo",
         start="Jan 1 2023",
         partition_by=["a"],
-        cluster_by=["a"],
+        cluster_by=["a", '"b"'],
         cron="@hourly",
         batch_size=5,
         lookback=3,
@@ -92,7 +92,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
     assert model.render_query_or_raise().sql() == 'SELECT 1 AS "a" FROM "foo" AS "foo"'
     assert model.start == "Jan 1 2023"
     assert [col.sql() for col in model.partitioned_by] == ["a"]
-    assert model.clustered_by == ["a"]
+    assert model.clustered_by == ["a", "b"]
     assert model.cron == "@hourly"
     assert model.stamp == "bar"
     assert model.dialect == "duckdb"
