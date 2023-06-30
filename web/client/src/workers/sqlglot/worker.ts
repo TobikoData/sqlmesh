@@ -51,8 +51,8 @@ scope.onmessage = async (e: MessageEvent) => {
     scope.postMessage({
       topic: 'dialect',
       payload: {
-        types: `${types} `.toLowerCase(),
-        keywords: `${keywords} `.toLowerCase(),
+        types: types.toLowerCase(),
+        keywords: keywords.toLowerCase(),
       },
     })
   }

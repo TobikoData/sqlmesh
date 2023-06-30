@@ -1,7 +1,4 @@
 import React from 'react'
-import CodeEditor, {
-  useSQLMeshModelExtensions,
-} from '@components/editor/EditorCode'
 import { Disclosure, Tab } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { EnumFileExtensions } from '@models/file'
@@ -11,6 +8,8 @@ import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { ModelColumns } from '@components/graph/Graph'
 import { useLineageFlow } from '@components/graph/context'
 import TabList from '@components/tab/Tab'
+import CodeEditor from '@components/editor/EditorCode'
+import { useSQLMeshModelExtensions } from '@components/editor/hooks'
 
 const Documentation = function Documentation({
   model,
@@ -131,7 +130,7 @@ const Documentation = function Documentation({
                       'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
                     )}
                   >
-                    <CodeEditor.Default
+                    <CodeEditor.SQLMeshDialect
                       type={EnumFileExtensions.SQL}
                       content={model.sql ?? ''}
                     >
@@ -142,7 +141,7 @@ const Documentation = function Documentation({
                           className="text-xs"
                         />
                       )}
-                    </CodeEditor.Default>
+                    </CodeEditor.SQLMeshDialect>
                   </Tab.Panel>
                 </Tab.Panels>
               </Tab.Group>
