@@ -31,6 +31,8 @@ class AuditMeta(PydanticModel):
     """Setting this to `true` will cause this audit to be skipped. Defaults to `false`."""
     blocking: bool = True
     """Setting this to `true` will cause the pipeline execution to stop if this audit fails. Defaults to `true`."""
+    defaults: t.Dict[str, exp.Expression] = {}
+    """Default values for the audit query."""
 
     @validator("name", "dialect", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
@@ -45,6 +47,18 @@ class AuditMeta(PydanticModel):
         if isinstance(v, exp.Expression):
             return v.name.lower() not in ("false", "no")
         return bool(v)
+
+    @validator("defaults", pre=True)
+    def _map_validator(cls, v: t.Any) -> t.Dict[str, t.Any]:
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            return dict(map(_maybe_parse_arg_pair, v.expressions))
+        elif isinstance(v, dict):
+            return v
+        else:
+            raise_config_error(
+                "Defaults must be a tuple of exp.EQ or a dict", error_type=AuditConfigError
+            )
+        return {}
 
 
 class Audit(AuditMeta, frozen=True):
@@ -204,7 +218,7 @@ class Audit(AuditMeta, frozen=True):
             snapshots=snapshots,
             is_dev=is_dev,
             this_model=query,
-            **kwargs,
+            **{**self.defaults, **kwargs},  # type: ignore
         )
 
         if rendered_query is None:
@@ -250,3 +264,11 @@ class AuditResult(PydanticModel):
 
 def _raise_config_error(msg: str, path: pathlib.Path) -> None:
     raise_config_error(msg, location=path, error_type=AuditConfigError)
+
+
+# mypy doesn't realize raise_config_error raises an exception
+@t.no_type_check
+def _maybe_parse_arg_pair(e: exp.Expression) -> t.Tuple[str, exp.Expression]:
+    if isinstance(e, exp.EQ):
+        return e.left.name, e.right
+    raise_config_error(f"Invalid defaults expression: {e}", error_type=AuditConfigError)
