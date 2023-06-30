@@ -66,6 +66,7 @@ class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
             snapshot_evaluator=context.snapshot_evaluator,
             backfill_concurrent_tasks=context.concurrent_tasks,
             console=context.console,
+            notification_target_manager=context.notification_target_manager,
         )
 
 
