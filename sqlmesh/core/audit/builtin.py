@@ -243,6 +243,100 @@ FROM validation_errors
     """,
 )
 
+# valid_uuid(column=column_name)
+valid_uuid_audit = Audit(
+    name="valid_uuid",
+    query="""
+SELECT *
+FROM @this_model
+WHERE NOT REGEXP_LIKE(@column, '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+    """,
+)
+
+# valid_http_method(column=column_name)
+valid_http_method_audit = Audit(
+    name="valid_http_method",
+    query="""
+SELECT *
+FROM @this_model
+WHERE NOT @column IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS', 'TRACE', 'CONNECT')
+    """,
+)
+
+# valid_email(column=column_name)
+valid_email_audit = Audit(
+    name="valid_email",
+    query="""
+SELECT *
+FROM @this_model
+WHERE NOT REGEXP_LIKE(@column, '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
+    """,
+)
+
+# match_regex_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
+match_regex_list_audit = Audit(
+    name="match_regex_list",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @EACH(
+    @patterns,
+    c -> NOT REGEXP_LIKE(@column, c)
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
+# not_match_regex_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
+not_match_regex_list_audit = Audit(
+    name="not_match_regex_list",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @EACH(
+    @patterns,
+    c -> REGEXP_LIKE(@column, c)
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
+# match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
+match_all_like_audit = Audit(
+    name="match_like_pattern_list",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @EACH(
+    @patterns,
+    c -> NOT @column LIKE c
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
+# not_match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
+not_match_like_pattern_list_audit = Audit(
+    name="not_match_like_pattern_list",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @EACH(
+    @patterns,
+    c -> @column LIKE c
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
 # The following audits are not yet implemented
 # we are awaiting a first class way to express cross-model audits
 
