@@ -7,6 +7,10 @@ from datetime import datetime
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.model import SeedModel
+from sqlmesh.core.notification_target import (
+    NotificationEvent,
+    NotificationTargetManager,
+)
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -24,6 +28,7 @@ from sqlmesh.utils.date import (
     validate_date_range,
     yesterday,
 )
+from sqlmesh.utils.errors import AuditError
 
 logger = logging.getLogger(__name__)
 Interval = t.Tuple[datetime, datetime]
@@ -56,6 +61,7 @@ class Scheduler:
         state_sync: StateSync,
         max_workers: int = 1,
         console: t.Optional[Console] = None,
+        notification_target_manager: t.Optional[NotificationTargetManager] = None,
     ):
         self.snapshots = {s.snapshot_id: s for s in snapshots}
         self.snapshot_per_version = _resolve_one_snapshot_per_version(snapshots)
@@ -63,6 +69,9 @@ class Scheduler:
         self.state_sync = state_sync
         self.max_workers = max_workers
         self.console: Console = console or get_console()
+        self.notification_target_manager = (
+            notification_target_manager or NotificationTargetManager()
+        )
 
     def batches(
         self,
@@ -135,15 +144,23 @@ class Scheduler:
             is_dev=is_dev,
             **kwargs,
         )
-        self.snapshot_evaluator.audit(
-            snapshot=snapshot,
-            start=start,
-            end=end,
-            latest=latest,
-            snapshots=snapshots,
-            is_dev=is_dev,
-            **kwargs,
-        )
+        try:
+            self.snapshot_evaluator.audit(
+                snapshot=snapshot,
+                start=start,
+                end=end,
+                latest=latest,
+                snapshots=snapshots,
+                is_dev=is_dev,
+                **kwargs,
+            )
+        except AuditError as e:
+            self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, e)
+            if not is_dev and snapshot.model.owner:
+                self.notification_target_manager.notify_user(
+                    NotificationEvent.AUDIT_FAILURE, snapshot.model.owner, e
+                )
+            raise e
         self.state_sync.add_interval(snapshot, start, end, is_dev=is_dev)
         self.console.update_snapshot_progress(snapshot.name, 1)
 

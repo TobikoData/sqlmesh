@@ -33,8 +33,10 @@ context.test()
 from __future__ import annotations
 
 import abc
+import collections
 import contextlib
 import gc
+import traceback
 import typing as t
 import unittest.result
 from io import StringIO
@@ -62,6 +64,10 @@ from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.model import Model
 from sqlmesh.core.model.definition import _Model
+from sqlmesh.core.notification_target import (
+    NotificationEvent,
+    NotificationTargetManager,
+)
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_schema_file
@@ -256,6 +262,7 @@ class Context(BaseContext):
         self.notification_targets = (notification_targets or []) + self.config.notification_targets
         self.users = (users or []) + self.config.users
         self.users = list({user.username: user for user in self.users}.values())
+        self._register_notification_targets()
 
         if load:
             self.load()
@@ -326,6 +333,7 @@ class Context(BaseContext):
             self.state_sync,
             max_workers=self.concurrent_tasks,
             console=self.console,
+            notification_target_manager=self.notification_target_manager,
         )
 
     @property
@@ -379,7 +387,17 @@ class Context(BaseContext):
             skip_janitor: Whether to skip the janitor task.
         """
         environment = environment or c.PROD
-        self.scheduler(environment=environment).run(environment, start, end, latest)
+        self.notification_target_manager.notify(
+            NotificationEvent.RUN_START, environment=environment
+        )
+        try:
+            self.scheduler(environment=environment).run(environment, start, end, latest)
+        except Exception as e:
+            self.notification_target_manager.notify(
+                NotificationEvent.RUN_FAILURE, traceback.format_exc()
+            )
+            raise e
+        self.notification_target_manager.notify(NotificationEvent.RUN_END, environment=environment)
 
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
@@ -749,7 +767,19 @@ class Context(BaseContext):
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
-        self._scheduler.create_plan_evaluator(self).evaluate(plan)
+        self.notification_target_manager.notify(
+            NotificationEvent.APPLY_START, environment=plan.environment.name
+        )
+        try:
+            self._scheduler.create_plan_evaluator(self).evaluate(plan)
+        except Exception as e:
+            self.notification_target_manager.notify(
+                NotificationEvent.APPLY_FAILURE, traceback.format_exc()
+            )
+            raise e
+        self.notification_target_manager.notify(
+            NotificationEvent.APPLY_END, environment=plan.environment.name
+        )
 
     def invalidate_environment(self, name: str) -> None:
         """Invalidates the target environment by setting its expiration timestamp to now.
@@ -1136,3 +1166,19 @@ class Context(BaseContext):
 
     def _new_state_sync(self) -> StateSync:
         return self._provided_state_sync or self._scheduler.create_state_sync(self)
+
+    def _register_notification_targets(self) -> None:
+        event_notifications = collections.defaultdict(set)
+        for target in self.notification_targets:
+            if target.is_configured:
+                for event in target.notify_on:
+                    event_notifications[event].add(target)
+        user_notification_targets = {
+            user.username: set(
+                target for target in user.notification_targets if target.is_configured
+            )
+            for user in self.users
+        }
+        self.notification_target_manager = NotificationTargetManager(
+            event_notifications, user_notification_targets, username=self.config.username
+        )
