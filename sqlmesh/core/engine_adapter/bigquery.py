@@ -94,9 +94,8 @@ class BigQueryEngineAdapter(EngineAdapter):
         try:
             super().create_schema(schema_name, ignore_if_exists=ignore_if_exists)
         except Conflict as e:
-            for arg in e.args:
-                if ignore_if_exists and "Already Exists: " in arg.message:
-                    return
+            if "Already Exists:" in str(e):
+                return
             raise e
 
     def columns(

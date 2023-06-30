@@ -22,9 +22,9 @@ def sushi_test_project() -> Project:
 
 @pytest.fixture()
 def runtime_renderer() -> t.Callable:
-    def create_renderer(context: DbtContext) -> t.Callable:
+    def create_renderer(context: DbtContext, **kwargs: t.Any) -> t.Callable:
         environment = context.jinja_macros.build_environment(
-            **context.jinja_globals, engine_adapter=context.engine_adapter
+            **context.jinja_globals, **kwargs, engine_adapter=context.engine_adapter
         )
 
         def render(value: str) -> str:
