@@ -11,6 +11,8 @@ import DragLayer from './DragLayer'
 import { useFileExplorer } from './context'
 import { type ModelArtifact } from '@models/artifact'
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
+import SearchList from '@components/search/SearchList'
+import { type ModelFile } from '@models/file'
 
 /* TODO:
   - add search
@@ -26,6 +28,7 @@ const FileExplorer = function FileExplorer({
 }): JSX.Element {
   const project = useStoreProject(s => s.project)
   const selectedFile = useStoreProject(s => s.selectedFile)
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const {
     activeRange,
@@ -65,6 +68,12 @@ const FileExplorer = function FileExplorer({
         className,
       )}
     >
+      <SearchList<ModelFile>
+        list={project.allFiles}
+        searchBy="path"
+        displayBy="name"
+        onSelect={setSelectedFile}
+      />
       <FileExplorer.ContextMenu
         trigger={
           <FileExplorer.ContextMenuTrigger>
