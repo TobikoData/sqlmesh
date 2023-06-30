@@ -153,6 +153,7 @@ class EngineAdapter:
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
     ) -> None:
         """Replaces an existing table with a query.
 
@@ -163,14 +164,15 @@ class EngineAdapter:
             query_or_df: The SQL query to run or a dataframe.
             columns_to_types: Only used if a dataframe is provided. A mapping between the column name and its data type.
                 Expected to be ordered to match the order of values in the dataframe.
+            kwargs: Optional create table properties.
         """
         table = exp.to_table(table_name)
         df = self.try_get_pandas_df(query_or_df)
         if df is not None:
-            return self._create_table_from_df(table, df, columns_to_types, replace=True)
+            return self._create_table_from_df(table, df, columns_to_types, replace=True, **kwargs)
         else:
             query_or_df = t.cast("Query", query_or_df)
-            return self._create_table_from_query(table, query_or_df, replace=True)
+            return self._create_table_from_query(table, query_or_df, replace=True, **kwargs)
 
     def create_index(
         self,
@@ -322,7 +324,7 @@ class EngineAdapter:
         with self.transaction():
             if replace:
                 self.drop_table(table_name)
-            self._create_table_from_columns(table_name, columns_to_types)
+            self._create_table_from_columns(table_name, columns_to_types, **kwargs)
             self._insert_append_pandas_df(table_name, df, columns_to_types)
 
     def _create_table(
