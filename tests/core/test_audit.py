@@ -192,7 +192,7 @@ def test_load_with_defaults(model, assert_exp_eq):
     }
     assert_exp_eq(
         audit.render_query(model, field4=exp.Literal.string("overridden")),
-        'SELECT * FROM "db"."table" AS "table" WHERE TRUE AND \'overridden\' IN (\'some string\', \'other string\') AND "some_column" = 3 AND "other_column" <> \'overridden\''
+        'SELECT * FROM "db"."table" AS "table" WHERE TRUE AND \'overridden\' IN (\'some string\', \'other string\') AND "some_column" = 3 AND "other_column" <> \'overridden\'',
     )
 
 
