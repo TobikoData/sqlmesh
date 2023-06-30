@@ -243,8 +243,8 @@ FROM validation_errors
     """,
 )
 
-# valid_uuid4(column=column_name)
-valid_uuid4_audit = Audit(
+# valid_uuid(column=column_name)
+valid_uuid_audit = Audit(
     name="valid_uuid",
     query="""
 SELECT *
@@ -515,89 +515,50 @@ HAVING kl_divergence > @threshold
     """,
 )
 
-# chi_squared(column=age, target_column=normalized_age, threshold=0.1)
-chi_squared_audit = Audit(
-    name="chi_squared",
+# chi_square(column_a=account_tier, column_b=account_user_segment, dependent=true, critical_value=9.48773)
+# Use the following to get the critical value for a given p-value:
+# from scipy.stats import chi2
+# chi2.ppf(0.95, 1) where 0.95 is the p-value and 1 is the degrees of freedom
+# https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.chi2.html
+# or use a table like https://www.medcalc.org/manual/chi-square-table.php
+chi_square_audit = Audit(
+    name="chi_square",
+    expressions=[
+        "@def(c, (SELECT COUNT(DISTINCT x_a) FROM contingency_table))",
+        "@def(r, (SELECT COUNT(DISTINCT x_b) FROM contingency_table))",
+        "@def(E, (tot_a * tot_b / g_t))",
+    ],
+    defaults={"dependent": exp.true()},
     query="""
 WITH
-  table_a AS (
+  samples AS (
     SELECT
-      @source_column,
-      COUNT(*) AS num_rows
+      @column_a AS x_a,
+      @column_b AS x_b,
     FROM @this_model
-    GROUP BY @source_column
+    WHERE @column_a IS NOT NULL AND @column_b IS NOT NULL
   ),
-  table_b AS (
+  contingency_table AS (
     SELECT
-      @target_column,
-      COUNT(*) AS num_rows
-    FROM @this_model
-    GROUP BY @target_column
-  ),
-  table_a_with_p AS (
-    SELECT
-      @source_column,
-      num_rows,
-      num_rows / SUM(num_rows) OVER () AS p
-    FROM table_a
-  ),
-  table_b_with_q AS (
-    SELECT
-      @target_column,
-      num_rows,
-      num_rows / SUM(num_rows) OVER () AS q
-    FROM table_b
-  ),
-  table_a_with_q AS (
-    SELECT
-      @source_column,
-      num_rows,
-      p,
-      COALESCE(q, 0) AS q
-    FROM table_a_with_p
-    LEFT JOIN table_b_with_q USING (@source_column)
-  ),
-  table_b_with_p AS (
-    SELECT
-      @target_column,
-      num_rows,
-      q,
-      COALESCE(p, 0) AS p
-    FROM table_b_with_q
-    LEFT JOIN table_a_with_p USING (@target_column)
-  ),
-  table_a_with_chi AS (
-    SELECT
-      @source_column,
-      num_rows,
-      p,
-      q,
-      (p - q) * (p - q) / NULLIF(q, 0) AS chi
-    FROM table_a_with_q
-  ),
-  table_b_with_chi AS (
-    SELECT
-      @target_column,
-      num_rows,
-      p,
-      q,
-      (q - p) * (q - p) / NULLIF(p, 0) AS chi
-    FROM table_b_with_p
-  ),
-  unioned AS (
-    SELECT *
-    FROM table_a_with_chi
-    UNION ALL
-    SELECT *
-    FROM table_b_with_chi
+      x_a,
+      x_b,
+      COUNT(*) as observed,
+      (SELECT COUNT(*) FROM samples AS t WHERE r.x_a = t.x_a) as tot_a,
+      (SELECT COUNT(*) FROM samples AS t WHERE r.x_b = t.x_b) as tot_b,
+      (SELECT COUNT(*) FROM samples) as g_t -- g_t is the grand total
+    FROM samples AS r
+    GROUP BY x_a, x_b
   )
+
 SELECT
-  @source_column,
-  @target_column,
-  SUM(chi) AS chi_squared
-FROM unioned
-GROUP BY @source_column, @target_column
-HAVING chi_squared > @threshold
+  (@c - 1) * (@r - 1) as degrees_of_freedom,
+  SUM((observed - @E) * (observed - @E) / @E) as chi_square
+FROM contingency_table
+-- H0: the two variables are independent
+-- H1: the two variables are dependent
+-- if chi_square > critical_value, reject H0
+-- if chi_square <= critical_value, fail to reject H0
+HAVING NOT @IF(@dependent, chi_square > @critical_value, chi_square <= @critical_value)
     """,
 )
 
