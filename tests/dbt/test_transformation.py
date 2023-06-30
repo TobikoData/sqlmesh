@@ -505,8 +505,15 @@ def test_partition_by(sushi_test_project: Project):
         == "TIMESTAMP_TRUNC(ds, DAY)"
     )
 
-    model_config.partition_by = {"field": "ds", "data_type": "int64", "granularity": "day"}
-    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
+    model_config.partition_by = {
+        "field": "one",
+        "data_type": "int64",
+        "range": {"start": 0, "end": 10, "interval": 2},
+    }
+    assert (
+        model_config.to_sqlmesh(context).partitioned_by[0].sql()
+        == "RANGE_BUCKET(one, GENERATE_SERIES(0, 10, 2))"
+    )
 
     model_config.partition_by = {"field": "ds", "data_type": "date", "granularity": "day"}
     assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]

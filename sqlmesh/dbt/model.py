@@ -201,10 +201,26 @@ class ModelConfig(BaseModelConfig):
     def _big_query_partition_by_expr(self) -> exp.Expression:
         assert isinstance(self.partition_by, dict)
         data_type = self.partition_by["data_type"].lower()
-        if data_type == "int64" or (
-            data_type == "date" and self.partition_by["granularity"].lower() == "day"
-        ):
+        if data_type == "date" and self.partition_by["granularity"].lower() == "day":
             return exp.to_column(self.partition_by["field"])
+
+        if data_type == "int64":
+            if "range" not in self.partition_by:
+                raise ConfigError(
+                    f"Range is required for int64 partitioning in model '{self.sql_name}'."
+                )
+
+            range_ = self.partition_by["range"]
+            start = range_["start"]
+            end = range_["end"]
+            interval = range_["interval"]
+
+            return exp.func(
+                "RANGE_BUCKET",
+                self.partition_by["field"],
+                exp.func("GENERATE_ARRAY", start, end, interval, dialect="bigquery"),
+                dialect="bigquery",
+            )
 
         return TIME_TYPE_TO_TRUNC_EXPR[data_type](
             this=exp.to_column(self.partition_by["field"]),
