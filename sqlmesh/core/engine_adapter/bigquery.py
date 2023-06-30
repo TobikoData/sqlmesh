@@ -236,7 +236,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         table_ = exp.to_table(table, dialect=self.dialect).copy()
 
         if not table_.catalog:
-            table_.set("catalog", self.client.project)
+            table_.set("catalog", exp.to_identifier(self.client.project))
 
         return bigquery.Table(
             table_ref=self._table_name(table_),
