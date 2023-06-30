@@ -41,7 +41,7 @@ def _get_path_mappings(context: Context) -> dict[Path, FileType]:
             path = audit._path.relative_to(context.path)
             mapping[path] = FileType.audit
     for model in context.models.values():
-        if model.source_type == "external" or not model._path:
+        if model.kind.is_external or not model._path:
             continue
         path = model._path.relative_to(context.path)
         mapping[path] = FileType.model
