@@ -99,7 +99,9 @@ class Project:
             package_vars = variables.get(name)
 
             if isinstance(package_vars, dict):
-                package.variables.update({**package_vars, **global_variables})
+                package.variables.update(package_vars)
+
+            package.variables.update(global_variables)
 
         return Project(context, profile, packages)
 
