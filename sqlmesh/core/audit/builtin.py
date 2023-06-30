@@ -243,6 +243,364 @@ FROM validation_errors
     """,
 )
 
+# valid_uuid4(column=column_name)
+valid_uuid4_audit = Audit(
+    name="valid_uuid",
+    query="""
+SELECT *
+FROM @this_model
+WHERE NOT REGEXP_LIKE(LOWER(@column), '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+    """,
+)
+
+# valid_url(column=column_name)
+valid_url_audit = Audit(
+    name="valid_url",
+    query="""
+SELECT *
+FROM @this_model
+WHERE NOT REGEXP_LIKE(@column, '^(https?|ftp)://[^\s/$.?#].[^\s]*$')
+    """,
+)
+
+# valid_http_method(column=column_name)
+valid_http_method_audit = Audit(
+    name="valid_http_method",
+    query="""
+SELECT *
+FROM @this_model
+WHERE NOT @column IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS', 'TRACE', 'CONNECT')
+    """,
+)
+
+# valid_email(column=column_name)
+valid_email_audit = Audit(
+    name="valid_email",
+    query="""
+SELECT *
+FROM @this_model
+WHERE NOT REGEXP_LIKE(@column, '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
+    """,
+)
+
+# match_regex_pattern_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
+match_regex_pattern_list_audit = Audit(
+    name="match_regex_pattern_list",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @EACH(
+    @patterns,
+    c -> NOT REGEXP_LIKE(@column, c)
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
+# not_match_regex_pattern_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
+not_match_regex_pattern_list_audit = Audit(
+    name="not_match_regex_pattern_list",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @EACH(
+    @patterns,
+    c -> REGEXP_LIKE(@column, c)
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
+# match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
+match_like_pattern_list = Audit(
+    name="match_like_pattern_list",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @EACH(
+    @patterns,
+    c -> NOT @column LIKE c
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
+# not_match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
+not_match_like_pattern_list_audit = Audit(
+    name="not_match_like_pattern_list",
+    query="""
+SELECT *
+FROM @this_model
+WHERE @REDUCE(
+  @EACH(
+    @patterns,
+    c -> @column LIKE c
+  ),
+  (l, r) -> l OR r
+)
+    """,
+)
+
+# z_score_audit(column=column_name, threshold=3)
+z_score_audit = Audit(
+    name="z_score",
+    query="""
+WITH stats AS (
+  SELECT
+    AVG(@column) AS mean_@column,
+    STDDEV(@column) AS stddev_@column
+  FROM @this_model
+)
+SELECT
+  @column,
+  (@column - mean_@column) / NULLIF(stddev_@column, 0) AS z_score
+FROM @this_model, stats
+WHERE ABS((@column - mean_@column) / NULLIF(stddev_@column, 0)) > @threshold
+    """,
+)
+
+# string_length_between_audit(column=column_name, max_v=22)
+string_length_between_audit = Audit(
+    name="string_length_between",
+    defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
+    query="""
+SELECT *
+FROM @this_model
+WHERE
+  False
+  OR @IF(@min_v IS NOT NULL AND @inclusive, LENGTH(@column) <= @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, LENGTH(@column) < @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, LENGTH(@column) >= @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, LENGTH(@column) > @max_v, False)
+    """,
+)
+
+# string_length_equal_audit(column=column_name, v=22)
+string_length_equal_audit = Audit(
+    name="string_length_equal",
+    query="""
+SELECT *
+FROM @this_model
+WHERE LENGTH(@column) != @v
+    """,
+)
+
+# stddev_in_range(column=age, min_v=2.5, max_v=25)
+stddev_in_range_audit = Audit(
+    name="stddev_in_range",
+    defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
+    query="""
+SELECT *
+FROM (
+  SELECT STDDEV(@column) AS stddev_@column
+  FROM @this_model
+)
+WHERE
+  False
+  OR @IF(@min_v IS NOT NULL AND @inclusive, stddev_@column <= @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, stddev_@column < @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, stddev_@column >= @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, stddev_@column > @max_v, False)
+    """,
+)
+
+# mean_in_range(column=age, min_v=2.5, max_v=25)
+mean_in_range_audit = Audit(
+    name="mean_in_range",
+    defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
+    query="""
+SELECT *
+FROM (
+  SELECT AVG(@column) AS mean_@column
+  FROM @this_model
+)
+WHERE
+  False
+  OR @IF(@min_v IS NOT NULL AND @inclusive, mean_@column <= @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, mean_@column < @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, mean_@column >= @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, mean_@column > @max_v, False)
+    """,
+)
+
+# kl_divergence(column=age, target_column=normalized_age, threshold=0.1)
+kl_divergence_audit = Audit(
+    name="kl_divergence",
+    query="""
+WITH
+  table_a AS (
+    SELECT
+      @source_column,
+      COUNT(*) AS num_rows
+    FROM @this_model
+    GROUP BY @source_column
+  ),
+  table_b AS (
+    SELECT
+      @target_column,
+      COUNT(*) AS num_rows
+    FROM @this_model
+    GROUP BY @target_column
+  ),
+  table_a_with_p AS (
+    SELECT
+      @source_column,
+      num_rows,
+      num_rows / SUM(num_rows) OVER () AS p
+    FROM table_a
+  ),
+  table_b_with_q AS (
+    SELECT
+      @target_column,
+      num_rows,
+      num_rows / SUM(num_rows) OVER () AS q
+    FROM table_b
+  ),
+  table_a_with_q AS (
+    SELECT
+      @source_column,
+      num_rows,
+      p,
+      COALESCE(q, 0) AS q
+    FROM table_a_with_p
+    LEFT JOIN table_b_with_q USING (@source_column)
+  ),
+  table_b_with_p AS (
+    SELECT
+      @target_column,
+      num_rows,
+      q,
+      COALESCE(p, 0) AS p
+    FROM table_b_with_q
+    LEFT JOIN table_a_with_p USING (@target_column)
+  ),
+  table_a_with_kl AS (
+    SELECT
+      @source_column,
+      num_rows,
+      p,
+      q,
+      p * LOG(p / NULLIF(q, 0)) AS kl
+    FROM table_a_with_q
+  ),
+  table_b_with_kl AS (
+    SELECT
+      @target_column,
+      num_rows,
+      p,
+      q,
+      q * LOG(q / NULLIF(p, 0)) AS kl
+    FROM table_b_with_p
+  ),
+  unioned AS (
+    SELECT *
+    FROM table_a_with_kl
+    UNION ALL
+    SELECT *
+    FROM table_b_with_kl
+  )
+SELECT
+  @source_column,
+  @target_column,
+  SUM(kl) AS kl_divergence
+FROM unioned
+GROUP BY @source_column, @target_column
+HAVING kl_divergence > @threshold
+    """,
+)
+
+# chi_squared(column=age, target_column=normalized_age, threshold=0.1)
+chi_squared_audit = Audit(
+    name="chi_squared",
+    query="""
+WITH
+  table_a AS (
+    SELECT
+      @source_column,
+      COUNT(*) AS num_rows
+    FROM @this_model
+    GROUP BY @source_column
+  ),
+  table_b AS (
+    SELECT
+      @target_column,
+      COUNT(*) AS num_rows
+    FROM @this_model
+    GROUP BY @target_column
+  ),
+  table_a_with_p AS (
+    SELECT
+      @source_column,
+      num_rows,
+      num_rows / SUM(num_rows) OVER () AS p
+    FROM table_a
+  ),
+  table_b_with_q AS (
+    SELECT
+      @target_column,
+      num_rows,
+      num_rows / SUM(num_rows) OVER () AS q
+    FROM table_b
+  ),
+  table_a_with_q AS (
+    SELECT
+      @source_column,
+      num_rows,
+      p,
+      COALESCE(q, 0) AS q
+    FROM table_a_with_p
+    LEFT JOIN table_b_with_q USING (@source_column)
+  ),
+  table_b_with_p AS (
+    SELECT
+      @target_column,
+      num_rows,
+      q,
+      COALESCE(p, 0) AS p
+    FROM table_b_with_q
+    LEFT JOIN table_a_with_p USING (@target_column)
+  ),
+  table_a_with_chi AS (
+    SELECT
+      @source_column,
+      num_rows,
+      p,
+      q,
+      (p - q) * (p - q) / NULLIF(q, 0) AS chi
+    FROM table_a_with_q
+  ),
+  table_b_with_chi AS (
+    SELECT
+      @target_column,
+      num_rows,
+      p,
+      q,
+      (q - p) * (q - p) / NULLIF(p, 0) AS chi
+    FROM table_b_with_p
+  ),
+  unioned AS (
+    SELECT *
+    FROM table_a_with_chi
+    UNION ALL
+    SELECT *
+    FROM table_b_with_chi
+  )
+SELECT
+  @source_column,
+  @target_column,
+  SUM(chi) AS chi_squared
+FROM unioned
+GROUP BY @source_column, @target_column
+HAVING chi_squared > @threshold
+    """,
+)
+
 # The following audits are not yet implemented
 # we are awaiting a first class way to express cross-model audits
 
