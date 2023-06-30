@@ -459,27 +459,41 @@ class TerminalConsole(Console):
         del self.loading_status[id]
 
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
-        tree = Tree(
-            f"\n[b]Schema Diff Between '[yellow]{schema_diff.source}[/yellow]' and '[green]{schema_diff.target}[/green]':"
-        )
+        source_name = schema_diff.source
+        if schema_diff.source_alias:
+            source_name = schema_diff.source_alias.upper()
+        target_name = schema_diff.target
+        if schema_diff.target_alias:
+            target_name = schema_diff.target_alias.upper()
 
-        if schema_diff.added:
-            added = Tree("[green]Added Columns:")
-            for c, t in schema_diff.added:
-                added.add(f"[green]{c} ({t})")
-            tree.add(added)
+        first_line = f"\n[b]Schema Diff Between '[yellow]{source_name}[/yellow]' and '[green]{target_name}[/green]'"
+        if schema_diff.model_name:
+            first_line = (
+                first_line + f" environments for model '[blue]{schema_diff.model_name}[/blue]'"
+            )
 
-        if schema_diff.removed:
-            removed = Tree("[red]Removed Columns:")
-            for c, t in schema_diff.removed:
-                removed.add(f"[red]{c} ({t})")
-            tree.add(removed)
+        tree = Tree(first_line + ":")
 
-        if schema_diff.modified:
-            modified = Tree("[magenta]Modified Columns:")
-            for c, (ft, tt) in schema_diff.modified.items():
-                modified.add(f"[magenta]{c} ({ft} -> {tt})")
-            tree.add(modified)
+        if any([schema_diff.added, schema_diff.removed, schema_diff.modified]):
+            if schema_diff.added:
+                added = Tree("[green]Added Columns:")
+                for c, t in schema_diff.added:
+                    added.add(f"[green]{c} ({t})")
+                tree.add(added)
+
+            if schema_diff.removed:
+                removed = Tree("[red]Removed Columns:")
+                for c, t in schema_diff.removed:
+                    removed.add(f"[red]{c} ({t})")
+                tree.add(removed)
+
+            if schema_diff.modified:
+                modified = Tree("[magenta]Modified Columns:")
+                for c, (ft, tt) in schema_diff.modified.items():
+                    modified.add(f"[magenta]{c} ({ft} -> {tt})")
+                tree.add(modified)
+        else:
+            tree.add("[b]Schemas match")
 
         self.console.print(tree)
 
@@ -491,12 +505,21 @@ class TerminalConsole(Console):
         if row_diff.target_alias:
             target_name = row_diff.target_alias.upper()
 
+        first_line = f"\n[b]Row Diff Between '[yellow]{source_name}[/yellow]' and '[green]{target_name}[/green]'"
+        if row_diff.model_name:
+            first_line = (
+                first_line + f" environments for model '[blue]{row_diff.model_name}[/blue]'"
+            )
+        self.console.print(first_line + ":")
         self.console.print("\n[b]Row Count:[/b]")
         self.console.print(f" [yellow]{source_name}[/yellow]: {row_diff.source_count} rows")
         self.console.print(f" [green]{target_name}[/green]: {row_diff.target_count} rows")
-        self.console.print(f"\n[b]Row Diff[b]: {row_diff.count_pct_change:.1f}%")
-        self.console.print("\n[b]Sample Rows:[/b]")
-        self.console.print(row_diff.sample.to_string(index=False), end="\n\n")
+        self.console.print(f" Change: {row_diff.count_pct_change:.1f}%")
+        if row_diff.sample.shape[0] > 0:
+            self.console.print("\n[b]Sample Rows:[/b]")
+            self.console.print(row_diff.sample.to_string(index=False), end="\n\n")
+        else:
+            self.console.print("\n[b]All rows match[/b]")
 
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool
