@@ -515,6 +515,92 @@ HAVING kl_divergence > @threshold
     """,
 )
 
+# chi_squared(column=age, target_column=normalized_age, threshold=0.1)
+chi_squared_audit = Audit(
+    name="chi_squared",
+    query="""
+WITH
+  table_a AS (
+    SELECT
+      @source_column,
+      COUNT(*) AS num_rows
+    FROM @this_model
+    GROUP BY @source_column
+  ),
+  table_b AS (
+    SELECT
+      @target_column,
+      COUNT(*) AS num_rows
+    FROM @this_model
+    GROUP BY @target_column
+  ),
+  table_a_with_p AS (
+    SELECT
+      @source_column,
+      num_rows,
+      num_rows / SUM(num_rows) OVER () AS p
+    FROM table_a
+  ),
+  table_b_with_q AS (
+    SELECT
+      @target_column,
+      num_rows,
+      num_rows / SUM(num_rows) OVER () AS q
+    FROM table_b
+  ),
+  table_a_with_q AS (
+    SELECT
+      @source_column,
+      num_rows,
+      p,
+      COALESCE(q, 0) AS q
+    FROM table_a_with_p
+    LEFT JOIN table_b_with_q USING (@source_column)
+  ),
+  table_b_with_p AS (
+    SELECT
+      @target_column,
+      num_rows,
+      q,
+      COALESCE(p, 0) AS p
+    FROM table_b_with_q
+    LEFT JOIN table_a_with_p USING (@target_column)
+  ),
+  table_a_with_chi AS (
+    SELECT
+      @source_column,
+      num_rows,
+      p,
+      q,
+      (p - q) * (p - q) / NULLIF(q, 0) AS chi
+    FROM table_a_with_q
+  ),
+  table_b_with_chi AS (
+    SELECT
+      @target_column,
+      num_rows,
+      p,
+      q,
+      (q - p) * (q - p) / NULLIF(p, 0) AS chi
+    FROM table_b_with_p
+  ),
+  unioned AS (
+    SELECT *
+    FROM table_a_with_chi
+    UNION ALL
+    SELECT *
+    FROM table_b_with_chi
+  )
+SELECT
+  @source_column,
+  @target_column,
+  SUM(chi) AS chi_squared
+FROM unioned
+GROUP BY @source_column, @target_column
+HAVING chi_squared > @threshold
+    """,
+)
+
 # The following audits are not yet implemented
 # we are awaiting a first class way to express cross-model audits
 
