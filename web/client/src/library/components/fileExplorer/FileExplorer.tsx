@@ -15,7 +15,6 @@ import SearchList from '@components/search/SearchList'
 import { type ModelFile } from '@models/file'
 
 /* TODO:
-  - add search
   - add drag and drop files/directories from desktop
   - add copy and paste
   - add accessability support
@@ -27,7 +26,6 @@ const FileExplorer = function FileExplorer({
   className?: string
 }): JSX.Element {
   const project = useStoreProject(s => s.project)
-  const selectedFile = useStoreProject(s => s.selectedFile)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const {
@@ -43,8 +41,8 @@ const FileExplorer = function FileExplorer({
   } = useFileExplorer()
 
   function handleKeyDown(e: React.KeyboardEvent): void {
-    if (e.key === 'Escape' && selectedFile != null && activeRange.size > 1) {
-      setActiveRange(new Set([selectedFile]))
+    if (e.key === 'Escape') {
+      setActiveRange(new Set([]))
     }
 
     if (e.metaKey && e.key === 'Backspace' && activeRange.size > 0) {
@@ -118,7 +116,9 @@ const FileExplorer = function FileExplorer({
       </FileExplorer.ContextMenu>
       <ModalConfirmation
         show={showConfirmation}
-        onClose={() => undefined}
+        onClose={() => {
+          setShowConfirmation(false)
+        }}
       >
         <ModalConfirmation.Main>
           {confirmation?.headline != null && (

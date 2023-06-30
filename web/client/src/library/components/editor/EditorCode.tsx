@@ -3,11 +3,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
 import { useApiFileByPath } from '~/api'
-import {
-  debounceAsync,
-  isNil,
-  isStringNotEmpty,
-} from '~/utils'
+import { debounceAsync, isNil, isStringNotEmpty } from '~/utils'
 import { isCancelledError } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
@@ -24,6 +20,7 @@ import {
   useKeymapsRemoteFile,
   useSQLMeshDialect,
 } from './hooks'
+import { useStoreProject } from '@context/project'
 
 function CodeEditorSQLMesh({
   type,
