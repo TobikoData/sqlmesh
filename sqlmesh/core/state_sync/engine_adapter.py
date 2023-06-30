@@ -645,7 +645,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         if self.engine_adapter.table_exists(_backup_table_name(self.intervals_table)):
             self._restore_table(self.seeds_table, _backup_table_name(self.intervals_table))
-        logger.info("Migration rollback successfull.")
+        logger.info("Migration rollback successful.")
 
     def _backup_state(self) -> None:
         for table in (
