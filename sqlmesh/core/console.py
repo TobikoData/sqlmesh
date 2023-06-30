@@ -505,12 +505,6 @@ class TerminalConsole(Console):
         if row_diff.target_alias:
             target_name = row_diff.target_alias.upper()
 
-        first_line = f"\n[b]Row Diff Between '[yellow]{source_name}[/yellow]' and '[green]{target_name}[/green]'"
-        if row_diff.model_name:
-            first_line = (
-                first_line + f" environments for model '[blue]{row_diff.model_name}[/blue]'"
-            )
-        self.console.print(first_line + ":")
         self.console.print("\n[b]Row Count:[/b]")
         self.console.print(f" [yellow]{source_name}[/yellow]: {row_diff.source_count} rows")
         self.console.print(f" [green]{target_name}[/green]: {row_diff.target_count} rows")
