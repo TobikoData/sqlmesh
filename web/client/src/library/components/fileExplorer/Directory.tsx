@@ -52,12 +52,13 @@ const Directory = function Directory({
 
         directory.open()
       },
-      canDrop(artifact) {
+      canDrop(artifact, monitor) {
         const artifacts = Array.from(
           activeRange.has(artifact) ? activeRange : [artifact],
         )
 
         return (
+          monitor.isOver({ shallow: true }) &&
           isArrayNotEmpty(artifacts) &&
           artifacts.every(item => {
             if (item.parent === directory || item === directory) return false
