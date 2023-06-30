@@ -108,7 +108,7 @@ class TestConfig(GeneralConfig):
         skip = not self.enabled
         blocking = self.severity == Severity.ERROR
 
-        return Audit(
+        audit = Audit(
             name=self.name,
             dialect=self.dialect,
             skip=skip,
@@ -116,6 +116,8 @@ class TestConfig(GeneralConfig):
             query=query,
             jinja_macros=jinja_macros,
         )
+        audit._path = self.path
+        return audit
 
     def _kwargs(self) -> str:
         kwargs = {}
