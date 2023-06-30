@@ -116,12 +116,12 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         )
 
     @notify(NotificationEvent.APPLY_FAILURE)
-    def notify_apply_failure(self, exc: Exception) -> None:
+    def notify_apply_failure(self, exc: str) -> None:
         """Notify in the case of an apply failure."""
         self.send(NotificationStatus.FAILURE, f"Failed to apply plan.\n{exc}")
 
     @notify(NotificationEvent.RUN_FAILURE)
-    def notify_run_failure(self, exc: Exception) -> None:
+    def notify_run_failure(self, exc: str) -> None:
         """Notify in the case of a run failure."""
         self.send(NotificationStatus.FAILURE, "Failed to run SQLMesh.\n{exc}")
 

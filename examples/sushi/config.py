@@ -60,20 +60,20 @@ required_approvers_config = Config(
     default_connection=DuckDBConnectionConfig(),
     users=[
         User(
-            username="test",
+            username="admin",
             roles=[UserRole.REQUIRED_APPROVER],
             notification_targets=[
                 SlackApiNotificationTarget(
-                    notify_on=["apply_start", "audit_failure"],
-                    token=os.getenv("SLACK_API_TOKEN"),
-                    channel="UXXXXXXXXX",  # User's Slack ID
+                    notify_on=["apply_start", "apply_failure", "apply_end", "audit_failure"],
+                    token=os.getenv("ADMIN_SLACK_API_TOKEN"),
+                    channel="UXXXXXXXXX",  # User's Slack member ID
                 ),
             ],
         )
     ],
     notification_targets=[
         SlackWebhookNotificationTarget(
-            notify_on=["apply_start", "run_start"],
+            notify_on=["apply_start", "apply_failure", "run_start"],
             url=os.getenv("SLACK_WEBHOOK_URL"),
         ),
         BasicSMTPNotificationTarget(

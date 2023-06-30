@@ -36,6 +36,7 @@ import abc
 import collections
 import contextlib
 import gc
+import traceback
 import typing as t
 import unittest.result
 from io import StringIO
@@ -392,7 +393,9 @@ class Context(BaseContext):
         try:
             self.scheduler(environment=environment).run(environment, start, end, latest)
         except Exception as e:
-            self.notification_target_manager.notify(NotificationEvent.RUN_FAILURE, e)
+            self.notification_target_manager.notify(
+                NotificationEvent.RUN_FAILURE, traceback.format_exc()
+            )
             raise e
         self.notification_target_manager.notify(NotificationEvent.RUN_END, environment=environment)
 
@@ -770,7 +773,9 @@ class Context(BaseContext):
         try:
             self._scheduler.create_plan_evaluator(self).evaluate(plan)
         except Exception as e:
-            self.notification_target_manager.notify(NotificationEvent.APPLY_FAILURE, e)
+            self.notification_target_manager.notify(
+                NotificationEvent.APPLY_FAILURE, traceback.format_exc()
+            )
             raise e
         self.notification_target_manager.notify(
             NotificationEvent.APPLY_END, environment=plan.environment.name
