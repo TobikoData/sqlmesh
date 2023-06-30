@@ -28,8 +28,6 @@ function Editor(): JSX.Element {
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const addTab = useStoreEditor(s => s.addTab)
-  const setDialects = useStoreEditor(s => s.setDialects)
-  const refreshTab = useStoreEditor(s => s.refreshTab)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
 

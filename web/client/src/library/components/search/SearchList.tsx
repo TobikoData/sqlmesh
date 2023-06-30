@@ -2,8 +2,8 @@ import React, { useMemo, useState } from 'react'
 import Input from '@components/input/Input'
 import { isFalse, isArrayEmpty, isArrayNotEmpty } from '@utils/index'
 import { EnumSize, type Size } from '~/types/enum'
-
-const EMPTY_STRING = ''
+import { EMPTY_STRING, filterListBy, highlightMatch } from './help'
+import { Link } from 'react-router-dom'
 
 export default function SearchList<
   T extends Record<string, any> = Record<string, any>,
@@ -13,13 +13,15 @@ export default function SearchList<
   searchBy,
   displayBy,
   onSelect,
+  to,
   autoFocus = false,
 }: {
   list: T[]
   searchBy: string
   displayBy: string
-  onSelect: (item: T) => void
+  onSelect?: (item: T) => void
   autoFocus?: boolean
+  to?: (item: T) => string
   size?: Size
 }): JSX.Element {
   const indices: Array<[T, string]> = useMemo(
@@ -32,7 +34,7 @@ export default function SearchList<
   const showSearchResults = search !== EMPTY_STRING && search.length > 1
   const found = isFalse(showSearchResults)
     ? []
-    : filterListBySearch<T>(indices, search)
+    : filterListBy<T>(indices, search)
 
   return (
     <div
@@ -73,22 +75,38 @@ export default function SearchList<
               <li
                 key={item.name}
                 className="p-2 cursor-pointer hover:bg-primary-10 rounded-lg"
-                onClick={(e: React.MouseEvent) => {
-                  e.stopPropagation()
-
-                  onSelect(item)
-                  setSearch(EMPTY_STRING)
-                }}
               >
-                <div className="text-md font-normal w-full">
-                  <span className="font-bold">{item[displayBy]}</span>
-                  <small
-                    className="block text-neutral-600 italic"
-                    dangerouslySetInnerHTML={{
-                      __html: highlightMatch(index, search),
+                {to == null ? (
+                  <SearchResult<T>
+                    item={item}
+                    index={index}
+                    search={search}
+                    displayBy={displayBy}
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation()
+
+                      onSelect?.(item)
+                      setSearch(EMPTY_STRING)
                     }}
-                  ></small>
-                </div>
+                  />
+                ) : (
+                  <Link
+                    to={to(item)}
+                    onClick={(e: React.MouseEvent) => {
+                      e.stopPropagation()
+
+                      setSearch(EMPTY_STRING)
+                    }}
+                    className="text-md font-normal mb-1 w-full"
+                  >
+                    <SearchResult<T>
+                      item={item}
+                      index={index}
+                      search={search}
+                      displayBy={displayBy}
+                    />
+                  </Link>
+                )}
               </li>
             ))}
         </ul>
@@ -97,36 +115,31 @@ export default function SearchList<
   )
 }
 
-function highlightMatch(source: string, match: string): string {
-  return source.replaceAll(
-    match,
-    `<b class="inline-block text-brand-500 bg-brand-10">${match}</b>`,
+function SearchResult<T extends Record<string, any> = Record<string, any>>({
+  item,
+  index,
+  search,
+  displayBy,
+  onClick,
+}: {
+  item: T
+  index: string
+  search: string
+  displayBy: string
+  onClick?: (e: React.MouseEvent) => void
+}): JSX.Element {
+  return (
+    <div
+      onClick={onClick}
+      className="text-md font-normal w-full"
+    >
+      <span className="font-bold">{item[displayBy]}</span>
+      <small
+        className="block text-neutral-600 italic"
+        dangerouslySetInnerHTML={{
+          __html: highlightMatch(index, search),
+        }}
+      />
+    </div>
   )
-}
-
-function filterListBySearch<
-  T extends Record<string, any> = Record<string, any>,
->(indices: Array<[T, string]> = [], search: string): Array<[T, string]> {
-  const DISPLAYED_MATCH_LENGTH = 40
-
-  return indices.reduce((acc: Array<[T, string]>, [model, index]) => {
-    const idx = index.indexOf(search.toLocaleLowerCase())
-
-    if (idx > -1) {
-      const min = Math.max(0, idx - DISPLAYED_MATCH_LENGTH)
-      const max = Math.min(
-        index.length - 1,
-        idx + search.length + DISPLAYED_MATCH_LENGTH,
-      )
-
-      acc.push([
-        model,
-        (min > 0 ? '... ' : EMPTY_STRING) +
-          index.slice(min, max) +
-          (max < index.length ? ' ...' : EMPTY_STRING),
-      ])
-    }
-
-    return acc
-  }, [])
 }
