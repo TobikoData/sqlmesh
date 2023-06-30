@@ -283,9 +283,9 @@ WHERE NOT REGEXP_LIKE(@column, '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$
     """,
 )
 
-# match_regex_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
-match_regex_list_audit = Audit(
-    name="match_regex_list",
+# match_regex_pattern_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
+match_regex_pattern_list_audit = Audit(
+    name="match_regex_pattern_list",
     query="""
 SELECT *
 FROM @this_model
@@ -299,9 +299,9 @@ WHERE @REDUCE(
     """,
 )
 
-# not_match_regex_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
-not_match_regex_list_audit = Audit(
-    name="not_match_regex_list",
+# not_match_regex_pattern_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
+not_match_regex_pattern_list_audit = Audit(
+    name="not_match_regex_pattern_list",
     query="""
 SELECT *
 FROM @this_model
@@ -316,7 +316,7 @@ WHERE @REDUCE(
 )
 
 # match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
-match_all_like_audit = Audit(
+match_like_pattern_list = Audit(
     name="match_like_pattern_list",
     query="""
 SELECT *
@@ -362,6 +362,70 @@ SELECT
   (@column - mean_@column) / NULLIF(stddev_@column, 0) AS z_score
 FROM @this_model, stats
 WHERE ABS((@column - mean_@column) / NULLIF(stddev_@column, 0)) > @threshold
+    """,
+)
+
+# string_length_between_audit(column=column_name, max_v=22)
+string_length_between_audit = Audit(
+    name="string_length_between",
+    defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
+    query="""
+SELECT *
+FROM @this_model
+WHERE
+  False
+  OR @IF(@min_v IS NOT NULL AND @inclusive, LENGTH(@column) <= @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, LENGTH(@column) < @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, LENGTH(@column) >= @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, LENGTH(@column) > @max_v, False)
+    """,
+)
+
+# string_length_equal_audit(column=column_name, v=22)
+string_length_equal_audit = Audit(
+    name="string_length_equal",
+    query="""
+SELECT *
+FROM @this_model
+WHERE LENGTH(@column) != @v
+    """,
+)
+
+# stddev_in_range(column=age, min_v=2.5, max_v=25)
+stddev_in_range_audit = Audit(
+    name="stddev_in_range",
+    defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
+    query="""
+SELECT *
+FROM (
+  SELECT STDDEV(@column) AS stddev_@column
+  FROM @this_model
+)
+WHERE
+  False
+  OR @IF(@min_v IS NOT NULL AND @inclusive, stddev_@column <= @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, stddev_@column < @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, stddev_@column >= @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, stddev_@column > @max_v, False)
+    """,
+)
+
+# mean_in_range(column=age, min_v=2.5, max_v=25)
+mean_in_range_audit = Audit(
+    name="mean_in_range",
+    defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
+    query="""
+SELECT *
+FROM (
+  SELECT AVG(@column) AS mean_@column
+  FROM @this_model
+)
+WHERE
+  False
+  OR @IF(@min_v IS NOT NULL AND @inclusive, mean_@column <= @min_v, False)
+  OR @IF(@min_v IS NOT NULL AND NOT @inclusive, mean_@column < @min_v, False)
+  OR @IF(@max_v IS NOT NULL AND @inclusive, mean_@column >= @max_v, False)
+  OR @IF(@max_v IS NOT NULL AND NOT @inclusive, mean_@column > @max_v, False)
     """,
 )
 
