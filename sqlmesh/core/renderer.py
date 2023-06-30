@@ -51,7 +51,7 @@ def _dates(
     )
 
 
-class ExpressionRenderer:
+class BaseExpressionRenderer:
     def __init__(
         self,
         expression: exp.Expression,
@@ -61,7 +61,6 @@ class ExpressionRenderer:
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_latest: bool = False,
-        resolve_tables: bool = True,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -70,7 +69,6 @@ class ExpressionRenderer:
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
         self._only_latest = only_latest
-        self._should_resolve_tables = resolve_tables
 
         self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.Optional[exp.Expression]] = {}
 
@@ -81,7 +79,6 @@ class ExpressionRenderer:
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         is_dev: bool = False,
-        expand: t.Iterable[str] = tuple(),
         **kwargs: t.Any,
     ) -> t.Optional[exp.Expression]:
         """Renders a expression, expanding macros with provided kwargs
@@ -94,9 +91,6 @@ class ExpressionRenderer:
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
                 tables / table clones should be used where applicable.
-            expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
-                that depend on materialized tables.  Model definitions are inlined and can thus be run end to
-                end on the fly.
 
         Returns:
             The rendered expression.
@@ -158,20 +152,7 @@ class ExpressionRenderer:
 
             self._cache[cache_key] = expression
 
-        expression = t.cast(exp.Expression, self._cache[cache_key])
-        if expression is None or not self._should_resolve_tables:
-            return expression
-
-        return self._resolve_tables(
-            expression,
-            snapshots=snapshots,
-            expand=expand,
-            is_dev=is_dev,
-            start=start,
-            end=end,
-            latest=latest,
-            **kwargs,
-        )
+        return t.cast(exp.Expression, self._cache[cache_key])
 
     def update_cache(
         self,
@@ -212,7 +193,41 @@ class ExpressionRenderer:
             )
 
 
-class QueryRenderer(ExpressionRenderer):
+class ExpressionRenderer(BaseExpressionRenderer):
+    def render(
+        self,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        latest: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        is_dev: bool = False,
+        expand: t.Iterable[str] = tuple(),
+        **kwargs: t.Any,
+    ) -> t.Optional[exp.Expression]:
+        expression = super().render(
+            start=start,
+            end=end,
+            latest=latest,
+            snapshots=snapshots,
+            is_dev=is_dev,
+            **kwargs,
+        )
+        if not expression:
+            return None
+
+        return self._resolve_tables(
+            expression,
+            snapshots=snapshots,
+            expand=expand,
+            is_dev=is_dev,
+            start=start,
+            end=end,
+            latest=latest,
+            **kwargs,
+        )
+
+
+class QueryRenderer(BaseExpressionRenderer):
     def __init__(
         self,
         query: exp.Expression,
@@ -235,7 +250,6 @@ class QueryRenderer(ExpressionRenderer):
             jinja_macro_registry=jinja_macro_registry,
             python_env=python_env,
             only_latest=only_latest,
-            resolve_tables=False,
         )
 
         self._model_name = model_name
