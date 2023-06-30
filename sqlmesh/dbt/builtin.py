@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import typing as t
 from ast import literal_eval
@@ -20,6 +21,8 @@ from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReturnVal
+
+logger = logging.getLogger(__name__)
 
 
 class Exceptions:
@@ -167,6 +170,7 @@ def generate_ref(refs: t.Dict[str, t.Any], api: Api) -> t.Callable:
         ref_name = f"{package}.{name}" if name else package
         relation_info = refs.get(ref_name)
         if relation_info is None:
+            logger.warning("Could not resolve ref '%s'", ref_name)
             return None
 
         return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
@@ -178,6 +182,7 @@ def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
     def source(package: str, name: str) -> t.Optional[BaseRelation]:
         relation_info = sources.get(f"{package}.{name}")
         if relation_info is None:
+            logger.warning("Could not resolve source package='%s' name='%s'", package, name)
             return None
 
         return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
@@ -291,6 +296,7 @@ def create_builtin_globals(
 
     target: t.Optional[AttributeDict] = jinja_globals.get("target", None)
     api = Api(target)
+    dialect = target.type if target else None  # type: ignore
 
     builtin_globals["api"] = api
 
@@ -321,16 +327,22 @@ def create_builtin_globals(
         adapter: BaseAdapter = RuntimeAdapter(
             engine_adapter,
             jinja_macros,
-            jinja_globals={**builtin_globals, **jinja_globals},
+            jinja_globals={
+                **builtin_globals,
+                **jinja_globals,
+                "engine_adapter": engine_adapter,
+            },
             relation_type=api.Relation,
             quote_policy=api.quote_policy,
+            snapshots=jinja_globals.get("snapshots", {}),
+            is_dev=jinja_globals.get("is_dev", False),
         )
         builtin_globals.update({"log": log, "print": log})
     else:
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
-            dialect=target.type if target else None,  # type: ignore
+            dialect=dialect,
         )
         builtin_globals.update({"log": no_log, "print": no_log})
 
