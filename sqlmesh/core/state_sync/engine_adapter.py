@@ -616,16 +616,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not skip_backup:
             self._backup_state()
 
-        for migration in migrations:
-            logger.info(f"Applying migration {migration}")
-            migration.migrate(self)
+        try:
+            for migration in migrations:
+                logger.info(f"Applying migration {migration}")
+                migration.migrate(self)
 
-        self._migrate_rows()
-        self._update_versions()
+            self._migrate_rows()
+            self._update_versions()
+        except Exception as e:
+            if skip_backup:
+                logger.error("Backup was skipped so no rollback was attempted.")
+            else:
+                self.rollback()
+            raise SQLMeshError("SQLMesh migration failed.") from e
 
     @transactional()
     def rollback(self) -> None:
         """Rollback to the previous migration."""
+        logger.info("Starting migration rollback.")
         tables = (self.snapshots_table, self.environments_table, self.versions_table)
         if not any(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
             raise SQLMeshError("There are no prior migrations to roll back to.")
@@ -637,6 +645,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         if self.engine_adapter.table_exists(_backup_table_name(self.intervals_table)):
             self._restore_table(self.seeds_table, _backup_table_name(self.intervals_table))
+        logger.info("Migration rollback successful.")
 
     def _backup_state(self) -> None:
         for table in (
