@@ -1,6 +1,7 @@
 import { isStringEmptyOrNil } from '@utils/index'
 import { type ModelDirectory } from './directory'
 import { ModelInitial } from './initial'
+import { toUniqueName } from '@components/fileExplorer/help'
 
 export interface InitialArtifact {
   name: string
@@ -59,6 +60,10 @@ export class ModelArtifact<
 
   get withParent(): boolean {
     return Boolean(this.parent?.isModel)
+  }
+
+  copyName(): string {
+    return `Copy ${this.name}__${toUniqueName()}`
   }
 
   rename(newName: string): void {

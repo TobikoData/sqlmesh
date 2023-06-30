@@ -10,7 +10,12 @@ import { useStoreProject } from '@context/project'
 import { ModelArtifact } from '@models/artifact'
 import { ModelDirectory } from '@models/directory'
 import { getAllFilesInDirectory, toUniqueName } from './help'
-import { isFalse, isNotNil, isStringEmptyOrNil } from '@utils/index'
+import {
+  isArrayNotEmpty,
+  isFalse,
+  isNotNil,
+  isStringEmptyOrNil,
+} from '@utils/index'
 import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
 import { type Confirmation } from '@components/modal/ModalConfirmation'
@@ -305,6 +310,7 @@ export default function FileExplorerProvider({
   function moveArtifacts(
     artifacts: Set<ModelArtifact>,
     target: ModelDirectory,
+    shouldRenameDuplicates = false,
   ): void {
     if (isLoading) return
 
@@ -317,8 +323,20 @@ export default function FileExplorerProvider({
         | typeof writeDirectoryApiDirectoriesPathPost
       >
     > = []
+    const duplicates: ModelArtifact[] = []
 
     artifacts.forEach(artifact => {
+      const isDuplicate = target.hasName(artifact.name)
+      const artifactPath = artifact.path
+
+      if (isDuplicate && isFalse(shouldRenameDuplicates)) {
+        return duplicates.push(artifact)
+      }
+
+      if (shouldRenameDuplicates) {
+        artifact.rename(artifact.copyName())
+      }
+
       const new_path = ModelArtifact.toPath(target.path, artifact.name)
 
       if (artifact instanceof ModelDirectory) {
@@ -327,7 +345,7 @@ export default function FileExplorerProvider({
           target.addDirectory(artifact)
         })
         promises.push(
-          writeDirectoryApiDirectoriesPathPost(artifact.path, { new_path }),
+          writeDirectoryApiDirectoriesPathPost(artifactPath, { new_path }),
         )
 
         artifact.allArtifacts.forEach(a => artifacts.delete(a))
@@ -338,9 +356,24 @@ export default function FileExplorerProvider({
           artifact.parent?.removeFile(artifact)
           target.addFile(artifact)
         })
-        promises.push(writeFileApiFilesPathPost(artifact.path, { new_path }))
+        promises.push(writeFileApiFilesPathPost(artifactPath, { new_path }))
       }
     })
+
+    if (isArrayNotEmpty(duplicates)) {
+      setConfirmation({
+        headline: 'Moving Duplicates',
+        description: `All duplicated names will be renamed!`,
+        yesText: 'Yes, Rename',
+        noText: 'No, Cancel',
+        details: duplicates.map(artifact => artifact.path),
+        action: () => {
+          moveArtifacts(artifacts, target, true)
+        },
+      })
+
+      return
+    }
 
     Promise.all(promises)
       .then(resolvedList => {
@@ -353,6 +386,7 @@ export default function FileExplorerProvider({
       .finally(() => {
         setIsLoading(false)
         setActiveRange(new Set())
+        setFiles(project?.allFiles ?? [])
       })
   }
 

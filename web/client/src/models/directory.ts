@@ -71,6 +71,10 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     return this.withFiles || this.withDirectories
   }
 
+  get artifacts(): ModelArtifact[] {
+    return (this.directories as ModelArtifact[]).concat(this.files)
+  }
+
   get allDirectories(): ModelDirectory[] {
     return this.directories.concat(
       this.directories.map(d => d.allDirectories).flat(100),
@@ -130,6 +134,10 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     this.directories.forEach(directory => {
       directory.collapse()
     })
+  }
+
+  hasName(name: string): boolean {
+    return this.artifacts.some(artifact => artifact.name === name)
   }
 
   hasFile(file: ModelFile): boolean {
