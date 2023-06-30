@@ -10,13 +10,13 @@ It provides a method of validating models that can be used along with [evaluatin
 
 Table diff executes two types of comparison on the source and target objects: a schema diff and a row diff.
 
-The schema diff identifies whether fields have been added, removed, or changed data types in the target object, relative to the source object. 
+The schema diff identifies whether fields have been added, removed, or changed data types in the target object relative to the source object. 
 
-The row diff identifies changes in data values across the tables' shared columns. It does this by performing a `FULL JOIN` of the two tables then, for each column present in both tables, comparing data values from one table to those from the other.
+The row diff identifies changes in data values across columns with the same name and data type in both tables. It does this by performing a `FULL JOIN` of the two tables then, for each column with the same name and data type, comparing data values from one table to those from the other.
 
-The table diff tool can be called in two ways: direct comparison of tables/views or comparison of a SQLMesh model across two project environments. It executes the comparison using the database or engine specified in the SQLMesh [project configuration](../reference/configuration.md).
+The table diff tool can be called in two ways: comparison of a SQLMesh model across two project environments or direct comparison of tables/views. It executes the comparison using the database or engine specified in the SQLMesh [project configuration](../reference/configuration.md).
 
-## Diffing
+## Diffing models across environments
 
 Compare a SQLMesh model across environments with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source environment]:[target environment] [model name]`. 
 
