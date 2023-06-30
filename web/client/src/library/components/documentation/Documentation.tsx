@@ -130,7 +130,7 @@ const Documentation = function Documentation({
                       'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
                     )}
                   >
-                    <CodeEditor.Default
+                    <CodeEditor.SQLMeshDialect
                       type={EnumFileExtensions.SQL}
                       content={model.sql ?? ''}
                     >
@@ -141,29 +141,15 @@ const Documentation = function Documentation({
                           className="text-xs"
                         />
                       )}
-                    >
-                      <CodeEditor.SQLMeshDialect
-                        type={EnumFileExtensions.SQL}
-                        content={model.sql ?? ''}
-                      >
-                        {({ extensions, content }) => (
-                          <CodeEditor
-                            extensions={extensions.concat(modelExtensions)}
-                            content={content}
-                            className="text-xs"
-                          />
-                        )}
-                      </CodeEditor.SQLMeshDialect>
+                    </CodeEditor.SQLMeshDialect>
                   </Tab.Panel>
                 </Tab.Panels>
               </Tab.Group>
-              </>
             )}
-        </CodeEditor.RemoteFile>
+          </CodeEditor.RemoteFile>
         </Section>
-  )
-}
-    </Container >
+      )}
+    </Container>
   )
 }
 

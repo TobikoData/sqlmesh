@@ -106,7 +106,7 @@ export function getDecorations(
             attributes: {
               class: clsx(
                 'sqlmesh-model__column --is-active-model',
-                isOriginal ? '--is-original' : ' --is-derived',
+                isOriginal ? '--is-original' : '--is-derived',
                 isActionMode && '--is-action-mode',
               ),
               column: maybeModelOrColumn,
@@ -117,7 +117,7 @@ export function getDecorations(
             attributes: {
               class: clsx(
                 'sqlmesh-model__column',
-                isOriginal ? '--is-original' : ' --is-derived',
+                isOriginal ? '--is-original' : '--is-derived',
                 isActionMode && '--is-action-mode',
               ),
               column: maybeModelOrColumn,

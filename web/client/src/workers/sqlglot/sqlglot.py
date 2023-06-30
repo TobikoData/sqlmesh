@@ -27,8 +27,8 @@ def get_dialect(name: str = "") -> str:
     type_mapping = dialect.generator_class.TYPE_MAPPING
 
     output = {
-        "keywords": " ".join(keywords) + " ",
-        "types": " ".join(type_mapping.get(t, t.value) for t in exp.DataType.Type) + " ",
+        "keywords": " ".join(keywords),
+        "types": " ".join(type_mapping.get(t, t.value) for t in exp.DataType.Type),
     }
 
     return json.dumps(output)

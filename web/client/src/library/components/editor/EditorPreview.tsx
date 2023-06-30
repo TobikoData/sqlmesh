@@ -165,9 +165,9 @@ export default function EditorPreview({
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(
-                                    header.column.columnDef.header,
-                                    header.getContext(),
-                                  )}
+                                      header.column.columnDef.header,
+                                      header.getContext(),
+                                    )}
                               </th>
                             ))}
                           </tr>
@@ -201,9 +201,9 @@ export default function EditorPreview({
                                 {header.isPlaceholder
                                   ? null
                                   : flexRender(
-                                    header.column.columnDef.footer,
-                                    header.getContext(),
-                                  )}
+                                      header.column.columnDef.footer,
+                                      header.getContext(),
+                                    )}
                               </th>
                             ))}
                           </tr>

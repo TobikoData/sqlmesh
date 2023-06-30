@@ -30,6 +30,16 @@ import {
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { sqlglotWorker } from '~/workers'
 
+const cache = new Map<string, (e: MessageEvent) => void>()
+const WHITE_SPACE = ' '
+
+type ExtensionCleanUp = () => void
+type ExtensionSqlMeshDialect = (
+  models: Map<string, Model>,
+  options?: { types: string; keywords: string },
+  dialects?: string[],
+) => LanguageSupport
+
 export function useDefaultExtensions(type: FileExtensions): Extension[] {
   const { mode } = useColorScheme()
 
@@ -189,16 +199,6 @@ export function useSQLMeshModelKeymaps(path: string): KeyBinding[] {
   ]
 }
 
-const cache = new Map<string, (e: MessageEvent) => void>()
-const WHITE_SPACE = ' '
-
-type ExtensionCleanUp = () => void
-type ExtensionSqlMeshDialect = (
-  models: Map<string, Model>,
-  options?: { types: string; keywords: string },
-  dialects?: string[],
-) => LanguageSupport
-
 export function useSqlMeshDialect(): [
   ExtensionSqlMeshDialect,
   ExtensionCleanUp,
@@ -212,13 +212,15 @@ export function useSqlMeshDialect(): [
     const SQLKeywords = (options?.keywords ?? '') + WHITE_SPACE
     const SQLMeshModelDictionary = SQLMeshModelKeywords(dialects)
     const SQLMeshKeywords =
-      'columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
+      'columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect' +
+      WHITE_SPACE
     const SQLMeshTypes =
-      'seed full incremental_by_time_range incremental_by_unique_key view embedded'
+      'seed full incremental_by_time_range incremental_by_unique_key view embedded' +
+      WHITE_SPACE
 
     const lang = SQLDialect.define({
-      keywords: SQLKeywords + SQLMeshKeywords + WHITE_SPACE,
-      types: SQLTypes + SQLMeshTypes + WHITE_SPACE,
+      keywords: SQLKeywords + SQLMeshKeywords,
+      types: SQLTypes + SQLMeshTypes,
     })
 
     const tables: Completion[] = Array.from(new Set(Object.values(models))).map(
