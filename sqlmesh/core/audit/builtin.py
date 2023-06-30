@@ -429,6 +429,92 @@ WHERE
     """,
 )
 
+# kl_divergence(column=age, target_column=normalized_age, threshold=0.1)
+kl_divergence_audit = Audit(
+    name="kl_divergence",
+    query="""
+WITH
+  table_a AS (
+    SELECT
+      @source_column,
+      COUNT(*) AS num_rows
+    FROM @this_model
+    GROUP BY @source_column
+  ),
+  table_b AS (
+    SELECT
+      @target_column,
+      COUNT(*) AS num_rows
+    FROM @this_model
+    GROUP BY @target_column
+  ),
+  table_a_with_p AS (
+    SELECT
+      @source_column,
+      num_rows,
+      num_rows / SUM(num_rows) OVER () AS p
+    FROM table_a
+  ),
+  table_b_with_q AS (
+    SELECT
+      @target_column,
+      num_rows,
+      num_rows / SUM(num_rows) OVER () AS q
+    FROM table_b
+  ),
+  table_a_with_q AS (
+    SELECT
+      @source_column,
+      num_rows,
+      p,
+      COALESCE(q, 0) AS q
+    FROM table_a_with_p
+    LEFT JOIN table_b_with_q USING (@source_column)
+  ),
+  table_b_with_p AS (
+    SELECT
+      @target_column,
+      num_rows,
+      q,
+      COALESCE(p, 0) AS p
+    FROM table_b_with_q
+    LEFT JOIN table_a_with_p USING (@target_column)
+  ),
+  table_a_with_kl AS (
+    SELECT
+      @source_column,
+      num_rows,
+      p,
+      q,
+      p * LOG(p / NULLIF(q, 0)) AS kl
+    FROM table_a_with_q
+  ),
+  table_b_with_kl AS (
+    SELECT
+      @target_column,
+      num_rows,
+      p,
+      q,
+      q * LOG(q / NULLIF(p, 0)) AS kl
+    FROM table_b_with_p
+  ),
+  unioned AS (
+    SELECT *
+    FROM table_a_with_kl
+    UNION ALL
+    SELECT *
+    FROM table_b_with_kl
+  )
+SELECT
+  @source_column,
+  @target_column,
+  SUM(kl) AS kl_divergence
+FROM unioned
+GROUP BY @source_column, @target_column
+HAVING kl_divergence > @threshold
+    """,
+)
+
 # The following audits are not yet implemented
 # we are awaiting a first class way to express cross-model audits
 
