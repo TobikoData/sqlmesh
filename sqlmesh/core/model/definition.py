@@ -691,7 +691,7 @@ class _SqlBasedModel(_Model):
             for statement in statements
             if not isinstance(statement, d.MacroDef)
         )
-        return [r for r in rendered if r is not None]
+        return [r for expressions in rendered for r in expressions]
 
     def _statement_renderer(self, expression: exp.Expression) -> ExpressionRenderer:
         expression_key = id(expression)
