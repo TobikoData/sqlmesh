@@ -3,9 +3,6 @@ import { Divider } from '../divider/Divider'
 import { useStoreFileTree } from '../../../context/fileTree'
 import SplitPane from '../splitPane/SplitPane'
 import { debounceSync, isFalse, isStringEmptyOrNil } from '../../../utils'
-import CodeEditor, {
-  useSQLMeshModelExtensions,
-} from '@components/editor/EditorCode'
 import EditorFooter from './EditorFooter'
 import EditorTabs from './EditorTabs'
 import EditorInspector from './EditorInspector'
@@ -18,6 +15,8 @@ import Spinner from '@components/logo/Spinner'
 import { EnumFileExtensions } from '@models/file'
 import { type KeyBinding } from '@codemirror/view'
 import { useLineageFlow } from '@components/graph/context'
+import CodeEditor from './EditorCode'
+import { useSQLMeshModelExtensions } from './hooks'
 
 function Editor(): JSX.Element {
   const files = useStoreFileTree(s => s.files)
@@ -274,7 +273,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
           >
             <div className="flex flex-col h-full">
               {tab.file.isLocal && (
-                <CodeEditor.Default
+                <CodeEditor.SQLMeshDialect
                   key={tab.id}
                   type={EnumFileExtensions.SQL}
                   content={tab.file.content}
@@ -287,7 +286,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
                       onChange={updateFileContent}
                     />
                   )}
-                </CodeEditor.Default>
+                </CodeEditor.SQLMeshDialect>
               )}
               {tab.file.isRemote && (
                 <CodeEditor.RemoteFile path={tab.file.path}>
