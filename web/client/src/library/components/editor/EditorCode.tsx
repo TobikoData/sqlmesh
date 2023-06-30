@@ -188,6 +188,7 @@ const CodeEditor = function CodeEditor({
       extensions={extensionsAll}
       onChange={onChange}
       readOnly={isNil(onChange)}
+      autoFocus
     />
   )
 }
