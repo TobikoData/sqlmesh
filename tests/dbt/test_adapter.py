@@ -4,6 +4,7 @@ import typing as t
 
 import pytest
 from dbt.adapters.base.column import Column
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
 from sqlmesh.dbt.project import Project
@@ -64,3 +65,42 @@ def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Calla
 
     with pytest.raises(ConfigError, match=r"Macro 'current_engine'.*was not found."):
         renderer("{{ adapter.dispatch('current_engine')() }}")
+
+
+def test_adapter_map_snapshot_tables(
+    sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
+):
+    snapshot_mock = mocker.Mock()
+    snapshot_mock.name = "test_db.test_model"
+    snapshot_mock.version = "1"
+    snapshot_mock.is_symbolic = False
+    snapshot_mock.table_name_for_mapping.return_value = "sqlmesh.test_db__test_model"
+
+    context = sushi_test_project.context
+    renderer = runtime_renderer(context, snapshots={"test_db.test_model": snapshot_mock})
+    assert context.engine_adapter
+
+    engine_adapter = context.engine_adapter
+    engine_adapter.create_schema("foo")
+    engine_adapter.create_schema("sqlmesh")
+    engine_adapter.create_table(
+        table_name="sqlmesh.test_db__test_model",
+        columns_to_types={"baz": exp.DataType.build("int")},
+    )
+    engine_adapter.create_table(
+        table_name="foo.bar", columns_to_types={"col": exp.DataType.build("int")}
+    )
+
+    assert (
+        renderer(
+            "{{ adapter.get_relation(database=none, schema='test_db', identifier='test_model') }}"
+        )
+        == '"sqlmesh"."test_db__test_model"'
+    )
+
+    assert "baz" in renderer("{{ run_query('SELECT * FROM test_db.test_model') }}")
+
+    assert (
+        renderer("{{ adapter.get_relation(database=none, schema='foo', identifier='bar') }}")
+        == '"foo"."bar"'
+    )
