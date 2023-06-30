@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
-from sqlglot import exp, parse_one
+from sqlglot import exp, parse
 from sqlglot.errors import SqlglotError
 from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -70,9 +70,9 @@ class BaseExpressionRenderer:
         self._python_env = python_env or {}
         self._only_latest = only_latest
 
-        self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.Optional[exp.Expression]] = {}
+        self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.List[exp.Expression]] = {}
 
-    def render(
+    def _render(
         self,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
@@ -80,7 +80,7 @@ class BaseExpressionRenderer:
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         is_dev: bool = False,
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Expression]:
+    ) -> t.List[exp.Expression]:
         """Renders a expression, expanding macros with provided kwargs
 
         Args:
@@ -93,13 +93,13 @@ class BaseExpressionRenderer:
                 tables / table clones should be used where applicable.
 
         Returns:
-            The rendered expression.
+            The rendered expressions.
         """
 
         dates = _dates(start, end, latest)
         cache_key = dates
         if cache_key not in self._cache:
-            expression = self._expression
+            expressions = [self._expression]
 
             render_kwargs = {
                 **date_dict(*dates, only_latest=self._only_latest),
@@ -111,17 +111,19 @@ class BaseExpressionRenderer:
                 **{**render_kwargs, **env}, snapshots=(snapshots or {}), is_dev=is_dev
             )
 
-            if isinstance(expression, d.Jinja):
+            if isinstance(self._expression, d.Jinja):
                 try:
-                    rendered_expression = jinja_env.from_string(expression.name).render()
+                    rendered_expression = jinja_env.from_string(self._expression.name).render()
                     if not rendered_expression.strip():
-                        self._cache[cache_key] = None
-                        return None
+                        self._cache[cache_key] = []
+                        return []
 
-                    parsed_expression = parse_one(rendered_expression, read=self._dialect)
-                    if not parsed_expression:
-                        raise ConfigError(f"Failed to parse a expression {expression}")
-                    expression = parsed_expression
+                    parsed_expressions = [
+                        e for e in parse(rendered_expression, read=self._dialect) if e
+                    ]
+                    if not parsed_expressions:
+                        raise ConfigError(f"Failed to parse an expression {self._expression}")
+                    expressions = parsed_expressions
                 except ParsetimeAdapterCallError:
                     raise
                 except Exception as ex:
@@ -141,18 +143,21 @@ class BaseExpressionRenderer:
 
             macro_evaluator.locals.update(render_kwargs)
 
-            try:
-                expression = macro_evaluator.transform(expression)  # type: ignore
-            except MacroEvalError as ex:
-                raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
+            resolved_expressions: t.List[exp.Expression] = []
+            for expression in expressions:
+                try:
+                    expression = macro_evaluator.transform(expression)  # type: ignore
+                except MacroEvalError as ex:
+                    raise_config_error(f"Failed to resolve macro for expression. {ex}", self._path)
 
-            if expression:
-                with _normalize_and_quote(expression, self._dialect) as expression:
-                    pass
+                if expression:
+                    with _normalize_and_quote(expression, self._dialect) as expression:
+                        pass
+                    resolved_expressions.append(expression)
 
-            self._cache[cache_key] = expression
+            self._cache[cache_key] = resolved_expressions
 
-        return t.cast(exp.Expression, self._cache[cache_key])
+        return self._cache[cache_key]
 
     def update_cache(
         self,
@@ -162,7 +167,7 @@ class BaseExpressionRenderer:
         latest: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
-        self._cache[_dates(start, end, latest)] = expression
+        self._cache[_dates(start, end, latest)] = [expression]
 
     def _resolve_tables(
         self,
@@ -203,8 +208,8 @@ class ExpressionRenderer(BaseExpressionRenderer):
         is_dev: bool = False,
         expand: t.Iterable[str] = tuple(),
         **kwargs: t.Any,
-    ) -> t.Optional[exp.Expression]:
-        expression = super().render(
+    ) -> t.List[exp.Expression]:
+        expressions = super()._render(
             start=start,
             end=end,
             latest=latest,
@@ -212,19 +217,20 @@ class ExpressionRenderer(BaseExpressionRenderer):
             is_dev=is_dev,
             **kwargs,
         )
-        if not expression:
-            return None
 
-        return self._resolve_tables(
-            expression,
-            snapshots=snapshots,
-            expand=expand,
-            is_dev=is_dev,
-            start=start,
-            end=end,
-            latest=latest,
-            **kwargs,
-        )
+        return [
+            self._resolve_tables(
+                e,
+                snapshots=snapshots,
+                expand=expand,
+                is_dev=is_dev,
+                start=start,
+                end=end,
+                latest=latest,
+                **kwargs,
+            )
+            for e in expressions
+        ]
 
 
 class QueryRenderer(BaseExpressionRenderer):
@@ -297,22 +303,24 @@ class QueryRenderer(BaseExpressionRenderer):
 
         if skip_cache or not optimize or cache_key not in self._optimized_cache:
             try:
-                query = t.cast(
-                    exp.Subqueryable,
-                    super().render(
-                        start=start,
-                        end=end,
-                        latest=latest,
-                        snapshots=snapshots,
-                        is_dev=is_dev,
-                        **kwargs,
-                    ),
+                expressions = super()._render(
+                    start=start,
+                    end=end,
+                    latest=latest,
+                    snapshots=snapshots,
+                    is_dev=is_dev,
+                    **kwargs,
                 )
             except ParsetimeAdapterCallError:
                 return None
 
-            if not query:
-                raise ConfigError(f"Failed to render query:\n{query}")
+            if not expressions:
+                raise ConfigError(f"Failed to render query:\n{self._expression}")
+
+            if len(expressions) > 1:
+                raise ConfigError(f"Too many statements in query:\n{self._expression}")
+
+            query = t.cast(exp.Subqueryable, expressions[0])
 
             if optimize:
                 query = self._optimize_query(query)

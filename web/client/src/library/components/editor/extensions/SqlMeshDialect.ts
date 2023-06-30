@@ -19,7 +19,7 @@ type ExtensionSqlMeshDialect = (
   dialects?: string[],
 ) => LanguageSupport
 
-export function useSqlMeshExtension(): [
+export default function useSqlMeshExtension(): [
   ExtensionSqlMeshDialect,
   ExtensionCleanUp,
 ] {

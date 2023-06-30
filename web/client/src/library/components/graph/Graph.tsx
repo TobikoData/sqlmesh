@@ -67,12 +67,11 @@ import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
 import { type ErrorIDE } from '~/library/pages/ide/context'
 import { Popover, Transition } from '@headlessui/react'
-import CodeEditor, {
-  useSQLMeshModelExtensions,
-} from '@components/editor/EditorCode'
+import CodeEditor from '@components/editor/EditorCode'
 import { EnumFileExtensions } from '@models/file'
-import { SqlMeshExpression } from '@components/editor/extensions'
 import { type Extension } from '@codemirror/state'
+import { useSQLMeshModelExtensions } from '@components/editor/hooks'
+import { SqlMeshExpression } from '@components/editor/extensions'
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,

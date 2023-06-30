@@ -34,7 +34,7 @@ export default function EditorTabs(): JSX.Element {
   return (
     <div className="flex items-center">
       <Button
-        className="m-0 ml-1 mr-3 bg-primary-10  hover:bg-secondary-10 active:bg-secondary-10 border-none"
+        className="h-6 m-0 ml-1 mr-3 bg-primary-10  hover:bg-secondary-10 active:bg-secondary-10 border-none"
         variant={EnumVariant.Alternative}
         size={EnumSize.sm}
         onClick={(e: MouseEvent) => {
