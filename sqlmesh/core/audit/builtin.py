@@ -243,13 +243,23 @@ FROM validation_errors
     """,
 )
 
-# valid_uuid(column=column_name)
-valid_uuid_audit = Audit(
+# valid_uuid4(column=column_name)
+valid_uuid4_audit = Audit(
     name="valid_uuid",
     query="""
 SELECT *
 FROM @this_model
-WHERE NOT REGEXP_LIKE(@column, '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+WHERE NOT REGEXP_LIKE(LOWER(@column), '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')
+    """,
+)
+
+# valid_url(column=column_name)
+valid_url_audit = Audit(
+    name="valid_url",
+    query="""
+SELECT *
+FROM @this_model
+WHERE NOT REGEXP_LIKE(@column, '^(https?|ftp)://[^\s/$.?#].[^\s]*$')
     """,
 )
 
@@ -334,6 +344,24 @@ WHERE @REDUCE(
   ),
   (l, r) -> l OR r
 )
+    """,
+)
+
+# z_score_audit(column=column_name, threshold=3)
+z_score_audit = Audit(
+    name="z_score",
+    query="""
+WITH stats AS (
+  SELECT
+    AVG(@column) AS mean_@column,
+    STDDEV(@column) AS stddev_@column
+  FROM @this_model
+)
+SELECT
+  @column,
+  (@column - mean_@column) / NULLIF(stddev_@column, 0) AS z_score
+FROM @this_model, stats
+WHERE ABS((@column - mean_@column) / NULLIF(stddev_@column, 0)) > @threshold
     """,
 )
 
