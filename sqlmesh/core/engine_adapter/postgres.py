@@ -25,6 +25,7 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter):
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
     ) -> None:
         """
         Postgres does not support replace table and also enforce binding views. Therefore we can't swap out tables
@@ -33,7 +34,7 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter):
         block reads until the insert is done. I'm not certain about this though.
         """
         if not self.table_exists(table_name):
-            return self.ctas(table_name, query_or_df, columns_to_types, exists=False)
+            return self.ctas(table_name, query_or_df, columns_to_types, exists=False, **kwargs)
         with self.transaction(TransactionType.DDL):
             sql = f"TRUNCATE {exp.to_table(table_name).sql(dialect=self.dialect)}"
             self.execute(sql)
