@@ -187,6 +187,7 @@ class SparkEngineAdapter(EngineAdapter):
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
     ) -> None:
         # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
         # currently check for storage formats we will just do an insert/overwrite.
