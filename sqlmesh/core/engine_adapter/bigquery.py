@@ -320,6 +320,15 @@ class BigQueryEngineAdapter(EngineAdapter):
             assert temp_table is not None
             self.drop_table(temp_table)
 
+    def table_exists(self, table_name: TableName) -> bool:
+        from google.cloud.exceptions import NotFound
+
+        try:
+            self._get_table(table_name)
+            return True
+        except NotFound:
+            return False
+
     def _get_table(self, table_name: TableName) -> BigQueryTable:
         """
         Returns a BigQueryTable object for the given table name.
