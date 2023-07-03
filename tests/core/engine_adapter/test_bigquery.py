@@ -91,14 +91,12 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
     create_temp_table = db_call_mock.call_args_list[0]
     load_temp_table = retry_resp.call_args_list[0]
     merge, drop_temp_table = execute_mock.call_args_list
-    merge_sql = merge[0]
-    drop_temp_table_sql = drop_temp_table[0]
+    merge_sql = merge[0][0]
+    drop_temp_table_sql = drop_temp_table[0][0]
     if sys.version_info < (3, 8):
         create_temp_table.kwargs = create_temp_table[1]
         load_temp_table.kwargs = load_temp_table[1]
         drop_temp_table.kwargs = drop_temp_table[1]
-        merge_sql = merge_sql[0]
-        drop_temp_table_sql = drop_temp_table_sql[0]
     assert create_temp_table.kwargs == {
         "exists_ok": False,
         "table": get_temp_bq_table.return_value,
