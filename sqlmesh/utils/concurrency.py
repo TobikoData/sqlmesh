@@ -110,6 +110,8 @@ class ConcurrentDAGExecutor(t.Generic[H]):
         for skipped_node in skipped_nodes:
             self._unprocessed_nodes_num -= 1
             self._unprocessed_nodes.pop(skipped_node)
+
+        for skipped_node in skipped_nodes:
             self._skip_next_nodes(skipped_node)
 
     def _init_state(self) -> None:
