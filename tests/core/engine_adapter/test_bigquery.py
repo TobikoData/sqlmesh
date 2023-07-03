@@ -1,4 +1,6 @@
 # type: ignore
+import sys
+
 import pandas as pd
 import pytest
 from google.cloud import bigquery
@@ -79,6 +81,11 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
     )
     assert db_call_mock.call_count == 4
     create_temp_table, load_temp_table, merge, drop_temp_table = db_call_mock.call_args_list
+    if sys.version_info < (3, 8):
+        create_temp_table.kwargs = create_temp_table[1]
+        load_temp_table.kwargs = load_temp_table[1]
+        merge.kwargs = merge[1]
+        drop_temp_table.kwargs = drop_temp_table[1]
     assert create_temp_table.kwargs == {
         "exists_ok": False,
         "table": get_temp_bq_table.return_value,
@@ -139,6 +146,9 @@ def test_replace_query_pandas(mocker: MockerFixture):
 
     assert db_call_mock.call_count == 2
     create_table, load_table = db_call_mock.call_args_list
+    if sys.version_info < (3, 8):
+        create_table.kwargs = create_table[1]
+        load_table.kwargs = load_table[1]
     assert create_table.kwargs == {
         "table": get_bq_table.return_value,
         "exists_ok": True,
