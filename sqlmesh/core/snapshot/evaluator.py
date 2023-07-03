@@ -742,7 +742,15 @@ class FullRefreshStrategy(MaterializableStrategy):
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
-        self.adapter.replace_query(name, query_or_df, model.columns_to_types)
+        self.adapter.replace_query(
+            name,
+            query_or_df,
+            columns_to_types=model.columns_to_types,
+            storage_format=model.storage_format,
+            partitioned_by=model.partitioned_by,
+            partition_interval_unit=model.interval_unit(),
+            clustered_by=model.clustered_by,
+        )
 
 
 class ViewStrategy(PromotableStrategy):

@@ -112,6 +112,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         table_name: TableName,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
     ) -> None:
         """
         Redshift doesn't support `CREATE OR REPLACE TABLE...` and it also doesn't support `VALUES` expression so we need to specially
@@ -125,7 +126,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         if df is None:
             with self.transaction():
                 self.drop_table(table_name, exists=True)
-                return self.ctas(table_name, query_or_df, columns_to_types)
+                return self.ctas(table_name, query_or_df, columns_to_types, **kwargs)
         if not columns_to_types:
             raise ValueError("columns_to_types must be provided for dataframes")
         target_table = exp.to_table(table_name)
@@ -138,7 +139,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
                 old_table_name = f"{target_table.alias_or_name}_old_{self._short_hash()}"
                 old_table = target_table.copy()
                 old_table.set("this", exp.to_identifier(old_table_name))
-                self.create_table(temp_table, columns_to_types, exists=False)
+                self.create_table(temp_table, columns_to_types, exists=False, **kwargs)
                 for expression in self._pandas_to_sql(
                     df, columns_to_types, self.DEFAULT_BATCH_SIZE
                 ):
@@ -147,7 +148,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
                 self.rename_table(temp_table, target_table)
                 self.drop_table(old_table)
         else:
-            self.create_table(target_table, columns_to_types, exists=False)
+            self.create_table(target_table, columns_to_types, exists=False, **kwargs)
             for expression in self._pandas_to_sql(df, columns_to_types, self.DEFAULT_BATCH_SIZE):
                 self._insert_append_query(target_table, expression, columns_to_types)
 
