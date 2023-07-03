@@ -283,6 +283,9 @@ class BigQueryEngineAdapter(EngineAdapter):
             query = exp.select(*columns_to_types).from_(temp_table)
         else:
             query = t.cast("Query", query_or_df)
+
+        query = self._add_where_to_query(query, where)
+
         columns = [
             exp.to_column(col)
             for col in (columns_to_types or [col.alias_or_name for col in query.expressions])

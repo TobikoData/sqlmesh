@@ -911,26 +911,6 @@ def test_render_query(assert_exp_eq):
           AND y BETWEEN '2020-10-28' AND '2020-10-28'
         """,
     )
-    assert_exp_eq(
-        model.render_query(
-            start="2020-10-28", end=to_datetime("2020-10-29"), add_incremental_filter=True
-        ),
-        """
-        SELECT
-          *
-        FROM (
-          SELECT
-            y AS y
-          FROM x AS x
-          WHERE
-            y BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
-            AND y BETWEEN '2020-10-28' AND '2020-10-28'
-        ) AS _subquery
-        WHERE
-          y BETWEEN TIME_STR_TO_TIME('2020-10-28T00:00:00+00:00') AND TIME_STR_TO_TIME('2020-10-28T23:59:59.999000+00:00')
-
-        """,
-    )
 
 
 def test_time_column():
@@ -1096,90 +1076,6 @@ def test_convert_to_time_column():
     )
     model = load_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == d.parse_one("CAST('20220101' AS date)")
-
-
-def test_filter_time_column(assert_exp_eq):
-    expressions = d.parse(
-        """
-        MODEL (
-          name sushi.items,
-          kind INCREMENTAL_BY_TIME_RANGE(
-            time_column (ds, '%Y%m%d')
-          )
-        );
-
-        SELECT
-          id::INT AS id,
-          name::TEXT AS name,
-          price::DOUBLE AS price,
-          ds::TEXT AS ds
-        FROM raw.items
-    """
-    )
-    model = load_model(expressions)
-
-    assert_exp_eq(
-        model.render_query(
-            start="2021-01-01", end="2021-01-01", latest="2021-01-01", add_incremental_filter=True
-        ),
-        """
-        SELECT
-          *
-        FROM (
-          SELECT
-            CAST(id AS INT) AS id,
-            CAST(name AS TEXT) AS name,
-            CAST(price AS DOUBLE) AS price,
-            CAST(ds AS TEXT) AS ds
-          FROM raw.items AS items
-        ) AS _subquery
-        WHERE
-          ds BETWEEN '20210101' AND '20210101'
-        """,
-    )
-
-    expressions = d.parse(
-        """
-        MODEL (
-          name sushi.items,
-          kind INCREMENTAL_BY_TIME_RANGE(
-            time_column (ds, '%Y%m%d')
-          )
-        );
-
-        SELECT
-          id::INT AS id,
-          name::TEXT AS name,
-          price::DOUBLE AS price,
-          ds::TEXT AS ds
-        FROM raw.items
-        WHERE
-          CAST(ds AS TEXT) <= '20210101' AND CAST(ds as TEXT) >= '20210101'
-    """
-    )
-    model = load_model(expressions)
-
-    assert_exp_eq(
-        model.render_query(
-            start="2021-01-01", end="2021-01-01", latest="2021-01-01", add_incremental_filter=True
-        ),
-        """
-        SELECT
-          *
-        FROM (
-          SELECT
-            CAST(id AS INT) AS id,
-            CAST(name AS TEXT) AS name,
-            CAST(price AS DOUBLE) AS price,
-            CAST(ds AS TEXT) AS ds
-          FROM raw.items AS items
-          WHERE
-            CAST(ds AS TEXT) <= '20210101' AND CAST(ds AS TEXT) >= '20210101'
-        ) AS _subquery
-        WHERE
-          ds BETWEEN '20210101' AND '20210101'
-        """,
-    )
 
 
 def test_parse(assert_exp_eq):
