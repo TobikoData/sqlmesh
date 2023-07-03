@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import logging
 import typing as t
 
@@ -194,12 +193,10 @@ class BigQueryEngineAdapter(EngineAdapter):
         if replace:
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
         logger.debug(f"Loading dataframe to BigQuery. Table: {table.full_table_id}")
-        result = self._db_call(
-            self.client.load_table_from_dataframe,
-            dataframe=df,
-            destination=table,
-            job_config=job_config,
+        job = self.client.load_table_from_dataframe(
+            dataframe=df, destination=table, job_config=job_config
         )
+        result = self._db_call(job.result)
         if result.errors:
             raise SQLMeshError(result.errors)
         return result
@@ -404,39 +401,17 @@ class BigQueryEngineAdapter(EngineAdapter):
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         return False
 
-    def _retryable_execute(
-        self,
-        sql: str,
-    ) -> None:
-        """
-        BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
-        So we update the cursor's query job and query data with the results of the new query job. This makes sure
-        that other cursor based operations execute correctly.
-        """
-        from google.cloud.bigquery import QueryJobConfig
-
-        job_config = QueryJobConfig(**self._job_params)
-        self.cursor._query_job = self.client.query(
-            sql,
-            job_config=job_config,
-            timeout=self._extra_config.get("job_creation_timeout_seconds"),
-        )
-        results = self.cursor._query_job.result(
-            timeout=self._extra_config.get("job_execution_timeout_seconds")  # type: ignore
-        )
-        self.cursor._query_data = iter(results) if results.total_rows else iter([])
-        query_results = self.cursor._query_job._query_results
-        self.cursor._set_rowcount(query_results)
-        self.cursor._set_description(query_results.schema)
-
     def _db_call(self, func: t.Callable[..., t.Any], *args: t.Any, **kwargs: t.Any) -> t.Any:
         from google.api_core import retry
 
-        return retry.retry_target(
-            target=functools.partial(func, *args, **kwargs),
-            predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
-            sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
-            deadline=self._extra_config.get("job_retry_deadline_seconds"),
+        return func(
+            retry=retry.Retry(
+                predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
+                sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
+                deadline=self._extra_config.get("job_retry_deadline_seconds"),
+            ),
+            *args,
+            **kwargs,
         )
 
     def execute(
@@ -454,10 +429,23 @@ class BigQueryEngineAdapter(EngineAdapter):
         for e in ensure_list(expressions):
             sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
             logger.debug(f"Executing SQL:\n{sql}")
-            self._db_call(
-                self._retryable_execute,
-                sql=sql,
+            from google.cloud.bigquery import QueryJobConfig
+
+            job_config = QueryJobConfig(**self._job_params)
+            self.cursor._query_job = self._db_call(
+                self.client.query,
+                query=sql,
+                job_config=job_config,
+                timeout=self._extra_config.get("job_creation_timeout_seconds"),
             )
+            results = self._db_call(
+                self.cursor._query_job.result,
+                timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
+            )
+            self.cursor._query_data = iter(results) if results.total_rows else iter([])
+            query_results = self.cursor._query_job._query_results
+            self.cursor._set_rowcount(query_results)
+            self.cursor._set_description(query_results.schema)
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
