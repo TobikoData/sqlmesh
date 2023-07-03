@@ -69,7 +69,7 @@ The `MODEL` DDL statement takes various properties, which are used for both meta
 
 ### name
 - `name` specifies the name of the model. This name represents the production view name that the model outputs, so it generally takes the form of `"schema"."view_name"`. The name of a model must be unique in a SQLMesh project.<br /><br />
-When models are used in non-production environments, SQLMesh automatically prefixes the names. For example, consider a model named `"sushi"."customers"`. In production its view is named `"sushi"."customers"`, and in dev its view is named `"dev__sushi"."customers"`.<br /><br />
+When models are used in non-production environments, SQLMesh automatically prefixes the names. For example, consider a model named `"sushi"."customers"`. In production its view is named `"sushi"."customers"`, and in dev its view is named `"sushi__dev"."customers"`.<br /><br />
 Name is ***required*** and must be ***unique***.
 
 ### kind

@@ -27,6 +27,7 @@ MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily',
+  grain item_id,
   audits [assert_positive_order_ids],
 );
 
@@ -42,14 +43,16 @@ GROUP BY item_id
 
 After running `sqlmesh plan dev` and applying the plan, the updated model will be present in the `dev` environment but not in `prod`.
 
-Compare the two versions of the model with the table diff tool by running `sqlmesh prod:dev sqlmesh_example.full_model -o item_id`.
+Compare the two versions of the model with the table diff tool by running `sqlmesh table_diff prod:dev sqlmesh_example.full_model`.
 
-The first argument `prod:dev` specifies that `prod` is the baseline environment to which we will compare `dev`. The second argument `sqlmesh_example.full_model` is the name of the model to compare across the `prod` and `dev` environments. The required `-o` option specifies the column names the tables should be joined on. If more than one column should be used for the join, specify multiple `-o` options.
+The first argument `prod:dev` specifies that `prod` is the baseline environment to which we will compare `dev`. The second argument `sqlmesh_example.full_model` is the name of the model to compare across the `prod` and `dev` environments. 
+
+Because the `grain` is set to `item_id` in the `MODEL` statement, SQLMesh knows how to perform the join between the two models. If `grain` were not set, the command would need to include the `-o item_id` option to specify that the tables should be joined on column `item_id`. If more than one column should be used for the join, specify `-o` once for each join column.
 
 Table diff returns this output:
 
 ```bash linenums="1"
-$ sqlmesh table_diff prod:dev sqlmesh_example.full_model -o item_id
+$ sqlmesh table_diff prod:dev sqlmesh_example.full_model
 Schema Diff Between 'PROD' and 'DEV' environments for model 'sqlmesh_example.full_model':
 └── Schemas match
 
