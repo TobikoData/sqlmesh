@@ -102,3 +102,40 @@ def test_concurrent_apply_to_snapshots_return_failed_skipped(mocker: MockerFixtu
     assert errors[0].node == snapshot_a.snapshot_id
 
     assert skipped == [snapshot_b.snapshot_id, snapshot_c.snapshot_id]
+
+
+def test_concurrent_apply_to_snapshots_skip_each_node_only_once(mocker: MockerFixture):
+    failed_snapshot = mocker.Mock()
+    failed_snapshot.snapshot_id = SnapshotId(
+        name="failed_snapshot_model", identifier="failed_snapshot"
+    )
+    failed_snapshot.parents = []
+
+    snapshot_a = mocker.Mock()
+    snapshot_a.snapshot_id = SnapshotId(name="model_a", identifier="snapshot_a")
+    snapshot_a.parents = [failed_snapshot.snapshot_id]
+
+    snapshot_b = mocker.Mock()
+    snapshot_b.snapshot_id = SnapshotId(name="model_b", identifier="snapshot_b")
+    snapshot_b.parents = [failed_snapshot.snapshot_id]
+
+    # snapshot_c depends on both the failed snapshot and one of the skipped ones (snapshot_a)
+    snapshot_c = mocker.Mock()
+    snapshot_c.snapshot_id = SnapshotId(name="model_c", identifier="snapshot_c")
+    snapshot_c.parents = [failed_snapshot.snapshot_id, snapshot_a.snapshot_id]
+
+    def raise_(snapshot):
+        if snapshot.snapshot_id.name == "failed_snapshot_model":
+            raise RuntimeError("fail")
+
+    errors, skipped = concurrent_apply_to_snapshots(
+        [failed_snapshot, snapshot_a, snapshot_b, snapshot_c],
+        lambda s: raise_(s),
+        2,
+        raise_on_error=False,
+    )
+
+    assert len(errors) == 1
+    assert errors[0].node == failed_snapshot.snapshot_id
+
+    assert skipped == [snapshot_a.snapshot_id, snapshot_b.snapshot_id, snapshot_c.snapshot_id]
