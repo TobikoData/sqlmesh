@@ -38,9 +38,6 @@ logger = logging.getLogger(__name__)
 class BigQueryEngineAdapter(EngineAdapter):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
-
-    TODO: Consider writing a custom implementation using the BigQuery API directly because we are already starting
-    to override some of the DB API behavior.
     """
 
     DIALECT = "bigquery"
@@ -422,6 +419,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
+        from google.cloud.bigquery import QueryJobConfig
 
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
@@ -430,8 +428,10 @@ class BigQueryEngineAdapter(EngineAdapter):
         for e in ensure_list(expressions):
             sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
             logger.debug(f"Executing SQL:\n{sql}")
-            from google.cloud.bigquery import QueryJobConfig
 
+            # BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
+            # So we update the cursor's query job and query data with the results of the new query job. This makes sure
+            # that other cursor based operations execute correctly.
             job_config = QueryJobConfig(**self._job_params)
             self.cursor._query_job = self._db_call(
                 self.client.query,
