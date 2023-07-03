@@ -123,37 +123,6 @@ def test_render(sushi_context, assert_exp_eq):
 
         """,
     )
-    assert_exp_eq(
-        sushi_context.render(
-            snapshot.name,
-            start=date(2021, 1, 1),
-            end=date(2021, 1, 1),
-            latest=date(2021, 1, 1),
-            add_incremental_filter=True,
-        ),
-        f"""
-        SELECT
-          *
-        FROM (
-          SELECT
-            CAST(o.waiter_id AS INT) AS waiter_id, /* Waiter id */
-            CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue, /* Revenue from orders taken by this waiter */
-            CAST(o.ds AS TEXT) AS ds /* Date */
-          FROM sqlmesh__sushi.sushi__orders__619968963 AS o
-          LEFT JOIN sqlmesh__sushi.sushi__order_items__3090566586 AS oi
-            ON o.ds = oi.ds AND o.id = oi.order_id
-          LEFT JOIN sqlmesh__sushi.sushi__items__1837306384 AS i
-            ON oi.ds = i.ds AND oi.item_id = i.id
-          WHERE
-            o.ds <= '2021-01-01' AND o.ds >= '2021-01-01'
-          GROUP BY
-            o.waiter_id,
-            o.ds
-        ) AS _subquery
-        WHERE
-          ds BETWEEN '2021-01-01' AND '2021-01-01'
-        """,
-    )
 
     # unpushed render still works
     unpushed = Context(paths="examples/sushi")

@@ -38,7 +38,6 @@ from sqlmesh.utils.metaprogramming import (
     print_exception,
     serialize_env,
 )
-from sqlmesh.utils.pandas import filter_df_by_timelike
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit
@@ -145,7 +144,6 @@ class _Model(ModelMeta, frozen=True):
             start=start,
             end=end,
             latest=latest,
-            add_incremental_filter=True,
             snapshots=context.snapshots,
             is_dev=context.is_dev,
             engine_adapter=context.engine_adapter,
@@ -433,13 +431,23 @@ class _Model(ModelMeta, frozen=True):
         else:
             self.time_column.format = default_time_format
 
-    def convert_to_time_column(self, time: TimeLike) -> exp.Expression:
+    def convert_to_time_column(
+        self, time: TimeLike, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> exp.Expression:
         """Convert a TimeLike object to the same time format and type as the model's time column."""
         if self.time_column:
             if self.time_column.format:
                 time = to_datetime(time).strftime(self.time_column.format)
 
-            time_column_type = self.columns_to_types_or_raise[self.time_column.column]
+            if columns_to_types is None:
+                columns_to_types = self.columns_to_types_or_raise
+
+            if self.time_column.column not in columns_to_types:
+                raise ConfigError(
+                    f"Time column '{self.time_column.column}' not found in model '{self.name}'."
+                )
+
+            time_column_type = columns_to_types[self.time_column.column]
             if time_column_type.this in exp.DataType.TEXT_TYPES:
                 return exp.Literal.string(time)
             elif time_column_type.this in exp.DataType.NUMERIC_TYPES:
@@ -892,8 +900,6 @@ class SqlModel(_SqlBasedModel):
                 path=self._path,
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
-                time_column=self.time_column,
-                time_converter=self.convert_to_time_column,
                 only_latest=self.kind.only_latest,
             )
         return self.__query_renderer
@@ -1082,8 +1088,6 @@ class PythonModel(_Model):
         latest: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
-        from sqlmesh.core.engine_adapter import EngineAdapter
-
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
         latest = to_datetime(latest or c.EPOCH)
@@ -1096,27 +1100,7 @@ class PythonModel(_Model):
                 df_or_iter = [df_or_iter]
 
             for df in df_or_iter:
-                if self.kind.is_incremental_by_time_range:
-                    assert self.time_column
-
-                    pandas_df = EngineAdapter.try_get_pandas_df(df)
-                    pyspark_df = EngineAdapter.try_get_pyspark_df(df)
-                    if pandas_df is not None:
-                        assert self.time_column.format, "Time column format is required."
-                        pandas_df = filter_df_by_timelike(
-                            pandas_df, self.time_column.column, self.time_column.format, start, end
-                        )
-                        yield pandas_df
-                    elif pyspark_df:
-                        pyspark_df = pyspark_df.where(
-                            f"{self.time_column.column} BETWEEN {self.convert_to_time_column(start).sql('spark')} "
-                            f"AND {self.convert_to_time_column(end).sql('spark')}"
-                        )
-                        yield pyspark_df
-                    else:
-                        raise SQLMeshError("Unsupported dataframe type.")
-                else:
-                    yield df
+                yield df
         except Exception as e:
             print_exception(e, self.python_env)
             raise SQLMeshError(f"Error executing Python model '{self.name}'")
