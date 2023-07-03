@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import logging
 import typing as t
 
@@ -194,10 +193,8 @@ class BigQueryEngineAdapter(EngineAdapter):
         logger.debug(f"Loading dataframe to BigQuery. Table: {table.full_table_id}")
         # This client call does not support retry so we don't use the `_db_call` method.
         result = self.__retry(
-            functools.partial(
-                self.__db_load_table_from_dataframe, df=df, table=table, job_config=job_config
-            )
-        )()
+            self.__db_load_table_from_dataframe,
+        )(df=df, table=table, job_config=job_config)
         if result.errors:
             raise SQLMeshError(result.errors)
         return result
