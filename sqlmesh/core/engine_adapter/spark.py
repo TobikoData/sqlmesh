@@ -132,6 +132,8 @@ class SparkEngineAdapter(EngineAdapter):
         if isinstance(table_name, exp.Table):
             table_name = table_name.sql(dialect=self.dialect)
 
+        df = df.where(where.sql(dialect=self.dialect)) if where else df
+
         df_writer = df.select(*self.spark.table(table_name).columns).write
         if overwrite:
             df_writer = df_writer.mode("overwrite")

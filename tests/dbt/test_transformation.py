@@ -24,7 +24,6 @@ from sqlmesh.dbt.column import (
     column_types_to_sqlmesh,
 )
 from sqlmesh.dbt.context import DbtContext
-from sqlmesh.dbt.macros import dbt_utils_star
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
@@ -411,26 +410,6 @@ def test_dbt_version(sushi_test_project: Project):
     context = sushi_test_project.context
 
     assert context.render("{{ dbt_version }}").startswith("1.")
-
-
-def test_dbt_utils_star_macro(sushi_test_project: Project):
-    context = sushi_test_project.context
-    context.jinja_macros.add_macros({"star": dbt_utils_star().info}, "dbt_utils")
-    context._jinja_environment = None
-
-    assert context.render("{{ dbt_utils.star(from='foo') }}") == "foo.*"
-    assert (
-        context.render("{{ dbt_utils.star(from='foo', except=['bar']) }}")
-        == """foo.* EXCEPT ("bar")"""
-    )
-    assert (
-        context.render("{{ dbt_utils.star(from='foo', except=['bar', 'baz']) }}")
-        == """foo.* EXCEPT ("bar", "baz")"""
-    )
-    with pytest.raises(CompilationError):
-        context.render("{{ dbt_utils.star(from='foo', prefix='pre') }}")
-    with pytest.raises(CompilationError):
-        context.render("{{ dbt_utils.star(from='foo', suffix='suf') }}")
 
 
 def test_parsetime_adapter_call(

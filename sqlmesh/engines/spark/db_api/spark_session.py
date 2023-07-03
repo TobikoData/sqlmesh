@@ -74,6 +74,7 @@ class SparkSessionConnection:
         if self.catalog:
             # Note: Spark 3.4+ Only API
             self.spark.catalog.setCurrentCatalog(self.catalog)
+        self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:

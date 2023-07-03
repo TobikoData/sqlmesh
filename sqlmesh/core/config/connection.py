@@ -159,17 +159,19 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     Args:
         server_hostname: Databricks instance host name.
         http_path: Http path either to a DBSQL endpoint (e.g. /sql/1.0/endpoints/1234567890abcdef)
-                   or to a DBR interactive cluster (e.g. /sql/protocolv1/o/1234567890123456/1234-123456-slid123)
+            or to a DBR interactive cluster (e.g. /sql/protocolv1/o/1234567890123456/1234-123456-slid123)
         access_token: Http Bearer access token, e.g. Databricks Personal Access Token.
         catalog: Default catalog to use for SQL models. Defaults to None which means it will use the default set in
-                 the Databricks cluster (most likely `hive_metastore`).
+            the Databricks cluster (most likely `hive_metastore`).
         http_headers: An optional list of (k, v) pairs that will be set as Http headers on every request
+        session_configuration: An optional dictionary of Spark session parameters.
+            Execute the SQL command `SET -v` to get a full list of available commands.
         databricks_connect_server_hostname: The hostname to use when establishing a connecting using Databricks Connect.
-                   Defaults to the `server_hostname` value.
+            Defaults to the `server_hostname` value.
         databricks_connect_access_token: The access token to use when establishing a connecting using Databricks Connect.
-                   Defaults to the `access_token` value.
+            Defaults to the `access_token` value.
         databricks_connect_cluster_id: The cluster id to use when establishing a connecting using Databricks Connect.
-                   Defaults to deriving the cluster id from the `http_path` value.
+            Defaults to deriving the cluster id from the `http_path` value.
         force_databricks_connect: Force all queries to run using Databricks Connect instead of the SQL connector.
         disable_databricks_connect: Even if databricks connect is installed, do not use it.
     """
@@ -179,6 +181,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     access_token: t.Optional[str]
     catalog: t.Optional[str]
     http_headers: t.Optional[t.List[t.Tuple[str, str]]]
+    session_configuration: t.Dict[str, t.Any] = {}
     databricks_connect_server_hostname: t.Optional[str]
     databricks_connect_access_token: t.Optional[str]
     databricks_connect_cluster_id: t.Optional[str]
@@ -215,6 +218,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
                 values["databricks_connect_access_token"] = access_token
             if not values.get("databricks_connect_cluster_id"):
                 values["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+        values["session_configuration"]["spark.sql.sources.partitionOverwriteMode"] = "dynamic"
         return values
 
     @property
