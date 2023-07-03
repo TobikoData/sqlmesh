@@ -25,8 +25,8 @@ def test_data_diff(sushi_context_fixed_date):
             column.replace(
                 exp.func(
                     "IF",
-                    exp.column("total", "ot").__lt__(4),
-                    exp.condition("ot.total * 0.1"),
+                    exp.column("total", "ot") < 4,
+                    exp.column("total", "ot") * 0.1,
                     exp.column("total", "ot"),
                 )
             )
