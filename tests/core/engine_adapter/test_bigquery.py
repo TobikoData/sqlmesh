@@ -57,15 +57,21 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
         {"project": "project", "dataset_id": "dataset", "table_id": "temp_table"}
     )
     adapter._BigQueryEngineAdapter__get_temp_bq_table = get_temp_bq_table
-    load_pandas_to_table_mock = mocker.Mock()
-    load_pandas_to_table_mock.return_value = AttributeDict({"errors": None})
-    adapter._BigQueryEngineAdapter__load_pandas_to_table = load_pandas_to_table_mock
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
-    drop_table_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.drop_table"
+    db_call_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._db_call"
     )
+    retry_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._BigQueryEngineAdapter__retry"
+    )
+    retry_resp = mocker.MagicMock()
+    retry_resp_call = mocker.MagicMock()
+    retry_resp.return_value = retry_resp_call
+    retry_resp_call.errors = None
+    retry_mock.return_value = retry_resp
+    db_call_mock.return_value = AttributeDict({"errors": None})
     df = pd.DataFrame({"a": [1, 2, 3], "ds": ["2020-01-01", "2020-01-02", "2020-01-03"]})
     adapter.insert_overwrite_by_time_partition(
         "test_table",
@@ -79,29 +85,40 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
             "ds": exp.DataType.build("string"),
         },
     )
-    assert db_call_mock.call_count == 4
-    create_temp_table, load_temp_table, merge, drop_temp_table = db_call_mock.call_args_list
+    assert execute_mock.call_count == 2
+    assert retry_resp.call_count == 1
+    assert db_call_mock.call_count == 1
+    create_temp_table = db_call_mock.call_args_list[0]
+    load_temp_table = retry_resp.call_args_list[0]
+    merge, drop_temp_table = execute_mock.call_args_list
+    merge_sql = merge[0]
+    drop_temp_table_sql = drop_temp_table[0]
     if sys.version_info < (3, 8):
         create_temp_table.kwargs = create_temp_table[1]
         load_temp_table.kwargs = load_temp_table[1]
-        merge.kwargs = merge[1]
         drop_temp_table.kwargs = drop_temp_table[1]
+        merge_sql = merge_sql[0]
+        drop_temp_table_sql = drop_temp_table_sql[0]
     assert create_temp_table.kwargs == {
         "exists_ok": False,
         "table": get_temp_bq_table.return_value,
     }
     assert sorted(load_temp_table.kwargs) == [
-        "dataframe",
-        "destination",
+        "df",
         "job_config",
+        "table",
     ]
-    assert load_temp_table.kwargs["dataframe"].equals(df)
-    assert load_temp_table.kwargs["destination"] == get_temp_bq_table.return_value
+    assert load_temp_table.kwargs["df"].equals(df)
+    assert load_temp_table.kwargs["table"] == get_temp_bq_table.return_value
     assert load_temp_table.kwargs["job_config"].write_disposition == None
-    assert merge.kwargs == {
-        "sql": "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT * FROM (SELECT a, ds FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)",
-    }
-    assert drop_temp_table.kwargs == {"sql": "DROP TABLE IF EXISTS project.dataset.temp_table"}
+    assert (
+        merge_sql.sql(dialect="bigquery")
+        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT a, ds FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
+    )
+    assert (
+        drop_temp_table_sql.sql(dialect="bigquery")
+        == "DROP TABLE IF EXISTS project.dataset.temp_table"
+    )
 
 
 def test_replace_query(mocker: MockerFixture):
@@ -138,14 +155,24 @@ def test_replace_query_pandas(mocker: MockerFixture):
     db_call_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._db_call"
     )
+    retry_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._BigQueryEngineAdapter__retry"
+    )
+    retry_resp = mocker.MagicMock()
+    retry_resp_call = mocker.MagicMock()
+    retry_resp.return_value = retry_resp_call
+    retry_resp_call.errors = None
+    retry_mock.return_value = retry_resp
     db_call_mock.return_value = AttributeDict({"errors": None})
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
         "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
     )
 
-    assert db_call_mock.call_count == 2
-    create_table, load_table = db_call_mock.call_args_list
+    assert db_call_mock.call_count == 1
+    assert retry_resp.call_count == 1
+    create_table = db_call_mock.call_args_list[0]
+    load_table = retry_resp.call_args_list[0]
     if sys.version_info < (3, 8):
         create_table.kwargs = create_table[1]
         load_table.kwargs = load_table[1]
@@ -154,12 +181,12 @@ def test_replace_query_pandas(mocker: MockerFixture):
         "exists_ok": True,
     }
     assert sorted(load_table.kwargs) == [
-        "dataframe",
-        "destination",
+        "df",
         "job_config",
+        "table",
     ]
-    assert load_table.kwargs["dataframe"].equals(df)
-    assert load_table.kwargs["destination"] == get_bq_table.return_value
+    assert load_table.kwargs["df"].equals(df)
+    assert load_table.kwargs["table"] == get_bq_table.return_value
     assert (
         load_table.kwargs["job_config"].write_disposition
         == bigquery.WriteDisposition.WRITE_TRUNCATE
