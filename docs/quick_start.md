@@ -94,7 +94,7 @@ gateways:
     local:
         connection:
             type: duckdb
-            database: db.db
+            database: ./db.db
 
 default_gateway: local
 ```
@@ -123,7 +123,9 @@ This is the complete dataset:
 
 We now briefly review each model in the project. 
 
-The first model is a `SEED` model that imports `seed_data.csv`. This model consists of only a `MODEL` statement because `SEED` models do not query a database. In addition to specifying the model name and CSV path relative to the model file, it includes the column names and data types of the columns in the CSV:
+The first model is a `SEED` model that imports `seed_data.csv`. This model consists of only a `MODEL` statement because `SEED` models do not query a database. 
+
+In addition to specifying the model name and CSV path relative to the model file, it includes the column names and data types of the columns in the CSV. It also sets the `grain` of the model to the columns that collectively form the table's unique identifier, `id` and `ds`.
 
 ```sql linenums="1"
 MODEL (
@@ -135,13 +137,14 @@ MODEL (
         id INTEGER,
         item_id INTEGER,
         ds VARCHAR
-    )
+    ),
+    grain [id, ds]
 );
 ```
 
 The second model is an `INCREMENTAL_BY_TIME_RANGE` model that includes both a `MODEL` statement and a SQL query selecting from the first seed model. 
 
-The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily.
+The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily. It sets the models' grain to columns `id` and `ds`.
 
 The SQL query includes a `WHERE` clause that SQLMesh uses to filter the data to a specific date/time interval when loading data incrementally:
 
@@ -153,6 +156,7 @@ MODEL (
     ),
     start '2020-01-01',
     cron '@daily',
+    grain [id, ds]
 );
 
 SELECT
@@ -172,6 +176,7 @@ MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily',
+  grain item_id,
   audits [assert_positive_order_ids],
 );
 

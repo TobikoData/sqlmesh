@@ -16,6 +16,7 @@ MODEL (
   name sushi.customer_total_revenue,
   owner toby,
   cron '@daily',
+  grain customer_id
 );
 
 SELECT
@@ -89,6 +90,12 @@ Name is ***required*** and must be ***unique***.
 ### cron
 - Cron is used to schedule your model to process or refresh at a certain interval. It uses [croniter](https://github.com/kiorky/croniter) under the hood, so expressions such as `@daily` can be used. A model's `IntervalUnit` is determined implicitly by the cron expression.
 
+### tags
+- Tags are one or more labels used to organize your models.
+
+### grain
+- A model's grain is the column or combination of columns that uniquely identify a row in the results returned by the model's query. If the grain is set, SQLMesh tools like `table_diff` are simpler to run because they automatically use the model grain for parameters that would otherwise need to be specified manually.
+
 ### storage_format
 - Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.
 
@@ -97,9 +104,6 @@ Name is ***required*** and must be ***unique***.
 
 ### clustered_by
 - Clustered by is an optional property for engines such as Bigquery that support clustering.
-
-### tags
-- Tags are one or more labels used to organize your models.
 
 ## Incremental Model Properties
 
