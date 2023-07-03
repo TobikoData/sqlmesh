@@ -240,7 +240,7 @@ class Audit(AuditMeta, frozen=True):
     def _create_query_renderer(self, model: Model) -> QueryRenderer:
         return QueryRenderer(
             self.query,
-            self.dialect,
+            self.dialect or model.dialect,
             self.macro_definitions,
             path=self._path or Path(),
             jinja_macro_registry=self.jinja_macros,
