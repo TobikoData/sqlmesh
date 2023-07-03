@@ -597,11 +597,16 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         start: TimeLike,
         end: TimeLike,
-        time_formatter: t.Callable[[TimeLike], exp.Expression],
+        time_formatter: t.Callable[
+            [TimeLike, t.Optional[t.Dict[str, exp.DataType]]], exp.Expression
+        ],
         time_column: TimeColumn | exp.Column | str,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        low, high = [time_formatter(dt) for dt in make_inclusive(start, end)]
+        if columns_to_types is None:
+            columns_to_types = self.columns(table_name)
+
+        low, high = [time_formatter(dt, columns_to_types) for dt in make_inclusive(start, end)]
         if isinstance(time_column, TimeColumn):
             time_column = time_column.column
         where = exp.Between(
@@ -656,7 +661,9 @@ class EngineAdapter:
                         columns_to_types=columns_to_types,
                     )
                 )
-            query = t.cast("Query", query_or_df)
+
+            query = self._add_where_to_query(t.cast("Query", query_or_df), where)
+
             insert_exp = exp.insert(
                 query,
                 table,
@@ -903,6 +910,21 @@ class EngineAdapter:
             table.set("db", None)
             table.set("catalog", None)
         return table
+
+    def _add_where_to_query(self, query: Query, where: t.Optional[exp.Expression]) -> Query:
+        if not where or not isinstance(query, exp.Subqueryable):
+            return query
+
+        query = t.cast(exp.Subqueryable, query.copy())
+        with_ = query.args.pop("with", None)
+        query = (
+            exp.select("*", copy=False)
+            .from_(query.subquery("_subquery", copy=False), copy=False)
+            .where(where, copy=False)
+        )
+        if with_:
+            query.set("with", with_)
+        return query
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):

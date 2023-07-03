@@ -198,18 +198,24 @@ class Audit(AuditMeta, frozen=True):
             model = snapshot_or_model.model
             this_model = snapshot_or_model.table_name(is_dev=is_dev, for_read=True)
 
+        columns_to_types: t.Optional[t.Dict[str, t.Any]] = None
+        if "engine_adapter" in kwargs:
+            try:
+                columns_to_types = kwargs["engine_adapter"].columns(this_model)
+            except Exception:
+                pass
+
         query_renderer = self._create_query_renderer(model)
 
-        query = (
-            exp.select("*")
-            .from_(this_model)
-            .where(
-                query_renderer.time_column_filter(start or c.EPOCH, end or c.EPOCH)
-                if query_renderer._time_column
-                else None
+        if model.time_column:
+            where = exp.column(model.time_column.column).between(
+                model.convert_to_time_column(start or c.EPOCH, columns_to_types),
+                model.convert_to_time_column(end or c.EPOCH, columns_to_types),
             )
-            .subquery()
-        )
+        else:
+            where = None
+
+        query = exp.select("*").from_(this_model).where(where).subquery()
 
         rendered_query = query_renderer.render(
             start=start,
@@ -240,13 +246,11 @@ class Audit(AuditMeta, frozen=True):
     def _create_query_renderer(self, model: Model) -> QueryRenderer:
         return QueryRenderer(
             self.query,
-            self.dialect,
+            self.dialect or model.dialect,
             self.macro_definitions,
             path=self._path or Path(),
             jinja_macro_registry=self.jinja_macros,
             python_env=model.python_env,
-            time_column=model.time_column,
-            time_converter=model.convert_to_time_column,
             only_latest=model.kind.only_latest,
         )
 

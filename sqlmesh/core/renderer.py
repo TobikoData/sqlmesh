@@ -19,13 +19,11 @@ from sqlglot.schema import MappingSchema
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroEvaluator
-from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
     ConfigError,
     MacroEvalError,
     ParsetimeAdapterCallError,
-    SQLMeshError,
     raise_config_error,
 )
 from sqlmesh.utils.jinja import JinjaMacroRegistry
@@ -244,8 +242,6 @@ class QueryRenderer(BaseExpressionRenderer):
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
-        time_column: t.Optional[TimeColumn] = None,
-        time_converter: t.Optional[t.Callable[[TimeLike], exp.Expression]] = None,
         only_latest: bool = False,
     ):
         super().__init__(
@@ -259,8 +255,6 @@ class QueryRenderer(BaseExpressionRenderer):
         )
 
         self._model_name = model_name
-        self._time_column = time_column
-        self._time_converter = time_converter or (lambda v: exp.convert(v))
 
         self._optimized_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
 
@@ -274,7 +268,6 @@ class QueryRenderer(BaseExpressionRenderer):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         is_dev: bool = False,
         expand: t.Iterable[str] = tuple(),
-        add_incremental_filter: bool = False,
         optimize: bool = True,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Subqueryable]:
@@ -291,7 +284,6 @@ class QueryRenderer(BaseExpressionRenderer):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            add_incremental_filter: Add an incremental filter to the query if the model is incremental.
             optimize: Whether to optimize the query.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -341,23 +333,6 @@ class QueryRenderer(BaseExpressionRenderer):
             **kwargs,
         )
 
-        # Ensure there is no data leakage in incremental mode by filtering out all
-        # events that have data outside the time window of interest.
-        if add_incremental_filter and self._time_column:
-            query = query.copy()
-            dates = _dates(start, end, latest)
-            with_ = query.args.pop("with", None)
-            query = (
-                exp.select("*", copy=False)
-                .from_(
-                    t.cast(exp.Subqueryable, query).subquery("_subquery", copy=False), copy=False
-                )
-                .where(self.time_column_filter(*dates[0:2]), copy=False)
-            )
-
-            if with_:
-                query.set("with", with_)
-
         if not isinstance(query, exp.Subqueryable):
             raise_config_error(f"Query needs to be a SELECT or a UNION {query}.", self._path)
 
@@ -376,17 +351,6 @@ class QueryRenderer(BaseExpressionRenderer):
             super().update_cache(expression, start=start, end=end, latest=latest, **kwargs)
         else:
             self._optimized_cache[_dates(start, end, latest)] = expression
-
-    def time_column_filter(self, start: TimeLike, end: TimeLike) -> exp.Between:
-        """Returns a between statement with the properly formatted time column."""
-        if not self._time_column:
-            raise SQLMeshError(
-                "Cannot produce time column filter because model does not have a time column."
-            )
-
-        return exp.column(self._time_column.column).between(
-            self._time_converter(start), self._time_converter(end)  # type: ignore
-        )
 
     def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer

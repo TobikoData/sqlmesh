@@ -16,7 +16,6 @@ from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
 
 from sqlmesh.dbt.basemodel import Dependencies
-from sqlmesh.dbt.macros import MACRO_OVERRIDES
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
@@ -124,10 +123,7 @@ class ManifestHelper:
             if not macro.name.startswith("materialization_") and not macro.name.startswith("test_"):
                 macro_references |= _extra_macro_references(macro.macro_sql)
 
-            package_overrides = MACRO_OVERRIDES.get(macro.package_name, {})
-            self._macros_per_package[macro.package_name][macro.name] = package_overrides.get(
-                macro.name
-            ) or MacroConfig(
+            self._macros_per_package[macro.package_name][macro.name] = MacroConfig(
                 info=MacroInfo(
                     definition=macro.macro_sql,
                     depends_on=list(macro_references),
