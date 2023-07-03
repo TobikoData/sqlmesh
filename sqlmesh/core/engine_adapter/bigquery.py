@@ -197,7 +197,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             functools.partial(
                 self.__db_load_table_from_dataframe, df=df, table=table, job_config=job_config
             )
-        )
+        )()
         if result.errors:
             raise SQLMeshError(result.errors)
         return result
