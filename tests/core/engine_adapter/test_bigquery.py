@@ -111,7 +111,7 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
     assert load_temp_table.kwargs["job_config"].write_disposition == None
     assert (
         merge_sql.sql(dialect="bigquery")
-        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT a, ds FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
+        == "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT * FROM (SELECT a, ds FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)"
     )
     assert (
         drop_temp_table_sql.sql(dialect="bigquery")
