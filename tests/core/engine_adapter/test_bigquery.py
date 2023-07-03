@@ -77,17 +77,24 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
             "ds": exp.DataType.build("string"),
         },
     )
-    sql_calls = [
-        # Python 3.7 support
-        call[0][0].sql(dialect="bigquery", identify=True)
-        if isinstance(call[0], tuple)
-        else call[0].sql(dialect="bigquery", identify=True)
-        for call in execute_mock.call_args_list
+    assert db_call_mock.call_count == 4
+    create_temp_table, load_temp_table, merge, drop_temp_table = db_call_mock.call_args_list
+    assert create_temp_table.kwargs == {
+        "exists_ok": False,
+        "table": get_temp_bq_table.return_value,
+    }
+    assert sorted(load_temp_table.kwargs) == [
+        "dataframe",
+        "destination",
+        "job_config",
     ]
-    assert sql_calls == [
-        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT * FROM (SELECT `a`, `ds` FROM `project`.`dataset`.`temp_table`) AS `_subquery` WHERE `ds` BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)"
-    ]
-    drop_table_mock.assert_called_once_with(exp.to_table("project.dataset.temp_table"))
+    assert load_temp_table.kwargs["dataframe"].equals(df)
+    assert load_temp_table.kwargs["destination"] == get_temp_bq_table.return_value
+    assert load_temp_table.kwargs["job_config"].write_disposition == None
+    assert merge.kwargs == {
+        "sql": "MERGE INTO test_table AS __MERGE_TARGET__ USING (SELECT * FROM (SELECT a, ds FROM project.dataset.temp_table) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND ds BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (a, ds) VALUES (a, ds)",
+    }
+    assert drop_temp_table.kwargs == {"sql": "DROP TABLE IF EXISTS project.dataset.temp_table"}
 
 
 def test_replace_query(mocker: MockerFixture):
@@ -121,29 +128,36 @@ def test_replace_query_pandas(mocker: MockerFixture):
         {"project": "project", "dataset_id": "dataset", "table_id": "test_table"}
     )
     adapter._BigQueryEngineAdapter__get_bq_table = get_bq_table
-    execute_mock = mocker.patch(
-        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    db_call_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter._db_call"
     )
-    client_mock = mocker.patch("sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.client")
-    load_result = mocker.Mock()
-    load_result.result.return_value = AttributeDict({"errors": None})
-    client_mock.load_table_from_dataframe.return_value = load_result
+    db_call_mock.return_value = AttributeDict({"errors": None})
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
         "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
     )
 
-    assert execute_mock.call_args_list == []
-    assert client_mock.method_calls[0] == [
-        "create_table",
-        (get_bq_table.return_value,),
-        {"exists_ok": True},
+    assert db_call_mock.call_count == 2
+    create_table, load_table = db_call_mock.call_args_list
+    assert create_table.kwargs == {
+        "table": get_bq_table.return_value,
+        "exists_ok": True,
+    }
+    assert sorted(load_table.kwargs) == [
+        "dataframe",
+        "destination",
+        "job_config",
     ]
-    assert client_mock.method_calls[1][0] == "load_table_from_dataframe"
+    assert load_table.kwargs["dataframe"].equals(df)
+    assert load_table.kwargs["destination"] == get_bq_table.return_value
     assert (
-        client_mock.method_calls[1][2]["job_config"].write_disposition
+        load_table.kwargs["job_config"].write_disposition
         == bigquery.WriteDisposition.WRITE_TRUNCATE
     )
+    assert load_table.kwargs["job_config"].schema == [
+        bigquery.SchemaField("a", "INT64"),
+        bigquery.SchemaField("b", "INT64"),
+    ]
 
 
 @pytest.mark.parametrize(
