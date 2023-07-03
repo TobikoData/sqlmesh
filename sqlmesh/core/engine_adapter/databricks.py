@@ -20,8 +20,7 @@ logger = logging.getLogger(__name__)
 
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
-    # Change to REPLACE WHERE once column bug is fixed
-    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
@@ -104,6 +103,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             if catalog:
                 # Note: Spark 3.4+ Only API
                 self._spark.catalog.setCurrentCatalog(catalog)
+            self._spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         return self._spark
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
