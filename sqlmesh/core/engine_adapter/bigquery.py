@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import logging
 import typing as t
 
@@ -22,6 +23,7 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
+    from google.api_core.retry import Retry
     from google.cloud import bigquery
     from google.cloud.bigquery.client import Client as BigQueryClient
     from google.cloud.bigquery.client import Connection as BigQueryConnection
@@ -191,12 +193,22 @@ class BigQueryEngineAdapter(EngineAdapter):
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
         logger.debug(f"Loading dataframe to BigQuery. Table: {table.full_table_id}")
         # This client call does not support retry so we don't use the `_db_call` method.
+        result = self.__retry(
+            functools.partial(
+                self.__db_load_table_from_dataframe, df=df, table=table, job_config=job_config
+            )
+        )
+        if result.errors:
+            raise SQLMeshError(result.errors)
+        return result
+
+    def __db_load_table_from_dataframe(
+        self, df: pd.DataFrame, table: bigquery.Table, job_config: bigquery.LoadJobConfig
+    ) -> None:
         job = self.client.load_table_from_dataframe(
             dataframe=df, destination=table, job_config=job_config
         )
         result = self._db_call(job.result)
-        if result.errors:
-            raise SQLMeshError(result.errors)
         return result
 
     def __get_bq_schema(
@@ -242,6 +254,16 @@ class BigQueryEngineAdapter(EngineAdapter):
         return bigquery.Table(
             table_ref=self._table_name(table_),
             schema=self.__get_bq_schema(columns_to_type),
+        )
+
+    @property
+    def __retry(self) -> Retry:
+        from google.api_core import retry
+
+        return retry.Retry(
+            predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
+            sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
+            deadline=self._extra_config.get("job_retry_deadline_seconds"),
         )
 
     def _insert_overwrite_by_condition(
@@ -400,14 +422,8 @@ class BigQueryEngineAdapter(EngineAdapter):
         return False
 
     def _db_call(self, func: t.Callable[..., t.Any], *args: t.Any, **kwargs: t.Any) -> t.Any:
-        from google.api_core import retry
-
         return func(
-            retry=retry.Retry(
-                predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
-                sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
-                deadline=self._extra_config.get("job_retry_deadline_seconds"),
-            ),
+            retry=self.__retry,
             *args,
             **kwargs,
         )
