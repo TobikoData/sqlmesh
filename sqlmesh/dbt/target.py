@@ -425,7 +425,9 @@ class BigQueryConfig(TargetConfig):
         "https://www.googleapis.com/auth/drive",
     )
     job_execution_timeout_seconds: t.Optional[int] = None
-    job_retries: int = 1
+    timeout_seconds: t.Optional[int] = None  # To support legacy config
+    job_retries: t.Optional[int] = None
+    retries: int = 1  # To support legacy config
     job_retry_deadline_seconds: t.Optional[int] = None
     priority: BigQueryPriority = BigQueryPriority.INTERACTIVE
     maximum_bytes_billed: t.Optional[int] = None
@@ -458,6 +460,12 @@ class BigQueryConfig(TargetConfig):
         return BigQueryColumn
 
     def to_sqlmesh(self) -> ConnectionConfig:
+        job_retries = self.job_retries if self.job_retries is not None else self.retries
+        job_execution_timeout_seconds = (
+            self.job_execution_timeout_seconds
+            if self.job_execution_timeout_seconds is not None
+            else self.timeout_seconds
+        )
         return BigQueryConnectionConfig(
             method=self.method,
             project=self.database,
@@ -471,8 +479,8 @@ class BigQueryConfig(TargetConfig):
             client_secret=self.client_secret,
             token_uri=self.token_uri,
             scopes=self.scopes,
-            job_execution_timeout_seconds=self.job_execution_timeout_seconds,
-            job_retries=self.job_retries,
+            job_execution_timeout_seconds=job_execution_timeout_seconds,
+            job_retries=job_retries,
             job_retry_deadline_seconds=self.job_retry_deadline_seconds,
             priority=self.priority,
             maximum_bytes_billed=self.maximum_bytes_billed,
