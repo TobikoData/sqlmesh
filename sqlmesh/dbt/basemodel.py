@@ -245,6 +245,7 @@ class BaseModelConfig(GeneralConfig):
             "hash_raw_query": True,
             "pre_statements": [d.jinja_statement(hook.sql) for hook in pre_hooks],
             "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
+            "tags": self.tags,
             **optional_kwargs,
         }
 
