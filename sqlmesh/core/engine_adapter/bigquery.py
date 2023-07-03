@@ -193,6 +193,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         if replace:
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
         logger.debug(f"Loading dataframe to BigQuery. Table: {table.full_table_id}")
+        # This client call does not support retry so we don't use the `_db_call` method.
         job = self.client.load_table_from_dataframe(
             dataframe=df, destination=table, job_config=job_config
         )
