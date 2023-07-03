@@ -8,7 +8,7 @@ DEFAULT_CONFIG = """gateways:
     local:
         connection:
             type: duckdb
-            database: ./db.db
+            database: db.db
 
 default_gateway: local
 """
