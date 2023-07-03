@@ -26,7 +26,7 @@ def test_insert_overwrite_by_time_partition_query(mocker: MockerFixture):
         parse_one("SELECT a, ds FROM tbl"),
         start="2022-01-01",
         end="2022-01-05",
-        time_formatter=lambda x: exp.Literal.string(x.strftime("%Y-%m-%d")),
+        time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
         time_column="ds",
         columns_to_types={
             "a": exp.DataType.build("int"),
@@ -41,7 +41,7 @@ def test_insert_overwrite_by_time_partition_query(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM `tbl`) AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
+        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT * FROM (SELECT `a`, `ds` FROM `tbl`) AS `_subquery` WHERE `ds` BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)"
     ]
 
 
@@ -70,7 +70,7 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
         df,
         start="2022-01-01",
         end="2022-01-05",
-        time_formatter=lambda x: exp.Literal.string(x.strftime("%Y-%m-%d")),
+        time_formatter=lambda x, _: exp.Literal.string(x.strftime("%Y-%m-%d")),
         time_column="ds",
         columns_to_types={
             "a": exp.DataType.build("int"),
@@ -85,7 +85,7 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
         for call in execute_mock.call_args_list
     ]
     assert sql_calls == [
-        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM `project`.`dataset`.`temp_table`) AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
+        "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT * FROM (SELECT `a`, `ds` FROM `project`.`dataset`.`temp_table`) AS `_subquery` WHERE `ds` BETWEEN '2022-01-01' AND '2022-01-05') AS __MERGE_SOURCE__ ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)"
     ]
     drop_table_mock.assert_called_once_with(exp.to_table("project.dataset.temp_table"))
 
