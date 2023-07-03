@@ -205,8 +205,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         job = self.client.load_table_from_dataframe(
             dataframe=df, destination=table, job_config=job_config
         )
-        result = self._db_call(job.result)
-        return result
+        return self._db_call(job.result)
 
     def __get_bq_schema(
         self, columns_to_types: t.Dict[str, exp.DataType]
