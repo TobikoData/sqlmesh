@@ -942,7 +942,7 @@ def _model_data_hash(model: Model) -> str:
             data.append(macro_name)
             data.append(macro.definition)
 
-        for package in model.jinja_macros.packages.values():
+        for _, package in sorted(model.jinja_macros.packages.items(), key=lambda x: x[0]):
             for macro_name, macro in sorted(package.items(), key=lambda x: x[0]):
                 data.append(macro_name)
                 data.append(macro.definition)
@@ -979,8 +979,8 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         str(model.retention) if model.retention else None,
         str(model.batch_size) if model.batch_size is not None else None,
         json.dumps(model.mapping_schema, sort_keys=True),
-        *model.tags,
-        *model.grain,
+        *sorted(model.tags),
+        *sorted(model.grain),
     ]
 
     for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):
