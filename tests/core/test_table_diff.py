@@ -15,7 +15,7 @@ def test_data_diff(sushi_context_fixed_date):
         no_prompts=True,
         auto_apply=True,
         skip_tests=True,
-        start="2023-01-01",
+        start="2023-01-31",
         end="2023-01-31",
     )
     model = sushi_context_fixed_date.models["sushi.customer_revenue_by_day"]
@@ -57,7 +57,7 @@ def test_data_diff(sushi_context_fixed_date):
         no_prompts=True,
         auto_apply=True,
         skip_tests=True,
-        start="2023-01-01",
+        start="2023-01-31",
         end="2023-01-31",
     )
 
@@ -76,6 +76,6 @@ def test_data_diff(sushi_context_fixed_date):
     assert schema_diff.removed == [("y", exp.DataType.build("int"))]
 
     row_diff = diff.row_diff()
-    assert row_diff.source_count == 546
-    assert row_diff.target_count == 547
-    assert row_diff.sample.shape == (6, 10)
+    assert row_diff.source_count == 17
+    assert row_diff.target_count == 18
+    assert row_diff.sample.shape == (1, 10)
