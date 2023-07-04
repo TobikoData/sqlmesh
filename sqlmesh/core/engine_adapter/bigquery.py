@@ -99,11 +99,34 @@ class BigQueryEngineAdapter(EngineAdapter):
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
-        from google.cloud.bigquery import TimePartitioningType
+        from google.cloud.bigquery import (
+            StandardSqlDataType,
+            StandardSqlTypeNames,
+            TimePartitioningType,
+        )
+
+        def dtype_to_sql(dtype: t.Optional[StandardSqlDataType]) -> str:
+            assert dtype
+
+            kind = dtype.type_kind
+            assert kind
+
+            if kind == StandardSqlTypeNames.ARRAY:
+                return f"ARRAY<{dtype_to_sql(dtype.array_element_type)}>"
+            if kind == StandardSqlTypeNames.STRUCT:
+                struct_type = dtype.struct_type
+                assert struct_type
+                fields = ", ".join(
+                    f"{field.name} {dtype_to_sql(field.type)}" for field in struct_type.fields
+                )
+                return f"STRUCT<{fields}>"
+            return kind.name
 
         table = self._get_table(table_name)
         columns = {
-            field.name: exp.DataType.build(field.field_type, dialect=self.dialect)
+            field.name: exp.DataType.build(
+                dtype_to_sql(field.to_standard_sql().type), dialect=self.dialect
+            )
             for field in table.schema
         }
         if include_pseudo_columns and table.time_partitioning and not table.time_partitioning.field:
