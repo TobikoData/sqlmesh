@@ -9,14 +9,14 @@ import {
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { getDecorations } from './help'
 
-export default function SqlMeshModel(
+export default function SQLMeshModel(
   models: Map<string, ModelSQLMeshModel>,
   model: ModelSQLMeshModel,
   columns: Set<string>,
   isActionMode: boolean,
 ): Extension {
   return ViewPlugin.fromClass(
-    class SqlMeshModelView {
+    class SQLMeshModelView {
       decorations: DecorationSet = Decoration.set([])
       constructor(readonly view: EditorView) {
         this.decorations = getDecorations(

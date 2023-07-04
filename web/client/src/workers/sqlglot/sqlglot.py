@@ -34,4 +34,30 @@ def get_dialect(name: str = "") -> str:
     return json.dumps(output)
 
 
-[parse_to_json, get_dialect, dialects]
+def format(sql: str = "", read: DialectType = None) -> str:
+    output = "\n".join(
+        sqlglot.transpile(sql, read=read, error_level=sqlglot.errors.ErrorLevel.IGNORE, pretty=True)
+    )
+
+    return output
+
+
+def validate(sql: str = "", read: DialectType = None) -> str:
+    is_valid = True
+    try:
+        sqlglot.transpile(
+            sql, read=read, pretty=False, unsupported_level=sqlglot.errors.ErrorLevel.IMMEDIATE
+        )
+    except sqlglot.errors.ParseError as e:
+        is_valid = False
+
+    return json.dumps(is_valid)
+
+
+{
+    "dialects": dialects,
+    "get_dialect": get_dialect,
+    "parse_to_json": parse_to_json,
+    "validate": validate,
+    "format": format,
+}

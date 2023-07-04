@@ -9,9 +9,9 @@ import {
   type ViewUpdate,
 } from '@codemirror/view'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import SqlMeshModel from './SqlMeshModel'
+import SQLMeshModel from './SQLMeshModel'
 
-export { HoverTooltip, events, SqlMeshModel }
+export { events, HoverTooltip, SQLMeshModel, SQLMeshExpression }
 
 function events(
   events: Record<string, (event: MouseEvent) => void>,
@@ -64,7 +64,7 @@ function HoverTooltip(models: Map<string, ModelSQLMeshModel>): Extension {
   )
 }
 
-export function SqlMeshExpression(expression: string): Extension {
+function SQLMeshExpression(expression: string): Extension {
   return ViewPlugin.fromClass(
     class SqlMeshModelView {
       decorations: DecorationSet = Decoration.set([])

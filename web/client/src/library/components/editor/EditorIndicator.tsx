@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import React from 'react'
-import { isFalse, isNil, isTrue } from '~/utils'
+import { isFalse, isNil, isNotNil, isTrue } from '~/utils'
 
 const EditorIndicator = function EditorIndicator({
   text,
@@ -13,7 +13,7 @@ const EditorIndicator = function EditorIndicator({
 }): JSX.Element {
   return (
     <small className={clsx('font-bold whitespace-nowrap text-xs', className)}>
-      {text != null && <span>{text}:&nbsp;</span>}
+      {isNotNil<string>(text) && <span>{text}:&nbsp;</span>}
       {children}
     </small>
   )

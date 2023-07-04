@@ -12,124 +12,121 @@ import { sqlglotWorker } from '~/workers'
 const cache = new Map<string, (e: MessageEvent) => void>()
 const WHITE_SPACE = ' '
 
-type ExtensionCleanUp = () => void
-type ExtensionSqlMeshDialect = (
+export type ExtensionSQLMeshDialect = (
   models: Map<string, Model>,
   options?: { types: string; keywords: string },
   dialects?: string[],
 ) => LanguageSupport
 
-export default function useSqlMeshExtension(): [
-  ExtensionSqlMeshDialect,
-  ExtensionCleanUp,
-] {
-  const SqlMeshDialectExtension: ExtensionSqlMeshDialect =
-    function SqlMeshDialectExtension(
-      models,
-      options,
-      dialects?,
-    ): LanguageSupport {
-      const SQLTypes = (options?.types ?? '') + WHITE_SPACE
-      const SQLKeywords = (options?.keywords ?? '') + WHITE_SPACE
-      const SQLMeshModelDictionary = SQLMeshModelKeywords(dialects)
-      const SQLMeshKeywords =
-        'columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
-      const SQLMeshTypes =
-        'seed full incremental_by_time_range incremental_by_unique_key view embedded'
+export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
+  models,
+  options,
+  dialects,
+): LanguageSupport {
+  const SQLKeywords = (options?.keywords ?? '') + WHITE_SPACE
+  const SQLTypes = (options?.types ?? '') + WHITE_SPACE
+  const SQLMeshModelDictionary = getSQLMeshModelKeywords(dialects)
+  const SQLMeshKeywords =
+    'columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect' +
+    WHITE_SPACE
+  const SQLMeshTypes =
+    'seed full incremental_by_time_range incremental_by_unique_key view embedded' +
+    WHITE_SPACE
 
-      const lang = SQLDialect.define({
-        keywords: SQLKeywords + SQLMeshKeywords + WHITE_SPACE,
-        types: SQLTypes + SQLMeshTypes + WHITE_SPACE,
-      })
+  console.log({ SQLKeywords })
 
-      const tables: Completion[] = Array.from(
-        new Set(Object.values(models)),
-      ).map(label => ({
-        label,
-        type: 'keyword',
-      }))
+  const lang = SQLDialect.define({
+    keywords: SQLKeywords + SQLMeshKeywords,
+    types: SQLTypes + SQLMeshTypes,
+  })
 
-      let handler = cache.get('message')
+  const tables: Completion[] = Array.from(new Set(Object.values(models))).map(
+    label => ({
+      label,
+      type: 'keyword',
+    }),
+  )
 
-      if (handler != null) {
-        sqlglotWorker.removeEventListener('message', handler)
-      }
+  let handler = cache.get('message')
 
-      handler = function getTokensFromSQLGlot(e: MessageEvent): void {
-        if (e.data.topic === 'parse') {
-          // TODO: set parsed tree and use it to improve editor autompletion
-        }
-      }
-
-      cache.set('message', handler)
-
-      sqlglotWorker.addEventListener('message', handler)
-
-      return new LanguageSupport(lang.language, [
-        lang.language.data.of({
-          autocomplete: completeFromList([
-            {
-              label: 'model',
-              type: 'keyword',
-              apply: 'MODEL (\n\r)',
-            },
-          ]),
-        }),
-        lang.language.data.of({
-          async autocomplete(ctx: CompletionContext) {
-            const match = ctx.matchBefore(/\w*$/)?.text.trim() ?? ''
-            const text = ctx.state.doc.toString()
-            const keywordFrom = ctx.matchBefore(/from.+/i)
-            const keywordKind = ctx.matchBefore(/kind.+/i)
-            const keywordDialect = ctx.matchBefore(/dialect.+/i)
-            const matchModels = text.match(/MODEL \(([\s\S]*?)\);/gi) ?? []
-            const isInsideModel = matchModels
-              .filter(str => str.includes(match))
-              .map<[number, number]>(str => [
-                text.indexOf(str),
-                text.indexOf(str) + str.length,
-              ])
-              .some(
-                ([start, end]: [number, number]) =>
-                  ctx.pos >= start && ctx.pos <= end,
-              )
-            let suggestions: Completion[] = tables
-
-            if (isFalse(isInsideModel)) {
-              if (keywordFrom != null)
-                return await completeFromList(suggestions)(ctx)
-
-              return await keywordCompletionSource(lang)(ctx)
-            }
-
-            suggestions = SQLMeshModelDictionary.get('keywords') ?? []
-
-            if (keywordKind != null) {
-              suggestions = SQLMeshModelDictionary.get('kind') ?? []
-            }
-
-            if (keywordDialect != null) {
-              suggestions = SQLMeshModelDictionary.get('dialect') ?? []
-            }
-
-            return await completeFromList(suggestions)(ctx)
-          },
-        }),
-      ])
-    }
-
-  function SqlMeshDialectCleanUp(): void {
-    const handler = cache.get('message')
-
-    if (handler == null) return
-
+  if (handler != null) {
     sqlglotWorker.removeEventListener('message', handler)
   }
 
-  return [SqlMeshDialectExtension, SqlMeshDialectCleanUp]
+  handler = function getTokensFromSQLGlot(e: MessageEvent): void {
+    if (e.data.topic === 'parse') {
+      // TODO: set parsed tree and use it to improve editor autompletion
+    }
+  }
+
+  cache.set('message', handler)
+
+  sqlglotWorker.addEventListener('message', handler)
+
+  return new LanguageSupport(lang.language, [
+    lang.language.data.of({
+      autocomplete: completeFromList([
+        {
+          label: 'model',
+          type: 'keyword',
+          apply: 'MODEL (\n\r)',
+        },
+      ]),
+    }),
+    lang.language.data.of({
+      async autocomplete(ctx: CompletionContext) {
+        const match = ctx.matchBefore(/\w*$/)?.text.trim() ?? ''
+        const text = ctx.state.doc.toJSON().join('\n')
+        const keywordFrom = ctx.matchBefore(/from.+/i)
+        const keywordKind = ctx.matchBefore(/kind.+/i)
+        const keywordDialect = ctx.matchBefore(/dialect.+/i)
+        const matchModels =
+          text.match(/MODEL \((?:[^)(]+|\((?:[^)(]+|\([^)(]*\))*\))*\)/g) ?? []
+        const isInsideModel = matchModels
+          .filter(str => str.includes(match))
+          .map<[number, number]>(str => [
+            text.indexOf(str),
+            text.indexOf(str) + str.length,
+          ])
+          .some(
+            ([start, end]: [number, number]) =>
+              ctx.pos >= start && ctx.pos <= end,
+          )
+
+        let suggestions: Completion[] = tables
+
+        if (isFalse(isInsideModel)) {
+          if (keywordFrom != null)
+            return await completeFromList(suggestions)(ctx)
+
+          return await keywordCompletionSource(lang)(ctx)
+        }
+
+        suggestions = SQLMeshModelDictionary.get('keywords') ?? []
+
+        if (keywordKind != null) {
+          suggestions = SQLMeshModelDictionary.get('kind') ?? []
+        }
+
+        if (keywordDialect != null) {
+          suggestions = SQLMeshModelDictionary.get('dialect') ?? []
+        }
+
+        return await completeFromList(suggestions)(ctx)
+      },
+    }),
+  ])
 }
 
-function SQLMeshModelKeywords(
+export function SQLMeshDialectCleanUp(): void {
+  const handler = cache.get('message')
+
+  if (handler == null) return
+
+  sqlglotWorker.removeEventListener('message', handler)
+}
+
+export function getSQLMeshModelKeywords(
   dialects: string[] = [],
 ): Map<string, Completion[]> {
   return new Map([
