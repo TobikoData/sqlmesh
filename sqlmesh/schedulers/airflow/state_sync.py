@@ -297,3 +297,10 @@ class HttpStateSync(StateSync):
     def rollback(self) -> None:
         """Rollback to previous backed up state."""
         raise NotImplementedError("Rollback is not supported by the Airflow state sync.")
+
+    def recycle(self) -> None:
+        """Closes all open connections and releases all allocated resources associated with any thread
+        except the calling one."""
+
+    def close(self) -> None:
+        """Closes all open connections and releases all allocated resources."""
