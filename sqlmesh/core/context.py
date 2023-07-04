@@ -862,6 +862,7 @@ class Context(BaseContext):
             where=where,
             source_alias=source_alias,
             target_alias=target_alias,
+            model_name=model.name if model_or_snapshot else None,
             limit=limit,
         )
         if show:

@@ -21,6 +21,9 @@ class SchemaDiff(PydanticModel, frozen=True):
     target: str
     source_schema: t.Dict[str, exp.DataType]
     target_schema: t.Dict[str, exp.DataType]
+    source_alias: t.Optional[str] = None
+    target_alias: t.Optional[str] = None
+    model_name: t.Optional[str] = None
 
     @property
     def added(self) -> t.List[t.Tuple[str, exp.DataType]]:
@@ -54,6 +57,7 @@ class RowDiff(PydanticModel, frozen=True):
     sample: pd.DataFrame
     source_alias: t.Optional[str] = None
     target_alias: t.Optional[str] = None
+    model_name: t.Optional[str] = None
 
     @property
     def source_count(self) -> int:
@@ -87,6 +91,7 @@ class TableDiff:
         limit: int = 20,
         source_alias: t.Optional[str] = None,
         target_alias: t.Optional[str] = None,
+        model_name: t.Optional[str] = None,
     ):
         self.adapter = adapter
         self.source = source
@@ -96,6 +101,7 @@ class TableDiff:
         # Support environment aliases for diff output improvement in certain cases
         self.source_alias = source_alias
         self.target_alias = target_alias
+        self.model_name = model_name
 
         if isinstance(on, (list, tuple)):
             self.on: exp.Condition = exp.and_(
@@ -130,6 +136,9 @@ class TableDiff:
             target=self.target,
             source_schema=self.source_schema,
             target_schema=self.target_schema,
+            source_alias=self.source_alias,
+            target_alias=self.target_alias,
+            model_name=self.model_name,
         )
 
     def row_diff(self) -> RowDiff:
@@ -203,5 +212,6 @@ class TableDiff:
                     sample=self.adapter.fetchdf(sample_query),
                     source_alias=self.source_alias,
                     target_alias=self.target_alias,
+                    model_name=self.model_name,
                 )
         return self._row_diff
