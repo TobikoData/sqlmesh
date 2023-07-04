@@ -4,7 +4,7 @@ from functools import wraps
 import click
 from sqlglot.errors import SqlglotError
 
-from sqlmesh import debug_mode_enabled
+from sqlmesh.utils import debug_mode_enabled
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.errors import SQLMeshError
 

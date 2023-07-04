@@ -187,6 +187,10 @@ def str_to_bool(s: t.Optional[str]) -> bool:
     return s.lower() in ("true", "1", "t", "y", "yes", "on")
 
 
+def debug_mode_enabled() -> bool:
+    return str_to_bool(os.environ.get("SQLMESH_DEBUG"))
+
+
 def ttl_cache(ttl: int = 60, maxsize: int = 128000) -> t.Callable:
     """Caches a function that clears whenever the current epoch / ttl seconds changes.
 
