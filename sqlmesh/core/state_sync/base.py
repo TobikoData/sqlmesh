@@ -122,6 +122,15 @@ class StateReader(abc.ABC):
             The list of snapshot intervals, one per unique version.
         """
 
+    @abc.abstractmethod
+    def recycle(self) -> None:
+        """Closes all open connections and releases all allocated resources associated with any thread
+        except the calling one."""
+
+    @abc.abstractmethod
+    def close(self) -> None:
+        """Closes all open connections and releases all allocated resources."""
+
     def missing_intervals(
         self,
         env_or_snapshots: str | Environment | t.Iterable[Snapshot],

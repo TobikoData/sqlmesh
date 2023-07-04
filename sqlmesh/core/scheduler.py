@@ -205,13 +205,16 @@ class Scheduler:
             snapshot, (start, end) = node
             self.evaluate(snapshot, start, end, latest, is_dev=is_dev)
 
-        with self.snapshot_evaluator.concurrent_context():
-            errors, skipped_intervals = concurrent_apply_to_dag(
-                dag,
-                evaluate_node,
-                self.max_workers,
-                raise_on_error=False,
-            )
+        try:
+            with self.snapshot_evaluator.concurrent_context():
+                errors, skipped_intervals = concurrent_apply_to_dag(
+                    dag,
+                    evaluate_node,
+                    self.max_workers,
+                    raise_on_error=False,
+                )
+        finally:
+            self.state_sync.recycle()
 
         self.console.stop_snapshot_progress(success=not errors)
 

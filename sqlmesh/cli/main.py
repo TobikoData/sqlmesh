@@ -61,6 +61,12 @@ def cli(
         return
 
     if debug_mode_enabled():
+        import faulthandler
+        import signal
+
+        # Enable threadumps.
+        faulthandler.enable()
+        faulthandler.register(signal.SIGUSR1.value)
         enable_logging(level=logging.DEBUG)
 
     context = Context(
