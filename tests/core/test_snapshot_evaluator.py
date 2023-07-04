@@ -124,7 +124,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     assert payload["calls"] == 3
     assert payload["y"] == exp.convert(["a", 2, True])
 
-    execute_calls = [call([parse_one("CREATE TABLE hook_called")])]
+    execute_calls = [call([parse_one('CREATE TABLE "hook_called"')])]
     adapter_mock.execute.assert_has_calls(execute_calls)
 
     adapter_mock.create_schema.assert_has_calls(

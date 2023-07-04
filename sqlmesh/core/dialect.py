@@ -167,6 +167,22 @@ def _parse_matching_macro(self: Parser, name: str) -> t.Optional[exp.Expression]
     return _parse_macro(self, keyword_macro=name)
 
 
+def _parse_body_macro(self: Parser) -> t.Tuple[str, t.Optional[exp.Expression]]:
+    name = self._next and self._next.text.upper()
+
+    if name == "JOIN":
+        return ("joins", self._parse_join())
+    if name == "WHERE":
+        return ("where", self._parse_where())
+    if name == "GROUP_BY":
+        return ("group", self._parse_group())
+    if name == "HAVING":
+        return ("having", self._parse_having())
+    if name == "ORDER_BY":
+        return ("order", self._parse_order())
+    return ("", None)
+
+
 def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "WITH")
     if not macro:
@@ -555,6 +571,9 @@ def extend_sqlglot() -> None:
     for parser in parsers:
         parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list})
         parser.PLACEHOLDER_PARSERS.update({TokenType.PARAMETER: _parse_macro})
+        parser.QUERY_MODIFIER_PARSERS.update(
+            {TokenType.PARAMETER: lambda self: _parse_body_macro(self)}
+        )
 
     for generator in generators:
         if MacroFunc not in generator.TRANSFORMS:
