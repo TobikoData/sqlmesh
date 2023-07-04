@@ -48,11 +48,11 @@ export function isObjectLike(value: unknown): boolean {
   return isNotNil(value) && typeof value === 'object'
 }
 
-export function isNil(value: unknown): boolean {
+export function isNil(value: unknown): value is undefined | null {
   return value == null
 }
 
-export function isNotNil(value: unknown): boolean {
+export function isNotNil<T>(value: T | null | undefined): value is T {
   return value != null
 }
 
@@ -67,7 +67,7 @@ export function isDate(value: unknown): boolean {
 }
 
 export function toDate(value?: string | number): Date | undefined {
-  if (value == null) return undefined
+  if (isNil(value)) return undefined
 
   try {
     const date = new Date(value)
@@ -83,7 +83,7 @@ export function toDateFormat(
   format: string = 'yyyy-mm-dd',
   isUTC: boolean = true,
 ): string {
-  if (date == null) return ''
+  if (isNil(date)) return ''
 
   const year = isUTC ? date.getUTCFullYear() : date.getFullYear()
   const month = toFormatted(
@@ -116,14 +116,14 @@ export function toRatio(
   bottom?: number,
   multiplier = 100,
 ): number {
-  if (top == null || bottom == null || bottom === 0) return 0
+  if (isNil(top) || isNil(bottom) || bottom === 0) return 0
   if (isNaN(top) || isNaN(bottom) || isNaN(multiplier)) return 0
 
   return (top / bottom) * multiplier
 }
 
 export function parseJSON<T>(value: string | null): Optional<T> {
-  if (value == null) return undefined
+  if (isNil(value)) return undefined
 
   try {
     return value === 'undefined' ? undefined : JSON.parse(value ?? '')
