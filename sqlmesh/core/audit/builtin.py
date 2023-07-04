@@ -256,7 +256,7 @@ WHERE NOT REGEXP_LIKE(LOWER(@column), '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}
 # valid_url(column=column_name)
 valid_url_audit = Audit(
     name="valid_url",
-    query="""
+    query=r"""
 SELECT *
 FROM @this_model
 WHERE NOT REGEXP_LIKE(@column, '^(https?|ftp)://[^\s/$.?#].[^\s]*$')
@@ -276,7 +276,7 @@ WHERE NOT @column IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'
 # valid_email(column=column_name)
 valid_email_audit = Audit(
     name="valid_email",
-    query="""
+    query=r"""
 SELECT *
 FROM @this_model
 WHERE NOT REGEXP_LIKE(@column, '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')

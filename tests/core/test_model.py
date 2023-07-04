@@ -105,18 +105,15 @@ def test_load(assert_exp_eq):
         model.render_query(),
         """
     SELECT
-        TRY_CAST(1 AS INT) AS a,
-        TRY_CAST(2 AS DOUBLE) AS b,
-        TRY_CAST(c AS BOOL) AS c,
-        TRY_CAST(1 AS INT) AS d, -- d
-        TRY_CAST(2 AS DOUBLE) AS e, -- e
-        TRY_CAST(f AS BOOL) AS f, -- f
-    FROM
-        db.other_table t1
-        LEFT JOIN
-        db.table t2
-        ON
-            t1.a = t2.a
+      TRY_CAST(1 AS INT) AS "a",
+      TRY_CAST(2 AS DOUBLE) AS "b",
+      TRY_CAST("c" AS BOOLEAN) AS "c",
+      TRY_CAST(1 AS INT) AS "d", /* d */
+      TRY_CAST(2 AS DOUBLE) AS "e", /* e */
+      TRY_CAST("f" AS BOOLEAN) /* f */ AS "f"
+    FROM "db"."other_table" AS "t1"
+    LEFT JOIN "db"."table" AS "t2"
+      ON "t1"."a" = "t2"."a"
     """,
     )
     assert model.tags == ["tag_foo", "tag_bar"]
@@ -904,11 +901,11 @@ def test_render_query(assert_exp_eq):
         model.render_query(start="2020-10-28", end="2020-10-28"),
         """
         SELECT
-          y AS y
-        FROM x AS x
+          "y" AS "y"
+        FROM "x" AS "x"
         WHERE
-          y BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
-          AND y BETWEEN '2020-10-28' AND '2020-10-28'
+          "y" BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
+          AND "y" BETWEEN '2020-10-28' AND '2020-10-28'
         """,
     )
 
@@ -1108,11 +1105,11 @@ def test_parse(assert_exp_eq):
         model.render_query(),
         """
       SELECT
-        CAST(id AS INT) AS id,
-        ds AS ds
-      FROM x AS x
+        CAST("id" AS INT) AS "id",
+        "ds" AS "ds"
+      FROM "x" AS "x"
       WHERE
-        ds BETWEEN '1970-01-01' AND '1970-01-01'
+        "ds" BETWEEN '1970-01-01' AND '1970-01-01'
     """,
     )
 

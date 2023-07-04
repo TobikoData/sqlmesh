@@ -85,9 +85,9 @@ def test_create_external_models(tmpdir, assert_exp_eq):
         fruits.render_query(snapshots=context.snapshots),
         """
         SELECT
-          raw_fruits.id AS id,
-          raw_fruits.name AS name
-        FROM sushi.raw_fruits AS raw_fruits
+          "raw_fruits"."id" AS "id",
+          "raw_fruits"."name" AS "name"
+        FROM "sushi"."raw_fruits" AS "raw_fruits"
         """,
     )
 
