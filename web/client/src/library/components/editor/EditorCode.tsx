@@ -18,8 +18,8 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import {
   useDefaultExtensions,
-  useSQLMeshModelKeymaps,
-  useSqlMeshDialect,
+  useKeymapsRemoteFile,
+  useSQLMeshDialect,
 } from './hooks'
 
 function CodeEditorSQLMesh({
@@ -36,22 +36,29 @@ function CodeEditorSQLMesh({
     content: string
   }) => JSX.Element
 }): JSX.Element {
-  const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshDialect()
+  const [SQLMeshDialect, SQLMeshDialectCleanUp] = useSQLMeshDialect()
 
   const extensionsDefault = useDefaultExtensions(type)
 
   const models = useStoreContext(s => s.models)
-
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
+  const setDialects = useStoreEditor(s => s.setDialects)
 
   const [dialectOptions, setDialectOptions] = useState<{
     types: string
     keywords: string
   }>()
 
-  const updateDialectOptions = useCallback((e: MessageEvent): void => {
+  const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
+    console.log('handleEngineWorkerMessage', e.data)
+
+    if (e.data.topic === 'dialects') {
+      setDialects(e.data.payload)
+    }
+
     if (e.data.topic === 'dialect') {
+      console.log('setDialectOptions', e.data.payload)
       setDialectOptions(e.data.payload)
     }
   }, [])
@@ -65,29 +72,30 @@ function CodeEditorSQLMesh({
     return [
       ...extensionsDefault,
       type === EnumFileExtensions.SQL &&
-        SqlMeshDialect(models, dialectOptions, dialectsTitles),
+        SQLMeshDialect(models, dialectOptions, dialectsTitles),
     ]
       .filter(Boolean)
-      .flat() as Extension[]
-  }, [type, dialectsTitles, dialectOptions])
+      .flat(10) as Extension[]
+  }, [models, type, dialectsTitles, dialectOptions])
 
   useEffect(() => {
     return () => {
-      SqlMeshDialectCleanUp()
+      SQLMeshDialectCleanUp()
     }
   }, [])
 
   useEffect(() => {
-    engine.addEventListener('message', updateDialectOptions)
+    engine.addEventListener('message', handleEngineWorkerMessage)
 
     return () => {
-      engine.removeEventListener('message', updateDialectOptions)
+      engine.removeEventListener('message', handleEngineWorkerMessage)
     }
-  }, [updateDialectOptions])
+  }, [handleEngineWorkerMessage])
 
   useEffect(() => {
     engine.postMessage({
-      topic: 'dialect',
+      topic: 'validate',
+      payload: content,
     })
   }, [content])
 
@@ -110,7 +118,8 @@ function CodeEditorRemoteFile({
   const { refetch: getFileContent, isFetching } = useApiFileByPath(path)
   const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
 
-  const keymaps = useSQLMeshModelKeymaps(path)
+  const keymaps = useKeymapsRemoteFile(path)
+
   const [file, setFile] = useState<ModelFile>()
 
   useEffect(() => {
@@ -175,7 +184,7 @@ const CodeEditor = function CodeEditor({
     [keymaps],
   )
   const extensionsAll = useMemo(
-    () => [...extensions, extensionKeymap],
+    () => [...extensions, extensionKeymap].flat(),
     [extensionKeymap, extensions],
   )
 
@@ -193,7 +202,7 @@ const CodeEditor = function CodeEditor({
   )
 }
 
-CodeEditor.SQLMeshDialect = CodeEditorSQLMesh
+CodeEditor.Default = CodeEditorSQLMesh
 CodeEditor.RemoteFile = CodeEditorRemoteFile
 
 export default CodeEditor
