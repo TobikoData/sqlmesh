@@ -516,6 +516,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.intervals_table, exp.column("id").isin(*interval_ids)
             )
 
+    def recycle(self) -> None:
+        self.engine_adapter.recycle()
+
+    def close(self) -> None:
+        self.engine_adapter.close()
+
     def get_snapshot_intervals(
         self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
     ) -> t.List[SnapshotIntervals]:

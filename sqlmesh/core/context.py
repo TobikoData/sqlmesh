@@ -1076,6 +1076,7 @@ class Context(BaseContext):
     def close(self) -> None:
         """Releases all resources allocated by this context."""
         self.snapshot_evaluator.close()
+        self.state_sync.close()
 
     def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()

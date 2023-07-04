@@ -139,7 +139,7 @@ class EngineAdapter:
     def spark(self) -> t.Optional[PySparkSession]:
         return None
 
-    def recycle(self) -> t.Any:
+    def recycle(self) -> None:
         """Closes all open connections and releases all allocated resources associated with any thread
         except the calling one."""
         self._connection_pool.close_all(exclude_calling_thread=True)

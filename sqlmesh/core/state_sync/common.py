@@ -105,9 +105,13 @@ class CommonStateSyncMixin(StateSync):
                         f"Cannot promote snapshot `{snapshot.name}` because its parent `{parent.name}:{parent.identifier}` is not promoted. Did you mean to promote all snapshots instead of a subset?"
                     )
 
-        table_infos = [s.table_info for s in snapshots]
+        table_infos = {s.table_info for s in snapshots}
+        if existing_environment and existing_environment.finalized_ts:
+            # Only promote new snapshots.
+            table_infos -= set(existing_environment.snapshots)
+
         self._update_environment(environment)
-        return table_infos, [existing_table_infos[name] for name in missing_models]
+        return list(table_infos), [existing_table_infos[name] for name in missing_models]
 
     @transactional()
     def finalize(self, environment: Environment) -> None:
