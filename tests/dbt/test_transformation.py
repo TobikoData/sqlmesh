@@ -243,7 +243,7 @@ def test_this(assert_exp_eq, sushi_test_project: Project):
     context = sushi_test_project.context
     assert_exp_eq(
         model_config.to_sqlmesh(context).render_query_or_raise().sql(),
-        "SELECT 1 AS one FROM test AS test",
+        'SELECT 1 AS "one" FROM "test" AS "test"',
     )
 
 
@@ -436,7 +436,7 @@ def test_parsetime_adapter_call(
     engine_adapter = sushi_test_dbt_context.engine_adapter
     assert_exp_eq(
         sqlmesh_model.render_query_or_raise(engine_adapter=engine_adapter).sql(),
-        "SELECT 1 AS one FROM test AS test",
+        'SELECT 1 AS "one" FROM "test" AS "test"',
     )
 
 
