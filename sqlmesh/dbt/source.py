@@ -57,7 +57,7 @@ class SourceConfig(GeneralConfig):
 
     @property
     def sql_name(self) -> str:
-        return ".".join(part for part in (self.schema_, self.table_name) if part)
+        return ".".join(part for part in (self.database, self.schema_, self.table_name) if part)
 
     @property
     def relation_info(self) -> AttributeDict:
