@@ -170,6 +170,11 @@ class EvaluateInput(BaseModel):
     limit: int = 1000
 
 
+class FetchdfInput(BaseModel):
+    sql: str
+    limit: int = 1000
+
+
 class Column(BaseModel):
     name: str
     type: str

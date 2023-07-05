@@ -1,12 +1,7 @@
 import { lazy, useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
-import {
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-} from '@tanstack/react-table'
-import { isArrayEmpty } from '~/utils'
+import { isArrayEmpty, isNotNil } from '~/utils'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
@@ -18,9 +13,10 @@ import CodeEditor from './EditorCode'
 import { EnumRoutes } from '~/routes'
 import { useNavigate } from 'react-router-dom'
 import { DisplayError } from '@components/report/ReportErrors'
-import TableDiff from '@components/table/TableDiff'
+import TableDiff from '@components/tableDiff/TableDiff'
 import TabList from '@components/tab/Tab'
 import { useSQLMeshModelExtensions } from './hooks'
+import Table from '@components/table/Table'
 
 const ModelLineage = lazy(
   async () => await import('@components/graph/ModelLineage'),
@@ -74,22 +70,6 @@ export default function EditorPreview({
     [tab.id, previewTable, previewConsole, previewQuery, previewDiff],
   )
 
-  const [headers, data] = useMemo(
-    () =>
-      previewTable == null
-        ? [[], []]
-        : [previewTable[0] ?? [], previewTable[1] ?? []],
-    [previewTable],
-  )
-
-  const columns = useMemo(
-    () =>
-      headers.map((accessorKey: string) => ({
-        accessorKey,
-      })),
-    [headers],
-  )
-
   useEffect(() => {
     if (previewConsole != null) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Console))
@@ -102,11 +82,6 @@ export default function EditorPreview({
     }
   }, [tabs])
 
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  })
   const model = models.get(tab.file.path)
 
   return (
@@ -151,67 +126,7 @@ export default function EditorPreview({
                   'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                 )}
               >
-                {table != null && (
-                  <div className="w-full h-full overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
-                    <table className="w-full h-full">
-                      <thead className="sticky top-0 bg-theme">
-                        {table.getHeaderGroups().map(headerGroup => (
-                          <tr key={headerGroup.id}>
-                            {headerGroup.headers.map(header => (
-                              <th
-                                key={header.id}
-                                className="px-2 text-sm text-left border-b-2 border-neutral-50"
-                              >
-                                {header.isPlaceholder
-                                  ? null
-                                  : flexRender(
-                                      header.column.columnDef.header,
-                                      header.getContext(),
-                                    )}
-                              </th>
-                            ))}
-                          </tr>
-                        ))}
-                      </thead>
-                      <tbody>
-                        {table.getRowModel().rows.map(row => (
-                          <tr key={row.id}>
-                            {row.getVisibleCells().map(cell => (
-                              <td
-                                key={cell.id}
-                                className="px-2 py-1 text-sm text-left border-b border-neutral-50 whitespace-nowrap"
-                              >
-                                {flexRender(
-                                  cell.column.columnDef.cell,
-                                  cell.getContext(),
-                                )}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="text-left sticky bottom-0 bg-neutral-50">
-                        {table.getFooterGroups().map(footerGroup => (
-                          <tr key={footerGroup.id}>
-                            {footerGroup.headers.map(header => (
-                              <th
-                                key={header.id}
-                                className="px-3"
-                              >
-                                {header.isPlaceholder
-                                  ? null
-                                  : flexRender(
-                                      header.column.columnDef.footer,
-                                      header.getContext(),
-                                    )}
-                              </th>
-                            ))}
-                          </tr>
-                        ))}
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
+                {isNotNil(previewTable) && <Table data={previewTable} />}
               </Tab.Panel>
             )}
             {previewConsole != null && (

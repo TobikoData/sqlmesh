@@ -73,9 +73,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_fetchdf_api_commands_fetchdf_post"
-              }
+              "schema": { "$ref": "#/components/schemas/FetchdfInput" }
             }
           },
           "required": true
@@ -714,12 +712,6 @@
           }
         }
       },
-      "Body_fetchdf_api_commands_fetchdf_post": {
-        "title": "Body_fetchdf_api_commands_fetchdf_post",
-        "required": ["sql"],
-        "type": "object",
-        "properties": { "sql": { "title": "Sql", "type": "string" } }
-      },
       "Body_run_plan_api_plan_post": {
         "title": "Body_run_plan_api_plan_post",
         "type": "object",
@@ -996,6 +988,15 @@
               { "type": "number" }
             ]
           },
+          "limit": { "title": "Limit", "type": "integer", "default": 1000 }
+        }
+      },
+      "FetchdfInput": {
+        "title": "FetchdfInput",
+        "required": ["sql"],
+        "type": "object",
+        "properties": {
+          "sql": { "title": "Sql", "type": "string" },
           "limit": { "title": "Limit", "type": "integer", "default": 1000 }
         }
       },
