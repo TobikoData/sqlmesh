@@ -30,7 +30,7 @@ import {
 import { EnumErrorKey } from '~/library/pages/ide/context'
 import TabList from '@components/tab/Tab'
 import Selector from '@components/selector/Selector'
-import { getTableDataFromArrowStreamResult } from './hooks'
+import { getTableDataFromArrowStreamResult } from './help'
 
 interface FormModel {
   model?: string
