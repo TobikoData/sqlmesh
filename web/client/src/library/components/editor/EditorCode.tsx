@@ -69,7 +69,7 @@ function CodeEditorSQLMesh({
         SQLMeshDialect(models, dialectOptions, dialectsTitles),
     ]
       .filter(Boolean)
-      .flat(10) as Extension[]
+      .flat() as Extension[]
   }, [models, type, dialectsTitles, dialectOptions])
 
   useEffect(() => {
