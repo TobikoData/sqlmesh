@@ -28,6 +28,7 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
+from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, ModelKindName, SeedModel
@@ -611,8 +612,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     @transactional()
-    def migrate(self, skip_backup: bool = False) -> None:
+    def migrate(self, skip_backup: bool = False, console: t.Optional[Console] = None) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
+        console = console or get_console()
+
         versions = self.get_versions(validate=False)
         migrations = MIGRATIONS[versions.schema_version :]
 
@@ -622,11 +625,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not skip_backup:
             self._backup_state()
 
+        completed = False
+        console.start_migration_progress(len(migrations))
+
         try:
             for migration in migrations:
                 logger.info(f"Applying migration {migration}")
-                migration.migrate(self)
 
+                migration.migrate(self)
+                console.update_migration_progress(1)
+
+            completed = True
             self._migrate_rows()
             self._update_versions()
         except Exception as e:
@@ -635,6 +644,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             else:
                 self.rollback()
             raise SQLMeshError("SQLMesh migration failed.") from e
+        finally:
+            console.stop_migration_progress(success=completed)
 
     @transactional()
     def rollback(self) -> None:
