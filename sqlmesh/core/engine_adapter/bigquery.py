@@ -24,6 +24,7 @@ from sqlmesh.utils.pandas import columns_to_types_from_df
 if t.TYPE_CHECKING:
     from google.api_core.retry import Retry
     from google.cloud import bigquery
+    from google.cloud.bigquery import StandardSqlDataType
     from google.cloud.bigquery.client import Client as BigQueryClient
     from google.cloud.bigquery.client import Connection as BigQueryConnection
     from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
@@ -99,11 +100,6 @@ class BigQueryEngineAdapter(EngineAdapter):
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
-        from google.cloud.bigquery import (
-            StandardSqlDataType,
-            StandardSqlTypeNames,
-            TimePartitioningType,
-        )
 
         def dtype_to_sql(dtype: t.Optional[StandardSqlDataType]) -> str:
             assert dtype
@@ -111,9 +107,11 @@ class BigQueryEngineAdapter(EngineAdapter):
             kind = dtype.type_kind
             assert kind
 
-            if kind == StandardSqlTypeNames.ARRAY:
+            # Not using the enum value to preserve compatibility with older versions
+            # of the BigQuery library.
+            if kind.name == "ARRAY":
                 return f"ARRAY<{dtype_to_sql(dtype.array_element_type)}>"
-            if kind == StandardSqlTypeNames.STRUCT:
+            if kind.name == "STRUCT":
                 struct_type = dtype.struct_type
                 assert struct_type
                 fields = ", ".join(
@@ -131,7 +129,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         }
         if include_pseudo_columns and table.time_partitioning and not table.time_partitioning.field:
             columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP")
-            if table.time_partitioning.type_ == TimePartitioningType.DAY:
+            if table.time_partitioning.type_ == "DAY":
                 columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
         return columns
 
