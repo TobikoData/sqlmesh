@@ -329,11 +329,6 @@ def test_relation(sushi_test_project: Project):
 
     assert context.render(jinja) == "sushi waiters"
 
-    jinja = (
-        "{% set relation = api.Relation.create(schema='sushi', identifier='waiters') %}"
-        "{{ relation.schema }} {{ relation.identifier}}"
-    )
-
 
 def test_column(sushi_test_project: Project):
     context = sushi_test_project.context
