@@ -35,6 +35,11 @@ def _sqlmesh_version() -> str:
     type=str,
     help="The name of the gateway.",
 )
+@click.option(
+    "--ignore-warnings",
+    is_flag=True,
+    help="Ignore warnings.",
+)
 @click.pass_context
 @error_handler
 def cli(
@@ -42,6 +47,7 @@ def cli(
     paths: t.List[str],
     config: t.Optional[str] = None,
     gateway: t.Optional[str] = None,
+    ignore_warnings: bool = False,
 ) -> None:
     """SQLMesh command line tool."""
     if ctx.invoked_subcommand == "version":
@@ -69,6 +75,10 @@ def cli(
         faulthandler.enable()
         faulthandler.register(signal.SIGUSR1.value)
         enable_logging(level=logging.DEBUG)
+    elif ignore_warnings:
+        import logging
+
+        logging.getLogger().setLevel(logging.ERROR)
 
     context = Context(
         paths=paths,
