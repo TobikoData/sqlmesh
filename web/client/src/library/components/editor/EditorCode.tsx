@@ -24,11 +24,13 @@ import {
 
 function CodeEditorSQLMesh({
   type,
+  dialect = '',
   content = '',
   children,
   className,
 }: {
   type: FileExtensions
+  dialect?: string
   content?: string
   className?: string
   children: (options: {
@@ -43,7 +45,6 @@ function CodeEditorSQLMesh({
   const models = useStoreContext(s => s.models)
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
-  const setDialects = useStoreEditor(s => s.setDialects)
 
   const [dialectOptions, setDialectOptions] = useState<{
     types: string
@@ -51,14 +52,7 @@ function CodeEditorSQLMesh({
   }>()
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
-    console.log('handleEngineWorkerMessage', e.data)
-
-    if (e.data.topic === 'dialects') {
-      setDialects(e.data.payload)
-    }
-
     if (e.data.topic === 'dialect') {
-      console.log('setDialectOptions', e.data.payload)
       setDialectOptions(e.data.payload)
     }
   }, [])
@@ -79,6 +73,10 @@ function CodeEditorSQLMesh({
   }, [models, type, dialectsTitles, dialectOptions])
 
   useEffect(() => {
+    engine.postMessage({
+      topic: 'dialects',
+    })
+
     return () => {
       SQLMeshDialectCleanUp()
     }
@@ -91,6 +89,13 @@ function CodeEditorSQLMesh({
       engine.removeEventListener('message', handleEngineWorkerMessage)
     }
   }, [handleEngineWorkerMessage])
+
+  useEffect(() => {
+    engine.postMessage({
+      topic: 'dialect',
+      payload: dialect,
+    })
+  }, [dialect])
 
   useEffect(() => {
     engine.postMessage({

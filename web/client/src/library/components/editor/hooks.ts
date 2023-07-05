@@ -28,7 +28,7 @@ import {
   type ExtensionSQLMeshDialect,
   SQLMeshDialect,
   SQLMeshDialectCleanUp,
-} from './extensions/SqlMeshDialect'
+} from './extensions/SQLMeshDialect'
 
 export {
   useDefaultExtensions,

@@ -37,13 +37,9 @@ function Editor(): JSX.Element {
   const [isReadyEngine, setIsreadyEngine] = useState(false)
 
   const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
-    setIsreadyEngine(true)
-  }, [])
-
-  useEffect(() => {
-    engine.postMessage({
-      topic: 'dialects',
-    })
+    if (e.data.topic === 'init') {
+      setIsreadyEngine(true)
+    }
   }, [])
 
   useEffect(() => {
@@ -69,7 +65,7 @@ function Editor(): JSX.Element {
   }, [files])
 
   useEffect(() => {
-    if (selectedFile == null || tab?.file === selectedFile) return
+    if (isNil(selectedFile) || tab?.file === selectedFile) return
 
     selectTab(createTab(selectedFile))
   }, [selectedFile])
@@ -124,6 +120,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
+  const setDialects = useStoreEditor(s => s.setDialects)
 
   const { models, setManuallySelectedColumn } = useLineageFlow()
 
@@ -140,6 +137,10 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
 
   const handleEngineWorkerMessage = useCallback(
     (e: MessageEvent): void => {
+      if (e.data.topic === 'dialects') {
+        setDialects(e.data.payload)
+      }
+
       if (e.data.topic === 'validate') {
         tab.isValid = e.data.payload
 
@@ -200,15 +201,10 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
 
     tab.dialect = model?.dialect ?? ''
 
-    engine.postMessage({
-      topic: 'dialect',
-      payload: tab.dialect,
-    })
+    refreshTab()
   }, [tab.id, models])
 
   useEffect(() => {
-    if (isNil(tab)) return
-
     tab.isSaved = isFalse(tab.file.isChanged)
 
     engine.postMessage({
@@ -254,6 +250,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
                 <CodeEditor.Default
                   key={tab.id}
                   type={EnumFileExtensions.SQL}
+                  dialect={tab.dialect}
                   content={tab.file.content}
                 >
                   {({ extensions, content }) => (
@@ -271,6 +268,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
                   {({ file, keymaps }) => (
                     <CodeEditor.Default
                       type={file.extension}
+                      dialect={tab.dialect}
                       content={file.content}
                     >
                       {({ extensions, content }) => (
