@@ -176,7 +176,7 @@ class TerminalConsole(Console):
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
-                srich.SchedulerBatchColumn(),
+                srich.BatchColumn(),
                 "•",
                 TimeElapsedColumn(),
                 console=self.console,
@@ -249,6 +249,8 @@ class TerminalConsole(Console):
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
+                srich.BatchColumn(),
+                "•",
                 TimeElapsedColumn(),
                 console=self.console,
             )
@@ -261,7 +263,6 @@ class TerminalConsole(Console):
 
     def update_migration_progress(self, num_tasks: int) -> None:
         """Update migration progress."""
-        breakpoint()
         if self.migration_progress is not None and self.migration_task is not None:
             self.migration_progress.update(self.migration_task, refresh=True, advance=num_tasks)
 
