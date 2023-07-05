@@ -550,6 +550,9 @@ class Context(BaseContext):
         stored_snapshots = self.state_reader.get_snapshots(
             [s.snapshot_id for s in snapshots.values() if not s.version]
         )
+        for snapshot in stored_snapshots.values():
+            # Keep the original model instance to preserve the query cache.
+            snapshot.model = snapshots[snapshot.name].model
 
         return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in snapshots.items()}
 
