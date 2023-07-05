@@ -107,7 +107,7 @@ config = Config(
 
 ### Overriding Notification Targets
 
-Notification Targets can be overriden to send custom messages.
+Notification Targets can be overridden to send custom messages.
 
 ```python
 from sqlmesh.core.notification_target import SlackApiNotificationTarget
