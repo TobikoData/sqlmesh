@@ -866,7 +866,11 @@ class SqlModel(_SqlBasedModel):
         if not isinstance(previous, SqlModel):
             return None
 
-        previous_query = previous.render_query()
+        try:
+            # the previous model which comes from disk could be unrenderable
+            previous_query = previous.render_query()
+        except Exception:
+            previous_query = None
         this_query = self.render_query()
 
         if previous_query is None or this_query is None:
