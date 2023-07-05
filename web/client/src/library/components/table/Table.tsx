@@ -15,8 +15,6 @@ import {
   ChevronDownIcon,
   ChevronUpDownIcon,
   ChevronUpIcon,
-  EyeIcon,
-  EyeSlashIcon,
 } from '@heroicons/react/24/solid'
 import { useVirtual } from '@tanstack/react-virtual'
 import Input from '@components/input/Input'
@@ -24,6 +22,7 @@ import { EnumSize } from '~/types/enum'
 import { isArrayNotEmpty } from '@utils/index'
 
 declare module '@tanstack/table-core' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     type: string
   }
