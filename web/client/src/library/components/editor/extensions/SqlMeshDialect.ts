@@ -6,7 +6,7 @@ import {
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { LanguageSupport } from '@codemirror/language'
 import { type Model } from '~/api/client'
-import { isFalse } from '~/utils'
+import { isFalse, isNil } from '~/utils'
 import { sqlglotWorker } from '~/workers'
 
 const cache = new Map<string, (e: MessageEvent) => void>()
@@ -20,11 +20,11 @@ export type ExtensionSQLMeshDialect = (
 
 export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   models,
-  options,
+  options = { types: '', keywords: '' },
   dialects,
 ): LanguageSupport {
-  const SQLKeywords = (options?.keywords ?? '') + WHITE_SPACE
-  const SQLTypes = (options?.types ?? '') + WHITE_SPACE
+  const SQLKeywords = options.keywords + WHITE_SPACE
+  const SQLTypes = options.types + WHITE_SPACE
   const SQLMeshModelDictionary = getSQLMeshModelKeywords(dialects)
   const SQLMeshKeywords =
     'columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect' +
@@ -33,11 +33,9 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
     'seed full incremental_by_time_range incremental_by_unique_key view embedded' +
     WHITE_SPACE
 
-  console.log({ SQLKeywords })
-
   const lang = SQLDialect.define({
-    keywords: SQLKeywords + SQLMeshKeywords,
-    types: SQLTypes + SQLMeshTypes,
+    keywords: (SQLKeywords + SQLMeshKeywords).toLowerCase(),
+    types: (SQLTypes + SQLMeshTypes).toLowerCase(),
   })
 
   const tables: Completion[] = Array.from(new Set(Object.values(models))).map(
@@ -47,13 +45,9 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
     }),
   )
 
-  let handler = cache.get('message')
+  SQLMeshDialectCleanUp()
 
-  if (handler != null) {
-    sqlglotWorker.removeEventListener('message', handler)
-  }
-
-  handler = function getTokensFromSQLGlot(e: MessageEvent): void {
+  const handler = function getTokensFromSQLGlot(e: MessageEvent): void {
     if (e.data.topic === 'parse') {
       // TODO: set parsed tree and use it to improve editor autompletion
     }
@@ -69,7 +63,7 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
         {
           label: 'model',
           type: 'keyword',
-          apply: 'MODEL (\n\r)',
+          apply: 'MODEL (\n\r);',
         },
       ]),
     }),
@@ -121,7 +115,7 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
 export function SQLMeshDialectCleanUp(): void {
   const handler = cache.get('message')
 
-  if (handler == null) return
+  if (isNil(handler)) return
 
   sqlglotWorker.removeEventListener('message', handler)
 }

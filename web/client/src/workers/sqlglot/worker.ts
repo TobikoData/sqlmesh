@@ -19,6 +19,10 @@ async function loadPyodideAndPackages(): Promise<{
     await fetch(new URL('./sqlglot.py', import.meta.url))
   ).text()
 
+  scope.postMessage({
+    topic: 'init',
+  })
+
   return {
     sqlglot: scope.pyodide.runPython(file),
   }
