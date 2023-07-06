@@ -78,7 +78,7 @@ SELECT
         parse(
             """
             MODEL(name a.b, kind FULL);
-            JINJA_QUERY_BEGIN; SELECT * FROM x WHERE y = {{ 1 }}; JINJA_END;"""
+            JINJA_QUERY_BEGIN; /* comment */ SELECT * FROM x WHERE y = {{ 1 }}; /* comment */ JINJA_END;"""
         )
     )
     assert (
@@ -89,7 +89,7 @@ SELECT
 );
 
 JINJA_QUERY_BEGIN;
-SELECT * FROM x WHERE y = {{ 1 }};
+/* comment */ SELECT * FROM x WHERE y = {{ 1 }}; /* comment */
 JINJA_END;"""
     )
 
