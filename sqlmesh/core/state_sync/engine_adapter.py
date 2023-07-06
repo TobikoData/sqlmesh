@@ -516,6 +516,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.intervals_table, exp.column("id").isin(*interval_ids)
             )
 
+    def recycle(self) -> None:
+        self.engine_adapter.recycle()
+
+    def close(self) -> None:
+        self.engine_adapter.close()
+
     def get_snapshot_intervals(
         self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
     ) -> t.List[SnapshotIntervals]:
@@ -704,23 +710,27 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
             fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
 
-            new_snapshot.fingerprint = fingerprint_from_model(
-                model,
-                models=models,
-                audits=audits,
-            )
-            new_snapshot.parents = tuple(
-                SnapshotId(
-                    name=name,
-                    identifier=fingerprint_from_model(
-                        models[name],
-                        models=models,
-                        audits=audits,
-                        cache=fingerprint_cache,
-                    ).to_identifier(),
+            try:
+                new_snapshot.fingerprint = fingerprint_from_model(
+                    model,
+                    models=models,
+                    audits=audits,
                 )
-                for name in _parents_from_model(model, models)
-            )
+                new_snapshot.parents = tuple(
+                    SnapshotId(
+                        name=name,
+                        identifier=fingerprint_from_model(
+                            models[name],
+                            models=models,
+                            audits=audits,
+                            cache=fingerprint_cache,
+                        ).to_identifier(),
+                    )
+                    for name in _parents_from_model(model, models)
+                )
+            except Exception:
+                logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
+                continue
 
             # Infer the missing change category to account for SQLMesh versions in which
             # we didn't assign a change category to indirectly modified snapshots.

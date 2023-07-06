@@ -1,7 +1,7 @@
 # Execution Engines
 
-# BigQuery
-## BigQuery - Local/Built-in Scheduler
+## BigQuery
+### BigQuery - Local/Built-in Scheduler
 **Engine Adapter Type**: `bigquery`
 
 | Option                          | Description                                                                                                    |  Type  | Required |
@@ -23,7 +23,30 @@
 | `priority`                      | The priority of the underlying job. (Default: `INTERACTIVE`)                                                   | string |    N     |
 | `maximum_bytes_billed`          | The maximum number of bytes to be billed for the underlying job.                                               |  int   |    N     |
 
-### Connection Methods:
+### BigQuery - Airflow Scheduler
+**Engine Name:** `bigquery`
+
+In order to share a common implementation across local and Airflow, SQLMesh BigQuery implements its own hook and operator.
+
+To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the BigQuery extra:
+```
+pip install "apache-airflow-providers-google"
+pip install "sqlmesh[bigquery]"
+```
+
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target BigQuery account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) and [GCP connection](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/connections/gcp.html)for more details. The goal is to create a working GCP connection on Airflow. The only difference is that you should use the `sqlmesh_google_cloud_bigquery_default` (by default) connection ID instead of the `google_cloud_default` one in the Airflow guide.
+
+By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
+```python linenums="1"
+sqlmesh_airflow = SQLMeshAirflow(
+    "bigquery",
+    engine_operator_args={
+        "bigquery_conn_id": "<Connection ID>"
+    },
+)
+```
+
+### Connection Methods
 * [oath](https://google-auth.readthedocs.io/en/master/reference/google.auth.html#google.auth.default) (default)
   * Related Credential Configuration:
     * `scopes` (Optional)
@@ -44,31 +67,8 @@
     * `keyfile_json` (Required)
     * `scopes` (Optional)
 
-## BigQuery - Airflow Scheduler
-**Engine Name:** `bigquery`
-
-In order to share a common implementation across local and Airflow, SQLMesh BigQuery implements its own hook and operator.
-
-To enable support for this operator, the Airflow BigQuery provider package should be installed on the target Airflow cluster along with SQLMesh with the BigQuery extra:
-```
-pip install "apache-airflow-providers-google"
-pip install "sqlmesh[bigquery]"
-```
-
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target BigQuery account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) for more details.
-
-By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
-```python linenums="1"
-sqlmesh_airflow = SQLMeshAirflow(
-    "bigquery",
-    engine_operator_args={
-        "bigquery_conn_id": "<Connection ID>"
-    },
-)
-```
-
-# Databricks
-## Databricks - Local/Built-in Scheduler
+## Databricks
+### Databricks - Local/Built-in Scheduler
 **Engine Adapter Type**: `databricks`
 
 If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook) then the only relevant configuration is `catalog` and it is optional.
@@ -79,7 +79,7 @@ If your project contains PySpark DataFrames in Python models then it will use [D
 SQLMesh's Databricks Connect implementation supports Databricks Runtime 13.0 or higher. If SQLMesh detects you have Databricks Connect installed then it will use it for all Python models (so both Pandas and PySpark DataFrames).
 
 Databricks connect execution can be routed to a different cluster than the SQL Connector by setting the `databricks_connect_*` properties.
-For example this allows SQLMesh to be configured to run SQL on a [Databricks SQL Warehouse](https://docs.databricks.com/sql/admin/create-sql-warehouse.html) while still routing DataFrame operations to a normal Databricks Cluster. 
+For example this allows SQLMesh to be configured to run SQL on a [Databricks SQL Warehouse](https://docs.databricks.com/sql/admin/create-sql-warehouse.html) while still routing DataFrame operations to a normal Databricks Cluster.
 
 Note: If using Databricks Connect please note the [requirements](https://docs.databricks.com/dev-tools/databricks-connect.html#requirements) and [limitations](https://docs.databricks.com/dev-tools/databricks-connect.html#limitations)
 
@@ -97,7 +97,7 @@ Note: If using Databricks Connect please note the [requirements](https://docs.da
 | `force_databricks_connect`           | When running locally, force the use of Databricks Connect for all model operations (so don't use SQL Connector for SQL models)                                                           |  bool  |    N     |
 | `disable_databricks_connect`         | When running locally, disable the use of Databricks Connect for all model operations (so use SQL Connector for all models)                                                               |  bool  |    N     |
 
-## Databricks - Airflow Scheduler
+### Databricks - Airflow Scheduler
 **Engine Name:** `databricks` / `databricks-submit` / `databricks-sql`.
 
 Databricks has multiple operators to help differentiate running a SQL query vs. running a Python script.
@@ -159,19 +159,19 @@ sqlmesh_airflow = SQLMeshAirflow(
 )
 ```
 
-# DuckDB
-## DuckDB - Local/Built-in Scheduler
+## DuckDB
+### DuckDB - Local/Built-in Scheduler
 **Engine Adapter Type**: `duckdb`
 
 | Option     | Description                                                                  |  Type  | Required |
 |------------|------------------------------------------------------------------------------|:------:|:--------:|
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
 
-## DuckDB - Airflow
+### DuckDB - Airflow
 DuckDB only works when running locally; therefore it does not support Airflow.
 
-# Postgres
-## Postgres - Local/Built-in Scheduler
+## Postgres
+### Postgres - Local/Built-in Scheduler
 **Engine Adapter Type**: `postgres`
 
 | Option            | Description                                                                     |  Type  | Required |
@@ -186,7 +186,7 @@ DuckDB only works when running locally; therefore it does not support Airflow.
 | `role`            | The role to use for authentication with the Postgres server                     | string |    N     |
 | `sslmode`         | The security of the connection to the Postgres server.                          | string |    N     |
 
-## Postgres - Airflow
+### Postgres - Airflow
 **Engine Name:** `postgres`
 
 The SQLMesh Postgres Operator is similar to the [PostgresOperator](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/_api/airflow/providers/postgres/operators/postgres/index.html), and relies on the same [PostgresHook](https://airflow.apache.org/docs/apache-airflow-providers-postgres/stable/_api/airflow/providers/postgres/hooks/postgres/index.html) implementation.
@@ -209,8 +209,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 )
 ```
 
-# Redshift
-## Redshift - Local/Built-in Scheduler
+## Redshift
+### Redshift - Local/Built-in Scheduler
 **Engine Adapter Type**: `Redshift`
 
 | Option                  | Description                                                                                                 |  Type  | Required |
@@ -235,7 +235,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 | `serverless_acct_id`    | The account ID of the serverless cluster                                                                    | string |    N     |
 | `serverless_work_group` | The name of work group for serverless end point                                                             | string |    N     |
 
-## Redshift - Airflow Scheduler
+### Redshift - Airflow Scheduler
 **Engine Name:** `redshift`
 
 In order to share a common implementation across local and Airflow, SQLMesh's Redshift engine implements its own hook and operator.
@@ -258,8 +258,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 )
 ```
 
-# Snowflake
-## Snowflake - Local/Built-in Scheduler
+## Snowflake
+### Snowflake - Local/Built-in Scheduler
 **Engine Adapter Type**: `snowflake`
 
 | Option          | Description                        |  Type  | Required |
@@ -272,7 +272,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 | `database`      | The Snowflake database name        | string |    N     |
 | `role`          | The Snowflake role name            | string |    N     |
 
-## Snowflake - Airflow Scheduler
+### Snowflake - Airflow Scheduler
 **Engine Name:** `snowflake`
 
 The SQLMesh Snowflake Operator is similar to the [SnowflakeOperator](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/operators/snowflake.html), and relies on the same [SnowflakeHook](https://airflow.apache.org/docs/apache-airflow-providers-snowflake/stable/_api/airflow/providers/snowflake/hooks/snowflake/index.html) implementation.
@@ -295,8 +295,8 @@ sqlmesh_airflow = SQLMeshAirflow(
 )
 ```
 
-# Spark
-## Spark - Local/Built-in Scheduler
+## Spark
+### Spark - Local/Built-in Scheduler
 **Engine Adapter Type**: `spark`
 
 | Option          | Description                                               |  Type  | Required |
@@ -305,7 +305,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 | `catalog`       | Spark 3.4+ Only. The catalog to use when issuing commands | string |    N     |
 | `config`        | Key/value pairs to set for the Spark Configuration.       |  dict  |    N     |
 
-## Spark - Airflow Scheduler
+### Spark - Airflow Scheduler
 **Engine Name:** `spark`
 
 The SQLMesh Spark operator is very similar to the Airflow [SparkSubmitOperator](https://airflow.apache.org/docs/apache-airflow-providers-apache-spark/stable/operators.html#sparksubmitoperator), and relies on the same [SparkSubmitHook](https://airflow.apache.org/docs/apache-airflow-providers-apache-spark/stable/_api/airflow/providers/apache/spark/hooks/spark_submit/index.html#airflow.providers.apache.spark.hooks.spark_submit.SparkSubmitHook) implementation.

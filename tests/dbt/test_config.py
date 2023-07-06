@@ -80,6 +80,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
         unique_key=["a"],
         meta={"stamp": "bar", "dialect": "duckdb"},
         owner="Sally",
+        tags=["test", "incremental"],
     )
     context = DbtContext()
     context.project_name = "Foo"
@@ -97,6 +98,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
     assert model.stamp == "bar"
     assert model.dialect == "duckdb"
     assert model.owner == "Sally"
+    assert model.tags == ["test", "incremental"]
     kind = t.cast(IncrementalByUniqueKeyKind, model.kind)
     assert kind.batch_size == 5
     assert kind.lookback == 3

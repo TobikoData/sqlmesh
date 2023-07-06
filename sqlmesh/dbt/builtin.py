@@ -170,7 +170,7 @@ def generate_ref(refs: t.Dict[str, t.Any], api: Api) -> t.Callable:
         ref_name = f"{package}.{name}" if name else package
         relation_info = refs.get(ref_name)
         if relation_info is None:
-            logger.warning("Could not resolve ref '%s'", ref_name)
+            logger.debug("Could not resolve ref '%s'", ref_name)
             return None
 
         return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)
@@ -182,7 +182,7 @@ def generate_source(sources: t.Dict[str, t.Any], api: Api) -> t.Callable:
     def source(package: str, name: str) -> t.Optional[BaseRelation]:
         relation_info = sources.get(f"{package}.{name}")
         if relation_info is None:
-            logger.warning("Could not resolve source package='%s' name='%s'", package, name)
+            logger.debug("Could not resolve source package='%s' name='%s'", package, name)
             return None
 
         return _relation_info_to_relation(relation_info, api.Relation, api.quote_policy)

@@ -7,11 +7,12 @@ import typing as t
 
 import click
 
-from sqlmesh import debug_mode_enabled, enable_logging
+from sqlmesh import enable_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
+from sqlmesh.utils import debug_mode_enabled
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
 
@@ -34,6 +35,11 @@ def _sqlmesh_version() -> str:
     type=str,
     help="The name of the gateway.",
 )
+@click.option(
+    "--ignore-warnings",
+    is_flag=True,
+    help="Ignore warnings.",
+)
 @click.pass_context
 @error_handler
 def cli(
@@ -41,6 +47,7 @@ def cli(
     paths: t.List[str],
     config: t.Optional[str] = None,
     gateway: t.Optional[str] = None,
+    ignore_warnings: bool = False,
 ) -> None:
     """SQLMesh command line tool."""
     if ctx.invoked_subcommand == "version":
@@ -61,7 +68,15 @@ def cli(
         return
 
     if debug_mode_enabled():
+        import faulthandler
+        import signal
+
+        # Enable threadumps.
+        faulthandler.enable()
+        faulthandler.register(signal.SIGUSR1.value)
         enable_logging(level=logging.DEBUG)
+    elif ignore_warnings:
+        logging.getLogger().setLevel(logging.ERROR)
 
     context = Context(
         paths=paths,

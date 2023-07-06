@@ -3,13 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from sqlmesh.dbt.basemodel import Dependencies
+from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper
+from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.jinja import MacroReference
 
 
 def test_manifest_helper():
     project_path = Path("tests/fixtures/dbt/sushi_test")
-    helper = ManifestHelper(project_path, project_path, "sushi")
+    profile = Profile.load(DbtContext(project_path))
+    helper = ManifestHelper(project_path, project_path, "sushi", profile.target)
 
     assert helper.models()["top_waiters"].dependencies == Dependencies(
         refs={"sushi.waiter_revenue_by_day", "waiter_revenue_by_day"},
@@ -64,7 +67,8 @@ def test_manifest_helper():
 
 def test_tests_referencing_disabled_models():
     project_path = Path("tests/fixtures/dbt/sushi_test")
-    helper = ManifestHelper(project_path, project_path, "sushi")
+    profile = Profile.load(DbtContext(project_path))
+    helper = ManifestHelper(project_path, project_path, "sushi", profile.target)
 
     assert "disabled_model" not in helper.models()
     assert "not_null_disabled_model_one" not in helper.tests()

@@ -41,11 +41,11 @@ setup(
         "ipywidgets",
         "jinja2",
         "pandas",
-        "pydantic>=1.10.7,<2.0.0",
+        "pydantic[email]>=1.10.7,<2.0.0",
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=16.8.1",
+        "sqlglot~=17.1.0",
         "fsspec",
     ],
     extras_require={

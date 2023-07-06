@@ -20,6 +20,7 @@ from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
+from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.errors import ConfigError
@@ -44,7 +45,7 @@ class ManifestHelper:
         project_path: Path,
         profiles_path: Path,
         profile_name: str,
-        target: t.Optional[str] = None,
+        target: TargetConfig,
     ):
         self.project_path = project_path
         self.profiles_path = profiles_path
@@ -104,7 +105,8 @@ class ManifestHelper:
     def _load_sources(self) -> None:
         for source in self._manifest.sources.values():
             source_dict = source.to_dict()
-            source_dict.pop("database", None)  # picked up from the `config` attribute
+            if source_dict.get("database") == self.target.database:
+                source_dict.pop("database", None)  # Only needed if overrides project's db
 
             source_config = SourceConfig(
                 **_config(source),
@@ -242,7 +244,7 @@ class ManifestHelper:
             vars={} if DBT_VERSION >= (1, 5) else "{}",
             profile=self.profile_name,
             profiles_dir=str(self.profiles_path),
-            target=self.target,
+            target=self.target.name,
             macro_debugging=False,
         )
         flags.set_from_args(args, None)
@@ -275,7 +277,7 @@ class ManifestHelper:
             raw_profiles=raw_profiles,
             profile_name=self.profile_name,
             renderer=profile_renderer,
-            target_override=self.target,
+            target_override=self.target.name,
         )
 
 

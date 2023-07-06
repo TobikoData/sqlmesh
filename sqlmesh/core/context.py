@@ -47,7 +47,6 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths, load_config_from_yaml
 from sqlmesh.core.console import Console, get_console
@@ -66,6 +65,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.notification_target import (
     NotificationEvent,
+    NotificationTarget,
     NotificationTargetManager,
 )
 from sqlmesh.core.plan import Plan
@@ -550,6 +550,9 @@ class Context(BaseContext):
         stored_snapshots = self.state_reader.get_snapshots(
             [s.snapshot_id for s in snapshots.values() if not s.version]
         )
+        for snapshot in stored_snapshots.values():
+            # Keep the original model instance to preserve the query cache.
+            snapshot.model = snapshots[snapshot.name].model
 
         return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in snapshots.items()}
 
@@ -862,6 +865,7 @@ class Context(BaseContext):
             where=where,
             source_alias=source_alias,
             target_alias=target_alias,
+            model_name=model.name if model_or_snapshot else None,
             limit=limit,
         )
         if show:
@@ -1075,6 +1079,7 @@ class Context(BaseContext):
     def close(self) -> None:
         """Releases all resources allocated by this context."""
         self.snapshot_evaluator.close()
+        self.state_sync.close()
 
     def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()

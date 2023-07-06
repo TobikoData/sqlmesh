@@ -70,7 +70,7 @@ class Project:
         context.target = profile.target
 
         context.manifest = ManifestHelper(
-            project_file_path.parent, profile.path.parent, profile_name, target=profile.target_name
+            project_file_path.parent, profile.path.parent, profile_name, target=profile.target
         )
 
         extra_fields = profile.target.extra

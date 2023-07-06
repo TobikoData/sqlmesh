@@ -866,7 +866,14 @@ class SqlModel(_SqlBasedModel):
         if not isinstance(previous, SqlModel):
             return None
 
-        previous_query = previous.render_query()
+        if self.lookback != previous.lookback:
+            return None
+
+        try:
+            # the previous model which comes from disk could be unrenderable
+            previous_query = previous.render_query()
+        except Exception:
+            previous_query = None
         this_query = self.render_query()
 
         if previous_query is None or this_query is None:
@@ -1651,7 +1658,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "batch_size": lambda value: exp.Literal.number(value),
     "partitioned_by_": _single_expr_or_tuple,
     "clustered_by": _single_value_or_tuple,
-    "depends_on_": lambda value: exp.Tuple(expressions=value),
+    "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "pre": _list_of_calls_to_exp,
     "post": _list_of_calls_to_exp,
     "audits": _list_of_calls_to_exp,

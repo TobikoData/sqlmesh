@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import logging
 import typing as t
 
@@ -23,7 +22,9 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
+    from google.api_core.retry import Retry
     from google.cloud import bigquery
+    from google.cloud.bigquery import StandardSqlDataType
     from google.cloud.bigquery.client import Client as BigQueryClient
     from google.cloud.bigquery.client import Connection as BigQueryConnection
     from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
@@ -39,9 +40,6 @@ logger = logging.getLogger(__name__)
 class BigQueryEngineAdapter(EngineAdapter):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
-
-    TODO: Consider writing a custom implementation using the BigQuery API directly because we are already starting
-    to override some of the DB API behavior.
     """
 
     DIALECT = "bigquery"
@@ -102,16 +100,36 @@ class BigQueryEngineAdapter(EngineAdapter):
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
         """Fetches column names and types for the target table."""
-        from google.cloud.bigquery import TimePartitioningType
+
+        def dtype_to_sql(dtype: t.Optional[StandardSqlDataType]) -> str:
+            assert dtype
+
+            kind = dtype.type_kind
+            assert kind
+
+            # Not using the enum value to preserve compatibility with older versions
+            # of the BigQuery library.
+            if kind.name == "ARRAY":
+                return f"ARRAY<{dtype_to_sql(dtype.array_element_type)}>"
+            if kind.name == "STRUCT":
+                struct_type = dtype.struct_type
+                assert struct_type
+                fields = ", ".join(
+                    f"{field.name} {dtype_to_sql(field.type)}" for field in struct_type.fields
+                )
+                return f"STRUCT<{fields}>"
+            return kind.name
 
         table = self._get_table(table_name)
         columns = {
-            field.name: exp.DataType.build(field.field_type, dialect=self.dialect)
+            field.name: exp.DataType.build(
+                dtype_to_sql(field.to_standard_sql().type), dialect=self.dialect
+            )
             for field in table.schema
         }
         if include_pseudo_columns and table.time_partitioning and not table.time_partitioning.field:
             columns["_PARTITIONTIME"] = exp.DataType.build("TIMESTAMP")
-            if table.time_partitioning.type_ == TimePartitioningType.DAY:
+            if table.time_partitioning.type_ == "DAY":
                 columns["_PARTITIONDATE"] = exp.DataType.build("DATE")
         return columns
 
@@ -159,7 +177,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         if columns_to_types is None:
             columns_to_types = columns_to_types_from_df(df)
         table = self.__get_bq_table(table_name, columns_to_types)
-        self.client.create_table(table, exists_ok=exists)
+        self._db_call(self.client.create_table, table=table, exists_ok=exists)
         self.__load_pandas_to_table(table, df, columns_to_types, replace=replace)
 
     def _insert_append_pandas_df(
@@ -193,10 +211,22 @@ class BigQueryEngineAdapter(EngineAdapter):
         job_config = bigquery.job.LoadJobConfig(schema=self.__get_bq_schema(columns_to_types))
         if replace:
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-        result = self.client.load_table_from_dataframe(df, table, job_config=job_config).result()
+        logger.debug(f"Loading dataframe to BigQuery. Table Path: {table.path}")
+        # This client call does not support retry so we don't use the `_db_call` method.
+        result = self.__retry(
+            self.__db_load_table_from_dataframe,
+        )(df=df, table=table, job_config=job_config)
         if result.errors:
             raise SQLMeshError(result.errors)
         return result
+
+    def __db_load_table_from_dataframe(
+        self, df: pd.DataFrame, table: bigquery.Table, job_config: bigquery.LoadJobConfig
+    ) -> None:
+        job = self.client.load_table_from_dataframe(
+            dataframe=df, destination=table, job_config=job_config
+        )
+        return self._db_call(job.result)
 
     def __get_bq_schema(
         self, columns_to_types: t.Dict[str, exp.DataType]
@@ -243,6 +273,16 @@ class BigQueryEngineAdapter(EngineAdapter):
             schema=self.__get_bq_schema(columns_to_type),
         )
 
+    @property
+    def __retry(self) -> Retry:
+        from google.api_core import retry
+
+        return retry.Retry(
+            predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
+            sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
+            deadline=self._extra_config.get("job_retry_deadline_seconds"),
+        )
+
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
@@ -270,7 +310,7 @@ class BigQueryEngineAdapter(EngineAdapter):
                 raise SQLMeshError("table_name must be qualified when using Pandas DataFrames")
 
             temp_bq_table = self.__get_temp_bq_table(table, columns_to_types)
-            self.client.create_table(temp_bq_table, exists_ok=False)
+            self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
             result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
             if result.errors:
                 raise SQLMeshError(result.errors)
@@ -329,7 +369,7 @@ class BigQueryEngineAdapter(EngineAdapter):
 
         Raises: `google.cloud.exceptions.NotFound` if the table does not exist.
         """
-        return self.client.get_table(self._table_name(table_name))
+        return self._db_call(self.client.get_table, table=self._table_name(table_name))
 
     def _table_name(self, table_name: TableName) -> str:
         # the api doesn't support backticks, so we can't call exp.table_name or sql
@@ -398,30 +438,12 @@ class BigQueryEngineAdapter(EngineAdapter):
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         return False
 
-    def _retryable_execute(
-        self,
-        sql: str,
-    ) -> None:
-        """
-        BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
-        So we update the cursor's query job and query data with the results of the new query job. This makes sure
-        that other cursor based operations execute correctly.
-        """
-        from google.cloud.bigquery import QueryJobConfig
-
-        job_config = QueryJobConfig(**self._job_params)
-        self.cursor._query_job = self.client.query(
-            sql,
-            job_config=job_config,
-            timeout=self._extra_config.get("job_creation_timeout_seconds"),
+    def _db_call(self, func: t.Callable[..., t.Any], *args: t.Any, **kwargs: t.Any) -> t.Any:
+        return func(
+            retry=self.__retry,
+            *args,
+            **kwargs,
         )
-        results = self.cursor._query_job.result(
-            timeout=self._extra_config.get("job_execution_timeout_seconds")  # type: ignore
-        )
-        self.cursor._query_data = iter(results) if results.total_rows else iter([])
-        query_results = self.cursor._query_job._query_results
-        self.cursor._set_rowcount(query_results)
-        self.cursor._set_description(query_results.schema)
 
     def execute(
         self,
@@ -430,7 +452,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
-        from google.api_core import retry
+        from google.cloud.bigquery import QueryJobConfig
 
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
@@ -439,12 +461,25 @@ class BigQueryEngineAdapter(EngineAdapter):
         for e in ensure_list(expressions):
             sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
             logger.debug(f"Executing SQL:\n{sql}")
-            retry.retry_target(
-                target=functools.partial(self._retryable_execute, sql=sql),
-                predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
-                sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
-                deadline=self._extra_config.get("job_retry_deadline_seconds"),
+
+            # BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
+            # So we update the cursor's query job and query data with the results of the new query job. This makes sure
+            # that other cursor based operations execute correctly.
+            job_config = QueryJobConfig(**self._job_params)
+            self.cursor._query_job = self._db_call(
+                self.client.query,
+                query=sql,
+                job_config=job_config,
+                timeout=self._extra_config.get("job_creation_timeout_seconds"),
             )
+            results = self._db_call(
+                self.cursor._query_job.result,
+                timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
+            )
+            self.cursor._query_data = iter(results) if results.total_rows else iter([])
+            query_results = self.cursor._query_job._query_results
+            self.cursor._set_rowcount(query_results)
+            self.cursor._set_description(query_results.schema)
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
@@ -457,7 +492,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         dataset_ref = DatasetReference(
             project=catalog_name or self.client.project, dataset_id=schema_name
         )
-        all_tables = self.client.list_tables(dataset_ref)
+        all_tables = self._db_call(self.client.list_tables, dataset=dataset_ref)
         return [
             DataObject(
                 catalog=table.project,
