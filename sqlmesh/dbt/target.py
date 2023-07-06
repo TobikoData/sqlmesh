@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import sys
 import typing as t
+from pathlib import Path
 
 from dbt.adapters.base import BaseRelation, Column
 from dbt.contracts.relation import Policy
@@ -109,6 +110,9 @@ class TargetConfig(abc.ABC, DbtConfig):
         return Column
 
 
+DUCKDB_IN_MEMORY = ":memory:"
+
+
 class DuckDbConfig(TargetConfig):
     """
     Connection config for DuckDb target
@@ -118,9 +122,22 @@ class DuckDbConfig(TargetConfig):
     """
 
     type: Literal["duckdb"] = "duckdb"
-    database: str = "memory"
+    database: str = ""  # defaulted in root validator if not set
     schema_: str = Field(default="main", alias="schema")
-    path: str = ":memory:"
+    path: str = DUCKDB_IN_MEMORY
+
+    @root_validator(pre=True)
+    def validate_authentication(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        if "database" not in values:
+            path = values.get("path")
+            values["database"] = (
+                "memory"
+                if path is None or path == DUCKDB_IN_MEMORY
+                else Path(t.cast(str, path)).stem
+            )
+        return values
 
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert"
