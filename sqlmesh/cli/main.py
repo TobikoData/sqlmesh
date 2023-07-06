@@ -76,8 +76,6 @@ def cli(
         faulthandler.register(signal.SIGUSR1.value)
         enable_logging(level=logging.DEBUG)
     elif ignore_warnings:
-        import logging
-
         logging.getLogger().setLevel(logging.ERROR)
 
     context = Context(
