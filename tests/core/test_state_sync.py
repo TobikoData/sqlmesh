@@ -1,5 +1,6 @@
 import json
 import typing as t
+from unittest.mock import patch
 
 import duckdb
 import pandas as pd
@@ -20,7 +21,7 @@ from sqlmesh.core.model import (
     SqlModel,
 )
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotTableInfo
-from sqlmesh.core.state_sync import EngineAdapterStateSync
+from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync
 from sqlmesh.core.state_sync.base import SCHEMA_VERSION, SQLGLOT_VERSION, Versions
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_ds, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
@@ -992,3 +993,34 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
 
     with pytest.raises(SQLMeshError, match="Cannot invalidate the production environment."):
         state_sync.invalidate_environment("prod")
+
+
+def test_cache(state_sync, make_snapshot, mocker):
+    cache = CachingStateSync(state_sync)
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 'a', 'ds'"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert not cache.get_snapshots([snapshot.snapshot_id])
+
+    with patch.object(state_sync, "get_snapshots") as mock:
+        assert not cache.get_snapshots([snapshot.snapshot_id])
+        mock.assert_not_called()
+
+    cache.push_snapshots([snapshot])
+
+    assert cache.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
+
+    with patch.object(state_sync, "get_snapshots") as mock:
+        assert cache.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
+        mock.assert_not_called()
+
+    cache.add_interval(snapshot, "2020-01-01", "2020-01-01")
+    with patch.object(state_sync, "get_snapshots") as mock:
+        cache.get_snapshots([snapshot.snapshot_id])
+        mock.assert_called()
