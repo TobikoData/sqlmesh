@@ -28,6 +28,7 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
+from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, ModelKindName, SeedModel
@@ -73,9 +74,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         engine_adapter: EngineAdapter,
         schema: str = c.SQLMESH,
+        console: t.Optional[Console] = None,
     ):
         self.schema = schema
         self.engine_adapter = engine_adapter
+        self.console = console or get_console()
         self.snapshots_table = f"{schema}._snapshots"
         self.environments_table = f"{schema}._environments"
         self.seeds_table = f"{schema}._seeds"
@@ -634,7 +637,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 logger.error("Backup was skipped so no rollback was attempted.")
             else:
                 self.rollback()
+
+            self.console.stop_migration_progress(success=False)
             raise SQLMeshError("SQLMesh migration failed.") from e
+
+        self.console.stop_migration_progress()
 
     @transactional()
     def rollback(self) -> None:
@@ -680,6 +687,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         environments = self.get_environments()
 
         snapshot_mapping = {}
+
+        if all_snapshots:
+            self.console.start_migration_progress(len(all_snapshots))
 
         for snapshot in all_snapshots.values():
             seen = set()
@@ -743,6 +753,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
             if not new_snapshot.temp_version:
                 new_snapshot.temp_version = snapshot.fingerprint.to_version()
+
+            self.console.update_migration_progress(1)
 
             if new_snapshot == snapshot:
                 logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
