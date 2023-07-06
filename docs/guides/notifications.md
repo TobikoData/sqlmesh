@@ -27,14 +27,14 @@ This example shows the location of both user-specific and global notification ta
     ```yaml linenums="1"
     # User notification targets
     users:
-      - username: User 1
+      - username: User1
         ...
         notification_targets:
           - notification_target_1
             ...
           - notification_target_2
             ...
-      - username: User 2
+      - username: User2
         ...
         notification_targets:
           - notification_target_1
@@ -58,16 +58,14 @@ This example shows the location of both user-specific and global notification ta
         # User notification targets
         users=[
             User(
-                username="User 1",
-                # User 1 notification targets
+                username="User1",
                 notification_targets=[
                     notification_target_1(...),
                     notification_target_2(...),
                 ],
             ),
             User(
-                username="User 2",
-                # User 2 notification targets
+                username="User2",
                 notification_targets=[
                     notification_target_1(...),
                     notification_target_2(...),
@@ -81,6 +79,49 @@ This example shows the location of both user-specific and global notification ta
             notification_target_2(...),
         ],
         ...
+    )
+    ```
+
+### Notifications During Development
+
+Events triggering notifications may be executed repeatedly during code development. To prevent excessive notification, SQLMesh can stop all but one user's notification targets.
+
+Specify the top-level `username` configuration key with a value also present in a user-specific notification target's `username` key to only notify that user. This key can be specified in either the project configuration file or a machine-specific configuration file located in `~/.sqlmesh`. The latter may be useful if a specific machine is always used for development.
+
+This example stops all notifications other than those for `User1`:
+
+=== "YAML"
+
+    ```yaml linenums="1" hl_lines="1-2"
+    # Top-level `username` key: only notify User1
+    username: User1
+    # User1 notification targets
+    users:
+      - username: User1
+        ...
+        notification_targets:
+          - notification_target_1
+            ...
+          - notification_target_2
+            ...
+    ```
+
+=== "Python"
+
+    ```python linenums="1" hl_lines="3-4"
+    config = Config(
+        ...,
+        # Top-level `username` key: only notify User1
+        username="User1",
+        users=[
+            User(
+                # User1 notification targets
+                username="User1",
+                notification_targets=[
+                    notification_target_1(...),
+                    notification_target_2(...),
+                ],
+            ),
     )
     ```
 
