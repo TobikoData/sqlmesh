@@ -118,7 +118,7 @@ class DuckDbConfig(TargetConfig):
     """
 
     type: Literal["duckdb"] = "duckdb"
-    database: str = "main"
+    database: str = "memory"
     schema_: str = Field(default="main", alias="schema")
     path: str = ":memory:"
 
