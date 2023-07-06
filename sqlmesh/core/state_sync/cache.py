@@ -17,7 +17,7 @@ from sqlmesh.core.state_sync.base import StateSync, Versions
 from sqlmesh.utils.date import TimeLike
 
 
-class StateSyncCache(StateSync):
+class CachingStateSync(StateSync):
     def __init__(self, state_sync: StateSync):
         self.state_sync = state_sync
         self.snapshot_cache: t.Dict[SnapshotIdLike, Snapshot] = {}
@@ -35,16 +35,17 @@ class StateSyncCache(StateSync):
             snapshot_id = s.snapshot_id
             snapshot = self.snapshot_cache.get(snapshot_id)
 
-            if not snapshot or (hydrate_seeds and not snapshot.is_hydrated):
+            if not snapshot or (hydrate_seeds and snapshot.is_seed and not snapshot.is_hydrated):
                 missing.add(snapshot_id)
             else:
                 existing[snapshot_id] = snapshot
 
-        existing.update(self.state_sync.get_snapshots(missing, hydrate_seeds))
+        if missing:
+            existing.update(self.state_sync.get_snapshots(missing, hydrate_seeds))
 
         for snapshot_id, snapshot in existing.items():
             cached = self.snapshot_cache.get(snapshot_id)
-            if cached and cached.is_hydrated:
+            if cached and (not cached.is_seed or cached.is_hydrated):
                 continue
             self.snapshot_cache[snapshot_id] = snapshot
 

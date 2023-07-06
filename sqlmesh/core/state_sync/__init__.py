@@ -14,6 +14,6 @@ The provided `sqlmesh.core.state_sync.EngineAdapterStateSync` leverages an exist
 adapter to read and write state to the underlying data store.
 """
 from sqlmesh.core.state_sync.base import StateReader, StateSync, Versions
-from sqlmesh.core.state_sync.cache import StateSyncCache
+from sqlmesh.core.state_sync.cache import CachingStateSync
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin
 from sqlmesh.core.state_sync.engine_adapter import EngineAdapterStateSync
