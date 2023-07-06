@@ -179,12 +179,12 @@ This example shows an email notification target, where `sushi@example.com` email
     notification_targets:
       - notify_on:
         - run_failure
-        host: "{{ env_var('SMTP_HOST') }}"
-        user: "{{ env_var('SMTP_USER') }}"
-        password: "{{ env_var('SMTP_PASSWORD') }}"
-        sender: sushi@example.com
-        recipients:
-          - data-team@example.com
+      host: "{{ env_var('SMTP_HOST') }}"
+      user: "{{ env_var('SMTP_USER') }}"
+      password: "{{ env_var('SMTP_PASSWORD') }}"
+      sender: sushi@example.com
+      recipients:
+        - data-team@example.com
     ```
 
 === "Python"
