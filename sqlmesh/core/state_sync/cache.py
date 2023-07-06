@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import (
     Intervals,
     Snapshot,
@@ -35,7 +36,11 @@ class CachingStateSync(StateSync):
             snapshot_id = s.snapshot_id
             snapshot = self.snapshot_cache.get(snapshot_id)
 
-            if not snapshot or (hydrate_seeds and snapshot.is_seed and not snapshot.is_hydrated):
+            if not snapshot or (
+                hydrate_seeds
+                and isinstance(snapshot.model, SeedModel)
+                and not snapshot.model.is_hydrated
+            ):
                 missing.add(snapshot_id)
             else:
                 existing[snapshot_id] = snapshot
@@ -45,7 +50,7 @@ class CachingStateSync(StateSync):
 
         for snapshot_id, snapshot in existing.items():
             cached = self.snapshot_cache.get(snapshot_id)
-            if cached and (not cached.is_seed or cached.is_hydrated):
+            if cached and (not isinstance(cached.model, SeedModel) or cached.model.is_hydrated):
                 continue
             self.snapshot_cache[snapshot_id] = snapshot
 
