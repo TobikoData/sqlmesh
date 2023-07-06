@@ -18,6 +18,11 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import Literal
 
+if sys.version_info >= (3, 9):
+    from typing import Annotated
+else:
+    from typing_extensions import Annotated
+
 if t.TYPE_CHECKING:
     from slack_sdk import WebClient, WebhookClient
 
@@ -87,97 +92,83 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
     notify_on: t.FrozenSet[NotificationEvent] = frozenset()
 
     def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
-        """
-        Sends notification with the provided message.
+        """Sends notification with the provided message.
+
+        Args:
+            notification_status: The status of the notification. One of: success, failure, warning, info, or progress.
+            msg: The message to send.
         """
 
     @notify(NotificationEvent.APPLY_START)
     def notify_apply_start(self, environment: str) -> None:
-        """Notify when an apply starts."""
+        """Notify when an apply starts.
+
+        Args:
+            environment: The target environment of the plan.
+        """
         self.send(NotificationStatus.INFO, f"Plan apply started for environment `{environment}`.")
 
     @notify(NotificationEvent.APPLY_END)
     def notify_apply_end(self, environment: str) -> None:
-        """Notify when an apply ends."""
+        """Notify when an apply ends.
+
+        Args:
+            environment: The target environment of the plan.
+        """
         self.send(
             NotificationStatus.SUCCESS, f"Plan apply finished for environment `{environment}`."
         )
 
     @notify(NotificationEvent.RUN_START)
     def notify_run_start(self, environment: str) -> None:
-        """Notify when an apply starts."""
+        """Notify when a SQLMesh run starts.
+
+        Args:
+            environment: The target environment of the run.
+        """
         self.send(NotificationStatus.INFO, f"SQLMesh run started for environment `{environment}`.")
 
     @notify(NotificationEvent.RUN_END)
     def notify_run_end(self, environment: str) -> None:
-        """Notify when an apply starts."""
+        """Notify when a SQLMesh run ends.
+
+        Args:
+            environment: The target environment of the run.
+        """
         self.send(
             NotificationStatus.SUCCESS, f"SQLMesh run finished for environment `{environment}`."
         )
 
     @notify(NotificationEvent.APPLY_FAILURE)
     def notify_apply_failure(self, exc: str) -> None:
-        """Notify in the case of an apply failure."""
+        """Notify in the case of an apply failure.
+
+        Args:
+            exc: The exception stack trace.
+        """
         self.send(NotificationStatus.FAILURE, f"Failed to apply plan.\n{exc}")
 
     @notify(NotificationEvent.RUN_FAILURE)
     def notify_run_failure(self, exc: str) -> None:
-        """Notify in the case of a run failure."""
+        """Notify in the case of a run failure.
+
+        Args:
+            exc: The exception stack trace.
+        """
         self.send(NotificationStatus.FAILURE, "Failed to run SQLMesh.\n{exc}")
 
     @notify(NotificationEvent.AUDIT_FAILURE)
     def notify_audit_failure(self, audit_error: AuditError) -> None:
-        """Notify in the case of an audit failure."""
+        """Notify in the case of an audit failure.
+
+        Args:
+            audit_error: The AuditError object.
+        """
         self.send(NotificationStatus.FAILURE, str(audit_error))
 
     @property
     def is_configured(self) -> bool:
         return True
-
-
-class NotificationTargetManager:
-    """Wrapper around a list of notification targets.
-
-    Calling a notification target's "notify_" method on this object will call it
-    on all registered notification targets.
-    """
-
-    def __init__(
-        self,
-        notification_targets: t.Dict[NotificationEvent, t.Set[BaseNotificationTarget]]
-        | None = None,
-        user_notification_targets: t.Dict[str, t.Set[BaseNotificationTarget]] | None = None,
-        username: str | None = None,
-    ) -> None:
-        self.notification_targets = notification_targets or {}
-        self.user_notification_targets = user_notification_targets or {}
-        self.username = username
-
-    def notify(self, event: NotificationEvent, *args: t.Any, **kwargs: t.Any) -> None:
-        """Call the 'notify_`event`' function of all notification targets that care about the event."""
-        if self.username:
-            self.notify_user(event, self.username, *args, **kwargs)
-        else:
-            for notification_target in self.notification_targets.get(event, set()):
-                notify_func = self._get_notification_function(notification_target, event)
-                notify_func(*args, **kwargs)
-
-    def notify_user(
-        self, event: NotificationEvent, username: str, *args: t.Any, **kwargs: t.Any
-    ) -> None:
-        """Call the 'notify_`event`' function of the user's notification targets that care about the event."""
-        notification_targets = self.user_notification_targets.get(username, set())
-        for notification_target in notification_targets:
-            if event in notification_target.notify_on:
-                notify_func = self._get_notification_function(notification_target, event)
-                notify_func(*args, **kwargs)
-
-    def _get_notification_function(
-        self, notification_target: BaseNotificationTarget, event: NotificationEvent
-    ) -> t.Callable:
-        """Lookup the registered function for a notification event"""
-        func_name = NOTIFICATION_FUNCTIONS[event]
-        return getattr(notification_target, func_name)
 
 
 class ConsoleNotificationTarget(BaseNotificationTarget):
@@ -295,3 +286,58 @@ class BasicSMTPNotificationTarget(BaseNotificationTarget):
     @property
     def is_configured(self) -> bool:
         return all((self.host, self.user, self.password, self.sender))
+
+
+NotificationTarget = Annotated[
+    t.Union[
+        BasicSMTPNotificationTarget,
+        ConsoleNotificationTarget,
+        SlackApiNotificationTarget,
+        SlackWebhookNotificationTarget,
+    ],
+    Field(discriminator="type_"),
+]
+
+
+class NotificationTargetManager:
+    """Wrapper around a list of notification targets.
+
+    Calling a notification target's "notify_" method on this object will call it
+    on all registered notification targets.
+    """
+
+    def __init__(
+        self,
+        notification_targets: t.Dict[NotificationEvent, t.Set[NotificationTarget]] | None = None,
+        user_notification_targets: t.Dict[str, t.Set[NotificationTarget]] | None = None,
+        username: str | None = None,
+    ) -> None:
+        self.notification_targets = notification_targets or {}
+        self.user_notification_targets = user_notification_targets or {}
+        self.username = username
+
+    def notify(self, event: NotificationEvent, *args: t.Any, **kwargs: t.Any) -> None:
+        """Call the 'notify_`event`' function of all notification targets that care about the event."""
+        if self.username:
+            self.notify_user(event, self.username, *args, **kwargs)
+        else:
+            for notification_target in self.notification_targets.get(event, set()):
+                notify_func = self._get_notification_function(notification_target, event)
+                notify_func(*args, **kwargs)
+
+    def notify_user(
+        self, event: NotificationEvent, username: str, *args: t.Any, **kwargs: t.Any
+    ) -> None:
+        """Call the 'notify_`event`' function of the user's notification targets that care about the event."""
+        notification_targets = self.user_notification_targets.get(username, set())
+        for notification_target in notification_targets:
+            if event in notification_target.notify_on:
+                notify_func = self._get_notification_function(notification_target, event)
+                notify_func(*args, **kwargs)
+
+    def _get_notification_function(
+        self, notification_target: NotificationTarget, event: NotificationEvent
+    ) -> t.Callable:
+        """Lookup the registered function for a notification event"""
+        func_name = NOTIFICATION_FUNCTIONS[event]
+        return getattr(notification_target, func_name)

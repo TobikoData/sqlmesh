@@ -47,7 +47,6 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths, load_config_from_yaml
 from sqlmesh.core.console import Console, get_console
@@ -66,6 +65,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.notification_target import (
     NotificationEvent,
+    NotificationTarget,
     NotificationTargetManager,
 )
 from sqlmesh.core.plan import Plan
@@ -77,7 +77,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     to_table_mapping,
 )
-from sqlmesh.core.state_sync import StateReader, StateSync
+from sqlmesh.core.state_sync import CachingStateSync, StateReader, StateSync
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
@@ -344,6 +344,7 @@ class Context(BaseContext):
             if self._state_sync.get_versions(validate=False).schema_version == 0:
                 self._state_sync.migrate()
             self._state_sync.get_versions()
+            self._state_sync = CachingStateSync(self._state_sync)
         return self._state_sync
 
     @property

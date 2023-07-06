@@ -3,8 +3,10 @@ from enum import Enum
 
 from pydantic import validator
 
-from sqlmesh.core._typing import NotificationTarget
-from sqlmesh.core.notification_target import BasicSMTPNotificationTarget
+from sqlmesh.core.notification_target import (
+    BasicSMTPNotificationTarget,
+    NotificationTarget,
+)
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -49,5 +51,5 @@ class User(PydanticModel):
             if isinstance(target, BasicSMTPNotificationTarget) and target.recipients != {
                 values["email"]
             }:
-                raise ValueError("Receipient emails do not match user email")
+                raise ValueError("Recipient emails do not match user email")
         return v

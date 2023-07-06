@@ -516,17 +516,18 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
             and token.token_type == TokenType.SEMICOLON
             and pos < total - 1
         ):
-            chunks.append(([], ChunkType.SQL))
             if token.token_type == TokenType.SEMICOLON:
                 pos += 1
             else:
                 # Jinja end statement
+                chunks[-1][0].append(token)
                 pos += 2
+            chunks.append(([], ChunkType.SQL))
         elif _is_jinja_query_begin(tokens, pos):
-            chunks.append(([], ChunkType.JINJA_QUERY))
+            chunks.append(([token], ChunkType.JINJA_QUERY))
             pos += 2
         elif _is_jinja_statement_begin(tokens, pos):
-            chunks.append(([], ChunkType.JINJA_STATEMENT))
+            chunks.append(([token], ChunkType.JINJA_STATEMENT))
             pos += 2
         else:
             chunks[-1][0].append(token)
@@ -542,7 +543,7 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
                     expressions.append(expression)
         else:
             start, *_, end = chunk
-            segment = sql[start.start : end.end + 2]
+            segment = sql[start.end + 2 : end.start - 1]
             factory = jinja_query if chunk_type == ChunkType.JINJA_QUERY else jinja_statement
             expression = factory(segment.strip())
             expression.meta["dialect"] = dialect
