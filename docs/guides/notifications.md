@@ -151,8 +151,8 @@ This example shows a Slack API notification target. Notifications are triggered 
         - apply_start
         - apply_end
         - audit_failure
-        token: "{{ env_var('SLACK_API_TOKEN') }}"
-        channel: "UXXXXXXXXX"  # Channel or a user's Slack member ID
+      token: "{{ env_var('SLACK_API_TOKEN') }}"
+      channel: "UXXXXXXXXX"  # Channel or a user's Slack member ID
     ```
 
 === "Python"
