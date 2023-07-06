@@ -21,8 +21,8 @@ from sqlmesh.utils.date import TimeLike
 class CachingStateSync(StateSync):
     def __init__(self, state_sync: StateSync):
         self.state_sync = state_sync
-        self.snapshot_cache: t.Dict[SnapshotIdLike, Snapshot] = {}
-        self.missing_snapshots: t.Set[SnapshotIdLike] = set()
+        self.snapshot_cache: t.Dict[SnapshotId, Snapshot] = {}
+        self.missing_snapshots: t.Set[SnapshotId] = set()
 
     def get_snapshots(
         self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
@@ -37,13 +37,16 @@ class CachingStateSync(StateSync):
             snapshot_id = s.snapshot_id
             snapshot = self.snapshot_cache.get(snapshot_id)
 
-            if (not snapshot and snapshot_id not in self.missing_snapshots) or (
+            is_cache_hit = snapshot or snapshot_id in self.missing_snapshots
+            should_hydrate = (
                 hydrate_seeds
                 and isinstance(snapshot.model, SeedModel)
                 and not snapshot.model.is_hydrated
-            ):
+            )
+
+            if not is_cache_hit or should_hydrate:
                 missing.add(snapshot_id)
-            else:
+            elif snapshot:
                 existing[snapshot_id] = snapshot
 
         if missing:
