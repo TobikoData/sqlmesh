@@ -14,7 +14,6 @@ from sqlmesh.core.snapshot import (
     Intervals,
     Snapshot,
     SnapshotChangeCategory,
-    SnapshotId,
     categorize_change,
     merge_intervals,
 )
@@ -376,25 +375,10 @@ class Plan:
     @property
     def _missing_intervals(self) -> t.Dict[str, Intervals]:
         if self.__missing_intervals is None:
-            previous_ids = [
-                SnapshotId(
-                    name=snapshot.name,
-                    identifier=snapshot.previous_version.fingerprint.to_identifier(),
-                )
-                for snapshot in self.snapshots
-                if snapshot.previous_version
-            ]
-
-            previous_snapshots = (
-                list(self._state_reader.get_snapshots(previous_ids).values())
-                if previous_ids
-                else []
-            )
-
             self.__missing_intervals = {
                 snapshot.version_get_or_generate(): missing
                 for snapshot, missing in self._state_reader.missing_intervals(
-                    previous_snapshots + list(self.snapshots),
+                    self.snapshots,
                     start=self._start or scheduler.earliest_start_date(self.snapshots),
                     end=self._end or now(),
                     latest=self._latest,
