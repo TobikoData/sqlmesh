@@ -68,9 +68,9 @@ class CommonStateSyncMixin(StateSync):
         """
         logger.info("Promoting environment '%s'", environment.name)
 
-        snapshot_ids = set(snapshot.snapshot_id for snapshot in environment.snapshots)
-        snapshots = self._get_snapshots(snapshot_ids, lock_for_update=True).values()
-        missing = snapshot_ids - {snapshot.snapshot_id for snapshot in snapshots}
+        missing = {s.snapshot_id for s in environment.snapshots} - self.snapshots_exist(
+            environment.snapshots
+        )
         if missing:
             raise SQLMeshError(
                 f"Missing snapshots {missing}. Make sure to push and backfill your snapshots."
@@ -87,6 +87,7 @@ class CommonStateSyncMixin(StateSync):
                 )
 
             if no_gaps:
+                snapshots = self.get_snapshots(environment.snapshots).values()
                 self._ensure_no_gaps(snapshots, existing_environment)
 
             existing_table_infos = {
@@ -95,17 +96,11 @@ class CommonStateSyncMixin(StateSync):
         else:
             existing_table_infos = {}
 
-        missing_models = set(existing_table_infos) - {snapshot.name for snapshot in snapshots}
+        missing_models = set(existing_table_infos) - {
+            snapshot.name for snapshot in environment.snapshots
+        }
 
-        for snapshot in snapshots:
-            existing_table_infos.get(snapshot.name)
-            for parent in snapshot.parents:
-                if parent not in snapshot_ids:
-                    raise SQLMeshError(
-                        f"Cannot promote snapshot `{snapshot.name}` because its parent `{parent.name}:{parent.identifier}` is not promoted. Did you mean to promote all snapshots instead of a subset?"
-                    )
-
-        table_infos = {s.table_info for s in snapshots}
+        table_infos = set(environment.snapshots)
         if existing_environment and existing_environment.finalized_ts:
             # Only promote new snapshots.
             table_infos -= set(existing_environment.snapshots)

@@ -351,12 +351,6 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
 
     state_sync.push_snapshots([snapshot_a, snapshot_b, snapshot_c])
 
-    with pytest.raises(
-        SQLMeshError,
-        match=r"Did you mean to promote all.*",
-    ):
-        promote_snapshots(state_sync, [snapshot_b], "prod")
-
     added, removed = promote_snapshots(state_sync, [snapshot_a, snapshot_b], "prod")
 
     assert set(added) == set([snapshot_a.table_info, snapshot_b.table_info])
@@ -374,12 +368,6 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
         ]
     )
     assert not removed
-
-    with pytest.raises(
-        SQLMeshError,
-        match=r"Did you mean to promote all.*",
-    ):
-        promote_snapshots(state_sync, [snapshot_b], "prod")
 
     added, removed = promote_snapshots(
         state_sync,
