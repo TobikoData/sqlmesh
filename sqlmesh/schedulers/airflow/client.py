@@ -7,9 +7,9 @@ from urllib.parse import urlencode, urljoin
 import requests
 from requests.models import Response
 
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,

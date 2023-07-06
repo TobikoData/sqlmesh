@@ -18,6 +18,11 @@ if sys.version_info >= (3, 8):
 else:
     from typing_extensions import Literal
 
+if sys.version_info >= (3, 9):
+    from typing import Annotated
+else:
+    from typing_extensions import Annotated
+
 if t.TYPE_CHECKING:
     from slack_sdk import WebClient, WebhookClient
 
@@ -135,51 +140,6 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         return True
 
 
-class NotificationTargetManager:
-    """Wrapper around a list of notification targets.
-
-    Calling a notification target's "notify_" method on this object will call it
-    on all registered notification targets.
-    """
-
-    def __init__(
-        self,
-        notification_targets: t.Dict[NotificationEvent, t.Set[BaseNotificationTarget]]
-        | None = None,
-        user_notification_targets: t.Dict[str, t.Set[BaseNotificationTarget]] | None = None,
-        username: str | None = None,
-    ) -> None:
-        self.notification_targets = notification_targets or {}
-        self.user_notification_targets = user_notification_targets or {}
-        self.username = username
-
-    def notify(self, event: NotificationEvent, *args: t.Any, **kwargs: t.Any) -> None:
-        """Call the 'notify_`event`' function of all notification targets that care about the event."""
-        if self.username:
-            self.notify_user(event, self.username, *args, **kwargs)
-        else:
-            for notification_target in self.notification_targets.get(event, set()):
-                notify_func = self._get_notification_function(notification_target, event)
-                notify_func(*args, **kwargs)
-
-    def notify_user(
-        self, event: NotificationEvent, username: str, *args: t.Any, **kwargs: t.Any
-    ) -> None:
-        """Call the 'notify_`event`' function of the user's notification targets that care about the event."""
-        notification_targets = self.user_notification_targets.get(username, set())
-        for notification_target in notification_targets:
-            if event in notification_target.notify_on:
-                notify_func = self._get_notification_function(notification_target, event)
-                notify_func(*args, **kwargs)
-
-    def _get_notification_function(
-        self, notification_target: BaseNotificationTarget, event: NotificationEvent
-    ) -> t.Callable:
-        """Lookup the registered function for a notification event"""
-        func_name = NOTIFICATION_FUNCTIONS[event]
-        return getattr(notification_target, func_name)
-
-
 class ConsoleNotificationTarget(BaseNotificationTarget):
     """
     Example console notification target. Keeping this around for testing purposes.
@@ -295,3 +255,58 @@ class BasicSMTPNotificationTarget(BaseNotificationTarget):
     @property
     def is_configured(self) -> bool:
         return all((self.host, self.user, self.password, self.sender))
+
+
+NotificationTarget = Annotated[
+    t.Union[
+        BasicSMTPNotificationTarget,
+        ConsoleNotificationTarget,
+        SlackApiNotificationTarget,
+        SlackWebhookNotificationTarget,
+    ],
+    Field(discriminator="type_"),
+]
+
+
+class NotificationTargetManager:
+    """Wrapper around a list of notification targets.
+
+    Calling a notification target's "notify_" method on this object will call it
+    on all registered notification targets.
+    """
+
+    def __init__(
+        self,
+        notification_targets: t.Dict[NotificationEvent, t.Set[NotificationTarget]] | None = None,
+        user_notification_targets: t.Dict[str, t.Set[NotificationTarget]] | None = None,
+        username: str | None = None,
+    ) -> None:
+        self.notification_targets = notification_targets or {}
+        self.user_notification_targets = user_notification_targets or {}
+        self.username = username
+
+    def notify(self, event: NotificationEvent, *args: t.Any, **kwargs: t.Any) -> None:
+        """Call the 'notify_`event`' function of all notification targets that care about the event."""
+        if self.username:
+            self.notify_user(event, self.username, *args, **kwargs)
+        else:
+            for notification_target in self.notification_targets.get(event, set()):
+                notify_func = self._get_notification_function(notification_target, event)
+                notify_func(*args, **kwargs)
+
+    def notify_user(
+        self, event: NotificationEvent, username: str, *args: t.Any, **kwargs: t.Any
+    ) -> None:
+        """Call the 'notify_`event`' function of the user's notification targets that care about the event."""
+        notification_targets = self.user_notification_targets.get(username, set())
+        for notification_target in notification_targets:
+            if event in notification_target.notify_on:
+                notify_func = self._get_notification_function(notification_target, event)
+                notify_func(*args, **kwargs)
+
+    def _get_notification_function(
+        self, notification_target: NotificationTarget, event: NotificationEvent
+    ) -> t.Callable:
+        """Lookup the registered function for a notification event"""
+        func_name = NOTIFICATION_FUNCTIONS[event]
+        return getattr(notification_target, func_name)

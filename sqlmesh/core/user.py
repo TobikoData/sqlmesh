@@ -3,8 +3,10 @@ from enum import Enum
 
 from pydantic import validator
 
-from sqlmesh.core._typing import NotificationTarget
-from sqlmesh.core.notification_target import BasicSMTPNotificationTarget
+from sqlmesh.core.notification_target import (
+    BasicSMTPNotificationTarget,
+    NotificationTarget,
+)
 from sqlmesh.utils.pydantic import PydanticModel
 
 

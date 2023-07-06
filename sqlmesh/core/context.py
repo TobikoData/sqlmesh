@@ -47,7 +47,6 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.config import Config, load_config_from_paths, load_config_from_yaml
 from sqlmesh.core.console import Console, get_console
@@ -66,6 +65,7 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.notification_target import (
     NotificationEvent,
+    NotificationTarget,
     NotificationTargetManager,
 )
 from sqlmesh.core.plan import Plan
