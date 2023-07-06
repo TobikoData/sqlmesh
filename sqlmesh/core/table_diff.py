@@ -184,7 +184,7 @@ class TableDiff:
                 .where(self.where)
             )
 
-            with self.adapter.temp_table(query) as table:
+            with self.adapter.temp_table(query, name="sqlmesh_temp.diff") as table:
                 summary_query = exp.select(
                     exp.func("SUM", "s_exists").as_("s_count"),
                     exp.func("SUM", "t_exists").as_("t_count"),

@@ -854,6 +854,8 @@ class EngineAdapter:
 
         with self.transaction(TransactionType.DDL):
             table = self._get_temp_table(name)
+            if table.db:
+                self.create_schema(table.db)
             self.ctas(table, query_or_df)
 
             try:
@@ -905,7 +907,7 @@ class EngineAdapter:
         Returns the name of the temp table that should be used for the given table name.
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
-        table.set("this", f"__temp_{table.name}_{uuid.uuid4().hex}")
+        table.set("this", exp.to_identifier(f"__temp_{table.name}_{uuid.uuid4().hex}"))
         if table_only:
             table.set("db", None)
             table.set("catalog", None)
