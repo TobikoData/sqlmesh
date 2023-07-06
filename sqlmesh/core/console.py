@@ -245,7 +245,7 @@ class TerminalConsole(Console):
         """Indicates that a new migration progress has begun."""
         if self.migration_progress is None:
             self.migration_progress = Progress(
-                TextColumn(f"[bold blue]Migrating", justify="right"),
+                TextColumn(f"[bold blue]Migrating snapshots", justify="right"),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
@@ -257,7 +257,7 @@ class TerminalConsole(Console):
 
             self.migration_progress.start()
             self.migration_task = self.migration_progress.add_task(
-                f"Migrating...",
+                f"Migrating snapshots...",
                 total=total_tasks,
             )
 
