@@ -41,7 +41,7 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
 
 class Console(abc.ABC):
     """Abstract base class for defining classes used for displaying information to the user and also interact
-    with them when their input is needed"""
+    with them when their input is needed."""
 
     @abc.abstractmethod
     def start_snapshot_progress(
@@ -55,7 +55,7 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def stop_snapshot_progress(self, success: bool = True) -> None:
-        """Stop the load progress"""
+        """Stop the load progress."""
 
     @abc.abstractmethod
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
@@ -67,7 +67,19 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def stop_promotion_progress(self, success: bool = True) -> None:
-        """Stop the promotion progress"""
+        """Stop the promotion progress."""
+
+    @abc.abstractmethod
+    def start_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new migration progress has begun."""
+
+    @abc.abstractmethod
+    def update_migration_progress(self, num_tasks: int) -> None:
+        """Update migration progress."""
+
+    @abc.abstractmethod
+    def stop_migration_progress(self, success: bool = True) -> None:
+        """Stop the migration progress."""
 
     @abc.abstractmethod
     def show_model_difference_summary(
@@ -91,49 +103,49 @@ class Console(abc.ABC):
     def log_test_results(
         self, result: unittest.result.TestResult, output: str, target_dialect: str
     ) -> None:
-        """Display the test result and output
+        """Display the test result and output.
 
         Args:
             result: The unittest test result that contains metrics like num success, fails, ect.
-            output: The generated output from the unittest
+            output: The generated output from the unittest.
             target_dialect: The dialect that tests were run against. Assumes all tests run against the same dialect.
         """
 
     @abc.abstractmethod
     def show_sql(self, sql: str) -> None:
-        """Display to the user SQL"""
+        """Display to the user SQL."""
 
     @abc.abstractmethod
     def log_status_update(self, message: str) -> None:
-        """Display general status update to the user"""
+        """Display general status update to the user."""
 
     @abc.abstractmethod
     def log_error(self, message: str) -> None:
-        """Display error info to the user"""
+        """Display error info to the user."""
 
     @abc.abstractmethod
     def log_success(self, message: str) -> None:
-        """Display a general successful message to the user"""
+        """Display a general successful message to the user."""
 
     @abc.abstractmethod
     def loading_start(self, message: t.Optional[str] = None) -> uuid.UUID:
-        """Starts loading and returns a unique ID that can be used to stop the loading. Optionally can display a message"""
+        """Starts loading and returns a unique ID that can be used to stop the loading. Optionally can display a message."""
 
     @abc.abstractmethod
     def loading_stop(self, id: uuid.UUID) -> None:
-        """Stop loading for the given id"""
+        """Stop loading for the given id."""
 
     @abc.abstractmethod
     def show_schema_diff(self, schema_diff: SchemaDiff) -> None:
-        """Show table schema diff"""
+        """Show table schema diff."""
 
     @abc.abstractmethod
     def show_row_diff(self, row_diff: RowDiff) -> None:
-        """Show table summary diff"""
+        """Show table summary diff."""
 
 
 class TerminalConsole(Console):
-    """A rich based implementation of the console"""
+    """A rich based implementation of the console."""
 
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         self.console: RichConsole = console or srich.console
@@ -141,6 +153,8 @@ class TerminalConsole(Console):
         self.evaluation_tasks: t.Dict[str, t.Tuple[TaskID, int]] = {}
         self.promotion_progress: t.Optional[Progress] = None
         self.promotion_task: t.Optional[TaskID] = None
+        self.migration_progress: t.Optional[Progress] = None
+        self.migration_task: t.Optional[TaskID] = None
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
@@ -162,13 +176,14 @@ class TerminalConsole(Console):
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
-                srich.SchedulerBatchColumn(),
+                srich.BatchColumn(),
                 "•",
                 TimeElapsedColumn(),
                 console=self.console,
             )
             self.evaluation_progress.start()
             self.evaluation_tasks = {}
+
         view_name = snapshot.qualified_view_name.for_environment(environment)
         self.evaluation_tasks[snapshot.name] = (
             self.evaluation_progress.add_task(
@@ -205,6 +220,7 @@ class TerminalConsole(Console):
                 TimeElapsedColumn(),
                 console=self.console,
             )
+
             self.promotion_progress.start()
             self.promotion_task = self.promotion_progress.add_task(
                 f"Virtually Updating {environment}...",
@@ -224,6 +240,40 @@ class TerminalConsole(Console):
             self.promotion_progress = None
             if success:
                 self.log_success("The target environment has been updated successfully")
+
+    def start_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new migration progress has begun."""
+        if self.migration_progress is None:
+            self.migration_progress = Progress(
+                TextColumn(f"[bold blue]Migrating snapshots", justify="right"),
+                BarColumn(bar_width=40),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                srich.BatchColumn(),
+                "•",
+                TimeElapsedColumn(),
+                console=self.console,
+            )
+
+            self.migration_progress.start()
+            self.migration_task = self.migration_progress.add_task(
+                f"Migrating snapshots...",
+                total=total_tasks,
+            )
+
+    def update_migration_progress(self, num_tasks: int) -> None:
+        """Update migration progress."""
+        if self.migration_progress is not None and self.migration_task is not None:
+            self.migration_progress.update(self.migration_task, refresh=True, advance=num_tasks)
+
+    def stop_migration_progress(self, success: bool = True) -> None:
+        """Stop the migration progress."""
+        self.migration_task = None
+        if self.migration_progress is not None:
+            self.migration_progress.stop()
+            self.migration_progress = None
+            if success:
+                self.log_success("The migration has been completed successfully")
 
     def show_model_difference_summary(
         self, context_diff: ContextDiff, detailed: bool = False

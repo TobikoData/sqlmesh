@@ -17,7 +17,7 @@ theme = Theme(
 console = Console(theme=theme)
 
 
-class SchedulerBatchColumn(ProgressColumn):
+class BatchColumn(ProgressColumn):
     """Renders completed count/total, "pending".
 
     Space pads the completed count so that progress length does not change as task progresses
@@ -26,7 +26,7 @@ class SchedulerBatchColumn(ProgressColumn):
     Source: https://rich.readthedocs.io/en/stable/reference/progress.html#rich.progress.MofNCompleteColumn
 
     Args:
-        separator (str, optional): Text to separate completed and total values. Defaults to "/".
+        separator: Text to separate completed and total values. Defaults to "/".
     """
 
     def __init__(self, separator: str = "/", table_column: t.Optional[Column] = None):
