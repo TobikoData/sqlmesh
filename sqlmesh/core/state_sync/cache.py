@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import typing as t
 
 from sqlmesh.core.environment import Environment
@@ -17,13 +18,18 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.state_sync.base import StateSync, Versions
 from sqlmesh.utils.date import TimeLike
 
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
+
 
 class CachingStateSync(StateSync):
     def __init__(self, state_sync: StateSync):
         self.state_sync = state_sync
         # The cache can contain a true snapshot or False.
         # False means that the snapshot does not exist in the state sync but has been requested before
-        self.snapshot_cache: t.Dict[SnapshotId, Snapshot | t.Literal[False]] = {}
+        self.snapshot_cache: t.Dict[SnapshotId, Snapshot | Literal[False]] = {}
 
     def get_snapshots(
         self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
