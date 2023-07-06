@@ -6,7 +6,7 @@ SQLMesh can send notifications via Slack or email when certain events occur. Thi
 
 Notifications are configured with `notification targets`. Targets are specified in a project's [configuration](https://sqlmesh.readthedocs.io/en/stable/reference/configuration/) file (`config.yml` or `config.py`), and multiple targets can be specified for a project.
 
-A project may specify both global and user-specific notifications. Each target's notifications will be sent for all instances of each [event type](#sqlmesh-event-types) (e.g., notifications for `run` will be sent for *all* of the project's environments), with one exception for audit failures.
+A project may specify both global and user-specific notifications. Each target's notifications will be sent for all instances of each [event type](#sqlmesh-event-types) (e.g., notifications for `run` will be sent for *all* of the project's environments), with exceptions for audit failures and when an [override is configured for development](#notifications-during-development).
 
 [Audit](../concepts/audits.md) failure notifications can be sent for specific models if five conditions are met: 
 
