@@ -22,6 +22,7 @@ class CachingStateSync(StateSync):
     def __init__(self, state_sync: StateSync):
         self.state_sync = state_sync
         self.snapshot_cache: t.Dict[SnapshotIdLike, Snapshot] = {}
+        self.missing_snapshots: t.Set[SnapshotIdLike] = set()
 
     def get_snapshots(
         self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
@@ -36,7 +37,7 @@ class CachingStateSync(StateSync):
             snapshot_id = s.snapshot_id
             snapshot = self.snapshot_cache.get(snapshot_id)
 
-            if not snapshot or (
+            if (not snapshot and snapshot_id not in self.missing_snapshots) or (
                 hydrate_seeds
                 and isinstance(snapshot.model, SeedModel)
                 and not snapshot.model.is_hydrated
@@ -47,6 +48,7 @@ class CachingStateSync(StateSync):
 
         if missing:
             existing.update(self.state_sync.get_snapshots(missing, hydrate_seeds))
+            self.missing_snapshots |= missing - existing.keys()
 
         for snapshot_id, snapshot in existing.items():
             cached = self.snapshot_cache.get(snapshot_id)
@@ -64,7 +66,7 @@ class CachingStateSync(StateSync):
             snapshot_id = s.snapshot_id
             if snapshot_id in self.snapshot_cache:
                 existing.add(snapshot_id)
-            else:
+            elif snapshot_id not in self.missing_snapshots:
                 missing.add(snapshot_id)
 
         if missing:
@@ -119,6 +121,7 @@ class CachingStateSync(StateSync):
 
         for snapshot in snapshots:
             self.snapshot_cache.pop(snapshot.snapshot_id, None)
+            self.missing_snapshots.discard(snapshot.snapshot_id)
 
         self.state_sync.push_snapshots(snapshots)
 
@@ -143,6 +146,7 @@ class CachingStateSync(StateSync):
         is_dev: bool = False,
     ) -> None:
         self.snapshot_cache.pop(snapshot.snapshot_id, None)
+        self.missing_snapshots.discard(snapshot.snapshot_id)
         self.state_sync.add_interval(snapshot, start, end, is_dev)
 
     def remove_interval(
@@ -155,6 +159,7 @@ class CachingStateSync(StateSync):
         snapshots = tuple(snapshots)
         for s in snapshots:
             self.snapshot_cache.pop(s.snapshot_id, None)
+            self.missing_snapshots.discard(s.snapshot_id)
         self.state_sync.remove_interval(snapshots, start, end, all_snapshots)
 
     def promote(
