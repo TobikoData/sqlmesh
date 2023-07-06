@@ -22,6 +22,7 @@ from sqlmesh.core.config.connection import (
 )
 from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKeyKind
 from sqlmesh.dbt.common import DbtConfig
+from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
 
@@ -122,7 +123,7 @@ class DuckDbConfig(TargetConfig):
     """
 
     type: Literal["duckdb"] = "duckdb"
-    database: str = ""  # defaulted in root validator if not set
+    database: str = "main"
     schema_: str = Field(default="main", alias="schema")
     path: str = DUCKDB_IN_MEMORY
 
@@ -130,7 +131,7 @@ class DuckDbConfig(TargetConfig):
     def validate_authentication(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        if "database" not in values:
+        if "database" not in values and DBT_VERSION >= (1, 5):
             path = values.get("path")
             values["database"] = (
                 "memory"
