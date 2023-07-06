@@ -9,8 +9,8 @@ from airflow.models import BaseOperator, baseoperator
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.plan import PlanStatus
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -326,7 +326,7 @@ class SnapshotDagGenerator:
             sid = intervals_per_snapshot.snapshot_id
 
             if not intervals_per_snapshot.intervals:
-                logger.info(f"Skipping backfill for snapshot %s", sid)
+                logger.info("Skipping backfill for snapshot %s", sid)
                 continue
 
             snapshot = snapshots[sid]
