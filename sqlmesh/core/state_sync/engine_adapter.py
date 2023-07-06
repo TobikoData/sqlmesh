@@ -625,18 +625,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not skip_backup:
             self._backup_state()
 
-        completed = False
-        console.start_migration_progress(len(migrations))
-
         try:
             for migration in migrations:
                 logger.info(f"Applying migration {migration}")
-
                 migration.migrate(self)
-                console.update_migration_progress(1)
 
-            completed = True
-            self._migrate_rows()
+            self._migrate_rows(console)
             self._update_versions()
         except Exception as e:
             if skip_backup:
@@ -644,8 +638,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             else:
                 self.rollback()
             raise SQLMeshError("SQLMesh migration failed.") from e
-        finally:
-            console.stop_migration_progress(success=completed)
 
     @transactional()
     def rollback(self) -> None:
@@ -680,7 +672,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         backup_name, exp.select("*").from_(table), exists=False
                     )
 
-    def _migrate_rows(self) -> None:
+    def _migrate_rows(self, console: Console) -> None:
         all_snapshots = {
             s.snapshot_id: s
             for s in Snapshot.hydrate_with_intervals_by_identifier(
@@ -691,6 +683,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         environments = self.get_environments()
 
         snapshot_mapping = {}
+
+        if all_snapshots:
+            completed = True
+            console.start_migration_progress(len(all_snapshots))
 
         for snapshot in all_snapshots.values():
             seen = set()
@@ -740,6 +736,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     for name in _parents_from_model(model, models)
                 )
             except Exception:
+                completed = False
                 logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
                 continue
 
@@ -755,6 +752,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if not new_snapshot.temp_version:
                 new_snapshot.temp_version = snapshot.fingerprint.to_version()
 
+            console.update_migration_progress(1)
+
             if new_snapshot == snapshot:
                 logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
                 continue
@@ -764,6 +763,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
             snapshot_mapping[snapshot.snapshot_id] = new_snapshot
             logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot.snapshot_id}.")
+
+        if all_snapshots:
+            console.stop_migration_progress(success=completed)
 
         if not snapshot_mapping:
             logger.debug("No changes to snapshots detected.")
