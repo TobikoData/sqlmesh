@@ -123,7 +123,7 @@ This example shows a Slack webhook notification target. Notifications are trigge
         - apply_start
         - apply_failure
         - run_start
-        url: "{{ env_var('SLACK_WEBHOOK_URL') }}"
+      url: "{{ env_var('SLACK_WEBHOOK_URL') }}"
     ```
 
 === "Python"
