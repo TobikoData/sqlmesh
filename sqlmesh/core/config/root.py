@@ -5,7 +5,6 @@ import typing as t
 from pydantic import root_validator, validator
 
 from sqlmesh.core import constants as c
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
@@ -13,6 +12,7 @@ from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
+from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
 

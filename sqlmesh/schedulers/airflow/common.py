@@ -3,8 +3,8 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core import constants as c
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.scheduler import Interval
 from sqlmesh.core.snapshot import (
     Snapshot,

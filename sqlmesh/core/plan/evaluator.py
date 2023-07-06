@@ -16,9 +16,11 @@ Refer to `sqlmesh.core.plan`.
 import abc
 import typing as t
 
-from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.notification_target import NotificationTargetManager
+from sqlmesh.core.notification_target import (
+    NotificationTarget,
+    NotificationTargetManager,
+)
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
