@@ -58,7 +58,7 @@ class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
         engine_adapter = (
             state_connection.create_engine_adapter() if state_connection else context.engine_adapter
         )
-        return EngineAdapterStateSync(engine_adapter)
+        return EngineAdapterStateSync(engine_adapter, console=context.console)
 
     def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
         return BuiltInPlanEvaluator(

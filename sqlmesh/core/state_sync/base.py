@@ -10,7 +10,6 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
 from sqlmesh.core import scheduler
-from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Intervals,
@@ -399,7 +398,7 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def migrate(self, skip_backup: bool = False, console: t.Optional[Console] = None) -> None:
+    def migrate(self, skip_backup: bool = False) -> None:
         """Migrate the state sync to the latest SQLMesh / SQLGlot version."""
 
     @abc.abstractmethod

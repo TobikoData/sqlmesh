@@ -1032,7 +1032,7 @@ class Context(BaseContext):
 
         Please contact your SQLMesh administrator before doing this.
         """
-        self._new_state_sync().migrate(console=self.console)
+        self._new_state_sync().migrate()
 
     def rollback(self) -> None:
         """Rolls back SQLMesh to the previous migration.
