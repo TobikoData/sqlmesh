@@ -297,3 +297,46 @@ test_foo:
     )
     result = _run_test(body, "test_foo", model, sushi_context)
     assert result and result.wasSuccessful()
+
+
+def test_nan(sushi_context: Context) -> None:
+    model = t.cast(
+        SqlModel,
+        sushi_context.upsert_model(
+            load_model(
+                parse(
+                    """
+        MODEL (
+            name sushi.foo,
+            kind FULL,
+        );
+
+        SELECT id, value, ds FROM raw;
+        """
+                )
+            )
+        ),
+    )
+
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: nan
+        ds: 3
+  outputs:
+    query:
+      - id: 1
+        value: null
+        ds: 3
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01
+    latest: 2022-01-01
+            """
+    )
+    result = _run_test(body, "test_foo", model, sushi_context)
+    assert result and result.wasSuccessful()
