@@ -17,6 +17,7 @@ nav:
     - guides/connections.md
     - guides/multi_repo.md
     - guides/migrations.md
+    - guides/notifications.md
   - Concepts:
     - concepts/overview.md
     - Models:
@@ -90,4 +91,6 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
 copyright: Tobiko Data Inc.
