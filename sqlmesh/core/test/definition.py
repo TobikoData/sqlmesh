@@ -5,6 +5,7 @@ import pathlib
 import typing as t
 import unittest
 
+import numpy as np
 import pandas as pd
 from sqlglot import Expression, exp, parse_one
 
@@ -78,6 +79,8 @@ class ModelTest(unittest.TestCase):
 
     def assert_equal(self, df1: pd.DataFrame, df2: pd.DataFrame) -> None:
         """Compare two DataFrames"""
+        df1 = df1.replace({np.nan: None, "nan": None})
+        df2 = df2.replace({np.nan: None, "nan": None})
         try:
             pd.testing.assert_frame_equal(
                 df1.sort_index(axis=1),
