@@ -814,6 +814,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.unpaused_ts is None
 
     @property
+    def is_hydrated(self) -> bool:
+        """Returns whether or not the snapshot's model is a hydrated seed."""
+        return isinstance(self.model, SeedModel) and self.model.is_hydrated
+
+    @property
     def normalized_effective_from_ts(self) -> t.Optional[int]:
         return (
             to_timestamp(self.model.cron_floor(self.effective_from))
