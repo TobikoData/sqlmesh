@@ -39,7 +39,8 @@ class CachingStateSync(StateSync):
 
             is_cache_hit = snapshot or snapshot_id in self.missing_snapshots
             should_hydrate = (
-                hydrate_seeds
+                snapshot
+                and hydrate_seeds
                 and isinstance(snapshot.model, SeedModel)
                 and not snapshot.model.is_hydrated
             )
