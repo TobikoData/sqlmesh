@@ -77,7 +77,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     to_table_mapping,
 )
-from sqlmesh.core.state_sync import StateReader, StateSync
+from sqlmesh.core.state_sync import CachingStateSync, StateReader, StateSync
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
@@ -344,6 +344,7 @@ class Context(BaseContext):
             if self._state_sync.get_versions(validate=False).schema_version == 0:
                 self._state_sync.migrate()
             self._state_sync.get_versions()
+            self._state_sync = CachingStateSync(self._state_sync)
         return self._state_sync
 
     @property
