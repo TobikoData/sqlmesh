@@ -6,16 +6,17 @@ SQLMesh can send notifications via Slack or email when certain events occur. Thi
 
 Notifications are configured with `notification targets`. Targets are specified in a project's [configuration](https://sqlmesh.readthedocs.io/en/stable/reference/configuration/) file (`config.yml` or `config.py`), and multiple targets can be specified for a project.
 
-A project's notifications can be global *or* user-specific, but not both (with one exception). If both are present in a configuration file, SQLMesh will ignore the global notification targets. 
+A project may specify both global and user-specific notifications. Each target's notifications will be sent for all instances of each [event type](#sqlmesh-event-types) (e.g., notifications for `run` will be sent for *all* of the project's environments), with one exception for audit failures.
 
-[Audit](../concepts/audits.md) failures are the exception to this rule if four conditions are met: 
+[Audit](../concepts/audits.md) failure notifications can be sent for specific models if five conditions are met: 
 
 1. A model's `owner` field is populated
 2. The model executes one or more audits
 3. The owner has a user-specific notification target configured
-4. The notification target `notify_on` key includes audit failure events
+4. The owner's notification target `notify_on` key includes audit failure events
+5. The audit fails in the `prod` environment
 
-When those conditions are met, global notification specifications will be honored and the audit owner will be notified if their audit failed in the `prod` environment.
+When those conditions are met, the audit owner will be notified if their audit failed in the `prod` environment.
 
 There are three types of notification target, corresponding to the two [Slack notification methods](#slack-notifications) and [email notification](#email-notifications). They are specified in either a specific user's `notification_targets` key or the top-level `notification_targets` configuration key.
 
@@ -83,7 +84,7 @@ This example shows the location of both user-specific and global notification ta
     )
     ```
 
-## SQLMesh Events
+## SQLMesh Event Types
 
 SQLMesh notifications are triggered by events. The events that should trigger a notification are specified in the notification target's `notify_on` field.
 
@@ -119,11 +120,12 @@ This example shows a Slack webhook notification target. Notifications are trigge
 
     ```yaml linenums="1"
     notification_targets:
-      - notify_on:
-        - apply_start
-        - apply_failure
-        - run_start
-      url: "{{ env_var('SLACK_WEBHOOK_URL') }}"
+      - type: slack_webhook
+        notify_on:
+          - apply_start
+          - apply_failure
+          - run_start
+        url: "{{ env_var('SLACK_WEBHOOK_URL') }}"
     ```
 
 === "Python"
@@ -147,12 +149,13 @@ This example shows a Slack API notification target. Notifications are triggered 
 
     ```yaml linenums="1"
     notification_targets:
-      - notify_on:
-        - apply_start
-        - apply_end
-        - audit_failure
-      token: "{{ env_var('SLACK_API_TOKEN') }}"
-      channel: "UXXXXXXXXX"  # Channel or a user's Slack member ID
+      - type: slack_api
+        notify_on:
+          - apply_start
+          - apply_end
+          - audit_failure
+        token: "{{ env_var('SLACK_API_TOKEN') }}"
+        channel: "UXXXXXXXXX"  # Channel or a user's Slack member ID
     ```
 
 === "Python"
@@ -177,14 +180,15 @@ This example shows an email notification target, where `sushi@example.com` email
 
     ```yaml linenums="1"
     notification_targets:
-      - notify_on:
-        - run_failure
-      host: "{{ env_var('SMTP_HOST') }}"
-      user: "{{ env_var('SMTP_USER') }}"
-      password: "{{ env_var('SMTP_PASSWORD') }}"
-      sender: sushi@example.com
-      recipients:
-        - data-team@example.com
+      - type: smtp 
+        notify_on:
+          - run_failure
+        host: "{{ env_var('SMTP_HOST') }}"
+        user: "{{ env_var('SMTP_USER') }}"
+        password: "{{ env_var('SMTP_PASSWORD') }}"
+        sender: sushi@example.com
+        recipients:
+          - data-team@example.com
     ```
 
 === "Python"
@@ -208,7 +212,25 @@ This example shows an email notification target, where `sushi@example.com` email
 
 ### Overriding Notification Targets
 
-Notification Targets can be overridden to send custom messages. This example appends the contents of a log file to the error stack trace:
+In Python configuration files, new notification targets can be configured to send custom messages. 
+
+To customize a notification, create a new notification target class as a subclass of one of the three target classes described above (`SlackWebhookNotificationTarget`, `SlackApiNotificationTarget`, or `BasicSMTPNotificationTarget`). See the definitions of these classes on Github [here](https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/core/notification_target.py).
+
+Each of those notification target classes is a subclass of `BaseNotificationTarget`, which contains a `notify` function corresponding to each event type. This table lists the notification functions, along with the contextual information available to them at calling time (e.g., the environment name for start/end events):
+
+| Function name        | Contextual information           |
+| -------------------- | -------------------------------- |
+| notify_apply_start   | Environment name: `env`          |
+| notify_apply_end     | Environment name: `env`          |
+| notify_apply_failure | Exception stack trace: `exc`     |
+| notify_run_start     | Environment name: `env`          |
+| notify_run_end       | Environment name: `env`          | 
+| notify_run_failure   | Exception stack trace: `exc`     |
+| notify_audit_failure | Audit error trace: `audit_error` |
+
+This example creates a new notification target class `CustomSMTPNotificationTarget`. 
+
+It overrides the default `notify_run_failure` function to read a log file `"/home/sqlmesh/sqlmesh.log"` and append its contents to the exception stack trace `exc`:
 
 === "Python"
 
@@ -221,3 +243,22 @@ class CustomSMTPNotificationTarget(BasicSMTPNotificationTarget):
             msg = f"{exc}\n\nLogs:\n{f.read()}"
         super().notify_run_failure(msg)
 ```
+
+Use this new class by specifying it as a notification target in the configuration file:
+
+=== "Python"
+
+    ```python linenums="1" hl_lines="2"
+    notification_targets=[
+        CustomSMTPNotificationTarget(
+            notify_on=["run_failure"],
+            host=os.getenv("SMTP_HOST"),
+            user=os.getenv("SMTP_USER"),
+            password=os.getenv("SMTP_PASSWORD"),
+            sender="notifications@example.com",
+            recipients=[
+                "data-team@example.com",
+            ],
+        )
+    ]
+    ```
