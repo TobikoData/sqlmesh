@@ -637,7 +637,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 logger.error("Backup was skipped so no rollback was attempted.")
             else:
                 self.rollback()
+
+            self.console.stop_migration_progress(success=False)
             raise SQLMeshError("SQLMesh migration failed.") from e
+
+        self.console.stop_migration_progress()
 
     @transactional()
     def rollback(self) -> None:
@@ -761,9 +765,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
             snapshot_mapping[snapshot.snapshot_id] = new_snapshot
             logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot.snapshot_id}.")
-
-        if all_snapshots:
-            self.console.stop_migration_progress()
 
         if not snapshot_mapping:
             logger.debug("No changes to snapshots detected.")
