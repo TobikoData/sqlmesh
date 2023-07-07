@@ -575,7 +575,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         end = latest or now() if for_removal and self.depends_on_past else end
         start_ts = to_timestamp(self.model.cron_floor(start))
         end_ts = to_timestamp(
-            self.model.cron_next(end) if is_date(end) else self.model.cron_floor(end)
+            self.model.cron_next(end)
+            if is_date(end) and self.model.interval_unit() == IntervalUnit.DAY
+            else self.model.cron_floor(end)
         )
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
