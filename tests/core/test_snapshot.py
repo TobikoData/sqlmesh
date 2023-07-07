@@ -959,3 +959,32 @@ def test_has_paused_forward_only(snapshot: Snapshot):
 
     snapshot.set_unpaused_ts("2023-01-01")
     assert not has_paused_forward_only([snapshot], [snapshot])
+
+
+def test_inclusive_exclusive_monthly(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds"), batch_size=1),
+            owner="owner",
+            dialect="",
+            cron="@monthly",
+            start="1 week ago",
+            query=parse_one("SELECT id, @end_ds as ds FROM name"),
+        )
+    )
+
+    assert snapshot.inclusive_exclusive("2023-01-01", "2023-07-01") == (
+        to_timestamp("2023-01-01"),
+        to_timestamp("2023-07-01"),
+    )
+
+    assert snapshot.inclusive_exclusive("2023-01-01", "2023-07-06") == (
+        to_timestamp("2023-01-01"),
+        to_timestamp("2023-07-01"),
+    )
+
+    assert snapshot.inclusive_exclusive("2023-01-01", "2023-07-31") == (
+        to_timestamp("2023-01-01"),
+        to_timestamp("2023-07-01"),
+    )
