@@ -283,6 +283,46 @@ class BigQueryEngineAdapter(EngineAdapter):
             deadline=self._extra_config.get("job_retry_deadline_seconds"),
         )
 
+    def __load_pandas_to_temp_table(
+        self,
+        reference_table: exp.Table,
+        df: pd.DataFrame,
+        columns_to_types: t.Dict[str, exp.DataType],
+    ) -> t.Tuple[exp.Select, exp.Table]:
+        temp_bq_table = self.__get_temp_bq_table(reference_table, columns_to_types)
+        self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
+        result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
+        if result.errors:
+            raise SQLMeshError(result.errors)
+
+        temp_table = exp.table_(
+            temp_bq_table.table_id,
+            db=temp_bq_table.dataset_id,
+            catalog=temp_bq_table.project,
+        )
+        return exp.select(*columns_to_types).from_(temp_table), temp_table
+
+    def merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        unique_key: t.Sequence[str],
+    ) -> None:
+        table = exp.to_table(target_table, dialect=self.dialect)
+        df = self.try_get_pandas_df(source_table)
+        temp_table: t.Optional[exp.Table] = None
+        if df is not None:
+            if columns_to_types is None:
+                raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
+            if table.db is None:
+                raise SQLMeshError("table_name must be qualified when using Pandas DataFrames")
+            source_table, temp_table = self.__load_pandas_to_temp_table(table, df, columns_to_types)
+        super().merge(table, source_table, columns_to_types, unique_key)
+        if df is not None:
+            assert temp_table is not None
+            self.drop_table(temp_table)
+
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
@@ -309,18 +349,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             if table.db is None:
                 raise SQLMeshError("table_name must be qualified when using Pandas DataFrames")
 
-            temp_bq_table = self.__get_temp_bq_table(table, columns_to_types)
-            self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
-            result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
-            if result.errors:
-                raise SQLMeshError(result.errors)
-
-            temp_table = exp.table_(
-                temp_bq_table.table_id,
-                db=temp_bq_table.dataset_id,
-                catalog=temp_bq_table.project,
-            )
-            query = exp.select(*columns_to_types).from_(temp_table)
+            query, temp_table = self.__load_pandas_to_temp_table(table, df, columns_to_types)
         else:
             query = t.cast("Query", query_or_df)
 
