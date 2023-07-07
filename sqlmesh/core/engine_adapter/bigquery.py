@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import typing as t
 
@@ -283,12 +284,22 @@ class BigQueryEngineAdapter(EngineAdapter):
             deadline=self._extra_config.get("job_retry_deadline_seconds"),
         )
 
-    def __load_pandas_to_temp_table(
+    @contextlib.contextmanager
+    def __try_load_pandas_to_temp_table(
         self,
-        reference_table: exp.Table,
-        df: pd.DataFrame,
-        columns_to_types: t.Dict[str, exp.DataType],
-    ) -> t.Tuple[exp.Select, exp.Table]:
+        reference_table_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+    ) -> t.Generator[Query, None, None]:
+        reference_table = exp.to_table(reference_table_name, dialect=self.dialect)
+        df = self.try_get_pandas_df(query_or_df)
+        if df is None:
+            yield t.cast("Query", query_or_df)
+            return
+        if columns_to_types is None:
+            raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
+        if reference_table.db is None:
+            raise SQLMeshError("table must be qualified when using Pandas DataFrames")
         temp_bq_table = self.__get_temp_bq_table(reference_table, columns_to_types)
         self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
         result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
@@ -300,7 +311,8 @@ class BigQueryEngineAdapter(EngineAdapter):
             db=temp_bq_table.dataset_id,
             catalog=temp_bq_table.project,
         )
-        return exp.select(*columns_to_types).from_(temp_table), temp_table
+        yield exp.select(*columns_to_types).from_(temp_table)
+        self.drop_table(temp_table)
 
     def merge(
         self,
@@ -309,19 +321,10 @@ class BigQueryEngineAdapter(EngineAdapter):
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[str],
     ) -> None:
-        table = exp.to_table(target_table, dialect=self.dialect)
-        df = self.try_get_pandas_df(source_table)
-        temp_table: t.Optional[exp.Table] = None
-        if df is not None:
-            if columns_to_types is None:
-                raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
-            if table.db is None:
-                raise SQLMeshError("table_name must be qualified when using Pandas DataFrames")
-            source_table, temp_table = self.__load_pandas_to_temp_table(table, df, columns_to_types)
-        super().merge(table, source_table, columns_to_types, unique_key)
-        if df is not None:
-            assert temp_table is not None
-            self.drop_table(temp_table)
+        with self.__try_load_pandas_to_temp_table(
+            target_table, source_table, columns_to_types
+        ) as source_table:
+            return super().merge(target_table, source_table, columns_to_types, unique_key)
 
     def _insert_overwrite_by_condition(
         self,
@@ -339,49 +342,35 @@ class BigQueryEngineAdapter(EngineAdapter):
         target table. This temporary table is deleted after the merge is complete or after it's expiration time has
         passed.
         """
-        table = exp.to_table(table_name, dialect=self.dialect)
-        query: t.Union[Query, exp.Select]
-        temp_table: t.Optional[exp.Table] = None
-        df = self.try_get_pandas_df(query_or_df)
-        if df is not None:
-            if columns_to_types is None:
-                raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
-            if table.db is None:
-                raise SQLMeshError("table_name must be qualified when using Pandas DataFrames")
+        with self.__try_load_pandas_to_temp_table(
+            table_name, query_or_df, columns_to_types
+        ) as source_table:
+            query = self._add_where_to_query(source_table, where)
 
-            query, temp_table = self.__load_pandas_to_temp_table(table, df, columns_to_types)
-        else:
-            query = t.cast("Query", query_or_df)
-
-        query = self._add_where_to_query(query, where)
-
-        columns = [
-            exp.to_column(col)
-            for col in (columns_to_types or [col.alias_or_name for col in query.expressions])
-        ]
-        when_not_matched_by_source = exp.When(
-            matched=False,
-            source=True,
-            condition=where,
-            then=exp.Delete(),
-        )
-        when_not_matched_by_target = exp.When(
-            matched=False,
-            source=False,
-            then=exp.Insert(
-                this=exp.Tuple(expressions=columns),
-                expression=exp.Tuple(expressions=columns),
-            ),
-        )
-        self._merge(
-            target_table=table,
-            source_table=query,
-            on=exp.false(),
-            match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
-        )
-        if df is not None:
-            assert temp_table is not None
-            self.drop_table(temp_table)
+            columns = [
+                exp.to_column(col)
+                for col in (columns_to_types or [col.alias_or_name for col in query.expressions])
+            ]
+            when_not_matched_by_source = exp.When(
+                matched=False,
+                source=True,
+                condition=where,
+                then=exp.Delete(),
+            )
+            when_not_matched_by_target = exp.When(
+                matched=False,
+                source=False,
+                then=exp.Insert(
+                    this=exp.Tuple(expressions=columns),
+                    expression=exp.Tuple(expressions=columns),
+                ),
+            )
+            self._merge(
+                target_table=table_name,
+                source_table=query,
+                on=exp.false(),
+                match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
+            )
 
     def table_exists(self, table_name: TableName) -> bool:
         from google.cloud.exceptions import NotFound
