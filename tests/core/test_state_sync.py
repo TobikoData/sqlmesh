@@ -217,6 +217,23 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
 
+    state_sync.add_interval(snapshot, to_datetime("2020-01-11"), "2020-01-15", is_dev=True)
+    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
+        (to_timestamp("2020-01-05"), to_timestamp("2020-01-16")),
+    ]
+
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    state_sync.add_interval(snapshot, to_datetime("2020-01-16"), "2020-01-20", is_dev=True)
+    intervals = state_sync.get_snapshot_intervals([snapshot])[0]
+    assert intervals.intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
+        (to_timestamp("2020-01-05"), to_timestamp("2020-01-16")),
+    ]
+    assert intervals.dev_intervals == [
+        (to_timestamp("2020-01-16"), to_timestamp("2020-01-21")),
+    ]
+
 
 def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
     snapshot_a = make_snapshot(
