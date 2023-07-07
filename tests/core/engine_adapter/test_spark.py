@@ -91,7 +91,7 @@ def test_alter_table(mocker: MockerFixture):
         [
             call("""ALTER TABLE test_table DROP COLUMN b"""),
             call("""ALTER TABLE test_table DROP COLUMN id"""),
-            call("""ALTER TABLE test_table ADD COLUMN id LONG"""),
+            call("""ALTER TABLE test_table ADD COLUMN id BIGINT"""),
             call("""ALTER TABLE test_table DROP COLUMN a"""),
             call("""ALTER TABLE test_table ADD COLUMN a STRING"""),
             call("""ALTER TABLE test_table DROP COLUMN complex"""),
