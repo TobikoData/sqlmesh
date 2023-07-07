@@ -217,6 +217,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 )
 @click.option(
     "--skip-tests",
+    is_flag=True,
     help="Skip tests prior to generating the plan if they are defined.",
 )
 @click.option(
