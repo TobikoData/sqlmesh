@@ -1,7 +1,7 @@
 import random
 import typing as t
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
@@ -20,13 +20,13 @@ class OrderItemDetails:
     item_id: str
     quantity: int
     table_id: int
-    order_ds: str
+    order_date: date
 
 
 @model(
     "src.order_item_details",
     kind=IncrementalByTimeRangeKind(
-        time_column=TimeColumn(column="order_ds", format="%Y-%m-%d"),
+        time_column=TimeColumn(column="order_date"),
         batch_size=100,
     ),
     start=DATA_START_DATE_STR,
@@ -37,7 +37,7 @@ class OrderItemDetails:
         "item_id": "TEXT",
         "quantity": "SMALLINT",
         "table_id": "SMALLINT",
-        "order_ds": "TEXT",
+        "order_date": "DATE",
     },
 )
 def execute(
@@ -53,10 +53,10 @@ def execute(
         f"""
         SELECT
             id AS customer_id,
-            register_ds
+            register_date
         FROM {customer_details_table_name}
         WHERE
-            register_ds <= '{to_ds(end)}'
+            register_date <= '{to_ds(end)}'
         """
     )
 
@@ -73,14 +73,14 @@ def execute(
     for order_date in iter_dates(start, end):
         set_seed(order_date)
         faker = Faker()
-        order_ds = order_date.strftime("%Y-%m-%d")
         for _ in range(random.choice(range(50, 100))):
             order_item_id = faker.uuid4()
             table_id = np.random.choice(range(0, 20))
             is_registered_customer = np.random.choice([True, False], p=[0.1, 0.9])
             if is_registered_customer:
                 df_possible_customers = df_customers[
-                    df_customers["register_ds"] <= order_ds
+                    df_customers["register_date"].astype("datetime64[ns]")
+                    <= pd.to_datetime(order_date).to_datetime64()
                 ].reset_index()
                 num_possible_customers = len(df_possible_customers.index)
                 customer_id = df_possible_customers.iloc[
@@ -105,7 +105,7 @@ def execute(
                         item_id=item_id,
                         quantity=quantity,
                         table_id=table_id,
-                        order_ds=order_ds,
+                        order_date=order_date,
                     )
                 )
     return pd.DataFrame(results)

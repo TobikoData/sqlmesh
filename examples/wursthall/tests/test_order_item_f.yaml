@@ -8,12 +8,12 @@ test_order_item_f:
         item_id: 'XX'
         quantity: 2
         table_id: 1
-        order_ds: '2022-10-01'
+        order_date: '2022-10-01'
       - id: 2
         item_id: 'XY'
         quantity: 1
         table_id: 0
-        order_ds: '2022-10-01'
+        order_date: '2022-10-01'
     db.item_d:
       rows:
       - item_id: 'XX'
@@ -32,12 +32,12 @@ test_order_item_f:
         item_id: 'XX'
         quantity: 2
         order_amount: 14.00
-        order_ds: '2022-10-01'
+        order_date: '2022-10-01'
       - order_id: 2
         item_id: 'XY'
         quantity: 1
         order_amount: 10.00
-        order_ds: '2022-10-01'
+        order_date: '2022-10-01'
   vars:
     start: 2022-10-01
     end: 2022-10-01

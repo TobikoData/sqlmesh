@@ -1,7 +1,7 @@
 MODEL (
   name db.customer_d,
   kind incremental_by_time_range (
-    time_column (register_ds, '%Y-%m-%d'),
+    time_column (register_date),
     batch_size 200,
   ),
   dialect "",
@@ -15,7 +15,7 @@ SELECT DISTINCT
   @mask(name) AS name,
   @mask(email) AS email,
   @mask(phone) AS phone,
-  register_ds AS register_ds
+  register_date AS register_date
 FROM src.customer_details
 WHERE
-  register_ds BETWEEN @start_ds AND @end_ds
+  register_date BETWEEN @start_ds AND @end_ds

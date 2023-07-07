@@ -1,7 +1,7 @@
 import random
 import typing as t
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 from faker import Faker
@@ -17,13 +17,13 @@ class CustomerDetails:
     name: str
     phone: str
     email: str
-    register_ds: str
+    register_date: date
 
 
 @model(
     "src.customer_details",
     kind=IncrementalByTimeRangeKind(
-        time_column=TimeColumn(column="register_ds", format="%Y-%m-%d"),
+        time_column=TimeColumn(column="register_date"),
         batch_size=200,
     ),
     start=DATA_START_DATE_STR,
@@ -33,7 +33,7 @@ class CustomerDetails:
         "name": "TEXT",
         "email": "TEXT",
         "phone": "TEXT",
-        "register_ds": "TEXT",
+        "register_date": "DATE",
     },
 )
 def execute(
@@ -54,7 +54,7 @@ def execute(
                     name=faker.name(),
                     phone=faker.phone_number(),
                     email=faker.ascii_email(),
-                    register_ds=register_date.strftime("%Y-%m-%d"),
+                    register_date=register_date,
                 )
             )
     return pd.DataFrame(customer_details)

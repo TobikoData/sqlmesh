@@ -1,3 +1,4 @@
+import decimal
 import random
 import typing as t
 from datetime import datetime
@@ -19,14 +20,14 @@ COLUMN_TO_TYPE = {
     "order_tip": "decimal(7, 2)",
     "credit_card_provider": "text",
     "charge_total": "decimal(7, 2)",
-    "order_ds": "text",
+    "order_date": "date",
 }
 
 
 @model(
     "db.order_f",
     kind=IncrementalByTimeRangeKind(
-        time_column=TimeColumn(column="order_ds", format="%Y-%m-%d"),
+        time_column=TimeColumn(column="order_date"),
         batch_size=200,
     ),
     start=DATA_START_DATE_STR,
@@ -59,10 +60,10 @@ def execute(
             customer_id,
             item_id,
             quantity,
-            order_ds
+            order_date
         FROM {order_item_f_table_name}
         WHERE
-            order_ds BETWEEN '{to_ds(start)}' AND '{to_ds(end)}'
+            order_date BETWEEN '{to_ds(start)}' AND '{to_ds(end)}'
         """
     )
 
@@ -70,18 +71,18 @@ def execute(
     df_order_item_f["item_price"] = 1.00
     df_order_item_f["item_total"] = df_order_item_f["item_price"] * df_order_item_f["quantity"]
     df_order_item_f = (
-        df_order_item_f.groupby(["order_id", "customer_id", "order_ds"], dropna=False)
+        df_order_item_f.groupby(["order_id", "customer_id", "order_date"], dropna=False)
         .agg(order_total=("item_total", "sum"))
-        .sort_values(["order_ds"])
+        .sort_values(["order_date"])
         .reset_index()
     )
     df_order_item_f = df_order_item_f.replace({np.nan: None})
-    prev_order_ds = None
+    prev_order_date = None
     for i, row in df_order_item_f.iterrows():
         i = t.cast(int, i)
-        if row["order_ds"] != prev_order_ds:
-            set_seed(datetime.strptime(row["order_ds"], "%Y-%m-%d").date())
-            prev_order_ds = row["order_ds"]
+        if row["order_date"] != prev_order_date:
+            set_seed(row["order_date"])
+            prev_order_date = row["order_date"]
         df_order_item_f.loc[i, "order_tax"] = row["order_total"] * 0.1
         df_order_item_f.loc[i, "order_tip"] = row["order_total"] * np.random.choice(
             [0, 0.1, 0.15, 0.2], p=[0.1, 0.2, 0.4, 0.3]
@@ -97,4 +98,12 @@ def execute(
         df_order_item_f.loc[i, "num_guests"] = np.random.choice(
             range(1, 10), p=[0.1, 0.2, 0.3, 0.2, 0.1, 0.025, 0.025, 0.025, 0.025]
         )
+    if context.engine_adapter.dialect == "bigquery":
+        decimal_context = decimal.Context(prec=7)
+        for name, data_type in COLUMN_TO_TYPE.items():
+            if "decimal" in data_type:
+                df_order_item_f[name] = df_order_item_f[name].apply(
+                    decimal_context.create_decimal_from_float  # type: ignore
+                )
+    df_order_item_f = df_order_item_f.reindex(columns=list(COLUMN_TO_TYPE))
     return df_order_item_f[list(COLUMN_TO_TYPE)]

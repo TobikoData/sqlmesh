@@ -1,7 +1,7 @@
 MODEL (
   name db.order_item_f,
   kind incremental_by_time_range (
-    time_column (order_ds, '%Y-%m-%d'),
+    time_column (order_date),
     batch_size 200,
   ),
   dialect "",
@@ -18,9 +18,9 @@ SELECT
   (
     id.item_price * quantity
   ) AS order_amount,
-  order_ds AS order_ds
+  order_date AS order_date
 FROM src.order_item_details AS oid
 INNER JOIN db.item_d AS id
   ON oid.item_id = id.item_id
 WHERE
-  order_ds BETWEEN @start_ds AND @end_ds
+  order_date BETWEEN @start_ds AND @end_ds

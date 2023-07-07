@@ -5,5 +5,5 @@ AUDIT (
 SELECT *
 FROM db.order_f
 WHERE
-  order_ds BETWEEN @start_ds AND @end_ds
+  order_date BETWEEN @start_ds AND @end_ds
   AND order_total < 0;
