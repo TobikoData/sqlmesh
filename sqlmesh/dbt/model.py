@@ -199,7 +199,7 @@ class ModelConfig(BaseModelConfig):
     def _big_query_partition_by_expr(self) -> exp.Expression:
         assert isinstance(self.partition_by, dict)
         data_type = self.partition_by["data_type"].lower()
-        field = d.parse_one(self.partition_by["field"])
+        field = d.parse_one(self.partition_by["field"], dialect="bigquery")
         if data_type == "date" and self.partition_by["granularity"].lower() == "day":
             return field
 
@@ -222,7 +222,7 @@ class ModelConfig(BaseModelConfig):
             )
 
         return d.parse_one(
-            f"{data_type}_trunc({field.sql(dialect='bigquery')}, {self.partition_by['granularity'].upper()})",
+            f"{data_type}_trunc({self.partition_by['field']}, {self.partition_by['granularity'].upper()})",
             dialect="bigquery",
         )
 
