@@ -199,8 +199,9 @@ class ModelConfig(BaseModelConfig):
     def _big_query_partition_by_expr(self) -> exp.Expression:
         assert isinstance(self.partition_by, dict)
         data_type = self.partition_by["data_type"].lower()
+        field = d.parse_one(self.partition_by["field"], dialect="bigquery")
         if data_type == "date" and self.partition_by["granularity"].lower() == "day":
-            return exp.to_column(self.partition_by["field"])
+            return field
 
         if data_type == "int64":
             if "range" not in self.partition_by:
@@ -215,14 +216,14 @@ class ModelConfig(BaseModelConfig):
 
             return exp.func(
                 "RANGE_BUCKET",
-                self.partition_by["field"],
+                field,
                 exp.func("GENERATE_ARRAY", start, end, interval, dialect="bigquery"),
                 dialect="bigquery",
             )
 
-        return TIME_TYPE_TO_TRUNC_EXPR[data_type](
-            this=exp.to_column(self.partition_by["field"]),
-            unit=exp.var(self.partition_by["granularity"].upper()),
+        return d.parse_one(
+            f"{data_type}_trunc({self.partition_by['field']}, {self.partition_by['granularity'].upper()})",
+            dialect="bigquery",
         )
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
@@ -261,10 +262,3 @@ class ModelConfig(BaseModelConfig):
             **optional_kwargs,
             **self.sqlmesh_model_kwargs(context),
         )
-
-
-TIME_TYPE_TO_TRUNC_EXPR = {
-    "date": exp.DateTrunc,
-    "datetime": exp.DatetimeTrunc,
-    "timestamp": exp.TimestampTrunc,
-}
