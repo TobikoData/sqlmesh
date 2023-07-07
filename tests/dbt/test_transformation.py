@@ -473,16 +473,14 @@ def test_partition_by(sushi_test_project: Project):
         partition_by={"field": "ds", "granularity": "month"},
         sql="""SELECT 1 AS one, ds FROM foo""",
     )
-    assert (
-        model_config.to_sqlmesh(context).partitioned_by[0].sql(dialect="bigquery")
-        == "DATE_TRUNC(ds, MONTH)"
-    )
+    date_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
+    assert date_trunc_expr.sql(dialect="bigquery") == "DATE_TRUNC(ds, MONTH)"
+    assert date_trunc_expr.sql() == "DATE_TRUNC('MONTH', ds)"
 
     model_config.partition_by = {"field": "ds", "data_type": "timestamp", "granularity": "day"}
-    assert (
-        model_config.to_sqlmesh(context).partitioned_by[0].sql(dialect="bigquery")
-        == "TIMESTAMP_TRUNC(ds, DAY)"
-    )
+    timestamp_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
+    assert timestamp_trunc_expr.sql(dialect="bigquery") == "TIMESTAMP_TRUNC(ds, DAY)"
+    assert timestamp_trunc_expr.sql() == "TIMESTAMP_TRUNC(ds, DAY)"
 
     model_config.partition_by = {
         "field": "one",
