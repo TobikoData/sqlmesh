@@ -102,19 +102,6 @@ def get_snapshots() -> Response:
         return _success(common.SnapshotsResponse(snapshots=snapshots))
 
 
-@sqlmesh_api_v1.get("/intervals")
-@csrf.exempt
-@check_authentication
-def get_snapshot_intervals() -> Response:
-    with util.scoped_state_sync() as state_sync:
-        snapshot_name_versions = _snapshot_name_versions_from_request()
-        return _success(
-            common.SnapshotIntervalsResponse(
-                snapshot_intervals=state_sync.get_snapshot_intervals(snapshot_name_versions)
-            )
-        )
-
-
 @sqlmesh_api_v1.get("/models")
 @csrf.exempt
 @check_authentication

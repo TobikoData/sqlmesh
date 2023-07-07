@@ -10,12 +10,7 @@ from requests.models import Response
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.notification_target import NotificationTarget
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotId,
-    SnapshotIntervals,
-    SnapshotNameVersion,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotId
 from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
@@ -113,13 +108,6 @@ class AirflowClient:
                 self._get(MODELS_PATH, *flags, names=",".join(names))
             ).names
         )
-
-    def get_snapshot_intervals(
-        self, snapshot_name_versions: t.List[SnapshotNameVersion]
-    ) -> t.List[SnapshotIntervals]:
-        return common.SnapshotIntervalsResponse.parse_obj(
-            self._get(INTERVALS_PATH, versions=_list_to_json(snapshot_name_versions))
-        ).snapshot_intervals
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         try:
