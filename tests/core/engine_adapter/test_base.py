@@ -712,6 +712,47 @@ def test_merge(mocker: MockerFixture):
     )
 
 
+def test_merge_pandas(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    adapter.merge(
+        target_table="target",
+        source_table=df,
+        columns_to_types={
+            "id": exp.DataType.Type.INT,
+            "ts": exp.DataType.Type.TIMESTAMP,
+            "val": exp.DataType.Type.INT,
+        },
+        unique_key=["id"],
+    )
+    cursor_mock.execute.assert_called_once_with(
+        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT CAST(id AS INT) AS id, CAST(ts AS TIMESTAMP) AS ts, CAST(val AS INT) AS val FROM (VALUES (1, 4), (2, 5), (3, 6)) AS t(id, ts, val)) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
+        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
+        "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
+    )
+
+    cursor_mock.reset_mock()
+    adapter.merge(
+        target_table="target",
+        source_table=df,
+        columns_to_types={
+            "id": exp.DataType.Type.INT,
+            "ts": exp.DataType.Type.TIMESTAMP,
+            "val": exp.DataType.Type.INT,
+        },
+        unique_key=["id", "ts"],
+    )
+    cursor_mock.execute.assert_called_once_with(
+        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT CAST(id AS INT) AS id, CAST(ts AS TIMESTAMP) AS ts, CAST(val AS INT) AS val FROM (VALUES (1, 4), (2, 5), (3, 6)) AS t(id, ts, val)) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id AND __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts "
+        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
+        "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
+    )
+
+
 def test_replace_query(mocker: MockerFixture):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
