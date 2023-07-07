@@ -520,10 +520,10 @@ class _ErrorCounter:
 
     @property
     def retryable_errors(self) -> t.Tuple[t.Type[Exception], ...]:
-        from google.cloud.exceptions import BadRequest, ServerError
+        from google.cloud.exceptions import ServerError
         from requests.exceptions import ConnectionError
 
-        return (ServerError, BadRequest, ConnectionError)
+        return (ServerError, ConnectionError)
 
     def _is_retryable(self, error: t.Type[Exception]) -> bool:
         from google.api_core.exceptions import Forbidden
