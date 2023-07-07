@@ -718,6 +718,15 @@ class EngineAdapter:
         if columns_to_types is None:
             columns_to_types = self.columns(target_table)
 
+        df = self.try_get_pandas_df(source_table)
+        if df is not None:
+            source_table = next(
+                pandas_to_sql(
+                    df,
+                    columns_to_types=columns_to_types,
+                )
+            )
+
         column_names = list(columns_to_types or [])
         on = exp.and_(
             *(
