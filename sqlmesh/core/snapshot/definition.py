@@ -184,12 +184,6 @@ class SnapshotInfoMixin(ModelKindMixin):
     fingerprint: SnapshotFingerprint
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
 
-    def is_temporary_table(self, is_dev: bool) -> bool:
-        """Provided whether the snapshot is used in a development mode or not, returns True
-        if the snapshot targets a temporary table or a clone and False otherwise.
-        """
-        return is_dev and (self.is_forward_only or self.is_indirect_non_breaking)
-
     @property
     def identifier(self) -> str:
         return self.fingerprint.to_identifier()
@@ -532,8 +526,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 If it is a datetime object, then it is exclusive.
             is_dev: Indicates whether the given interval is being added while in development mode.
         """
-        is_temp_table = self.is_temporary_table(is_dev)
-        intervals = self.dev_intervals if is_temp_table else self.intervals
+        intervals = self.dev_intervals if is_dev else self.intervals
 
         intervals.append(self.inclusive_exclusive(start, end))
 
@@ -541,7 +534,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return
 
         merged_intervals = merge_intervals(intervals)
-        if is_temp_table:
+        if is_dev:
             self.dev_intervals = merged_intervals
         else:
             self.intervals = merged_intervals
@@ -746,6 +739,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             is_dev = self.is_paused
 
         return self._table_name(self.version, is_dev, True)
+
+    def is_temporary_table(self, is_dev: bool) -> bool:
+        """Provided whether the snapshot is used in a development mode or not, returns True
+        if the snapshot targets a temporary table or a clone and False otherwise.
+        """
+        return is_dev and (self.is_forward_only or self.is_indirect_non_breaking) and self.is_paused
 
     def version_get_or_generate(self) -> str:
         """Helper method to get the version or generate it from the fingerprint."""
