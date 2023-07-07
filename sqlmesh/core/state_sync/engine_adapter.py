@@ -468,6 +468,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     ) -> None:
         logger.info("Adding interval for snapshot %s", snapshot.snapshot_id)
 
+        is_dev = snapshot.is_temporary_table(is_dev)
+
         self.engine_adapter.insert_append(
             self.intervals_table,
             _intervals_to_df([snapshot], start, end, is_dev, False),
@@ -657,7 +659,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self._restore_table(self.seeds_table, _backup_table_name(self.seeds_table))
 
         if self.engine_adapter.table_exists(_backup_table_name(self.intervals_table)):
-            self._restore_table(self.seeds_table, _backup_table_name(self.intervals_table))
+            self._restore_table(self.intervals_table, _backup_table_name(self.intervals_table))
         logger.info("Migration rollback successful.")
 
     def _backup_state(self) -> None:
