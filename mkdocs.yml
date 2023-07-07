@@ -18,6 +18,7 @@ nav:
     - guides/multi_repo.md
     - guides/migrations.md
     - guides/notifications.md
+    - guides/tablediff.md
   - Concepts:
     - concepts/overview.md
     - Models:
