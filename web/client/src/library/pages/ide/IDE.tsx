@@ -89,7 +89,7 @@ export default function PageIDE(): JSX.Element {
   const closeTab = useStoreEditor(s => s.closeTab)
   const inTabs = useStoreEditor(s => s.inTabs)
 
-  const subscribe = useChannelEvents()
+  const channel = useChannelEvents()
 
   // We need to fetch from IDE level to make sure
   // all pages have access to models and files
@@ -129,6 +129,10 @@ export default function PageIDE(): JSX.Element {
       changes.sort((a: any) =>
         a.change === EnumFileExplorerChange.Deleted ? -1 : 1,
       )
+      const channelTasks = channel<PlanProgress>('tasks', updateTasks)
+      const channelModels = channel<Model[]>('models', updateModels)
+      const channelErrors = channel<ErrorIDE>('errors', displayErrors)
+      const channelPromote = channel<any>('promote-environment', handlePromote)
 
       changes.forEach(({ change, path, file }) => {
         if (change === EnumFileExplorerChange.Modified) {
@@ -212,6 +216,11 @@ export default function PageIDE(): JSX.Element {
       setProject(project)
     })
 
+    channelTasks?.subscribe()
+    channelModels?.subscribe()
+    channelErrors?.subscribe()
+    channelPromote?.subscribe()
+
     return () => {
       void cancelRequestModels()
       void cancelRequestFiles()
@@ -223,6 +232,19 @@ export default function PageIDE(): JSX.Element {
       unsubscribePromote?.()
       unsubscribeErrors?.()
       unsubscribeFile?.()
+      debouncedGetEnvironemnts.cancel()
+      debouncedGetModels.cancel()
+      debouncedGetFiles.cancel()
+      debouncedRunPlan.cancel()
+
+      apiCancelFiles(client)
+      apiCancelModels(client)
+      apiCancelGetEnvironments(client)
+
+      channelTasks?.unsubscribe()
+      channelModels?.unsubscribe()
+      channelErrors?.unsubscribe()
+      channelPromote?.unsubscribe()
     }
   }, [])
 
