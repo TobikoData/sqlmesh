@@ -7,11 +7,19 @@ import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import ReportTestsErrors from '@components/report/ReportTestsErrors'
 import ReportErrors from '@components/report/ReportErrors'
+import { EnumPlanAction, useStorePlan } from '@context/plan'
 
 export default function PlanHeader(): JSX.Element {
+  const planAction = useStorePlan(s => s.action)
+
   const environment = useStoreContext(s => s.environment)
 
   const { testsReportErrors } = usePlan()
+
+  const shouldShowBannerProdEnv =
+    planAction !== EnumPlanAction.Cancelling &&
+    environment.isInitial &&
+    environment.isDefault
 
   return (
     <div className="flex flex-col py-2 w-full">
@@ -26,14 +34,14 @@ export default function PlanHeader(): JSX.Element {
           <ReportErrors />
         </div>
       </div>
-      <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--vertical px-6 ">
-        {environment.isInitial && environment.isDefault && (
+      <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical px-6 ">
+        {shouldShowBannerProdEnv && (
           <Banner variant={EnumVariant.Warning}>
-            <Disclosure defaultOpen={true}>
+            <Disclosure defaultOpen={false}>
               {({ open }) => (
                 <>
                   <div className="flex items-center">
-                    <Banner.Headline className="w-full mr-2 text-sm mb-0">
+                    <Banner.Headline className="w-full mr-2 text-sm !mb-0">
                       Initializing Prod Environment
                     </Banner.Headline>
                     <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
@@ -59,7 +67,7 @@ export default function PlanHeader(): JSX.Element {
         )}
         {testsReportErrors != null && isObjectNotEmpty(testsReportErrors) && (
           <Banner variant={EnumVariant.Danger}>
-            <Disclosure defaultOpen={false}>
+            <Disclosure defaultOpen={true}>
               {({ open }) => (
                 <>
                   <div className="flex items-center">

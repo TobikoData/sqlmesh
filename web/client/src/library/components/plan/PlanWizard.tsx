@@ -1,5 +1,9 @@
 import { Disclosure } from '@headlessui/react'
-import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
+import {
+  MinusCircleIcon,
+  PlusCircleIcon,
+  CheckCircleIcon,
+} from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { type RefObject, Suspense, useCallback, useMemo } from 'react'
 import { type ContextEnvironmentBackfill } from '~/api/client'
@@ -12,21 +16,28 @@ import {
   type PlanTaskStatus,
 } from '../../../context/plan'
 import {
-  isNil,
   isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
   isObjectNotEmpty,
+  isNotNil,
 } from '../../../utils'
 import Spinner from '../logo/Spinner'
 import { EnumPlanChangeType, usePlan } from './context'
 import { getBackfillStepHeadline, isModified } from './help'
 import Plan from './Plan'
 import PlanChangePreview from './PlanChangePreview'
-import { EnumVariant } from '~/types/enum'
+import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
 import Banner from '@components/banner/Banner'
 import TasksOverview from '../tasksOverview/TasksOverview'
-import ReportTestsErrors from '@components/report/ReportTestsErrors'
+import Loading from '@components/loading/Loading'
+import Title from '@components/title/Title'
+
+interface PropsPlanWizardStepMessage extends React.HTMLAttributes<HTMLElement> {
+  hasSpinner?: boolean
+  variant?: Variant
+  index?: number
+}
 
 export default function PlanWizard({
   setRefTasksOverview,
@@ -43,11 +54,10 @@ export default function PlanWizard({
     removed,
     virtualUpdateDescription,
     skip_backfill,
-    skip_tests,
     change_categorization,
     hasVirtualUpdate,
-    testsReportErrors,
     testsReportMessages,
+    planReport,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
@@ -153,174 +163,204 @@ export default function PlanWizard({
   })
 
   return (
-    <div className="w-full h-full overflow-hidden overflow-y-auto p-4 hover:scrollbar scrollbar--vertical">
-      <ul className="w-full">
+    <div className="w-full h-full py-4 overflow-hidden">
+      <div className="w-full h-full px-4 overflow-y-auto scrollbar scrollbar--vertical ">
         {planAction === EnumPlanAction.Run ? (
           <Plan.StepOptions className="w-full" />
         ) : (
           <>
-            <PlanWizardStep
-              headline="Tests"
-              description="Report"
-              disabled={environment == null}
-            >
-              {planAction === EnumPlanAction.Running ? (
-                <PlanWizardStepMessage hasSpinner>
-                  Running Tests ...
-                </PlanWizardStepMessage>
-              ) : isNil(testsReportErrors) && isNil(testsReportMessages) ? (
-                <PlanWizardStepMessage>
-                  {skip_tests ? 'Tests Skipped' : 'No Tests'}
-                </PlanWizardStepMessage>
-              ) : (
-                <>
-                  {testsReportErrors != null && (
-                    <Banner variant={EnumVariant.Danger}>
-                      {isObjectNotEmpty(testsReportErrors) && (
-                        <ReportTestsErrors report={testsReportErrors} />
-                      )}
+            <PlanModelChanges />
+            {planReport.has('plan') && (
+              <div className="px-2">
+                {planReport.get('plan')!.status === 'init' && (
+                  <Banner
+                    className="mb-2"
+                    variant={EnumVariant.Primary}
+                  >
+                    <Loading
+                      text="Step 1: Validating Plan..."
+                      hasSpinner
+                      size={EnumSize.lg}
+                      variant={EnumVariant.Primary}
+                    />
+                  </Banner>
+                )}
+                {planReport.get('plan')!.status === 'success' && (
+                  <Banner
+                    className="mb-2 flex items-center"
+                    variant={EnumVariant.Success}
+                  >
+                    <CheckCircleIcon className="w-5 mr-4" />
+                    <Title
+                      text="Plan Validated"
+                      size={EnumSize.sm}
+                      variant={EnumVariant.Success}
+                    />
+                  </Banner>
+                )}
+              </div>
+            )}
+            {planReport.has('tests') && (
+              <div className="px-2">
+                {planReport.get('tests')!.status === 'init' && (
+                  <PlanWizardStepMessage
+                    index={2}
+                    hasSpinner
+                  >
+                    Running Tests...
+                  </PlanWizardStepMessage>
+                )}
+                {planReport.get('tests')!.status === 'success' &&
+                  isNotNil(testsReportMessages) && (
+                    <Banner
+                      className="mb-2 flex items-center"
+                      variant={EnumVariant.Success}
+                    >
+                      <CheckCircleIcon className="w-5 mr-4" />
+                      <Title
+                        text={testsReportMessages?.message}
+                        size={EnumSize.sm}
+                        variant={EnumVariant.Success}
+                      />
                     </Banner>
                   )}
-                  {testsReportMessages != null && (
-                    <Banner variant={EnumVariant.Success}>
-                      {isObjectNotEmpty(testsReportMessages) && (
-                        <div>{testsReportMessages.message}</div>
-                      )}
-                    </Banner>
-                  )}
-                </>
-              )}
-            </PlanWizardStep>
-            <PlanWizardStep
-              headline="Models"
-              description="Review Changes"
-              disabled={environment == null}
-            >
-              {hasChanges ? (
-                <>
-                  {(isArrayNotEmpty(added) || isArrayNotEmpty(removed)) && (
-                    <div className="flex">
-                      {isArrayNotEmpty(added) && (
-                        <PlanChangePreview
-                          className="w-full m-2 max-h-[30vh]"
-                          headline="Added Models"
-                          type={EnumPlanChangeType.Add}
-                        >
-                          <PlanChangePreview.Default
-                            type={EnumPlanChangeType.Add}
-                            changes={added}
-                          />
-                        </PlanChangePreview>
-                      )}
-                      {isArrayNotEmpty(removed) && (
-                        <PlanChangePreview
-                          className="w-full m-2 max-h-[30vh]"
-                          headline="Removed Models"
-                          type={EnumPlanChangeType.Remove}
-                        >
-                          <PlanChangePreview.Default
-                            type={EnumPlanChangeType.Remove}
-                            changes={removed}
-                          />
-                        </PlanChangePreview>
-                      )}
-                    </div>
-                  )}
-                  {isModified(modified) && (
-                    <>
-                      {isArrayNotEmpty(modified?.direct) && (
-                        <PlanChangePreview
-                          className="m-2 max-h-[30vh]"
-                          headline="Modified Directly "
-                          type={EnumPlanChangeType.Direct}
-                        >
-                          <PlanChangePreview.Direct
-                            changes={modified.direct ?? []}
-                          />
-                        </PlanChangePreview>
-                      )}
-                      {isArrayNotEmpty(modified.indirect) && (
-                        <PlanChangePreview
-                          className="m-2 max-h-[30vh]"
-                          headline="Modified Indirectly"
-                          type={EnumPlanChangeType.Indirect}
-                        >
-                          <PlanChangePreview.Indirect
-                            changes={modified.indirect ?? []}
-                          />
-                        </PlanChangePreview>
-                      )}
-                      {isArrayNotEmpty(modified?.metadata) && (
-                        <PlanChangePreview
-                          className="m-2 max-h-[30vh]"
-                          headline="Modified Metadata"
-                          type={EnumPlanChangeType.Metadata}
-                        >
-                          <PlanChangePreview.Default
-                            type={EnumPlanChangeType.Metadata}
-                            changes={modified?.metadata ?? []}
-                          />
-                        </PlanChangePreview>
-                      )}
-                    </>
-                  )}
-                </>
-              ) : planAction === EnumPlanAction.Running ? (
-                <PlanWizardStepMessage hasSpinner>
-                  Checking Models...
-                </PlanWizardStepMessage>
-              ) : (
-                <PlanWizardStepMessage>No Changes</PlanWizardStepMessage>
-              )}
-            </PlanWizardStep>
-            <PlanWizardStep
-              headline="Backfill"
-              description="Progress"
-              disabled={environment == null}
-            >
+                {planReport.get('tests')!.status === 'fail' && (
+                  <PlanWizardStepMessage
+                    index={2}
+                    variant={EnumVariant.Danger}
+                  >
+                    Tests Failed
+                  </PlanWizardStepMessage>
+                )}
+                {planReport.get('tests')!.status === 'skip' && (
+                  <PlanWizardStepMessage
+                    index={2}
+                    variant={EnumVariant.Info}
+                  >
+                    Tests Skipped
+                  </PlanWizardStepMessage>
+                )}
+              </div>
+            )}
+            {planReport.has('push') && (
+              <div className="px-2">
+                {planReport.get('push')!.status === 'init' && (
+                  <PlanWizardStepMessage
+                    index={3}
+                    hasSpinner
+                  >
+                    Pushing Changes...
+                  </PlanWizardStepMessage>
+                )}
+                {planReport.get('push')!.status === 'success' && (
+                  <Banner
+                    className="mb-2 flex items-center"
+                    variant={EnumVariant.Success}
+                  >
+                    <CheckCircleIcon className="w-5 mr-4" />
+                    <Title
+                      text="Changes Pushed"
+                      size={EnumSize.sm}
+                      variant={EnumVariant.Success}
+                    />
+                  </Banner>
+                )}
+                {planReport.get('push')!.status === 'fail' && (
+                  <PlanWizardStepMessage
+                    index={3}
+                    variant={EnumVariant.Danger}
+                  >
+                    Pushing Failed
+                  </PlanWizardStepMessage>
+                )}
+              </div>
+            )}
+            {planReport.has('restate') && (
+              <div className="px-2">
+                {planReport.get('restate')!.status === 'init' && (
+                  <PlanWizardStepMessage
+                    index={4}
+                    hasSpinner
+                  >
+                    Restating Models...
+                  </PlanWizardStepMessage>
+                )}
+                {planReport.get('restate')!.status === 'success' && (
+                  <PlanWizardStepMessage
+                    index={4}
+                    variant={EnumVariant.Success}
+                  >
+                    Restate Completed
+                  </PlanWizardStepMessage>
+                )}
+                {planReport.get('restate')!.status === 'fail' && (
+                  <PlanWizardStepMessage
+                    index={4}
+                    variant={EnumVariant.Danger}
+                  >
+                    Restate Failed
+                  </PlanWizardStepMessage>
+                )}
+                {planReport.get('restate')!.status === 'skip' && (
+                  <Banner
+                    className="mb-2 flex items-center"
+                    variant={EnumVariant.Info}
+                  >
+                    <CheckCircleIcon className="w-5 mr-4" />
+                    <Title
+                      text="No Models To Restate"
+                      size={EnumSize.sm}
+                      variant={EnumVariant.Info}
+                    />
+                  </Banner>
+                )}
+              </div>
+            )}
+            {isNotNil(activeBackfill) && (
               <Disclosure
                 key={backfillStepHeadline}
                 defaultOpen={hasBackfills}
               >
                 {({ open }) => (
-                  <>
-                    <PlanWizardStepMessage
-                      hasSpinner={
-                        isFalse(open) &&
-                        (planAction === EnumPlanAction.Running ||
-                          planAction === EnumPlanAction.Applying)
+                  <div className="px-2">
+                    <Banner
+                      className="mb-2 flex items-center"
+                      variant={
+                        planState === EnumPlanState.Finished
+                          ? EnumVariant.Success
+                          : planState === EnumPlanState.Failed
+                            ? EnumVariant.Danger
+                            : EnumVariant.Info
                       }
                     >
-                      <div className="flex justify-between items-center w-full">
+                      {planState === EnumPlanState.Finished && (
+                        <CheckCircleIcon className="w-5 mr-4" />
+                      )}
+                      <Title
+                        text={backfillStepHeadline}
+                        size={EnumSize.sm}
+                        variant={
+                          planState === EnumPlanState.Finished
+                            ? EnumVariant.Success
+                            : planState === EnumPlanState.Failed
+                              ? EnumVariant.Danger
+                              : EnumVariant.Info
+                        }
+                        className="w-full"
+                      />
+                      {showDetails && (
                         <div className="flex items-center">
-                          <h3
-                            className={clsx(
-                              planState === EnumPlanState.Cancelled &&
-                                'text-prose',
-                              planState === EnumPlanState.Failed &&
-                                'text-danger-700',
-                              planState === EnumPlanState.Finished &&
-                                'text-success-700',
+                          <p className="mr-2 text-sm">Details</p>
+                          <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                            {open ? (
+                              <MinusCircleIcon className="w-5" />
+                            ) : (
+                              <PlusCircleIcon className="w-5" />
                             )}
-                          >
-                            {backfillStepHeadline}
-                          </h3>
+                          </Disclosure.Button>
                         </div>
-                        {showDetails && (
-                          <div className="flex items-center">
-                            <p className="mr-2 text-sm">Details</p>
-                            <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
-                              {open ? (
-                                <MinusCircleIcon className="h-6 w-6 text-primary-500" />
-                              ) : (
-                                <PlusCircleIcon className="h-6 w-6 text-primary-500" />
-                              )}
-                            </Disclosure.Button>
-                          </div>
-                        )}
-                      </div>
-                    </PlanWizardStepMessage>
-
+                      )}
+                    </Banner>
                     <Disclosure.Panel className="px-4 pb-2 text-sm">
                       {hasBackfills &&
                         isFalse(skip_backfill) &&
@@ -383,87 +423,166 @@ export default function PlanWizard({
                         </div>
                       )}
                     </Disclosure.Panel>
-                  </>
+                  </div>
                 )}
               </Disclosure>
-            </PlanWizardStep>
+            )}
+            {planReport.has('promote') && (
+              <div className="px-2">
+                {planReport.get('promote')!.status === 'init' && (
+                  <PlanWizardStepMessage
+                    index={6}
+                    hasSpinner
+                  >
+                    Promoting...
+                  </PlanWizardStepMessage>
+                )}
+                {planReport.get('promote')!.status === 'success' && (
+                  <PlanWizardStepMessage
+                    index={6}
+                    variant={EnumVariant.Success}
+                  >
+                    Promote Completed
+                  </PlanWizardStepMessage>
+                )}
+                {planReport.get('promote')!.status === 'fail' && (
+                  <PlanWizardStepMessage
+                    index={6}
+                    variant={EnumVariant.Danger}
+                  >
+                    Promote Failed
+                  </PlanWizardStepMessage>
+                )}
+              </div>
+            )}
           </>
         )}
-      </ul>
+      </div>
     </div>
   )
 }
 
-interface PropsPlanWizardStep extends React.HTMLAttributes<HTMLElement> {
-  headline: string
-  description: string
-  disabled?: boolean
-}
+function PlanModelChanges(): JSX.Element {
+  const planAction = useStorePlan(s => s.action)
 
-interface PropsPlanWizardStepMessage extends React.HTMLAttributes<HTMLElement> {
-  hasSpinner?: boolean
-}
+  const { hasChanges, modified, added, removed } = usePlan()
 
-interface PropsPlanWizardStepHeader
-  extends React.ButtonHTMLAttributes<HTMLElement> {
-  headline?: string
-  disabled?: boolean
+  const isPlanRunning = planAction === EnumPlanAction.Running
+
+  return (
+    <div className={clsx('w-full px-2', isPlanRunning && 'h-full')}>
+      {isPlanRunning && (
+        <Banner
+          isFull
+          isCenter
+        >
+          <Loading
+            text="Checking Models..."
+            hasSpinner
+            size={EnumSize.lg}
+          />
+        </Banner>
+      )}
+      {isFalse(hasChanges) && isFalse(isPlanRunning) && (
+        <Banner
+          isFull
+          isCenter
+        >
+          <Title
+            size={EnumSize.lg}
+            text="No Changes"
+          />
+        </Banner>
+      )}
+      {hasChanges && isFalse(isPlanRunning) && (
+        <>
+          {(isArrayNotEmpty(added) || isArrayNotEmpty(removed)) && (
+            <div className="flex">
+              {isArrayNotEmpty(added) && (
+                <PlanChangePreview
+                  className="w-full my-2 max-h-[50vh]"
+                  headline="Added Models"
+                  type={EnumPlanChangeType.Add}
+                >
+                  <PlanChangePreview.Default
+                    type={EnumPlanChangeType.Add}
+                    changes={added}
+                  />
+                </PlanChangePreview>
+              )}
+              {isArrayNotEmpty(removed) && (
+                <PlanChangePreview
+                  className="w-full my-2 max-h-[50vh]"
+                  headline="Removed Models"
+                  type={EnumPlanChangeType.Remove}
+                >
+                  <PlanChangePreview.Default
+                    type={EnumPlanChangeType.Remove}
+                    changes={removed}
+                  />
+                </PlanChangePreview>
+              )}
+            </div>
+          )}
+          {isModified(modified) && (
+            <>
+              {isArrayNotEmpty(modified?.direct) && (
+                <PlanChangePreview
+                  className="m-2 max-h-[50vh]"
+                  headline="Modified Directly "
+                  type={EnumPlanChangeType.Direct}
+                >
+                  <PlanChangePreview.Direct changes={modified.direct ?? []} />
+                </PlanChangePreview>
+              )}
+              {isArrayNotEmpty(modified.indirect) && (
+                <PlanChangePreview
+                  className="m-2 max-h-[50vh]"
+                  headline="Modified Indirectly"
+                  type={EnumPlanChangeType.Indirect}
+                >
+                  <PlanChangePreview.Indirect
+                    changes={modified.indirect ?? []}
+                  />
+                </PlanChangePreview>
+              )}
+              {isArrayNotEmpty(modified?.metadata) && (
+                <PlanChangePreview
+                  className="m-2 max-h-[50vh]"
+                  headline="Modified Metadata"
+                  type={EnumPlanChangeType.Metadata}
+                >
+                  <PlanChangePreview.Default
+                    type={EnumPlanChangeType.Metadata}
+                    changes={modified?.metadata ?? []}
+                  />
+                </PlanChangePreview>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  )
 }
 
 function PlanWizardStepMessage({
   hasSpinner = false,
+  variant = EnumVariant.Primary,
+  index,
   children,
 }: PropsPlanWizardStepMessage): JSX.Element {
   return (
-    <span className="mt-1 mb-4 px-4 py-2 bg-primary-10 flex w-full rounded-lg">
+    <Banner variant={variant}>
       <span className="flex items-center w-full">
+        {isNotNil(index) && (
+          <span className="inline-block mr-3 font-black whitespace-nowrap">
+            Step {index}:
+          </span>
+        )}
         {hasSpinner && <Spinner className="w-4 h-4 mr-2" />}
         {children}
       </span>
-    </span>
-  )
-}
-
-function PlanWizardStep({
-  headline,
-  description,
-  children,
-  disabled = false,
-}: PropsPlanWizardStep): JSX.Element {
-  return (
-    <li className="mb-2 p-4">
-      <PlanWizardStepHeader
-        className="min-w-[25%] pr-12"
-        headline={headline}
-        disabled={disabled}
-      >
-        {description}
-      </PlanWizardStepHeader>
-      {!disabled && children}
-    </li>
-  )
-}
-
-function PlanWizardStepHeader({
-  disabled = false,
-  headline,
-  children,
-  className,
-}: PropsPlanWizardStepHeader): JSX.Element {
-  return (
-    <div
-      className={clsx(
-        disabled && 'opacity-40 cursor-not-allowed',
-        'mb-4 ',
-        className,
-      )}
-    >
-      {headline != null && (
-        <h3 className="whitespace-nowrap font-bold text-lg">{headline}</h3>
-      )}
-      {children != null && (
-        <small className="whitespace-nowrap">{children}</small>
-      )}
-    </div>
+    </Banner>
   )
 }

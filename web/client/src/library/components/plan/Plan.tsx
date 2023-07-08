@@ -23,6 +23,9 @@ import { useApplyPayload, usePlanPayload } from './hooks'
 import { useChannelEvents } from '@api/channels'
 import SplitPane from '../splitPane/SplitPane'
 import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
+import { EnumVariant } from '~/types/enum'
 
 function Plan({
   environment,
@@ -61,7 +64,7 @@ function Plan({
 
   const [isPlanRan, setIsPlanRan] = useState(false)
 
-  const subscribe = useChannelEvents()
+  const channel = useChannelEvents()
 
   const planPayload = usePlanPayload({ environment, isInitialPlanRun })
   const applyPayload = useApplyPayload({ isInitialPlanRun })
@@ -75,7 +78,8 @@ function Plan({
   const { refetch: cancelPlan } = useApiCancelPlan()
 
   useEffect(() => {
-    const unsubscribeTests = subscribe('tests', testsReport)
+    const channelTests = channel('tests', updateTestsReport)
+    const channelPlanReport = channel('report', updatePlanReport)
 
     if (environment.isInitial && environment.isDefault) {
       run()
@@ -89,10 +93,14 @@ function Plan({
       },
     ])
 
+    channelTests?.subscribe()
+    channelPlanReport?.subscribe()
+
     return () => {
       void cancelRequestPlanRun()
 
-      unsubscribeTests?.()
+      channelTests?.unsubscribe()
+      channelPlanReport?.unsubscribe()
     }
   }, [])
 
@@ -162,17 +170,31 @@ function Plan({
     setPlanState(EnumPlanState.Failed)
   }, [errors])
 
-  function testsReport(data: { ok: boolean } & any): void {
+  function updateTestsReport(data: any & { ok: boolean }): void {
     dispatch([
       isTrue(data.ok)
         ? {
-            type: EnumPlanActions.TestsReportMessages,
-            testsReportMessages: data,
-          }
+          type: EnumPlanActions.TestsReportMessages,
+          testsReportMessages: data,
+        }
         : {
-            type: EnumPlanActions.TestsReportErrors,
-            testsReportErrors: data,
-          },
+          type: EnumPlanActions.TestsReportErrors,
+          testsReportErrors: data,
+        },
+    ])
+  }
+
+  function updatePlanReport(data: {
+    ok: boolean
+    status: string
+    timestamp: number
+    type: string
+  }): void {
+    dispatch([
+      {
+        type: EnumPlanActions.PlanReport,
+        planReport: data,
+      },
     ])
   }
 
@@ -193,6 +215,10 @@ function Plan({
       },
       {
         type: EnumPlanActions.ResetPlanOptions,
+      },
+      {
+        type: EnumPlanActions.PlanReport,
+        planReport: undefined,
       },
     ])
   }
@@ -221,14 +247,21 @@ function Plan({
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
-    const cancelAction =
-      planAction === EnumPlanAction.Applying
-        ? cancelRequestPlanRun
-        : cancelRequestPlanApply
 
-    void cancelAction()
 
-    cancelPlan()
+    let cancelAction
+
+    if (planAction === EnumPlanAction.Applying) {
+      cancelAction = cancelRequestPlanRun
+
+      channel('tasks')?.unsubscribe()
+
+      setActivePlan(undefined)
+    } else {
+      cancelAction = cancelRequestPlanApply
+    }
+
+    cancelAction
       .then(() => {
         setPlanAction(EnumPlanAction.Run)
         setPlanState(EnumPlanState.Cancelled)
@@ -236,6 +269,8 @@ function Plan({
       .catch(() => {
         reset()
       })
+
+    cancelPlan()
   }
 
   function apply(): void {
@@ -253,6 +288,11 @@ function Plan({
         if (data?.type === EnumPlanApplyType.Virtual) {
           setPlanState(EnumPlanState.Finished)
         }
+
+        elTaskProgress?.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        })
       })
       .catch(console.log)
       .finally(() => {
@@ -260,85 +300,123 @@ function Plan({
           behavior: 'smooth',
           block: 'start',
         })
-      })
-  }
+
+      }
 
   function run(): void {
-    dispatch([
-      {
-        type: EnumPlanActions.ResetTestsReport,
-      },
-    ])
-    setPlanAction(EnumPlanAction.Running)
-    setPlanState(EnumPlanState.Running)
+          dispatch([
+            {
+              type: EnumPlanActions.ResetTestsReport,
+            },
+          ])
+          setPlanAction(EnumPlanAction.Running)
+          setPlanState(EnumPlanState.Running)
 
-    void planRun().then(({ data }) => {
-      dispatch([
-        {
-          type: EnumPlanActions.Backfills,
-          backfills: data?.backfills,
-        },
-        {
-          type: EnumPlanActions.Changes,
-          ...data?.changes,
-        },
-        {
-          type: EnumPlanActions.Dates,
-          start: data?.start,
-          end: data?.end,
-        },
-      ])
+          void planRun().then(({ data }) => {
+            dispatch([
+              {
+                type: EnumPlanActions.Backfills,
+                backfills: data?.backfills,
+              },
+              {
+                type: EnumPlanActions.Changes,
+                ...data?.changes,
+              },
+              {
+                type: EnumPlanActions.Dates,
+                start: data?.start,
+                end: data?.end,
+              },
+            ])
 
-      setIsPlanRan(true)
-      setPlanState(EnumPlanState.Init)
+            setIsPlanRan(true)
+            setPlanState(EnumPlanState.Init)
 
-      if (auto_apply) {
-        apply()
-      } else {
-        setPlanAction(EnumPlanAction.Apply)
-      }
-    })
-  }
+            if (auto_apply) {
+              apply()
+            } else {
+              setPlanAction(EnumPlanAction.Apply)
+            }
+          })
+        }
 
   const shouldSplitPane = isObjectNotEmpty(testsReportErrors)
 
-  return (
-    <div className="flex flex-col w-full h-full overflow-hidden pt-6">
-      {shouldSplitPane ? (
-        <SplitPane
-          sizes={isObjectNotEmpty(testsReportErrors) ? [50, 50] : [30, 70]}
-          direction="vertical"
-          snapOffset={0}
-          className="flex flex-col w-full h-full overflow-hidden"
-        >
-          <Plan.Header />
-          <Plan.Wizard setRefTasksOverview={elTaskProgress} />
-        </SplitPane>
-      ) : (
-        <>
-          <Plan.Header />
-          <Divider />
-          <Plan.Wizard setRefTasksOverview={elTaskProgress} />
-        </>
-      )}
-      <Divider />
-      <Plan.Actions
-        disabled={disabled}
-        planAction={planAction}
-        apply={apply}
-        run={run}
-        cancel={cancel}
-        close={close}
-        reset={reset}
-      />
-    </div>
-  )
-}
+    return (
+      <div className="flex flex-col w-full h-full overflow-hidden pt-6">
+        {shouldSplitPane ? (
+          <SplitPane
+            sizes={isObjectNotEmpty(testsReportErrors) ? [50, 50] : [30, 70]}
+            direction="vertical"
+            snapOffset={0}
+            className="flex flex-col w-full h-full overflow-hidden"
+          >
+            <PlanBlock elTaskProgress={elTaskProgress} />
+          </SplitPane>
+        ) : (
+          <PlanBlock
+            elTaskProgress={elTaskProgress}
+            hasDivider={true}
+          />
+        )}
+        <Divider />
+        <Plan.Actions
+          disabled={disabled}
+          planAction={planAction}
+          apply={apply}
+          run={run}
+          cancel={cancel}
+          close={close}
+          reset={reset}
+        />
+      </div>
+    )
+  }
 
-Plan.Actions = PlanActions
-Plan.Header = PlanHeader
-Plan.Wizard = PlanWizard
-Plan.StepOptions = PlanWizardStepOptions
-Plan.BackfillDates = PlanBackfillDates
+  Plan.Actions = PlanActions
+  Plan.Header = PlanHeader
+  Plan.Wizard = PlanWizard
+  Plan.StepOptions = PlanWizardStepOptions
+  Plan.BackfillDates = PlanBackfillDates
 
-export default Plan
+  export default Plan
+
+  function PlanBlock({
+    hasDivider = false,
+    elTaskProgress,
+  }: {
+    hasDivider?: boolean
+    elTaskProgress: React.RefObject<HTMLDivElement>
+  }): JSX.Element {
+    const planAction = useStorePlan(s => s.action)
+
+    return (
+      <>
+        <Plan.Header />
+        {hasDivider && <Divider />}
+        {planAction === EnumPlanAction.Cancelling ? (
+          <CancellingPlanOrApply />
+        ) : (
+          <Plan.Wizard setRefTasksOverview={elTaskProgress} />
+        )}
+      </>
+    )
+  }
+
+  function CancellingPlanOrApply(): JSX.Element {
+    return (
+      <div className="w-full h-full p-4">
+        <div className="w-full h-full flex justify-center items-center p-4 bg-warning-10 rounded-lg overflow-hidden">
+          <Loading className="inline-block">
+            <Spinner
+              variant={EnumVariant.Warning}
+              className="w-3 h-3 border border-neutral-10 mr-4"
+            />
+            <h3 className="text-2xl text-warning-500 font-bold">
+              Canceling Plan...
+            </h3>
+          </Loading>
+        </div>
+      </div>
+    )
+  }

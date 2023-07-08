@@ -94,9 +94,9 @@ export default function PlanActions({
           <Button
             disabled={isRunning || disabled}
             onClick={handleRun}
-            autoFocus
             ref={setFocus}
             variant={EnumVariant.Primary}
+            autoFocus
           >
             <span>
               {getActionName(planAction, [
@@ -112,7 +112,6 @@ export default function PlanActions({
             )}
           </Button>
         )}
-
         {(isApply || isApplying) && (
           <Button
             onClick={handleApply}
@@ -141,7 +140,6 @@ export default function PlanActions({
             {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
           </Button>
         )}
-
         {(isRun || isRunning || isApply || isApplying) && (
           <p className="ml-2 text-xs max-w-sm">
             <span>Plan for</span>

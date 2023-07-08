@@ -15,7 +15,7 @@ import {
   SnapshotChangeCategory,
 } from '~/api/client'
 import { type PlanProgress } from '~/context/plan'
-import { isArrayEmpty, isArrayNotEmpty } from '~/utils'
+import { isArrayEmpty, isArrayNotEmpty, isNotNil } from '~/utils'
 import { isModified } from './help'
 
 export const EnumPlanActions = {
@@ -34,6 +34,7 @@ export const EnumPlanActions = {
   External: 'external',
   TestsReportErrors: 'tests-report-errors',
   TestsReportMessages: 'tests-report-messages',
+  PlanReport: 'plan-report',
 } as const
 
 export const EnumPlanChangeType = {
@@ -112,6 +113,13 @@ export interface TestReportMessage {
   message: string
 }
 
+export interface PlanReport {
+  ok: boolean
+  timestamp: number
+  type: string
+  status: string
+}
+
 interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   start?: ContextEnvironmentStart
   end?: ContextEnvironmentEnd
@@ -119,6 +127,7 @@ interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   isInitialPlanRun: boolean
   categories: Category[]
   change_categorization: Map<string, ChangeCategory>
+  planReport: Map<string, PlanReport>
   testsReportErrors?: TestReportError
   testsReportMessages?: TestReportMessage
 }
@@ -171,6 +180,7 @@ const initial = {
   errors: [],
   testsReportErrors: undefined,
   testsReportMessages: undefined,
+  planReport: new Map(),
 }
 
 export const PlanContext = createContext<PlanDetails>(initial)
@@ -363,6 +373,23 @@ function reducer(
       >({}, plan, {
         testsReportErrors: undefined,
         testsReportMessages: undefined,
+      })
+    }
+
+    case EnumPlanActions.PlanReport: {
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'planReport'>
+      >({}, plan, {
+        planReport: (() => {
+          const report = newState.planReport as unknown as PlanReport
+          if (isNotNil(report)) {
+            plan.planReport.set(report.type, report)
+          }
+
+          return new Map(plan.planReport)
+        })(),
       })
     }
 
