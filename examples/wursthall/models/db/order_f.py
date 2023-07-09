@@ -98,12 +98,13 @@ def execute(
         df_order_item_f.loc[i, "num_guests"] = np.random.choice(
             range(1, 10), p=[0.1, 0.2, 0.3, 0.2, 0.1, 0.025, 0.025, 0.025, 0.025]
         )
+    decimal_context = decimal.Context(prec=7)
+    decimal_columns = {k: v for k, v in COLUMN_TO_TYPE.items() if "decimal" in v}
+    df_order_item_f = df_order_item_f.round({k: 2 for k in decimal_columns})
     if context.engine_adapter.dialect == "bigquery":
-        decimal_context = decimal.Context(prec=7)
-        for name, data_type in COLUMN_TO_TYPE.items():
-            if "decimal" in data_type:
-                df_order_item_f[name] = df_order_item_f[name].apply(
-                    decimal_context.create_decimal_from_float  # type: ignore
-                )
+        for name, data_type in decimal_columns.items():
+            df_order_item_f[name] = df_order_item_f[name].apply(
+                decimal_context.create_decimal_from_float  # type: ignore
+            )
     df_order_item_f = df_order_item_f.reindex(columns=list(COLUMN_TO_TYPE))
     return df_order_item_f[list(COLUMN_TO_TYPE)]
