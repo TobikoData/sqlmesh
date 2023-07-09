@@ -105,7 +105,7 @@ def execute(
                         item_id=item_id,
                         quantity=quantity,
                         table_id=table_id,
-                        order_date=order_date,
+                        order_date=order_date.strftime("%Y-%m-%d"),
                     )
                 )
     return pd.DataFrame(results)

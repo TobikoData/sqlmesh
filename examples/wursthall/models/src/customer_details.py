@@ -54,7 +54,7 @@ def execute(
                     name=faker.name(),
                     phone=faker.phone_number(),
                     email=faker.ascii_email(),
-                    register_date=register_date,
+                    register_date=register_date.strftime("%Y-%m-%d"),
                 )
             )
     return pd.DataFrame(customer_details)
