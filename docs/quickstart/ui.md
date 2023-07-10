@@ -234,5 +234,8 @@ Double-check that the data updated in `prod` by re-running the SQL query from th
 
 Congratulations, you've now conquered the basics of using SQLMesh!
 
+From here, you can:
+
+* [Set up a connection to a database or SQL engine](../guides/connections.md)
 * [Learn more about SQLMesh concepts](../concepts/overview.md)
 * [Join our Slack community](https://tobikodata.com/slack)

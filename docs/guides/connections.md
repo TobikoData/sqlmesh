@@ -79,6 +79,7 @@ default_gateway: local_db
 
 * [BigQuery](../integrations/engines.md#bigquery-localbuilt-in-scheduler)
 * [Databricks](../integrations/engines.md#databricks-localbuilt-in-scheduler)
+* [PostgreSQL](../integrations/engines.md#postgres---localbuilt-in-scheduler)
 * [Redshift](../integrations/engines.md#redshift-localbuilt-in-scheduler)
 * [Snowflake](../integrations/engines.md#snowflake-localbuilt-in-scheduler)
 * [Spark](../integrations/engines.md#spark-localbuilt-in-scheduler)
