@@ -46,6 +46,7 @@ class ModelTest(unittest.TestCase):
         self.body = body
         self.test_name = test_name
         self.model = model
+        self.models = models
         self.engine_adapter = engine_adapter
         self.path = path
 
@@ -152,67 +153,45 @@ class ModelTest(unittest.TestCase):
 
 
 class SqlModelTest(ModelTest):
-    def __init__(
-        self,
-        body: dict[str, t.Any],
-        test_name: str,
-        model: SqlModel,
-        models: dict[str, Model],
-        engine_adapter: EngineAdapter,
-        path: pathlib.Path | None,
-    ) -> None:
-        """SqlModelTest encapsulates a unit test for a SQL model.
-
-        Args:
-            body: A dictionary that contains test metadata like inputs and outputs.
-            test_name: The name of the test.
-            model: The SQL model that is being tested.
-            models: All models to use for expansion and mapping of physical locations.
-            engine_adapter: The engine adapter to use.
-            path: An optional path to the test definition yaml file
-        """
-        super().__init__(body, test_name, model, models, engine_adapter, path)
-
-        self.query = model.render_query_or_raise(
-            add_incremental_filter=True,
-            **self.body.get("vars", {}),
-            engine_adapter=engine_adapter,
-        )
-        # For tests we just use the model name for the table reference and we don't want to expand
-        mapping = {
-            name: _test_fixture_name(name) for name in models.keys() | body.get("inputs", {}).keys()
-        }
-        if mapping:
-            self.query = exp.replace_tables(self.query, mapping)
-
-        self.ctes = {cte.alias: cte for cte in self.query.ctes}
-
     def execute(self, query: Expression) -> pd.DataFrame:
         """Execute the query with the engine adapter and return a DataFrame"""
         return self.engine_adapter.fetchdf(query)
 
-    def test_ctes(self) -> None:
+    def test_ctes(self, ctes: t.Dict[str, Expression]) -> None:
         """Run CTE queries and compare output to expected output"""
         for cte_name, value in self.body["outputs"].get("ctes", {}).items():
             with self.subTest(cte=cte_name):
-                if cte_name not in self.ctes:
+                if cte_name not in ctes:
                     _raise_error(
                         f"No CTE named {cte_name} found in model {self.model.name}", self.path
                     )
-                cte_query = self.ctes[cte_name].this
-                for alias, cte in self.ctes.items():
+                cte_query = ctes[cte_name].this
+                for alias, cte in ctes.items():
                     cte_query = cte_query.with_(alias, cte.this)
                 expected_df = pd.DataFrame.from_records(self._get_rows(value))
                 actual_df = self.execute(cte_query)
                 self.assert_equal(expected_df, actual_df)
 
     def runTest(self) -> None:
-        self.test_ctes()
+        query = self.model.render_query_or_raise(
+            add_incremental_filter=True,
+            **self.body.get("vars", {}),
+            engine_adapter=self.engine_adapter,
+        )
+        # For tests we just use the model name for the table reference and we don't want to expand
+        mapping = {
+            name: _test_fixture_name(name)
+            for name in self.models.keys() | self.body.get("inputs", {}).keys()
+        }
+        if mapping:
+            query = exp.replace_tables(query, mapping)
+
+        self.test_ctes({cte.alias: cte for cte in query.ctes})
 
         # Test model query
         if "query" in self.body["outputs"]:
             expected_df = pd.DataFrame.from_records(self._get_rows(self.body["outputs"]["query"]))
-            actual_df = self.execute(self.query)
+            actual_df = self.execute(query)
             self.assert_equal(expected_df, actual_df)
 
 
