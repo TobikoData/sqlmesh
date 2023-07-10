@@ -10,6 +10,14 @@ H = t.TypeVar("H", bound=t.Hashable)
 S = t.TypeVar("S", bound=SnapshotInfoLike)
 
 
+class Signal:
+    def __init__(self) -> None:
+        self.is_cancelled = False
+
+    def cancel(self) -> None:
+        self.is_cancelled = True
+
+
 class NodeExecutionFailedError(t.Generic[H], SQLMeshError):
     def __init__(self, node: H):
         self.node = node
@@ -36,11 +44,13 @@ class ConcurrentDAGExecutor(t.Generic[H]):
         fn: t.Callable[[H], None],
         tasks_num: int,
         raise_on_error: bool,
+        signal: Signal = Signal(),
     ):
         self.dag = dag
         self.fn = fn
         self.tasks_num = tasks_num
         self.raise_on_error = raise_on_error
+        self.signal = signal
 
         self._init_state()
 
@@ -60,7 +70,7 @@ class ConcurrentDAGExecutor(t.Generic[H]):
             with self._unprocessed_nodes_lock:
                 self._submit_next_nodes(pool)
             self._finished_future.result()
-        return self._node_errors, self._skipped_nodes
+        return ([], []) if self.signal.is_cancelled else (self._node_errors, self._skipped_nodes)
 
     def _process_node(self, node: H, executor: Executor) -> None:
         try:
@@ -83,7 +93,7 @@ class ConcurrentDAGExecutor(t.Generic[H]):
                 self._skip_next_nodes(node)
 
     def _submit_next_nodes(self, executor: Executor, processed_node: t.Optional[H] = None) -> None:
-        if not self._unprocessed_nodes_num:
+        if not self._unprocessed_nodes_num or self.signal.is_cancelled:
             self._finished_future.set_result(None)
             return
 
@@ -130,6 +140,7 @@ def concurrent_apply_to_snapshots(
     tasks_num: int,
     reverse_order: bool = False,
     raise_on_error: bool = True,
+    signal: t.Optional[Signal] = None,
 ) -> t.Tuple[t.List[NodeExecutionFailedError[SnapshotId]], t.List[SnapshotId]]:
     """Applies a function to the given collection of snapshots concurrently while
     preserving the topological order between snapshots.
@@ -150,7 +161,6 @@ def concurrent_apply_to_snapshots(
         A pair which contains a list of errors and a list of skipped snapshot IDs.
     """
     snapshots_by_id = {s.snapshot_id: s for s in snapshots}
-
     dag: DAG[SnapshotId] = DAG[SnapshotId]()
     for snapshot in snapshots:
         dag.add(
@@ -163,6 +173,7 @@ def concurrent_apply_to_snapshots(
         lambda s_id: fn(snapshots_by_id[s_id]),
         tasks_num,
         raise_on_error=raise_on_error,
+        signal=signal,
     )
 
 
@@ -171,6 +182,7 @@ def concurrent_apply_to_dag(
     fn: t.Callable[[H], None],
     tasks_num: int,
     raise_on_error: bool = True,
+    signal: t.Optional[Signal] = None,
 ) -> t.Tuple[t.List[NodeExecutionFailedError[H]], t.List[H]]:
     """Applies a function to the given DAG concurrently while preserving the topological
     order between snapshots.
@@ -193,7 +205,7 @@ def concurrent_apply_to_dag(
         raise ConfigError(f"Invalid number of concurrent tasks {tasks_num}")
 
     if tasks_num == 1:
-        return sequential_apply_to_dag(dag, fn, raise_on_error)
+        return sequential_apply_to_dag(dag, fn, raise_on_error, signal=signal)
 
     return ConcurrentDAGExecutor(
         dag,
@@ -207,6 +219,7 @@ def sequential_apply_to_dag(
     dag: DAG[H],
     fn: t.Callable[[H], None],
     raise_on_error: bool = True,
+    signal: t.Optional[Signal] = None,
 ) -> t.Tuple[t.List[NodeExecutionFailedError[H]], t.List[H]]:
     dependencies = dag.graph
 
@@ -216,6 +229,11 @@ def sequential_apply_to_dag(
     failed_or_skipped_nodes: t.Set[H] = set()
 
     for node in dag.sorted:
+        if signal and signal.is_cancelled:
+            skipped_nodes = []
+            node_errors = []
+            break
+
         if not failed_or_skipped_nodes.isdisjoint(dependencies[node]):
             skipped_nodes.append(node)
             failed_or_skipped_nodes.add(node)

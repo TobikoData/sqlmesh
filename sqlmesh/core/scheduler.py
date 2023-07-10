@@ -212,6 +212,7 @@ class Scheduler:
                     evaluate_node,
                     self.max_workers,
                     raise_on_error=False,
+                    signal=self.snapshot_evaluator.signal,
                 )
         finally:
             self.state_sync.recycle()

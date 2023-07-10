@@ -42,7 +42,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotInfoLike,
 )
-from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
+from sqlmesh.utils.concurrency import Signal, concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
@@ -65,9 +65,15 @@ class SnapshotEvaluator:
             operations (table / view creation, deletion, etc). Default: 1.
     """
 
-    def __init__(self, adapter: EngineAdapter, ddl_concurrent_tasks: int = 1):
+    def __init__(
+        self,
+        adapter: EngineAdapter,
+        ddl_concurrent_tasks: int = 1,
+        signal: Signal = Signal(),
+    ):
         self.adapter = adapter
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
+        self.signal = signal
 
     def evaluate(
         self,
@@ -202,6 +208,7 @@ class SnapshotEvaluator:
                 target_snapshots,
                 lambda s: self._promote_snapshot(s, environment, is_dev, on_complete),
                 self.ddl_concurrent_tasks,
+                signal=self.signal,
             )
 
     def demote(
@@ -222,6 +229,7 @@ class SnapshotEvaluator:
                 target_snapshots,
                 lambda s: self._demote_snapshot(s, environment, on_complete),
                 self.ddl_concurrent_tasks,
+                signal=self.signal,
             )
 
     def create(
@@ -239,6 +247,7 @@ class SnapshotEvaluator:
                 target_snapshots,
                 lambda s: self._create_snapshot(s, snapshots),
                 self.ddl_concurrent_tasks,
+                signal=self.signal,
             )
 
     def migrate(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
@@ -252,6 +261,7 @@ class SnapshotEvaluator:
                 target_snapshots,
                 lambda s: self._migrate_snapshot(s),
                 self.ddl_concurrent_tasks,
+                signal=self.signal,
             )
 
     def cleanup(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
@@ -266,6 +276,7 @@ class SnapshotEvaluator:
                 self._cleanup_snapshot,
                 self.ddl_concurrent_tasks,
                 reverse_order=True,
+                signal=self.signal,
             )
 
     def audit(
