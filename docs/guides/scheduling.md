@@ -5,13 +5,13 @@ SQLMesh currently offers two ways of scheduling model evaluation:
 * Using the [built-in scheduler](#built-in-scheduler)
 * By [integrating with Airflow](#integrating-with-airflow)
 
-The built-in scheduler is appropriate for trying out SQLMesh, as well as for smaller data teams with relatively few models.
-
-**Note:** the built-in scheduler has not been designed for scale. As your organization and data models grow, we strongly recommended that you switch to using the Airflow open-source workflow orchestrator to prevent scheduling from becoming a performance bottleneck.
-
 ## Built-in scheduler
 
-SQLMesh comes with a built-in scheduler that can be used to schedule model evaluation without requiring any additional tools or dependencies.
+SQLMesh includes a built-in scheduler that schedules model evaluation without any additional tools or dependencies. It provides all the functionality needed to use SQLMesh in production. 
+
+By default, the scheduler stores your SQLMesh project's state (information about models, data, and run history) in the SQL engine used to execute your models. Some engines, such as BigQuery, are not optimized for the transactions the scheduler executes to store state, which may degrade the scheduler's performance. 
+
+When running the scheduler in production, we recommend evaluating its performance with your SQL engine. If you observe degraded performance, consider providing the scheduler its own transactional database such as PostgreSQL to improve performance. See the [configuration reference](../reference/configuration.md#state-connection) for more information on providing a separate database/engine for the scheduler.
 
 To perform model evaluation using the built-in scheduler, run the following command:
 ```bash
@@ -28,7 +28,7 @@ sqlmesh_example.example_incremental_model ━━━━━━━━━━━━�
        sqlmesh_example.example_full_model ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 1/1 • 0:00:00
 ```
 
-**Note:** The `sqlmesh run` command performs model evaluation based on the missing data intervals identified at the time of running. The command itself doesn't run continuously, and will exit once the evaluation is complete. It is the responsibility of users to run this command periodically with a cron job, a CI/CD tool like Jenkins, or in a similar fashion.
+**Note:** The `sqlmesh run` command performs model evaluation based on the missing data intervals identified at the time of running. It does not run continuously, and will exit once evaluation is complete. You must run this command periodically with a cron job, a CI/CD tool like Jenkins, or in a similar fashion.
 
 
 ## Integrating with Airflow

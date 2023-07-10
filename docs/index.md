@@ -55,7 +55,7 @@ SQLMesh was built on three core principles:
     * Loading tables incrementally is as easy as a full refresh. SQLMesh transparently handles the complexity of tracking which intervals need loading, so all you have to do is specify a date filter.
 
 * Integrated with Airflow
-    * You can schedule jobs with our simple built-in scheduler or use your existing Airflow cluster. SQLMesh can dynamically generate and push Airflow DAGs. We aim to support other schedulers like Dagster and Prefect in the future.
+    * You can schedule jobs with our built-in scheduler or use your existing Airflow cluster. SQLMesh can dynamically generate and push Airflow DAGs. We aim to support other schedulers like Dagster and Prefect in the future.
 
 * Notebook / CLI
     * Interact with SQLMesh with whatever tool you’re comfortable with.
