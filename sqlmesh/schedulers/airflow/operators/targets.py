@@ -9,12 +9,7 @@ from sqlalchemy.orm import Session
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.model import SeedModel
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotEvaluator,
-    SnapshotId,
-    SnapshotTableInfo,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.utils.date import TimeLike
@@ -274,19 +269,10 @@ class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload]
         if not self.new_snapshots:
             return None
 
-        parent_snapshot_ids = {
-            p_sid for snapshot in self.new_snapshots for p_sid in snapshot.parents
-        }
-        stored_snapshots = self._get_stored_snapshots(parent_snapshot_ids)
-
         return commands.CreateTablesCommandPayload(
             target_snapshot_ids=[s.snapshot_id for s in self.new_snapshots],
-            snapshots=stored_snapshots + self.new_snapshots,
+            snapshots=_get_snapshots_with_parents(self.new_snapshots),
         )
-
-    def _get_stored_snapshots(self, snapshot_ids: t.Set[SnapshotId]) -> t.List[Snapshot]:
-        with util.scoped_state_sync() as state_sync:
-            return list(state_sync.get_snapshots(snapshot_ids).values())
 
 
 class SnapshotMigrateTablesTarget(BaseTarget[commands.MigrateTablesCommandPayload], PydanticModel):
@@ -299,7 +285,7 @@ class SnapshotMigrateTablesTarget(BaseTarget[commands.MigrateTablesCommandPayloa
         [SnapshotEvaluator, commands.MigrateTablesCommandPayload], None
     ] = commands.migrate_tables
 
-    snapshots: t.List[SnapshotTableInfo]
+    snapshots: t.List[Snapshot]
     ddl_concurrent_tasks: int
 
     def _get_command_payload(
@@ -307,7 +293,26 @@ class SnapshotMigrateTablesTarget(BaseTarget[commands.MigrateTablesCommandPayloa
     ) -> t.Optional[commands.MigrateTablesCommandPayload]:
         if not self.snapshots:
             return None
-        return commands.MigrateTablesCommandPayload(snapshots=self.snapshots)
+
+        return commands.MigrateTablesCommandPayload(
+            target_snapshot_ids=[s.snapshot_id for s in self.snapshots],
+            snapshots=_get_snapshots_with_parents(self.snapshots),
+        )
+
+
+def _get_snapshots_with_parents(snapshots: t.Iterable[Snapshot]) -> t.List[Snapshot]:
+    snapshots_by_id = {s.snapshot_id: s for s in snapshots}
+
+    parent_snapshot_ids = {p_sid for snapshot in snapshots for p_sid in snapshot.parents}
+    missing_parent_ids = parent_snapshot_ids - set(snapshots_by_id.keys())
+
+    existing_snapshots = list(snapshots_by_id.values())
+
+    if not missing_parent_ids:
+        return existing_snapshots
+
+    with util.scoped_state_sync() as state_sync:
+        return existing_snapshots + list(state_sync.get_snapshots(missing_parent_ids).values())
 
 
 def _delete_xcom(key: str, task_id: str, context: Context, session: Session) -> None:

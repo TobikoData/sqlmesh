@@ -24,7 +24,9 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
+    Snapshot,
     SnapshotEvaluator,
+    SnapshotId,
     SnapshotInfoLike,
     has_paused_forward_only,
 )
@@ -66,6 +68,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.console = console or get_console()
         self.notification_target_manager = notification_target_manager
+
+        self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
     def evaluate(self, plan: Plan) -> None:
         tasks = (
@@ -112,15 +116,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         Args:
             plan: The plan to source snapshots from.
         """
-        parent_snapshot_ids = {
-            p_sid for snapshot in plan.new_snapshots for p_sid in snapshot.parents
-        }
-
-        stored_snapshots_by_id = self.state_sync.get_snapshots(parent_snapshot_ids)
-        new_snapshots_by_id = {snapshot.snapshot_id: snapshot for snapshot in plan.new_snapshots}
-        all_snapshots_by_id = {**stored_snapshots_by_id, **new_snapshots_by_id}
-
-        self.snapshot_evaluator.create(plan.new_snapshots, all_snapshots_by_id)
+        self.snapshot_evaluator.create(plan.new_snapshots, self._all_snapshots(plan))
         self.state_sync.push_snapshots(plan.new_snapshots)
 
     def _promote(self, plan: Plan) -> None:
@@ -139,7 +135,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         if not environment.end_at:
             if not plan.is_dev:
-                self.snapshot_evaluator.migrate(plan.environment.snapshots)
+                self.snapshot_evaluator.migrate(plan.snapshots, self._all_snapshots(plan))
             self.state_sync.unpause_snapshots(added, now())
 
         def on_complete(snapshot: SnapshotInfoLike) -> None:
@@ -181,6 +177,22 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 start=plan.start,
                 end=plan.end,
             )
+
+    def _all_snapshots(self, plan: Plan) -> t.Dict[SnapshotId, Snapshot]:
+        if plan.plan_id not in self.__all_snapshots:
+            all_snapshots = {s.snapshot_id: s for s in plan.snapshots}
+
+            parent_snapshot_ids = {
+                p_sid for snapshot in all_snapshots.values() for p_sid in snapshot.parents
+            }
+
+            missing_parent_ids = parent_snapshot_ids - set(all_snapshots.keys())
+            if missing_parent_ids:
+                all_snapshots.update(self.state_sync.get_snapshots(missing_parent_ids))
+
+            self.__all_snapshots[plan.plan_id] = all_snapshots
+
+        return self.__all_snapshots[plan.plan_id]
 
 
 class AirflowPlanEvaluator(PlanEvaluator):

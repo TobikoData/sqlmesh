@@ -58,7 +58,8 @@ class CreateTablesCommandPayload(PydanticModel):
 
 
 class MigrateTablesCommandPayload(PydanticModel):
-    snapshots: t.List[SnapshotTableInfo]
+    target_snapshot_ids: t.List[SnapshotId]
+    snapshots: t.List[Snapshot]
 
 
 def evaluate(
@@ -136,7 +137,9 @@ def migrate_tables(
 ) -> None:
     if isinstance(command_payload, str):
         command_payload = MigrateTablesCommandPayload.parse_raw(command_payload)
-    evaluator.migrate(command_payload.snapshots)
+    snapshots_by_id = {s.snapshot_id: s for s in command_payload.snapshots}
+    target_snapshots = [snapshots_by_id[sid] for sid in command_payload.target_snapshot_ids]
+    evaluator.migrate(target_snapshots, snapshots_by_id)
 
 
 COMMAND_HANDLERS: t.Dict[CommandType, t.Callable[[SnapshotEvaluator, str], None]] = {
