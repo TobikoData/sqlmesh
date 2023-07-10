@@ -174,7 +174,7 @@ export default function PlanWizard({
               <div className="px-2">
                 {planReport.get('plan')!.status === 'init' && (
                   <Banner
-                    className="mb-2"
+                    className="my-2"
                     variant={EnumVariant.Primary}
                   >
                     <Loading
@@ -187,7 +187,7 @@ export default function PlanWizard({
                 )}
                 {planReport.get('plan')!.status === 'success' && (
                   <Banner
-                    className="mb-2 flex items-center"
+                    className="my-2 flex items-center"
                     variant={EnumVariant.Success}
                   >
                     <CheckCircleIcon className="w-5 mr-4" />
@@ -213,7 +213,7 @@ export default function PlanWizard({
                 {planReport.get('tests')!.status === 'success' &&
                   isNotNil(testsReportMessages) && (
                     <Banner
-                      className="mb-2 flex items-center"
+                      className="my-2 flex items-center"
                       variant={EnumVariant.Success}
                     >
                       <CheckCircleIcon className="w-5 mr-4" />
@@ -254,7 +254,7 @@ export default function PlanWizard({
                 )}
                 {planReport.get('push')!.status === 'success' && (
                   <Banner
-                    className="mb-2 flex items-center"
+                    className="my-2 flex items-center"
                     variant={EnumVariant.Success}
                   >
                     <CheckCircleIcon className="w-5 mr-4" />
@@ -303,7 +303,7 @@ export default function PlanWizard({
                 )}
                 {planReport.get('restate')!.status === 'skip' && (
                   <Banner
-                    className="mb-2 flex items-center"
+                    className="my-2 flex items-center"
                     variant={EnumVariant.Info}
                   >
                     <CheckCircleIcon className="w-5 mr-4" />
@@ -316,7 +316,7 @@ export default function PlanWizard({
                 )}
               </div>
             )}
-            {isNotNil(activeBackfill) && (
+            {(isNotNil(activeBackfill) || hasVirtualUpdate) && (
               <Disclosure
                 key={backfillStepHeadline}
                 defaultOpen={hasBackfills}
@@ -324,7 +324,7 @@ export default function PlanWizard({
                 {({ open }) => (
                   <div className="px-2">
                     <Banner
-                      className="mb-2 flex items-center"
+                      className="my-2 flex items-center"
                       variant={
                         planState === EnumPlanState.Finished
                           ? EnumVariant.Success
@@ -465,12 +465,17 @@ export default function PlanWizard({
 function PlanModelChanges(): JSX.Element {
   const planAction = useStorePlan(s => s.action)
 
-  const { hasChanges, modified, added, removed } = usePlan()
+  const { hasChanges, modified, added, removed, hasVirtualUpdate } = usePlan()
 
   const isPlanRunning = planAction === EnumPlanAction.Running
+  const shouldBeFullAndCenter =
+    (isFalse(hasChanges) &&
+      isFalse(isPlanRunning) &&
+      isFalse(hasVirtualUpdate)) ||
+    isPlanRunning
 
   return (
-    <div className={clsx('w-full px-2', isPlanRunning && 'h-full')}>
+    <div className={clsx('w-full px-2', shouldBeFullAndCenter && 'h-full')}>
       {isPlanRunning && (
         <Banner
           isFull
@@ -485,11 +490,11 @@ function PlanModelChanges(): JSX.Element {
       )}
       {isFalse(hasChanges) && isFalse(isPlanRunning) && (
         <Banner
-          isFull
-          isCenter
+          isFull={isFalse(hasVirtualUpdate)}
+          isCenter={isFalse(hasVirtualUpdate)}
         >
           <Title
-            size={EnumSize.lg}
+            size={hasVirtualUpdate ? EnumSize.md : EnumSize.lg}
             text="No Changes"
           />
         </Banner>

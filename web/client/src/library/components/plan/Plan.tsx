@@ -235,6 +235,7 @@ function Plan({
   function close(): void {
     removeError(EnumErrorKey.RunPlan)
     removeError(EnumErrorKey.ApplyPlan)
+    cleanUp()
     onClose()
   }
 

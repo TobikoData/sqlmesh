@@ -15,7 +15,7 @@ import {
   SnapshotChangeCategory,
 } from '~/api/client'
 import { type PlanProgress } from '~/context/plan'
-import { isArrayEmpty, isArrayNotEmpty, isNotNil } from '~/utils'
+import { isArrayEmpty, isArrayNotEmpty, isNil } from '~/utils'
 import { isModified } from './help'
 
 export const EnumPlanActions = {
@@ -132,8 +132,10 @@ interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   testsReportMessages?: TestReportMessage
 }
 
-type PlanAction = { type: PlanActions } & Partial<PlanDetails> &
-  Partial<ChangeCategory> & { modified?: ModelsDiff }
+type PlanAction =
+  | ({ type: PlanActions } & Partial<PlanDetails> &
+      Partial<ChangeCategory> & { modified?: ModelsDiff })
+  | { planReport?: PlanReport }
 
 const [defaultCategory, categories] = useCategories()
 const initial = {
@@ -377,19 +379,21 @@ function reducer(
     }
 
     case EnumPlanActions.PlanReport: {
+      const report = newState.planReport as unknown as PlanReport
+      let planReport = new Map(plan.planReport)
+
+      if (isNil(report)) {
+        planReport = new Map()
+      } else {
+        planReport.set(report.type, report)
+      }
+
       return Object.assign<
         Record<string, unknown>,
         PlanDetails,
         Pick<PlanDetails, 'planReport'>
       >({}, plan, {
-        planReport: (() => {
-          const report = newState.planReport as unknown as PlanReport
-          if (isNotNil(report)) {
-            plan.planReport.set(report.type, report)
-          }
-
-          return new Map(plan.planReport)
-        })(),
+        planReport,
       })
     }
 
