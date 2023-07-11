@@ -362,14 +362,14 @@ class SQLMeshMagics(Magics):
         self._context.refresh()
         args = parse_argstring(self.evaluate, line)
 
-        df = self._context.evaluate(
+        self._shell.user_ns["evaluate"] = self._context.evaluate(
             args.model,
             start=args.start,
             end=args.end,
             latest=args.latest,
             limit=args.limit,
         )
-        self.display(df)
+        self.display(self._shell.user_ns["evaluate"])
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
@@ -399,21 +399,11 @@ class SQLMeshMagics(Magics):
         self._context.console.show_sql(query.sql(pretty=True, dialect=args.dialect))
 
     @magic_arguments()
-    @argument(
-        "df_var",
-        default=None,
-        nargs="?",
-        type=str,
-        help="An optional variable name to store the resulting dataframe.",
-    )
     @cell_magic
     def fetchdf(self, line: str, sql: str) -> None:
-        """Fetches a dataframe from sql, optionally storing it in a variable."""
-        args = parse_argstring(self.fetchdf, line)
-        df = self._context.fetchdf(sql)
-        if args.df_var:
-            self._shell.user_ns[args.df_var] = df
-        self.display(df)
+        """Fetches a dataframe from sql"""
+        self._shell.user_ns["fetchdf"] = self._context.fetchdf(sql)
+        self.display(self._shell.user_ns["fetchdf"])
 
     @magic_arguments()
     @line_magic
@@ -481,7 +471,7 @@ class SQLMeshMagics(Magics):
         """
         args = parse_argstring(self.table_diff, line)
 
-        self._context.table_diff(
+        self._shell.user_ns["table_diff"] = self._context.table_diff(
             source=args.source,
             target=args.target,
             on=args.on,
