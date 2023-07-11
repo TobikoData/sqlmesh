@@ -3,7 +3,6 @@ import { type Extension } from '@codemirror/state'
 import { type KeyBinding } from '@codemirror/view'
 import { useLineageFlow } from '@components/graph/context'
 import { useStoreEditor } from '@context/editor'
-import { useStoreFileTree } from '@context/fileTree'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useQueryClient, isCancelledError } from '@tanstack/react-query'
 import { type Column, type File } from '~/api/client'
@@ -24,6 +23,7 @@ import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 import { EnumColorScheme, useColorScheme } from '@context/theme'
 import { type FileExtensions, EnumFileExtensions } from '@models/file'
 import { findModel, findColumn } from './extensions/help'
+import { useStoreProject } from '@context/project'
 import {
   type ExtensionSQLMeshDialect,
   SQLMeshDialect,
@@ -59,13 +59,17 @@ function useDefaultKeymapsEditorTab(): KeyBinding[] {
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const closeTab = useStoreEditor(s => s.closeTab)
+  const addTab = useStoreEditor(s => s.addTab)
 
   return [
     {
       key: 'Mod-Alt-[',
       preventDefault: true,
       run() {
-        selectTab(createTab())
+        const newTab = createTab()
+
+        addTab(newTab)
+        selectTab(newTab)
 
         return true
       },
@@ -85,7 +89,7 @@ function useDefaultKeymapsEditorTab(): KeyBinding[] {
 function useKeymapsRemoteFile(path: string): KeyBinding[] {
   const client = useQueryClient()
 
-  const files = useStoreFileTree(s => s.files)
+  const files = useStoreProject(s => s.files)
   const file = files.get(path)
 
   if (isNil(file)) return []
@@ -167,7 +171,7 @@ function useSQLMeshModelExtensions(
   handleModelColumn?: (model: ModelSQLMeshModel, column: Column) => void,
 ): Extension[] {
   const { models, lineage } = useLineageFlow()
-  const files = useStoreFileTree(s => s.files)
+  const files = useStoreProject(s => s.files)
   const model = path == null ? undefined : models.get(path)
 
   const [isActionMode, setIsActionMode] = useState(false)

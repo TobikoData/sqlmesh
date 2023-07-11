@@ -2,20 +2,19 @@ import { create } from 'zustand'
 import { ModelDirectory, type ModelFile } from '../models'
 import { type Directory } from '~/api/client'
 
-interface FileTreeStore {
-  project?: ModelDirectory
-  files: Map<ID, ModelFile>
-  selectedFile?: ModelFile
-  selectFile: (selectedFile?: ModelFile) => void
-  setFiles: (files: ModelFile[]) => void
+interface ProjectStore {
+  project: ModelDirectory
   setProject: (project?: Directory) => void
-  refreshProject: () => void
+  files: Map<ID, ModelFile>
+  setFiles: (files: ModelFile[]) => void
+  selectedFile?: ModelFile
+  setSelectedFile: (selectedFile?: ModelFile) => void
 }
 
-export const useStoreFileTree = create<FileTreeStore>((set, get) => ({
-  project: undefined,
-  files: new Map(),
+export const useStoreProject = create<ProjectStore>((set, get) => ({
   selectedFile: undefined,
+  project: new ModelDirectory(),
+  files: new Map(),
   setProject(project) {
     set(() => ({
       project: new ModelDirectory(project),
@@ -26,12 +25,9 @@ export const useStoreFileTree = create<FileTreeStore>((set, get) => ({
       files: files.reduce((acc, file) => acc.set(file.id, file), new Map()),
     }))
   },
-  selectFile(selectedFile) {
+  setSelectedFile(selectedFile) {
     set(() => ({
       selectedFile,
     }))
-  },
-  refreshProject() {
-    get().setProject(get().project)
   },
 }))

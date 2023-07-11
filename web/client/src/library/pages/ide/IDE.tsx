@@ -23,12 +23,14 @@ import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
-import { useStoreFileTree } from '@context/fileTree'
+import { useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
 import { type Model } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
+import { useStoreEditor } from '@context/editor'
+import { type ModelFile } from '@models/file'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -60,9 +62,15 @@ export default function PageIDE(): JSX.Element {
   const setState = useStorePlan(s => s.setState)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
-  const project = useStoreFileTree(s => s.project)
-  const setProject = useStoreFileTree(s => s.setProject)
-  const setFiles = useStoreFileTree(s => s.setFiles)
+  const project = useStoreProject(s => s.project)
+  const setProject = useStoreProject(s => s.setProject)
+  const setFiles = useStoreProject(s => s.setFiles)
+
+  const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
+  const storedTabsId = useStoreEditor(s => s.storedTabsId)
+  const selectTab = useStoreEditor(s => s.selectTab)
+  const createTab = useStoreEditor(s => s.createTab)
+  const addTab = useStoreEditor(s => s.addTab)
 
   const subscribe = useChannelEvents()
 
@@ -137,7 +145,10 @@ export default function PageIDE(): JSX.Element {
   }, [location])
 
   useEffect(() => {
-    setFiles(project?.allFiles ?? [])
+    const files = project?.allFiles ?? []
+
+    setFiles(files)
+    restoreEditorTabsFromSaved(files)
   }, [project])
 
   useEffect(() => {
@@ -202,6 +213,20 @@ export default function PageIDE(): JSX.Element {
     setActivePlan(undefined)
 
     void debouncedGetEnvironemnts()
+  }
+
+  function restoreEditorTabsFromSaved(files: ModelFile[]): void {
+    files.forEach(file => {
+      if (storedTabsIds.includes(file.id)) {
+        const tab = createTab(file)
+
+        if (storedTabsId === file.id) {
+          selectTab(tab)
+        } else {
+          addTab(tab)
+        }
+      }
+    })
   }
 
   const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
