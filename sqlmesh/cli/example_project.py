@@ -39,7 +39,7 @@ model_defaults:
 from sqlmesh.dbt.loader import sqlmesh_config
 from sqlmesh.core.config.model import ModelDefaultsConfig
 
-config = sqlmesh_config(Path(__file__).parent, model_defaults=ModelDefaultsConfig(dialect={dialect}))
+config = sqlmesh_config(Path(__file__).parent, model_defaults=ModelDefaultsConfig(dialect='{dialect}'))
 """,
     }
 
