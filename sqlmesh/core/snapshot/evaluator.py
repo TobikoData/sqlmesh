@@ -645,7 +645,7 @@ class MaterializableStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
-        self.adapter.create_schema(exp.to_table(name, dialect=self.adapter.dialect).db)
+        self.adapter.create_schema(exp.to_table(name).db)
 
         logger.info("Creating table '%s'", name)
         if model.annotated:
@@ -796,7 +796,7 @@ class ViewStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
-        self.adapter.create_schema(exp.to_table(name, dialect=self.adapter.dialect).db)
+        self.adapter.create_schema(exp.to_table(name).db)
 
         logger.info("Creating view '%s'", name)
         self.adapter.create_view(

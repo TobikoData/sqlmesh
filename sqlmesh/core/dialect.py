@@ -669,7 +669,6 @@ def pandas_to_sql(
 def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) -> str:
     return exp.table_name(
         normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect),
-        dialect=dialect,
     )
 
 

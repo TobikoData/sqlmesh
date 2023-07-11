@@ -459,7 +459,7 @@ class _Model(ModelMeta, frozen=True):
     def update_schema(self, schema: MappingSchema) -> None:
         """Updates the schema for this model's dependencies based on the given mapping schema."""
         for dep in self.depends_on:
-            table = exp.to_table(dep, dialect=self.dialect)
+            table = exp.to_table(dep)
             mapping_schema = schema.find(table)
 
             if mapping_schema:
