@@ -45,6 +45,7 @@ from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.dialects.dialect import Dialects
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
@@ -236,6 +237,11 @@ class Context(BaseContext):
         self._jinja_macros = JinjaMacroRegistry()
 
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
+        if self.config.model_defaults.dialect is None:
+            raise ConfigError("Default model SQL dialect is a required configuration parameter.")
+        else:
+            _ = Dialects(self.config.model_defaults.dialect.lower())
+
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
