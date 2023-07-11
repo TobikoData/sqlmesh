@@ -19,11 +19,8 @@ import pandas as pd
 from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
 from sqlglot.helper import ensure_list
-from sqlglot.optimizer.normalize_identifiers import (
-    normalize_identifiers as normalize_identifiers_func,
-)
 
-from sqlmesh.core.dialect import pandas_to_sql
+from sqlmesh.core.dialect import normalize_and_quote_identifiers, pandas_to_sql
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
@@ -701,7 +698,9 @@ class EngineAdapter:
         match_expressions: t.List[exp.When],
     ) -> None:
         this = exp.alias_(exp.to_table(target_table), alias=MERGE_TARGET_ALIAS, table=True)
-        using = exp.Subquery(this=source_table, alias=MERGE_SOURCE_ALIAS)
+        using = exp.alias_(
+            exp.Subquery(this=source_table), alias=MERGE_SOURCE_ALIAS, copy=False, table=True
+        )
         self.execute(
             exp.Merge(
                 this=this,
@@ -908,7 +907,7 @@ class EngineAdapter:
         adapter, and then finally kwargs provided by the user when calling this method.
         """
         if normalize_identifiers:
-            normalize_identifiers_func(e, dialect=self.dialect)
+            normalize_and_quote_identifiers(e, dialect=self.dialect)
 
         sql_gen_kwargs = {
             "dialect": self.dialect,

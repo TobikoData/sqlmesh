@@ -8,8 +8,10 @@ from enum import Enum, auto
 
 import pandas as pd
 from sqlglot import Dialect, Generator, Parser, Tokenizer, TokenType, exp
+from sqlglot._typing import E
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.tokens import Token
 
@@ -673,6 +675,10 @@ def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) ->
     return exp.table_name(
         normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect),
     )
+
+
+def normalize_and_quote_identifiers(expression: E, dialect: DialectType = None) -> E:
+    return quote_identifiers(normalize_identifiers(expression, dialect=dialect))
 
 
 def extract_columns_to_types(query: exp.Subqueryable) -> t.Dict[str, exp.DataType]:
