@@ -173,18 +173,17 @@ class SqlModelTest(ModelTest):
                 self.assert_equal(expected_df, actual_df)
 
     def runTest(self) -> None:
-        query = self.model.render_query_or_raise(
-            add_incremental_filter=True,
-            **self.body.get("vars", {}),
-            engine_adapter=self.engine_adapter,
-        )
         # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {
             name: _test_fixture_name(name)
             for name in self.models.keys() | self.body.get("inputs", {}).keys()
         }
-        if mapping:
-            query = exp.replace_tables(query, mapping)
+        query = self.model.render_query_or_raise(
+            add_incremental_filter=True,
+            **self.body.get("vars", {}),
+            engine_adapter=self.engine_adapter,
+            table_mapping=mapping,
+        )
 
         self.test_ctes({cte.alias: cte for cte in query.ctes})
 
