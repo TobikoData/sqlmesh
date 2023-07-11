@@ -4,29 +4,47 @@ from pathlib import Path
 
 import click
 
-DEFAULT_CONFIG = """gateways:
+
+class ProjectTemplate(Enum):
+    AIRFLOW = "airflow"
+    DBT = "dbt"
+    DEFAULT = "default"
+
+
+def _gen_config(dialect: str, template: ProjectTemplate) -> str:
+
+    default_configs = {
+        ProjectTemplate.DEFAULT: f"""gateways:
     local:
         connection:
             type: duckdb
             database: db.db
 
 default_gateway: local
-"""
 
-
-DEFAULT_AIRFLOW_CONFIG = """default_scheduler:
+model_defaults:
+    dialect: {dialect}
+""",
+        ProjectTemplate.DEFAULT: """default_scheduler:
     type: airflow
     airflow_url: http://localhost:8080/
     username: airflow
     password: airflow
-"""
 
-DEFAULT_DBT_CONFIG = """from pathlib import Path
+model_defaults:
+    dialect: {dialect}
+""",
+        ProjectTemplate.DBT: """from pathlib import Path
 
 from sqlmesh.dbt.loader import sqlmesh_config
+from sqlmesh.core.config.model import ModelDefaultsConfig
 
-config = sqlmesh_config(Path(__file__).parent)
-"""
+config = sqlmesh_config(Path(__file__).parent, model_defaults=ModelDefaultsConfig(dialect={dialect}))
+""",
+    }
+
+    return default_configs[template]
+
 
 EXAMPLE_SCHEMA_NAME = "sqlmesh_example"
 EXAMPLE_FULL_MODEL_NAME = f"{EXAMPLE_SCHEMA_NAME}.full_model"
@@ -127,21 +145,8 @@ EXAMPLE_TEST = f"""test_example_full_model:
 """
 
 
-class ProjectTemplate(Enum):
-    AIRFLOW = "airflow"
-    DBT = "dbt"
-    DEFAULT = "default"
-
-
-DEFAULT_CONFIGS = {
-    ProjectTemplate.AIRFLOW: DEFAULT_AIRFLOW_CONFIG,
-    ProjectTemplate.DBT: DEFAULT_DBT_CONFIG,
-    ProjectTemplate.DEFAULT: DEFAULT_CONFIG,
-}
-
-
 def init_example_project(
-    path: t.Union[str, Path], template: ProjectTemplate = ProjectTemplate.DEFAULT
+    path: t.Union[str, Path], dialect: str, template: ProjectTemplate = ProjectTemplate.DEFAULT
 ) -> None:
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
@@ -155,7 +160,7 @@ def init_example_project(
     if config_path.exists():
         raise click.ClickException(f"Found an existing config in '{config_path}'")
 
-    _create_config(config_path, template)
+    _create_config(config_path, dialect, template)
     if template == ProjectTemplate.DBT:
         return
 
@@ -173,10 +178,12 @@ def _create_folders(target_folders: t.Sequence[Path]) -> None:
         (folder_path / ".gitkeep").touch()
 
 
-def _create_config(config_path: Path, template: ProjectTemplate) -> None:
+def _create_config(config_path: Path, dialect: str, template: ProjectTemplate) -> None:
+    project_config = _gen_config(dialect, template)
+
     _write_file(
         config_path,
-        DEFAULT_CONFIGS[template],
+        project_config,
     )
 
 

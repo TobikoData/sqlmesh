@@ -6,6 +6,7 @@ import sys
 import typing as t
 
 import click
+from sqlglot.dialects.dialect import Dialects
 
 from sqlmesh import enable_logging
 from sqlmesh.cli import error_handler
@@ -24,6 +25,10 @@ def _sqlmesh_version() -> str:
         return __version__
     except ImportError:
         return "0.0.0"
+
+
+def _sqlglot_dialects() -> str:
+    return "'" + "', '".join(Dialects.__members__.values()) + "'"
 
 
 @click.group(no_args_is_help=True)
@@ -95,20 +100,31 @@ def cli(
 
 @cli.command("init")
 @click.option(
+    "-d",
+    "--dialect",
+    required=True,
+    type=str,
+    help=f"Default model dialect. Supported values: {_sqlglot_dialects()}.",
+)
+@click.option(
     "-t",
     "--template",
     type=str,
-    help="Project template. Support values: airflow, dbt, default.",
+    help="Project template. Supported values: airflow, dbt, default.",
 )
 @click.pass_context
 @error_handler
-def init(ctx: click.Context, template: t.Optional[str] = None) -> None:
+def init(ctx: click.Context, dialect: str, template: t.Optional[str] = None) -> None:
     """Create a new SQLMesh repository."""
     try:
         project_template = ProjectTemplate(template.lower() if template else "default")
     except ValueError:
         raise click.ClickException(f"Invalid project template '{template}'")
-    init_example_project(ctx.obj, template=project_template)
+    try:
+        _ = Dialects(dialect.lower())
+    except ValueError:
+        raise click.ClickException(f"Invalid dialect '{dialect}'")
+    init_example_project(ctx.obj, dialect=dialect, template=project_template)
 
 
 @cli.command("render")
