@@ -125,7 +125,8 @@ const Directory = function Directory({
     }, [activeRange])
 
   useEffect(() => {
-    // Update component every time ModelDirectory's "isOpen" state is changes
+    // Setting syncStateOpen in order to have a mechanism
+    // to trigger re-render every time ModelDirectory's "isOpen" state is changes
     directory.syncStateOpen = setIsOpen
   }, [])
 
