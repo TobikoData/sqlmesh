@@ -1,5 +1,5 @@
 {
-  "openapi": "3.0.2",
+  "openapi": "3.1.0",
   "info": { "title": "FastAPI", "version": "0.1.0" },
   "paths": {
     "/api/commands/apply": {
@@ -154,7 +154,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Path", "type": "string" },
+            "schema": { "type": "string", "title": "Path" },
             "name": "path",
             "in": "path"
           }
@@ -185,7 +185,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Path", "type": "string" },
+            "schema": { "type": "string", "title": "Path" },
             "name": "path",
             "in": "path"
           }
@@ -225,7 +225,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Path", "type": "string" },
+            "schema": { "type": "string", "title": "Path" },
             "name": "path",
             "in": "path"
           }
@@ -236,8 +236,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Delete File Api Files  Path  Delete",
-                  "type": "null"
+                  "type": "null",
+                  "title": "Response Delete File Api Files  Path  Delete"
                 }
               }
             }
@@ -261,7 +261,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Path", "type": "string" },
+            "schema": { "type": "string", "title": "Path" },
             "name": "path",
             "in": "path"
           }
@@ -301,7 +301,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Path", "type": "string" },
+            "schema": { "type": "string", "title": "Path" },
             "name": "path",
             "in": "path"
           }
@@ -367,8 +367,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Cancel Plan Api Plan Cancel Post",
-                  "type": "null"
+                  "type": "null",
+                  "title": "Response Cancel Plan Api Plan Cancel Post"
                 }
               }
             }
@@ -387,11 +387,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Environments Api Environments Get",
-                  "type": "object",
                   "additionalProperties": {
                     "$ref": "#/components/schemas/Environment"
-                  }
+                  },
+                  "type": "object",
+                  "title": "Response Get Environments Api Environments Get"
                 }
               }
             }
@@ -420,13 +420,13 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Column Name", "type": "string" },
+            "schema": { "type": "string", "title": "Column Name" },
             "name": "column_name",
             "in": "path"
           },
           {
             "required": true,
-            "schema": { "title": "Model Name", "type": "string" },
+            "schema": { "type": "string", "title": "Model Name" },
             "name": "model_name",
             "in": "path"
           }
@@ -437,14 +437,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Column Lineage Api Lineage  Model Name   Column Name  Get",
-                  "type": "object",
                   "additionalProperties": {
-                    "type": "object",
                     "additionalProperties": {
                       "$ref": "#/components/schemas/LineageColumn"
-                    }
-                  }
+                    },
+                    "type": "object"
+                  },
+                  "type": "object",
+                  "title": "Response Column Lineage Api Lineage  Model Name   Column Name  Get"
                 }
               }
             }
@@ -468,7 +468,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Model Name", "type": "string" },
+            "schema": { "type": "string", "title": "Model Name" },
             "name": "model_name",
             "in": "path"
           }
@@ -479,13 +479,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Model Lineage Api Lineage  Model Name  Get",
-                  "type": "object",
                   "additionalProperties": {
-                    "uniqueItems": true,
+                    "items": { "type": "string" },
                     "type": "array",
-                    "items": { "type": "string" }
-                  }
+                    "uniqueItems": true
+                  },
+                  "type": "object",
+                  "title": "Response Model Lineage Api Lineage  Model Name  Get"
                 }
               }
             }
@@ -512,14 +512,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Models Api Models Get",
                   "anyOf": [
                     {
-                      "type": "array",
-                      "items": { "$ref": "#/components/schemas/Model" }
+                      "items": { "$ref": "#/components/schemas/Model" },
+                      "type": "array"
                     },
                     { "$ref": "#/components/schemas/ApiExceptionPayload" }
-                  ]
+                  ],
+                  "title": "Response Get Models Api Models Get"
                 }
               }
             }
@@ -552,37 +552,37 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Source", "type": "string" },
+            "schema": { "type": "string", "title": "Source" },
             "name": "source",
             "in": "query"
           },
           {
             "required": true,
-            "schema": { "title": "Target", "type": "string" },
+            "schema": { "type": "string", "title": "Target" },
             "name": "target",
             "in": "query"
           },
           {
             "required": false,
-            "schema": { "title": "On", "type": "string" },
+            "schema": { "type": "string", "title": "On" },
             "name": "on",
             "in": "query"
           },
           {
             "required": false,
-            "schema": { "title": "Model Or Snapshot", "type": "string" },
+            "schema": { "type": "string", "title": "Model Or Snapshot" },
             "name": "model_or_snapshot",
             "in": "query"
           },
           {
             "required": false,
-            "schema": { "title": "Where", "type": "string" },
+            "schema": { "type": "string", "title": "Where" },
             "name": "where",
             "in": "query"
           },
           {
             "required": false,
-            "schema": { "title": "Limit", "type": "integer", "default": 20 },
+            "schema": { "type": "integer", "title": "Limit", "default": 20 },
             "name": "limit",
             "in": "query"
           }
@@ -617,8 +617,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Health Health Get",
-                  "type": "string"
+                  "type": "string",
+                  "title": "Response Health Health Get"
                 }
               }
             }
@@ -633,7 +633,7 @@
         "parameters": [
           {
             "required": true,
-            "schema": { "title": "Full Path", "type": "string" },
+            "schema": { "type": "string", "title": "Full Path" },
             "name": "full_path",
             "in": "path"
           }
@@ -658,46 +658,44 @@
   "components": {
     "schemas": {
       "ApiExceptionPayload": {
-        "title": "ApiExceptionPayload",
-        "required": ["timestamp", "status", "message", "origin"],
-        "type": "object",
         "properties": {
-          "timestamp": { "title": "Timestamp", "type": "integer" },
-          "status": { "title": "Status", "type": "integer" },
-          "message": { "title": "Message", "type": "string" },
-          "origin": { "title": "Origin", "type": "string" },
-          "trigger": { "title": "Trigger", "type": "string" },
-          "type": { "title": "Type", "type": "string" },
-          "description": { "title": "Description", "type": "string" },
-          "traceback": { "title": "Traceback", "type": "string" },
+          "timestamp": { "type": "integer", "title": "Timestamp" },
+          "status": { "type": "integer", "title": "Status" },
+          "message": { "type": "string", "title": "Message" },
+          "origin": { "type": "string", "title": "Origin" },
+          "trigger": { "type": "string", "title": "Trigger" },
+          "type": { "type": "string", "title": "Type" },
+          "description": { "type": "string", "title": "Description" },
+          "traceback": { "type": "string", "title": "Traceback" },
           "stack": {
-            "title": "Stack",
+            "items": { "type": "string" },
             "type": "array",
-            "items": { "type": "string" }
+            "title": "Stack"
           }
-        }
+        },
+        "type": "object",
+        "required": ["timestamp", "status", "message", "origin"],
+        "title": "ApiExceptionPayload"
       },
       "ApplyResponse": {
-        "title": "ApplyResponse",
-        "required": ["type"],
+        "properties": { "type": { "$ref": "#/components/schemas/ApplyType" } },
         "type": "object",
-        "properties": { "type": { "$ref": "#/components/schemas/ApplyType" } }
+        "required": ["type"],
+        "title": "ApplyResponse"
       },
       "ApplyType": {
-        "title": "ApplyType",
-        "enum": ["virtual", "backfill"],
         "type": "string",
+        "enum": ["virtual", "backfill"],
+        "title": "ApplyType",
         "description": "An enumeration of possible apply types."
       },
       "Body_apply_api_commands_apply_post": {
-        "title": "Body_apply_api_commands_apply_post",
-        "type": "object",
         "properties": {
-          "environment": { "title": "Environment", "type": "string" },
+          "environment": { "type": "string", "title": "Environment" },
           "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
           "plan_options": {
-            "title": "Plan Options",
             "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
+            "title": "Plan Options",
             "default": {
               "skip_tests": false,
               "skip_backfill": false,
@@ -707,28 +705,28 @@
             }
           },
           "categories": {
-            "type": "object",
             "additionalProperties": {
               "$ref": "#/components/schemas/SnapshotChangeCategory"
-            }
+            },
+            "type": "object"
           }
-        }
+        },
+        "type": "object",
+        "title": "Body_apply_api_commands_apply_post"
       },
       "Body_fetchdf_api_commands_fetchdf_post": {
-        "title": "Body_fetchdf_api_commands_fetchdf_post",
-        "required": ["sql"],
+        "properties": { "sql": { "type": "string", "title": "Sql" } },
         "type": "object",
-        "properties": { "sql": { "title": "Sql", "type": "string" } }
+        "required": ["sql"],
+        "title": "Body_fetchdf_api_commands_fetchdf_post"
       },
       "Body_run_plan_api_plan_post": {
-        "title": "Body_run_plan_api_plan_post",
-        "type": "object",
         "properties": {
-          "environment": { "title": "Environment", "type": "string" },
+          "environment": { "type": "string", "title": "Environment" },
           "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
           "plan_options": {
-            "title": "Plan Options",
             "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
+            "title": "Plan Options",
             "default": {
               "skip_tests": false,
               "skip_backfill": false,
@@ -737,65 +735,86 @@
               "no_auto_categorization": false
             }
           }
-        }
+        },
+        "type": "object",
+        "title": "Body_run_plan_api_plan_post"
       },
       "Body_write_directory_api_directories__path__post": {
-        "title": "Body_write_directory_api_directories__path__post",
+        "properties": { "new_path": { "type": "string", "title": "New Path" } },
         "type": "object",
-        "properties": { "new_path": { "title": "New Path", "type": "string" } }
+        "title": "Body_write_directory_api_directories__path__post"
       },
       "Body_write_file_api_files__path__post": {
-        "title": "Body_write_file_api_files__path__post",
-        "type": "object",
         "properties": {
-          "content": { "title": "Content", "type": "string", "default": "" },
-          "new_path": { "title": "New Path", "type": "string" }
-        }
+          "content": { "type": "string", "title": "Content", "default": "" },
+          "new_path": { "type": "string", "title": "New Path" }
+        },
+        "type": "object",
+        "title": "Body_write_file_api_files__path__post"
       },
       "ChangeDirect": {
-        "title": "ChangeDirect",
-        "required": ["model_name", "diff"],
-        "type": "object",
         "properties": {
-          "model_name": { "title": "Model Name", "type": "string" },
-          "diff": { "title": "Diff", "type": "string" },
+          "model_name": { "type": "string", "title": "Model Name" },
+          "diff": { "type": "string", "title": "Diff" },
           "indirect": {
-            "title": "Indirect",
-            "type": "array",
             "items": { "type": "string" },
+            "type": "array",
+            "title": "Indirect",
             "default": []
           },
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           }
-        }
+        },
+        "type": "object",
+        "required": ["model_name", "diff"],
+        "title": "ChangeDirect"
       },
       "ChangeIndirect": {
-        "title": "ChangeIndirect",
-        "required": ["model_name"],
-        "type": "object",
         "properties": {
-          "model_name": { "title": "Model Name", "type": "string" },
+          "model_name": { "type": "string", "title": "Model Name" },
           "direct": {
-            "title": "Direct",
-            "type": "array",
             "items": { "type": "string" },
+            "type": "array",
+            "title": "Direct",
             "default": []
           }
-        }
+        },
+        "type": "object",
+        "required": ["model_name"],
+        "title": "ChangeIndirect"
       },
       "Column": {
-        "title": "Column",
-        "required": ["name", "type"],
-        "type": "object",
         "properties": {
-          "name": { "title": "Name", "type": "string" },
-          "type": { "title": "Type", "type": "string" },
-          "description": { "title": "Description", "type": "string" }
-        }
+          "name": { "type": "string", "title": "Name" },
+          "type": { "type": "string", "title": "Type" },
+          "description": { "type": "string", "title": "Description" }
+        },
+        "type": "object",
+        "required": ["name", "type"],
+        "title": "Column"
       },
       "Context": {
-        "title": "Context",
+        "properties": {
+          "concurrent_tasks": {
+            "type": "integer",
+            "title": "Concurrent Tasks"
+          },
+          "engine_adapter": { "type": "string", "title": "Engine Adapter" },
+          "time_column_format": {
+            "type": "string",
+            "title": "Time Column Format"
+          },
+          "scheduler": { "type": "string", "title": "Scheduler" },
+          "models": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Models",
+            "default": []
+          },
+          "config": { "type": "string", "title": "Config" }
+        },
+        "type": "object",
         "required": [
           "concurrent_tasks",
           "engine_adapter",
@@ -803,343 +822,324 @@
           "scheduler",
           "config"
         ],
-        "type": "object",
-        "properties": {
-          "concurrent_tasks": {
-            "title": "Concurrent Tasks",
-            "type": "integer"
-          },
-          "engine_adapter": { "title": "Engine Adapter", "type": "string" },
-          "time_column_format": {
-            "title": "Time Column Format",
-            "type": "string"
-          },
-          "scheduler": { "title": "Scheduler", "type": "string" },
-          "models": {
-            "title": "Models",
-            "type": "array",
-            "items": { "type": "string" },
-            "default": []
-          },
-          "config": { "title": "Config", "type": "string" }
-        }
+        "title": "Context"
       },
       "ContextEnvironment": {
-        "title": "ContextEnvironment",
-        "required": ["environment", "start", "end"],
-        "type": "object",
         "properties": {
-          "environment": { "title": "Environment", "type": "string" },
+          "environment": { "type": "string", "title": "Environment" },
           "start": {
-            "title": "Start",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Start"
           },
           "end": {
-            "title": "End",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "End"
           },
           "changes": {
             "$ref": "#/components/schemas/ContextEnvironmentChanges"
           },
           "backfills": {
-            "title": "Backfills",
-            "type": "array",
             "items": {
               "$ref": "#/components/schemas/ContextEnvironmentBackfill"
             },
+            "type": "array",
+            "title": "Backfills",
             "default": []
           }
-        }
+        },
+        "type": "object",
+        "required": ["environment", "start", "end"],
+        "title": "ContextEnvironment"
       },
       "ContextEnvironmentBackfill": {
-        "title": "ContextEnvironmentBackfill",
-        "required": ["model_name", "view_name", "interval", "batches"],
-        "type": "object",
         "properties": {
-          "model_name": { "title": "Model Name", "type": "string" },
-          "view_name": { "title": "View Name", "type": "string" },
+          "model_name": { "type": "string", "title": "Model Name" },
+          "view_name": { "type": "string", "title": "View Name" },
           "interval": {
-            "title": "Interval",
+            "items": [{ "type": "string" }, { "type": "string" }],
+            "type": "array",
             "maxItems": 2,
             "minItems": 2,
-            "type": "array",
-            "items": [{ "type": "string" }, { "type": "string" }]
+            "title": "Interval"
           },
-          "batches": { "title": "Batches", "type": "integer" }
-        }
+          "batches": { "type": "integer", "title": "Batches" }
+        },
+        "type": "object",
+        "required": ["model_name", "view_name", "interval", "batches"],
+        "title": "ContextEnvironmentBackfill"
       },
       "ContextEnvironmentChanges": {
-        "title": "ContextEnvironmentChanges",
-        "required": ["added", "removed", "modified"],
-        "type": "object",
         "properties": {
           "added": {
-            "title": "Added",
-            "uniqueItems": true,
+            "items": { "type": "string" },
             "type": "array",
-            "items": { "type": "string" }
+            "uniqueItems": true,
+            "title": "Added"
           },
           "removed": {
-            "title": "Removed",
-            "uniqueItems": true,
+            "items": { "type": "string" },
             "type": "array",
-            "items": { "type": "string" }
+            "uniqueItems": true,
+            "title": "Removed"
           },
           "modified": { "$ref": "#/components/schemas/ModelsDiff" }
-        }
+        },
+        "type": "object",
+        "required": ["added", "removed", "modified"],
+        "title": "ContextEnvironmentChanges"
       },
       "Directory": {
-        "title": "Directory",
-        "required": ["name", "path"],
-        "type": "object",
         "properties": {
-          "name": { "title": "Name", "type": "string" },
-          "path": { "title": "Path", "type": "string" },
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "title": "Path" },
           "directories": {
-            "title": "Directories",
-            "type": "array",
             "items": { "$ref": "#/components/schemas/Directory" },
+            "type": "array",
+            "title": "Directories",
             "default": []
           },
           "files": {
-            "title": "Files",
-            "type": "array",
             "items": { "$ref": "#/components/schemas/File" },
+            "type": "array",
+            "title": "Files",
             "default": []
           }
-        }
+        },
+        "type": "object",
+        "required": ["name", "path"],
+        "title": "Directory"
       },
       "Environment": {
-        "title": "Environment",
-        "required": ["name", "snapshots", "start_at", "plan_id"],
-        "type": "object",
         "properties": {
-          "name": { "title": "Name", "type": "string" },
+          "name": { "type": "string", "title": "Name" },
           "snapshots": {
-            "title": "Snapshots",
+            "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
             "type": "array",
-            "items": { "$ref": "#/components/schemas/SnapshotTableInfo" }
+            "title": "Snapshots"
           },
           "start_at": {
-            "title": "Start At",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Start At"
           },
           "end_at": {
-            "title": "End At",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "End At"
           },
-          "plan_id": { "title": "Plan Id", "type": "string" },
-          "previous_plan_id": { "title": "Previous Plan Id", "type": "string" },
-          "expiration_ts": { "title": "Expiration Ts", "type": "integer" },
-          "finalized_ts": { "title": "Finalized Ts", "type": "integer" }
+          "plan_id": { "type": "string", "title": "Plan Id" },
+          "previous_plan_id": { "type": "string", "title": "Previous Plan Id" },
+          "expiration_ts": { "type": "integer", "title": "Expiration Ts" },
+          "finalized_ts": { "type": "integer", "title": "Finalized Ts" }
         },
         "additionalProperties": false,
+        "type": "object",
+        "required": ["name", "snapshots", "start_at", "plan_id"],
+        "title": "Environment",
         "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables."
       },
       "EvaluateInput": {
-        "title": "EvaluateInput",
-        "required": ["model", "start", "end", "latest"],
-        "type": "object",
         "properties": {
-          "model": { "title": "Model", "type": "string" },
+          "model": { "type": "string", "title": "Model" },
           "start": {
-            "title": "Start",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Start"
           },
           "end": {
-            "title": "End",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "End"
           },
           "latest": {
-            "title": "Latest",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Latest"
           },
-          "limit": { "title": "Limit", "type": "integer", "default": 1000 }
-        }
+          "limit": { "type": "integer", "title": "Limit", "default": 1000 }
+        },
+        "type": "object",
+        "required": ["model", "start", "end", "latest"],
+        "title": "EvaluateInput"
       },
       "File": {
-        "title": "File",
-        "required": ["name", "path"],
-        "type": "object",
         "properties": {
-          "name": { "title": "Name", "type": "string" },
-          "path": { "title": "Path", "type": "string" },
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "title": "Path" },
           "extension": {
-            "title": "Extension",
             "type": "string",
+            "title": "Extension",
             "default": ""
           },
           "is_supported": {
-            "title": "Is Supported",
             "type": "boolean",
+            "title": "Is Supported",
             "default": false
           },
-          "content": { "title": "Content", "type": "string" },
+          "content": { "type": "string", "title": "Content" },
           "type": { "$ref": "#/components/schemas/FileType" }
-        }
+        },
+        "type": "object",
+        "required": ["name", "path"],
+        "title": "File"
       },
       "FileType": {
-        "title": "FileType",
-        "enum": ["audit", "macros", "model", "tests"],
         "type": "string",
+        "enum": ["audit", "macros", "model", "tests"],
+        "title": "FileType",
         "description": "An enumeration of possible file types."
       },
       "HTTPValidationError": {
-        "title": "HTTPValidationError",
-        "type": "object",
         "properties": {
           "detail": {
-            "title": "Detail",
+            "items": { "$ref": "#/components/schemas/ValidationError" },
             "type": "array",
-            "items": { "$ref": "#/components/schemas/ValidationError" }
+            "title": "Detail"
           }
-        }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
       },
       "IntervalUnit": {
-        "title": "IntervalUnit",
-        "enum": ["year", "month", "day", "hour", "minute"],
         "type": "string",
+        "enum": ["year", "month", "day", "hour", "minute"],
+        "title": "IntervalUnit",
         "description": "IntervalUnit is the inferred granularity of an incremental model.\n\nIntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a model. The minimum time delta between a sample set of dates\nis used to determine which unit a model's schedule is."
       },
       "LineageColumn": {
-        "title": "LineageColumn",
-        "type": "object",
         "properties": {
-          "source": { "title": "Source", "type": "string" },
-          "expression": { "title": "Expression", "type": "string" },
+          "source": { "type": "string", "title": "Source" },
+          "expression": { "type": "string", "title": "Expression" },
           "models": {
-            "title": "Models",
-            "type": "object",
             "additionalProperties": {
-              "type": "array",
-              "items": { "type": "string" }
-            }
+              "items": { "type": "string" },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Models"
           }
-        }
+        },
+        "type": "object",
+        "title": "LineageColumn"
       },
       "Model": {
-        "title": "Model",
-        "required": ["name", "path", "dialect", "type", "columns"],
-        "type": "object",
         "properties": {
-          "name": { "title": "Name", "type": "string" },
-          "path": { "title": "Path", "type": "string" },
-          "dialect": { "title": "Dialect", "type": "string" },
-          "type": { "title": "Type", "type": "string" },
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "title": "Path" },
+          "dialect": { "type": "string", "title": "Dialect" },
+          "type": { "type": "string", "title": "Type" },
           "columns": {
-            "title": "Columns",
+            "items": { "$ref": "#/components/schemas/Column" },
             "type": "array",
-            "items": { "$ref": "#/components/schemas/Column" }
+            "title": "Columns"
           },
-          "description": { "title": "Description", "type": "string" },
+          "description": { "type": "string", "title": "Description" },
           "details": { "$ref": "#/components/schemas/ModelDetails" },
-          "sql": { "title": "Sql", "type": "string" }
-        }
+          "sql": { "type": "string", "title": "Sql" }
+        },
+        "type": "object",
+        "required": ["name", "path", "dialect", "type", "columns"],
+        "title": "Model"
       },
       "ModelDetails": {
-        "title": "ModelDetails",
-        "type": "object",
         "properties": {
-          "owner": { "title": "Owner", "type": "string" },
-          "kind": { "title": "Kind", "type": "string" },
-          "batch_size": { "title": "Batch Size", "type": "integer" },
-          "cron": { "title": "Cron", "type": "string" },
+          "owner": { "type": "string", "title": "Owner" },
+          "kind": { "type": "string", "title": "Kind" },
+          "batch_size": { "type": "integer", "title": "Batch Size" },
+          "cron": { "type": "string", "title": "Cron" },
           "stamp": {
-            "title": "Stamp",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Stamp"
           },
           "start": {
-            "title": "Start",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Start"
           },
-          "retention": { "title": "Retention", "type": "integer" },
-          "storage_format": { "title": "Storage Format", "type": "string" },
-          "time_column": { "title": "Time Column", "type": "string" },
-          "tags": { "title": "Tags", "type": "string" },
-          "grain": { "title": "Grain", "type": "string" },
-          "partitioned_by": { "title": "Partitioned By", "type": "string" },
-          "clustered_by": { "title": "Clustered By", "type": "string" },
-          "lookback": { "title": "Lookback", "type": "integer" },
+          "retention": { "type": "integer", "title": "Retention" },
+          "storage_format": { "type": "string", "title": "Storage Format" },
+          "time_column": { "type": "string", "title": "Time Column" },
+          "tags": { "type": "string", "title": "Tags" },
+          "grain": { "type": "string", "title": "Grain" },
+          "partitioned_by": { "type": "string", "title": "Partitioned By" },
+          "clustered_by": { "type": "string", "title": "Clustered By" },
+          "lookback": { "type": "integer", "title": "Lookback" },
           "cron_prev": {
-            "title": "Cron Prev",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Cron Prev"
           },
           "cron_next": {
-            "title": "Cron Next",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Cron Next"
           },
           "interval_unit": { "$ref": "#/components/schemas/IntervalUnit" },
-          "annotated": { "title": "Annotated", "type": "boolean" }
-        }
+          "annotated": { "type": "boolean", "title": "Annotated" }
+        },
+        "type": "object",
+        "title": "ModelDetails"
       },
       "ModelKindName": {
-        "title": "ModelKindName",
+        "type": "string",
         "enum": [
           "INCREMENTAL_BY_TIME_RANGE",
           "INCREMENTAL_BY_UNIQUE_KEY",
@@ -1149,149 +1149,162 @@
           "SEED",
           "EXTERNAL"
         ],
-        "type": "string",
+        "title": "ModelKindName",
         "description": "The kind of model, determining how this data is computed and stored in the warehouse."
       },
       "ModelsDiff": {
-        "title": "ModelsDiff",
-        "type": "object",
         "properties": {
           "direct": {
-            "title": "Direct",
-            "type": "array",
             "items": { "$ref": "#/components/schemas/ChangeDirect" },
+            "type": "array",
+            "title": "Direct",
             "default": []
           },
           "indirect": {
-            "title": "Indirect",
-            "type": "array",
             "items": { "$ref": "#/components/schemas/ChangeIndirect" },
+            "type": "array",
+            "title": "Indirect",
             "default": []
           },
           "metadata": {
-            "title": "Metadata",
-            "uniqueItems": true,
-            "type": "array",
             "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Metadata",
             "default": []
           }
-        }
+        },
+        "type": "object",
+        "title": "ModelsDiff"
       },
       "PlanDates": {
-        "title": "PlanDates",
-        "type": "object",
         "properties": {
           "start": {
-            "title": "Start",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Start"
           },
           "end": {
-            "title": "End",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "End"
           }
-        }
+        },
+        "type": "object",
+        "title": "PlanDates"
       },
       "PlanOptions": {
-        "title": "PlanOptions",
-        "type": "object",
         "properties": {
           "skip_tests": {
-            "title": "Skip Tests",
             "type": "boolean",
+            "title": "Skip Tests",
             "default": false
           },
           "skip_backfill": {
-            "title": "Skip Backfill",
             "type": "boolean",
+            "title": "Skip Backfill",
             "default": false
           },
           "no_gaps": {
-            "title": "No Gaps",
             "type": "boolean",
+            "title": "No Gaps",
             "default": false
           },
           "forward_only": {
-            "title": "Forward Only",
             "type": "boolean",
+            "title": "Forward Only",
             "default": false
           },
           "no_auto_categorization": {
-            "title": "No Auto Categorization",
             "type": "boolean",
+            "title": "No Auto Categorization",
             "default": false
           },
-          "create_from": { "title": "Create From", "type": "string" },
-          "restate_models": { "title": "Restate Models", "type": "string" }
-        }
+          "create_from": { "type": "string", "title": "Create From" },
+          "restate_models": { "type": "string", "title": "Restate Models" }
+        },
+        "type": "object",
+        "title": "PlanOptions"
       },
       "Query": {
-        "title": "Query",
-        "required": ["sql"],
+        "properties": { "sql": { "type": "string", "title": "Sql" } },
         "type": "object",
-        "properties": { "sql": { "title": "Sql", "type": "string" } }
+        "required": ["sql"],
+        "title": "Query"
       },
       "RenderInput": {
-        "title": "RenderInput",
-        "required": ["model"],
-        "type": "object",
         "properties": {
-          "model": { "title": "Model", "type": "string" },
+          "model": { "type": "string", "title": "Model" },
           "start": {
-            "title": "Start",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Start"
           },
           "end": {
-            "title": "End",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "End"
           },
           "latest": {
-            "title": "Latest",
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
               { "type": "number" }
-            ]
+            ],
+            "title": "Latest"
           },
           "expand": {
-            "title": "Expand",
             "anyOf": [
               { "type": "boolean" },
-              { "type": "array", "items": { "type": "string" } }
+              { "items": { "type": "string" }, "type": "array" }
             ],
+            "title": "Expand",
             "default": false
           },
-          "pretty": { "title": "Pretty", "type": "boolean", "default": true },
-          "dialect": { "title": "Dialect", "type": "string" }
-        }
+          "pretty": { "type": "boolean", "title": "Pretty", "default": true },
+          "dialect": { "type": "string", "title": "Dialect" }
+        },
+        "type": "object",
+        "required": ["model"],
+        "title": "RenderInput"
       },
       "RowDiff": {
-        "title": "RowDiff",
+        "properties": {
+          "source": { "type": "string", "title": "Source" },
+          "target": { "type": "string", "title": "Target" },
+          "stats": {
+            "additionalProperties": { "type": "number" },
+            "type": "object",
+            "title": "Stats"
+          },
+          "sample": { "type": "object", "title": "Sample" },
+          "source_count": { "type": "integer", "title": "Source Count" },
+          "target_count": { "type": "integer", "title": "Target Count" },
+          "count_pct_change": { "type": "number", "title": "Count Pct Change" }
+        },
+        "type": "object",
         "required": [
           "source",
           "target",
@@ -1301,23 +1314,39 @@
           "target_count",
           "count_pct_change"
         ],
-        "type": "object",
-        "properties": {
-          "source": { "title": "Source", "type": "string" },
-          "target": { "title": "Target", "type": "string" },
-          "stats": {
-            "title": "Stats",
-            "type": "object",
-            "additionalProperties": { "type": "number" }
-          },
-          "sample": { "title": "Sample", "type": "object" },
-          "source_count": { "title": "Source Count", "type": "integer" },
-          "target_count": { "title": "Target Count", "type": "integer" },
-          "count_pct_change": { "title": "Count Pct Change", "type": "number" }
-        }
+        "title": "RowDiff"
       },
       "SchemaDiff": {
-        "title": "SchemaDiff",
+        "properties": {
+          "source": { "type": "string", "title": "Source" },
+          "target": { "type": "string", "title": "Target" },
+          "source_schema": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Source Schema"
+          },
+          "target_schema": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Target Schema"
+          },
+          "added": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Added"
+          },
+          "removed": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Removed"
+          },
+          "modified": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Modified"
+          }
+        },
+        "type": "object",
         "required": [
           "source",
           "target",
@@ -1327,90 +1356,84 @@
           "removed",
           "modified"
         ],
-        "type": "object",
-        "properties": {
-          "source": { "title": "Source", "type": "string" },
-          "target": { "title": "Target", "type": "string" },
-          "source_schema": {
-            "title": "Source Schema",
-            "type": "object",
-            "additionalProperties": { "type": "string" }
-          },
-          "target_schema": {
-            "title": "Target Schema",
-            "type": "object",
-            "additionalProperties": { "type": "string" }
-          },
-          "added": {
-            "title": "Added",
-            "type": "object",
-            "additionalProperties": { "type": "string" }
-          },
-          "removed": {
-            "title": "Removed",
-            "type": "object",
-            "additionalProperties": { "type": "string" }
-          },
-          "modified": {
-            "title": "Modified",
-            "type": "object",
-            "additionalProperties": { "type": "string" }
-          }
-        }
+        "title": "SchemaDiff"
       },
       "SnapshotChangeCategory": {
-        "title": "SnapshotChangeCategory",
-        "enum": [1, 2, 3, 4, 5],
         "type": "integer",
+        "enum": [1, 2, 3, 4, 5],
+        "title": "SnapshotChangeCategory",
         "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change."
       },
       "SnapshotDataVersion": {
-        "title": "SnapshotDataVersion",
-        "required": ["fingerprint", "version"],
-        "type": "object",
         "properties": {
           "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
-          "version": { "title": "Version", "type": "string" },
-          "temp_version": { "title": "Temp Version", "type": "string" },
+          "version": { "type": "string", "title": "Version" },
+          "temp_version": { "type": "string", "title": "Temp Version" },
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           },
-          "physical_schema": { "title": "Physical Schema", "type": "string" }
+          "physical_schema": { "type": "string", "title": "Physical Schema" }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["fingerprint", "version"],
+        "title": "SnapshotDataVersion"
       },
       "SnapshotFingerprint": {
-        "title": "SnapshotFingerprint",
-        "required": ["data_hash", "metadata_hash"],
-        "type": "object",
         "properties": {
-          "data_hash": { "title": "Data Hash", "type": "string" },
-          "metadata_hash": { "title": "Metadata Hash", "type": "string" },
+          "data_hash": { "type": "string", "title": "Data Hash" },
+          "metadata_hash": { "type": "string", "title": "Metadata Hash" },
           "parent_data_hash": {
-            "title": "Parent Data Hash",
             "type": "string",
+            "title": "Parent Data Hash",
             "default": "0"
           },
           "parent_metadata_hash": {
-            "title": "Parent Metadata Hash",
             "type": "string",
+            "title": "Parent Metadata Hash",
             "default": "0"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["data_hash", "metadata_hash"],
+        "title": "SnapshotFingerprint"
       },
       "SnapshotId": {
-        "title": "SnapshotId",
-        "required": ["name", "identifier"],
-        "type": "object",
         "properties": {
-          "name": { "title": "Name", "type": "string" },
-          "identifier": { "title": "Identifier", "type": "string" }
+          "name": { "type": "string", "title": "Name" },
+          "identifier": { "type": "string", "title": "Identifier" }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["name", "identifier"],
+        "title": "SnapshotId"
       },
       "SnapshotTableInfo": {
-        "title": "SnapshotTableInfo",
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
+          "version": { "type": "string", "title": "Version" },
+          "temp_version": { "type": "string", "title": "Temp Version" },
+          "physical_schema": { "type": "string", "title": "Physical Schema" },
+          "parents": {
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
+            "type": "array",
+            "title": "Parents"
+          },
+          "previous_versions": {
+            "items": { "$ref": "#/components/schemas/SnapshotDataVersion" },
+            "type": "array",
+            "title": "Previous Versions",
+            "default": []
+          },
+          "change_category": {
+            "$ref": "#/components/schemas/SnapshotChangeCategory"
+          },
+          "kind_name": { "$ref": "#/components/schemas/ModelKindName" }
+        },
+        "additionalProperties": false,
+        "type": "object",
         "required": [
           "name",
           "fingerprint",
@@ -1419,63 +1442,40 @@
           "parents",
           "kind_name"
         ],
-        "type": "object",
-        "properties": {
-          "name": { "title": "Name", "type": "string" },
-          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
-          "version": { "title": "Version", "type": "string" },
-          "temp_version": { "title": "Temp Version", "type": "string" },
-          "physical_schema": { "title": "Physical Schema", "type": "string" },
-          "parents": {
-            "title": "Parents",
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/SnapshotId" }
-          },
-          "previous_versions": {
-            "title": "Previous Versions",
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/SnapshotDataVersion" },
-            "default": []
-          },
-          "change_category": {
-            "$ref": "#/components/schemas/SnapshotChangeCategory"
-          },
-          "kind_name": { "$ref": "#/components/schemas/ModelKindName" }
-        },
-        "additionalProperties": false
+        "title": "SnapshotTableInfo"
       },
       "TableDiff": {
-        "title": "TableDiff",
-        "required": ["schema_diff", "row_diff", "on"],
-        "type": "object",
         "properties": {
           "schema_diff": { "$ref": "#/components/schemas/SchemaDiff" },
           "row_diff": { "$ref": "#/components/schemas/RowDiff" },
           "on": {
-            "title": "On",
-            "type": "array",
             "items": {
-              "maxItems": 2,
-              "minItems": 2,
+              "items": [{ "type": "string" }, { "type": "string" }],
               "type": "array",
-              "items": [{ "type": "string" }, { "type": "string" }]
-            }
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "On"
           }
-        }
+        },
+        "type": "object",
+        "required": ["schema_diff", "row_diff", "on"],
+        "title": "TableDiff"
       },
       "ValidationError": {
-        "title": "ValidationError",
-        "required": ["loc", "msg", "type"],
-        "type": "object",
         "properties": {
           "loc": {
-            "title": "Location",
+            "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] },
             "type": "array",
-            "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] }
+            "title": "Location"
           },
-          "msg": { "title": "Message", "type": "string" },
-          "type": { "title": "Error Type", "type": "string" }
-        }
+          "msg": { "type": "string", "title": "Message" },
+          "type": { "type": "string", "title": "Error Type" }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
       }
     }
   }
