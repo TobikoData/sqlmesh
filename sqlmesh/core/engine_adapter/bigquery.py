@@ -264,7 +264,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         """
         from google.cloud import bigquery
 
-        table_ = exp.to_table(table, dialect=self.dialect).copy()
+        table_ = exp.to_table(table).copy()
 
         if not table_.catalog:
             table_.set("catalog", exp.to_identifier(self.client.project))
@@ -291,7 +291,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
     ) -> t.Generator[Query, None, None]:
-        reference_table = exp.to_table(reference_table_name, dialect=self.dialect)
+        reference_table = exp.to_table(reference_table_name)
         df = self.try_get_pandas_df(query_or_df)
         if df is None:
             yield t.cast("Query", query_or_df)
@@ -391,7 +391,7 @@ class BigQueryEngineAdapter(EngineAdapter):
 
     def _table_name(self, table_name: TableName) -> str:
         # the api doesn't support backticks, so we can't call exp.table_name or sql
-        return ".".join(part.name for part in exp.to_table(table_name, dialect=self.dialect).parts)
+        return ".".join(part.name for part in exp.to_table(table_name).parts)
 
     def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         self.execute(query)

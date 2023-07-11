@@ -1531,3 +1531,24 @@ def test_contains_star_projection():
     model = load_model(expression_without_star)
     assert model.contains_star_projection is False
     assert "a" in model.columns_to_types
+
+
+def test_model_normalization():
+    expr = d.parse(
+        """
+        MODEL (
+            name `project-1.db.tbl`,
+            kind FULL,
+            columns ( a STRUCT <`a` INT64> ),
+            partitioned_by foo(`ds`),
+            dialect bigquery,
+        );
+        SELECT * FROM project-1.db.raw
+        """
+    )
+
+    model = SqlModel.parse_raw(load_model(expr, depends_on={"project-2.db.raw"}).json())
+    assert model.columns_to_types["a"].sql(dialect="bigquery") == "STRUCT<`a` INT64>"
+    assert model.partitioned_by[0].sql(dialect="bigquery") == "foo(`ds`)"
+    assert model.name == '"project-1".db.tbl'
+    assert model.depends_on == {'"project-1".db.raw', '"project-2".db.raw'}
