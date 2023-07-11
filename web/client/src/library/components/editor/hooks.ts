@@ -44,7 +44,7 @@ function useDefaultExtensions(type: FileExtensions): Extension[] {
   return useMemo(() => {
     return [
       mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      type === EnumFileExtensions.Python && python(),
+      type === EnumFileExtensions.PY && python(),
       type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
       type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
     ].filter(Boolean) as Extension[]

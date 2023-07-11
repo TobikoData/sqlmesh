@@ -7,7 +7,7 @@ export function getLanguageByExtension(extension?: FileExtensions): string {
   switch (extension) {
     case EnumFileExtensions.SQL:
       return 'SQL'
-    case EnumFileExtensions.Python:
+    case EnumFileExtensions.PY:
       return 'Python'
     case EnumFileExtensions.YAML:
     case EnumFileExtensions.YML:

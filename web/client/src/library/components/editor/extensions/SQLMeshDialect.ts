@@ -152,6 +152,11 @@ export function getSQLMeshModelKeywords(
           type: 'keyword',
           apply: 'SEED ()',
         },
+        {
+          label: 'EMBEDDED',
+          type: 'keyword',
+          apply: 'EMBEDDED, ',
+        },
       ],
     ],
     [
