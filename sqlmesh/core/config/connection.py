@@ -181,7 +181,7 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     access_token: t.Optional[str]
     catalog: t.Optional[str]
     http_headers: t.Optional[t.List[t.Tuple[str, str]]]
-    session_configuration: t.Dict[str, t.Any] = {}
+    session_configuration: t.Optional[t.Dict[str, t.Any]]
     databricks_connect_server_hostname: t.Optional[str]
     databricks_connect_access_token: t.Optional[str]
     databricks_connect_cluster_id: t.Optional[str]
@@ -218,6 +218,8 @@ class DatabricksConnectionConfig(_ConnectionConfig):
                 values["databricks_connect_access_token"] = access_token
             if not values.get("databricks_connect_cluster_id"):
                 values["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+        if not values.get("session_configuration"):
+            values["session_configuration"] = {}
         values["session_configuration"]["spark.sql.sources.partitionOverwriteMode"] = "dynamic"
         return values
 
