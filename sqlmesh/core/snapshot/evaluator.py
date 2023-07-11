@@ -43,7 +43,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
 )
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, now
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -241,7 +241,9 @@ class SnapshotEvaluator:
                 self.ddl_concurrent_tasks,
             )
 
-    def migrate(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
+    def migrate(
+        self, target_snapshots: t.Iterable[Snapshot], snapshots: t.Dict[SnapshotId, Snapshot]
+    ) -> None:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
 
         Args:
@@ -250,7 +252,7 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._migrate_snapshot(s),
+                lambda s: self._migrate_snapshot(s, snapshots),
                 self.ddl_concurrent_tasks,
             )
 
@@ -381,13 +383,21 @@ class SnapshotEvaluator:
 
             self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
-    def _migrate_snapshot(self, snapshot: SnapshotInfoLike) -> None:
+    def _migrate_snapshot(
+        self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+    ) -> None:
         if snapshot.change_category != SnapshotChangeCategory.FORWARD_ONLY:
             return
 
+        parent_snapshots_by_name = {
+            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+        }
+
         tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
-        _evaluation_strategy(snapshot, self.adapter).migrate(target_table_name, tmp_table_name)
+        _evaluation_strategy(snapshot, self.adapter).migrate(
+            snapshot.model, parent_snapshots_by_name, target_table_name, tmp_table_name
+        )
 
     def _promote_snapshot(
         self,
@@ -522,10 +532,18 @@ class EvaluationStrategy(abc.ABC):
         """
 
     @abc.abstractmethod
-    def migrate(self, target_table_name: str, source_table_name: str) -> None:
+    def migrate(
+        self,
+        model: Model,
+        snapshots: t.Dict[str, Snapshot],
+        target_table_name: str,
+        source_table_name: str,
+    ) -> None:
         """Migrates the target table schema so that it corresponds to the source table schema.
 
         Args:
+            model: The target model.
+            snapshots: Parent snapshots.
             target_table_name: The target table name.
             source_table_name: The source table name.
         """
@@ -589,7 +607,13 @@ class SymbolicStrategy(EvaluationStrategy):
     ) -> None:
         pass
 
-    def migrate(self, target_table_name: str, source_table_name: str) -> None:
+    def migrate(
+        self,
+        model: Model,
+        snapshots: t.Dict[str, Snapshot],
+        target_table_name: str,
+        source_table_name: str,
+    ) -> None:
         pass
 
     def delete(self, name: str) -> None:
@@ -668,7 +692,13 @@ class MaterializableStrategy(PromotableStrategy):
                 clustered_by=model.clustered_by,
             )
 
-    def migrate(self, target_table_name: str, source_table_name: str) -> None:
+    def migrate(
+        self,
+        model: Model,
+        snapshots: t.Dict[str, Snapshot],
+        target_table_name: str,
+        source_table_name: str,
+    ) -> None:
         logger.info(f"Altering table '{target_table_name}'")
         self.adapter.alter_table(target_table_name, source_table_name)
 
@@ -805,8 +835,22 @@ class ViewStrategy(PromotableStrategy):
             materialized=self._is_materialized_view(model),
         )
 
-    def migrate(self, target_table_name: str, source_table_name: str) -> None:
-        raise ConfigError(f"Cannot migrate a view '{target_table_name}'.")
+    def migrate(
+        self,
+        model: Model,
+        snapshots: t.Dict[str, Snapshot],
+        target_table_name: str,
+        source_table_name: str,
+    ) -> None:
+        logger.info("Migrating view '%s'", target_table_name)
+        self.adapter.create_view(
+            target_table_name,
+            model.render_query_or_raise(
+                latest=now(), snapshots=snapshots, engine_adapter=self.adapter
+            ),
+            model.columns_to_types,
+            materialized=self._is_materialized_view(model),
+        )
 
     def delete(self, name: str) -> None:
         self.adapter.drop_view(name)

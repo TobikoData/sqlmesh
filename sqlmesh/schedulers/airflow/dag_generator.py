@@ -162,7 +162,7 @@ class SnapshotDagGenerator:
             (
                 promote_start_task,
                 promote_end_task,
-            ) = self._create_promotion_demotion_tasks(plan_dag_spec)
+            ) = self._create_promotion_demotion_tasks(plan_dag_spec, all_snapshots)
 
             start_task >> create_start_task
             if (
@@ -245,7 +245,7 @@ class SnapshotDagGenerator:
         return (start_task, end_task)
 
     def _create_promotion_demotion_tasks(
-        self, request: common.PlanDagSpec
+        self, request: common.PlanDagSpec, snapshots: t.Dict[SnapshotId, Snapshot]
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_promotion_start")
         end_task = EmptyOperator(task_id="snapshot_promotion_end")
@@ -291,7 +291,7 @@ class SnapshotDagGenerator:
 
             if not request.is_dev and request.unpaused_dt:
                 migrate_tables_task = self._create_snapshot_migrate_tables_operator(
-                    request.promoted_snapshots,
+                    [snapshots[s.snapshot_id] for s in request.promoted_snapshots],
                     request.ddl_concurrent_tasks,
                     "snapshot_promotion__migrate_tables",
                 )
@@ -442,7 +442,7 @@ class SnapshotDagGenerator:
 
     def _create_snapshot_migrate_tables_operator(
         self,
-        snapshots: t.List[SnapshotTableInfo],
+        snapshots: t.List[Snapshot],
         ddl_concurrent_tasks: int,
         task_id: str,
     ) -> BaseOperator:
