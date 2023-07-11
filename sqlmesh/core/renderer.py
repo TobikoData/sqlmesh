@@ -302,9 +302,8 @@ class QueryRenderer(BaseExpressionRenderer):
             The rendered expression.
         """
         cache_key = _dates(start, end, latest)
-        skip_cache = bool(snapshots or table_mapping or expand)
 
-        if skip_cache or not optimize or cache_key not in self._optimized_cache:
+        if not optimize or cache_key not in self._optimized_cache:
             try:
                 expressions = super()._render(
                     start=start,
@@ -328,8 +327,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
             if optimize:
                 query = self._optimize_query(query)
-                if not skip_cache:
-                    self._optimized_cache[cache_key] = query
+                self._optimized_cache[cache_key] = query
         else:
             query = t.cast(exp.Subqueryable, self._optimized_cache[cache_key])
 

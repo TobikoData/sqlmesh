@@ -179,7 +179,6 @@ class SqlModelTest(ModelTest):
             for name in self.models.keys() | self.body.get("inputs", {}).keys()
         }
         query = self.model.render_query_or_raise(
-            add_incremental_filter=True,
             **self.body.get("vars", {}),
             engine_adapter=self.engine_adapter,
             table_mapping=mapping,
