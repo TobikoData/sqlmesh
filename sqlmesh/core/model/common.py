@@ -10,19 +10,6 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.utils.errors import ConfigError
 
 
-def parse_model_name(name: str) -> t.Tuple[t.Optional[str], t.Optional[str], str]:
-    """Convert a model name into table parts.
-
-    Args:
-        name: model name.
-
-    Returns:
-        A tuple consisting of catalog, schema, table name.
-    """
-    table = exp.to_table(name)
-    return table.catalog or None, table.db or None, table.name
-
-
 def parse_expression(
     v: t.Union[t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None],
     values: t.Dict[str, t.Any],
