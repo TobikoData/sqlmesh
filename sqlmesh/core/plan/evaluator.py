@@ -116,7 +116,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         Args:
             plan: The plan to source snapshots from.
         """
-        self.snapshot_evaluator.create(plan.new_snapshots, self._all_snapshots(plan))
+        self.snapshot_evaluator.create(
+            plan.new_snapshots, {s.snapshot_id: s for s in plan.snapshots}
+        )
         self.state_sync.push_snapshots(plan.new_snapshots)
 
     def _promote(self, plan: Plan) -> None:
@@ -135,7 +137,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         if not environment.end_at:
             if not plan.is_dev:
-                self.snapshot_evaluator.migrate(plan.snapshots, self._all_snapshots(plan))
+                self.snapshot_evaluator.migrate(
+                    plan.snapshots, {s.snapshot_id: s for s in plan.snapshots}
+                )
             self.state_sync.unpause_snapshots(added, now())
 
         def on_complete(snapshot: SnapshotInfoLike) -> None:
@@ -177,22 +181,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 start=plan.start,
                 end=plan.end,
             )
-
-    def _all_snapshots(self, plan: Plan) -> t.Dict[SnapshotId, Snapshot]:
-        if plan.plan_id not in self.__all_snapshots:
-            all_snapshots = {s.snapshot_id: s for s in plan.snapshots}
-
-            parent_snapshot_ids = {
-                p_sid for snapshot in all_snapshots.values() for p_sid in snapshot.parents
-            }
-
-            missing_parent_ids = parent_snapshot_ids - set(all_snapshots.keys())
-            if missing_parent_ids:
-                all_snapshots.update(self.state_sync.get_snapshots(missing_parent_ids))
-
-            self.__all_snapshots[plan.plan_id] = all_snapshots
-
-        return self.__all_snapshots[plan.plan_id]
 
 
 class AirflowPlanEvaluator(PlanEvaluator):
