@@ -908,6 +908,17 @@ def test_render_query(assert_exp_eq):
           AND "y" BETWEEN '2020-10-28' AND '2020-10-28'
         """,
     )
+    assert_exp_eq(
+        model.render_query(start="2020-10-28", end="2020-10-28", table_mapping={"x": "x_mapped"}),
+        """
+        SELECT
+          "y" AS "y"
+        FROM "x_mapped" AS "x"
+        WHERE
+          "y" BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
+          AND "y" BETWEEN '2020-10-28' AND '2020-10-28'
+        """,
+    )
 
 
 def test_time_column():

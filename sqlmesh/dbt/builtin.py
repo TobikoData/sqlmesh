@@ -335,6 +335,7 @@ def create_builtin_globals(
             relation_type=api.Relation,
             quote_policy=api.quote_policy,
             snapshots=jinja_globals.get("snapshots", {}),
+            table_mapping=jinja_globals.get("table_mapping", {}),
             is_dev=jinja_globals.get("is_dev", False),
         )
         builtin_globals.update({"log": log, "print": log})
