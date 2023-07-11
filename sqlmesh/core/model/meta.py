@@ -146,13 +146,13 @@ class ModelMeta(PydanticModel):
     def _partition_by_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.List[exp.Expression]:
-        partitions: t.List[exp.Expression]
+        dialect = values.get("dialect")
+
         if isinstance(v, (exp.Tuple, exp.Array)):
-            partitions = v.expressions
+            partitions: t.List[exp.Expression] = v.expressions
         elif isinstance(v, exp.Expression):
             partitions = [v]
         else:
-            dialect = values.get("dialect")
             partitions = [
                 d.parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
                 for entry in ensure_list(v)
@@ -163,6 +163,7 @@ class ModelMeta(PydanticModel):
         ]
 
         for partition in partitions:
+            partition.meta["dialect"] = dialect
             num_cols = len(list(partition.find_all(exp.Column)))
             error_msg: t.Optional[str] = None
             if num_cols == 0:
@@ -179,13 +180,20 @@ class ModelMeta(PydanticModel):
     def _columns_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        dialect = values.get("dialect")
+        columns_to_types = {}
         if isinstance(v, exp.Schema):
-            return {column.name: column.args["kind"] for column in v.expressions}
+            for column in v.expressions:
+                expr = column.args["kind"]
+                expr.meta["dialect"] = dialect
+                columns_to_types[column.name] = expr
+            return columns_to_types
         if isinstance(v, dict):
-            return {
-                k: exp.DataType.build(data_type, dialect=values.get("dialect"))
-                for k, data_type in v.items()
-            }
+            for k, data_type in v.items():
+                expr = exp.DataType.build(data_type, dialect=dialect)
+                expr.meta["dialect"] = dialect
+                columns_to_types[k] = expr
+            return columns_to_types
         return v
 
     @validator("depends_on_", pre=True)
@@ -201,6 +209,8 @@ class ModelMeta(PydanticModel):
             }
         if isinstance(v, exp.Expression):
             return {d.normalize_model_name(v.sql(dialect=dialect), dialect=dialect)}
+        if hasattr(v, "__iter__") and not isinstance(v, str):
+            return {d.normalize_model_name(name, dialect=dialect) for name in v}
 
         return v
 
