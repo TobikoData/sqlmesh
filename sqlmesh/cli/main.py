@@ -100,8 +100,7 @@ def cli(
 
 @cli.command("init")
 @click.option(
-    "-d",
-    "--dialect",
+    "dialect",
     required=True,
     type=str,
     help=f"Default model dialect. Supported values: {_sqlglot_dialects()}.",
@@ -120,10 +119,7 @@ def init(ctx: click.Context, dialect: str, template: t.Optional[str] = None) -> 
         project_template = ProjectTemplate(template.lower() if template else "default")
     except ValueError:
         raise click.ClickException(f"Invalid project template '{template}'")
-    try:
-        _ = Dialects(dialect.lower())
-    except ValueError:
-        raise click.ClickException(f"Invalid dialect '{dialect}'")
+    _ = Dialects(dialect.lower())
     init_example_project(ctx.obj, dialect=dialect, template=project_template)
 
 

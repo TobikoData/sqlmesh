@@ -13,6 +13,7 @@ from IPython.core.magic import (
     magics_class,
 )
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
+from sqlglot.dialects.dialect import Dialects
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core import constants as c
@@ -29,6 +30,10 @@ CONTEXT_VARIABLE_NAMES = [
     "ctx",
     "sqlmesh",
 ]
+
+
+def _sqlglot_dialects() -> str:
+    return "'" + "', '".join(Dialects.__members__.values()) + "'"
 
 
 @magics_class
@@ -92,6 +97,11 @@ class SQLMeshMagics(Magics):
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
     @argument(
+        "dialect",
+        type=str,
+        help=f"Default model dialect. Supported values: {_sqlglot_dialects()}.",
+    )
+    @argument(
         "--template",
         "-t",
         type=str,
@@ -107,7 +117,8 @@ class SQLMeshMagics(Magics):
             )
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
-        init_example_project(args.path, project_template)
+        _ = Dialects(args.dialect.lower())
+        init_example_project(args.path, args.dialect, project_template)
         self.display(self.success_message({"green-bold": "SQLMesh project scaffold created"}))
 
     @magic_arguments()
