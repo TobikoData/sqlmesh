@@ -31,7 +31,7 @@
   color: var(--color-brand-700) !important;
 }
 
-.cm-editor .cm-scroller::-webkit-scrollbar {
+.cm-editor:hover .cm-scroller::-webkit-scrollbar {
   height: 0.2rem;
   width: 0.2rem;
 }

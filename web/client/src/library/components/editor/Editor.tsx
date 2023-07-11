@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Divider } from '../divider/Divider'
-import { useStoreFileTree } from '../../../context/fileTree'
+import { useStoreProject } from '../../../context/project'
 import SplitPane from '../splitPane/SplitPane'
 import {
   debounceSync,
@@ -23,16 +23,8 @@ import CodeEditor from './EditorCode'
 import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
 
 function Editor(): JSX.Element {
-  const files = useStoreFileTree(s => s.files)
-  const selectedFile = useStoreFileTree(s => s.selectedFile)
-
   const tab = useStoreEditor(s => s.tab)
-  const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
-  const storedTabsId = useStoreEditor(s => s.storedTabsId)
   const engine = useStoreEditor(s => s.engine)
-  const selectTab = useStoreEditor(s => s.selectTab)
-  const createTab = useStoreEditor(s => s.createTab)
-  const addTab = useStoreEditor(s => s.addTab)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
 
@@ -49,26 +41,6 @@ function Editor(): JSX.Element {
       engine.removeEventListener('message', handleEngineWorkerMessage)
     }
   }, [handleEngineWorkerMessage])
-
-  useEffect(() => {
-    files.forEach(file => {
-      if (storedTabsIds.includes(file.id)) {
-        const tab = createTab(file)
-
-        if (storedTabsId === file.id) {
-          selectTab(tab)
-        } else {
-          addTab(tab)
-        }
-      }
-    })
-  }, [files])
-
-  useEffect(() => {
-    if (isNil(selectedFile) || tab?.file === selectedFile) return
-
-    selectTab(createTab(selectedFile))
-  }, [selectedFile])
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
@@ -107,15 +79,14 @@ function EditorLoading(): JSX.Element {
 }
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
-  const files = useStoreFileTree(s => s.files)
-  const selectFile = useStoreFileTree(s => s.selectFile)
+  const files = useStoreProject(s => s.files)
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const direction = useStoreEditor(s => s.direction)
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewConsole = useStoreEditor(s => s.previewConsole)
   const previewDiff = useStoreEditor(s => s.previewDiff)
-
   const refreshTab = useStoreEditor(s => s.refreshTab)
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
@@ -128,7 +99,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const modelExtensions = useSQLMeshModelExtensions(
     tab.file.path,
     model => {
-      selectFile(files.get(model.path))
+      setSelectedFile(files.get(model.path))
     },
     (model, column) => {
       setManuallySelectedColumn([model, column])

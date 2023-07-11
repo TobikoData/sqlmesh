@@ -1,5 +1,7 @@
+import { isStringEmptyOrNil } from '@utils/index'
 import { type ModelDirectory } from './directory'
 import { ModelInitial } from './initial'
+import { toUniqueName } from '@components/fileExplorer/help'
 
 export interface InitialArtifact {
   name: string
@@ -13,6 +15,7 @@ export class ModelArtifact<
   private _name: string
 
   parent: ModelDirectory | undefined
+  remove: boolean = false
 
   constructor(initial?: T | ModelArtifact, parent?: ModelDirectory) {
     super(
@@ -32,7 +35,7 @@ export class ModelArtifact<
   }
 
   get id(): ID {
-    return this.path === '' ? this.initial.id : this.path
+    return isStringEmptyOrNil(this.path) ? this.initial.id : this.path
   }
 
   get name(): string {
@@ -59,6 +62,10 @@ export class ModelArtifact<
     return Boolean(this.parent?.isModel)
   }
 
+  copyName(): string {
+    return `Copy of ${this.name}__${toUniqueName()}`
+  }
+
   rename(newName: string): void {
     if (this.isRemote) {
       this._path = this.toPath(newName, this._path.replace(this.name, newName))
@@ -68,9 +75,12 @@ export class ModelArtifact<
   }
 
   private toPath(name: string, fallback: string = ''): string {
-    return (this.withParent ? `${this.parent?.path ?? ''}/${name}` : fallback)
-      .split('/')
-      .filter(Boolean)
-      .join('/')
+    return ModelArtifact.toPath(
+      this.withParent ? `${this.parent?.path ?? ''}/${name}` : fallback,
+    )
+  }
+
+  static toPath(...paths: string[]): string {
+    return paths.flatMap(path => path.split('/').filter(Boolean)).join('/')
   }
 }
