@@ -207,6 +207,7 @@ class _Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
         engine_adapter: t.Optional[EngineAdapter] = None,
@@ -219,6 +220,7 @@ class _Model(ModelMeta, frozen=True):
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
@@ -244,6 +246,7 @@ class _Model(ModelMeta, frozen=True):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
         engine_adapter: t.Optional[EngineAdapter] = None,
@@ -256,6 +259,7 @@ class _Model(ModelMeta, frozen=True):
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
@@ -271,6 +275,7 @@ class _Model(ModelMeta, frozen=True):
             end=end,
             latest=latest,
             snapshots=snapshots,
+            table_mapping=table_mapping,
             expand=expand,
             is_dev=is_dev,
             engine_adapter=engine_adapter,
@@ -459,7 +464,7 @@ class _Model(ModelMeta, frozen=True):
     def update_schema(self, schema: MappingSchema) -> None:
         """Updates the schema for this model's dependencies based on the given mapping schema."""
         for dep in self.depends_on:
-            table = exp.to_table(dep, dialect=self.dialect)
+            table = exp.to_table(dep)
             mapping_schema = schema.find(table)
 
             if mapping_schema:
@@ -738,6 +743,7 @@ class SqlModel(_SqlBasedModel):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
         engine_adapter: t.Optional[EngineAdapter] = None,
@@ -748,6 +754,7 @@ class SqlModel(_SqlBasedModel):
             end=end,
             latest=latest,
             snapshots=snapshots,
+            table_mapping=table_mapping,
             expand=expand,
             is_dev=is_dev,
             engine_adapter=engine_adapter,
