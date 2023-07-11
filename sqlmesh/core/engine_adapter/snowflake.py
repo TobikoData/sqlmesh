@@ -4,6 +4,7 @@ import typing as t
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
@@ -65,31 +66,23 @@ class SnowflakeEngineAdapter(EngineAdapter):
     ) -> None:
         from snowflake.connector.pandas_tools import write_pandas
 
-        table = exp.to_table(table_name)
-
-        table_identifier = table.name
-        if not table.this.quoted:
-            table_identifier = table_identifier.upper()
-
-        if "db" in table.args:
-            table_db = table.db
-            if not table.args["db"].quoted:
-                table_db = table_db.upper()
-        else:
-            table_db = None
+        table = normalize_identifiers(exp.to_table(table_name), dialect=self.dialect)
 
         new_column_names = {
-            col: col if exp.to_identifier(col).quoted else col.upper() for col in df.columns  # type: ignore
+            col: col if exp.to_identifier(col).quoted else col.upper() for col in df.columns
         }
         df = df.rename(columns=new_column_names)
 
         # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
-        self.cursor.execute(f'USE SCHEMA "{table_db}"')
+        #
+        # The above issue has already been fixed upstream, but we keep the following
+        # line anyway in order to support a wider range of Snowflake versions.
+        self.cursor.execute(f'USE SCHEMA "{table.db}"')
 
         write_pandas(
             self._connection_pool.get(),
             df,
-            table_identifier,
-            schema=table_db,
+            table.name,
+            schema=table.db,
             chunk_size=self.DEFAULT_BATCH_SIZE,
         )
