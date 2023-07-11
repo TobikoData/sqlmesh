@@ -1,7 +1,7 @@
 export { filterListBy, highlightMatch }
 
 export const EMPTY_STRING = ''
-const MATCHED_LENGTH_TO_DISPALY = 40
+const MATCHED_LENGTH_TO_DISPLAY = 40
 
 function highlightMatch(source: string, match: string): string {
   return source.replaceAll(
@@ -18,10 +18,10 @@ function filterListBy<T extends Record<string, any> = Record<string, any>>(
     const idx = index.indexOf(search.toLocaleLowerCase())
 
     if (idx > -1) {
-      const min = Math.max(0, idx - MATCHED_LENGTH_TO_DISPALY)
+      const min = Math.max(0, idx - MATCHED_LENGTH_TO_DISPLAY)
       const max = Math.min(
         index.length - 1,
-        idx + search.length + MATCHED_LENGTH_TO_DISPALY,
+        idx + search.length + MATCHED_LENGTH_TO_DISPLAY,
       )
 
       acc.push([

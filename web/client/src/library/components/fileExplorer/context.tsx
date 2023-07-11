@@ -29,7 +29,7 @@ interface FileExplorer {
   selectArtifactsInRange: (to: ModelArtifact) => void
   createDirectory: (parent: ModelDirectory) => void
   createFile: (parent: ModelDirectory) => void
-  renameAtrifact: (artifact: ModelArtifact, newName?: string) => void
+  renameArtifact: (artifact: ModelArtifact, newName?: string) => void
   removeArtifacts: (artifacts: Set<ModelArtifact>) => void
   removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
   moveArtifacts: (artifacts: Set<ModelArtifact>, target: ModelDirectory) => void
@@ -45,7 +45,7 @@ export const FileExplorerContext = createContext<FileExplorer>({
   selectArtifactsInRange: () => {},
   createDirectory: () => {},
   createFile: () => {},
-  renameAtrifact: () => {},
+  renameArtifact: () => {},
   removeArtifacts: () => {},
   removeArtifactWithConfirmation: () => {},
   moveArtifacts: () => {},
@@ -160,7 +160,7 @@ export default function FileExplorerProvider({
       })
   }
 
-  function renameAtrifact(artifact: ModelArtifact, newName?: string): void {
+  function renameArtifact(artifact: ModelArtifact, newName?: string): void {
     if (isLoading || isStringEmptyOrNil(newName)) return
 
     setIsLoading(true)
@@ -326,7 +326,7 @@ export default function FileExplorerProvider({
     const duplicates: ModelArtifact[] = []
 
     artifacts.forEach(artifact => {
-      const isDuplicate = target.hasName(artifact.name)
+      const isDuplicate = target.containsName(artifact.name)
       const artifactPath = artifact.path
 
       if (isDuplicate && isFalse(shouldRenameDuplicates)) {
@@ -398,7 +398,7 @@ export default function FileExplorerProvider({
         activeRange,
         createDirectory,
         createFile,
-        renameAtrifact,
+        renameArtifact,
         removeArtifacts,
         removeArtifactWithConfirmation,
         moveArtifacts,

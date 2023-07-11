@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react'
 import Input from '@components/input/Input'
-import { isFalse, isArrayEmpty, isArrayNotEmpty } from '@utils/index'
+import { isFalse, isArrayEmpty, isNil } from '@utils/index'
 import { EnumSize, type Size } from '~/types/enum'
 import { EMPTY_STRING, filterListBy, highlightMatch } from './help'
 import { Link } from 'react-router-dom'
+import clsx from 'clsx'
 
 export default function SearchList<
   T extends Record<string, any> = Record<string, any>,
@@ -15,6 +16,7 @@ export default function SearchList<
   onSelect,
   to,
   autoFocus = false,
+  isFullWidth = false,
 }: {
   list: T[]
   searchBy: string
@@ -23,6 +25,7 @@ export default function SearchList<
   autoFocus?: boolean
   to?: (item: T) => string
   size?: Size
+  isFullWidth?: boolean
 }): JSX.Element {
   const indices: Array<[T, string]> = useMemo(
     () => list.map(item => [item, item[searchBy]]),
@@ -38,7 +41,7 @@ export default function SearchList<
 
   return (
     <div
-      className="p-2 relative"
+      className="px-2 py-1 relative"
       onKeyDown={(e: React.KeyboardEvent) => {
         if (e.key === 'Escape') {
           setSearch(EMPTY_STRING)
@@ -56,8 +59,13 @@ export default function SearchList<
         autoFocus={autoFocus}
       />
       {showSearchResults && (
-        <ul className="p-2 bg-theme dark:bg-theme-lighter absolute w-full z-10 mt-2 rounded-lg max-h-[25vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl">
-          {isArrayEmpty(found) && (
+        <ul
+          className={clsx(
+            'p-2 bg-theme dark:bg-theme-lighter fixed z-10 mt-2 rounded-lg max-h-[25vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
+            isFullWidth ? 'w-full' : 'w-full max-w-[20rem]',
+          )}
+        >
+          {isArrayEmpty(found) ? (
             <li
               key="not-found"
               className="p-2"
@@ -69,14 +77,13 @@ export default function SearchList<
             >
               No Results Found
             </li>
-          )}
-          {isArrayNotEmpty(found) &&
+          ) : (
             found.map(([item, index]) => (
               <li
                 key={item.name}
                 className="p-2 cursor-pointer hover:bg-primary-10 rounded-lg"
               >
-                {to == null ? (
+                {isNil(to) ? (
                   <SearchResult<T>
                     item={item}
                     index={index}
@@ -108,7 +115,8 @@ export default function SearchList<
                   </Link>
                 )}
               </li>
-            ))}
+            ))
+          )}
         </ul>
       )}
     </div>
@@ -131,7 +139,7 @@ function SearchResult<T extends Record<string, any> = Record<string, any>>({
   return (
     <div
       onClick={onClick}
-      className="text-md font-normal w-full"
+      className="text-md font-normal w-full overflow-hidden whitespace-nowrap overflow-ellipsis"
     >
       <span className="font-bold">{item[displayBy]}</span>
       <small

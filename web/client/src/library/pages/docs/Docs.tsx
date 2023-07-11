@@ -68,6 +68,7 @@ export default function PageDocs(): JSX.Element {
                   model.name,
                 )}`
               }
+              isFullWidth={true}
             />
           )}
           <SplitPane

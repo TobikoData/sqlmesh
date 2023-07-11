@@ -87,7 +87,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   copyName(): string {
-    return `Copy ${
+    return `Copy of ${
       this.name.split(this.extension)[0] ?? ''
     }__${toUniqueName()}${this.extension}`
   }

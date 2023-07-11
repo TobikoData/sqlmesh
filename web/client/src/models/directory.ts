@@ -136,7 +136,7 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     })
   }
 
-  hasName(name: string): boolean {
+  containsName(name: string): boolean {
     return this.artifacts.some(artifact => artifact.name === name)
   }
 

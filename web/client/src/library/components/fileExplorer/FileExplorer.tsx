@@ -62,7 +62,7 @@ const FileExplorer = function FileExplorer({
   return (
     <div
       className={clsx(
-        'h-full py-2 overflow-hidden  text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
+        'flex flex-col h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
         className,
       )}
     >
@@ -74,10 +74,10 @@ const FileExplorer = function FileExplorer({
       />
       <FileExplorer.ContextMenu
         trigger={
-          <FileExplorer.ContextMenuTrigger>
+          <FileExplorer.ContextMenuTrigger className="h-full pb-2">
             <DndProvider backend={HTML5Backend}>
               <div
-                className="w-full relative h-full px-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
+                className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
                 tabIndex={1}
                 onKeyDown={handleKeyDown}
               >
@@ -183,7 +183,7 @@ function FileExplorerContextMenu({
       {trigger}
       <ContextMenu.Portal>
         <ContextMenu.Content
-          className="bg-light rounded-md overflow-hiddin shadow-lg py-2 px-1"
+          className="bg-light rounded-md overflow-hidden shadow-lg py-2 px-1"
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
           }}
@@ -215,15 +215,15 @@ function FileExplorerContextMenuTrigger({
 }
 
 function FileExplorerArtifactRename({
-  atrifact,
+  artifact,
   newName,
   setNewName,
 }: {
-  atrifact: ModelArtifact
+  artifact: ModelArtifact
   newName?: string
   setNewName: (name?: string) => void
 }): JSX.Element {
-  const { renameAtrifact } = useFileExplorer()
+  const { renameArtifact } = useFileExplorer()
 
   return (
     <div className="w-full flex items-center py-[0.125rem] pr-2">
@@ -238,7 +238,7 @@ function FileExplorerArtifactRename({
         }}
       />
       <div className="flex">
-        {atrifact.name === newName?.trim() || newName === '' ? (
+        {artifact.name === newName?.trim() || newName === '' ? (
           <XCircleIcon
             className="inline-block w-4 h-4 ml-2 text-neutral-100 cursor-pointer"
             onClick={(e: MouseEvent) => {
@@ -253,7 +253,7 @@ function FileExplorerArtifactRename({
             onClick={(e: MouseEvent) => {
               e.stopPropagation()
 
-              renameAtrifact(atrifact, newName)
+              renameArtifact(artifact, newName)
               setNewName(undefined)
             }}
           />

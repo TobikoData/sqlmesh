@@ -100,16 +100,16 @@ const Directory = function Directory({
 
       let isAllDirectories = true
       let isAllOpened = true
-      let isAllsClosed = true
+      let isAllClosed = true
 
-      for (const atrifact of Array.from(activeRange)) {
-        if (atrifact instanceof ModelDirectory && isAllDirectories) {
+      for (const artifact of Array.from(activeRange)) {
+        if (artifact instanceof ModelDirectory && isAllDirectories) {
           if (isAllOpened) {
-            isAllOpened = atrifact.isOpened
+            isAllOpened = artifact.isOpened
           }
 
-          if (isAllsClosed) {
-            isAllsClosed = atrifact.isClosed
+          if (isAllClosed) {
+            isAllClosed = artifact.isClosed
           }
         } else {
           isAllDirectories = false
@@ -119,13 +119,13 @@ const Directory = function Directory({
       return [
         isAllDirectories,
         isAllOpened,
-        isAllsClosed,
-        isFalse(isAllOpened) && isFalse(isAllsClosed),
+        isAllClosed,
+        isFalse(isAllOpened) && isFalse(isAllClosed),
       ]
     }, [activeRange])
 
   useEffect(() => {
-    // Update component every time ModelDirectory's state "isOpen" is changing
+    // Update component every time ModelDirectory's "isOpen" state is changes
     directory.syncStateOpen = setIsOpen
   }, [])
 
@@ -324,7 +324,7 @@ const Directory = function Directory({
                 </FileExplorer.ContextMenu>
               ) : (
                 <FileExplorer.Rename
-                  atrifact={directory}
+                  artifact={directory}
                   newName={newName}
                   setNewName={setNewName}
                 />

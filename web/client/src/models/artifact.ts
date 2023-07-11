@@ -63,7 +63,7 @@ export class ModelArtifact<
   }
 
   copyName(): string {
-    return `Copy ${this.name}__${toUniqueName()}`
+    return `Copy of ${this.name}__${toUniqueName()}`
   }
 
   rename(newName: string): void {
@@ -81,6 +81,6 @@ export class ModelArtifact<
   }
 
   static toPath(...paths: string[]): string {
-    return paths.join('/').split('/').filter(Boolean).join('/')
+    return paths.flatMap(path => path.split('/').filter(Boolean)).join('/')
   }
 }
