@@ -4,7 +4,9 @@ importScripts('https://cdn.jsdelivr.net/pyodide/v0.23.2/full/pyodide.js')
 
 const scope = self as any
 
-async function loadPyodideAndPackages(): Promise<any[]> {
+async function loadPyodideAndPackages(): Promise<{
+  sqlglot: Record<string, any>
+}> {
   scope.pyodide = await scope.loadPyodide()
 
   await scope.pyodide.loadPackage('micropip')
@@ -17,22 +19,25 @@ async function loadPyodideAndPackages(): Promise<any[]> {
     await fetch(new URL('./sqlglot.py', import.meta.url))
   ).text()
 
-  scope.postMessage({ topic: 'init' })
+  scope.postMessage({
+    topic: 'init',
+  })
 
-  return Array.from(scope.pyodide.runPython(file))
+  return {
+    sqlglot: scope.pyodide.runPython(file),
+  }
 }
 
 const pyodideReadyPromise = loadPyodideAndPackages()
 
 scope.onmessage = async (e: MessageEvent) => {
-  const [parse, get_dialect, dialects] = await pyodideReadyPromise
+  const { sqlglot } = await pyodideReadyPromise
 
   if (e.data.topic === 'validate') {
-    let payload
+    let payload: boolean
 
     try {
-      const parsed = JSON.parse(parse(e.data.payload)).filter(Boolean)
-      payload = Boolean(parsed) && parsed.length > 0
+      payload = JSON.parse(sqlglot.get('validate')?.(e.data.payload))
     } catch (error) {
       payload = false
     }
@@ -44,26 +49,42 @@ scope.onmessage = async (e: MessageEvent) => {
   }
 
   if (e.data.topic === 'dialect') {
-    const { keywords, types }: { keywords: string; types: string } = JSON.parse(
-      get_dialect(e.data.payload),
-    )
+    let payload: { keywords: string; types: string }
+
+    try {
+      payload = JSON.parse(sqlglot.get('get_dialect')?.(e.data.payload))
+    } catch (error) {
+      payload = {
+        keywords: '',
+        types: '',
+      }
+    }
 
     scope.postMessage({
       topic: 'dialect',
-      payload: {
-        types: types.toLowerCase(),
-        keywords: keywords.toLowerCase(),
-      },
+      payload,
     })
   }
 
   if (e.data.topic === 'dialects') {
+    let payload: Array<{ dialect_title: string; dialect_name: string }>
+
+    try {
+      payload = JSON.parse(sqlglot.get('dialects'))
+    } catch (error) {
+      payload = []
+    }
+
     scope.postMessage({
       topic: 'dialects',
-      payload: {
-        dialects: JSON.parse(dialects),
-        dialect: 'mysql',
-      },
+      payload,
+    })
+  }
+
+  if (e.data.topic === 'format') {
+    scope.postMessage({
+      topic: 'format',
+      payload: sqlglot.get('format')?.(e.data.payload.sql) ?? '',
     })
   }
 }
