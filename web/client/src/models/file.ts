@@ -5,7 +5,7 @@ import { isStringEmptyOrNil } from '@utils/index'
 
 export const EnumFileExtensions = {
   SQL: '.sql',
-  Python: '.py',
+  PY: '.py',
   CSV: '.csv',
   YAML: '.yaml',
   YML: '.yml',
@@ -78,7 +78,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   get isSQLMeshModelPython(): boolean {
-    return this.isSQLMeshModel && this.extension === EnumFileExtensions.Python
+    return this.isSQLMeshModel && this.extension === EnumFileExtensions.PY
   }
 
   get isSQLMeshModelSQL(): boolean {

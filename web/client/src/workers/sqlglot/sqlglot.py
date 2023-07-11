@@ -26,12 +26,35 @@ def get_dialect(name: str = "") -> str:
     keywords = dialect.tokenizer_class.KEYWORDS
     type_mapping = dialect.generator_class.TYPE_MAPPING
 
-    output = {
-        "keywords": " ".join(keywords),
-        "types": " ".join(type_mapping.get(t, t.value) for t in exp.DataType.Type),
-    }
+    return json.dumps(
+        {
+            "keywords": " ".join(keywords),
+            "types": " ".join(type_mapping.get(t, t.value) for t in exp.DataType.Type),
+        }
+    )
 
-    return json.dumps(output)
+
+def format(sql: str = "", read: DialectType = None) -> str:
+    return "\n".join(
+        sqlglot.transpile(sql, read=read, error_level=sqlglot.errors.ErrorLevel.IGNORE, pretty=True)
+    )
 
 
-[parse_to_json, get_dialect, dialects]
+def validate(sql: str = "", read: DialectType = None) -> str:
+    try:
+        sqlglot.transpile(
+            sql, read=read, pretty=False, unsupported_level=sqlglot.errors.ErrorLevel.IMMEDIATE
+        )
+    except sqlglot.errors.ParseError as e:
+        return json.dumps(False)
+
+    return json.dumps(True)
+
+
+{
+    "dialects": dialects,
+    "get_dialect": get_dialect,
+    "parse_to_json": parse_to_json,
+    "validate": validate,
+    "format": format,
+}

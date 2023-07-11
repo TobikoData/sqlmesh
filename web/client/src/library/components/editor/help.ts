@@ -1,15 +1,16 @@
+import { EnumFileExtensions, type FileExtensions } from '@models/file'
 import { type Table } from 'apache-arrow'
 import { type Dialect, type EditorTab } from '~/context/editor'
 import { isArrayNotEmpty } from '~/utils'
 
-export function getLanguageByExtension(extension?: string): string {
+export function getLanguageByExtension(extension?: FileExtensions): string {
   switch (extension) {
-    case '.sql':
+    case EnumFileExtensions.SQL:
       return 'SQL'
-    case '.py':
+    case EnumFileExtensions.PY:
       return 'Python'
-    case '.yaml':
-    case '.yml':
+    case EnumFileExtensions.YAML:
+    case EnumFileExtensions.YML:
       return 'YAML'
     default:
       return 'Plain Text'
@@ -21,16 +22,11 @@ export function showIndicatorDialects(
   dialects: Dialect[],
 ): boolean {
   return (
-    tab.file.extension === '.sql' &&
+    tab.file.extension === EnumFileExtensions.SQL &&
     tab.file.isLocal &&
     isArrayNotEmpty(dialects)
   )
 }
-
-type TableCellValue = number | string | null
-type TableRows = Array<Record<string, TableCellValue>>
-type TableColumns = string[]
-type ResponseTableColumns = Array<Array<[string, TableCellValue]>>
 
 export function toTableRow(
   row: Array<[string, TableCellValue]> = [],
@@ -41,6 +37,11 @@ export function toTableRow(
     {},
   )
 }
+
+type TableCellValue = number | string | null
+type TableRows = Array<Record<string, TableCellValue>>
+type TableColumns = string[]
+type ResponseTableColumns = Array<Array<[string, TableCellValue]>>
 
 export function getTableDataFromArrowStreamResult(
   result: Table<any>,

@@ -111,7 +111,7 @@ const Documentation = function Documentation({
                       'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                     )}
                   >
-                    <CodeEditor.SQLMeshDialect
+                    <CodeEditor.Default
                       content={file.content}
                       type={file.extension}
                     >
@@ -122,7 +122,7 @@ const Documentation = function Documentation({
                           className="text-xs"
                         />
                       )}
-                    </CodeEditor.SQLMeshDialect>
+                    </CodeEditor.Default>
                   </Tab.Panel>
                   <Tab.Panel
                     unmount={false}
@@ -130,7 +130,7 @@ const Documentation = function Documentation({
                       'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
                     )}
                   >
-                    <CodeEditor.SQLMeshDialect
+                    <CodeEditor.Default
                       type={EnumFileExtensions.SQL}
                       content={model.sql ?? ''}
                     >
@@ -141,7 +141,7 @@ const Documentation = function Documentation({
                           className="text-xs"
                         />
                       )}
-                    </CodeEditor.SQLMeshDialect>
+                    </CodeEditor.Default>
                   </Tab.Panel>
                 </Tab.Panels>
               </Tab.Group>
