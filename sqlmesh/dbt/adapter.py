@@ -165,7 +165,10 @@ class RuntimeAdapter(BaseAdapter):
         self.engine_adapter = engine_adapter
         self.relation_type = relation_type or BaseRelation
         self.quote_policy = quote_policy or Policy()
-        self.table_mapping = table_mapping | to_table_mapping((snapshots or {}).values(), is_dev)
+        self.table_mapping = {
+            **to_table_mapping((snapshots or {}).values(), is_dev),
+            **table_mapping,
+        }
 
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str

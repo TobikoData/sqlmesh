@@ -437,7 +437,7 @@ def _resolve_tables(
 
     snapshots = snapshots or {}
     table_mapping = table_mapping or {}
-    mapping = table_mapping | to_table_mapping(snapshots.values(), is_dev)
+    mapping = {**to_table_mapping(snapshots.values(), is_dev), **table_mapping}
     # if a snapshot is provided but not mapped, we need to expand it or the query
     # won't be valid
     expand = set(expand) | {name for name in snapshots if name not in mapping}
