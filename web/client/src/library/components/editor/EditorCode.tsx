@@ -66,7 +66,7 @@ function CodeEditorSQLMesh({
     return [
       ...extensionsDefault,
       type === EnumFileExtensions.SQL &&
-      SQLMeshDialect(models, dialectOptions, dialectsTitles),
+        SQLMeshDialect(models, dialectOptions, dialectsTitles),
     ]
       .filter(Boolean)
       .flat() as Extension[]

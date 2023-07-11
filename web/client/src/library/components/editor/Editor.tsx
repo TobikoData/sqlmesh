@@ -25,9 +25,6 @@ import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
   const engine = useStoreEditor(s => s.engine)
-  const selectTab = useStoreEditor(s => s.selectTab)
-  const createTab = useStoreEditor(s => s.createTab)
-  const addTab = useStoreEditor(s => s.addTab)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
 
@@ -44,29 +41,6 @@ function Editor(): JSX.Element {
       engine.removeEventListener('message', handleEngineWorkerMessage)
     }
   }, [handleEngineWorkerMessage])
-
-  useEffect(() => {
-    files.forEach(file => {
-      if (storedTabsIds.includes(file.id)) {
-        const tab = createTab(file)
-
-        if (storedTabsId === file.id) {
-          selectTab(tab)
-        } else {
-          addTab(tab)
-        }
-      }
-    })
-  }, [files])
-
-  useEffect(() => {
-    if (isNil(selectedFile) || tab?.file === selectedFile) return
-
-    const newTab = createTab(selected as ModelFile)
-
-    addTab(newTab)
-    selectTab(newTab)
-  }, [selected])
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden">
