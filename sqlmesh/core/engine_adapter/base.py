@@ -19,6 +19,9 @@ import pandas as pd
 from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
 from sqlglot.helper import ensure_list
+from sqlglot.optimizer.normalize_identifiers import (
+    normalize_identifiers as normalize_identifiers_func,
+)
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
@@ -790,14 +793,18 @@ class EngineAdapter:
         self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
         return self.cursor.fetchall()
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+    ) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
-        self.execute(query)
+        self.execute(query, normalize_identifiers=normalize_identifiers)
         return self.cursor.fetchdf()
 
-    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
+    def fetchdf(
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+    ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
-        df = self._fetch_native_df(query)
+        df = self._fetch_native_df(query, normalize_identifiers=normalize_identifiers)
         if not isinstance(df, pd.DataFrame):
             raise NotImplementedError(
                 "The cursor's `fetch_native_df` method is not returning a pandas DataFrame. Need to update `fetchdf` so a Pandas DataFrame is returned"
@@ -835,6 +842,7 @@ class EngineAdapter:
         self,
         expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
+        normalize_identifiers: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
@@ -843,7 +851,16 @@ class EngineAdapter:
         )
 
         for e in ensure_list(expressions):
-            sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
+            sql = (
+                self._to_sql(
+                    e,
+                    normalize_identifiers=normalize_identifiers,
+                    **to_sql_kwargs,
+                )
+                if isinstance(e, exp.Expression)
+                else e
+            )
+
             logger.debug(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
 
@@ -882,12 +899,17 @@ class EngineAdapter:
         """Creates a SQLGlot table properties expression for ddl."""
         return None
 
-    def _to_sql(self, e: exp.Expression, **kwargs: t.Any) -> str:
+    def _to_sql(
+        self, e: exp.Expression, normalize_identifiers: bool = True, **kwargs: t.Any
+    ) -> str:
         """
         Converts an expression to a SQL string. Has a set of default kwargs to apply, and then default
         kwargs defined for the given dialect, and then kwargs provided by the user when defining the engine
         adapter, and then finally kwargs provided by the user when calling this method.
         """
+        if normalize_identifiers:
+            normalize_identifiers_func(e, dialect=self.dialect)
+
         sql_gen_kwargs = {
             "dialect": self.dialect,
             "pretty": False,

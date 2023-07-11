@@ -40,8 +40,18 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter):
             self.execute(sql)
             return self.insert_append(table_name, query_or_df, columns_to_types)
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+    ) -> DF:
         """Fetches a Pandas DataFrame from a SQL query."""
-        sql = self._to_sql(query) if isinstance(query, exp.Expression) else query
+        sql = (
+            self._to_sql(
+                query,
+                normalize_identifiers=normalize_identifiers,
+            )
+            if isinstance(query, exp.Expression)
+            else query
+        )
+
         logger.debug(f"Executing SQL:\n{sql}")
         return read_sql_query(sql, self.cursor.connection)

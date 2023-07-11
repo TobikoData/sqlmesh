@@ -20,10 +20,12 @@ class SnowflakeEngineAdapter(EngineAdapter):
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+    ) -> DF:
         from snowflake.connector.errors import NotSupportedError
 
-        self.execute(query)
+        self.execute(query, normalize_identifiers=normalize_identifiers)
 
         try:
             return self.cursor.fetch_pandas_all()

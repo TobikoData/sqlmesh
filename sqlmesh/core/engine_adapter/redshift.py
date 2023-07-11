@@ -62,9 +62,11 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
             **create_kwargs,
         )
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+    ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
-        self.execute(query)
+        self.execute(query, normalize_identifiers=normalize_identifiers)
         return self.cursor.fetch_dataframe()
 
     def _create_table_from_query(
