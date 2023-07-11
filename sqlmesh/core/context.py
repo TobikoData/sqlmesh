@@ -139,7 +139,7 @@ class BaseContext(abc.ABC):
         Returns:
             The default dataframe is Pandas, but for Spark a PySpark dataframe is returned.
         """
-        return self.engine_adapter.fetchdf(query, normalize_identifiers=False)
+        return self.engine_adapter.fetchdf(query)
 
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         """Fetches a PySpark dataframe given a sql string or sqlglot expression.
