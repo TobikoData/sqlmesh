@@ -119,7 +119,6 @@ def init(ctx: click.Context, dialect: str, template: t.Optional[str] = None) -> 
         project_template = ProjectTemplate(template.lower() if template else "default")
     except ValueError:
         raise click.ClickException(f"Invalid project template '{template}'")
-    _ = Dialects(dialect.lower())
     init_example_project(ctx.obj, dialect=dialect, template=project_template)
 
 
