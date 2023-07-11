@@ -682,6 +682,7 @@ class Context(BaseContext):
         auto_apply: bool = False,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
+        promote_all: bool = False,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -715,6 +716,7 @@ class Context(BaseContext):
                 changes (breaking / non-breaking). If not provided, then the corresponding configuration
                 option determines the behavior.
             effective_from: The effective date from which to apply forward-only changes on production.
+            promote_all: Whether to promote all snapshots in the target environment as opposed to only new ones.
 
         Returns:
             The populated Plan object.
@@ -749,6 +751,7 @@ class Context(BaseContext):
             categorizer_config=self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
+            promote_all=promote_all,
         )
 
         if not no_prompts:

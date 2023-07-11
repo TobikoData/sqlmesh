@@ -33,6 +33,10 @@ class PlanError(SQLMeshError):
     pass
 
 
+class NoChangesPlanError(PlanError):
+    pass
+
+
 class MissingContextException(Exception):
     pass
 

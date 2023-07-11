@@ -477,3 +477,91 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
     plan.effective_from = None
     assert plan.effective_from is None
     assert snapshot.effective_from is None
+
+
+def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot}
+    context_diff_mock.added = set()
+    context_diff_mock.removed = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {}
+    context_diff_mock.promoted_model_names = set()
+    context_diff_mock.is_new_environment = True
+    context_diff_mock.has_snapshot_changes = False
+    context_diff_mock.environment = "test_dev"
+    context_diff_mock.previous_plan_id = "previous_plan_id"
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.missing_intervals.return_value = {}
+
+    with pytest.raises(PlanError, match="No changes were detected.*"):
+        Plan(context_diff_mock, state_reader_mock, is_dev=True)
+
+    assert Plan(context_diff_mock, state_reader_mock).environment.promoted_snapshot_ids is None
+    assert (
+        Plan(
+            context_diff_mock, state_reader_mock, is_dev=True, promote_all=True
+        ).environment.promoted_snapshot_ids
+        is None
+    )
+
+
+def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 3, ds")))
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": updated_snapshot_a, "b": snapshot_b}
+    context_diff_mock.added = set()
+    context_diff_mock.removed = set()
+    context_diff_mock.modified_snapshots = {"a": (updated_snapshot_a, snapshot_a)}
+    context_diff_mock.new_snapshots = {updated_snapshot_a.snapshot_id: updated_snapshot_a}
+    context_diff_mock.promoted_model_names = set()
+    context_diff_mock.is_new_environment = True
+    context_diff_mock.has_snapshot_changes = True
+    context_diff_mock.environment = "test_dev"
+    context_diff_mock.previous_plan_id = "previous_plan_id"
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.missing_intervals.return_value = {}
+
+    # Modified the existing model.
+    assert Plan(
+        context_diff_mock, state_reader_mock, is_dev=True
+    ).environment.promoted_snapshot_ids == [updated_snapshot_a.snapshot_id]
+
+    # Updating the existing environment with a previously promoted snapshot.
+    context_diff_mock.promoted_model_names = {"b"}
+    context_diff_mock.is_new_environment = False
+    assert set(
+        Plan(context_diff_mock, state_reader_mock, is_dev=True).environment.promoted_snapshot_ids
+        or []
+    ) == {
+        updated_snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+    }
+
+    # Adding a new model
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("select 4, ds")))
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+    context_diff_mock.snapshots = {"a": updated_snapshot_a, "b": snapshot_b, "c": snapshot_c}
+    context_diff_mock.added = {"c"}
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {snapshot_c.snapshot_id: snapshot_c}
+    context_diff_mock.promoted_model_names = {"a", "b"}
+    assert set(
+        Plan(context_diff_mock, state_reader_mock, is_dev=True).environment.promoted_snapshot_ids
+        or []
+    ) == {
+        updated_snapshot_a.snapshot_id,
+        snapshot_b.snapshot_id,
+        snapshot_c.snapshot_id,
+    }

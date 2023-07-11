@@ -478,6 +478,7 @@ def test_get_environments(project_context: Context) -> None:
             "previous_plan_id": None,
             "expiration_ts": None,
             "finalized_ts": None,
+            "promoted_snapshot_ids": None,
         }
     }
 
@@ -524,6 +525,7 @@ def test_table_diff(web_sushi_context: Context) -> None:
         no_prompts=True,
         auto_apply=True,
         skip_tests=True,
+        promote_all=True,
     )
     response = client.get(
         "/api/table_diff",

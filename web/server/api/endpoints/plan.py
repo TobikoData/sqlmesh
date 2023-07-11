@@ -46,6 +46,7 @@ async def run_plan(
             skip_backfill=plan_options.skip_backfill,
             forward_only=plan_options.forward_only,
             no_auto_categorization=plan_options.no_auto_categorization,
+            promote_all=True,
         )
     except Exception:
         raise ApiException(
