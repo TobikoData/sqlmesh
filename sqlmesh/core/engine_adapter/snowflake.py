@@ -22,7 +22,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
     SUPPORTS_MATERIALIZED_VIEWS = True
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> DF:
         from snowflake.connector.errors import NotSupportedError
 

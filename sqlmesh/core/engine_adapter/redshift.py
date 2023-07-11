@@ -63,7 +63,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         )
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
         self.execute(query, normalize_identifiers=normalize_identifiers)
