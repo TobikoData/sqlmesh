@@ -396,7 +396,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         return ".".join(part.name for part in exp.to_table(table_name).parts)
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> DF:
         self.execute(query, normalize_identifiers=normalize_identifiers)
         return self.cursor._query_job.to_dataframe()
@@ -483,11 +483,7 @@ class BigQueryEngineAdapter(EngineAdapter):
 
         for e in ensure_list(expressions):
             sql = (
-                self._to_sql(
-                    e,
-                    normalize_identifiers=normalize_identifiers,
-                    **to_sql_kwargs,
-                )
+                self._to_sql(e, normalize_identifiers=normalize_identifiers, **to_sql_kwargs)
                 if isinstance(e, exp.Expression)
                 else e
             )

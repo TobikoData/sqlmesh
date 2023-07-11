@@ -364,7 +364,7 @@ def audit(
 def fetchdf(ctx: click.Context, sql: str) -> None:
     """Runs a sql query and displays the results."""
     context = ctx.obj
-    context.console.log_success(context.fetchdf(sql, normalize_identifiers=False))
+    context.console.log_success(context.fetchdf(sql))
 
 
 @cli.command("info")

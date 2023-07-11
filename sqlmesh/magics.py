@@ -422,7 +422,7 @@ class SQLMeshMagics(Magics):
     def fetchdf(self, line: str, sql: str) -> None:
         """Fetches a dataframe from sql, optionally storing it in a variable."""
         args = parse_argstring(self.fetchdf, line)
-        df = self._context.fetchdf(sql, normalize_identifiers=False)
+        df = self._context.fetchdf(sql)
         if args.df_var:
             self._shell.user_ns[args.df_var] = df
         self.display(df)

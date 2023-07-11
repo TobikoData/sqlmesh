@@ -130,20 +130,16 @@ class BaseContext(abc.ABC):
         """
         return self._model_tables[model_name]
 
-    def fetchdf(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
-    ) -> pd.DataFrame:
+    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
         """Fetches a dataframe given a sql string or sqlglot expression.
 
         Args:
             query: SQL string or sqlglot expression.
-            normalize_identifiers: Whether or not to normalize all identifiers in the query
-                according to the dialect's resolution rules.
 
         Returns:
             The default dataframe is Pandas, but for Spark a PySpark dataframe is returned.
         """
-        return self.engine_adapter.fetchdf(query, normalize_identifiers=normalize_identifiers)
+        return self.engine_adapter.fetchdf(query, normalize_identifiers=False)
 
     def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
         """Fetches a PySpark dataframe given a sql string or sqlglot expression.

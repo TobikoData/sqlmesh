@@ -43,14 +43,11 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter):
             return self.insert_append(table_name, query_or_df, columns_to_types)
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> DF:
         """Fetches a Pandas DataFrame from a SQL query."""
         sql = (
-            self._to_sql(
-                query,
-                normalize_identifiers=normalize_identifiers,
-            )
+            self._to_sql(query, normalize_identifiers=normalize_identifiers)
             if isinstance(query, exp.Expression)
             else query
         )

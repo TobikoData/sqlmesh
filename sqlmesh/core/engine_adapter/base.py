@@ -793,14 +793,14 @@ class EngineAdapter:
         return self.cursor.fetchall()
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         self.execute(query, normalize_identifiers=normalize_identifiers)
         return self.cursor.fetchdf()
 
     def fetchdf(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
         df = self._fetch_native_df(query, normalize_identifiers=normalize_identifiers)
@@ -851,11 +851,7 @@ class EngineAdapter:
 
         for e in ensure_list(expressions):
             sql = (
-                self._to_sql(
-                    e,
-                    normalize_identifiers=normalize_identifiers,
-                    **to_sql_kwargs,
-                )
+                self._to_sql(e, normalize_identifiers=normalize_identifiers, **to_sql_kwargs)
                 if isinstance(e, exp.Expression)
                 else e
             )

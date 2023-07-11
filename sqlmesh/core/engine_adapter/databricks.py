@@ -107,7 +107,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         return self._spark
 
     def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         if self.is_spark_session_cursor:
@@ -123,7 +123,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         return self.cursor.fetchall_arrow().to_pandas()
 
     def fetchdf(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> pd.DataFrame:
         """
         Returns a Pandas DataFrame from a query or expression.

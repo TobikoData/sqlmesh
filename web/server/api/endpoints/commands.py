@@ -115,7 +115,7 @@ async def fetchdf(
 ) -> ArrowStreamingResponse:
     """Fetches a dataframe given a sql string"""
     try:
-        df = context.fetchdf(options.sql, normalize_identifiers=False)
+        df = context.fetchdf(options.sql)
     except Exception:
         raise ApiException(
             message="Unable to fetch a dataframe from the given sql string",

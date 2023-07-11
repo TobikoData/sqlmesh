@@ -48,12 +48,12 @@ class SparkEngineAdapter(EngineAdapter):
         return self.spark.createDataFrame(df)
 
     def fetchdf(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> pd.DataFrame:
         return self.fetch_pyspark_df(query, normalize_identifiers=normalize_identifiers).toPandas()
 
     def fetch_pyspark_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = True
+        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
     ) -> PySparkDataFrame:
         return self._ensure_pyspark_df(
             self._fetch_native_df(query, normalize_identifiers=normalize_identifiers)
