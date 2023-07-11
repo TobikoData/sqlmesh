@@ -536,8 +536,10 @@ class Plan:
                 )
 
     def _ensure_no_forward_only_new_models(self) -> None:
-        if self.forward_only and self.context_diff.added_internal_models:
-            raise PlanError("New models can't be added as part of the forward-only plan.")
+        if self.forward_only and self.context_diff.added_materialized_models:
+            raise PlanError(
+                "New models that require materialization can't be added as part of the forward-only plan."
+            )
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self.context_diff.snapshots.values():

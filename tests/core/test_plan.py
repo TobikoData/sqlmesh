@@ -40,7 +40,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {"b": (snapshot_b, snapshot_b)}
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
-    context_diff_mock.added_internal_models = set()
+    context_diff_mock.added_materialized_models = set()
 
     state_reader_mock = mocker.Mock()
 
@@ -71,7 +71,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
-    context_diff_mock.added_internal_models = set()
+    context_diff_mock.added_materialized_models = set()
 
     state_reader_mock = mocker.Mock()
 
@@ -102,16 +102,17 @@ def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerF
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {}
-    context_diff_mock.added_internal_models = {"a"}
+    context_diff_mock.added_materialized_models = {"a"}
 
     state_reader_mock = mocker.Mock()
 
     with pytest.raises(
-        PlanError, match="New models can't be added as part of the forward-only plan."
+        PlanError,
+        match="New models that require materialization can't be added as part of the forward-only plan.",
     ):
         Plan(context_diff_mock, state_reader_mock, forward_only=True)
 
-    context_diff_mock.added_internal_models = set()
+    context_diff_mock.added_materialized_models = set()
     Plan(context_diff_mock, state_reader_mock, forward_only=True)
 
 
@@ -138,7 +139,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {"b": (snapshot_b, snapshot_b)}
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
-    context_diff_mock.added_internal_models = set()
+    context_diff_mock.added_materialized_models = set()
 
     state_reader_mock = mocker.Mock()
 
@@ -175,7 +176,7 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {}
-    context_diff_mock.added_internal_models = set()
+    context_diff_mock.added_materialized_models = set()
 
     state_reader_mock = mocker.Mock()
 
@@ -274,7 +275,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {"a": (snapshot, forward_only_snapshot)}
     context_diff_mock.new_snapshots = {}
-    context_diff_mock.added_internal_models = set()
+    context_diff_mock.added_materialized_models = set()
 
     state_reader_mock = mocker.Mock()
 
@@ -324,7 +325,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {"a": (snapshot_a_updated, snapshot_a)}
     context_diff_mock.new_snapshots = {snapshot_a_updated.snapshot_id: snapshot_a_updated}
-    context_diff_mock.added_internal_models = set()
+    context_diff_mock.added_materialized_models = set()
 
     state_reader_mock = mocker.Mock()
 
@@ -447,7 +448,7 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {snapshot.snapshot_id: snapshot}
-    context_diff_mock.added_internal_models = set()
+    context_diff_mock.added_materialized_models = set()
 
     state_reader_mock = mocker.Mock()
 
