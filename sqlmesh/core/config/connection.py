@@ -218,6 +218,8 @@ class DatabricksConnectionConfig(_ConnectionConfig):
                 values["databricks_connect_access_token"] = access_token
             if not values.get("databricks_connect_cluster_id"):
                 values["databricks_connect_cluster_id"] = http_path.split("/")[-1]
+        if not values.get("session_configuration"):
+            values["session_configuration"] = {}
         values["session_configuration"]["spark.sql.sources.partitionOverwriteMode"] = "dynamic"
         return values
 
