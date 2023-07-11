@@ -301,7 +301,7 @@ class SQLMeshMagics(Magics):
         console = self._context.console
         self._context.console = get_console(display=self.display)
 
-        self._context.plan(
+        self._shell.user_ns["plan"] = self._context.plan(
             args.environment,
             start=args.start,
             end=args.end,
