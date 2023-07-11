@@ -23,19 +23,17 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   options = { types: '', keywords: '' },
   dialects,
 ): LanguageSupport {
-  const SQLKeywords = options.keywords + WHITE_SPACE
-  const SQLTypes = options.types + WHITE_SPACE
+  const SQLKeywords = options.keywords
+  const SQLTypes = options.types
   const SQLMeshModelDictionary = getSQLMeshModelKeywords(dialects)
   const SQLMeshKeywords =
-    'columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect' +
-    WHITE_SPACE
+    'columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
   const SQLMeshTypes =
-    'seed full incremental_by_time_range incremental_by_unique_key view embedded' +
-    WHITE_SPACE
+    'seed full incremental_by_time_range incremental_by_unique_key view embedded'
 
   const lang = SQLDialect.define({
-    keywords: (SQLKeywords + SQLMeshKeywords).toLowerCase(),
-    types: (SQLTypes + SQLMeshTypes).toLowerCase(),
+    keywords: (SQLKeywords + WHITE_SPACE + SQLMeshKeywords).toLowerCase(),
+    types: (SQLTypes + WHITE_SPACE + SQLMeshTypes).toLowerCase(),
   })
 
   const tables: Completion[] = Array.from(new Set(Object.values(models))).map(
