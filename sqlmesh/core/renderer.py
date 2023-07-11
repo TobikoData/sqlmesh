@@ -76,6 +76,7 @@ class BaseExpressionRenderer:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         is_dev: bool = False,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
@@ -87,6 +88,7 @@ class BaseExpressionRenderer:
             latest: The latest datetime to use for non-incremental models. Defaults to epoch start.
             kwargs: Additional kwargs to pass to the renderer.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
                 tables / table clones should be used where applicable.
 
@@ -106,7 +108,10 @@ class BaseExpressionRenderer:
 
             env = prepare_env(self._python_env)
             jinja_env = self._jinja_macro_registry.build_environment(
-                **{**render_kwargs, **env}, snapshots=(snapshots or {}), is_dev=is_dev
+                **{**render_kwargs, **env},
+                snapshots=(snapshots or {}),
+                table_mapping=table_mapping,
+                is_dev=is_dev,
             )
 
             if isinstance(self._expression, d.Jinja):
@@ -175,11 +180,12 @@ class BaseExpressionRenderer:
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
         **kwargs: t.Any,
     ) -> E:
-        if not snapshots and not expand:
+        if not snapshots and not table_mapping and not expand:
             return expression
 
         expression = expression.copy()
@@ -187,6 +193,7 @@ class BaseExpressionRenderer:
             return _resolve_tables(
                 expression,
                 snapshots=snapshots,
+                table_mapping=table_mapping,
                 expand=expand,
                 is_dev=is_dev,
                 start=start,
@@ -203,6 +210,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         is_dev: bool = False,
         expand: t.Iterable[str] = tuple(),
         **kwargs: t.Any,
@@ -220,6 +228,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
             self._resolve_tables(
                 e,
                 snapshots=snapshots,
+                table_mapping=table_mapping,
                 expand=expand,
                 is_dev=is_dev,
                 start=start,
@@ -266,6 +275,7 @@ class QueryRenderer(BaseExpressionRenderer):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         is_dev: bool = False,
         expand: t.Iterable[str] = tuple(),
         optimize: bool = True,
@@ -279,6 +289,7 @@ class QueryRenderer(BaseExpressionRenderer):
             end: The end datetime to render. Defaults to epoch start.
             latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
@@ -291,15 +302,15 @@ class QueryRenderer(BaseExpressionRenderer):
             The rendered expression.
         """
         cache_key = _dates(start, end, latest)
-        skip_cache = bool(snapshots or expand)
 
-        if skip_cache or not optimize or cache_key not in self._optimized_cache:
+        if not optimize or cache_key not in self._optimized_cache:
             try:
                 expressions = super()._render(
                     start=start,
                     end=end,
                     latest=latest,
                     snapshots=snapshots,
+                    table_mapping=table_mapping,
                     is_dev=is_dev,
                     **kwargs,
                 )
@@ -316,8 +327,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
             if optimize:
                 query = self._optimize_query(query)
-                if not skip_cache:
-                    self._optimized_cache[cache_key] = query
+                self._optimized_cache[cache_key] = query
         else:
             query = t.cast(exp.Subqueryable, self._optimized_cache[cache_key])
 
@@ -325,6 +335,7 @@ class QueryRenderer(BaseExpressionRenderer):
         query = self._resolve_tables(
             query,
             snapshots=snapshots,
+            table_mapping=table_mapping,
             expand=expand,
             is_dev=is_dev,
             start=start,
@@ -415,6 +426,7 @@ def _resolve_tables(
     expression: E,
     *,
     snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+    table_mapping: t.Optional[t.Dict[str, str]] = None,
     expand: t.Iterable[str] = tuple(),
     is_dev: bool = False,
     **render_kwargs: t.Any,
@@ -422,7 +434,8 @@ def _resolve_tables(
     from sqlmesh.core.snapshot import to_table_mapping
 
     snapshots = snapshots or {}
-    mapping = to_table_mapping(snapshots.values(), is_dev)
+    table_mapping = table_mapping or {}
+    mapping = {**to_table_mapping(snapshots.values(), is_dev), **table_mapping}
     # if a snapshot is provided but not mapped, we need to expand it or the query
     # won't be valid
     expand = set(expand) | {name for name in snapshots if name not in mapping}

@@ -152,6 +152,7 @@ class RuntimeAdapter(BaseAdapter):
         relation_type: t.Optional[t.Type[BaseRelation]] = None,
         quote_policy: t.Optional[Policy] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        table_mapping: t.Optional[t.Dict[str, str]] = None,
         is_dev: bool = False,
     ):
         from dbt.adapters.base import BaseRelation
@@ -159,10 +160,15 @@ class RuntimeAdapter(BaseAdapter):
 
         super().__init__(jinja_macros, jinja_globals=jinja_globals, dialect=engine_adapter.dialect)
 
+        table_mapping = table_mapping or {}
+
         self.engine_adapter = engine_adapter
         self.relation_type = relation_type or BaseRelation
         self.quote_policy = quote_policy or Policy()
-        self.table_mapping = to_table_mapping((snapshots or {}).values(), is_dev)
+        self.table_mapping = {
+            **to_table_mapping((snapshots or {}).values(), is_dev),
+            **table_mapping,
+        }
 
     def get_relation(
         self, database: t.Optional[str], schema: str, identifier: str
