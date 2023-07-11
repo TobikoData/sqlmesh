@@ -141,7 +141,7 @@ function File({
           </FileExplorer.ContextMenu>
         ) : (
           <FileExplorer.Rename
-            atrifact={file}
+            artifact={file}
             newName={newName}
             setNewName={setNewName}
           />
