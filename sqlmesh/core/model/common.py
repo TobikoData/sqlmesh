@@ -4,7 +4,7 @@ import typing as t
 
 from pydantic import validator
 from sqlglot import exp
-from sqlglot.helper import seq_get, split_num_words
+from sqlglot.helper import seq_get
 
 from sqlmesh.core.dialect import parse
 from sqlmesh.utils.errors import ConfigError
@@ -19,7 +19,8 @@ def parse_model_name(name: str) -> t.Tuple[t.Optional[str], t.Optional[str], str
     Returns:
         A tuple consisting of catalog, schema, table name.
     """
-    return split_num_words(name, ".", 3)  # type: ignore
+    table = exp.to_table(name)
+    return table.catalog or None, table.db or None, table.name
 
 
 def parse_expression(

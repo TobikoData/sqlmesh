@@ -756,7 +756,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def physical_schema(self) -> str:
         if self.physical_schema_ is not None:
             return self.physical_schema_
-        _, schema, _ = parse_model_name(self.name)
+        schema = parse_model_name(self.name)[1]
         if schema is None:
             schema = c.DEFAULT_SCHEMA
         return f"{c.SQLMESH}__{schema}"
