@@ -682,6 +682,7 @@ class Context(BaseContext):
         auto_apply: bool = False,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
+        promote_all: t.Optional[bool] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -715,6 +716,7 @@ class Context(BaseContext):
                 changes (breaking / non-breaking). If not provided, then the corresponding configuration
                 option determines the behavior.
             effective_from: The effective date from which to apply forward-only changes on production.
+            promote_all: Indicates whether to promote all models in the target development environment or only modified ones.
 
         Returns:
             The populated Plan object.
@@ -733,6 +735,9 @@ class Context(BaseContext):
             self.environment_ttl if environment not in self.pinned_environments else None
         )
 
+        if promote_all is None:
+            promote_all = self.config.promote_all
+
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, create_from=create_from),
             state_reader=self.state_reader,
@@ -749,6 +754,7 @@ class Context(BaseContext):
             categorizer_config=self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
+            promote_all=promote_all,
         )
 
         if not no_prompts:

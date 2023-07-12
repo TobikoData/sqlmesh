@@ -49,6 +49,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id="previous_plan_id",
+        promoted_snapshot_ids=[snapshot.snapshot_id],
     )
 
     request_id = "test_request_id"
@@ -123,6 +124,12 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "end_at": "2022-01-01",
             "plan_id": "test_plan_id",
             "previous_plan_id": "previous_plan_id",
+            "promoted_snapshot_ids": [
+                {
+                    "name": "test_model",
+                    "identifier": "3324258585",
+                }
+            ],
         },
         "no_gaps": False,
         "skip_backfill": False,

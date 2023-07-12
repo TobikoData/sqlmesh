@@ -291,6 +291,12 @@ class SQLMeshMagics(Magics):
         help="Disable automatic change categorization.",
         default=None,
     )
+    @argument(
+        "--promote-all",
+        action="store_true",
+        help="Promote all models in the target environment as opposed to only modified ones.",
+        default=None,
+    )
     @line_magic
     def plan(self, line: str) -> None:
         """Goes through a set of prompts to both establish a plan and apply it"""
@@ -316,6 +322,7 @@ class SQLMeshMagics(Magics):
             auto_apply=args.auto_apply,
             no_auto_categorization=args.no_auto_categorization,
             effective_from=args.effective_from,
+            promote_all=args.promote_all,
         )
         self._context.console = console
 
