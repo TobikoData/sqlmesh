@@ -247,7 +247,7 @@ def merge_dicts(*args: t.Dict) -> t.Dict:
     def merge(a: t.Dict, b: t.Dict) -> t.Dict:
         for b_key, b_value in b.items():
             a_value = a.get(b_key)
-            if b_key in a and isinstance(a_value, dict) and isinstance(b_value, dict):
+            if isinstance(a_value, dict) and isinstance(b_value, dict):
                 merge(a_value, b_value)
             elif isinstance(b_value, dict):
                 a[b_key] = copy.deepcopy(b_value)
