@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config.root import Config
-from sqlmesh.utils import sys_path
+from sqlmesh.utils import merge_dicts, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import load as yaml_load
@@ -16,11 +16,11 @@ def load_config_from_paths(
     *paths: Path,
     config_name: str = "config",
     load_from_env: bool = True,
-    config_defaults: Config | None = None,
 ) -> Config:
-    config: t.Optional[Config] = None
 
     visited_folders: t.Set[Path] = set()
+    python_config: t.Optional[Config] = None
+    non_python_configs = []
     for path in paths:
         if not path.exists():
             continue
@@ -39,33 +39,32 @@ def load_config_from_paths(
                 raise ConfigError(
                     "YAML configs do not support multiple configs. Use Python instead."
                 )
-            next_config = load_config_from_yaml(path)
+            non_python_configs.append(load_config_from_yaml(path))
         elif extension == "py":
-            next_config = load_config_from_python_module(path, config_name=config_name)
+            python_config = load_config_from_python_module(path, config_name=config_name)
         else:
             raise ConfigError(
                 f"Unsupported config file extension '{extension}' in config file '{path}'."
             )
 
-        config = config.update_with(next_config) if config is not None else next_config
+    if load_from_env:
+        env_config = load_config_from_env()
+        if env_config:
+            non_python_configs.append(load_config_from_env())
 
-    if config is None:
+    if not non_python_configs and not python_config:
         raise ConfigError(
             "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up SQLMesh, run `sqlmesh init`."
         )
 
-    if load_from_env:
-        config = config.update_with(load_config_from_env())
-
-    if config_defaults:
-        config = config_defaults.update_with(config)
-
-    return config
+    non_python_config = Config.parse_obj(merge_dicts(*non_python_configs))
+    if python_config:
+        return python_config.update_with(non_python_config)
+    return non_python_config
 
 
-def load_config_from_yaml(path: Path) -> Config:
-    config_dict = yaml_load(path)
-    return Config.parse_obj(config_dict)
+def load_config_from_yaml(path: Path) -> t.Dict[str, t.Any]:
+    return yaml_load(path)
 
 
 def load_config_from_python_module(module_path: Path, config_name: str = "config") -> Config:
@@ -88,7 +87,7 @@ def load_config_from_python_module(module_path: Path, config_name: str = "config
     return config_obj
 
 
-def load_config_from_env() -> Config:
+def load_config_from_env() -> t.Dict[str, t.Any]:
     config_dict: t.Dict[str, t.Any] = {}
 
     for key, value in os.environ.items():
@@ -105,4 +104,4 @@ def load_config_from_env() -> Config:
                 target_dict = target_dict[config_key]
             target_dict[segments[-1]] = value
 
-    return Config.parse_obj(config_dict)
+    return config_dict

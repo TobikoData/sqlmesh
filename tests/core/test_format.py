@@ -3,27 +3,29 @@ import pathlib
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import load_model
+from sqlmesh.core.model import SqlModel, load_model
 from tests.utils.test_filesystem import create_temp_file
 
 
-def test_format_files(tmpdir):
+def test_format_files(tmp_path: pathlib.Path):
     models_dir = pathlib.Path("models")
 
     f1 = create_temp_file(
-        tmpdir,
+        tmp_path,
         pathlib.Path(models_dir, "model_1.sql"),
         "MODEL(name some.model, dialect 'duckdb'); SELECT 1 AS \"CaseSensitive\"",
     )
     f2 = create_temp_file(
-        tmpdir,
+        tmp_path,
         pathlib.Path(models_dir, "model_2.sql"),
         "MODEL(name other.model); SELECT 2 AS another_column",
     )
 
     config = Config()
-    context = Context(paths=str(tmpdir), config=config)
+    context = Context(paths=str(tmp_path), config=config)
     context.load()
+    assert isinstance(context.models["some.model"], SqlModel)
+    assert isinstance(context.models["other.model"], SqlModel)
     assert context.models["some.model"].query.sql() == 'SELECT 1 AS "CaseSensitive"'
     assert context.models["other.model"].query.sql() == "SELECT 2 AS another_column"
 
