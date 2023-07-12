@@ -411,7 +411,7 @@ function SelectEnvironemnt({
                 side === EnumSide.Right && 'right-0',
               )}
             >
-              <Menu.Items className="overflow-auto max-h-80 py-2 scrollbar scrollbar--vertical">
+              <Menu.Items className="overflow-auto max-h-80 py-2 hover:scrollbar scrollbar--vertical">
                 {Array.from(environments).map(env => (
                   <Menu.Item key={env.name}>
                     {({ active }) => (

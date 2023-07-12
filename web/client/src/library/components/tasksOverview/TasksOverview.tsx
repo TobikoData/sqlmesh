@@ -248,7 +248,7 @@ function TasksBlock({
   return (
     <div
       className={clsx(
-        'my-3 mx-4 max-h-[50vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal',
+        'my-3 mx-4 max-h-[50vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
         className,
       )}
     >
@@ -279,7 +279,7 @@ function Tasks({
   return (
     <ul
       className={clsx(
-        'bg-neutral-10 rounded-lg py-4 overflow-auto text-prose scrollbar scrollbar--vertical scrollbar--horizontal',
+        'bg-neutral-10 rounded-lg py-4 overflow-auto text-prose hover:scrollbar scrollbar--vertical scrollbar--horizontal',
         className,
       )}
     >

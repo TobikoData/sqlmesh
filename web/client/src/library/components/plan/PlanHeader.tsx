@@ -26,7 +26,7 @@ export default function PlanHeader(): JSX.Element {
           <ReportErrors />
         </div>
       </div>
-      <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical px-6 ">
+      <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--vertical px-6 ">
         {environment.isInitial && environment.isDefault && (
           <Banner variant={EnumVariant.Warning}>
             <Disclosure defaultOpen={true}>

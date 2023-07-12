@@ -112,7 +112,7 @@ export default function EditorPreview({
   return (
     <div
       className={clsx(
-        'w-full h-full flex flex-col text-prose overflow-auto scrollbar scrollbar--vertical',
+        'w-full h-full flex flex-col text-prose overflow-auto hover:scrollbar scrollbar--vertical',
         className,
       )}
     >
@@ -152,7 +152,7 @@ export default function EditorPreview({
                 )}
               >
                 {table != null && (
-                  <div className="w-full h-full overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
+                  <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
                     <table className="w-full h-full">
                       <thead className="sticky top-0 bg-theme">
                         {table.getHeaderGroups().map(headerGroup => (
@@ -221,7 +221,7 @@ export default function EditorPreview({
                   'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
                 )}
               >
-                <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
+                <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
                   <DisplayError
                     scope={previewConsole[0]}
                     error={previewConsole[1]}
@@ -236,7 +236,7 @@ export default function EditorPreview({
                   'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
                 )}
               >
-                <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
+                <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
                   <CodeEditor.Default
                     type={EnumFileExtensions.SQL}
                     content={previewQuery ?? ''}

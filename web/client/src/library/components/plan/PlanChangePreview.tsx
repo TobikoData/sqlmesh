@@ -37,7 +37,7 @@ function PlanChangePreview({
   return (
     <div
       className={clsx(
-        'flex flex-col rounded-md p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal',
+        'flex flex-col rounded-md p-4 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
         type === EnumPlanChangeType.Add && 'bg-success-10',
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
@@ -342,7 +342,7 @@ function PlanChangePreviewRelations({
 function PlanChangePreviewDiff({ diff }: { diff: string }): JSX.Element {
   return (
     <div className="my-4 bg-dark-lighter rounded-lg overflow-hidden">
-      <pre className="p-4 text-primary-100 max-h-[30vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+      <pre className="p-4 text-primary-100 max-h-[30vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
         {diff.split('\n').map((line: string, idx: number) => (
           <p
             key={`${line}-${idx}`}
