@@ -185,6 +185,11 @@ class ContextDiff(PydanticModel):
     def has_snapshot_changes(self) -> bool:
         return bool(self.added or self.removed or self.modified_snapshots)
 
+    @property
+    def added_materialized_models(self) -> t.Set[str]:
+        """Returns the set of added internal models."""
+        return {name for name in self.added if self.snapshots[name].model_kind_name.is_materialized}
+
     def directly_modified(self, model_name: str) -> bool:
         """Returns whether or not a model was directly modified in this context.
 
