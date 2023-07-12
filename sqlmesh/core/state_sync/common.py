@@ -91,19 +91,20 @@ class CommonStateSyncMixin(StateSync):
                 self._ensure_no_gaps(snapshots, existing_environment)
 
             existing_table_infos = {
-                table_info.name: table_info for table_info in existing_environment.snapshots
+                table_info.name: table_info
+                for table_info in existing_environment.promoted_snapshots
             }
         else:
             existing_table_infos = {}
 
         missing_models = set(existing_table_infos) - {
-            snapshot.name for snapshot in environment.snapshots
+            snapshot.name for snapshot in environment.promoted_snapshots
         }
 
-        table_infos = set(environment.snapshots)
+        table_infos = set(environment.promoted_snapshots)
         if existing_environment and existing_environment.finalized_ts:
             # Only promote new snapshots.
-            table_infos -= set(existing_environment.snapshots)
+            table_infos -= set(existing_environment.promoted_snapshots)
 
         self._update_environment(environment)
         return list(table_infos), [existing_table_infos[name] for name in missing_models]
