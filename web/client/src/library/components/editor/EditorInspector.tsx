@@ -30,7 +30,7 @@ import {
 import { EnumErrorKey } from '~/library/pages/ide/context'
 import TabList from '@components/tab/Tab'
 import Selector from '@components/selector/Selector'
-import { getTableDataFromArrowStreamResult } from './help'
+import { getTableDataFromArrowStreamResult } from '@components/table/help'
 
 interface FormModel {
   model?: string
@@ -208,6 +208,7 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
+  const engine = useStoreEditor(s => s.engine)
 
   const { refetch: getFetchdf, isFetching } = useApiFetchdf(tab.file.content)
   const debouncedGetFetchdf = debounceAsync(getFetchdf, 1000, true)
@@ -227,6 +228,7 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
       throwOnError: true,
     })
       .then(({ data }) => {
+        console.log(data)
         setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
       })
       .catch(error => {
@@ -276,6 +278,22 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
       </InspectorForm>
       <Divider />
       <InspectorActions>
+        <Button
+          size={EnumSize.sm}
+          variant={EnumVariant.Alternative}
+          onClick={e => {
+            e.stopPropagation()
+
+            engine.postMessage({
+              topic: 'format',
+              payload: {
+                sql: tab.file.content,
+              },
+            })
+          }}
+        >
+          Format
+        </Button>
         <Button
           size={EnumSize.sm}
           variant={EnumVariant.Alternative}

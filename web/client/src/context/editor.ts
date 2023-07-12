@@ -1,4 +1,5 @@
 import { type LineageColumn } from '@api/client'
+import { type TableColumn, type TableRow } from '@components/table/help'
 import { uid } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
@@ -24,7 +25,7 @@ interface EditorStore {
   engine: Worker
   dialects: Dialect[]
   previewQuery?: string
-  previewTable?: any[]
+  previewTable?: [TableColumn[], TableRow[]]
   previewConsole?: [ErrorKey, ErrorIDE]
   previewDiff?: any
   direction: 'vertical' | 'horizontal'
@@ -38,7 +39,7 @@ interface EditorStore {
   setDialects: (dialects: Dialect[]) => void
   refreshTab: () => void
   setPreviewQuery: (previewQuery?: string) => void
-  setPreviewTable: (previewTable?: any[]) => void
+  setPreviewTable: (previewTable?: [TableColumn[], TableRow[]]) => void
   setPreviewConsole: (previewConsole?: [ErrorKey, ErrorIDE]) => void
   setPreviewDiff: (previewDiff?: any) => void
 }
