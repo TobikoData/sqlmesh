@@ -23,7 +23,7 @@ from sqlmesh.core.model import (
     ViewKind,
     kind,
 )
-from sqlmesh.core.model.definition import _SqlBasedModel
+from sqlmesh.core.model.definition import _Model, _SqlBasedModel
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
@@ -841,7 +841,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def model(self) -> Model:
-        if isinstance(self.node, Model):  # type: ignore
+        if isinstance(self.node, _Model):
             return t.cast(Model, self.node)
         raise SQLMeshError(f"Snapshot {self.snapshot_id} is not a model snapshot.")
 
