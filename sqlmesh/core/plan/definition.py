@@ -60,7 +60,7 @@ class Plan:
         categorizer_config: Auto categorization settings.
         auto_categorization_enabled: Whether to apply auto categorization.
         effective_from: The effective date from which to apply forward-only changes on production.
-        promote_all: Whether to promote all snapshots in the target environment as opposed to only new ones.
+        promote_all: Indicates whether to promote all models in the target development environment or only modified ones.
     """
 
     def __init__(
@@ -261,12 +261,9 @@ class Plan:
         snapshots = [s.table_info for s in self.snapshots]
         promoted_snapshot_ids = None
         if self.is_dev and not self.promote_all:
-            names_to_promote = {
-                *self.context_diff.promoted_model_names,
-                *self.context_diff.added,
-                *self.context_diff.modified_snapshots,
-            } - self.context_diff.removed
-            promoted_snapshot_ids = [s.snapshot_id for s in snapshots if s.name in names_to_promote]
+            promoted_snapshot_ids = [
+                s.snapshot_id for s in snapshots if s.name in self.context_diff.promotable_models
+            ]
 
         return Environment(
             name=self.context_diff.environment,

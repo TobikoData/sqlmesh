@@ -682,7 +682,7 @@ class Context(BaseContext):
         auto_apply: bool = False,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
-        promote_all: bool = False,
+        promote_all: t.Optional[bool] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -716,7 +716,7 @@ class Context(BaseContext):
                 changes (breaking / non-breaking). If not provided, then the corresponding configuration
                 option determines the behavior.
             effective_from: The effective date from which to apply forward-only changes on production.
-            promote_all: Whether to promote all snapshots in the target environment as opposed to only new ones.
+            promote_all: Indicates whether to promote all models in the target development environment or only modified ones.
 
         Returns:
             The populated Plan object.
@@ -734,6 +734,9 @@ class Context(BaseContext):
         environment_ttl = (
             self.environment_ttl if environment not in self.pinned_environments else None
         )
+
+        if promote_all is None:
+            promote_all = self.config.promote_all
 
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, create_from=create_from),

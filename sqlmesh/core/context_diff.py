@@ -53,7 +53,7 @@ class ContextDiff(PydanticModel):
     """New snapshots."""
     previous_plan_id: t.Optional[str]
     """Previous plan id."""
-    promoted_model_names: t.Set[str]
+    previously_promoted_model_names: t.Set[str]
     """Models that were promoted by the previous plan."""
 
     @classmethod
@@ -82,10 +82,10 @@ class ContextDiff(PydanticModel):
         if env is None:
             env = state_reader.get_environment(create_from.lower())
             is_new_environment = True
-            promoted_model_names = set()
+            previously_promoted_model_names = set()
         else:
             is_new_environment = False
-            promoted_model_names = {s.name for s in env.promoted_snapshots}
+            previously_promoted_model_names = {s.name for s in env.promoted_snapshots}
 
         existing_info = {info.name: info for info in (env.snapshots if env else [])}
         existing_models = set(existing_info)
@@ -177,7 +177,7 @@ class ContextDiff(PydanticModel):
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
             previous_plan_id=env.plan_id if env and not is_new_environment else None,
-            promoted_model_names=promoted_model_names,
+            previously_promoted_model_names=previously_promoted_model_names,
         )
 
     @property
@@ -194,6 +194,15 @@ class ContextDiff(PydanticModel):
     def added_materialized_models(self) -> t.Set[str]:
         """Returns the set of added internal models."""
         return {name for name in self.added if self.snapshots[name].model_kind_name.is_materialized}
+
+    @property
+    def promotable_models(self) -> t.Set[str]:
+        """The set of model names that have to be promoted in the target environment."""
+        return {
+            *self.previously_promoted_model_names,
+            *self.added,
+            *self.modified_snapshots,
+        } - self.removed
 
     def directly_modified(self, model_name: str) -> bool:
         """Returns whether or not a model was directly modified in this context.

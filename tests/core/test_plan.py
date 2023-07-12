@@ -488,8 +488,8 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
     context_diff_mock.added = set()
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {}
+    context_diff_mock.promotable_models = set()
     context_diff_mock.new_snapshots = {}
-    context_diff_mock.promoted_model_names = set()
     context_diff_mock.is_new_environment = True
     context_diff_mock.has_snapshot_changes = False
     context_diff_mock.environment = "test_dev"
@@ -523,8 +523,8 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     context_diff_mock.added = set()
     context_diff_mock.removed = set()
     context_diff_mock.modified_snapshots = {"a": (updated_snapshot_a, snapshot_a)}
+    context_diff_mock.promotable_models = {"a"}
     context_diff_mock.new_snapshots = {updated_snapshot_a.snapshot_id: updated_snapshot_a}
-    context_diff_mock.promoted_model_names = set()
     context_diff_mock.is_new_environment = True
     context_diff_mock.has_snapshot_changes = True
     context_diff_mock.environment = "test_dev"
@@ -539,7 +539,7 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     ).environment.promoted_snapshot_ids == [updated_snapshot_a.snapshot_id]
 
     # Updating the existing environment with a previously promoted snapshot.
-    context_diff_mock.promoted_model_names = {"b"}
+    context_diff_mock.promotable_models = {"a", "b"}
     context_diff_mock.is_new_environment = False
     assert set(
         Plan(context_diff_mock, state_reader_mock, is_dev=True).environment.promoted_snapshot_ids
@@ -556,7 +556,7 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     context_diff_mock.added = {"c"}
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {snapshot_c.snapshot_id: snapshot_c}
-    context_diff_mock.promoted_model_names = {"a", "b"}
+    context_diff_mock.promotable_models = {"a", "b", "c"}
     assert set(
         Plan(context_diff_mock, state_reader_mock, is_dev=True).environment.promoted_snapshot_ids
         or []
