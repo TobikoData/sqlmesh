@@ -60,7 +60,7 @@ export default function ReportErrors(): JSX.Element {
             >
               <ul
                 className={clsx(
-                  'w-full bg-danger-10 py-4 pl-3 pr-1 rounded-md overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal',
+                  'w-full bg-danger-10 py-4 pl-3 pr-1 rounded-md overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
                   'max-w-[90vw] max-h-[80vh]',
                 )}
               >
@@ -159,7 +159,7 @@ export function DisplayError({
                     </div>
                   </Disclosure.Button>
                   <Disclosure.Panel className="px-2 pb-2 overflow-hidden">
-                    <pre className="font-mono w-full bg-dark-lighter text-danger-500 rounded-lg p-4 overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal max-h-[35vh] text-sm">
+                    <pre className="font-mono w-full bg-dark-lighter text-danger-500 rounded-lg p-4 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal max-h-[35vh] text-sm">
                       <code>{error.traceback ?? error.message}</code>
                     </pre>
                   </Disclosure.Panel>

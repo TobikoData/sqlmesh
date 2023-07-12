@@ -61,7 +61,7 @@ export default function SearchList<
       {showSearchResults && (
         <ul
           className={clsx(
-            'p-2 bg-theme dark:bg-theme-lighter fixed z-10 mt-2 rounded-lg max-h-[25vh] overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
+            'p-2 bg-theme dark:bg-theme-lighter fixed z-10 mt-2 rounded-lg max-h-[25vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
             isFullWidth ? 'w-full' : 'w-full max-w-[20rem]',
           )}
         >
