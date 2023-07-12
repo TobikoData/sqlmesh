@@ -190,7 +190,7 @@ function InspectorForm({
   children: React.ReactNode
 }): JSX.Element {
   return (
-    <div className="flex w-full h-full py-1 overflow-hidden overflow-y-auto scrollbar scrollbar--vertical">
+    <div className="flex w-full h-full py-1 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
       {children}
     </div>
   )

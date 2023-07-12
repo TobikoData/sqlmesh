@@ -597,7 +597,7 @@ const ModelColumns = memo(function ModelColumns({
       {isArrayNotEmpty(columnsSelected) && (
         <div
           className={clsx(
-            'overflow-hidden overflow-y-auto scrollbar scrollbar--vertical-md',
+            'overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical-md',
             withHandles ? 'w-full bg-theme-lighter cursor-default' : '',
             className,
           )}
@@ -655,7 +655,7 @@ const ModelColumns = memo(function ModelColumns({
       )}
       <div
         className={clsx(
-          'overflow-hidden overflow-y-auto scrollbar scrollbar--vertical-md py-2',
+          'overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical-md py-2',
           withHandles ? 'w-full bg-theme-lighter cursor-default' : '',
           className,
         )}
