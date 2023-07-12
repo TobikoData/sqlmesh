@@ -6,7 +6,7 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config.root import Config
-from sqlmesh.utils import merge_list_of_dicts, sys_path
+from sqlmesh.utils import merge_dicts, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import load as yaml_load
@@ -57,7 +57,7 @@ def load_config_from_paths(
             "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up SQLMesh, run `sqlmesh init`."
         )
 
-    non_python_config = Config.parse_obj(merge_list_of_dicts(non_python_configs))
+    non_python_config = Config.parse_obj(merge_dicts(*non_python_configs))
     if python_config:
         return python_config.update_with(non_python_config)
     return non_python_config

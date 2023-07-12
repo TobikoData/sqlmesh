@@ -239,9 +239,9 @@ def env_vars(environ: dict[str, str]) -> t.Iterator[None]:
         os.environ.update(old_environ)
 
 
-def merge_list_of_dicts(list_of_dicts: t.List[t.Dict]) -> t.Dict:
+def merge_dicts(*args: t.Dict) -> t.Dict:
     """
-    Merges a list of dicts. Just does key collision replacement
+    Merges dicts. Just does key collision replacement
     """
 
     def merge(a: t.Dict, b: t.Dict) -> t.Dict:
@@ -255,4 +255,4 @@ def merge_list_of_dicts(list_of_dicts: t.List[t.Dict]) -> t.Dict:
                 a[b_key] = b_value
         return a
 
-    return reduce(merge, list_of_dicts, {})
+    return reduce(merge, args, {})
