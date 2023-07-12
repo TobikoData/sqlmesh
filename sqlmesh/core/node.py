@@ -53,6 +53,18 @@ class Node(PydanticModel):
             raise ConfigError(f"'{v}' needs to be time-like: https://pypi.org/project/dateparser")
         return v
 
+    @validator("cron", pre=True)
+    def _cron_validator(cls, v: t.Any) -> t.Optional[str]:
+        cron = str_or_exp_to_str(v)
+        if cron:
+            from croniter import CroniterBadCronError, croniter
+
+            try:
+                croniter(cron)
+            except CroniterBadCronError:
+                raise ConfigError(f"Invalid cron expression '{cron}'")
+        return cron
+
     @property
     def batch_size(self) -> t.Optional[int]:
         """The maximal number of units in a single task for a backfill."""
@@ -149,3 +161,9 @@ class Node(PydanticModel):
             The timestamp floor.
         """
         return self.croniter(self.cron_next(value)).get_prev()
+
+
+def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:
+    if isinstance(v, exp.Expression):
+        return v.name
+    return str(v) if v is not None else None

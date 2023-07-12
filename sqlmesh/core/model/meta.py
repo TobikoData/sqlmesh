@@ -14,7 +14,7 @@ from sqlmesh.core.model.kind import (
     ViewKind,
     _Incremental,
 )
-from sqlmesh.core.node import Node
+from sqlmesh.core.node import Node, str_or_exp_to_str
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import ConfigError
 
@@ -27,7 +27,6 @@ class ModelMeta(Node):
     dialect: str = ""
     name: str
     kind: ModelKind = ViewKind()
-    cron: str = "@daily"
     owner: t.Optional[str]
     description: t.Optional[str]
     stamp: t.Optional[str]
@@ -100,21 +99,7 @@ class ModelMeta(Node):
 
     @validator("dialect", "owner", "storage_format", "description", "stamp", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
-        if isinstance(v, exp.Expression):
-            return v.name
-        return str(v) if v is not None else None
-
-    @validator("cron", pre=True)
-    def _cron_validator(cls, v: t.Any) -> t.Optional[str]:
-        cron = cls._string_validator(v)
-        if cron:
-            from croniter import CroniterBadCronError, croniter
-
-            try:
-                croniter(cron)
-            except CroniterBadCronError:
-                raise ConfigError(f"Invalid cron expression '{cron}'")
-        return cron
+        return str_or_exp_to_str(v)
 
     @validator("partitioned_by_", pre=True)
     def _partition_by_validator(

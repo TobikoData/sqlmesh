@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import typing as t
 from collections import defaultdict
 from datetime import datetime
@@ -40,8 +41,14 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.hashing import crc32
 from sqlmesh.utils.pydantic import PydanticModel
 
+if sys.version_info >= (3, 9):
+    from typing import Annotated
+else:
+    from typing_extensions import Annotated
+
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
+SnapshotNode = Annotated[Model, Field(discriminator="source_type")]
 
 
 class SnapshotChangeCategory(IntEnum):
@@ -153,9 +160,6 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         return self.fingerprint.to_version() == self.version
-
-
-SnapshotNode = t.Annotated[Model, Field(discriminator="source_type")]
 
 
 class QualifiedViewName(PydanticModel, frozen=True):
