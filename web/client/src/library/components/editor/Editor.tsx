@@ -28,10 +28,20 @@ function Editor(): JSX.Element {
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
 
-  const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
-    if (e.data.topic === 'init') {
-      setIsreadyEngine(true)
-    }
+  const handleEngineWorkerMessage = useCallback(
+    (e: MessageEvent): void => {
+      if (e.data.topic === 'init' && isFalse(isReadyEngine)) {
+        setIsreadyEngine(true)
+      }
+    },
+    [engine],
+  )
+
+  useEffect(() => {
+    isFalse(isReadyEngine) &&
+      engine.postMessage({
+        topic: 'init',
+      })
   }, [])
 
   useEffect(() => {
