@@ -236,8 +236,6 @@ class Context(BaseContext):
         self._jinja_macros = JinjaMacroRegistry()
 
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
-        if self.config.model_defaults.dialect is None:
-            raise ConfigError("Default model SQL dialect is a required configuration parameter.")
 
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
