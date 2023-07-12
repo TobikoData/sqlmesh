@@ -758,12 +758,12 @@ def test_render_definition():
     expressions = d.parse(
         """
         MODEL (
-            dialect spark,
             name db.table,
+            owner owner_name,
+            dialect spark,
             kind INCREMENTAL_BY_TIME_RANGE (
                 time_column (a, 'yyyymmdd')
             ),
-            owner owner_name,
             storage_format iceberg,
             partitioned_by a,
         );

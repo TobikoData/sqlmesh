@@ -33,17 +33,34 @@ class IntervalUnit(str, Enum):
 
 class Node(PydanticModel):
     """
+    Node is the core abstraction for entity that can be executed within the orchestrator.
+
     Args:
-        start: The earliest date that the model will be backfilled for. If this is None,
+        name: The name of the node.
+        description: The optional node description.
+        owner: The owner of the node.
+        start: The earliest date that the node will be executed for. If this is None,
             then the date is inferred by taking the most recent start date of its ancestors.
             The start date can be a static datetime or a relative datetime like "1 year ago"
+        cron: A cron string specifying how often the ndoe should be run, leveraging the
+            [croniter](https://github.com/kiorky/croniter) library.
+        stamp: An optional arbitrary string sequence used to create new node versions without making
+            changes to any of the functional components of the definition.
     """
 
+    name: str
+    description: t.Optional[str]
+    owner: t.Optional[str]
     start: t.Optional[TimeLike]
     cron: str = "@daily"
+    stamp: t.Optional[str]
 
     _croniter: t.Optional[CroniterCache] = None
     _interval_unit: t.Optional[IntervalUnit] = None
+
+    @validator("name", pre=True)
+    def _name_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> str:
+        return v.name if isinstance(v, exp.Expression) else str(v)
 
     @validator("start", pre=True)
     def _date_validator(cls, v: t.Any) -> t.Optional[TimeLike]:
@@ -64,6 +81,10 @@ class Node(PydanticModel):
             except CroniterBadCronError:
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
+
+    @validator("owner", "description", "stamp", pre=True)
+    def _string_validator(cls, v: t.Any) -> t.Optional[str]:
+        return str_or_exp_to_str(v)
 
     @property
     def batch_size(self) -> t.Optional[int]:

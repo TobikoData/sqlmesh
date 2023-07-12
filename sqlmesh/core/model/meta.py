@@ -27,9 +27,6 @@ class ModelMeta(Node):
     dialect: str = ""
     name: str
     kind: ModelKind = ViewKind()
-    owner: t.Optional[str]
-    description: t.Optional[str]
-    stamp: t.Optional[str]
     retention: t.Optional[int]  # not implemented yet
     storage_format: t.Optional[str]
     partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
@@ -43,10 +40,6 @@ class ModelMeta(Node):
     hash_raw_query: bool = False
 
     _model_kind_validator = ModelKind.field_validator()
-
-    @validator("name", pre=True)
-    def _name_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> str:
-        return d.normalize_model_name(v, dialect=values.get("dialect"))
 
     @validator("audits", pre=True)
     def _audits_validator(cls, v: t.Any) -> t.Any:
@@ -97,7 +90,7 @@ class ModelMeta(Node):
             return [v.name]
         return v
 
-    @validator("dialect", "owner", "storage_format", "description", "stamp", pre=True)
+    @validator("dialect", "storage_format", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
 
@@ -174,6 +167,12 @@ class ModelMeta(Node):
         return v
 
     @root_validator
+    def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        values = cls._kind_validator(values)
+        values = cls._normalize_name(values)
+        return values
+
+    @classmethod
     def _kind_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         kind = values.get("kind")
         if kind:
@@ -181,6 +180,11 @@ class ModelMeta(Node):
                 if values.get(field) and not kind.is_materialized:
                     raise ValueError(f"{field} field cannot be set for {kind} models")
 
+        return values
+
+    @classmethod
+    def _normalize_name(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        values["name"] = d.normalize_model_name(values["name"], dialect=values.get("dialect"))
         return values
 
     @property
