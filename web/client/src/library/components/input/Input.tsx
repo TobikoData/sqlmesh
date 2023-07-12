@@ -43,11 +43,11 @@ function Input({
     'focus:outline-none focus:border-secondary-500',
     'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
     size === EnumSize.sm &&
-      'px-2 py-0.5 text-xs leading-4 border-2 focus:ring-2 rounded-[0.25rem] min-w-[7rem]',
+    'px-2 py-0.5 text-xs leading-4 border-2 focus:ring-2 rounded-[0.25rem] min-w-[7rem]',
     size === EnumSize.md &&
-      'px-3 py-2 text-sm leading-4 border-2 focus:ring-4 rounded-md min-w-[10rem]',
+    'px-3 py-2 text-sm leading-4 border-2 focus:ring-4 rounded-md min-w-[10rem]',
     size === EnumSize.lg &&
-      'px-3 py-2 text-sm leading-6 border-2 focus:ring-4 rounded-md min-w-[10rem]',
+    'px-3 py-2 text-sm leading-6 border-2 focus:ring-4 rounded-md min-w-[10rem]',
   )
 
   return (
@@ -113,4 +113,4 @@ Input.Info = InputInfo
 Input.Textfield = Textfield
 Input.Selector = Selector
 
-export default Input
+export default React.forwardRef<HTMLInputElement, PropsInput>(Input)

@@ -60,7 +60,7 @@ export default function PageDocs(): JSX.Element {
           {isArrayNotEmpty(filtered) && (
             <SearchList<ModelSQLMeshModel>
               list={filtered}
-              size={EnumSize.md}
+              size={EnumSize.lg}
               searchBy="index"
               displayBy="name"
               to={model =>
