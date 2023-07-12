@@ -1,6 +1,8 @@
 import pathlib
 from datetime import date
+from tempfile import TemporaryDirectory
 
+import py
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
@@ -290,3 +292,45 @@ def test_plan_apply(sushi_context) -> None:
     )
     sushi_context.apply(plan)
     assert sushi_context.state_reader.get_environment("dev")
+
+
+def test_project_config_person_config_overrides(tmpdir):
+    context = Context(paths="examples/sushi")
+    with TemporaryDirectory() as td:
+        home_path = pathlib.Path(td)
+        create_temp_file(
+            py.path.LocalPath(home_path),
+            pathlib.Path("config.yaml"),
+            """
+gateways:
+    snowflake:
+        connection:
+            type: snowflake
+            password: XYZ
+            user: ABC
+""",
+        )
+        project_config = create_temp_file(
+            tmpdir,
+            pathlib.Path("config.yaml"),
+            """
+gateways:
+    snowflake:
+        connection:
+            type: snowflake
+            account: 123
+            user: CDE
+""",
+        )
+        with pytest.raises(
+            ConfigError,
+            match="User and password must be provided if using default authentication",
+        ):
+            context._load_configs("config", [pathlib.Path(project_config.dirname)])
+        context.sqlmesh_path = home_path
+        loaded_configs = context._load_configs("config", [pathlib.Path(project_config.dirname)])
+        assert len(loaded_configs) == 1
+        snowflake_connection = list(loaded_configs.values())[0].gateways["snowflake"].connection
+        assert snowflake_connection.account == "123"
+        assert snowflake_connection.user == "ABC"
+        assert snowflake_connection.password == "XYZ"

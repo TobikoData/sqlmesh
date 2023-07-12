@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import importlib
 import os
 import re
@@ -11,7 +12,7 @@ import typing as t
 import uuid
 from contextlib import contextmanager
 from copy import deepcopy
-from functools import lru_cache, wraps
+from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
 T = t.TypeVar("T")
@@ -236,3 +237,22 @@ def env_vars(environ: dict[str, str]) -> t.Iterator[None]:
     finally:
         os.environ.clear()
         os.environ.update(old_environ)
+
+
+def merge_list_of_dicts(list_of_dicts: t.List[t.Dict]) -> t.Dict:
+    """
+    Merges a list of dicts. Just does key collision replacement
+    """
+
+    def merge(a: t.Dict, b: t.Dict) -> t.Dict:
+        for b_key, b_value in b.items():
+            a_value = a.get(b_key)
+            if b_key in a and isinstance(a_value, dict) and isinstance(b_value, dict):
+                merge(a_value, b_value)
+            elif isinstance(b_value, dict):
+                a[b_key] = copy.deepcopy(b_value)
+            else:
+                a[b_key] = b_value
+        return a
+
+    return reduce(merge, list_of_dicts, {})
