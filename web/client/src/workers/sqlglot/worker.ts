@@ -87,4 +87,10 @@ scope.onmessage = async (e: MessageEvent) => {
       payload: sqlglot.get('format')?.(e.data.payload.sql) ?? '',
     })
   }
+
+  if (e.data.topic === 'init') {
+    scope.postMessage({
+      topic: 'init',
+    })
+  }
 }

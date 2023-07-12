@@ -952,13 +952,18 @@
           "plan_id": { "type": "string", "title": "Plan Id" },
           "previous_plan_id": { "type": "string", "title": "Previous Plan Id" },
           "expiration_ts": { "type": "integer", "title": "Expiration Ts" },
-          "finalized_ts": { "type": "integer", "title": "Finalized Ts" }
+          "finalized_ts": { "type": "integer", "title": "Finalized Ts" },
+          "promoted_snapshot_ids": {
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
+            "type": "array",
+            "title": "Promoted Snapshot Ids"
+          }
         },
         "additionalProperties": false,
         "type": "object",
         "required": ["name", "snapshots", "start_at", "plan_id"],
         "title": "Environment",
-        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables."
+        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    name: The name of the environment.\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this enviornment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promotion_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted."
       },
       "EvaluateInput": {
         "properties": {
