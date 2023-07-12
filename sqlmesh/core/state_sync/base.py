@@ -75,15 +75,15 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
-        """Returns the model names that exist in the state sync.
+    def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+        """Returns the node names that exist in the state sync.
 
         Args:
-            names: Iterable of model names to check.
+            names: Iterable of node names to check.
             exclude_external: Whether to exclude external models from the output.
 
         Returns:
-            A set of all the existing model names.
+            A set of all the existing node names.
         """
 
     @abc.abstractmethod

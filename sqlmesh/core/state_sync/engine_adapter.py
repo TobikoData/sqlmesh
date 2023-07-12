@@ -31,7 +31,7 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model import Model, ModelKindName, SeedModel
+from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
     Intervals,
     Snapshot,
@@ -43,10 +43,11 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotIntervals,
     SnapshotNameVersionLike,
-    fingerprint_from_model,
+    SnapshotNode,
+    fingerprint_from_node,
 )
 from sqlmesh.core.snapshot.definition import (
-    _parents_from_model,
+    _parents_from_node,
     merge_intervals,
     remove_interval,
 )
@@ -60,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 
 class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
-    """Manages state of models and snapshot with an existing engine adapter.
+    """Manages state of nodes and snapshot with an existing engine adapter.
 
     This state sync is convenient to use because it requires no additional setup.
     You can reuse the same engine/warehouse that your data is stored in.
@@ -167,15 +168,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots_to_store = []
 
         for snapshot in snapshots:
-            if isinstance(snapshot.model, SeedModel):
+            if isinstance(snapshot.node, SeedModel):
+                seed_model = t.cast(SeedModel, snapshot.node)
                 seed_contents.append(
                     {
                         "name": snapshot.name,
                         "identifier": snapshot.identifier,
-                        "content": snapshot.model.seed.content,
+                        "content": seed_model.seed.content,
                     }
                 )
-                snapshot = snapshot.copy(update={"model": snapshot.model.to_dehydrated()})
+                snapshot = snapshot.copy(update={"node": seed_model.to_dehydrated()})
             snapshots_to_store.append(snapshot)
 
         self.engine_adapter.insert_append(
@@ -257,7 +259,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
         }
 
-    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+    def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         names = set(names)
 
         if not names:
@@ -377,8 +379,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             else:
                 snapshots[snapshot_id] = snapshot
 
-            if hydrate_seeds and isinstance(snapshot.model, SeedModel) and row[1]:
-                snapshot.model = snapshot.model.to_hydrated(row[1])
+            if hydrate_seeds and isinstance(snapshot.node, SeedModel) and row[1]:
+                snapshot.node = t.cast(SeedModel, snapshot.node).to_hydrated(row[1])
 
         if snapshots:
             _, intervals = self._get_snapshot_intervals(snapshots.values())
@@ -697,8 +699,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         for snapshot in all_snapshots.values():
             seen = set()
             queue = {snapshot.snapshot_id}
-            model = snapshot.model
-            models: t.Dict[str, Model] = {}
+            node = snapshot.node
+            nodes: t.Dict[str, SnapshotNode] = {}
             audits: t.Dict[str, Audit] = {}
 
             while queue:
@@ -715,7 +717,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     continue
 
                 queue.update(s.parents)
-                models[s.name] = s.model
+                nodes[s.name] = s.node
                 for audit in s.audits:
                     audits[audit.name] = audit
 
@@ -724,22 +726,22 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
 
             try:
-                new_snapshot.fingerprint = fingerprint_from_model(
-                    model,
-                    models=models,
+                new_snapshot.fingerprint = fingerprint_from_node(
+                    node,
+                    nodes=nodes,
                     audits=audits,
                 )
                 new_snapshot.parents = tuple(
                     SnapshotId(
                         name=name,
-                        identifier=fingerprint_from_model(
-                            models[name],
-                            models=models,
+                        identifier=fingerprint_from_node(
+                            nodes[name],
+                            nodes=nodes,
                             audits=audits,
                             cache=fingerprint_cache,
                         ).to_identifier(),
                     )
-                    for name in _parents_from_model(model, models)
+                    for name in _parents_from_node(node, nodes)
                 )
             except Exception:
                 logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)

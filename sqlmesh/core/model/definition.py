@@ -48,9 +48,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
-    from typing import Annotated, Literal
+    from typing import Literal
 else:
-    from typing_extensions import Annotated, Literal
+    from typing_extensions import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -1156,9 +1156,7 @@ class ExternalModel(_Model):
         return None
 
 
-Model = Annotated[
-    t.Union[SqlModel, SeedModel, PythonModel, ExternalModel], Field(discriminator="source_type")
-]
+Model = t.Union[SqlModel, SeedModel, PythonModel, ExternalModel]
 
 
 def load_model(

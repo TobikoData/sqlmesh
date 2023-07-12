@@ -543,7 +543,7 @@ class Context(BaseContext):
 
             snapshot = Snapshot.from_model(
                 model,
-                models=models,
+                nodes=models,
                 audits=audits,
                 cache=fingerprint_cache,
                 ttl=ttl,
@@ -555,7 +555,7 @@ class Context(BaseContext):
 
         for snapshot in stored_snapshots.values():
             # Keep the original model instance to preserve the query cache.
-            snapshot.model = snapshots[snapshot.name].model
+            snapshot.node = snapshots[snapshot.name].node
 
         return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in snapshots.items()}
 

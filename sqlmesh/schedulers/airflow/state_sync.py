@@ -96,17 +96,17 @@ class HttpStateSync(StateSync):
             return set()
         return self._client.snapshots_exist([s.snapshot_id for s in snapshot_ids])
 
-    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
-        """Returns the model names that exist in the state sync.
+    def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+        """Returns the node names that exist in the state sync.
 
         Args:
-            names: Iterable of model names to check.
+            names: Iterable of node names to check.
             exclude_external: Whether to exclude external models from the output.
 
         Returns:
-            A set of all the existing model names.
+            A set of all the existing node names.
         """
-        return self._client.models_exist(names, exclude_external=exclude_external)
+        return self._client.nodes_exist(names, exclude_external=exclude_external)
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
         """Queries the store to get the migration.

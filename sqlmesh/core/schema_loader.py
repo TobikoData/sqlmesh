@@ -43,7 +43,7 @@ def create_schema_file(
                 external_tables.add(dep)
 
     # Make sure we don't convert internal models into external ones.
-    existing_models = state_reader.models_exist(external_tables, exclude_external=True)
+    existing_models = state_reader.nodes_exist(external_tables, exclude_external=True)
     if existing_models:
         logger.warning(
             "The following models already exist and can't be converted to external: %s."

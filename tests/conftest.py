@@ -159,7 +159,7 @@ def make_snapshot() -> t.Callable:
         return Snapshot.from_model(
             model,
             **{  # type: ignore
-                "models": {},
+                "nodes": {},
                 "ttl": "in 1 week",
                 **kwargs,
             },

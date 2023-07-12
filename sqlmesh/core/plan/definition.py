@@ -9,7 +9,7 @@ from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     Intervals,
     Snapshot,

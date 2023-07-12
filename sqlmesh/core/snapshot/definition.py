@@ -23,7 +23,7 @@ from sqlmesh.core.model import (
     kind,
 )
 from sqlmesh.core.model.definition import _SqlBasedModel
-from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -153,6 +153,9 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         return self.fingerprint.to_version() == self.version
+
+
+SnapshotNode = t.Annotated[Model, Field(discriminator="source_type")]
 
 
 class QualifiedViewName(PydanticModel, frozen=True):
@@ -358,7 +361,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     name: str
     fingerprint: SnapshotFingerprint
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
-    model: Model
+    node: SnapshotNode
     parents: t.Tuple[SnapshotId, ...]
     audits: t.Tuple[Audit, ...]
     intervals: Intervals = []
@@ -449,7 +452,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         cls,
         model: Model,
         *,
-        models: t.Dict[str, Model],
+        nodes: t.Dict[str, SnapshotNode],
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         project: str = "",
         version: t.Optional[str] = None,
@@ -477,24 +480,24 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         return cls(
             name=model.name,
-            fingerprint=fingerprint_from_model(
+            fingerprint=fingerprint_from_node(
                 model,
-                models=models,
+                nodes=nodes,
                 audits=audits,
                 cache=cache,
             ),
-            model=model,
+            node=model,
             parents=tuple(
                 SnapshotId(
                     name=name,
-                    identifier=fingerprint_from_model(
-                        models[name],
-                        models=models,
+                    identifier=fingerprint_from_node(
+                        nodes[name],
+                        nodes=nodes,
                         audits=audits,
                         cache=cache,
                     ).to_identifier(),
                 )
-                for name in _parents_from_model(model, models)
+                for name in _parents_from_node(model, nodes)
             ),
             audits=tuple(model.referenced_audits(audits)),
             intervals=[],
@@ -833,6 +836,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.model.kind.name
 
     @property
+    def model(self) -> Model:
+        if isinstance(self.node, Model):  # type: ignore
+            return t.cast(Model, self.node)
+        raise SQLMeshError(f"Snapshot {self.snapshot_id} is not a model snapshot.")
+
+    @property
     def depends_on_past(self) -> bool:
         """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
         return self.model.depends_on_past
@@ -854,10 +863,22 @@ def table_name(physical_schema: str, name: str, version: str, is_temp: bool = Fa
     return f"{physical_schema}.{name.replace('.', '__')}__{version}{temp_suffx}"
 
 
+def fingerprint_from_node(
+    node: SnapshotNode,
+    *,
+    nodes: t.Dict[str, SnapshotNode],
+    audits: t.Optional[t.Dict[str, Audit]] = None,
+    cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
+) -> SnapshotFingerprint:
+    """Helper function to generate a fingerprint based on node and environment."""
+    # only model nodes right now
+    return fingerprint_from_model(node, nodes=nodes, audits=audits, cache=cache)
+
+
 def fingerprint_from_model(
     model: Model,
     *,
-    models: t.Dict[str, Model],
+    nodes: t.Dict[str, SnapshotNode],
     audits: t.Optional[t.Dict[str, Audit]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
@@ -881,14 +902,14 @@ def fingerprint_from_model(
 
     if model.name not in cache:
         parents = [
-            fingerprint_from_model(
-                models[table],
-                models=models,
+            fingerprint_from_node(
+                nodes[table],
+                nodes=nodes,
                 audits=audits,
                 cache=cache,
             )
             for table in model.depends_on
-            if table in models
+            if table in nodes
         ]
 
         parent_data_hash = _hash(sorted(p.to_version() for p in parents))
@@ -1026,18 +1047,18 @@ def _hash(data: t.Iterable[t.Optional[str]]) -> str:
     return crc32(data)
 
 
-def _parents_from_model(
-    model: Model,
-    models: t.Dict[str, Model],
+def _parents_from_node(
+    node: SnapshotNode,
+    nodes: t.Dict[str, SnapshotNode],
 ) -> t.Set[str]:
-    parent_tables = set()
-    for table in model.depends_on:
-        if table in models:
-            parent_tables.add(table)
-            if models[table].kind.is_embedded:
-                parent_tables.update(_parents_from_model(models[table], models))
+    parent_nodes = set()
+    for parent in node.depends_on:
+        if parent in nodes:
+            parent_nodes.add(parent)
+            if nodes[parent].kind.is_embedded:
+                parent_nodes.update(_parents_from_node(nodes[parent], nodes))
 
-    return parent_tables
+    return parent_nodes
 
 
 def merge_intervals(intervals: Intervals) -> Intervals:

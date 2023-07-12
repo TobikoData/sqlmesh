@@ -24,7 +24,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotFingerprint,
     categorize_change,
-    fingerprint_from_model,
+    fingerprint_from_node,
     has_paused_forward_only,
 )
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
@@ -68,7 +68,7 @@ def snapshot(
     monkeypatch.setattr("sqlmesh.utils.date.now", mock)
     snapshot = make_snapshot(
         model,
-        models={parent_model.name: parent_model, model.name: model},
+        nodes={parent_model.name: parent_model, model.name: model},
     )
     snapshot.version = snapshot.fingerprint
     return snapshot
@@ -81,7 +81,7 @@ def test_json(snapshot: Snapshot):
         "fingerprint": snapshot.fingerprint.dict(),
         "intervals": [],
         "dev_intervals": [],
-        "model": {
+        "node": {
             "audits": [],
             "clustered_by": [],
             "cron": "1 0 * * *",
@@ -383,7 +383,7 @@ each_macro = lambda: "test"
 
 def test_fingerprint(model: Model, parent_model: Model):
     original_model = deepcopy(model)
-    fingerprint = fingerprint_from_model(model, models={})
+    fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="1634812886",
@@ -392,33 +392,33 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     assert fingerprint == original_fingerprint
 
-    with_parent_fingerprint = fingerprint_from_model(model, models={"parent.tbl": parent_model})
+    with_parent_fingerprint = fingerprint_from_node(model, nodes={"parent.tbl": parent_model})
     assert with_parent_fingerprint != fingerprint
     assert int(with_parent_fingerprint.parent_data_hash) > 0
     assert int(with_parent_fingerprint.parent_metadata_hash) > 0
 
     assert (
-        fingerprint_from_model(
+        fingerprint_from_node(
             model,
-            models={"parent.tbl": SqlModel(**{**model.dict(), "query": parse_one("select 2, ds")})},
+            nodes={"parent.tbl": SqlModel(**{**model.dict(), "query": parse_one("select 2, ds")})},
         )
         != with_parent_fingerprint
     )
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds")})
-    new_fingerprint = fingerprint_from_model(model, models={})
+    new_fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
-    assert new_fingerprint != fingerprint_from_model(model, models={})
+    assert new_fingerprint != fingerprint_from_node(model, nodes={})
 
     model = SqlModel(
         **{**original_model.dict(), "pre_statements": [parse_one("CREATE TABLE test")]}
     )
-    assert original_fingerprint != fingerprint_from_model(model, models={})
+    assert original_fingerprint != fingerprint_from_node(model, nodes={})
 
     model = SqlModel(**{**original_model.dict(), "post_statements": [parse_one("DROP TABLE test")]})
-    assert original_fingerprint != fingerprint_from_model(model, models={})
+    assert original_fingerprint != fingerprint_from_node(model, nodes={})
 
 
 def test_fingerprint_seed_model():
@@ -439,12 +439,12 @@ def test_fingerprint_seed_model():
     )
 
     model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
-    actual_fingerprint = fingerprint_from_model(model, models={})
+    actual_fingerprint = fingerprint_from_node(model, nodes={})
     assert actual_fingerprint == expected_fingerprint
 
     # Make sure that the fingerprint doesn't change when the model is dehydrated.
     dehydrated_model = model.to_dehydrated()
-    assert fingerprint_from_model(dehydrated_model, models={}) == expected_fingerprint
+    assert fingerprint_from_node(dehydrated_model, nodes={}) == expected_fingerprint
 
     updated_model = model.copy(
         update={
@@ -454,7 +454,7 @@ def test_fingerprint_seed_model():
             }
         }
     )
-    updated_actual_fingerprint = fingerprint_from_model(updated_model, models={})
+    updated_actual_fingerprint = fingerprint_from_node(updated_model, nodes={})
     assert updated_actual_fingerprint.data_hash != expected_fingerprint.data_hash
     assert updated_actual_fingerprint.metadata_hash == expected_fingerprint.metadata_hash
 
@@ -473,39 +473,39 @@ def test_fingerprint_jinja_macros(model: Model):
             ),
         }
     )
-    fingerprint = fingerprint_from_model(model, models={})
+    fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="524645336",
         metadata_hash="2802762491",
     )
 
-    fingerprint = fingerprint_from_model(model, models={})
+    fingerprint = fingerprint_from_node(model, nodes={})
     assert fingerprint == original_fingerprint
 
     model.jinja_macros.root_macros["test_macro"] = MacroInfo(
         definition="{% macro test_macro() %}b{% endmacro %}", depends_on=[]
     )
-    updated_fingerprint = fingerprint_from_model(model, models={})
+    updated_fingerprint = fingerprint_from_node(model, nodes={})
     assert updated_fingerprint.data_hash != original_fingerprint.data_hash
     assert updated_fingerprint.metadata_hash == original_fingerprint.metadata_hash
 
 
 def test_fingerprint_builtin_audits(model: Model, parent_model: Model):
-    fingerprint = fingerprint_from_model(model, models={})
+    fingerprint = fingerprint_from_node(model, nodes={})
 
     model = SqlModel.parse_obj(
         {**model.dict(), "audits": [("unique_values", {"columns": exp.convert([to_column("a")])})]}
     )
-    new_fingerprint = fingerprint_from_model(model, models={})
+    new_fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
 
 
 def test_stamp(model: Model):
-    original_fingerprint = fingerprint_from_model(model, models={})
+    original_fingerprint = fingerprint_from_node(model, nodes={})
 
     stamped_model = SqlModel(**{**model.dict(), "stamp": "test_stamp"})
-    stamped_fingerprint = fingerprint_from_model(stamped_model, models={})
+    stamped_fingerprint = fingerprint_from_node(stamped_model, nodes={})
 
     assert original_fingerprint != stamped_fingerprint
 

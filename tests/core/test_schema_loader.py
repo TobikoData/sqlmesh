@@ -104,7 +104,7 @@ def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
     }
 
     state_reader_mock = mocker.Mock()
-    state_reader_mock.models_exist.return_value = {"model_b"}
+    state_reader_mock.nodes_exist.return_value = {"model_b"}
 
     model = SqlModel(name="a", query=parse_one("select * FROM model_b, tbl_c"))
 
