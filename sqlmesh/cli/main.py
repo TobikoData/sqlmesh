@@ -6,14 +6,13 @@ import sys
 import typing as t
 
 import click
-from sqlglot.dialects.dialect import Dialects
 
 from sqlmesh import enable_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
-from sqlmesh.utils import debug_mode_enabled
+from sqlmesh.utils import debug_mode_enabled, sqlglot_dialects
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
 
@@ -25,10 +24,6 @@ def _sqlmesh_version() -> str:
         return __version__
     except ImportError:
         return "0.0.0"
-
-
-def _sqlglot_dialects() -> str:
-    return "'" + "', '".join(Dialects.__members__.values()) + "'"
 
 
 @click.group(no_args_is_help=True)
@@ -103,7 +98,7 @@ def cli(
     "dialect",
     required=True,
     type=str,
-    help=f"Default model dialect. Supported values: {_sqlglot_dialects()}.",
+    help=f"Default model dialect. Supported values: {sqlglot_dialects()}.",
 )
 @click.option(
     "-t",

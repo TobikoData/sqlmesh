@@ -15,14 +15,13 @@ from IPython.core.magic import (
 from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
-from sqlmesh.cli.main import _sqlglot_dialects
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
-from sqlmesh.utils import yaml
+from sqlmesh.utils import sqlglot_dialects, yaml
 from sqlmesh.utils.errors import MagicError, MissingContextException
 
 CONTEXT_VARIABLE_NAMES = [
@@ -95,7 +94,7 @@ class SQLMeshMagics(Magics):
     @argument(
         "dialect",
         type=str,
-        help=f"Default model dialect. Supported values: {_sqlglot_dialects()}.",
+        help=f"Default model dialect. Supported values: {sqlglot_dialects()}.",
     )
     @argument(
         "--template",

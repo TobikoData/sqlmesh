@@ -14,6 +14,8 @@ from copy import deepcopy
 from functools import lru_cache, wraps
 from pathlib import Path
 
+from sqlglot.dialects.dialect import Dialects
+
 T = t.TypeVar("T")
 KEY = t.TypeVar("KEY", bound=t.Hashable)
 VALUE = t.TypeVar("VALUE")
@@ -236,3 +238,7 @@ def env_vars(environ: dict[str, str]) -> t.Iterator[None]:
     finally:
         os.environ.clear()
         os.environ.update(old_environ)
+
+
+def sqlglot_dialects() -> str:
+    return "'" + "', '".join(Dialects.__members__.values()) + "'"
