@@ -2,13 +2,12 @@ import pathlib
 from datetime import date
 from tempfile import TemporaryDirectory
 
-import py
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 import sqlmesh.core.constants
-from sqlmesh.core.config import Config, ModelDefaultsConfig
+from sqlmesh.core.config import Config, ModelDefaultsConfig, SnowflakeConnectionConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import load_model
@@ -228,7 +227,7 @@ def test_evaluate_limit():
     assert context.evaluate("without_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
 
-def test_ignore_files(mocker: MockerFixture, tmpdir):
+def test_ignore_files(mocker: MockerFixture, tmp_path: pathlib.Path):
     mocker.patch.object(
         sqlmesh.core.constants,
         "IGNORE_PATTERNS",
@@ -239,12 +238,12 @@ def test_ignore_files(mocker: MockerFixture, tmpdir):
     macros_dir = pathlib.Path("macros")
 
     ignore_model_file = create_temp_file(
-        tmpdir,
+        tmp_path,
         pathlib.Path(models_dir, "ignore", "ignore_model.sql"),
         "MODEL(name ignore.ignore_model); SELECT 1 AS cola",
     )
     ignore_macro_file = create_temp_file(
-        tmpdir,
+        tmp_path,
         pathlib.Path(macros_dir, "macro_ignore.py"),
         """
 from sqlmesh.core.macros import macro
@@ -255,17 +254,17 @@ def test():
 """,
     )
     constant_ignore_model_file = create_temp_file(
-        tmpdir,
+        tmp_path,
         pathlib.Path(models_dir, ".ipynb_checkpoints", "ignore_model2.sql"),
         "MODEL(name ignore_model2); SELECT cola::bigint AS cola FROM db.other_table",
     )
     create_temp_file(
-        tmpdir,
+        tmp_path,
         pathlib.Path(models_dir, "db", "actual_test.sql"),
         "MODEL(name db.actual_test, kind full); SELECT 1 AS cola",
     )
     create_temp_file(
-        tmpdir,
+        tmp_path,
         pathlib.Path(macros_dir, "macro_file.py"),
         """
 from sqlmesh.core.macros import macro
@@ -278,7 +277,7 @@ def test():
     config = Config(
         ignore_patterns=["models/ignore/*.sql", "macro_ignore.py", ".ipynb_checkpoints/*"]
     )
-    context = Context(paths=str(tmpdir), config=config)
+    context = Context(paths=str(tmp_path), config=config)
 
     assert ["db.actual_test"] == list(context.models)
     assert "test" == list(context._macros)[-1]
@@ -294,12 +293,12 @@ def test_plan_apply(sushi_context) -> None:
     assert sushi_context.state_reader.get_environment("dev")
 
 
-def test_project_config_person_config_overrides(tmpdir):
+def test_project_config_person_config_overrides(tmp_path: pathlib.Path):
     context = Context(paths="examples/sushi")
     with TemporaryDirectory() as td:
         home_path = pathlib.Path(td)
         create_temp_file(
-            py.path.LocalPath(home_path),
+            home_path,
             pathlib.Path("config.yaml"),
             """
 gateways:
@@ -311,7 +310,7 @@ gateways:
 """,
         )
         project_config = create_temp_file(
-            tmpdir,
+            tmp_path,
             pathlib.Path("config.yaml"),
             """
 gateways:
@@ -326,11 +325,12 @@ gateways:
             ConfigError,
             match="User and password must be provided if using default authentication",
         ):
-            context._load_configs("config", [pathlib.Path(project_config.dirname)])
+            context._load_configs("config", [project_config.parent])
         context.sqlmesh_path = home_path
-        loaded_configs = context._load_configs("config", [pathlib.Path(project_config.dirname)])
+        loaded_configs = context._load_configs("config", [project_config.parent])
         assert len(loaded_configs) == 1
-        snowflake_connection = list(loaded_configs.values())[0].gateways["snowflake"].connection
+        snowflake_connection = list(loaded_configs.values())[0].gateways["snowflake"].connection  # type: ignore
+        assert isinstance(snowflake_connection, SnowflakeConnectionConfig)
         assert snowflake_connection.account == "123"
         assert snowflake_connection.user == "ABC"
         assert snowflake_connection.password == "XYZ"
