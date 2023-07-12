@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
-import { useStoreFileTree } from '~/context/fileTree'
 import { useApiFileByPath } from '~/api'
 import { debounceAsync, isNil, isStringNotEmpty } from '~/utils'
 import { isCancelledError } from '@tanstack/react-query'
@@ -18,17 +17,20 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import {
   useDefaultExtensions,
-  useSQLMeshModelKeymaps,
-  useSqlMeshDialect,
+  useKeymapsRemoteFile,
+  useSQLMeshDialect,
 } from './hooks'
+import { useStoreProject } from '@context/project'
 
 function CodeEditorSQLMesh({
   type,
+  dialect = '',
   content = '',
   children,
   className,
 }: {
   type: FileExtensions
+  dialect?: string
   content?: string
   className?: string
   children: (options: {
@@ -36,12 +38,11 @@ function CodeEditorSQLMesh({
     content: string
   }) => JSX.Element
 }): JSX.Element {
-  const [SqlMeshDialect, SqlMeshDialectCleanUp] = useSqlMeshDialect()
+  const [SQLMeshDialect, SQLMeshDialectCleanUp] = useSQLMeshDialect()
 
   const extensionsDefault = useDefaultExtensions(type)
 
   const models = useStoreContext(s => s.models)
-
   const engine = useStoreEditor(s => s.engine)
   const dialects = useStoreEditor(s => s.dialects)
 
@@ -50,7 +51,7 @@ function CodeEditorSQLMesh({
     keywords: string
   }>()
 
-  const updateDialectOptions = useCallback((e: MessageEvent): void => {
+  const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
     if (e.data.topic === 'dialect') {
       setDialectOptions(e.data.payload)
     }
@@ -65,29 +66,41 @@ function CodeEditorSQLMesh({
     return [
       ...extensionsDefault,
       type === EnumFileExtensions.SQL &&
-        SqlMeshDialect(models, dialectOptions, dialectsTitles),
+        SQLMeshDialect(models, dialectOptions, dialectsTitles),
     ]
       .filter(Boolean)
       .flat() as Extension[]
-  }, [type, dialectsTitles, dialectOptions])
+  }, [models, type, dialectsTitles, dialectOptions])
 
   useEffect(() => {
+    engine.postMessage({
+      topic: 'dialects',
+    })
+
     return () => {
-      SqlMeshDialectCleanUp()
+      SQLMeshDialectCleanUp()
     }
   }, [])
 
   useEffect(() => {
-    engine.addEventListener('message', updateDialectOptions)
+    engine.addEventListener('message', handleEngineWorkerMessage)
 
     return () => {
-      engine.removeEventListener('message', updateDialectOptions)
+      engine.removeEventListener('message', handleEngineWorkerMessage)
     }
-  }, [updateDialectOptions])
+  }, [handleEngineWorkerMessage])
 
   useEffect(() => {
     engine.postMessage({
       topic: 'dialect',
+      payload: dialect,
+    })
+  }, [dialect])
+
+  useEffect(() => {
+    engine.postMessage({
+      topic: 'validate',
+      payload: content,
     })
   }, [content])
 
@@ -105,12 +118,13 @@ function CodeEditorRemoteFile({
   path: string
   children: (options: { file: ModelFile; keymaps: KeyBinding[] }) => JSX.Element
 }): JSX.Element {
-  const files = useStoreFileTree(s => s.files)
+  const files = useStoreProject(s => s.files)
 
   const { refetch: getFileContent, isFetching } = useApiFileByPath(path)
   const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
 
-  const keymaps = useSQLMeshModelKeymaps(path)
+  const keymaps = useKeymapsRemoteFile(path)
+
   const [file, setFile] = useState<ModelFile>()
 
   useEffect(() => {
@@ -175,7 +189,7 @@ const CodeEditor = function CodeEditor({
     [keymaps],
   )
   const extensionsAll = useMemo(
-    () => [...extensions, extensionKeymap],
+    () => [...extensions, extensionKeymap].flat(),
     [extensionKeymap, extensions],
   )
 
@@ -193,7 +207,7 @@ const CodeEditor = function CodeEditor({
   )
 }
 
-CodeEditor.SQLMeshDialect = CodeEditorSQLMesh
+CodeEditor.Default = CodeEditorSQLMesh
 CodeEditor.RemoteFile = CodeEditorRemoteFile
 
 export default CodeEditor

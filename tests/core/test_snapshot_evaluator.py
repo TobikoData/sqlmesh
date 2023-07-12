@@ -16,6 +16,7 @@ from sqlmesh.core.model import (
     PythonModel,
     SqlModel,
     TimeColumn,
+    ViewKind,
     load_model,
 )
 from sqlmesh.core.model.meta import IntervalUnit
@@ -353,7 +354,7 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     snapshot = make_snapshot(model, version="1")
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
 
-    evaluator.migrate([snapshot])
+    evaluator.migrate([snapshot], {})
 
     cursor_mock.execute.assert_has_calls(
         [
@@ -361,6 +362,34 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
             call(
                 """ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT"""
             ),
+        ]
+    )
+
+
+def test_migrate_view(mocker: MockerFixture, make_snapshot):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+    adapter = EngineAdapter(lambda: connection_mock, "")
+
+    evaluator = SnapshotEvaluator(adapter)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=ViewKind(),
+        storage_format="parquet",
+        query=parse_one("SELECT c, a FROM tbl"),
+    )
+    snapshot = make_snapshot(model, version="1")
+    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+
+    evaluator.migrate([snapshot], {})
+
+    cursor_mock.execute.assert_has_calls(
+        [
+            call(
+                'CREATE OR REPLACE VIEW sqlmesh__test_schema.test_schema__test_model__1 AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
+            )
         ]
     )
 
@@ -418,7 +447,7 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
     new_snapshot.version = snapshot.version
 
     evaluator.create([new_snapshot], {})
-    evaluator.migrate([new_snapshot])
+    evaluator.migrate([new_snapshot], {})
 
     evaluator.evaluate(
         new_snapshot,

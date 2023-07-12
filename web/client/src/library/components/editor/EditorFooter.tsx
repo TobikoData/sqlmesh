@@ -2,7 +2,8 @@ import { getLanguageByExtension, showIndicatorDialects } from './help'
 import EditorIndicator from './EditorIndicator'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { useEffect } from 'react'
-import { isNil } from '~/utils'
+import { isFalse, isNil, isNotNil } from '~/utils'
+import { EnumFileExtensions } from '@models/file'
 
 export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
   const engine = useStoreEditor(s => s.engine)
@@ -10,8 +11,10 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
   const refreshTab = useStoreEditor(s => s.refreshTab)
 
   useEffect(() => {
-    if (isNil(tab.dialect) && dialects[0]?.dialect_name != null) {
-      updateTabDialect(dialects[0]?.dialect_name)
+    const dialectName = dialects[0]?.dialect_name
+
+    if (isNil(tab.dialect) && isNotNil(dialectName)) {
+      updateTabDialect(dialectName)
     }
   }, [dialects, tab])
 
@@ -36,6 +39,15 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           <EditorIndicator.Light ok={tab.isValid} />
         </EditorIndicator>
       )}
+      {tab.file.extension === EnumFileExtensions.SQL &&
+        isFalse(tab.file.isSQLMeshModelSQL) && (
+          <EditorIndicator
+            className="mr-2"
+            text="Valid SQL"
+          >
+            <EditorIndicator.Light ok={tab.isValid} />
+          </EditorIndicator>
+        )}
       {tab.file.isRemote && (
         <EditorIndicator
           className="mr-2"

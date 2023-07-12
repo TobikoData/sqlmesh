@@ -735,6 +735,7 @@ def apply_to_environment(
         environment,
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
         no_prompts=True,
+        promote_all=True,
     )
     plan.set_start(start(context))
 

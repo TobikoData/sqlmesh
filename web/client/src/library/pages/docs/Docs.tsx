@@ -5,8 +5,10 @@ import { useStoreContext } from '@context/context'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import Container from '@components/container/Container'
 import SplitPane from '@components/splitPane/SplitPane'
-import Search from './Search'
 import SourceList from './SourceList'
+import SearchList from '@components/search/SearchList'
+import { EnumSize } from '~/types/enum'
+import { EnumRoutes } from '~/routes'
 
 export default function PageDocs(): JSX.Element {
   const location = useLocation()
@@ -14,7 +16,6 @@ export default function PageDocs(): JSX.Element {
 
   const models = useStoreContext(s => s.models)
 
-  const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
 
   const filtered = Array.from(models.entries()).reduce(
@@ -34,7 +35,6 @@ export default function PageDocs(): JSX.Element {
 
   useEffect(() => {
     setFilter('')
-    setSearch('')
   }, [location.pathname])
 
   return (
@@ -58,10 +58,17 @@ export default function PageDocs(): JSX.Element {
       ) : (
         <div className="p-4 flex flex-col w-full h-full overflow-hidden">
           {isArrayNotEmpty(filtered) && (
-            <Search
-              models={filtered}
-              search={search}
-              setSearch={setSearch}
+            <SearchList<ModelSQLMeshModel>
+              list={filtered}
+              size={EnumSize.md}
+              searchBy="index"
+              displayBy="name"
+              to={model =>
+                `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(
+                  model.name,
+                )}`
+              }
+              isFullWidth={true}
             />
           )}
           <SplitPane

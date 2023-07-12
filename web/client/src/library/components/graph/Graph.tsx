@@ -69,9 +69,7 @@ import { type ErrorIDE } from '~/library/pages/ide/context'
 import { Popover, Transition } from '@headlessui/react'
 import CodeEditor from '@components/editor/EditorCode'
 import { EnumFileExtensions } from '@models/file'
-import { type Extension } from '@codemirror/state'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
-import { SqlMeshExpression } from '@components/editor/extensions'
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
@@ -92,17 +90,9 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
 }): JSX.Element {
   const { handleClickModel } = useLineageFlow()
 
-  const extensions = useMemo(
-    () =>
-      [expression != null && SqlMeshExpression(expression)].filter(
-        Boolean,
-      ) as Extension[],
-    [expression],
-  )
-
   const modelExtensions = useSQLMeshModelExtensions(undefined, model => {
     handleClickModel?.(model.name)
-  }).concat(extensions)
+  })
 
   const [isShowing, setIsShowing] = useState(false)
 
@@ -135,7 +125,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                 leaveTo="opacity-0 translate-y-1"
               >
                 <Popover.Panel className="fixed bottom-0 left-10 z-10 transform cursor-pointer rounded-lg bg-theme border-4 border-primary-20">
-                  <CodeEditor.SQLMeshDialect
+                  <CodeEditor.Default
                     content={source}
                     type={EnumFileExtensions.SQL}
                     className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !h-[25vh] !max-w-[30rem]"
@@ -147,7 +137,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                         className="text-xs pr-2"
                       />
                     )}
-                  </CodeEditor.SQLMeshDialect>
+                  </CodeEditor.Default>
                 </Popover.Panel>
               </Transition>
             </>

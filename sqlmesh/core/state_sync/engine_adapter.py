@@ -102,6 +102,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             "previous_plan_id": exp.DataType.build("text"),
             "expiration_ts": exp.DataType.build("bigint"),
             "finalized_ts": exp.DataType.build("bigint"),
+            "promoted_snapshot_ids": exp.DataType.build("text"),
         }
 
         self._seed_columns_to_types = {
@@ -918,6 +919,11 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
                 "previous_plan_id": environment.previous_plan_id,
                 "expiration_ts": environment.expiration_ts,
                 "finalized_ts": environment.finalized_ts,
+                "promoted_snapshot_ids": json.dumps(
+                    [s.dict() for s in environment.promoted_snapshot_ids]
+                )
+                if environment.promoted_snapshot_ids is not None
+                else None,
             }
         ]
     )

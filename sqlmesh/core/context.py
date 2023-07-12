@@ -683,6 +683,7 @@ class Context(BaseContext):
         auto_apply: bool = False,
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
+        promote_all: t.Optional[bool] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -716,6 +717,7 @@ class Context(BaseContext):
                 changes (breaking / non-breaking). If not provided, then the corresponding configuration
                 option determines the behavior.
             effective_from: The effective date from which to apply forward-only changes on production.
+            promote_all: Indicates whether to promote all models in the target development environment or only modified ones.
 
         Returns:
             The populated Plan object.
@@ -734,6 +736,9 @@ class Context(BaseContext):
             self.environment_ttl if environment not in self.pinned_environments else None
         )
 
+        if promote_all is None:
+            promote_all = self.config.promote_all
+
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, create_from=create_from),
             state_reader=self.state_reader,
@@ -750,6 +755,7 @@ class Context(BaseContext):
             categorizer_config=self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
+            promote_all=promote_all,
         )
 
         if not no_prompts:
@@ -1135,20 +1141,25 @@ class Context(BaseContext):
         if isinstance(config, Config):
             return {path: config for path in paths}
 
-        config_defaults = None
-        for path in (self.sqlmesh_path / "config.yml", self.sqlmesh_path / "config.yaml"):
+        config_env_vars = None
+        personal_paths = [
+            self.sqlmesh_path / "config.yml",
+            self.sqlmesh_path / "config.yaml",
+        ]
+        for path in personal_paths:
             if path.exists():
-                config_defaults = load_config_from_yaml(path)
-                break
+                config_env_vars = load_config_from_yaml(path).get("env_vars")
+                if config_env_vars:
+                    break
 
-        with env_vars(config_defaults.env_vars if config_defaults else {}):
+        with env_vars(config_env_vars if config_env_vars else {}):
             return {
                 path: load_config_from_paths(
                     path / "config.py",
                     path / "config.yml",
                     path / "config.yaml",
+                    *personal_paths,
                     config_name=config,
-                    config_defaults=config_defaults,
                 )
                 for path in paths
             }

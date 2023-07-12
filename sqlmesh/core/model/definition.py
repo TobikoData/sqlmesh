@@ -22,7 +22,7 @@ from sqlglot.time import format_time
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, macro
-from sqlmesh.core.model.common import expression_validator, parse_model_name
+from sqlmesh.core.model.common import expression_validator
 from sqlmesh.core.model.kind import ModelKindName, SeedKind
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
@@ -533,7 +533,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def view_name(self) -> str:
-        return parse_model_name(self.name)[2]
+        return exp.to_table(self.name).name
 
     @property
     def python_env(self) -> t.Dict[str, Executable]:

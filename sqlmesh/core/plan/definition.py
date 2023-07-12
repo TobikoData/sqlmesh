@@ -31,7 +31,7 @@ from sqlmesh.utils.date import (
     validate_date_range,
     yesterday_ds,
 )
-from sqlmesh.utils.errors import PlanError, SQLMeshError
+from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
 SnapshotMapping = t.Dict[str, t.Set[str]]
@@ -60,6 +60,7 @@ class Plan:
         categorizer_config: Auto categorization settings.
         auto_categorization_enabled: Whether to apply auto categorization.
         effective_from: The effective date from which to apply forward-only changes on production.
+        promote_all: Indicates whether to promote all models in the target development environment or only modified ones.
     """
 
     def __init__(
@@ -79,6 +80,7 @@ class Plan:
         categorizer_config: t.Optional[CategorizerConfig] = None,
         auto_categorization_enabled: bool = True,
         effective_from: t.Optional[TimeLike] = None,
+        promote_all: bool = False,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -91,6 +93,7 @@ class Plan:
         self.environment_ttl = environment_ttl
         self.categorizer_config = categorizer_config or CategorizerConfig()
         self.auto_categorization_enabled = auto_categorization_enabled
+        self.promote_all = promote_all
         self._effective_from: t.Optional[TimeLike] = None
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
@@ -120,6 +123,7 @@ class Plan:
 
         self._add_restatements(restate_models or [])
 
+        self._ensure_new_env_with_changes()
         self._ensure_valid_date_range(self._start, self._end)
         self._ensure_no_forward_only_revert()
         self._ensure_no_forward_only_new_models()
@@ -253,14 +257,23 @@ class Plan:
             if self.is_dev and self.environment_ttl is not None
             else None
         )
+
+        snapshots = [s.table_info for s in self.snapshots]
+        promoted_snapshot_ids = None
+        if self.is_dev and not self.promote_all:
+            promoted_snapshot_ids = [
+                s.snapshot_id for s in snapshots if s.name in self.context_diff.promotable_models
+            ]
+
         return Environment(
             name=self.context_diff.environment,
-            snapshots=[snapshot.table_info for snapshot in self.snapshots],
+            snapshots=snapshots,
             start_at=self.start,
             end_at=self._end,
             plan_id=self.plan_id,
             previous_plan_id=self.context_diff.previous_plan_id,
             expiration_ts=expiration_ts,
+            promoted_snapshot_ids=promoted_snapshot_ids,
         )
 
     @property
@@ -536,8 +549,10 @@ class Plan:
                 )
 
     def _ensure_no_forward_only_new_models(self) -> None:
-        if self.forward_only and self.context_diff.added:
-            raise PlanError("New models can't be added as part of the forward-only plan.")
+        if self.forward_only and self.context_diff.added_materialized_models:
+            raise PlanError(
+                "New models that require materialization can't be added as part of the forward-only plan."
+            )
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self.context_diff.snapshots.values():
@@ -546,6 +561,17 @@ class Plan:
                 raise PlanError(
                     f"Removed models {broken_references} are referenced in model '{snapshot.name}'. Please remove broken references before proceeding."
                 )
+
+    def _ensure_new_env_with_changes(self) -> None:
+        if (
+            self.is_dev
+            and not self.promote_all
+            and self.context_diff.is_new_environment
+            and not self.context_diff.has_snapshot_changes
+        ):
+            raise NoChangesPlanError(
+                "No changes were detected. Run with --promote-all to create a new environment anyway."
+            )
 
 
 class PlanStatus(str, Enum):

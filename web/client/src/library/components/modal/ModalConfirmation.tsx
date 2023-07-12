@@ -11,6 +11,7 @@ export interface Confirmation {
   cancel?: () => void
   headline?: string
   description?: string
+  details?: string[]
   tagline?: string
   yesText: string
   noText: string
@@ -69,10 +70,30 @@ function ModalConfirmationActions({
   )
 }
 
+function ModalConfirmationDetails({
+  details,
+}: {
+  details: string[]
+}): JSX.Element {
+  return (
+    <ul className="mt-2 p-4 bg-warning-10 rounded-md max-h-[20vh] overflow-y-auto hover:scrollbar scrollbar--vertical">
+      {details.map(detail => (
+        <li
+          key={detail}
+          className="text-sm"
+        >
+          {detail}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 ModalConfirmation.Headline = ModalConfirmationHeadline
 ModalConfirmation.Tagline = ModalConfirmationTagline
 ModalConfirmation.Description = ModalConfirmationDescription
 ModalConfirmation.Actions = ModalConfirmationActions
 ModalConfirmation.Main = ModalConfirmationMain
+ModalConfirmation.Details = ModalConfirmationDetails
 
 export default ModalConfirmation

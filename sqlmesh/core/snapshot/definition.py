@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import IntEnum
 
 from pydantic import Field, validator
+from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
@@ -20,7 +21,6 @@ from sqlmesh.core.model import (
     SqlModel,
     ViewKind,
     kind,
-    parse_model_name,
 )
 from sqlmesh.core.model.definition import _SqlBasedModel
 from sqlmesh.core.model.meta import IntervalUnit
@@ -194,8 +194,12 @@ class SnapshotInfoMixin(ModelKindMixin):
 
     @property
     def qualified_view_name(self) -> QualifiedViewName:
-        catalog, schema, table = parse_model_name(self.name)
-        return QualifiedViewName(catalog=catalog, schema_name=schema, table=table)
+        view_name = exp.to_table(self.name)
+        return QualifiedViewName(
+            catalog=view_name.catalog or None,
+            schema_name=view_name.db or None,
+            table=view_name.name,
+        )
 
     @property
     def previous_version(self) -> t.Optional[SnapshotDataVersion]:
@@ -756,8 +760,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def physical_schema(self) -> str:
         if self.physical_schema_ is not None:
             return self.physical_schema_
-        _, schema, _ = parse_model_name(self.name)
-        if schema is None:
+        schema = exp.to_table(self.name).db
+        if not schema:
             schema = c.DEFAULT_SCHEMA
         return f"{c.SQLMESH}__{schema}"
 

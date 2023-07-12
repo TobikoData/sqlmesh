@@ -39,6 +39,7 @@ class Config(BaseConfig):
         users: A list of users that can be used for approvals/notifications.
         pinned_environments: A list of development environment names that should not be deleted by the janitor task.
         model_defaults: Default values for model definitions.
+        promote_all: Indicates whether to promote all models in the target development environment or only modified ones.
     """
 
     gateways: t.Union[t.Dict[str, GatewayConfig], GatewayConfig] = GatewayConfig()
@@ -59,6 +60,7 @@ class Config(BaseConfig):
     loader: t.Type[Loader] = SqlMeshLoader
     env_vars: t.Dict[str, str] = {}
     username: str = ""
+    promote_all: bool = False
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,

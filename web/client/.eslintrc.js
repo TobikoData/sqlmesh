@@ -20,6 +20,8 @@ module.exports = {
     'no-use-before-define': OFF,
     '@typescript-eslint/promise-function-async': OFF,
     '@typescript-eslint/no-non-null-assertion': OFF,
+    'no-return-await': OFF,
+    '@typescript-eslint/return-await': OFF,
     '@typescript-eslint/no-use-before-define': [
       ERROR,
       {
@@ -37,6 +39,7 @@ module.exports = {
         format: ['camelCase', 'PascalCase', 'UPPER_CASE', 'snake_case'],
       },
     ],
+    '@typescript-eslint/no-confusing-void-expression': OFF,
   },
   ignorePatterns: [
     'src/api/client.ts',

@@ -2,10 +2,11 @@ import { type File, FileType } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { isStringEmptyOrNil } from '@utils/index'
+import { toUniqueName } from '@components/fileExplorer/help'
 
 export const EnumFileExtensions = {
   SQL: '.sql',
-  Python: '.py',
+  PY: '.py',
   CSV: '.csv',
   YAML: '.yaml',
   YML: '.yml',
@@ -78,11 +79,17 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   get isSQLMeshModelPython(): boolean {
-    return this.isSQLMeshModel && this.extension === EnumFileExtensions.Python
+    return this.isSQLMeshModel && this.extension === EnumFileExtensions.PY
   }
 
   get isSQLMeshModelSQL(): boolean {
     return this.isSQLMeshModel && this.extension === EnumFileExtensions.SQL
+  }
+
+  copyName(): string {
+    return `Copy of ${
+      this.name.split(this.extension)[0] ?? ''
+    }__${toUniqueName()}${this.extension}`
   }
 
   updateContent(newContent: string = ''): void {

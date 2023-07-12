@@ -17,7 +17,6 @@ import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
-import { getTableDataFromArrowStreamResult } from './help'
 import { Tab } from '@headlessui/react'
 import Banner from '@components/banner/Banner'
 import Documentation from '@components/documentation/Documentation'
@@ -31,6 +30,7 @@ import {
 import { EnumErrorKey } from '~/library/pages/ide/context'
 import TabList from '@components/tab/Tab'
 import Selector from '@components/selector/Selector'
+import { getTableDataFromArrowStreamResult } from './help'
 
 interface FormModel {
   model?: string

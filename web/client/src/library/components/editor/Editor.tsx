@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Divider } from '../divider/Divider'
-import { useStoreFileTree } from '../../../context/fileTree'
+import { useStoreProject } from '../../../context/project'
 import SplitPane from '../splitPane/SplitPane'
-import { debounceSync, isFalse, isStringEmptyOrNil } from '../../../utils'
+import {
+  debounceSync,
+  isFalse,
+  isNil,
+  isStringEmptyOrNil,
+} from '../../../utils'
 import EditorFooter from './EditorFooter'
 import EditorTabs from './EditorTabs'
 import EditorInspector from './EditorInspector'
@@ -13,71 +18,21 @@ import clsx from 'clsx'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { EnumFileExtensions } from '@models/file'
-import { type KeyBinding } from '@codemirror/view'
 import { useLineageFlow } from '@components/graph/context'
 import CodeEditor from './EditorCode'
-import { useSQLMeshModelExtensions } from './hooks'
+import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
 
 function Editor(): JSX.Element {
-  const files = useStoreFileTree(s => s.files)
-  const selectedFile = useStoreFileTree(s => s.selectedFile)
-
   const tab = useStoreEditor(s => s.tab)
-  const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
-  const storedTabsId = useStoreEditor(s => s.storedTabsId)
   const engine = useStoreEditor(s => s.engine)
-  const selectTab = useStoreEditor(s => s.selectTab)
-  const createTab = useStoreEditor(s => s.createTab)
-  const addTab = useStoreEditor(s => s.addTab)
-  const setDialects = useStoreEditor(s => s.setDialects)
-  const refreshTab = useStoreEditor(s => s.refreshTab)
 
   const [isReadyEngine, setIsreadyEngine] = useState(false)
 
-  const handleEngineWorkerMessage = useCallback(
-    (e: MessageEvent): void => {
+  const handleEngineWorkerMessage = useCallback((e: MessageEvent): void => {
+    if (e.data.topic === 'init') {
       setIsreadyEngine(true)
-
-      if (e.data.topic === 'dialects') {
-        setDialects(e.data.payload.dialects ?? [])
-      }
-
-      if (e.data.topic === 'validate') {
-        if (tab == null) return
-
-        tab.isValid = e.data.payload
-
-        refreshTab()
-      }
-    },
-    [tab],
-  )
-
-  useEffect(() => {
-    engine.postMessage({
-      topic: 'dialects',
-    })
+    }
   }, [])
-
-  useEffect(() => {
-    files.forEach(file => {
-      if (storedTabsIds.includes(file.id)) {
-        const tab = createTab(file)
-
-        if (storedTabsId === file.id) {
-          selectTab(tab)
-        } else {
-          addTab(tab)
-        }
-      }
-    })
-  }, [files])
-
-  useEffect(() => {
-    if (selectedFile == null || tab?.file === selectedFile) return
-
-    selectTab(createTab(selectedFile))
-  }, [selectedFile])
 
   useEffect(() => {
     engine.addEventListener('message', handleEngineWorkerMessage)
@@ -93,7 +48,7 @@ function Editor(): JSX.Element {
         <>
           <EditorTabs />
           <Divider />
-          {tab == null ? <EditorEmpty /> : <EditorMain tab={tab} />}
+          {isNil(tab) ? <EditorEmpty /> : <EditorMain tab={tab} />}
         </>
       ) : (
         <EditorLoading />
@@ -124,32 +79,54 @@ function EditorLoading(): JSX.Element {
 }
 
 function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
-  const files = useStoreFileTree(s => s.files)
-  const selectFile = useStoreFileTree(s => s.selectFile)
+  const files = useStoreProject(s => s.files)
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const direction = useStoreEditor(s => s.direction)
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewConsole = useStoreEditor(s => s.previewConsole)
   const previewDiff = useStoreEditor(s => s.previewDiff)
-  const selectTab = useStoreEditor(s => s.selectTab)
-  const createTab = useStoreEditor(s => s.createTab)
-  const closeTab = useStoreEditor(s => s.closeTab)
   const refreshTab = useStoreEditor(s => s.refreshTab)
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
+  const setDialects = useStoreEditor(s => s.setDialects)
 
   const { models, setManuallySelectedColumn } = useLineageFlow()
 
+  const defaultKeymapsEditorTab = useDefaultKeymapsEditorTab()
   const modelExtensions = useSQLMeshModelExtensions(
     tab.file.path,
     model => {
-      selectFile(files.get(model.path))
+      setSelectedFile(files.get(model.path))
     },
     (model, column) => {
       setManuallySelectedColumn([model, column])
     },
+  )
+
+  const handleEngineWorkerMessage = useCallback(
+    (e: MessageEvent): void => {
+      if (e.data.topic === 'dialects') {
+        setDialects(e.data.payload)
+      }
+
+      if (e.data.topic === 'validate') {
+        tab.isValid = e.data.payload
+
+        refreshTab()
+      }
+
+      if (e.data.topic === 'format') {
+        if (isStringEmptyOrNil(e.data.payload)) return
+
+        tab.file.content = e.data.payload
+
+        refreshTab()
+      }
+    },
+    [tab.id],
   )
 
   const updateFileContent = useCallback(
@@ -182,55 +159,23 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     return showPreview ? [70, 30] : [100, 0]
   }, [tab, models, previewConsole, previewTable, previewDiff])
 
-  const keymaps: KeyBinding[] = useMemo(
-    () =>
-      tab == null
-        ? []
-        : [
-            {
-              key: 'Mod-Alt-[',
-              preventDefault: true,
-              run() {
-                selectTab(createTab())
+  useEffect(() => {
+    engine.addEventListener('message', handleEngineWorkerMessage)
 
-                return true
-              },
-            },
-            {
-              key: 'Mod-Alt-]',
-              preventDefault: true,
-              run() {
-                closeTab(tab.file)
-
-                return true
-              },
-            },
-          ],
-    [tab?.file],
-  )
+    return () => {
+      engine.removeEventListener('message', handleEngineWorkerMessage)
+    }
+  }, [handleEngineWorkerMessage])
 
   useEffect(() => {
-    if (tab?.id == null) return
-
     const model = models.get(tab.file.path)
 
-    if (model == null) {
-      engine.postMessage({
-        topic: 'dialects',
-      })
-    } else {
-      tab.dialect = model.dialect
+    tab.dialect = model?.dialect ?? ''
 
-      engine.postMessage({
-        topic: 'dialect',
-        payload: tab.dialect,
-      })
-    }
-  }, [tab.id])
+    refreshTab()
+  }, [tab.id, models])
 
   useEffect(() => {
-    if (tab == null) return
-
     tab.isSaved = isFalse(tab.file.isChanged)
 
     engine.postMessage({
@@ -273,37 +218,39 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
           >
             <div className="flex flex-col h-full">
               {tab.file.isLocal && (
-                <CodeEditor.SQLMeshDialect
+                <CodeEditor.Default
                   key={tab.id}
                   type={EnumFileExtensions.SQL}
+                  dialect={tab.dialect}
                   content={tab.file.content}
                 >
                   {({ extensions, content }) => (
                     <CodeEditor
                       extensions={extensions}
+                      keymaps={defaultKeymapsEditorTab}
                       content={content}
-                      keymaps={keymaps}
                       onChange={updateFileContent}
                     />
                   )}
-                </CodeEditor.SQLMeshDialect>
+                </CodeEditor.Default>
               )}
               {tab.file.isRemote && (
                 <CodeEditor.RemoteFile path={tab.file.path}>
-                  {({ file, keymaps: additional }) => (
-                    <CodeEditor.SQLMeshDialect
+                  {({ file, keymaps }) => (
+                    <CodeEditor.Default
                       type={file.extension}
+                      dialect={tab.dialect}
                       content={file.content}
                     >
                       {({ extensions, content }) => (
                         <CodeEditor
-                          extensions={extensions.concat(modelExtensions)}
                           content={content}
-                          keymaps={keymaps.concat(additional)}
+                          extensions={extensions.concat(modelExtensions)}
+                          keymaps={keymaps.concat(defaultKeymapsEditorTab)}
                           onChange={updateFileContent}
                         />
                       )}
-                    </CodeEditor.SQLMeshDialect>
+                    </CodeEditor.Default>
                   )}
                 </CodeEditor.RemoteFile>
               )}
