@@ -38,6 +38,7 @@ import {
   getTableDiffApiTableDiffGet,
   type GetTableDiffApiTableDiffGetParams,
   type TableDiff,
+  FetchdfInput,
 } from './client'
 import {
   useIDE,
@@ -201,11 +202,11 @@ export function useApiPlanApply(
   })
 }
 
-export function useApiFetchdf(sql: string): UseQueryResult<unknown> {
+export function useApiFetchdf(options: FetchdfInput): UseQueryResult<unknown> {
   return useQuery<unknown, ErrorIDE>({
     queryKey: ['/api/commands/fetchd'],
     queryFn: async ({ signal }) =>
-      await fetchdfApiCommandsFetchdfPost({ sql }, { signal }),
+      await fetchdfApiCommandsFetchdfPost(options, { signal }),
     enabled: false,
     cacheTime: 0,
   })

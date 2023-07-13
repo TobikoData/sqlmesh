@@ -15,7 +15,7 @@ export {
 
 const SOURCE_PREFIX = 's__'
 const TARGET_PREFIX = 't__'
-const EMTPY_TABLE_CELL = 'NULL'
+const EMPTY_TABLE_CELL = 'NULL'
 
 function getHeaders(
   {
@@ -77,7 +77,7 @@ function getRows(
   const added: string[] = []
   const rest: string[] = []
 
-  Object.entries(rows ?? {}).forEach(([key, value]) => {
+  Object.entries(rows ?? {}).forEach(([key]) => {
     if (isAddedRow(diff, key, on)) added.push(key)
     else if (isDeletedRow(diff, key, on)) deleted.push(key)
     else rest.push(key)
@@ -98,13 +98,10 @@ function getRows(
 }
 
 function isModified(diff: any, header: string, key: string): boolean {
-  const source_sample = diff.row_diff.sample[`${SOURCE_PREFIX}${header}`]?.[key]
-  const target_sample = diff.row_diff.sample[`${TARGET_PREFIX}${header}`]?.[key]
+  const source_sample = getCellContent(diff, SOURCE_PREFIX, header, key)
+  const target_sample = getCellContent(diff, TARGET_PREFIX, header, key)
 
-  return (
-    (isNotNil(source_sample) || isNotNil(target_sample)) &&
-    source_sample !== target_sample
-  )
+  return source_sample !== target_sample
 }
 
 function isDeletedRow(
@@ -113,10 +110,8 @@ function isDeletedRow(
   on: Array<[string, string]>,
 ): boolean {
   return on.every(([source, target]) => {
-    const source_sample =
-      diff.row_diff.sample[`${SOURCE_PREFIX}${source}`]?.[key]
-    const target_sample =
-      diff.row_diff.sample[`${TARGET_PREFIX}${target}`]?.[key]
+    const source_sample = getCellContent(diff, SOURCE_PREFIX, source, key)
+    const target_sample = getCellContent(diff, TARGET_PREFIX, target, key)
 
     return isNotNil(source_sample) && isNil(target_sample)
   })
@@ -128,10 +123,8 @@ function isAddedRow(
   on: Array<[string, string]>,
 ): boolean {
   return on.every(([source, target]) => {
-    const source_sample =
-      diff.row_diff.sample[`${SOURCE_PREFIX}${source}`]?.[key]
-    const target_sample =
-      diff.row_diff.sample[`${TARGET_PREFIX}${target}`]?.[key]
+    const source_sample = getCellContent(diff, SOURCE_PREFIX, source, key)
+    const target_sample = getCellContent(diff, TARGET_PREFIX, target, key)
 
     return isNil(source_sample) && isNotNil(target_sample)
   })
@@ -156,30 +149,17 @@ function hasModified(
 
 function getCellContent(
   diff: any,
+  prefix: string,
   header: string,
   key: string,
-  on: Array<[string, string]>,
-): string {
-  if (header in diff.schema_diff.removed && isAddedRow(diff, key, on))
-    return EMTPY_TABLE_CELL
-  if (header in diff.schema_diff.added && isDeletedRow(diff, key, on))
-    return EMTPY_TABLE_CELL
-
-  return (
-    diff.row_diff.sample[`${TARGET_PREFIX}${header}`]?.[key] ??
-    diff.row_diff.sample[`${SOURCE_PREFIX}${header}`]?.[key] ??
-    EMTPY_TABLE_CELL
-  )
+): string | undefined {
+  return diff.row_diff.sample[`${prefix}${header}`]?.[key]
 }
 
 function getCellContentSource(diff: any, header: string, key: string): string {
-  return (
-    diff.row_diff.sample[`${SOURCE_PREFIX}${header}`]?.[key] ?? EMTPY_TABLE_CELL
-  )
+  return getCellContent(diff, SOURCE_PREFIX, header, key) ?? EMPTY_TABLE_CELL
 }
 
 function getCellContentTarget(diff: any, header: string, key: string): string {
-  return (
-    diff.row_diff.sample[`${TARGET_PREFIX}${header}`]?.[key] ?? EMTPY_TABLE_CELL
-  )
+  return getCellContent(diff, TARGET_PREFIX, header, key) ?? EMPTY_TABLE_CELL
 }

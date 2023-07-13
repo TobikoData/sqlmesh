@@ -147,9 +147,7 @@ export default function EditorPreview({
             {isNotNil(previewQuery) && (
               <Tab.Panel
                 unmount={false}
-                className={clsx(
-                  'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
-                )}
+                className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
               >
                 <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
                   <CodeEditor.Default

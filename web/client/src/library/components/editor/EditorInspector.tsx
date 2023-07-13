@@ -210,12 +210,15 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
   const engine = useStoreEditor(s => s.engine)
 
-  const { refetch: getFetchdf, isFetching } = useApiFetchdf(tab.file.content)
-  const debouncedGetFetchdf = debounceAsync(getFetchdf, 1000, true)
-
   const [form, setForm] = useState<FormArbitrarySql>({
     limit: LIMIT,
   })
+
+  const { refetch: getFetchdf, isFetching } = useApiFetchdf({
+    sql: tab.file.content,
+    limit: form.limit,
+  })
+  const debouncedGetFetchdf = debounceAsync(getFetchdf, 1000, true)
 
   const shouldSendQuery = Object.values(form).every(Boolean)
 
@@ -228,7 +231,6 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
       throwOnError: true,
     })
       .then(({ data }) => {
-        console.log(data)
         setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
       })
       .catch(error => {

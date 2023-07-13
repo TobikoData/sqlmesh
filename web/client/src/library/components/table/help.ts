@@ -14,8 +14,6 @@ export function getTableDataFromArrowStreamResult(
 ): [TableColumn[], TableRow[]] {
   if (isNil(result)) return [[], []]
 
-  console.log('getTableDataFromArrowStreamResult', result)
-
   const data: ResponseTableColumns = result.toArray() // result.toArray() returns an array of Proxies
   const rows = Array.from(data).map(toTableRow) // using Array.from to convert the Proxies to real objects
   const columns = result.schema.fields.map(field => ({
@@ -31,7 +29,8 @@ function toTableRow(
 ): Record<string, TableCellValue> {
   // using Array.from to convert the Proxies to real objects
   return Array.from(row).reduce(
-    (acc, [key, value]) => Object.assign(acc, { [key]: value }),
+    (acc, [key, value]) =>
+      Object.assign(acc, { [key]: isNil(value) ? undefined : String(value) }),
     {},
   )
 }

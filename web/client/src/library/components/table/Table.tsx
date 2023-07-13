@@ -66,18 +66,19 @@ export default function Table({
   })
 
   const { rows } = table.getRowModel()
-  const rowVirtualizer = useVirtual({
+  const { virtualItems: virtualRows, totalSize } = useVirtual({
     parentRef: elTableContainer,
     size: rows.length,
     overscan: 10,
   })
-  const { virtualItems: virtualRows, totalSize } = rowVirtualizer
 
   const paddingTop = virtualRows.length > 0 ? virtualRows?.[0]?.start ?? 0 : 0
   const paddingBottom =
     virtualRows.length > 0
       ? totalSize - (virtualRows?.[virtualRows.length - 1]?.end ?? 0)
       : 0
+
+  console.log('rows', rows, filter)
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -107,11 +108,11 @@ export default function Table({
                 {headerGroup.headers.map(header => (
                   <th
                     key={header.id}
-                    className={clsx(
-                      'pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark',
-                    )}
+                    className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark"
                   >
-                    {header.isPlaceholder ? null : (
+                    {header.isPlaceholder ? (
+                      <></>
+                    ) : (
                       <div
                         className={clsx(
                           header.column.getCanSort()
