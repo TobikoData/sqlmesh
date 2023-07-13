@@ -421,6 +421,50 @@ class BigQueryConnectionConfig(_ConnectionConfig):
         return connect
 
 
+class GCPPostgresConnectionConfig(_ConnectionConfig):
+    """
+    Postgres Connection Configuration for GCP.
+
+    Args:
+        instance_connection_string: Connection name for the postgres instance.
+        user: Postgres or IAM user's name
+        password: The postgres user's password. Only needed when the user is a postgres user.
+        enable_iam_auth: Set to True when user is an IAM user.
+        db: Name of the db to connect to.
+    """
+
+    instance_connection_string: str
+    user: str
+    password: t.Optional[str] = None
+    enable_iam_auth: t.Optional[bool] = None
+    db: str
+
+    driver: str = "pg8000"
+    type_: Literal["postgres"] = Field(alias="type", default="postgres")
+    concurrent_tasks: int = 4
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "instance_connection_string",
+            "driver",
+            "user",
+            "password",
+            "db",
+            "enable_iam_auth",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.PostgresEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from google.cloud.sql.connector import Connector
+
+        return Connector().connect
+
+
 class RedshiftConnectionConfig(_ConnectionConfig):
     """
     Redshift Connection Configuration.
@@ -606,6 +650,7 @@ class SparkConnectionConfig(_ConnectionConfig):
 ConnectionConfig = Annotated[
     t.Union[
         BigQueryConnectionConfig,
+        GCPPostgresConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
         PostgresConnectionConfig,

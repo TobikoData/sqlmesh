@@ -94,6 +94,9 @@ setup(
         "dbt": [
             "dbt-core<1.5.0",
         ],
+        "gcppostgres": [
+            "cloud-sql-python-connector[pg8000]",
+        ],
         "github": [
             "PyGithub",
         ],
