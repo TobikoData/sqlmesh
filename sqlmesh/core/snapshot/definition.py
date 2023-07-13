@@ -628,8 +628,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
-        is_temp_table = self.is_temporary_table(is_dev)
-        intervals = self.dev_intervals if is_temp_table else self.intervals
+        intervals = (
+            self.dev_intervals
+            if is_dev and self.is_forward_only and self.is_paused
+            else self.intervals
+        )
         restatements = restatements or set()
 
         if self.is_symbolic or (self.is_seed and intervals):

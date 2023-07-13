@@ -57,10 +57,10 @@ class Scheduler:
         console: t.Optional[Console] = None,
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
     ):
-        self.snapshots = {s.snapshot_id: s for s in snapshots}
-        self.snapshot_per_version = _resolve_one_snapshot_per_version(snapshots)
-        self.snapshot_evaluator = snapshot_evaluator
         self.state_sync = state_sync
+        self.snapshots = self.state_sync.get_snapshots(snapshots)
+        self.snapshot_per_version = _resolve_one_snapshot_per_version(self.snapshots.values())
+        self.snapshot_evaluator = snapshot_evaluator
         self.max_workers = max_workers
         self.console: Console = console or get_console()
         self.notification_target_manager = (

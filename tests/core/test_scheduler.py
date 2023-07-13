@@ -124,10 +124,13 @@ def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot
     )
     snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
     mock_state_sync = mocker.MagicMock()
+    mock_state_sync.get_snapshots.return_value = {
+        unique_by_key_snapshot.snapshot_id: unique_by_key_snapshot
+    }
     unique_by_key_snapshot.add_interval("2023-01-02", "2023-01-02")
     unique_by_key_snapshot.add_interval("2023-01-05", "2023-01-05")
     scheduler = Scheduler(
-        snapshots=[unique_by_key_snapshot],
+        snapshots=[],
         snapshot_evaluator=snapshot_evaluator,
         state_sync=mock_state_sync,
         max_workers=2,
@@ -168,10 +171,13 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
     )
     snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
     mock_state_sync = mocker.MagicMock()
+    mock_state_sync.get_snapshots.return_value = {
+        incremental_self_snapshot.snapshot_id: incremental_self_snapshot
+    }
     incremental_self_snapshot.add_interval("2023-01-02", "2023-01-02")
     incremental_self_snapshot.add_interval("2023-01-05", "2023-01-05")
     scheduler = Scheduler(
-        snapshots=[incremental_self_snapshot],
+        snapshots=[],
         snapshot_evaluator=snapshot_evaluator,
         state_sync=mock_state_sync,
         max_workers=2,
