@@ -13,7 +13,7 @@ const EditorIndicator = function EditorIndicator({
 }): JSX.Element {
   return (
     <small className={clsx('font-bold whitespace-nowrap text-xs', className)}>
-      {isNotNil<string>(text) && <span>{text}:&nbsp;</span>}
+      {isNotNil(text) && <span>{text}:&nbsp;</span>}
       {children}
     </small>
   )
