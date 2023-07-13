@@ -35,7 +35,10 @@ class HighWaterMarkSensor(BaseSensorOperator):
     def poke(self, context: Context) -> bool:
         dag_run = context["dag_run"]
 
-        target_snapshot = self._get_target_snapshot()
+        with util.scoped_state_sync() as state_sync:
+            target_snapshot = state_sync.get_snapshots([self.target_snapshot_info])[
+                self.target_snapshot_info.snapshot_id
+            ]
         if target_snapshot.intervals:
             current_high_water_mark = to_datetime(target_snapshot.intervals[-1][1])
         else:
@@ -60,14 +63,3 @@ class HighWaterMarkSensor(BaseSensorOperator):
         target_prev = to_datetime(target_snapshot.model.cron_floor(target_date))
         this_prev = to_datetime(self.this_snapshot.model.cron_floor(target_date))
         return min(target_prev, this_prev)
-
-    def _get_target_snapshot(self) -> Snapshot:
-        with util.scoped_state_sync() as state_sync:
-            target_snapshots = state_sync.get_snapshots([self.target_snapshot_info])
-            target_snapshot_intervals = state_sync.get_snapshot_intervals(
-                [self.target_snapshot_info]
-            )
-            return Snapshot.hydrate_with_intervals_by_version(
-                target_snapshots.values(),
-                target_snapshot_intervals,
-            )[0]

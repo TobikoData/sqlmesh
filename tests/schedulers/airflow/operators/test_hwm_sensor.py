@@ -28,11 +28,6 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     )
     get_snapshots_mock.return_value = {target_snapshot.snapshot_id: target_snapshot}
 
-    get_snapshot_intervals_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshot_intervals"
-    )
-    get_snapshot_intervals_mock.return_value = []
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.data_interval_end = to_datetime("2022-01-01")
 
@@ -40,7 +35,6 @@ def test_no_current_hwm(mocker: MockerFixture, make_snapshot, random_name):
     assert not task.poke(context)
 
     get_snapshots_mock.assert_called_once_with([target_snapshot.table_info])
-    get_snapshot_intervals_mock.assert_called_once_with([target_snapshot.table_info])
 
 
 @pytest.mark.airflow
@@ -73,14 +67,6 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
     )
     get_snapshots_mock.return_value = {target_snapshot_v1.snapshot_id: target_snapshot_v1}
 
-    get_snapshot_intervals_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshot_intervals"
-    )
-    get_snapshot_intervals_mock.return_value = [
-        target_snapshot_v1.snapshot_intervals,
-        target_snapshot_v2.snapshot_intervals,
-    ]
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.data_interval_end = to_datetime("2022-01-03")
 
@@ -89,7 +75,6 @@ def test_current_hwm_below_target(mocker: MockerFixture, make_snapshot):
     assert not task.poke(context)
 
     get_snapshots_mock.assert_called_once_with([target_snapshot_v1.table_info])
-    get_snapshot_intervals_mock.assert_called_once_with([target_snapshot_v1.table_info])
 
 
 @pytest.mark.airflow
@@ -103,13 +88,7 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
         SqlModel(name="that", query=parse_one("select 2, ds")), version="b"
     )
     target_snapshot_v1.change_category = SnapshotChangeCategory.BREAKING
-
-    target_snapshot_v2 = make_snapshot(
-        SqlModel(name="that", query=parse_one("select 3, ds")), version="b"
-    )
-    target_snapshot_v2.change_category = SnapshotChangeCategory.FORWARD_ONLY
-
-    target_snapshot_v2.add_interval("2022-01-01", "2022-01-02")
+    target_snapshot_v1.add_interval("2022-01-01", "2022-01-02")
 
     task = HighWaterMarkSensor(
         target_snapshot_info=target_snapshot_v1.table_info,
@@ -122,14 +101,6 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
     )
     get_snapshots_mock.return_value = {target_snapshot_v1.snapshot_id: target_snapshot_v1}
 
-    get_snapshot_intervals_mock = mocker.patch(
-        "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.get_snapshot_intervals"
-    )
-    get_snapshot_intervals_mock.return_value = [
-        target_snapshot_v1.snapshot_intervals,
-        target_snapshot_v2.snapshot_intervals,
-    ]
-
     dag_run_mock = mocker.Mock()
     dag_run_mock.data_interval_end = to_datetime("2022-01-03")
 
@@ -138,4 +109,3 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
     assert task.poke(context)
 
     get_snapshots_mock.assert_called_once_with([target_snapshot_v1.table_info])
-    get_snapshot_intervals_mock.assert_called_once_with([target_snapshot_v1.table_info])

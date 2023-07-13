@@ -10,9 +10,6 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
-    SnapshotIntervals,
-    SnapshotNameVersion,
-    SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
 from sqlmesh.core.state_sync import StateSync, Versions
@@ -69,7 +66,9 @@ class HttpStateSync(StateSync):
         return self._client.get_environments()
 
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Gets multiple snapshots from the rest api.
 
@@ -108,25 +107,6 @@ class HttpStateSync(StateSync):
             A set of all the existing model names.
         """
         return self._client.models_exist(names, exclude_external=exclude_external)
-
-    def get_snapshot_intervals(
-        self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
-    ) -> t.List[SnapshotIntervals]:
-        """Fetch intervals for given snapshots as well as for snapshots that share a version with the given ones.
-
-        Args:
-            snapshots: Target snapshot IDs. If not specified all intervals will be fetched.
-            current_only: Whether to only fetch intervals for snapshots provided as input as opposed
-                to fetching intervals for all snapshots that share the same version as the input ones.
-
-        Returns:
-            The list of snapshot intervals, one per unique version.
-        """
-        if not snapshots:
-            return []
-        return self._client.get_snapshot_intervals(
-            [SnapshotNameVersion(name=s.name, version=s.version) for s in snapshots]
-        )
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
         """Queries the store to get the migration.

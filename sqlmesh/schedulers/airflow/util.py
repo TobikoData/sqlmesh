@@ -35,7 +35,7 @@ SQLMESH_STATE_CONN_ID = "sqlmesh_state_db"
 
 
 @contextlib.contextmanager
-def scoped_state_sync() -> t.Generator[StateSync, None, None]:
+def scoped_state_sync() -> t.Iterator[StateSync]:
     try:
         connection = Connection.get_connection_from_secrets(SQLMESH_STATE_CONN_ID)
 

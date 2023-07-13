@@ -17,7 +17,6 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
 
     return Plan(
         sushi_context._context_diff("dev"),
-        state_reader=sushi_context.state_reader,
         is_dev=True,
         promote_all=True,
     )
@@ -52,7 +51,6 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
 
     plan = Plan(
         sushi_context._context_diff("prod"),
-        state_reader=sushi_context.state_reader,
     )
 
     evaluator = BuiltInPlanEvaluator(

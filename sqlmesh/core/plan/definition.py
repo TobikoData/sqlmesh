@@ -4,7 +4,6 @@ import typing as t
 from collections import defaultdict
 from enum import Enum
 
-from sqlmesh.core import scheduler
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
@@ -15,10 +14,11 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     categorize_change,
+    earliest_start_date,
     merge_intervals,
+    missing_intervals,
 )
 from sqlmesh.core.snapshot.definition import format_intervals
-from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -42,7 +42,6 @@ class Plan:
 
     Args:
         context_diff: The context diff that the plan is based on.
-        state_reader: The state_reader to get metadata with.
         start: The start time to backfill data.
         end: The end time to backfill data.
         latest: The latest time used for non incremental datasets.
@@ -66,7 +65,6 @@ class Plan:
     def __init__(
         self,
         context_diff: ContextDiff,
-        state_reader: StateReader,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
@@ -104,8 +102,7 @@ class Plan:
         for name, snapshot in self.context_diff.snapshots.items():
             self._dag.add(name, snapshot.model.depends_on)
 
-        self._state_reader = state_reader
-        self.__missing_intervals: t.Optional[t.Dict[str, Intervals]] = None
+        self.__missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
         self._restatements: t.Set[str] = set()
 
         if restate_models and context_diff.new_snapshots:
@@ -160,7 +157,7 @@ class Plan:
     def start(self) -> TimeLike:
         """Returns the start of the plan or the earliest date of all snapshots."""
         if not self.override_start and not self._missing_intervals:
-            return scheduler.earliest_start_date(self.snapshots)
+            return earliest_start_date(self.snapshots)
         return self._start or (
             min(
                 start
@@ -199,8 +196,11 @@ class Plan:
                     [
                         (end, snapshot.model.interval_unit())
                         for snapshot in self.snapshots
-                        if snapshot.version_get_or_generate() in self._missing_intervals
-                        for _, end in self._missing_intervals[snapshot.version_get_or_generate()]
+                        if (snapshot.name, snapshot.version_get_or_generate())
+                        in self._missing_intervals
+                        for _, end in self._missing_intervals[
+                            (snapshot.name, snapshot.version_get_or_generate())
+                        ]
                     ]
                 )
             return self._get_end_date(
@@ -231,14 +231,18 @@ class Plan:
     @property
     def missing_intervals(self) -> t.List[SnapshotIntervals]:
         """Returns a list of missing intervals."""
-        return [
+        missing_intervals = (
             SnapshotIntervals(
                 snapshot_name=snapshot.name,
-                intervals=self._missing_intervals[snapshot.version_get_or_generate()],
+                intervals=self._missing_intervals.get(
+                    (snapshot.name, snapshot.version_get_or_generate())
+                )
+                or [],
             )
             for snapshot in self.snapshots
-            if snapshot.version_get_or_generate() in self._missing_intervals
-        ]
+        )
+
+        return [interval for interval in missing_intervals if interval.intervals]
 
     @property
     def snapshots(self) -> t.List[Snapshot]:
@@ -388,14 +392,26 @@ class Plan:
                 snapshot.effective_from = effective_from
 
     @property
-    def _missing_intervals(self) -> t.Dict[str, Intervals]:
+    def _missing_intervals(self) -> t.Dict[t.Tuple[str, str], Intervals]:
         if self.__missing_intervals is None:
+            # we need previous snapshots because this method is cached and users have the option
+            # to choose non-breaking / forward only. this will change the version of the snapshot on the fly
+            # thus changing the missing intervals. additionally we replace any snapshots with the old copies
+            # because they have intervals and the ephemeral ones don't
+            snapshots = {
+                (snapshot.name, snapshot.version_get_or_generate()): snapshot
+                for snapshot in self.snapshots
+            }
+
+            for _, old in self.context_diff.modified_snapshots.values():
+                snapshots[(old.name, old.version_get_or_generate())] = old
+
             self.__missing_intervals = {
-                snapshot.version_get_or_generate(): missing
-                for snapshot, missing in self._state_reader.missing_intervals(
-                    self.snapshots,
-                    start=self._start or scheduler.earliest_start_date(self.snapshots),
-                    end=self._end or now(),
+                (snapshot.name, snapshot.version_get_or_generate()): missing
+                for snapshot, missing in missing_intervals(
+                    snapshots.values(),
+                    start=self._start,
+                    end=self._end,
                     latest=self._latest,
                     restatements=self.restatements,
                 ).items()

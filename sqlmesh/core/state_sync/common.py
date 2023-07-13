@@ -4,6 +4,7 @@ import abc
 import logging
 import typing as t
 from collections import defaultdict
+from datetime import datetime
 from functools import wraps
 
 from sqlmesh.core.engine_adapter.shared import TransactionType
@@ -15,6 +16,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotNameVersionLike,
     SnapshotTableInfo,
+    start_date,
 )
 from sqlmesh.core.state_sync.base import StateSync
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime
@@ -42,7 +44,9 @@ def transactional(
 
 class CommonStateSyncMixin(StateSync):
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         return self._get_snapshots(snapshot_ids, hydrate_seeds=hydrate_seeds)
 
@@ -87,7 +91,7 @@ class CommonStateSyncMixin(StateSync):
                 )
 
             if no_gaps:
-                snapshots = self.get_snapshots(environment.snapshots).values()
+                snapshots = self._get_snapshots(environment.snapshots).values()
                 self._ensure_no_gaps(snapshots, existing_environment)
 
             existing_table_infos = {
@@ -205,8 +209,6 @@ class CommonStateSyncMixin(StateSync):
     def _ensure_no_gaps(
         self, target_snapshots: t.Iterable[Snapshot], target_environment: Environment
     ) -> None:
-        from sqlmesh.core.scheduler import start_date
-
         target_snapshots_by_name = {s.name: s for s in target_snapshots}
 
         changed_version_prev_snapshots_by_name = {
@@ -216,32 +218,20 @@ class CommonStateSyncMixin(StateSync):
             and target_snapshots_by_name[s.name].version != s.version
         }
 
-        changed_version_target_snapshots = [
-            t for t in target_snapshots if t.name in changed_version_prev_snapshots_by_name
-        ]
+        prev_snapshots = self._get_snapshots(
+            changed_version_prev_snapshots_by_name.values()
+        ).values()
+        cache: t.Dict[str, datetime] = {}
 
-        all_snapshot_intervals = self.get_snapshot_intervals(
-            [*changed_version_prev_snapshots_by_name.values(), *changed_version_target_snapshots],
-        )
-
-        hydrated_prev_snapshots = Snapshot.hydrate_with_intervals_by_version(
-            self.get_snapshots(changed_version_prev_snapshots_by_name.values()).values(),
-            all_snapshot_intervals,
-        )
-        hydrated_target_snapshots = Snapshot.hydrate_with_intervals_by_version(
-            changed_version_target_snapshots, all_snapshot_intervals
-        )
-        hydrated_target_snapshots_by_name = {s.name: s for s in hydrated_target_snapshots}
-
-        for prev_snapshot in hydrated_prev_snapshots:
-            target_snapshot = hydrated_target_snapshots_by_name[prev_snapshot.name]
+        for prev_snapshot in prev_snapshots:
+            target_snapshot = target_snapshots_by_name[prev_snapshot.name]
             if (
                 target_snapshot.is_incremental_by_time_range
                 and prev_snapshot.is_incremental_by_time_range
                 and prev_snapshot.intervals
             ):
                 missing_intervals = target_snapshot.missing_intervals(
-                    start_date(target_snapshot, target_snapshots_by_name.values())
+                    start_date(target_snapshot, target_snapshots_by_name.values(), cache)
                     or prev_snapshot.intervals[0][0],
                     prev_snapshot.intervals[-1][1],
                 )
