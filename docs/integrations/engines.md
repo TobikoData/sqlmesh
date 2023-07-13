@@ -262,13 +262,13 @@ sqlmesh_airflow = SQLMeshAirflow(
 ### GCP Postgres - Local/Built-in Scheduler
 **Engine Adapter Type**: `postgres`
 
-| Option                    | Description                                                             |  Type   | Required |
-|---------------------------|-------------------------------------------------------------------------|:-------:|:--------:|
-| `instance_connection_str` | Connection name for the postgres instance                               | string  |    Y     |
-| `user`                    | The username (posgres or IAM) to use for authentication                 | string  |    Y     |
-| `password`                | The password to use for authentication when using a Postgres user       | string  |    N     |
-| `enable_iam_auth`         | Enables IAM authentication when using a IAM user                        | boolean |    N     |
-| `db`                      | The name of the database instance to connect to                         | string  |    Y     |
+| Option                    | Description                                                                         |  Type   | Required |
+|---------------------------|-------------------------------------------------------------------------------------|:-------:|:--------:|
+| `instance_connection_str` | Connection name for the postgres instance                                           | string  |    Y     |
+| `user`                    | The username (posgres or IAM) to use for authentication                             | string  |    Y     |
+| `password`                | The password to use for authentication. Required when connecting as a Postgres user | string  |    N     |
+| `enable_iam_auth`         | Enables IAM authentication. Required when connecting as an IAM user                 | boolean |    N     |
+| `db`                      | The name of the database instance to connect to                                     | string  |    Y     |
 
 ## Snowflake
 ### Snowflake - Local/Built-in Scheduler

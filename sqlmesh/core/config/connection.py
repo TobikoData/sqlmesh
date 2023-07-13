@@ -447,6 +447,8 @@ class GCPPostgresConnectionConfig(_ConnectionConfig):
     def _validate_auth_method(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
+        if "type" in values and values["type"] != "gcp_postgres":
+            return values
         password = values.get("password")
         enable_iam_auth = values.get("enable_iam_auth")
         if password and enable_iam_auth:
