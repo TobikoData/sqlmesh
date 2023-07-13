@@ -10,6 +10,7 @@ from enum import Enum
 from pydantic import EmailStr, Field, SecretStr
 
 from sqlmesh.core.console import Console, get_console
+from sqlmesh.integrations import slack
 from sqlmesh.utils.errors import AuditError, ConfigError, MissingDependencyError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -216,7 +217,27 @@ class SlackWebhookNotificationTarget(BaseNotificationTarget):
         return self._client
 
     def send(self, notification_status: NotificationStatus, msg: str, **kwargs: t.Any) -> None:
-        self.client.send(text=msg)
+        status_emoji = {
+            NotificationStatus.PROGRESS: slack.SlackAlertIcon.START,
+            NotificationStatus.SUCCESS: slack.SlackAlertIcon.SUCCESS,
+            NotificationStatus.FAILURE: slack.SlackAlertIcon.FAILURE,
+            NotificationStatus.WARNING: slack.SlackAlertIcon.WARNING,
+            NotificationStatus.INFO: slack.SlackAlertIcon.INFO,
+        }
+        composed = slack.message().add_primary_blocks(
+            slack.header_block(f"{status_emoji[notification_status]} SQLMesh Notification"),
+            slack.context_block(
+                f"*Status:* {notification_status.value}",
+                f"*Command:* {slack.stringify_list(sys.argv)}",
+            ),
+            slack.divider_block(),
+            slack.text_section_block(msg),
+            slack.context_block(f"*Python Version:* {sys.version}"),
+        )
+        self.client.send(
+            blocks=composed.slack_message["blocks"],
+            attachments=composed.slack_message["attachments"],  # type: ignore
+        )
 
     @property
     def is_configured(self) -> bool:
