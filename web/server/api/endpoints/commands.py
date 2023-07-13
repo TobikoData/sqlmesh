@@ -110,12 +110,12 @@ async def evaluate(
 
 @router.post("/fetchdf")
 async def fetchdf(
-    sql: str = Body(embed=True),
+    options: models.FetchdfInput,
     context: Context = Depends(get_loaded_context),
 ) -> ArrowStreamingResponse:
     """Fetches a dataframe given a sql string"""
     try:
-        df = context.fetchdf(sql)
+        df = context.fetchdf(options.sql)
     except Exception:
         raise ApiException(
             message="Unable to fetch a dataframe from the given sql string",

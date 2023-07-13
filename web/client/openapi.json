@@ -73,9 +73,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_fetchdf_api_commands_fetchdf_post"
-              }
+              "schema": { "$ref": "#/components/schemas/FetchdfInput" }
             }
           },
           "required": true
@@ -715,12 +713,6 @@
         "type": "object",
         "title": "Body_apply_api_commands_apply_post"
       },
-      "Body_fetchdf_api_commands_fetchdf_post": {
-        "properties": { "sql": { "type": "string", "title": "Sql" } },
-        "type": "object",
-        "required": ["sql"],
-        "title": "Body_fetchdf_api_commands_fetchdf_post"
-      },
       "Body_run_plan_api_plan_post": {
         "properties": {
           "environment": { "type": "string", "title": "Environment" },
@@ -1005,6 +997,15 @@
         "type": "object",
         "required": ["model", "start", "end", "latest"],
         "title": "EvaluateInput"
+      },
+      "FetchdfInput": {
+        "properties": {
+          "sql": { "type": "string", "title": "Sql" },
+          "limit": { "type": "integer", "title": "Limit", "default": 1000 }
+        },
+        "type": "object",
+        "required": ["sql"],
+        "title": "FetchdfInput"
       },
       "File": {
         "properties": {
