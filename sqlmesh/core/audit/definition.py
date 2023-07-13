@@ -9,7 +9,8 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.definition import Model, _Model, expression_validator
+from sqlmesh.core.model.common import bool_validator, expression_validator
+from sqlmesh.core.model.definition import Model, _Model
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
@@ -34,19 +35,13 @@ class AuditMeta(PydanticModel):
     defaults: t.Dict[str, exp.Expression] = {}
     """Default values for the audit query."""
 
+    _bool_validator = bool_validator
+
     @validator("name", "dialect", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         if isinstance(v, exp.Expression):
             return v.name.lower()
         return str(v).lower() if v is not None else None
-
-    @validator("skip", "blocking", pre=True)
-    def _bool_validator(cls, v: t.Any) -> bool:
-        if isinstance(v, exp.Boolean):
-            return v.this
-        if isinstance(v, exp.Expression):
-            return v.name.lower() not in ("false", "no")
-        return bool(v)
 
     @validator("defaults", pre=True)
     def _map_validator(cls, v: t.Any) -> t.Dict[str, t.Any]:

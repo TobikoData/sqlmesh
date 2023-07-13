@@ -9,6 +9,7 @@ from sqlglot import exp
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.model.common import bool_validator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -196,6 +197,10 @@ class TimeColumn(PydanticModel):
 class _Incremental(ModelKind):
     batch_size: t.Optional[int]
     lookback: t.Optional[int]
+    forward_only: bool = False
+    disable_restatement: bool = False
+
+    _bool_validator = bool_validator
 
     @validator("batch_size", "lookback", pre=True)
     def _int_validator(cls, v: t.Any, field: ModelField) -> t.Optional[int]:

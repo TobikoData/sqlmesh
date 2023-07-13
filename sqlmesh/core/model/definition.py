@@ -23,7 +23,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import ModelKindName, SeedKind
+from sqlmesh.core.model.kind import ModelKindName, SeedKind, _Incremental
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
@@ -563,6 +563,14 @@ class _Model(ModelMeta, frozen=True):
             return self.name in d.find_tables(query, dialect=self.dialect)
 
         return self._depends_on_past
+
+    @property
+    def forward_only(self) -> bool:
+        return isinstance(self.kind, _Incremental) and self.kind.forward_only
+
+    @property
+    def disable_restatement(self) -> bool:
+        return isinstance(self.kind, _Incremental) and self.kind.disable_restatement
 
     def validate_definition(self) -> None:
         """Validates the model's definition.

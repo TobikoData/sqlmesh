@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 
 from pydantic import validator
@@ -24,6 +25,9 @@ from sqlmesh.utils.errors import ConfigError
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
+
+
+logger = logging.getLogger(__name__)
 
 INCREMENTAL_BY_TIME_STRATEGIES = set(["delete+insert", "insert_overwrite"])
 INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES = set(["merge"])
@@ -145,13 +149,22 @@ class ModelConfig(BaseModelConfig):
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
                     IncrementalByTimeRangeKind
                 )
+
+                is_supported = True
                 if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
-                    raise ConfigError(
-                        f"SQLMesh IncrementalByTime is not compatible with '{strategy}'"
-                        f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}."
+                    logger.warning(
+                        "SQLMesh IncrementalByTime is not compatible with '%s' incremental strategy in model '%s'. Supported strategies include %s.",
+                        strategy,
+                        self.sql_name,
+                        collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
                     )
+                    is_supported = False
+
                 return IncrementalByTimeRangeKind(
-                    time_column=self.time_column, **incremental_kwargs
+                    time_column=self.time_column,
+                    **incremental_kwargs,
+                    forward_only=not is_supported,
+                    disable_restatement=not is_supported,
                 )
             if self.unique_key:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(

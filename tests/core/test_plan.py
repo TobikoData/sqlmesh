@@ -182,7 +182,7 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
 
     with pytest.raises(
         PlanError,
-        match=r"Cannot restate from 'a'. Either such model doesn't exist or no other model references it.",
+        match="Cannot restate from 'a'. Either such model doesn't exist, no other materialized model references it.*",
     ):
         Plan(context_diff_mock, state_reader_mock, restate_models=["a"])
 
@@ -565,3 +565,75 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
         snapshot_b.snapshot_id,
         snapshot_c.snapshot_id,
     }
+
+
+def test_forward_only_models(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 3, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        )
+    )
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": updated_snapshot}
+    context_diff_mock.removed = set()
+    context_diff_mock.added = set()
+    context_diff_mock.added_materialized_models = set()
+    context_diff_mock.modified_snapshots = {"a": (updated_snapshot, snapshot)}
+    context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
+    context_diff_mock.has_snapshot_changes = True
+    context_diff_mock.environment = "test_dev"
+    context_diff_mock.previous_plan_id = "previous_plan_id"
+
+    state_reader_mock = mocker.Mock()
+
+    with pytest.raises(
+        PlanError, match="Model 'a' can only be changed as part of a forward-only plan.*"
+    ):
+        Plan(context_diff_mock, state_reader_mock, is_dev=True)
+
+    Plan(context_diff_mock, state_reader_mock, is_dev=True, forward_only=True)
+    Plan(context_diff_mock, state_reader_mock, forward_only=True)
+
+
+def test_disable_restatement(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", disable_restatement=True),
+        )
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot}
+    context_diff_mock.removed = set()
+    context_diff_mock.added = set()
+    context_diff_mock.added_materialized_models = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {}
+    context_diff_mock.has_snapshot_changes = False
+    context_diff_mock.is_new_environment = False
+    context_diff_mock.environment = "test_dev"
+    context_diff_mock.previous_plan_id = "previous_plan_id"
+
+    state_reader_mock = mocker.Mock()
+
+    with pytest.raises(PlanError, match="Cannot restate from 'a'.*"):
+        Plan(context_diff_mock, state_reader_mock, restate_models=["a"])
+
+    # Effective from doesn't apply to snapshots for which restatements are disabled.
+    plan = Plan(
+        context_diff_mock, state_reader_mock, forward_only=True, effective_from="2023-01-01"
+    )
+    assert plan.effective_from == "2023-01-01"
+    assert snapshot.effective_from is None
+
+    # Restatements should still be supported when in dev.
+    plan = Plan(context_diff_mock, state_reader_mock, is_dev=True, restate_models=["a"])
+    assert plan.restatements == {"a"}
