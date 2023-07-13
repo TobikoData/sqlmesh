@@ -79,6 +79,8 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "kind": {
                         "name": "INCREMENTAL_BY_TIME_RANGE",
                         "time_column": {"column": "ds"},
+                        "forward_only": False,
+                        "disable_restatement": False,
                     },
                     "mapping_schema": {},
                     "name": "test_model",
@@ -127,7 +129,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "promoted_snapshot_ids": [
                 {
                     "name": "test_model",
-                    "identifier": "3324258585",
+                    "identifier": "972402299",
                 }
             ],
         },

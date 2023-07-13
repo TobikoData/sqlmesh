@@ -34,7 +34,7 @@ export default function SourceList({
           {modelsFiltered.length}
         </div>
       </div>
-      <ul className="p-2 overflow-auto scrollbar scrollbar--horizontal scrollbar--vertical">
+      <ul className="p-2 overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
         {isArrayEmpty(modelsFiltered) && (
           <li
             key="not-found"

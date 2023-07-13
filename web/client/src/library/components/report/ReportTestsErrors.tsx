@@ -23,7 +23,7 @@ export default function ReportTestsErrors({
             <span className="inline-block mr-4">&mdash;</span>
             <div className="overflow-hidden">
               <span className="inline-block mb-2">{item.message}</span>
-              <code className="inline-block max-h-[50vh] bg-theme py-2 px-4 rounded-lg w-full overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+              <code className="inline-block max-h-[50vh] bg-theme py-2 px-4 rounded-lg w-full overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
                 <pre>{item.details}</pre>
               </code>
             </div>

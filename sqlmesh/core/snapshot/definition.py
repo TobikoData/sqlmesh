@@ -986,6 +986,8 @@ def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
         json.dumps(model.mapping_schema, sort_keys=True),
         *sorted(model.tags),
         *sorted(model.grain),
+        str(model.forward_only),
+        str(model.disable_restatement),
     ]
 
     for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):

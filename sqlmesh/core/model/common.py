@@ -7,6 +7,7 @@ from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.dialect import parse
+from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -51,3 +52,22 @@ expression_validator = validator(
     allow_reuse=True,
     check_fields=False,
 )(parse_expression)
+
+
+def parse_bool(v: t.Any) -> bool:
+    if isinstance(v, exp.Boolean):
+        return v.this
+    if isinstance(v, exp.Expression):
+        return str_to_bool(v.name)
+    return str_to_bool(str(v or ""))
+
+
+bool_validator = validator(
+    "skip",
+    "blocking",
+    "forward_only",
+    "disable_restatement",
+    pre=True,
+    allow_reuse=True,
+    check_fields=False,
+)(parse_bool)

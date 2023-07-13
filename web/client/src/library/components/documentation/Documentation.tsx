@@ -184,7 +184,7 @@ function Container({
   return (
     <div className={clsx('w-full h-full rounded-xl', className)}>
       <div className="w-full h-full py-4 rounded-xl">
-        <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical scrollbar--horizontal">
+        <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
           {children}
         </div>
       </div>

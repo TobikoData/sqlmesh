@@ -63,7 +63,7 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
           />
         </div>
       </div>
-      <div className="overflow-auto h-full scrollbar scrollbar--horizontal scrollbar--vertical">
+      <div className="overflow-auto h-full hover:scrollbar scrollbar--horizontal scrollbar--vertical">
         <table
           cellPadding={0}
           cellSpacing={0}

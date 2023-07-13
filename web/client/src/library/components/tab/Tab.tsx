@@ -14,7 +14,7 @@ export default function TabList({
     <Tab.List className="w-full whitespace-nowrap px-2 py-0.5 flex justify-between items-center bg-primary-10 dark:bg-secondary-10">
       <div
         className={clsx(
-          'flex w-full overflow-hidden overflow-x-auto py-1 scrollbar scrollbar--horizontal',
+          'flex w-full overflow-hidden overflow-x-auto py-1 hover:scrollbar scrollbar--horizontal',
           className,
         )}
       >

@@ -28,7 +28,7 @@ LEFT JOIN {{ source('streaming', 'items') }} AS i
   WHERE
     o.ds > (select max(ds) from {{ this }})
 {% endif %}
-{% if sqlmesh is defined %}
+{% if sqlmesh_incremental is defined %}
   WHERE
       o.ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
 {% endif %}
