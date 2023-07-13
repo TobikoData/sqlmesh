@@ -31,6 +31,9 @@ gateways:
         connection:
             type: duckdb
             database: test_db
+
+model_defaults:
+    dialect: ''
         """
         )
     return config_path
@@ -41,8 +44,8 @@ def python_config_path(tmp_path_factory) -> Path:
     config_path = tmp_path_factory.mktemp("python_config") / "config.py"
     with open(config_path, "w") as fd:
         fd.write(
-            """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
-config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()))
+            """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig, ModelDefaultsConfig
+config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()), model_defaults=ModelDefaultsConfig(dialect=''))
         """
         )
     return config_path
@@ -139,13 +142,16 @@ def test_default_gateway():
 
 
 def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path):
-    config = load_config_from_paths(yaml_config_path, python_config_path)
+    config = load_config_from_paths(
+        project_paths=[yaml_config_path, python_config_path],
+    )
 
     assert config == Config(
         gateways={  # type: ignore
             "another_gateway": GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
             "": GatewayConfig(connection=DuckDBConnectionConfig()),
-        }
+        },
+        model_defaults=ModelDefaultsConfig(dialect=""),
     )
 
 
@@ -159,7 +165,7 @@ def test_load_config_multiple_config_files_in_folder(tmp_path):
         fd.write("project: project_b")
 
     with pytest.raises(ConfigError, match=r"^Multiple configuration files found in folder.*"):
-        load_config_from_paths(config_a_path, config_b_path)
+        load_config_from_paths(project_paths=[config_a_path, config_b_path])
 
 
 def test_load_config_no_config():
@@ -172,7 +178,7 @@ def test_load_config_unsupported_extension(tmp_path):
     config_path.touch()
 
     with pytest.raises(ConfigError, match=r"^Unsupported config file extension 'txt'.*"):
-        load_config_from_paths(config_path)
+        load_config_from_paths(project_paths=[config_path])
 
 
 def test_load_config_from_env():

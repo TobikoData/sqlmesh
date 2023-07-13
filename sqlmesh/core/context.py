@@ -1152,13 +1152,24 @@ class Context(BaseContext):
                 if config_env_vars:
                     break
 
+        project_config_names = [
+            "config.py",
+            "config.yml",
+            "config.yaml",
+        ]
+        # ensure project-level config file exists
+        for path in paths:
+            config_exists = [(path / name).exists() for name in project_config_names]
+            if not any(config_exists):
+                raise ConfigError(
+                    f"SQLMesh config could not be found in {path}. Point the cli to the right path with `sqlmesh -p`. If you haven't set up the SQLMesh project, run `sqlmesh init`."
+                )
+
         with env_vars(config_env_vars if config_env_vars else {}):
             return {
                 path: load_config_from_paths(
-                    path / "config.py",
-                    path / "config.yml",
-                    path / "config.yaml",
-                    *personal_paths,
+                    project_paths=[(path / name) for name in project_config_names],
+                    personal_paths=personal_paths,
                     config_name=config,
                 )
                 for path in paths
