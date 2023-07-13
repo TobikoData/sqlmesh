@@ -29,7 +29,6 @@ import {
 } from '@api/index'
 import { EnumErrorKey } from '~/library/pages/ide/context'
 import TabList from '@components/tab/Tab'
-import Selector from '@components/selector/Selector'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 
 interface FormModel {

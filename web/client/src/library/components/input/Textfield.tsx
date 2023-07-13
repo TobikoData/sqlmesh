@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import React from 'react'
-import { isFalse, isTrue } from '~/utils'
+import { isFalse } from '~/utils'
 
 export interface PropsTextfield {
   value?: string | number
@@ -32,7 +32,7 @@ export default React.forwardRef<HTMLInputElement, PropsTextfield>(
         ref={ref}
         className={clsx(
           'placeholder:text-neutral-300 dark:placeholder:text-neutral-700',
-          isTrue(disabled) && 'opacity-50 cursor-not-allowed',
+          disabled && 'opacity-50 cursor-not-allowed',
           className,
         )}
         type={type}

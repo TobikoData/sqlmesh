@@ -30,7 +30,7 @@ export default function SourceList({
               className={clsx(className, 'w-full')}
               value={filter}
               placeholder="Filter models"
-              onInput={e => {
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setFilter(e.target.value)
               }}
             />
