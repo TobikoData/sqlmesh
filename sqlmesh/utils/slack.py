@@ -202,7 +202,7 @@ def stringify_list(list_variation: t.Union[t.List[str], str]) -> str:
         return list_variation
     if len(list_variation) == 1:
         return list_variation[0]
-    return "\n".join(sorted(set(list_variation)))
+    return " ".join(list_variation)
 
 
 message = SlackMessageComposer
