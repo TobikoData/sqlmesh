@@ -126,6 +126,7 @@ class Plan:
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range(self._start, self._end)
         self._ensure_no_forward_only_revert()
+        self._ensure_forward_only_models_compatibility()
         self._ensure_no_forward_only_new_models()
         self._ensure_no_broken_references()
 
@@ -383,7 +384,8 @@ class Plan:
         self._effective_from = effective_from
 
         for snapshot in self.new_snapshots:
-            snapshot.effective_from = effective_from
+            if not snapshot.model.disable_restatement:
+                snapshot.effective_from = effective_from
 
     @property
     def _missing_intervals(self) -> t.Dict[str, Intervals]:
@@ -409,12 +411,16 @@ class Plan:
 
             snapshots = self.context_diff.snapshots
             downstream = [
-                d for d in downstream if snapshots[d].is_materialized and not snapshots[d].is_seed
+                d
+                for d in downstream
+                if snapshots[d].is_materialized
+                and (not snapshots[d].model.disable_restatement or self.is_dev)
+                and not snapshots[d].is_seed
             ]
 
             if not downstream:
                 raise PlanError(
-                    f"Cannot restate from '{table}'. Either such model doesn't exist or no other model references it."
+                    f"Cannot restate from '{table}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled fror this model."
                 )
             self._restatements.update(downstream)
 
@@ -561,6 +567,14 @@ class Plan:
                 raise PlanError(
                     f"Removed models {broken_references} are referenced in model '{snapshot.name}'. Please remove broken references before proceeding."
                 )
+
+    def _ensure_forward_only_models_compatibility(self) -> None:
+        if not self.forward_only:
+            for new in self.context_diff.new_snapshots.values():
+                if new.model.forward_only and new.name in self.context_diff.modified_snapshots:
+                    raise PlanError(
+                        f"Model '{new.name}' can only be changed as part of a forward-only plan. Please run this plan with --forward-only flag."
+                    )
 
     def _ensure_new_env_with_changes(self) -> None:
         if (

@@ -71,21 +71,20 @@ def test_model_kind():
         target
     ) == IncrementalByUniqueKeyKind(unique_key=["bar"])
 
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
+    ).model_kind(target) == IncrementalByTimeRangeKind(
+        time_column="foo", forward_only=True, disable_restatement=True
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="append"
+    ).model_kind(target) == IncrementalByTimeRangeKind(
+        time_column="foo", forward_only=True, disable_restatement=True
+    )
+
     with pytest.raises(ConfigError) as exception:
         ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(target)
-    with pytest.raises(ConfigError) as exception:
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            time_column="foo",
-            incremental_strategy="merge",
-        ).model_kind(target)
-    with pytest.raises(ConfigError) as exception:
-        ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            time_column="foo",
-            incremental_strategy="append",
-        ).model_kind(target)
-
     with pytest.raises(ConfigError) as exception:
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
