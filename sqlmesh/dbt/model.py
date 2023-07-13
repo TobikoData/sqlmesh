@@ -182,7 +182,7 @@ class ModelConfig(BaseModelConfig):
 
             raise ConfigError(
                 f"{self.sql_name}: Incremental materialization requires either a "
-                f"time_column {collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}) or a "
+                f"time_column ({collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}) or a "
                 f"unique_key ({collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(['none']))}) configuration."
             )
         if materialization == Materialization.EPHEMERAL:
