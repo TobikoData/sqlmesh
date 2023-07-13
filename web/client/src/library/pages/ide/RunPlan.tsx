@@ -68,7 +68,9 @@ export default function RunPlan(): JSX.Element {
     refetch: planRun,
     data: dataPlan,
     isFetching,
-  } = useApiPlanRun(environment.name, { planOptions: { skip_tests: true } })
+  } = useApiPlanRun(environment.name, {
+    planOptions: { skip_tests: true, promote_all: true },
+  })
 
   const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
     planRun,

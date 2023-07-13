@@ -229,6 +229,7 @@ class PlanOptions(BaseModel):
     no_gaps: bool = False
     forward_only: bool = False
     no_auto_categorization: bool = False
+    promote_all: bool = False
     create_from: t.Optional[str] = None
     restate_models: t.Optional[str] = None
 
