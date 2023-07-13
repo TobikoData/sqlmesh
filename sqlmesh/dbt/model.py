@@ -115,7 +115,7 @@ class ModelConfig(BaseModelConfig):
         **BaseModelConfig._FIELD_UPDATE_STRATEGY,
         **{
             "sql": UpdateStrategy.IMMUTABLE,
-            "time_column": UpdateStrategy.IMMUTABLE,
+            "time_column_": UpdateStrategy.IMMUTABLE,
         },
     }
 
@@ -123,7 +123,11 @@ class ModelConfig(BaseModelConfig):
     def time_column(self) -> t.Optional[str]:
         if self.time_column_:
             return self.time_column_
-        if isinstance(self.partition_by, dict) and self.partition_by["data_type"] != "int64":
+        if (
+            isinstance(self.partition_by, dict)
+            and self.partition_by["data_type"] != "int64"
+            and self.incremental_strategy in INCREMENTAL_BY_TIME_STRATEGIES
+        ):
             return self.partition_by["field"]
         return None
 
