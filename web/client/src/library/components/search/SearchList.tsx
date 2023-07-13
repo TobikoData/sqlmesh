@@ -8,6 +8,51 @@ import clsx from 'clsx'
 import { Popover, Transition } from '@headlessui/react'
 import { useClickAway } from '@uidotdev/usehooks'
 
+interface PropsSearchListInput {
+  value: string
+  placeholder?: string
+  className?: string
+  size?: Size
+  autoFocus?: boolean
+  onInput?: (e: React.ChangeEvent<HTMLInputElement>) => void
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
+}
+
+const SearchListInput = React.forwardRef<
+  HTMLInputElement,
+  PropsSearchListInput
+>(function SearchListInput(
+  {
+    value,
+    placeholder,
+    size = EnumSize.md,
+    autoFocus = false,
+    onInput,
+    onKeyDown,
+    className,
+  },
+  ref: React.Ref<HTMLInputElement>,
+): JSX.Element {
+  return (
+    <Input
+      className={className}
+      size={size}
+    >
+      {({ className }) => (
+        <Input.Textfield
+          ref={ref}
+          className={clsx(className, 'w-full')}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          value={value}
+          onInput={onInput}
+          onKeyDown={onKeyDown}
+        />
+      )}
+    </Input>
+  )
+})
+
 export default function SearchList<
   T extends Record<string, any> = Record<string, any>,
 >({
@@ -82,7 +127,7 @@ export default function SearchList<
       <Popover className="relative flex">
         <Popover.Button
           ref={elTrigger}
-          as={Input}
+          as={SearchListInput}
           className="w-full !m-0"
           size={size}
           value={search}
