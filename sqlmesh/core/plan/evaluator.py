@@ -135,11 +135,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         self.console.start_promotion_progress(environment.name, len(added) + len(removed))
 
-        if not environment.end_at:
-            if not plan.is_dev:
-                self.snapshot_evaluator.migrate(
-                    plan.snapshots, {s.snapshot_id: s for s in plan.snapshots}
-                )
+        if not plan.is_dev:
+            self.snapshot_evaluator.migrate(
+                [s for s in plan.snapshots if s.is_paused],
+                {s.snapshot_id: s for s in plan.snapshots},
+            )
             self.state_sync.unpause_snapshots(added, now())
 
         def on_complete(snapshot: SnapshotInfoLike) -> None:
