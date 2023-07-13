@@ -24,12 +24,18 @@ export default function SourceList({
         <Input
           className="w-full !m-0"
           size={EnumSize.sm}
-          value={filter}
-          placeholder="Filter models"
-          onInput={e => {
-            setFilter(e.target.value)
-          }}
-        />
+        >
+          {({ className }) => (
+            <Input.Textfield
+              className={clsx(className, 'w-full')}
+              value={filter}
+              placeholder="Filter models"
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFilter(e.target.value)
+              }}
+            />
+          )}
+        </Input>
         <div className="ml-3 px-3 bg-primary-10 text-primary-500 rounded-full text-xs flex items-center">
           {modelsFiltered.length}
         </div>

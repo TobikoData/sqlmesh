@@ -206,12 +206,18 @@ function Header({
         <Input
           className="!m-0 mb-2"
           size={EnumSize.sm}
-          value={filter}
-          placeholder="Filter Rows"
-          onInput={e => {
-            setFilter(e.target.value)
-          }}
-        />
+        >
+          {({ className }) => (
+            <Input.Textfield
+              className={clsx(className, 'w-full')}
+              value={filter}
+              placeholder="Filter Rows"
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFilter(e.target.value)
+              }}
+            />
+          )}
+        </Input>
       </div>
     </div>
   )

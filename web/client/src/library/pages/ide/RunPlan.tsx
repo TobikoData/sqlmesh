@@ -523,14 +523,20 @@ function AddEnvironemnt({
       <Input
         className="my-0 mx-0 mr-4 min-w-[10rem] w-full"
         size={size}
-        placeholder="Environment"
-        value={customEnvironment}
-        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-          e.stopPropagation()
+      >
+        {({ className }) => (
+          <Input.Textfield
+            className={clsx(className, 'w-full')}
+            placeholder="Environment"
+            value={customEnvironment}
+            onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+              e.stopPropagation()
 
-          setCustomEnvironment(e.target.value)
-        }}
-      />
+              setCustomEnvironment(e.target.value)
+            }}
+          />
+        )}
+      </Input>
       <Button
         className="my-0 mx-0 font-bold"
         size={size}
