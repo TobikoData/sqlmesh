@@ -701,7 +701,8 @@
               "skip_backfill": false,
               "no_gaps": false,
               "forward_only": false,
-              "no_auto_categorization": false
+              "no_auto_categorization": false,
+              "promote_all": false
             }
           },
           "categories": {
@@ -732,7 +733,8 @@
               "skip_backfill": false,
               "no_gaps": false,
               "forward_only": false,
-              "no_auto_categorization": false
+              "no_auto_categorization": false,
+              "promote_all": false
             }
           }
         },
@@ -1233,6 +1235,11 @@
           "no_auto_categorization": {
             "type": "boolean",
             "title": "No Auto Categorization",
+            "default": false
+          },
+          "promote_all": {
+            "type": "boolean",
+            "title": "Promote All",
             "default": false
           },
           "create_from": { "type": "string", "title": "Create From" },
