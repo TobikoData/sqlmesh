@@ -6,7 +6,6 @@ import {
   useEffect,
   Fragment,
   type MouseEvent,
-  useMemo,
   useCallback,
 } from 'react'
 import { useApiPlanRun } from '~/api'
@@ -32,9 +31,6 @@ import { Button, makeButton, type ButtonSize } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Input from '@components/input/Input'
 import Spinner from '@components/logo/Spinner'
-import ModalConfirmation, {
-  type Confirmation,
-} from '@components/modal/ModalConfirmation'
 import {
   EnumPlanChangeType,
   type PlanChangeType,
@@ -51,6 +47,8 @@ export default function RunPlan(): JSX.Element {
   const setPlanAction = useStorePlan(s => s.setAction)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
+  const addConfirmation = useStoreContext(s => s.addConfirmation)
+  const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const setInitialDates = useStoreContext(s => s.setInitialDates)
@@ -59,7 +57,6 @@ export default function RunPlan(): JSX.Element {
   )
 
   const [hasChanges, setHasChanges] = useState(false)
-  const [showConfirmation, setShowConfirmation] = useState(false)
   const [plan, setPlan] = useState<ContextEnvironment | undefined>()
   const [shouldStartPlanAutomatically, setShouldSartPlanAutomatically] =
     useState(false)
@@ -75,20 +72,6 @@ export default function RunPlan(): JSX.Element {
   const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
     planRun,
   ])
-
-  const confirmation: Confirmation | undefined = useMemo(() => {
-    return environment.isDefault
-      ? {
-          headline: 'Running Plan Directly On Prod Environment!',
-          description: `Are you sure you want to run your changes directly on prod? Safer choice will be to select or add new environment first.`,
-          yesText: `Yes, Run ${environment.name}`,
-          noText: 'No, Cancel',
-          action() {
-            startPlan()
-          },
-        }
-      : undefined
-  }, [environment])
 
   useEffect(() => {
     if (shouldStartPlanAutomatically) {
@@ -160,11 +143,55 @@ export default function RunPlan(): JSX.Element {
           disabled={shouldDisableActions}
           variant={EnumVariant.Alternative}
           size={EnumSize.sm}
-          onClick={(e: MouseEvent) => {
+          onClick={(e: React.MouseEvent) => {
             e.stopPropagation()
 
             if (environment.isDefault && isFalse(environment.isInitial)) {
-              setShowConfirmation(true)
+              addConfirmation({
+                headline: 'Running Plan Directly On Prod Environment!',
+                description: `Are you sure you want to run your changes directly on prod? Safer choice will be to select or add new environment first.`,
+                yesText: `Yes, Run ${environment.name}`,
+                noText: 'No, Cancel',
+                action() {
+                  startPlan()
+                },
+                children: (
+                  <div className="mt-5 pt-4">
+                    <h4 className="mb-2">{`${
+                      environments.size > 1 ? 'Select or ' : ''
+                    }Add Environment`}</h4>
+                    <div className="flex items-center relative">
+                      {environments.size > 1 && (
+                        <SelectEnvironemnt
+                          className="mr-2"
+                          side="left"
+                          environment={environment}
+                          showAddEnvironemnt={false}
+                          onSelect={() => {
+                            setShouldSartPlanAutomatically(true)
+                            setShowConfirmation(false)
+                          }}
+                          size={EnumSize.md}
+                          disabled={
+                            isFetching ||
+                            planAction !== EnumPlanAction.None ||
+                            planState === EnumPlanState.Applying ||
+                            planState === EnumPlanState.Cancelling
+                          }
+                        />
+                      )}
+                      <AddEnvironemnt
+                        className="w-full"
+                        size={EnumSize.md}
+                        onAdd={() => {
+                          setShouldSartPlanAutomatically(true)
+                          setShowConfirmation(false)
+                        }}
+                      />
+                    </div>
+                  </div>
+                ),
+              })
             } else {
               startPlan()
             }
@@ -189,86 +216,6 @@ export default function RunPlan(): JSX.Element {
         isLoading={isFetching}
         hasChanges={hasChanges}
       />
-      <ModalConfirmation
-        show={showConfirmation}
-        onClose={() => undefined}
-      >
-        <ModalConfirmation.Main>
-          {confirmation?.headline != null && (
-            <ModalConfirmation.Headline>
-              {confirmation?.headline}
-            </ModalConfirmation.Headline>
-          )}
-          {confirmation?.description != null && (
-            <ModalConfirmation.Description>
-              {confirmation?.description}
-            </ModalConfirmation.Description>
-          )}
-          <div className="mt-5 pt-4">
-            <h4 className="mb-2">{`${
-              environments.size > 1 ? 'Select or ' : ''
-            }Add Environment`}</h4>
-            <div className="flex items-center relative">
-              {environments.size > 1 && (
-                <SelectEnvironemnt
-                  className="mr-2"
-                  side="left"
-                  environment={environment}
-                  showAddEnvironemnt={false}
-                  onSelect={() => {
-                    setShouldSartPlanAutomatically(true)
-                    setShowConfirmation(false)
-                  }}
-                  size={EnumSize.md}
-                  disabled={
-                    isFetching ||
-                    planAction !== EnumPlanAction.None ||
-                    planState === EnumPlanState.Applying ||
-                    planState === EnumPlanState.Cancelling
-                  }
-                />
-              )}
-              <AddEnvironemnt
-                className="w-full"
-                size={EnumSize.md}
-                onAdd={() => {
-                  setShouldSartPlanAutomatically(true)
-                  setShowConfirmation(false)
-                }}
-              />
-            </div>
-          </div>
-        </ModalConfirmation.Main>
-        <ModalConfirmation.Actions>
-          <Button
-            className="font-bold"
-            size="md"
-            variant={EnumVariant.Primary}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              confirmation?.action?.()
-
-              setShowConfirmation(false)
-            }}
-          >
-            {confirmation?.yesText ?? 'Confirm'}
-          </Button>
-          <Button
-            size="md"
-            variant={EnumVariant.Neutral}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              confirmation?.cancel?.()
-
-              setShowConfirmation(false)
-            }}
-          >
-            {confirmation?.noText ?? 'Cancel'}
-          </Button>
-        </ModalConfirmation.Actions>
-      </ModalConfirmation>
     </div>
   )
 }

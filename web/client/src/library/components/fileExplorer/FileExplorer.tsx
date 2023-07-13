@@ -1,7 +1,5 @@
 import React, { type MouseEvent } from 'react'
 import clsx from 'clsx'
-import ModalConfirmation from '../modal/ModalConfirmation'
-import { Button } from '../button/Button'
 import Directory from './Directory'
 import { useStoreProject } from '@context/project'
 import * as ContextMenu from '@radix-ui/react-context-menu'
@@ -14,6 +12,8 @@ import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import SearchList from '@components/search/SearchList'
 import { type ModelFile } from '@models/file'
 import { EnumSize } from '~/types/enum'
+import { useStoreContext } from '@context/context'
+
 /* TODO:
   - add drag and drop files/directories from desktop
   - add copy and paste
@@ -28,12 +28,10 @@ const FileExplorer = function FileExplorer({
   const project = useStoreProject(s => s.project)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
+  const addConfirmation = useStoreContext(s => s.addConfirmation)
+
   const {
     activeRange,
-    confirmation,
-    showConfirmation,
-    setShowConfirmation,
-    setConfirmation,
     removeArtifacts,
     setActiveRange,
     createDirectory,
@@ -46,7 +44,7 @@ const FileExplorer = function FileExplorer({
     }
 
     if (e.metaKey && e.key === 'Backspace' && activeRange.size > 0) {
-      setConfirmation({
+      addConfirmation({
         headline: 'Removing Selected Files/Directories',
         description: `Are you sure you want to remove ${activeRange.size} items?`,
         yesText: 'Yes, Remove',
@@ -116,57 +114,6 @@ const FileExplorer = function FileExplorer({
           <div className="ml-auto pl-5"></div>
         </ContextMenu.Item>
       </FileExplorer.ContextMenu>
-      <ModalConfirmation
-        show={showConfirmation}
-        onClose={() => {
-          setShowConfirmation(false)
-        }}
-      >
-        <ModalConfirmation.Main>
-          {confirmation?.headline != null && (
-            <ModalConfirmation.Headline>
-              {confirmation?.headline}
-            </ModalConfirmation.Headline>
-          )}
-          {confirmation?.description != null && (
-            <ModalConfirmation.Description>
-              {confirmation?.description}
-            </ModalConfirmation.Description>
-          )}
-          {confirmation?.details != null && (
-            <ModalConfirmation.Details details={confirmation?.details} />
-          )}
-        </ModalConfirmation.Main>
-        <ModalConfirmation.Actions>
-          <Button
-            className="font-bold"
-            size="md"
-            variant="danger"
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              confirmation?.action?.()
-
-              setShowConfirmation(false)
-            }}
-          >
-            {confirmation?.yesText ?? 'Confirm'}
-          </Button>
-          <Button
-            size="md"
-            variant="alternative"
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              confirmation?.cancel?.()
-
-              setShowConfirmation(false)
-            }}
-          >
-            {confirmation?.noText ?? 'Cancel'}
-          </Button>
-        </ModalConfirmation.Actions>
-      </ModalConfirmation>
     </div>
   )
 }
@@ -290,7 +237,7 @@ function FileExplorerArtifactContainer({
         activeRange.has(artifact)
           ? 'text-brand-100 !bg-brand-500 dark:bg-brand-700 dark:text-brand-100'
           : isSelected &&
-              'bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
+          'bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
       )}
       style={style}
       onClick={handleSelect}

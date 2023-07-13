@@ -1,4 +1,4 @@
-import { useEffect, useCallback, lazy, Suspense } from 'react'
+import React, { useEffect, useCallback, lazy, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useApiModels,
@@ -31,6 +31,9 @@ import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
 import { useStoreEditor } from '@context/editor'
 import { type ModelFile } from '@models/file'
+import ModalConfirmation, {
+  type Confirmation,
+} from '@components/modal/ModalConfirmation'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -47,6 +50,10 @@ export default function PageIDE(): JSX.Element {
 
   const { removeError, addError } = useIDE()
 
+  const showConfirmation = useStoreContext(s => s.showConfirmation)
+  const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
+  const confirmations = useStoreContext(s => s.confirmations)
+  const removeConfirmation = useStoreContext(s => s.removeConfirmation)
   const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
   const setModels = useStoreContext(s => s.setModels)
@@ -174,6 +181,11 @@ export default function PageIDE(): JSX.Element {
     }
   }, [models])
 
+  useEffect(() => {
+    console.log('confirmations', confirmations)
+    setShowConfirmation(confirmations.length > 0)
+  }, [confirmations])
+
   function updateModels(models?: Model[]): void {
     removeError(EnumErrorKey.General)
     removeError(EnumErrorKey.Models)
@@ -230,7 +242,14 @@ export default function PageIDE(): JSX.Element {
     })
   }
 
+  function closeModalConfirmation(confirmation?: Confirmation): void {
+    confirmation?.cancel?.()
+
+    setShowConfirmation(false)
+  }
+
   const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
+  const confirmation = confirmations[0]
 
   return (
     <Container.Page>
@@ -263,6 +282,59 @@ export default function PageIDE(): JSX.Element {
       </div>
       <Divider />
       <Outlet />
+      <ModalConfirmation
+        show={showConfirmation}
+        onClose={() => {
+          closeModalConfirmation(confirmation)
+        }}
+        afterLeave={() => {
+          removeConfirmation()
+        }}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === 'Escape') {
+            closeModalConfirmation(confirmation)
+          }
+        }}
+      >
+        <ModalConfirmation.Main>
+          {confirmation?.headline != null && (
+            <ModalConfirmation.Headline>
+              {confirmation?.headline}
+            </ModalConfirmation.Headline>
+          )}
+          {confirmation?.description != null && (
+            <ModalConfirmation.Description>
+              {confirmation?.description}
+            </ModalConfirmation.Description>
+          )}
+          {confirmation?.children}
+        </ModalConfirmation.Main>
+        <ModalConfirmation.Actions>
+          <Button
+            className="font-bold"
+            size="md"
+            variant="danger"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation()
+
+              confirmation?.action?.()
+            }}
+          >
+            {confirmation?.yesText ?? 'Confirm'}
+          </Button>
+          <Button
+            size="md"
+            variant="alternative"
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation()
+
+              closeModalConfirmation(confirmation)
+            }}
+          >
+            {confirmation?.noText ?? 'Cancel'}
+          </Button>
+        </ModalConfirmation.Actions>
+      </ModalConfirmation>
     </Container.Page>
   )
 }

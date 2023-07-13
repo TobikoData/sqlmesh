@@ -1,3 +1,4 @@
+import { type Confirmation } from '@components/modal/ModalConfirmation'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { create } from 'zustand'
 import {
@@ -14,11 +15,16 @@ import {
 import { isStringEmptyOrNil } from '~/utils'
 
 interface ContextStore {
+  showConfirmation: boolean
+  confirmations: Confirmation[]
   environment: ModelEnvironment
   environments: Set<ModelEnvironment>
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
   models: Map<string, ModelSQLMeshModel>
+  setShowConfirmation: (showConfirmation: boolean) => void
+  addConfirmation: (confirmation: Confirmation) => void
+  removeConfirmation: () => void
   setModels: (models?: Model[]) => void
   isExistingEnvironment: (
     environment: ModelEnvironment | EnvironmentName,
@@ -42,11 +48,36 @@ const environments = new Set(ModelEnvironment.getDefaultEnvironments())
 const environment = environments.values().next().value
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
+  showConfirmation: false,
+  confirmations: [],
   environment,
   environments,
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
+  setShowConfirmation(showConfirmation) {
+    set(() => ({
+      showConfirmation,
+    }))
+  },
+  addConfirmation(confirmation) {
+    set(s => {
+      s.confirmations.push(confirmation)
+
+      return {
+        confirmations: Array.from(s.confirmations),
+      }
+    })
+  },
+  removeConfirmation() {
+    const s = get()
+
+    s.confirmations.shift()
+
+    set(() => ({
+      confirmations: Array.from(s.confirmations),
+    }))
+  },
   setModels(models = []) {
     const s = get()
 
