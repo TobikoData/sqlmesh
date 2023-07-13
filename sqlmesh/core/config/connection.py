@@ -421,6 +421,41 @@ class BigQueryConnectionConfig(_ConnectionConfig):
         return connect
 
 
+class GooglePostgresConnectionConfig(_ConnectionConfig):
+    """
+    Google Postgres Connection Configuration.
+    """
+
+    instance_connection_string: str
+    driver: str = "pg8000"
+    user: str
+    db: str
+    enable_iam_auth: bool = True
+
+    type_: Literal["postgres"] = Field(alias="type", default="postgres")
+    concurrent_tasks: int = 4
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "instance_connection_string",
+            "driver",
+            "user",
+            "db",
+            "enable_iam_auth",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.PostgresEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from google.cloud.sql.connector import Connector
+
+        return Connector().connect
+
+
 class RedshiftConnectionConfig(_ConnectionConfig):
     """
     Redshift Connection Configuration.
@@ -606,6 +641,7 @@ class SparkConnectionConfig(_ConnectionConfig):
 ConnectionConfig = Annotated[
     t.Union[
         BigQueryConnectionConfig,
+        GooglePostgresConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
         PostgresConnectionConfig,
