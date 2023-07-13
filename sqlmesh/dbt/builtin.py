@@ -271,6 +271,7 @@ BUILTIN_GLOBALS = {
     "return": return_val,
     "set": to_set,
     "set_strict": set,
+    "sqlmesh": True,
     "sqlmesh_incremental": True,
     "tojson": to_json,
     "toyaml": to_yaml,
