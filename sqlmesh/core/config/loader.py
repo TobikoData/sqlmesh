@@ -13,8 +13,8 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 
 def load_config_from_paths(
-    project_paths: t.List[Path],
-    personal_paths: t.List[Path],
+    project_paths: t.List[Path] = [],
+    personal_paths: t.List[Path] = [],
     config_name: str = "config",
     load_from_env: bool = True,
 ) -> Config:
