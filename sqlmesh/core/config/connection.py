@@ -423,15 +423,23 @@ class BigQueryConnectionConfig(_ConnectionConfig):
 
 class GooglePostgresConnectionConfig(_ConnectionConfig):
     """
-    Google Postgres Connection Configuration.
+    Postgres Connection Configuration for GCP.
+
+    Args:
+        instance_connection_string: Connection name for the postgres instance.
+        user: Postgres or IAM user's name
+        password: The postgres user's password. Only needed when the user is a postgres user.
+        enable_iam_auth: Set to True when user is an IAM user.
+        db: Name of the db to connect to.
     """
 
     instance_connection_string: str
-    driver: str = "pg8000"
     user: str
+    password: t.Optional[str] = None
+    enable_iam_auth: t.Optional[bool] = None
     db: str
-    enable_iam_auth: bool = True
 
+    driver: str = "pg8000"
     type_: Literal["postgres"] = Field(alias="type", default="postgres")
     concurrent_tasks: int = 4
 
@@ -441,6 +449,7 @@ class GooglePostgresConnectionConfig(_ConnectionConfig):
             "instance_connection_string",
             "driver",
             "user",
+            "password",
             "db",
             "enable_iam_auth",
         }
