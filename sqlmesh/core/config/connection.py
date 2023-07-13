@@ -440,8 +440,28 @@ class GCPPostgresConnectionConfig(_ConnectionConfig):
     db: str
 
     driver: str = "pg8000"
-    type_: Literal["postgres"] = Field(alias="type", default="postgres")
+    type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
     concurrent_tasks: int = 4
+
+    @root_validator(pre=True)
+    def _validate_auth_method(
+        cls, values: t.Dict[str, t.Optional[str]]
+    ) -> t.Dict[str, t.Optional[str]]:
+        password = values.get("password")
+        enable_iam_auth = values.get("enable_iam_auth")
+        if password and enable_iam_auth:
+            raise ConfigError(
+                "Invalid GCP Postgres connection configuration - both password and"
+                " enable_iam_auth set. Use password when connecting to a postgres"
+                " user and enable_iam_auth 'True' when connecting to an IAM user."
+            )
+        if not password and not enable_iam_auth:
+            raise ConfigError(
+                "GCP Postgres connection configuration requires either password set"
+                " for a postgres user account or enable_iam_auth set to 'True'"
+                " for an IAM user account."
+            )
+        return values
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
