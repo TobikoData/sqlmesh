@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from collections import defaultdict
 from enum import Enum
@@ -33,6 +34,9 @@ from sqlmesh.utils.date import (
 )
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
+
+logger = logging.getLogger(__name__)
+
 
 SnapshotMapping = t.Dict[str, t.Set[str]]
 
@@ -496,12 +500,31 @@ class Plan:
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
                     elif self.auto_categorization_enabled and is_directly_modified:
-                        new, old = self.context_diff.modified_snapshots[model_name]
-                        change_category = categorize_change(
-                            new, old, config=self.categorizer_config
-                        )
-                        if change_category is not None:
-                            self.set_choice(new, change_category)
+                        model_with_missing_columns: t.Optional[str] = None
+                        this_model_with_downstream = self.indirectly_modified.get(
+                            model_name, set()
+                        ) | {model_name}
+                        for downstream in this_model_with_downstream:
+                            if (
+                                self.context_diff.snapshots[downstream].model.columns_to_types
+                                is None
+                            ):
+                                model_with_missing_columns = downstream
+                                break
+
+                        if model_with_missing_columns is None:
+                            new, old = self.context_diff.modified_snapshots[model_name]
+                            change_category = categorize_change(
+                                new, old, config=self.categorizer_config
+                            )
+                            if change_category is not None:
+                                self.set_choice(new, change_category)
+                        else:
+                            logger.warning(
+                                "Changes to model '%s' cannot be automatically categorized due to missing schema for model '%s'",
+                                model_name,
+                                model_with_missing_columns,
+                            )
 
                 # set to breaking if an indirect child has no directly modified parents
                 # that need a decision. this can happen when a revert to a parent causes
@@ -600,7 +623,7 @@ class Plan:
             and not self.context_diff.has_snapshot_changes
         ):
             raise NoChangesPlanError(
-                "No changes were detected. Run with --promote-all to create a new environment anyway."
+                "No changes were detected. Make a change or run with --promote-all to create a new environment without changes."
             )
 
 

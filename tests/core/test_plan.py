@@ -357,6 +357,40 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
 
 
+def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
+
+    downstream_snapshot = make_snapshot(
+        SqlModel(name="b", query=parse_one("select * from tbl"), depends_on={"a"}),
+        models={"a": snapshot.model},
+    )
+    downstream_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_downstream_snapshot = make_snapshot(
+        downstream_snapshot.model,
+        models={"a": updated_snapshot.model},
+    )
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": updated_snapshot, "b": downstream_snapshot}
+    context_diff_mock.added = set()
+    context_diff_mock.removed = set()
+    context_diff_mock.modified_snapshots = {
+        "a": (updated_snapshot, snapshot),
+        "b": (updated_downstream_snapshot, downstream_snapshot),
+    }
+    context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
+    context_diff_mock.directly_modified.side_effect = lambda name: name == "a"
+
+    state_reader_mock = mocker.Mock()
+
+    Plan(context_diff_mock, state_reader_mock)
+
+    assert updated_snapshot.version is None
+    assert updated_snapshot.change_category is None
+
+
 def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
     snapshot_a = make_snapshot(
         SqlModel(
