@@ -29,7 +29,6 @@ import {
 } from '@api/index'
 import { EnumErrorKey } from '~/library/pages/ide/context'
 import TabList from '@components/tab/Tab'
-import Selector from '@components/selector/Selector'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 
 interface FormModel {
@@ -169,7 +168,7 @@ function InspectorSql({ tab }: { tab: EditorTab }): JSX.Element {
             'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
           )}
         >
-          <FormDiff tab={tab} />
+          <FormDiff />
         </Tab.Panel>
       </Tab.Panels>
     </Tab.Group>
@@ -258,23 +257,28 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
               </Banner>
             </FormFieldset>
           )}
-          <fieldset className="mb-4">
+          <fieldset className="mb-4 w-full">
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
-              type="number"
               label="Limit"
-              placeholder={String(LIMIT)}
-              value={form.limit}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  type="number"
+                  placeholder={String(LIMIT)}
+                  value={form.limit}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setForm({
-                  ...form,
-                  limit: e.target.valueAsNumber ?? LIMIT,
-                })
-              }}
-            />
+                    setForm({
+                      ...form,
+                      limit: e.target.valueAsNumber ?? LIMIT,
+                    })
+                  }}
+                />
+              )}
+            </Input>
           </fieldset>
         </form>
       </InspectorForm>
@@ -387,7 +391,7 @@ function FormActionsModel({
   return (
     <>
       <InspectorForm>
-        <form>
+        <form className="w-full">
           {isFalse(shouldEvaluate) && (
             <FormFieldset>
               <Banner variant={EnumVariant.Warning}>
@@ -397,68 +401,88 @@ function FormActionsModel({
               </Banner>
             </FormFieldset>
           )}
-          <fieldset className="my-3 px-3">
+          <fieldset className="my-3 px-3 w-full">
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
               label="Start Date"
-              placeholder="02/11/2023"
-              value={form.start}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="02/11/2023"
+                  value={form.start}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setForm({
-                  ...form,
-                  start: e.target.value ?? '',
-                })
-              }}
-            />
+                    setForm({
+                      ...form,
+                      start: e.target.value ?? '',
+                    })
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
               label="End Date"
-              placeholder="02/13/2023"
-              value={form.end}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="02/13/2023"
+                  value={form.end}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setForm({
-                  ...form,
-                  end: e.target.value ?? '',
-                })
-              }}
-            />
+                    setForm({
+                      ...form,
+                      end: e.target.value ?? '',
+                    })
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
               label="Latest Date"
-              placeholder="02/13/2023"
-              value={form.latest}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="02/13/2023"
+                  value={form.latest}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setForm({
-                  ...form,
-                  latest: e.target.value ?? '',
-                })
-              }}
-            />
+                    setForm({
+                      ...form,
+                      latest: e.target.value ?? '',
+                    })
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
-              type="number"
               label="Limit"
-              placeholder="1000"
-              value={form.limit}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  type="number"
+                  placeholder="1000"
+                  value={form.limit}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setForm({
-                  ...form,
-                  limit: e.target.valueAsNumber ?? LIMIT,
-                })
-              }}
-            />
+                    setForm({
+                      ...form,
+                      limit: e.target.valueAsNumber ?? LIMIT,
+                    })
+                  }}
+                />
+              )}
+            </Input>
           </fieldset>
         </form>
       </InspectorForm>
@@ -499,16 +523,13 @@ function FormDiffModel({
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
 
-  const [selectedSource, setSelectedSource] = useState<{
-    text: string
-    value: string
-  }>(list[0]!)
+  const [selectedSource, setSelectedSource] = useState(list[0]!.value)
   const [limit, setLimit] = useState(LIMIT_DIFF)
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
   const { refetch: getDiff } = useApiTableDiff({
-    source: selectedSource.value,
+    source: selectedSource,
     target: target.value,
     model_or_snapshot: model.name,
     limit,
@@ -518,7 +539,7 @@ function FormDiffModel({
   const debouncedGetDiff = debounceAsync(getDiff, 1000, true)
 
   useEffect(() => {
-    setSelectedSource(list[0]!)
+    setSelectedSource(list[0]!.value)
   }, [list])
 
   function getTableDiff(): void {
@@ -549,53 +570,75 @@ function FormDiffModel({
   return (
     <>
       <InspectorForm>
-        <form>
-          <fieldset className="my-3 px-3">
-            <Selector
-              list={list}
-              item={selectedSource}
-              onChange={setSelectedSource}
+        <form className="w-full">
+          <fieldset className="my-3 px-3 w-full">
+            <Input
+              className="w-full mx-0"
               label="Source"
-              className="w-full mx-0"
               disabled={list.length < 2}
-            />
+            >
+              {({ disabled, className }) => (
+                <Input.Selector
+                  className={clsx(className, 'w-full')}
+                  list={list}
+                  value={selectedSource}
+                  disabled={disabled}
+                  onChange={setSelectedSource}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
-              type="number"
               label="Limit"
-              placeholder="1000"
-              value={limit}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  type="number"
+                  placeholder="1000"
+                  value={limit}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setLimit(e.target.valueAsNumber ?? LIMIT_DIFF)
-              }}
-            />
+                    setLimit(e.target.valueAsNumber ?? LIMIT_DIFF)
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
               label="ON"
-              placeholder="s.id = t.id"
-              value={on}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="s.id = t.id"
+                  value={on}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setOn(e.target.value)
-              }}
-            />
+                    setOn(e.target.value)
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
               label="WHERE"
-              placeholder="id > 10"
-              value={where}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="id > 10"
+                  value={where}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setWhere(e.target.value)
-              }}
-            />
+                    setWhere(e.target.value)
+                  }}
+                />
+              )}
+            </Input>
           </fieldset>
         </form>
       </InspectorForm>
@@ -609,7 +652,7 @@ function FormDiffModel({
             </span>{' '}
             as <b>Target</b> and{' '}
             <span className="inline-block px-2 bg-brand-10 mx-1 text-brand-600 rounded-md">
-              {selectedSource.value}
+              {selectedSource}
             </span>{' '}
             as <b>Source</b>
           </span>
@@ -634,7 +677,7 @@ function FormDiffModel({
   )
 }
 
-function FormDiff({ tab }: { tab: EditorTab }): JSX.Element {
+function FormDiff(): JSX.Element {
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
 
@@ -680,69 +723,94 @@ function FormDiff({ tab }: { tab: EditorTab }): JSX.Element {
   return (
     <>
       <InspectorForm>
-        <form>
-          <fieldset className="my-3 px-3">
+        <form className="w-full">
+          <fieldset className="my-3 px-3 w-full">
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
               label="Source"
-              placeholder="exp.tst_model__dev"
-              value={source}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="exp.tst_model__dev"
+                  value={source}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setSource(e.target.value)
-              }}
-            />
+                    setSource(e.target.value)
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
               label="Target"
-              placeholder="exp.tst_snapshot__1353336088"
-              value={target}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="exp.tst_snapshot__1353336088"
+                  value={target}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setTarget(e.target.value)
-              }}
-            />
+                    setTarget(e.target.value)
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
-              type="number"
               label="Limit"
-              placeholder="1000"
-              value={limit}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  type="number"
+                  placeholder="1000"
+                  value={limit}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setLimit(e.target.valueAsNumber ?? LIMIT_DIFF)
-              }}
-            />
+                    setLimit(e.target.valueAsNumber ?? LIMIT_DIFF)
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
               label="ON"
-              placeholder="s.id = t.id"
-              value={on}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="s.id = t.id"
+                  value={on}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setOn(e.target.value)
-              }}
-            />
+                    setOn(e.target.value)
+                  }}
+                />
+              )}
+            </Input>
             <Input
               className="w-full mx-0"
-              size={EnumSize.sm}
-              label="WHERE (Optional)"
-              placeholder="id > 10"
-              value={where}
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                e.stopPropagation()
+              label="WHERE"
+            >
+              {({ className }) => (
+                <Input.Textfield
+                  className={clsx(className, 'w-full')}
+                  placeholder="id > 10"
+                  value={where}
+                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    e.stopPropagation()
 
-                setWhere(e.target.value)
-              }}
-            />
+                    setWhere(e.target.value)
+                  }}
+                />
+              )}
+            </Input>
           </fieldset>
         </form>
       </InspectorForm>

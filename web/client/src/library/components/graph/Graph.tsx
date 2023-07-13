@@ -645,12 +645,18 @@ const ModelColumns = memo(function ModelColumns({
           <Input
             className="w-full !m-0"
             size={EnumSize.sm}
-            value={filter}
-            placeholder="Filter models"
-            onInput={e => {
-              setFilter(e.target.value)
-            }}
-          />
+          >
+            {({ className }) => (
+              <Input.Textfield
+                className={clsx(className, 'w-full')}
+                value={filter}
+                placeholder="Filter models"
+                onInput={e => {
+                  setFilter(e.target.value)
+                }}
+              />
+            )}
+          </Input>
         </div>
       )}
       <div
