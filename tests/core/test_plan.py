@@ -383,9 +383,7 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
     context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
     context_diff_mock.directly_modified.side_effect = lambda name: name == "a"
 
-    state_reader_mock = mocker.Mock()
-
-    Plan(context_diff_mock, state_reader_mock)
+    Plan(context_diff_mock)
 
     assert updated_snapshot.version is None
     assert updated_snapshot.change_category is None
