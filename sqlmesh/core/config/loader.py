@@ -13,53 +13,73 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 
 def load_config_from_paths(
-    *paths: Path,
+    project_paths: t.List[Path],
+    personal_paths: t.List[Path],
     config_name: str = "config",
     load_from_env: bool = True,
 ) -> Config:
-
     visited_folders: t.Set[Path] = set()
-    python_config: t.Optional[Config] = None
-    non_python_configs = []
-    for path in paths:
-        if not path.exists():
-            continue
 
-        if not path.is_file():
-            raise ConfigError(f"Path '{path}' must be a file.")
+    def _load_configs(paths: t.List[Path]) -> t.Dict[str, t.Union[None, Config, t.List]]:
+        python_config: Config | None = None
+        non_python_configs: t.List[t.Dict] = []
+        for path in paths:
+            if not path.exists():
+                continue
 
-        parent_path = path.parent
-        if parent_path in visited_folders:
-            raise ConfigError(f"Multiple configuration files found in folder '{parent_path}'.")
-        visited_folders.add(parent_path)
+            if not path.is_file():
+                raise ConfigError(f"Path '{path}' must be a file.")
 
-        extension = path.name.split(".")[-1].lower()
-        if extension in ("yml", "yaml"):
-            if config_name != "config":
+            parent_path = path.parent
+            if parent_path in visited_folders:
+                raise ConfigError(f"Multiple configuration files found in folder '{parent_path}'.")
+            visited_folders.add(parent_path)
+
+            extension = path.name.split(".")[-1].lower()
+            if extension in ("yml", "yaml"):
+                if config_name != "config":
+                    raise ConfigError(
+                        "YAML configs do not support multiple configs. Use Python instead."
+                    )
+                non_python_configs.append(load_config_from_yaml(path))
+            elif extension == "py":
+                python_config = load_config_from_python_module(path, config_name=config_name)
+            else:
                 raise ConfigError(
-                    "YAML configs do not support multiple configs. Use Python instead."
+                    f"Unsupported config file extension '{extension}' in config file '{path}'."
                 )
-            non_python_configs.append(load_config_from_yaml(path))
-        elif extension == "py":
-            python_config = load_config_from_python_module(path, config_name=config_name)
-        else:
-            raise ConfigError(
-                f"Unsupported config file extension '{extension}' in config file '{path}'."
-            )
+
+        return {"python_config": python_config, "non_python_configs": non_python_configs}
+
+    project_config_dicts = _load_configs(project_paths)
+    personal_config_dicts = _load_configs(personal_paths)
+
+    no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter - set it in the `model_defaults` key."
+
+    if project_config_dicts.get("non_python_configs"):
+        non_python_config = Config.parse_obj(
+            merge_dicts(*project_config_dicts.get("non_python_configs"))
+        )
+        non_python_defaults = getattr(non_python_config, "model_defaults")
+        if getattr(non_python_defaults, "dialect") is None:
+            raise ConfigError(no_dialect_err_msg)
+
+        non_python_config.update_with(merge_dicts(*personal_config_dicts.get("non_python_configs")))
+    else:
+        non_python_config = Config()
 
     if load_from_env:
         env_config = load_config_from_env()
         if env_config:
-            non_python_configs.append(load_config_from_env())
+            non_python_config.update_with(load_config_from_env())
 
-    if not non_python_configs and not python_config:
-        raise ConfigError(
-            "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up SQLMesh, run `sqlmesh init`."
-        )
-
-    non_python_config = Config.parse_obj(merge_dicts(*non_python_configs))
+    python_config: t.Union[None, Config] = project_config_dicts["python_config"]
     if python_config:
+        python_defaults = getattr(python_config, "model_defaults")
+        if getattr(python_defaults, "dialect") is None:
+            raise ConfigError(no_dialect_err_msg)
         return python_config.update_with(non_python_config)
+
     return non_python_config
 
 

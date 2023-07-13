@@ -27,7 +27,7 @@ class ModelDefaultsConfig(BaseConfig):
     """
 
     kind: t.Optional[ModelKind]
-    dialect: t.Optional[str]
+    dialect: t.Optional[str | None] = None
     cron: t.Optional[str]
     owner: t.Optional[str]
     start: t.Optional[TimeLike]
