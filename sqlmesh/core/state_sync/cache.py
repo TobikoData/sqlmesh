@@ -6,13 +6,10 @@ import typing as t
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import (
-    Intervals,
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
-    SnapshotIntervals,
-    SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
 from sqlmesh.core.state_sync.base import StateSync, Versions
@@ -32,7 +29,9 @@ class CachingStateSync(StateSync):
         self.snapshot_cache: t.Dict[SnapshotId, Snapshot | Literal[False]] = {}
 
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         if not snapshot_ids:
             return self.state_sync.get_snapshots(snapshot_ids, hydrate_seeds)
@@ -94,32 +93,11 @@ class CachingStateSync(StateSync):
     def get_environments(self) -> t.List[Environment]:
         return self.state_sync.get_environments()
 
-    def get_snapshot_intervals(
-        self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
-    ) -> t.List[SnapshotIntervals]:
-        return self.state_sync.get_snapshot_intervals(snapshots)
-
     def recycle(self) -> None:
         self.state_sync.recycle()
 
     def close(self) -> None:
         self.state_sync.close()
-
-    def missing_intervals(
-        self,
-        env_or_snapshots: str | Environment | t.Iterable[Snapshot],
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        restatements: t.Optional[t.Iterable[str]] = None,
-    ) -> t.Dict[Snapshot, Intervals]:
-        return self.state_sync.missing_intervals(
-            env_or_snapshots,
-            start,
-            end,
-            latest,
-            restatements,
-        )
 
     def get_versions(self, validate: bool = True) -> Versions:
         return self.state_sync.get_versions(validate)

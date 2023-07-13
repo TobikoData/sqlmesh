@@ -529,7 +529,7 @@ class Context(BaseContext):
         snapshots = {}
 
         for model in models.values():
-            if model.name in remote_snapshots:
+            if model.name not in self._models and model.name in remote_snapshots:
                 snapshot = remote_snapshots[model.name]
                 ttl = snapshot.ttl
                 project = snapshot.project
@@ -548,9 +548,8 @@ class Context(BaseContext):
             )
             snapshots[model.name] = snapshot
 
-        stored_snapshots = self.state_reader.get_snapshots(
-            [s.snapshot_id for s in snapshots.values() if not s.version]
-        )
+        stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
+
         for snapshot in stored_snapshots.values():
             # Keep the original model instance to preserve the query cache.
             snapshot.model = snapshots[snapshot.name].model
@@ -740,7 +739,6 @@ class Context(BaseContext):
 
         plan = Plan(
             context_diff=self._context_diff(environment or c.PROD, create_from=create_from),
-            state_reader=self.state_reader,
             start=start,
             end=end,
             latest=latest,

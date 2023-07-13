@@ -34,6 +34,7 @@ from sqlmesh.utils.date import (
     to_datetime,
     to_ds,
     to_timestamp,
+    yesterday,
 )
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.hashing import crc32
@@ -373,7 +374,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
-    _start: t.Optional[datetime] = None
 
     @validator("ttl")
     @classmethod
@@ -413,13 +413,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 (snapshot.name, snapshot.version_get_or_generate()), []
             )
             for interval in snapshot_intervals:
-                if (
-                    not is_dev
-                    or not snapshot.is_forward_only
-                    or not snapshot.is_paused
-                    or snapshot.identifier == interval.identifier
-                ):
-                    snapshot.merge_intervals(interval)
+                snapshot.merge_intervals(interval)
             result.append(snapshot)
 
         return result
@@ -617,6 +611,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         end: TimeLike,
         latest: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Set[str]] = None,
+        is_dev: bool = False,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -633,8 +628,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
+        is_temp_table = self.is_temporary_table(is_dev)
+        intervals = self.dev_intervals if is_temp_table else self.intervals
         restatements = restatements or set()
-        if self.is_symbolic or (self.is_seed and self.intervals):
+
+        if self.is_symbolic or (self.is_seed and intervals):
             return []
 
         latest = make_inclusive_end(latest or now())
@@ -682,7 +680,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
-            for low, high in self.intervals:
+            for low, high in intervals:
                 if compare_ts < low:
                     missing.append((current_ts, next_ts))
                     break
@@ -699,6 +697,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             category: The change category to assign to this snapshot.
         """
+        assert not self.intervals  # a snapshot that has been processed should not be recategorized
         is_forward_only = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
@@ -825,13 +824,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             if self.effective_from
             else None
         )
-
-    @property
-    def start(self) -> t.Optional[datetime]:
-        time = self.model.start or self._start
-        if time:
-            return to_datetime(time)
-        return None
 
     @property
     def model_kind_name(self) -> ModelKindName:
@@ -1133,3 +1125,110 @@ def has_paused_forward_only(
         if target_snapshot.is_paused and target_snapshot.is_forward_only:
             return True
     return False
+
+
+def missing_intervals(
+    snapshots: t.Collection[Snapshot],
+    start: t.Optional[TimeLike] = None,
+    end: t.Optional[TimeLike] = None,
+    latest: t.Optional[TimeLike] = None,
+    restatements: t.Optional[t.Iterable[str]] = None,
+    is_dev: bool = False,
+) -> t.Dict[Snapshot, Intervals]:
+    """Returns all missing intervals given a collection of snapshots."""
+    missing = {}
+    cache: t.Dict[str, datetime] = {}
+    start_dt = to_datetime(start or earliest_start_date(snapshots, cache))
+    end_date = end or now()
+    restatements = set(restatements or [])
+
+    for snapshot in snapshots:
+        if snapshot.name in restatements:
+            snapshot = snapshot.copy()
+            snapshot.intervals = snapshot.intervals.copy()
+            snapshot.remove_interval(start_dt, end_date, latest)
+
+        intervals = snapshot.missing_intervals(
+            max(
+                start_dt,
+                to_datetime(start_date(snapshot, snapshots, cache) or start_dt),
+            ),
+            end_date,
+            latest=latest,
+            restatements=restatements,
+            is_dev=is_dev,
+        )
+        if intervals:
+            missing[snapshot] = intervals
+
+    return missing
+
+
+def earliest_start_date(
+    snapshots: t.Iterable[Snapshot], cache: t.Optional[t.Dict[str, datetime]] = None
+) -> datetime:
+    """Get the earliest start date from a collection of snapshots.
+
+    Args:
+        snapshots: Snapshots to find earliest start date.
+        cache: optional cache to make computing cache date more efficient
+    Returns:
+        The earliest start date or yesterday if none is found.
+    """
+    cache = {} if cache is None else cache
+    snapshots = list(snapshots)
+    earliest = to_datetime(yesterday().date())
+    if snapshots:
+        for snapshot in snapshots:
+            if not snapshot.parents and not snapshot.model.start:
+                cache[snapshot.name] = earliest
+        return min(start_date(snapshot, snapshots, cache) or earliest for snapshot in snapshots)
+    return earliest
+
+
+def start_date(
+    snapshot: Snapshot,
+    snapshots: t.Dict[SnapshotId, Snapshot] | t.Iterable[Snapshot],
+    cache: t.Optional[t.Dict[str, datetime]] = None,
+) -> t.Optional[datetime]:
+    """Get the effective/inferred start date for a snapshot.
+
+    Not all snapshots define a start date. In those cases, the model's start date
+    can be inferred from its parent's start date.
+
+    Args:
+        snapshot: snapshot to infer start date.
+        snapshots: a catalog of available snapshots.
+        cache: optional cache to make computing cache date more efficient
+
+    Returns:
+        Start datetime object.
+    """
+    cache = {} if cache is None else cache
+    if snapshot.name in cache:
+        return cache[snapshot.name]
+    if snapshot.model.start:
+        start = to_datetime(snapshot.model.start)
+        cache[snapshot.name] = start
+        return start
+
+    if not isinstance(snapshots, dict):
+        snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
+
+    earliest = None
+
+    for parent in snapshot.parents:
+        if parent not in snapshots:
+            continue
+
+        start_dt = start_date(snapshots[parent], snapshots, cache)
+
+        if not earliest:
+            earliest = start_dt
+        elif start_dt:
+            earliest = min(earliest, start_dt)
+
+    if earliest:
+        cache[snapshot.name] = earliest
+
+    return earliest

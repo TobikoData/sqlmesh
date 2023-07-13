@@ -8,7 +8,6 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import (
@@ -20,10 +19,15 @@ from sqlmesh.core.model import (
     SeedModel,
     SqlModel,
 )
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotTableInfo
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotTableInfo,
+    missing_intervals,
+)
 from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync
 from sqlmesh.core.state_sync.base import SCHEMA_VERSION, SQLGLOT_VERSION, Versions
-from sqlmesh.utils.date import now_timestamp, to_datetime, to_ds, to_timestamp
+from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -189,6 +193,10 @@ def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[
     assert state_sync.snapshots_exist(snapshot_ids) == snapshot_ids
 
 
+def get_snapshot_intervals(state_sync, snapshot):
+    return state_sync._get_snapshot_intervals([snapshot])[-1][0]
+
+
 def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
     snapshot = make_snapshot(
         SqlModel(
@@ -202,30 +210,30 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
     state_sync.push_snapshots([snapshot])
 
     state_sync.add_interval(snapshot, "2020-01-01", "20200101")
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == [
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-02")),
     ]
 
     state_sync.add_interval(snapshot, "20200101", to_datetime("2020-01-04"))
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == [
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
     ]
 
     state_sync.add_interval(snapshot, to_datetime("2020-01-05"), "2020-01-10")
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == [
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
 
     state_sync.add_interval(snapshot, to_datetime("2020-01-11"), "2020-01-15", is_dev=True)
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == [
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-16")),
     ]
 
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
     state_sync.add_interval(snapshot, to_datetime("2020-01-16"), "2020-01-20", is_dev=True)
-    intervals = state_sync.get_snapshot_intervals([snapshot])[0]
+    intervals = get_snapshot_intervals(state_sync, snapshot)
     assert intervals.intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-16")),
@@ -258,14 +266,14 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
 
     state_sync.remove_interval([snapshot_a], "2020-01-15", "2020-01-17")
 
-    intervals = state_sync.get_snapshot_intervals([snapshot_a, snapshot_b])
-    intervals_by_snapshot_id = {i.snapshot_id: i for i in intervals}
+    snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
 
-    assert intervals_by_snapshot_id[snapshot_a.snapshot_id].intervals == [
-        (to_timestamp("2020-01-01"), to_timestamp("2020-01-11"))
+    assert snapshots[snapshot_a.snapshot_id].intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-15")),
+        (to_timestamp("2020-01-18"), to_timestamp("2020-01-31")),
     ]
-    assert intervals_by_snapshot_id[snapshot_b.snapshot_id].intervals == [
-        (to_timestamp("2020-01-11"), to_timestamp("2020-01-15")),
+    assert snapshots[snapshot_b.snapshot_id].intervals == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-15")),
         (to_timestamp("2020-01-18"), to_timestamp("2020-01-31")),
     ]
 
@@ -295,7 +303,7 @@ def test_get_snapshot_intervals(
     )
     state_sync.push_snapshots([snapshot_b])
 
-    assert state_sync.get_snapshot_intervals([snapshot_b])[0].intervals == [
+    assert get_snapshot_intervals(state_sync, snapshot_b).intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-02")),
     ]
 
@@ -323,14 +331,14 @@ def test_compact_intervals(state_sync: EngineAdapterStateSync, make_snapshot: t.
         (to_timestamp("2020-01-12"), to_timestamp("2020-01-14")),
     ]
 
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == expected_intervals
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == expected_intervals
 
     state_sync.compact_intervals()
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == expected_intervals
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == expected_intervals
 
     # Make sure compaction is idempotent.
     state_sync.compact_intervals()
-    assert state_sync.get_snapshot_intervals([snapshot])[0].intervals == expected_intervals
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == expected_intervals
 
 
 def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
@@ -628,18 +636,6 @@ def test_environment_start_as_timestamp(
     assert stored_env.start_at == to_datetime(now_ts).isoformat()
 
 
-def test_missing_intervals(sushi_context_pre_scheduling: Context) -> None:
-    sushi_context = sushi_context_pre_scheduling
-    state_sync = sushi_context.state_reader
-    start = to_ds("1 week ago")
-    end = to_ds("yesterday")
-    missing = state_sync.missing_intervals("prod", start, end, latest=end)
-    assert missing
-    assert missing == sushi_context.state_reader.missing_intervals(
-        sushi_context.snapshots.values(), start, end, end
-    )
-
-
 def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot = make_snapshot(
         SqlModel(
@@ -692,16 +688,13 @@ def test_unpause_snapshots_remove_intervals(
     )
     new_snapshot.effective_from = "2023-01-03"
     state_sync.push_snapshots([new_snapshot])
+    state_sync.add_interval(snapshot, "2023-01-06", "2023-01-06")
     state_sync.unpause_snapshots([new_snapshot], "2023-01-06")
 
-    actual_snapshots = {
-        s.snapshot_id: s
-        for s in Snapshot.hydrate_with_intervals_by_identifier(
-            [snapshot, new_snapshot],
-            state_sync.get_snapshot_intervals([snapshot, new_snapshot]),
-        )
-    }
-    assert not actual_snapshots[new_snapshot.snapshot_id].intervals
+    actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
+    assert actual_snapshots[new_snapshot.snapshot_id].intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
+    ]
     assert actual_snapshots[snapshot.snapshot_id].intervals == [
         (to_timestamp("2023-01-01"), to_timestamp("2023-01-03")),
     ]
@@ -841,11 +834,28 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     assert len(old_snapshots) == len(new_snapshots)
     assert len(old_environments) == len(new_environments)
 
-    assert not state_sync.missing_intervals("staging")
-    assert not state_sync.missing_intervals("dev")
-    assert len(state_sync.missing_intervals("dev", start="2023-01-08", end="2023-01-10")) == 8
+    start = "2023-01-01"
+    end = "2023-01-07"
 
-    assert all(not s.intervals for s in state_sync.get_snapshots(None).values())
+    assert not missing_intervals(
+        state_sync.get_snapshots(
+            t.cast(Environment, state_sync.get_environment("staging")).snapshots
+        ).values(),
+        start=start,
+        end=end,
+    )
+
+    dev_snapshots = state_sync.get_snapshots(
+        t.cast(Environment, state_sync.get_environment("dev")).snapshots
+    ).values()
+
+    assert not missing_intervals(dev_snapshots, start=start, end=end)
+
+    assert not missing_intervals(dev_snapshots, start="2023-01-08", end="2023-01-10") == 8
+
+    for s in state_sync.get_snapshots(None).values():
+        if not s.is_symbolic:
+            assert s.intervals
 
     customer_revenue_by_day = new_snapshots.loc[
         new_snapshots["name"] == "sushi.customer_revenue_by_day"
