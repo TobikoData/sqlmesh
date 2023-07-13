@@ -83,7 +83,7 @@ export default function PlanWizardStepOptions({
                               onChange={env => {
                                 dispatch({
                                   type: EnumPlanActions.PlanOptions,
-                                  create_from: env.value,
+                                  create_from: env,
                                 })
                               }}
                               value={create_from}
