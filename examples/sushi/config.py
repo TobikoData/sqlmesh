@@ -7,6 +7,7 @@ from sqlmesh.core.config import (
     Config,
     DuckDBConnectionConfig,
     GatewayConfig,
+    ModelDefaultsConfig,
     SparkConnectionConfig,
 )
 from sqlmesh.core.notification_target import (
@@ -21,18 +22,22 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
 # An in memory DuckDB config.
-config = Config(default_connection=DuckDBConnectionConfig())
+config = Config(
+    default_connection=DuckDBConnectionConfig(), model_defaults=ModelDefaultsConfig(dialect="")
+)
 
 
 # A configuration used for SQLMesh tests.
 test_config = Config(
     default_connection=DuckDBConnectionConfig(),
     auto_categorize_changes=CategorizerConfig(sql=AutoCategorizationMode.SEMI),
+    model_defaults=ModelDefaultsConfig(dialect=""),
 )
 
 # A stateful DuckDB config.
 local_config = Config(
     default_connection=DuckDBConnectionConfig(database=f"{DATA_DIR}/local.duckdb"),
+    model_defaults=ModelDefaultsConfig(dialect=""),
 )
 
 # Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
@@ -46,6 +51,7 @@ airflow_config = Config(  # type: ignore
             },
         )
     ),
+    model_defaults=ModelDefaultsConfig(dialect=""),
 )
 
 
@@ -53,6 +59,7 @@ airflow_config = Config(  # type: ignore
 airflow_config_docker = Config(  # type: ignore
     default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
     gateways=GatewayConfig(connection=SparkConnectionConfig()),
+    model_defaults=ModelDefaultsConfig(dialect=""),
 )
 
 
@@ -87,4 +94,5 @@ required_approvers_config = Config(
             ],
         ),
     ],
+    model_defaults=ModelDefaultsConfig(dialect=""),
 )
