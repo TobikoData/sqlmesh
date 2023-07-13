@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import typing as t
 
-from pydantic import validator
+from pydantic import Field, validator
 from sqlglot import exp
 from sqlglot.helper import ensure_list
 
@@ -66,7 +66,7 @@ class ModelConfig(BaseModelConfig):
 
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
-    time_column: t.Optional[str] = None
+    time_column_: t.Optional[str] = Field(None, alias="time_column")
     cron: t.Optional[str] = None
     dialect: t.Optional[str] = None
     batch_size: t.Optional[int] = None
@@ -118,6 +118,14 @@ class ModelConfig(BaseModelConfig):
             "time_column": UpdateStrategy.IMMUTABLE,
         },
     }
+
+    @property
+    def time_column(self) -> t.Optional[str]:
+        if self.time_column_:
+            return self.time_column_
+        if isinstance(self.partition_by, dict) and self.partition_by["data_type"] != "int64":
+            return self.partition_by["field"]
+        return None
 
     @property
     def model_dialect(self) -> t.Optional[str]:

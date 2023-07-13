@@ -83,6 +83,13 @@ def test_model_kind():
         time_column="foo", forward_only=True, disable_restatement=True
     )
 
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, time_column="foo", partition_by={"field": "bar"}
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL, partition_by={"field": "bar"}
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="bar")
+
     with pytest.raises(ConfigError) as exception:
         ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(target)
     with pytest.raises(ConfigError) as exception:
@@ -102,6 +109,11 @@ def test_model_kind():
             materialized=Materialization.INCREMENTAL,
             unique_key=["bar"],
             incremental_strategy="append",
+        ).model_kind(target)
+    with pytest.raises(ConfigError) as exception:
+        assert ModelConfig(
+            materialized=Materialization.INCREMENTAL,
+            partition_by={"field": "bar", "data_type": "int64"},
         ).model_kind(target)
 
 
