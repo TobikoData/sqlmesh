@@ -10,7 +10,7 @@ from enum import Enum
 from pydantic import EmailStr, Field, SecretStr
 
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.utils import slack
+from sqlmesh.integrations import slack
 from sqlmesh.utils.errors import AuditError, ConfigError, MissingDependencyError
 from sqlmesh.utils.pydantic import PydanticModel
 
