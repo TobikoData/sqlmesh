@@ -65,65 +65,63 @@ export default function PlanWizardStepOptions({
                   <div className="mt-3">
                     <div className="flex flex-wrap md:flex-nowrap">
                       {isFalse(environment.isDefault) && (
-                        <div className="inline-block m-1 w-full">
-                          <Input.Label>Create From Environment</Input.Label>
-                          <select
-                            className={clsx(
-                              'w-full bg-neutral-100 border-2 rounded-lg py-2 px-3 text-base leading-4',
-                              synchronizedEnvironments.length < 2 &&
-                                'opacity-50 cursor-not-allowed',
-                              'flex w-full text-prose-lighter bg-theme-lighter border-theme-darker dark:border-theme-lighter dark:text-prose-darker rounded-md',
-                              'border-2 focus:ring-4 focus:outline-none focus:border-secondary-500',
-                              'ring-secondary-300 ring-opacity-60 ring-offset ring-offset-secondary-100',
-                            )}
-                            onChange={e => {
-                              dispatch({
-                                type: EnumPlanActions.PlanOptions,
-                                create_from: e.target.value,
-                              })
-                            }}
-                            disabled={synchronizedEnvironments.length < 2}
-                            value={create_from}
-                          >
-                            {ModelEnvironment.getOnlySynchronized(
-                              Array.from(environments),
-                            ).map(env => (
-                              <option
-                                key={env.name}
-                                value={env.name}
-                              >
-                                {env.name}
-                              </option>
-                            ))}
-                          </select>
-                          <Input.Info>
-                            The environment to base the plan on rather than
-                            local files
-                          </Input.Info>
-                        </div>
+                        <Input
+                          className="w-full"
+                          label="Create From Environment"
+                          info="The environment to base the plan on rather than local files"
+                          disabled={synchronizedEnvironments.length < 2}
+                        >
+                          {({ className, disabled }) => (
+                            <Input.Selector
+                              className={clsx(className, 'w-full')}
+                              list={ModelEnvironment.getOnlySynchronized(
+                                Array.from(environments),
+                              ).map(env => ({
+                                value: env.name,
+                                text: env.name,
+                              }))}
+                              onChange={env => {
+                                dispatch({
+                                  type: EnumPlanActions.PlanOptions,
+                                  create_from: env.value,
+                                })
+                              }}
+                              value={create_from}
+                              disabled={disabled}
+                            />
+                          )}
+                        </Input>
                       )}
                       <Input
                         className="w-full"
                         label="Restate Models"
                         info="Restate data for specified models and models
-              downstream from the one specified. For production
-              environment, all related model versions will have
-              their intervals wiped, but only the current
-              versions will be backfilled. For development
-              environment, only the current model versions will
-              be affected"
-                        placeholder="project.model1, project.model2"
-                        disabled={isInitialPlanRun}
-                        value={restate_models ?? ''}
-                        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          e.stopPropagation()
+                        downstream from the one specified. For production
+                        environment, all related model versions will have
+                        their intervals wiped, but only the current
+                        versions will be backfilled. For development
+                        environment, only the current model versions will
+                        be affected"
+                      >
+                        {({ className }) => (
+                          <Input.Textfield
+                            className={clsx(className, 'w-full')}
+                            placeholder="project.model1, project.model2"
+                            disabled={isInitialPlanRun}
+                            value={restate_models ?? ''}
+                            onInput={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => {
+                              e.stopPropagation()
 
-                          dispatch({
-                            type: EnumPlanActions.PlanOptions,
-                            restate_models: e.target.value,
-                          })
-                        }}
-                      />
+                              dispatch({
+                                type: EnumPlanActions.PlanOptions,
+                                restate_models: e.target.value,
+                              })
+                            }}
+                          />
+                        )}
+                      </Input>
                     </div>
                   </div>
                   <div className="flex flex-wrap md:flex-nowrap w-full mt-3">

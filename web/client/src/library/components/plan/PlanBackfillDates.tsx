@@ -1,3 +1,4 @@
+import clsx from 'clsx'
 import Input from '../input/Input'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 
@@ -15,34 +16,48 @@ export default function PlanBackfillDates({
         className="w-full md:w-[50%]"
         label="Start Date (UTC)"
         info="The start datetime of the interval"
-        placeholder="2023-12-13"
         disabled={disabled || isInitialPlanRun}
-        value={start}
-        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-          e.stopPropagation()
+      >
+        {({ disabled, className }) => (
+          <Input.Textfield
+            className={clsx(className, 'w-full')}
+            disabled={disabled}
+            placeholder="2023-12-13"
+            value={start}
+            onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+              e.stopPropagation()
 
-          dispatch({
-            type: EnumPlanActions.DateStart,
-            start: e.target.value,
-          })
-        }}
-      />
+              dispatch({
+                type: EnumPlanActions.DateStart,
+                start: e.target.value,
+              })
+            }}
+          />
+        )}
+      </Input>
       <Input
         className="w-full md:w-[50%]"
         label="End Date (UTC)"
         info="The end datetime of the interval"
-        placeholder="2022-12-13"
-        value={end}
         disabled={disabled || isInitialPlanRun}
-        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-          e.stopPropagation()
+      >
+        {({ disabled, className }) => (
+          <Input.Textfield
+            className={clsx(className, 'w-full')}
+            disabled={disabled}
+            placeholder="2022-12-13"
+            value={end}
+            onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+              e.stopPropagation()
 
-          dispatch({
-            type: EnumPlanActions.DateEnd,
-            end: e.target.value,
-          })
-        }}
-      />
+              dispatch({
+                type: EnumPlanActions.DateEnd,
+                end: e.target.value,
+              })
+            }}
+          />
+        )}
+      </Input>
     </div>
   )
 }

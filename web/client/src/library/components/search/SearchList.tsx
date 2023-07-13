@@ -51,13 +51,19 @@ export default function SearchList<
       <Input
         className="w-full !m-0"
         size={size}
-        value={search}
-        placeholder="Search"
-        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-          setSearch(e.target.value.trim())
-        }}
         autoFocus={autoFocus}
-      />
+      >
+        {({ className }) => (
+          <Input.Textfield
+            className={clsx(className, 'w-full')}
+            value={search}
+            placeholder="Search"
+            onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+              setSearch(e.target.value.trim())
+            }}
+          />
+        )}
+      </Input>
       {showSearchResults && (
         <ul
           className={clsx(
