@@ -421,7 +421,7 @@ class BigQueryConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class GooglePostgresConnectionConfig(_ConnectionConfig):
+class GCPPostgresConnectionConfig(_ConnectionConfig):
     """
     Postgres Connection Configuration for GCP.
 
@@ -650,7 +650,7 @@ class SparkConnectionConfig(_ConnectionConfig):
 ConnectionConfig = Annotated[
     t.Union[
         BigQueryConnectionConfig,
-        GooglePostgresConnectionConfig,
+        GCPPostgresConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
         PostgresConnectionConfig,
