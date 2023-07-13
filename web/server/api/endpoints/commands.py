@@ -43,6 +43,7 @@ async def apply(
         context.plan,
         environment=environment,
         no_prompts=True,
+        promote_all=plan_options.promote_all,
         start=plan_dates.start if plan_dates else None,
         end=plan_dates.end if plan_dates else None,
         skip_tests=plan_options.skip_tests,
@@ -53,9 +54,9 @@ async def apply(
         forward_only=plan_options.forward_only,
         no_auto_categorization=plan_options.no_auto_categorization,
     )
-    request.app.state.task = task = asyncio.create_task(run_in_executor(plan_func))
+    request.app.state.task = plan_task = asyncio.create_task(run_in_executor(plan_func))
     try:
-        plan = await task
+        plan = await plan_task
     except PlanError as e:
         raise ApiException(
             message=str(e),
@@ -67,9 +68,15 @@ async def apply(
             if plan.is_new_snapshot(new) and new.name in categories:
                 plan.set_choice(new, categories[new.name])
 
-    request.app.state.task = asyncio.create_task(run_in_executor(context.apply, plan))
+    request.app.state.task = apply_task = asyncio.create_task(run_in_executor(context.apply, plan))
     if not plan.requires_backfill or plan_options.skip_backfill:
-        await request.app.state.task
+        try:
+            await apply_task
+        except PlanError as e:
+            raise ApiException(
+                message=str(e),
+                origin="API -> commands -> apply",
+            )
 
     return models.ApplyResponse(
         type=models.ApplyType.backfill if plan.requires_backfill else models.ApplyType.virtual
