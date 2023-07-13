@@ -232,6 +232,7 @@ class SlackWebhookNotificationTarget(BaseNotificationTarget):
             ),
             slack.divider_block(),
             slack.text_section_block(msg),
+            slack.context_block(f"*Python Version:* {sys.version}"),
         )
         self.client.send(
             blocks=composed.slack_message["blocks"],
