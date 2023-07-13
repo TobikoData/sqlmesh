@@ -129,9 +129,7 @@ const Documentation = function Documentation({
                   {withQuery && (
                     <Tab.Panel
                       unmount={false}
-                      className={clsx(
-                        'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
-                      )}
+                      className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
                     >
                       <CodeEditor.Default
                         type={EnumFileExtensions.SQL}
