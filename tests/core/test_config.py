@@ -143,7 +143,7 @@ def test_default_gateway():
 
 def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path):
     config = load_config_from_paths(
-        project_paths=[yaml_config_path, python_config_path], personal_paths=[]
+        project_paths=[yaml_config_path, python_config_path],
     )
 
     assert config == Config(
@@ -165,12 +165,12 @@ def test_load_config_multiple_config_files_in_folder(tmp_path):
         fd.write("project: project_b")
 
     with pytest.raises(ConfigError, match=r"^Multiple configuration files found in folder.*"):
-        load_config_from_paths(project_paths=[config_a_path, config_b_path], personal_paths=[])
+        load_config_from_paths(project_paths=[config_a_path, config_b_path])
 
 
 def test_load_config_no_config():
     with pytest.raises(ConfigError, match=r"^SQLMesh config could not be found.*"):
-        load_config_from_paths(project_paths=[], personal_paths=[], load_from_env=False)
+        load_config_from_paths(load_from_env=False)
 
 
 def test_load_config_unsupported_extension(tmp_path):
@@ -178,7 +178,7 @@ def test_load_config_unsupported_extension(tmp_path):
     config_path.touch()
 
     with pytest.raises(ConfigError, match=r"^Unsupported config file extension 'txt'.*"):
-        load_config_from_paths(project_paths=[config_path], personal_paths=[])
+        load_config_from_paths(project_paths=[config_path])
 
 
 def test_load_config_from_env():
