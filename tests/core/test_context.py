@@ -19,7 +19,7 @@ from tests.utils.test_filesystem import create_temp_file
 
 def test_global_config():
     context = Context(paths="examples/sushi")
-    assert context.config.dialect == ""
+    assert context.config.dialect == "duckdb"
     assert context.config.time_column_format == "%Y-%m-%d"
 
 
