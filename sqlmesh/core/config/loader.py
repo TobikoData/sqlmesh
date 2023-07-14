@@ -20,7 +20,7 @@ def load_config_from_paths(
 ) -> Config:
     visited_folders: t.Set[Path] = set()
 
-    def _load_configs(paths: t.List[Path]) -> t.Dict[str, t.Union[None, Config, t.List]]:
+    def _load_configs(paths: t.List[Path]) -> t.Dict[str, t.Optional[t.Union[Config, t.List]]]:
         python_config: Config | None = None
         non_python_configs: t.List[t.Dict] = []
         for path in paths:
@@ -60,8 +60,8 @@ def load_config_from_paths(
         non_python_config = Config.parse_obj(
             merge_dicts(*project_config_dicts.get("non_python_configs"))
         )
-        non_python_defaults = getattr(non_python_config, "model_defaults")
-        if getattr(non_python_defaults, "dialect") is None:
+        non_python_defaults = non_python_config.model_defaults
+        if non_python_defaults.dialect is None:
             raise ConfigError(no_dialect_err_msg)
 
         non_python_config.update_with(merge_dicts(*personal_config_dicts.get("non_python_configs")))
@@ -73,10 +73,10 @@ def load_config_from_paths(
         if env_config:
             non_python_config.update_with(load_config_from_env())
 
-    python_config: t.Union[None, Config] = project_config_dicts["python_config"]
+    python_config = project_config_dicts["python_config"]
     if python_config:
-        python_defaults = getattr(python_config, "model_defaults")
-        if getattr(python_defaults, "dialect") is None:
+        python_defaults = python_config.model_defaults
+        if python_defaults.dialect is None:
             raise ConfigError(no_dialect_err_msg)
         return python_config.update_with(non_python_config)
 
