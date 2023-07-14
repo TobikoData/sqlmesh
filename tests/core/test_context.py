@@ -319,15 +319,18 @@ gateways:
             type: snowflake
             account: 123
             user: CDE
+
+model_defaults:
+    dialect: snowflake
 """,
         )
         with pytest.raises(
             ConfigError,
             match="User and password must be provided if using default authentication",
         ):
-            context._load_configs("config", [project_config.parent])
+            context._load_configs("config", paths=[project_config.parent])
         context.sqlmesh_path = home_path
-        loaded_configs = context._load_configs("config", [project_config.parent])
+        loaded_configs = context._load_configs("config", paths=[project_config.parent])
         assert len(loaded_configs) == 1
         snowflake_connection = list(loaded_configs.values())[0].gateways["snowflake"].connection  # type: ignore
         assert isinstance(snowflake_connection, SnowflakeConnectionConfig)
