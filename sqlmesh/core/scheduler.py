@@ -14,6 +14,7 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
+    SnapshotIdLike,
     earliest_start_date,
     missing_intervals,
 )
@@ -41,7 +42,7 @@ class Scheduler:
     The scheduler comes equipped with a simple ThreadPoolExecutor based evaluation engine.
 
     Args:
-        snapshots: A collection of snapshots.
+        snapshots: A collection of snapshots/ids.
         snapshot_evaluator: The snapshot evaluator to execute queries.
         state_sync: The state sync to pull saved snapshots.
         max_workers: The maximum number of parallel queries to run.
@@ -50,7 +51,7 @@ class Scheduler:
 
     def __init__(
         self,
-        snapshots: t.Iterable[Snapshot],
+        snapshots: t.Iterable[SnapshotIdLike],
         snapshot_evaluator: SnapshotEvaluator,
         state_sync: StateSync,
         max_workers: int = 1,
