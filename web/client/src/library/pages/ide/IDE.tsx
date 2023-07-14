@@ -182,7 +182,6 @@ export default function PageIDE(): JSX.Element {
   }, [models])
 
   useEffect(() => {
-    console.log('confirmations', confirmations)
     setShowConfirmation(confirmations.length > 0)
   }, [confirmations])
 
@@ -318,6 +317,7 @@ export default function PageIDE(): JSX.Element {
               e.stopPropagation()
 
               confirmation?.action?.()
+              setShowConfirmation(false)
             }}
           >
             {confirmation?.yesText ?? 'Confirm'}

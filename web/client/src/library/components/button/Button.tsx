@@ -132,14 +132,7 @@ function ButtonPlain(
       disabled={disabled}
       onClick={onClick}
       onKeyDown={(e: React.KeyboardEvent<HTMLButtonElement>) => {
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          e.stopPropagation()
-
-          onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>)
-        }
-
-        if (e.key === ' ') {
+        if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           e.stopPropagation()
 

@@ -13,6 +13,7 @@ import { getAllFilesInDirectory } from './help'
 import {
   isArrayNotEmpty,
   isFalse,
+  isNotNil,
   isStringEmptyOrNil,
   toUniqueName,
 } from '@utils/index'
@@ -277,16 +278,8 @@ export default function FileExplorerProvider({
         yesText: 'Yes, Remove',
         noText: 'No, Cancel',
         action: () => {
-          if (artifact instanceof ModelDirectory) {
-            if (artifact.parent != null) {
-              removeArtifacts(new Set([artifact]))
-            }
-          }
-
-          if (artifact instanceof ModelFile) {
-            if (artifact.parent != null) {
-              removeArtifacts(new Set([artifact]))
-            }
+          if (isNotNil(artifact.parent)) {
+            removeArtifacts(new Set([artifact]))
           }
         },
       })

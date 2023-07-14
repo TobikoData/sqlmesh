@@ -58,7 +58,7 @@ export default function RunPlan(): JSX.Element {
 
   const [hasChanges, setHasChanges] = useState(false)
   const [plan, setPlan] = useState<ContextEnvironment | undefined>()
-  const [shouldStartPlanAutomatically, setShouldSartPlanAutomatically] =
+  const [shouldStartPlanAutomatically, setShouldStartPlanAutomatically] =
     useState(false)
 
   const {
@@ -76,7 +76,7 @@ export default function RunPlan(): JSX.Element {
   useEffect(() => {
     if (shouldStartPlanAutomatically) {
       startPlan()
-      setShouldSartPlanAutomatically(false)
+      setShouldStartPlanAutomatically(false)
     }
 
     if (isFalse(environment.isSynchronized)) return
@@ -166,9 +166,9 @@ export default function RunPlan(): JSX.Element {
                           className="mr-2"
                           side="left"
                           environment={environment}
-                          showAddEnvironemnt={false}
+                          showAddEnvironment={false}
                           onSelect={() => {
-                            setShouldSartPlanAutomatically(true)
+                            setShouldStartPlanAutomatically(true)
                             setShowConfirmation(false)
                           }}
                           size={EnumSize.md}
@@ -184,7 +184,7 @@ export default function RunPlan(): JSX.Element {
                         className="w-full"
                         size={EnumSize.md}
                         onAdd={() => {
-                          setShouldSartPlanAutomatically(true)
+                          setShouldStartPlanAutomatically(true)
                           setShowConfirmation(false)
                         }}
                       />
@@ -304,7 +304,7 @@ function SelectEnvironemnt({
   disabled,
   side = EnumSide.Right,
   className,
-  showAddEnvironemnt = true,
+  showAddEnvironment = true,
   size = EnumSize.sm,
 }: {
   environment: ModelEnvironment
@@ -313,7 +313,7 @@ function SelectEnvironemnt({
   size?: ButtonSize
   side?: Side
   onSelect?: () => void
-  showAddEnvironemnt?: boolean
+  showAddEnvironment?: boolean
 }): JSX.Element {
   const environments = useStoreContext(s => s.environments)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
@@ -426,7 +426,7 @@ function SelectEnvironemnt({
                     )}
                   </Menu.Item>
                 ))}
-                {showAddEnvironemnt && (
+                {showAddEnvironment && (
                   <>
                     <Divider />
                     <AddEnvironemnt
