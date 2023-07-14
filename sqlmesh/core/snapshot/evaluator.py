@@ -47,6 +47,7 @@ from sqlmesh.utils.date import TimeLike, now
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.console import Console
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -65,9 +66,18 @@ class SnapshotEvaluator:
             operations (table / view creation, deletion, etc). Default: 1.
     """
 
-    def __init__(self, adapter: EngineAdapter, ddl_concurrent_tasks: int = 1):
+    def __init__(
+        self,
+        adapter: EngineAdapter,
+        ddl_concurrent_tasks: int = 1,
+        console: t.Optional[Console] = None,
+    ):
         self.adapter = adapter
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
+
+        from sqlmesh.core.console import get_console
+
+        self.console = console or get_console()
 
     def evaluate(
         self,
@@ -195,7 +205,7 @@ class SnapshotEvaluator:
             environment: The target environment.
             is_dev: Indicates whether the promotion happens in the development mode and temporary
                 tables / table clones should be used where applicable.
-            on_complete: a callback to call on each successfully promoted snapshot.
+            on_complete: A callback to call on each successfully promoted snapshot.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
@@ -215,7 +225,7 @@ class SnapshotEvaluator:
         Args:
             target_snapshots: Snapshots to demote.
             environment: The target environment.
-            on_complete: a callback to call on each successfully demoted snapshot.
+            on_complete: A callback to call on each successfully demoted snapshot.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
@@ -228,16 +238,19 @@ class SnapshotEvaluator:
         self,
         target_snapshots: t.Iterable[Snapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
+        on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         """Creates a physical snapshot schema and table for the given collection of snapshots.
 
         Args:
-            target_snapshots: Target snapshosts.
+            target_snapshots: Target snapshots.
+            snapshots: Mapping of snapshot ID to snapshot.
+            on_complete: A callback to call on each successfully created snapshot.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._create_snapshot(s, snapshots),
+                lambda s: self._create_snapshot(s, snapshots, on_complete),
                 self.ddl_concurrent_tasks,
             )
 
@@ -247,7 +260,8 @@ class SnapshotEvaluator:
         """Alters a physical snapshot table to match its snapshot's schema for the given collection of snapshots.
 
         Args:
-            target_snapshots: Target snapshosts.
+            target_snapshots: Target snapshots.
+            snapshots: Mapping of snapshot ID to snapshot.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
@@ -358,7 +372,12 @@ class SnapshotEvaluator:
         except Exception:
             logger.exception("Failed to close Snapshot Evaluator")
 
-    def _create_snapshot(self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]) -> None:
+    def _create_snapshot(
+        self,
+        snapshot: Snapshot,
+        snapshots: t.Dict[SnapshotId, Snapshot],
+        on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+    ) -> None:
         # If a snapshot reuses an existing version we assume that the table for that version
         # has already been created, so we only need to create a temporary table or a clone.
         is_dev = snapshot.is_forward_only or snapshot.is_indirect_non_breaking
@@ -382,6 +401,9 @@ class SnapshotEvaluator:
             )
 
             self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
+
+        if on_complete is not None:
+            on_complete(snapshot)
 
     def _migrate_snapshot(
         self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
