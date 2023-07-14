@@ -20,6 +20,11 @@ def load_config_from_paths(
 ) -> Config:
     visited_folders: t.Set[Path] = set()
 
+    if not project_paths or not any([path.exists() for path in project_paths]):
+        raise ConfigError(
+            "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up the SQLMesh project, run `sqlmesh init`."
+        )
+
     def _load_configs(paths: t.List[Path]) -> t.Dict[str, t.Optional[t.Union[Config, t.List]]]:
         python_config: Config | None = None
         non_python_configs: t.List[t.Dict] = []
