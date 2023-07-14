@@ -1142,7 +1142,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
             print(f"Virtually Updated {num_promotions}/{total_promotions}")
 
     def stop_promotion_progress(self, success: bool = True) -> None:
-        """Stop the snapshot promotion progress"""
+        """Stop the snapshot promotion progress."""
         print(f"Virtual Update {'succeeded' if success else 'failed'}")
 
 
