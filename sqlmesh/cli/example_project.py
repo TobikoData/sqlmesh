@@ -25,7 +25,15 @@ default_gateway: local
 model_defaults:
     dialect: {dialect}
 """,
-        ProjectTemplate.DEFAULT: """default_scheduler:
+        ProjectTemplate.AIRFLOW: f"""gateways:
+    local:
+        connection:
+            type: duckdb
+            database: db.db
+
+default_gateway: local
+
+default_scheduler:
     type: airflow
     airflow_url: http://localhost:8080/
     username: airflow
