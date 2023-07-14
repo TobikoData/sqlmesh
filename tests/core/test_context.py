@@ -186,7 +186,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     plan_evaluator._promote(
         Plan(
             context_diff=sushi_context._context_diff("prod"),
-            state_reader=sushi_context.state_reader,
         )
     )
 

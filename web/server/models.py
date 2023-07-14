@@ -170,6 +170,11 @@ class EvaluateInput(BaseModel):
     limit: int = 1000
 
 
+class FetchdfInput(BaseModel):
+    sql: str
+    limit: int = 1000
+
+
 class Column(BaseModel):
     name: str
     type: str
@@ -229,6 +234,7 @@ class PlanOptions(BaseModel):
     no_gaps: bool = False
     forward_only: bool = False
     no_auto_categorization: bool = False
+    promote_all: bool = False
     create_from: t.Optional[str] = None
     restate_models: t.Optional[str] = None
 

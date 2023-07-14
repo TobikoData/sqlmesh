@@ -104,45 +104,47 @@ const Documentation = function Documentation({
                 />
 
                 <Tab.Panels className="h-full w-full overflow-hidden bg-neutral-10 mt-4 rounded-lg">
-                  <Tab.Panel
-                    unmount={false}
-                    className={clsx(
-                      'flex flex-col w-full h-full relative px-2 overflow-hidden p-2',
-                      'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
-                    )}
-                  >
-                    <CodeEditor.Default
-                      content={file.content}
-                      type={file.extension}
-                    >
-                      {({ extensions, content }) => (
-                        <CodeEditor
-                          extensions={extensions.concat(modelExtensions)}
-                          content={content}
-                          className="text-xs"
-                        />
+                  {withCode && (
+                    <Tab.Panel
+                      unmount={false}
+                      className={clsx(
+                        'flex flex-col w-full h-full relative px-2 overflow-hidden p-2',
+                        'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                       )}
-                    </CodeEditor.Default>
-                  </Tab.Panel>
-                  <Tab.Panel
-                    unmount={false}
-                    className={clsx(
-                      'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
-                    )}
-                  >
-                    <CodeEditor.Default
-                      type={EnumFileExtensions.SQL}
-                      content={model.sql ?? ''}
                     >
-                      {({ extensions, content }) => (
-                        <CodeEditor
-                          extensions={extensions.concat(modelExtensions)}
-                          content={content}
-                          className="text-xs"
-                        />
-                      )}
-                    </CodeEditor.Default>
-                  </Tab.Panel>
+                      <CodeEditor.Default
+                        content={file.content}
+                        type={file.extension}
+                      >
+                        {({ extensions, content }) => (
+                          <CodeEditor
+                            extensions={extensions.concat(modelExtensions)}
+                            content={content}
+                            className="text-xs"
+                          />
+                        )}
+                      </CodeEditor.Default>
+                    </Tab.Panel>
+                  )}
+                  {withQuery && (
+                    <Tab.Panel
+                      unmount={false}
+                      className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
+                    >
+                      <CodeEditor.Default
+                        type={EnumFileExtensions.SQL}
+                        content={model.sql ?? ''}
+                      >
+                        {({ extensions, content }) => (
+                          <CodeEditor
+                            extensions={extensions.concat(modelExtensions)}
+                            content={content}
+                            className="text-xs"
+                          />
+                        )}
+                      </CodeEditor.Default>
+                    </Tab.Panel>
+                  )}
                 </Tab.Panels>
               </Tab.Group>
             )}

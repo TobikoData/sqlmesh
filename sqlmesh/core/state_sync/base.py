@@ -9,20 +9,16 @@ import typing as t
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
-from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
-    Intervals,
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
-    SnapshotIntervals,
-    SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
 from sqlmesh.utils import major_minor
-from sqlmesh.utils.date import TimeLike, now, to_datetime
+from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -52,7 +48,9 @@ class StateReader(abc.ABC):
 
     @abc.abstractmethod
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Bulk fetch snapshots given the corresponding snapshot ids.
 
@@ -108,21 +106,6 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
-    def get_snapshot_intervals(
-        self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
-    ) -> t.List[SnapshotIntervals]:
-        """Fetch intervals for given snapshots as well as for snapshots that share a version with the given ones.
-
-        Args:
-            snapshots: Target snapshot IDs. If not specified all intervals will be fetched.
-            current_only: Whether to only fetch intervals for snapshots provided as input as opposed
-                to fetching intervals for all snapshots that share the same version as the input ones.
-
-        Returns:
-            The list of snapshot intervals, one per unique version.
-        """
-
-    @abc.abstractmethod
     def recycle(self) -> None:
         """Closes all open connections and releases all allocated resources associated with any thread
         except the calling one."""
@@ -130,81 +113,6 @@ class StateReader(abc.ABC):
     @abc.abstractmethod
     def close(self) -> None:
         """Closes all open connections and releases all allocated resources."""
-
-    def missing_intervals(
-        self,
-        env_or_snapshots: str | Environment | t.Iterable[Snapshot],
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        restatements: t.Optional[t.Iterable[str]] = None,
-    ) -> t.Dict[Snapshot, Intervals]:
-        """Find missing intervals for an environment or a list of snapshots.
-
-        Args:
-            env_or_snapshots: The environment or snapshots to find missing intervals for.
-            start: The start of the time range to look for.
-            end: The end of the time range to look for.
-            latest: The latest datetime to use for non-incremental queries.
-
-        Returns:
-            A dictionary of SnapshotId to Intervals.
-        """
-
-        if isinstance(env_or_snapshots, str):
-            env = self.get_environment(env_or_snapshots)
-        elif isinstance(env_or_snapshots, Environment):
-            env = env_or_snapshots
-        else:
-            env = None
-
-        if env:
-            snapshots_by_id = self.get_snapshots(env.snapshots)
-            start = start or env.start_at
-            end = end or env.end_at
-        elif isinstance(env_or_snapshots, str):
-            snapshots_by_id = {}
-        elif not isinstance(env_or_snapshots, Environment):
-            snapshots_by_id = {snapshot.snapshot_id: snapshot for snapshot in env_or_snapshots}
-        else:
-            raise SQLMeshError("This shouldn't be possible.")
-
-        if not snapshots_by_id:
-            return {}
-
-        unversioned = [snapshot for snapshot in snapshots_by_id.values() if not snapshot.version]
-
-        snapshots_by_id = {
-            **snapshots_by_id,
-            **(self.get_snapshots(unversioned) if unversioned else {}),
-        }
-
-        snapshot_intervals = self.get_snapshot_intervals(snapshots_by_id.values())
-
-        missing = {}
-        start_date = to_datetime(start or scheduler.earliest_start_date(snapshots_by_id.values()))
-        end_date = end or now()
-        restatements = set(restatements or [])
-
-        for snapshot in Snapshot.hydrate_with_intervals_by_version(
-            snapshots_by_id.values(), snapshot_intervals
-        ):
-            if snapshot.name in restatements:
-                snapshot.remove_interval(start_date, end_date, latest)
-            intervals = snapshot.missing_intervals(
-                max(
-                    start_date,
-                    to_datetime(
-                        scheduler.start_date(snapshot, snapshots_by_id.values()) or start_date
-                    ),
-                ),
-                end_date,
-                latest=latest,
-                restatements=restatements,
-            )
-            if intervals:
-                missing[snapshot] = intervals
-        return missing
 
     def get_versions(self, validate: bool = True) -> Versions:
         """Get the current versions of the SQLMesh schema and libraries.

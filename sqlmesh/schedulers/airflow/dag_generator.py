@@ -265,7 +265,6 @@ class SnapshotDagGenerator:
             python_callable=promotion_update_state_task,
             op_kwargs={
                 "environment": environment,
-                "unpaused_dt": request.unpaused_dt,
                 "no_gaps": request.no_gaps,
             },
         )
@@ -291,12 +290,27 @@ class SnapshotDagGenerator:
 
             if not request.is_dev and request.unpaused_dt:
                 migrate_tables_task = self._create_snapshot_migrate_tables_operator(
-                    [snapshots[s.snapshot_id] for s in request.promoted_snapshots],
+                    [
+                        snapshots[s.snapshot_id]
+                        for s in request.promoted_snapshots
+                        if snapshots[s.snapshot_id].is_paused
+                    ],
                     request.ddl_concurrent_tasks,
                     "snapshot_promotion__migrate_tables",
                 )
+
+                unpause_snapshots_task = PythonOperator(
+                    task_id="snapshot_promotion__unpause_snapshots",
+                    python_callable=promotion_unpause_snapshots_task,
+                    op_kwargs={
+                        "environment": environment,
+                        "unpaused_dt": request.unpaused_dt,
+                    },
+                )
+
                 update_state_task >> migrate_tables_task
-                migrate_tables_task >> create_views_task
+                migrate_tables_task >> unpause_snapshots_task
+                unpause_snapshots_task >> create_views_task
             else:
                 update_state_task >> create_views_task
 
@@ -499,12 +513,18 @@ def creation_update_state_task(new_snapshots: t.Iterable[Snapshot]) -> None:
 
 def promotion_update_state_task(
     environment: Environment,
-    unpaused_dt: t.Optional[TimeLike],
     no_gaps: bool,
 ) -> None:
     with util.scoped_state_sync() as state_sync:
         state_sync.promote(environment, no_gaps=no_gaps)
-        if environment.snapshots and not environment.end_at and unpaused_dt:
+
+
+def promotion_unpause_snapshots_task(
+    environment: Environment,
+    unpaused_dt: t.Optional[TimeLike],
+) -> None:
+    if environment.snapshots and unpaused_dt:
+        with util.scoped_state_sync() as state_sync:
             state_sync.unpause_snapshots(environment.snapshots, unpaused_dt)
 
 

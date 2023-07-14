@@ -380,6 +380,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if hydrate_seeds and isinstance(snapshot.model, SeedModel) and row[1]:
                 snapshot.model = snapshot.model.to_hydrated(row[1])
 
+        if snapshots:
+            _, intervals = self._get_snapshot_intervals(snapshots.values())
+            Snapshot.hydrate_with_intervals_by_version(snapshots.values(), intervals)
+
         if duplicates:
             self._push_snapshots(duplicates.values(), overwrite=True)
             logger.error("Found duplicate snapshots in the state store.")
@@ -499,17 +503,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     @transactional()
     def compact_intervals(self) -> None:
-        def query_modifier(query: exp.Select) -> exp.Select:
-            return query.join(
-                exp.select("name", "identifier")
-                .from_(self.intervals_table)
-                .where(exp.column("is_compacted").not_())
-                .distinct()
-                .subquery(alias="uncompacted"),
-                using=["name", "identifier"],
-            )
-
-        interval_ids, snapshot_intervals = self._get_snapshot_intervals(query_modifier)
+        interval_ids, snapshot_intervals = self._get_snapshot_intervals(uncompacted_only=True)
 
         logger.info(
             "Compacting %s intervals for %s snapshots", len(interval_ids), len(snapshot_intervals)
@@ -528,18 +522,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def close(self) -> None:
         self.engine_adapter.close()
 
-    def get_snapshot_intervals(
-        self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
-    ) -> t.List[SnapshotIntervals]:
-        def query_modifier(query: exp.Select) -> exp.Select:
-            if snapshots is None:
-                return query
-            return query.where(self._snapshot_name_version_filter(snapshots))
-
-        return self._get_snapshot_intervals(query_modifier)[1]
-
     def _get_snapshot_intervals(
-        self, query_modifier: t.Optional[t.Callable[[exp.Select], exp.Select]]
+        self,
+        snapshots: t.Optional[t.Collection[SnapshotNameVersionLike]] = None,
+        uncompacted_only: bool = False,
     ) -> t.Tuple[t.Set[str], t.List[SnapshotIntervals]]:
         query = (
             exp.select(
@@ -548,8 +534,22 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             .from_(self.intervals_table)
             .order_by("name", "identifier", "created_ts", "is_removed")
         )
-        if query_modifier is not None:
-            query = query_modifier(query)
+
+        if uncompacted_only:
+            query.join(
+                exp.select("name", "identifier")
+                .from_(self.intervals_table)
+                .where(exp.column("is_compacted").not_())
+                .distinct()
+                .subquery(alias="uncompacted"),
+                using=["name", "identifier"],
+                copy=False,
+            )
+
+        if snapshots:
+            query.where(self._snapshot_name_version_filter(snapshots), copy=False)
+        elif snapshots is not None:
+            return (set(), [])
 
         rows = self.engine_adapter.fetchall(query)
         interval_ids = {row[0] for row in rows}
@@ -684,7 +684,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             s.snapshot_id: s
             for s in Snapshot.hydrate_with_intervals_by_identifier(
                 self._get_snapshots(lock_for_update=True, hydrate_seeds=True).values(),
-                self.get_snapshot_intervals(None),
+                self._get_snapshot_intervals(None)[1],
             )
         }
         environments = self.get_environments()

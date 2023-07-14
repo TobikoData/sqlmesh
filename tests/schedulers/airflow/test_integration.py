@@ -49,7 +49,7 @@ def test_apply_plan_create_backfill_promote(
 
     assert airflow_client.get_environment(environment_name) is None
 
-    _apply_plan_and_block(airflow_client, [snapshot], environment)
+    _apply_plan_and_block(airflow_client, [snapshot], environment, is_dev=False)
 
     assert airflow_client.get_environment(environment_name).snapshots == [  # type: ignore
         snapshot.table_info
@@ -75,11 +75,13 @@ def _apply_plan_and_block(
     airflow_client: AirflowClient,
     new_snapshots: t.List[Snapshot],
     environment: Environment,
+    is_dev: t.Optional[bool] = None,
 ) -> None:
+    if is_dev is None:
+        is_dev = environment.name != c.PROD
+
     plan_request_id = random_id()
-    airflow_client.apply_plan(
-        new_snapshots, environment, plan_request_id, is_dev=environment.name != c.PROD
-    )
+    airflow_client.apply_plan(new_snapshots, environment, plan_request_id, is_dev=is_dev)
 
     plan_application_dag_id = common.plan_application_dag_id(environment.name, plan_request_id)
     plan_application_dag_run_id = airflow_client.wait_for_first_dag_run(

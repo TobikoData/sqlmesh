@@ -73,9 +73,7 @@
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_fetchdf_api_commands_fetchdf_post"
-              }
+              "schema": { "$ref": "#/components/schemas/FetchdfInput" }
             }
           },
           "required": true
@@ -701,7 +699,8 @@
               "skip_backfill": false,
               "no_gaps": false,
               "forward_only": false,
-              "no_auto_categorization": false
+              "no_auto_categorization": false,
+              "promote_all": false
             }
           },
           "categories": {
@@ -713,12 +712,6 @@
         },
         "type": "object",
         "title": "Body_apply_api_commands_apply_post"
-      },
-      "Body_fetchdf_api_commands_fetchdf_post": {
-        "properties": { "sql": { "type": "string", "title": "Sql" } },
-        "type": "object",
-        "required": ["sql"],
-        "title": "Body_fetchdf_api_commands_fetchdf_post"
       },
       "Body_run_plan_api_plan_post": {
         "properties": {
@@ -732,7 +725,8 @@
               "skip_backfill": false,
               "no_gaps": false,
               "forward_only": false,
-              "no_auto_categorization": false
+              "no_auto_categorization": false,
+              "promote_all": false
             }
           }
         },
@@ -1004,6 +998,15 @@
         "required": ["model", "start", "end", "latest"],
         "title": "EvaluateInput"
       },
+      "FetchdfInput": {
+        "properties": {
+          "sql": { "type": "string", "title": "Sql" },
+          "limit": { "type": "integer", "title": "Limit", "default": 1000 }
+        },
+        "type": "object",
+        "required": ["sql"],
+        "title": "FetchdfInput"
+      },
       "File": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
@@ -1233,6 +1236,11 @@
           "no_auto_categorization": {
             "type": "boolean",
             "title": "No Auto Categorization",
+            "default": false
+          },
+          "promote_all": {
+            "type": "boolean",
+            "title": "Promote All",
             "default": false
           },
           "create_from": { "type": "string", "title": "Create From" },

@@ -14,20 +14,15 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
-    SnapshotId,
-    SnapshotIntervals,
+    SnapshotIdLike,
+    earliest_start_date,
+    missing_intervals,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import (
-    TimeLike,
-    now,
-    to_datetime,
-    validate_date_range,
-    yesterday,
-)
+from sqlmesh.utils.date import TimeLike, now, to_datetime, validate_date_range
 from sqlmesh.utils.errors import AuditError
 
 logger = logging.getLogger(__name__)
@@ -47,7 +42,7 @@ class Scheduler:
     The scheduler comes equipped with a simple ThreadPoolExecutor based evaluation engine.
 
     Args:
-        snapshots: A collection of snapshots.
+        snapshots: A collection of snapshots/ids.
         snapshot_evaluator: The snapshot evaluator to execute queries.
         state_sync: The state sync to pull saved snapshots.
         max_workers: The maximum number of parallel queries to run.
@@ -56,17 +51,17 @@ class Scheduler:
 
     def __init__(
         self,
-        snapshots: t.Iterable[Snapshot],
+        snapshots: t.Iterable[SnapshotIdLike],
         snapshot_evaluator: SnapshotEvaluator,
         state_sync: StateSync,
         max_workers: int = 1,
         console: t.Optional[Console] = None,
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
     ):
-        self.snapshots = {s.snapshot_id: s for s in snapshots}
-        self.snapshot_per_version = _resolve_one_snapshot_per_version(snapshots)
-        self.snapshot_evaluator = snapshot_evaluator
         self.state_sync = state_sync
+        self.snapshots = self.state_sync.get_snapshots(snapshots)
+        self.snapshot_per_version = _resolve_one_snapshot_per_version(self.snapshots.values())
+        self.snapshot_evaluator = snapshot_evaluator
         self.max_workers = max_workers
         self.console: Console = console or get_console()
         self.notification_target_manager = (
@@ -81,7 +76,15 @@ class Scheduler:
         is_dev: bool = False,
         restatements: t.Optional[t.Set[str]] = None,
     ) -> SnapshotToBatches:
-        """Returns a list of snapshot batches to evaluate.
+        """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
+
+        For each model name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
+        calculate the missing intervals that need to be processed given the passed in start and end intervals.
+
+        If a snapshot's model specifies a batch size, consecutive intervals are merged into batches of a size that is less than
+        or equal to the configured one. If no batch size is specified, then it uses the intervals that correspond to the model's cron expression.
+        For example, if a model is supposed to run daily and has 70 days to backfill with a batch size set to 30, there would be 2 jobs
+        with 30 days and 1 job with 10.
 
         Args:
             start: The start of the run. Defaults to the min model start date.
@@ -94,11 +97,13 @@ class Scheduler:
         restatements = restatements or set()
         validate_date_range(start, end)
 
-        return self._interval_params(
-            self.snapshot_per_version.values(),
-            start,
-            end,
-            latest,
+        snapshots = self.snapshot_per_version.values()
+
+        return compute_interval_params(
+            snapshots,
+            start=start or earliest_start_date(snapshots),
+            end=end or now(),
+            latest=latest or now(),
             is_dev=is_dev,
             restatements=restatements,
         )
@@ -229,46 +234,6 @@ class Scheduler:
 
         return not errors
 
-    def _interval_params(
-        self,
-        snapshots: t.Iterable[Snapshot],
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        is_dev: bool = False,
-        restatements: t.Optional[t.Set[str]] = None,
-    ) -> SnapshotToBatches:
-        """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
-
-        For each model name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
-        calculate the missing intervals that need to be processed given the passed in start and end intervals.
-
-        If a snapshot's model specifies a batch size, consecutive intervals are merged into batches of a size that is less than
-        or equal to the configured one. If no batch size is specified, then it uses the intervals that correspond to the model's cron expression.
-        For example, if a model is supposed to run daily and has 70 days to backfill with a batch size set to 30, there would be 2 jobs
-        with 30 days and 1 job with 10.
-
-        Args:
-            snapshots: The list of snapshots.
-            start: Start of the interval.
-            end: End of the interval.
-            latest: The latest datetime to use for non-incremental queries.
-            is_dev: Indicates whether the evaluation happens in the development mode.
-            restatements: A set of snapshots to restate.
-
-        Returns:
-            A list of tuples containing all snapshots needing to be run with their associated interval params.
-        """
-        return compute_interval_params(
-            snapshots,
-            intervals=self.state_sync.get_snapshot_intervals(snapshots),
-            start=start or earliest_start_date(snapshots),
-            end=end or now(),
-            latest=latest or now(),
-            is_dev=is_dev,
-            restatements=restatements,
-        )
-
     def _dag(self, batches: SnapshotToBatches) -> DAG[SchedulingUnit]:
         """Builds a DAG of snapshot intervals to be evaluated.
 
@@ -311,9 +276,8 @@ class Scheduler:
 
 
 def compute_interval_params(
-    snapshots: t.Iterable[Snapshot],
+    snapshots: t.Collection[Snapshot],
     *,
-    intervals: t.Iterable[SnapshotIntervals],
     start: TimeLike,
     end: TimeLike,
     latest: TimeLike,
@@ -336,105 +300,38 @@ def compute_interval_params(
         start: Start of the interval.
         end: End of the interval.
         latest: The latest datetime to use for non-incremental queries.
-        restatements: A set of snapshot names being restated
+        is_dev: Whether or not these intervals are for development.
+        restatements: A set of snapshot names being restated.
 
     Returns:
         A dict containing all snapshots needing to be run with their associated interval params.
     """
-    restatements = restatements or set()
-    start_dt = to_datetime(start)
+    snapshot_batches = {}
 
-    snapshots_to_batches = {}
-
-    for snapshot in Snapshot.hydrate_with_intervals_by_version(snapshots, intervals, is_dev=is_dev):
-        model_start_dt = max(start_date(snapshot, snapshots) or start_dt, start_dt)
-        snapshots_to_batches[snapshot] = [
-            (to_datetime(s), to_datetime(e))
-            for s, e in snapshot.missing_intervals(
-                model_start_dt, end, latest, restatements=restatements
-            )
-        ]
-
-    return _batched_intervals(snapshots_to_batches)
-
-
-def start_date(
-    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot] | t.Iterable[Snapshot]
-) -> t.Optional[datetime]:
-    """Get the effective/inferred start date for a snapshot.
-
-    Not all snapshots define a start date. In those cases, the model's start date
-    can be inferred from its parent's start date.
-
-    Args:
-        snapshot: snapshot to infer start date.
-        snapshots: a catalog of available snapshots.
-
-    Returns:
-        Start datetime object.
-    """
-    if snapshot.start:
-        return snapshot.start
-
-    if not isinstance(snapshots, dict):
-        snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
-
-    earliest = None
-
-    for parent in snapshot.parents:
-        if parent not in snapshots:
-            continue
-
-        start_dt = start_date(snapshots[parent], snapshots)
-
-        if not earliest:
-            earliest = start_dt
-        elif start_dt:
-            earliest = min(earliest, start_dt)
-
-    if earliest:
-        snapshot._start = earliest
-
-    return earliest
-
-
-def earliest_start_date(snapshots: t.Iterable[Snapshot]) -> datetime:
-    """Get the earliest start date from a collection of snapshots.
-
-    Args:
-        snapshots: Snapshots to find earliest start date.
-    Returns:
-        The earliest start date or yesterday if none is found.
-    """
-    snapshots = list(snapshots)
-    earliest = to_datetime(yesterday().date())
-    if snapshots:
-        for snapshot in snapshots:
-            if not snapshot.parents and not snapshot.start:
-                snapshot._start = earliest
-        return min(start_date(snapshot, snapshots) or earliest for snapshot in snapshots)
-    return earliest
-
-
-def _batched_intervals(params: SnapshotToBatches) -> SnapshotToBatches:
-    batches = {}
-
-    for snapshot, intervals in params.items():
+    for snapshot, intervals in missing_intervals(
+        snapshots,
+        start=start,
+        end=end,
+        latest=latest,
+        restatements=restatements,
+        is_dev=is_dev,
+    ).items():
+        batches = []
         batch_size = snapshot.model.batch_size
-        batches_for_snapshot = []
-        next_batch: t.List[Interval] = []
+        next_batch: t.List[t.Tuple[int, int]] = []
+
         for interval in intervals:
             if (batch_size and len(next_batch) >= batch_size) or (
                 next_batch and interval[0] != next_batch[-1][-1]
             ):
-                batches_for_snapshot.append((next_batch[0][0], next_batch[-1][-1]))
+                batches.append((next_batch[0][0], next_batch[-1][-1]))
                 next_batch = []
             next_batch.append(interval)
         if next_batch:
-            batches_for_snapshot.append((next_batch[0][0], next_batch[-1][-1]))
-        batches[snapshot] = batches_for_snapshot
+            batches.append((next_batch[0][0], next_batch[-1][-1]))
+        snapshot_batches[snapshot] = [(to_datetime(s), to_datetime(e)) for s, e in batches]
 
-    return batches
+    return snapshot_batches
 
 
 def _resolve_one_snapshot_per_version(

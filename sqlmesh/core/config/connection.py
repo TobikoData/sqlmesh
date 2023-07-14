@@ -421,6 +421,72 @@ class BigQueryConnectionConfig(_ConnectionConfig):
         return connect
 
 
+class GCPPostgresConnectionConfig(_ConnectionConfig):
+    """
+    Postgres Connection Configuration for GCP.
+
+    Args:
+        instance_connection_string: Connection name for the postgres instance.
+        user: Postgres or IAM user's name
+        password: The postgres user's password. Only needed when the user is a postgres user.
+        enable_iam_auth: Set to True when user is an IAM user.
+        db: Name of the db to connect to.
+    """
+
+    instance_connection_string: str
+    user: str
+    password: t.Optional[str] = None
+    enable_iam_auth: t.Optional[bool] = None
+    db: str
+
+    driver: str = "pg8000"
+    type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
+    concurrent_tasks: int = 4
+
+    @root_validator(pre=True)
+    def _validate_auth_method(
+        cls, values: t.Dict[str, t.Optional[str]]
+    ) -> t.Dict[str, t.Optional[str]]:
+        if "type" in values and values["type"] != "gcp_postgres":
+            return values
+        password = values.get("password")
+        enable_iam_auth = values.get("enable_iam_auth")
+        if password and enable_iam_auth:
+            raise ConfigError(
+                "Invalid GCP Postgres connection configuration - both password and"
+                " enable_iam_auth set. Use password when connecting to a postgres"
+                " user and enable_iam_auth 'True' when connecting to an IAM user."
+            )
+        if not password and not enable_iam_auth:
+            raise ConfigError(
+                "GCP Postgres connection configuration requires either password set"
+                " for a postgres user account or enable_iam_auth set to 'True'"
+                " for an IAM user account."
+            )
+        return values
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "instance_connection_string",
+            "driver",
+            "user",
+            "password",
+            "db",
+            "enable_iam_auth",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.PostgresEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from google.cloud.sql.connector import Connector
+
+        return Connector().connect
+
+
 class RedshiftConnectionConfig(_ConnectionConfig):
     """
     Redshift Connection Configuration.
@@ -606,6 +672,7 @@ class SparkConnectionConfig(_ConnectionConfig):
 ConnectionConfig = Annotated[
     t.Union[
         BigQueryConnectionConfig,
+        GCPPostgresConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
         PostgresConnectionConfig,

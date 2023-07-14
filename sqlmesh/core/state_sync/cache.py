@@ -6,17 +6,14 @@ import typing as t
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import (
-    Intervals,
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
-    SnapshotIntervals,
-    SnapshotNameVersionLike,
     SnapshotTableInfo,
 )
 from sqlmesh.core.state_sync.base import StateSync, Versions
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, now_timestamp
 
 if sys.version_info >= (3, 8):
     from typing import Literal
@@ -25,27 +22,54 @@ else:
 
 
 class CachingStateSync(StateSync):
-    def __init__(self, state_sync: StateSync):
+    """In memory cache for snapshots that implements the state sync api.
+
+    Args:
+        state_sync: The base state sync.
+        ttl: The number of seconds a snapshot should be cached.
+    """
+
+    def __init__(self, state_sync: StateSync, ttl: int = 30):
         self.state_sync = state_sync
-        # The cache can contain a true snapshot or False.
+        # The cache can contain a snapshot or False or None.
         # False means that the snapshot does not exist in the state sync but has been requested before
-        self.snapshot_cache: t.Dict[SnapshotId, Snapshot | Literal[False]] = {}
+        # None means that the snapshot has not been requested.
+        self.snapshot_cache: t.Dict[
+            SnapshotId, t.Tuple[t.Optional[Snapshot | Literal[False]], int]
+        ] = {}
+
+        self.ttl = ttl
+
+    def _from_cache(
+        self, snapshot_id: SnapshotId, now: int
+    ) -> t.Optional[Snapshot | Literal[False]]:
+        snapshot: t.Optional[Snapshot | Literal[False]] = None
+        snapshot_expiration = self.snapshot_cache.get(snapshot_id)
+
+        if snapshot_expiration and snapshot_expiration[1] >= now:
+            snapshot = snapshot_expiration[0]
+
+        return snapshot
 
     def get_snapshots(
-        self, snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]], hydrate_seeds: bool = False
+        self,
+        snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
+        hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
         if not snapshot_ids:
             return self.state_sync.get_snapshots(snapshot_ids, hydrate_seeds)
 
         existing = {}
         missing = set()
+        now = now_timestamp()
+        expire_at = now + self.ttl * 1000
 
         for s in snapshot_ids:
             snapshot_id = s.snapshot_id
-            snapshot = self.snapshot_cache.get(snapshot_id)
+            snapshot = self._from_cache(snapshot_id, now)
 
             if snapshot is None:
-                self.snapshot_cache[snapshot_id] = False
+                self.snapshot_cache[snapshot_id] = (False, expire_at)
                 missing.add(snapshot_id)
             elif snapshot:
                 if (
@@ -61,20 +85,21 @@ class CachingStateSync(StateSync):
             existing.update(self.state_sync.get_snapshots(missing, hydrate_seeds))
 
         for snapshot_id, snapshot in existing.items():
-            cached = self.snapshot_cache.get(snapshot_id)
+            cached = self._from_cache(snapshot_id, now)
             if cached and (not isinstance(cached.model, SeedModel) or cached.model.is_hydrated):
                 continue
-            self.snapshot_cache[snapshot_id] = snapshot
+            self.snapshot_cache[snapshot_id] = (snapshot, expire_at)
 
         return existing
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         existing = set()
         missing = set()
+        now = now_timestamp()
 
         for s in snapshot_ids:
             snapshot_id = s.snapshot_id
-            snapshot = self.snapshot_cache.get(snapshot_id)
+            snapshot = self._from_cache(snapshot_id, now)
             if snapshot:
                 existing.add(snapshot_id)
             elif snapshot is None:
@@ -94,32 +119,11 @@ class CachingStateSync(StateSync):
     def get_environments(self) -> t.List[Environment]:
         return self.state_sync.get_environments()
 
-    def get_snapshot_intervals(
-        self, snapshots: t.Optional[t.Iterable[SnapshotNameVersionLike]]
-    ) -> t.List[SnapshotIntervals]:
-        return self.state_sync.get_snapshot_intervals(snapshots)
-
     def recycle(self) -> None:
         self.state_sync.recycle()
 
     def close(self) -> None:
         self.state_sync.close()
-
-    def missing_intervals(
-        self,
-        env_or_snapshots: str | Environment | t.Iterable[Snapshot],
-        start: t.Optional[TimeLike] = None,
-        end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
-        restatements: t.Optional[t.Iterable[str]] = None,
-    ) -> t.Dict[Snapshot, Intervals]:
-        return self.state_sync.missing_intervals(
-            env_or_snapshots,
-            start,
-            end,
-            latest,
-            restatements,
-        )
 
     def get_versions(self, validate: bool = True) -> Versions:
         return self.state_sync.get_versions(validate)
@@ -143,6 +147,7 @@ class CachingStateSync(StateSync):
         self.state_sync.delete_snapshots(snapshot_ids)
 
     def delete_expired_snapshots(self) -> t.List[Snapshot]:
+        self.snapshot_cache.clear()
         return self.state_sync.delete_expired_snapshots()
 
     def invalidate_environment(self, name: str) -> None:

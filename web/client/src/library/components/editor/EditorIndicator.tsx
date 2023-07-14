@@ -13,7 +13,7 @@ const EditorIndicator = function EditorIndicator({
 }): JSX.Element {
   return (
     <small className={clsx('font-bold whitespace-nowrap text-xs', className)}>
-      {isNotNil<string>(text) && <span>{text}:&nbsp;</span>}
+      {isNotNil(text) && <span>{text}:&nbsp;</span>}
       {children}
     </small>
   )
@@ -49,55 +49,7 @@ function IndicatorLight({
   )
 }
 
-function IndicatorSelector<T = any>({
-  value,
-  className,
-  onChange,
-  options,
-  children,
-}: {
-  value?: string
-  className?: string
-  options: T[]
-  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void
-  children: (option: T) => JSX.Element
-}): JSX.Element {
-  return (
-    <select
-      className={clsx(
-        'text-xs m-0 px-1 py-[0.125rem] bg-neutral-10 rounded',
-        className,
-      )}
-      value={value}
-      onChange={onChange}
-    >
-      {options.map(children)}
-    </select>
-  )
-}
-
-function IndicatorSelectorOption({
-  value,
-  className,
-  children,
-}: {
-  className?: string
-  value: string
-  children: React.ReactNode
-}): JSX.Element {
-  return (
-    <option
-      className={clsx(className)}
-      value={value}
-    >
-      {children}
-    </option>
-  )
-}
-
 EditorIndicator.Text = IndicatorText
 EditorIndicator.Light = IndicatorLight
-EditorIndicator.Selector = IndicatorSelector
-EditorIndicator.SelectorOption = IndicatorSelectorOption
 
 export default EditorIndicator

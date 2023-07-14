@@ -2,8 +2,10 @@ import { getLanguageByExtension, showIndicatorDialects } from './help'
 import EditorIndicator from './EditorIndicator'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { useEffect } from 'react'
-import { isFalse, isNil, isNotNil } from '~/utils'
+import { isFalse, isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
 import { EnumFileExtensions } from '@models/file'
+import Input from '@components/input/Input'
+import { EnumSize } from '~/types/enum'
 
 export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
   const engine = useStoreEditor(s => s.engine)
@@ -69,22 +71,24 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
           className="mr-2"
           text="Dialect"
         >
-          <EditorIndicator.Selector
-            value={tab.dialect}
-            options={dialects}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-              updateTabDialect(e.target.value)
-            }}
-          >
-            {dialect => (
-              <EditorIndicator.SelectorOption
-                key={dialect.dialect_title}
-                value={dialect.dialect_name}
-              >
-                {dialect.dialect_title}
-              </EditorIndicator.SelectorOption>
+          <Input size={EnumSize.sm}>
+            {({ className, size }) => (
+              <Input.Selector
+                className={className}
+                size={size}
+                list={dialects.map(d => ({
+                  text: d.dialect_title,
+                  value: isStringEmptyOrNil(d.dialect_name)
+                    ? 'sqlglot'
+                    : d.dialect_name,
+                }))}
+                onChange={dialect => {
+                  updateTabDialect(dialect)
+                }}
+                value={tab.dialect}
+              />
             )}
-          </EditorIndicator.Selector>
+          </Input>
         </EditorIndicator>
       )}
       {tab.file.isSQLMeshModel && tab.dialect != null && tab.dialect !== '' && (

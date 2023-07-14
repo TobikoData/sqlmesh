@@ -13,6 +13,7 @@ import { type ModelArtifact } from '@models/artifact'
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import SearchList from '@components/search/SearchList'
 import { type ModelFile } from '@models/file'
+import { EnumSize } from '~/types/enum'
 
 /* TODO:
   - add drag and drop files/directories from desktop
@@ -70,6 +71,7 @@ const FileExplorer = function FileExplorer({
         list={project.allFiles}
         searchBy="path"
         displayBy="name"
+        size={EnumSize.sm}
         onSelect={setSelectedFile}
       />
       <FileExplorer.ContextMenu

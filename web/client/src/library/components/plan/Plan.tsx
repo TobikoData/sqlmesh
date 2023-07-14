@@ -49,7 +49,7 @@ function Plan({
   const client = useQueryClient()
 
   const dispatch = usePlanDispatch()
-  const { errors, removeError } = useIDE()
+  const { errors, removeError, addError } = useIDE()
 
   const {
     auto_apply,
@@ -120,6 +120,7 @@ function Plan({
           forward_only: false,
           no_auto_categorization: false,
           no_gaps: false,
+          promote_all: true,
         },
       ])
     }
@@ -267,8 +268,7 @@ function Plan({
         if (isCancelledError(error)) {
           console.log('planApply', 'Request aborted by React Query')
         } else {
-          console.log('planApply', error)
-          reset()
+          addError(EnumErrorKey.ApplyPlan, error)
         }
       })
       .finally(() => {
@@ -321,8 +321,7 @@ function Plan({
         if (isCancelledError(error)) {
           console.log('planRun', 'Request aborted by React Query')
         } else {
-          console.log('planRun', error)
-          reset()
+          addError(EnumErrorKey.RunPlan, error)
         }
       })
   }

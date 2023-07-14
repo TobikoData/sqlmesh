@@ -8,7 +8,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotNameVersion
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
 
@@ -206,26 +206,6 @@ def test_models_exist(mocker: MockerFixture, snapshot: Snapshot):
 
     models_exist_mock.assert_called_once_with(
         "http://localhost:8080/sqlmesh/api/v1/models?exclude_external&names=model_a%2Cmodel_b"
-    )
-
-
-def test_get_snapshot_intervals(mocker: MockerFixture, snapshot: Snapshot):
-    intervals = common.SnapshotIntervalsResponse(snapshot_intervals=[snapshot.snapshot_intervals])
-
-    get_snapshot_intervals_response_mock = mocker.Mock()
-    get_snapshot_intervals_response_mock.status_code = 200
-    get_snapshot_intervals_response_mock.json.return_value = intervals.dict()
-    get_snapshot_intervals_mock = mocker.patch("requests.Session.get")
-    get_snapshot_intervals_mock.return_value = get_snapshot_intervals_response_mock
-
-    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    versions = [SnapshotNameVersion(name=snapshot.name, version=snapshot.version)]
-    result = client.get_snapshot_intervals(versions)
-
-    assert result == [snapshot.snapshot_intervals]
-
-    get_snapshot_intervals_mock.assert_called_once_with(
-        f"http://localhost:8080/sqlmesh/api/v1/intervals?{snapshot_url(versions, 'versions')}"
     )
 
 
