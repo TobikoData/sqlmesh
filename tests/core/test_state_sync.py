@@ -1011,7 +1011,7 @@ def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapsho
 
 
 def test_cache(state_sync, make_snapshot, mocker):
-    cache = CachingStateSync(state_sync)
+    cache = CachingStateSync(state_sync, ttl=10)
 
     snapshot = make_snapshot(
         SqlModel(
@@ -1021,21 +1021,46 @@ def test_cache(state_sync, make_snapshot, mocker):
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
+    now_timestamp = mocker.patch("sqlmesh.core.state_sync.cache.now_timestamp")
+    now_timestamp.return_value = to_timestamp("2023-01-01 00:00:00")
+
+    # prime the cache with a cached missing snapshot
     assert not cache.get_snapshots([snapshot.snapshot_id])
 
+    # item is cached and shouldn't hit state sync
     with patch.object(state_sync, "get_snapshots") as mock:
         assert not cache.get_snapshots([snapshot.snapshot_id])
         mock.assert_not_called()
 
+    # prime the cache with a real snapshot
     cache.push_snapshots([snapshot])
-
     assert cache.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
 
+    # cache hit
     with patch.object(state_sync, "get_snapshots") as mock:
         assert cache.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
         mock.assert_not_called()
 
+    # clear the cache by adding intervals
     cache.add_interval(snapshot, "2020-01-01", "2020-01-01")
     with patch.object(state_sync, "get_snapshots") as mock:
-        cache.get_snapshots([snapshot.snapshot_id])
+        assert not cache.get_snapshots([snapshot.snapshot_id])
+        mock.assert_called()
+
+    # clear the cache by removing intervals
+    cache.remove_interval([snapshot], "2020-01-01", "2020-01-01")
+
+    # prime the cache
+    assert cache.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}
+
+    # cache hit half way
+    now_timestamp.return_value = to_timestamp("2023-01-01 00:00:05")
+    with patch.object(state_sync, "get_snapshots") as mock:
+        assert cache.get_snapshots([snapshot.snapshot_id])
+        mock.not_called()
+
+    # no cache hit
+    now_timestamp.return_value = to_timestamp("2023-01-01 00:00:11")
+    with patch.object(state_sync, "get_snapshots") as mock:
+        assert not cache.get_snapshots([snapshot.snapshot_id])
         mock.assert_called()
