@@ -94,7 +94,7 @@ def cli(
 
 
 @cli.command("init")
-@click.option("sql_dialect")
+@click.argument("sql_dialect")
 @click.option(
     "-t",
     "--template",
