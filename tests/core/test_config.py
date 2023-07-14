@@ -169,7 +169,7 @@ def test_load_config_multiple_config_files_in_folder(tmp_path):
 
 
 def test_load_config_no_config():
-    with pytest.raises(ConfigError, match=r"^SQLMesh config could not be found.*"):
+    with pytest.raises(ConfigError, match=r"^SQLMesh project config could not be found.*"):
         load_config_from_paths(load_from_env=False)
 
 
