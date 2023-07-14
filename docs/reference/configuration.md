@@ -8,6 +8,8 @@ Configuration options from different sources have the following order of precede
 2. Set in `config.yaml` in a project folder.
 3. Set in `config.yaml` in the `~/.sqlmesh` folder.
 
+**NOTE**: A SQLMesh project **must** contain a configuration file in its directory - it cannot solely rely on environment variables and a configuration in `~/.sqlmesh`. The SQLMesh project configuration **must** contain a default SQL dialect for the project's models in the [`model_defaults` `dialect` key](#model-configuration).
+
 ## Debug mode
 To enable the debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y". Enabling this mode ensures that full backtraces are printed when using CLI. Additionally the default log level is set to `DEBUG` when this mode is enabled.
 
@@ -155,7 +157,11 @@ See [Airflow Integration Guide](../integrations/airflow.md) for information on h
 | `auto_categorize_changes` | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([Additional Details](#auto-categorize-changes))                                                                      | dict[string, string] | N        |
 
 ## Model configuration
-This section contains options that are specific to models, which are set automatically unless explicitly overridden in the model definition.
+This section contains options that are specific to models. 
+
+The `model_defaults` configuration is **required** and must contain a value for the `dialect` key. All SQL dialect [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed. 
+
+Other values are set automatically unless explicitly overridden in the model definition.
 
 ```yaml linenums="1"
 model_defaults:
