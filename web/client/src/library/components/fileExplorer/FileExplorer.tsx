@@ -14,7 +14,6 @@ import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import SearchList from '@components/search/SearchList'
 import { type ModelFile } from '@models/file'
 import { EnumSize } from '~/types/enum'
-
 /* TODO:
   - add drag and drop files/directories from desktop
   - add copy and paste
@@ -75,6 +74,7 @@ const FileExplorer = function FileExplorer({
         onSelect={setSelectedFile}
       />
       <FileExplorer.ContextMenu
+        key={project.id}
         trigger={
           <FileExplorer.ContextMenuTrigger className="h-full pb-2">
             <DndProvider backend={HTML5Backend}>
@@ -285,7 +285,7 @@ function FileExplorerArtifactContainer({
   return (
     <span
       className={clsx(
-        'w-full flex items-center overflow-hidden whitespace-nowrap group/file rounded-md px-2',
+        'w-full flex items-center group/file rounded-md px-2',
         className,
         activeRange.has(artifact)
           ? 'text-brand-100 !bg-brand-500 dark:bg-brand-700 dark:text-brand-100'

@@ -251,7 +251,9 @@ class Context(BaseContext):
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
         self.snapshot_evaluator = SnapshotEvaluator(
-            self.engine_adapter, ddl_concurrent_tasks=self.concurrent_tasks
+            self.engine_adapter,
+            ddl_concurrent_tasks=self.concurrent_tasks,
+            console=self.console,
         )
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync

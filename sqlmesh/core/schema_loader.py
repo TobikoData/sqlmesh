@@ -33,9 +33,14 @@ def create_schema_file(
         dialect: The dialect to serialize the schema as.
         max_workers: The max concurrent workers to fetch columns.
     """
-    external_tables = {
-        dep for model in models.values() for dep in model.depends_on if dep not in models
-    }
+    external_tables = set()
+
+    for model in models.values():
+        if model.kind.is_external:
+            external_tables.add(model.name)
+        for dep in model.depends_on:
+            if dep not in models:
+                external_tables.add(dep)
 
     # Make sure we don't convert internal models into external ones.
     existing_models = state_reader.models_exist(external_tables, exclude_external=True)

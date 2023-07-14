@@ -116,9 +116,24 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         Args:
             plan: The plan to source snapshots from.
         """
-        self.snapshot_evaluator.create(
-            plan.new_snapshots, {s.snapshot_id: s for s in plan.snapshots}
-        )
+        snapshot_id_to_snapshot = {s.snapshot_id: s for s in plan.snapshots}
+
+        self.console.start_creation_progress(plan.environment.name, len(snapshot_id_to_snapshot))
+
+        def on_complete(snapshot: SnapshotInfoLike) -> None:
+            self.console.update_creation_progress(1)
+
+        completed = False
+        try:
+            self.snapshot_evaluator.create(
+                plan.new_snapshots,
+                snapshot_id_to_snapshot,
+                on_complete=on_complete,
+            )
+            completed = True
+        finally:
+            self.console.stop_creation_progress(success=completed)
+
         self.state_sync.push_snapshots(plan.new_snapshots)
 
     def _promote(self, plan: Plan) -> None:

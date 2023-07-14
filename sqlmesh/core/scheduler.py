@@ -63,7 +63,7 @@ class Scheduler:
         self.snapshot_per_version = _resolve_one_snapshot_per_version(self.snapshots.values())
         self.snapshot_evaluator = snapshot_evaluator
         self.max_workers = max_workers
-        self.console: Console = console or get_console()
+        self.console = console or get_console()
         self.notification_target_manager = (
             notification_target_manager or NotificationTargetManager()
         )
@@ -167,7 +167,7 @@ class Scheduler:
                 )
             raise e
         self.state_sync.add_interval(snapshot, start, end, is_dev=is_dev)
-        self.console.update_snapshot_progress(snapshot.name, 1)
+        self.console.update_evaluation_progress(snapshot.name, 1)
 
     def run(
         self,
@@ -203,7 +203,7 @@ class Scheduler:
                 continue
             visited.add(snapshot)
             intervals = batches[snapshot]
-            self.console.start_snapshot_progress(snapshot, len(intervals), environment)
+            self.console.start_evaluation_progress(snapshot, len(intervals), environment)
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest
@@ -221,7 +221,7 @@ class Scheduler:
         finally:
             self.state_sync.recycle()
 
-        self.console.stop_snapshot_progress(success=not errors)
+        self.console.stop_evaluation_progress(success=not errors)
 
         for error in errors:
             sid = error.node[0]
