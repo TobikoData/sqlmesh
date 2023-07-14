@@ -407,8 +407,14 @@ class Plan:
                 for snapshot in self.snapshots
             }
 
-            for _, old in self.context_diff.modified_snapshots.values():
-                snapshots[(old.name, old.version_get_or_generate())] = old
+            for new, old in self.context_diff.modified_snapshots.values():
+                # Never override forward-only snapshots to preserve the effect
+                # of the effective_from setting. Instead re-merge the intervals.
+                if not new.is_forward_only:
+                    snapshots[(old.name, old.version_get_or_generate())] = old
+                else:
+                    new.intervals = []
+                    new.merge_intervals(old)
 
             self.__missing_intervals = {
                 (snapshot.name, snapshot.version_get_or_generate()): missing

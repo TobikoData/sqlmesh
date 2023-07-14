@@ -118,7 +118,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         """
         snapshot_id_to_snapshot = {s.snapshot_id: s for s in plan.snapshots}
 
-        self.console.start_creation_progress(plan.environment.name, len(snapshot_id_to_snapshot))
+        if plan.new_snapshots:
+            self.console.start_creation_progress(plan.environment.name, len(plan.new_snapshots))
 
         def on_complete(snapshot: SnapshotInfoLike) -> None:
             self.console.update_creation_progress(1)
