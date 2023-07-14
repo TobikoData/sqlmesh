@@ -217,3 +217,12 @@ export function uid(): string {
 
   return time + random
 }
+
+export function toUniqueName(prefix?: string, suffix?: string): string {
+  // Should be enough for now
+  const hex = (Date.now() % 100000).toString(16)
+
+  return `${prefix == null ? '' : `${prefix}_`}${hex}${
+    suffix ?? ''
+  }`.toLowerCase()
+}

@@ -12,7 +12,7 @@ import { type ModelArtifact } from '@models/artifact'
 import { getEmptyImage } from 'react-dnd-html5-backend'
 import { useFileExplorer } from './context'
 import FileExplorer from './FileExplorer'
-
+import { useLongPress } from '@uidotdev/usehooks'
 const Directory = function Directory({
   directory,
   className,
@@ -27,6 +27,17 @@ const Directory = function Directory({
   const [newName, setNewName] = useState<string>()
   const [isOpen, setIsOpen] = useState<boolean>(directory.isOpened)
   const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
+  const [isDraggable, setIsDraggable] = useState(false)
+
+  const attrs = useLongPress(() => setIsDraggable(true), {
+    threshold: 500,
+    onFinish() {
+      setIsDraggable(false)
+    },
+    onCancel() {
+      setIsDraggable(false)
+    },
+  })
 
   const {
     activeRange,
@@ -60,13 +71,15 @@ const Directory = function Directory({
         return (
           monitor.isOver({ shallow: true }) &&
           isArrayNotEmpty(artifacts) &&
-          artifacts.every(item => {
+          artifacts.reduce((acc, item) => {
+            if (isFalse(acc)) return false
+
             if (item.parent === directory || item === directory) return false
             if (item instanceof ModelDirectory && item.hasDirectory(directory))
               return false
 
             return true
-          })
+          }, true)
         )
       },
       collect(monitor) {
@@ -82,8 +95,11 @@ const Directory = function Directory({
     () => ({
       type: 'artifact',
       item: directory,
+      end() {
+        setIsDraggable(false)
+      },
       canDrag() {
-        return isStringEmptyOrNil(newName)
+        return isStringEmptyOrNil(newName) && isDraggable
       },
       collect(monitor) {
         return {
@@ -91,7 +107,7 @@ const Directory = function Directory({
         }
       },
     }),
-    [directory, newName],
+    [directory, newName, isDraggable],
   )
 
   const [isAllDirectories, shouldClose, shouldOpen, shouldToggle] =
@@ -183,11 +199,15 @@ const Directory = function Directory({
         className={clsx(isOver && isFalse(isDragging) && 'bg-brand-5')}
       >
         {directory.withParent && (
-          <div ref={directory.withParent ? drag : undefined}>
+          <div
+            {...attrs}
+            ref={directory.withParent ? drag : undefined}
+          >
             <FileExplorer.Container
               artifact={directory}
               className={clsx(
                 isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
+                isDraggable && 'bg-primary-10 !cursor-grabbing',
                 isOpenContextMenu && 'bg-primary-10',
                 className,
               )}
