@@ -21,8 +21,8 @@ def project_tmp_path(tmp_path: Path) -> Path:
 
     config = tmp_path / "config.py"
     config.write_text(
-        """from sqlmesh.core.config import Config
-config = Config()
+        """from sqlmesh.core.config import Config, ModelDefaultsConfig
+config = Config(model_defaults=ModelDefaultsConfig(dialect=''))
     """
     )
 
@@ -115,8 +115,8 @@ def test_get_file_not_found() -> None:
 def test_get_file_invalid_path(project_tmp_path: Path) -> None:
     config = project_tmp_path / "config.py"
     config.write_text(
-        """from sqlmesh.core.config import Config
-config = Config(ignore_patterns=["*.txt"])
+        """from sqlmesh.core.config import Config, ModelDefaultsConfig
+config = Config(ignore_patterns=["*.txt"], model_defaults=ModelDefaultsConfig(dialect=''))
     """
     )
     foo_txt = project_tmp_path / "foo.txt"
