@@ -9,6 +9,7 @@ import { useFileExplorer } from './context'
 import { type ModelFile } from '@models/file'
 import { useDrag } from 'react-dnd'
 import { getEmptyImage } from 'react-dnd-html5-backend'
+import { useLongPress } from '@uidotdev/usehooks'
 
 function File({
   file,
@@ -21,6 +22,18 @@ function File({
 }): JSX.Element {
   const selectedFile = useStoreProject(s => s.selectedFile)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
+
+  const [isDraggable, setIsDraggable] = useState(false)
+
+  const attrs = useLongPress(() => setIsDraggable(true), {
+    threshold: 500,
+    onFinish() {
+      setIsDraggable(false)
+    },
+    onCancel() {
+      setIsDraggable(false)
+    },
+  })
 
   const {
     activeRange,
@@ -36,8 +49,11 @@ function File({
     () => ({
       type: 'artifact',
       item: file,
+      end() {
+        setIsDraggable(false)
+      },
       canDrag() {
-        return isStringEmptyOrNil(newName)
+        return isStringEmptyOrNil(newName) && isDraggable
       },
       collect(monitor) {
         return {
@@ -45,7 +61,7 @@ function File({
         }
       },
     }),
-    [file, newName],
+    [file, newName, isDraggable],
   )
 
   useEffect(() => {
@@ -84,13 +100,18 @@ function File({
   const disabled = activeRange.size > 1 && activeRange.has(file)
 
   return (
-    <div ref={drag}>
+    <div
+      {...attrs}
+      ref={drag}
+    >
       <FileExplorer.Container
         artifact={file}
         isSelected={selectedFile === file}
         className={clsx(
           isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
           isOpenContextMenu && 'bg-primary-10',
+          isDraggable &&
+            'bg-primary-10 !cursor-grabbing outline-2 !outline-primary-500',
           isDragging && 'opacity-50',
           className,
         )}

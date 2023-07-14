@@ -1,8 +1,7 @@
 import { type File, FileType } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
-import { isStringEmptyOrNil } from '@utils/index'
-import { toUniqueName } from '@components/fileExplorer/help'
+import { isStringEmptyOrNil, toUniqueName } from '@utils/index'
 
 export const EnumFileExtensions = {
   SQL: '.sql',

@@ -9,12 +9,13 @@ import {
 import { useStoreProject } from '@context/project'
 import { ModelArtifact } from '@models/artifact'
 import { ModelDirectory } from '@models/directory'
-import { getAllFilesInDirectory, toUniqueName } from './help'
+import { getAllFilesInDirectory } from './help'
 import {
   isArrayNotEmpty,
   isFalse,
   isNotNil,
   isStringEmptyOrNil,
+  toUniqueName,
 } from '@utils/index'
 import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
