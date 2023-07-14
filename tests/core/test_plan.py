@@ -436,14 +436,17 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
 
 def test_effective_from(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM a")))
-    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.add_interval("2023-01-01", "2023-03-01")
+
+    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds FROM a")))
 
     context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {"a": snapshot}
+    context_diff_mock.snapshots = {"a": updated_snapshot}
     context_diff_mock.added = set()
     context_diff_mock.removed = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {snapshot.snapshot_id: snapshot}
+    context_diff_mock.modified_snapshots = {"a": (updated_snapshot, snapshot)}
+    context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
     context_diff_mock.added_materialized_models = set()
 
     with pytest.raises(
@@ -451,9 +454,12 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         match="Effective date can only be set for a forward-only plan.",
     ):
         plan = Plan(context_diff_mock)
-        plan.effective_from = "2023-01-01"
+        plan.effective_from = "2023-02-01"
 
-    plan = Plan(context_diff_mock, forward_only=True)
+    plan = Plan(
+        context_diff_mock, forward_only=True, start="2023-01-01", end="2023-03-01", is_dev=True
+    )
+    updated_snapshot.add_interval("2023-01-01", "2023-03-01")
 
     with pytest.raises(
         PlanError,
@@ -462,15 +468,21 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         plan.effective_from = now() + timedelta(days=1)
 
     assert plan.effective_from is None
-    assert snapshot.effective_from is None
+    assert updated_snapshot.effective_from is None
+    assert not plan.missing_intervals
 
-    plan.effective_from = "2023-01-01"
-    assert plan.effective_from == "2023-01-01"
-    assert snapshot.effective_from == "2023-01-01"
+    plan.effective_from = "2023-02-01"
+    assert plan.effective_from == "2023-02-01"
+    assert updated_snapshot.effective_from == "2023-02-01"
+
+    assert len(plan.missing_intervals) == 1
+    missing_intervals = plan.missing_intervals[0]
+    assert missing_intervals.intervals[0][0] == to_timestamp("2023-02-01")
+    assert missing_intervals.intervals[-1][-1] == to_timestamp("2023-03-02")
 
     plan.effective_from = None
     assert plan.effective_from is None
-    assert snapshot.effective_from is None
+    assert updated_snapshot.effective_from is None
 
 
 def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
