@@ -64,7 +64,7 @@ def load_config_from_paths(
             "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up SQLMesh, run `sqlmesh init`."
         )
 
-    no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter - set it in the `model_defaults` key."
+    no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
 
     non_python_config = Config.parse_obj(merge_dicts(*non_python_configs))
     if python_config:
