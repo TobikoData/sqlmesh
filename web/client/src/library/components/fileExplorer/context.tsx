@@ -19,12 +19,10 @@ import {
 } from '@utils/index'
 import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
-import { type Confirmation } from '@components/modal/ModalConfirmation'
 import { type ResponseWithDetail } from '@api/instance'
+import { useStoreContext } from '@context/context'
 
 interface FileExplorer {
-  confirmation?: Confirmation
-  showConfirmation: boolean
   activeRange: Set<ModelArtifact>
   setActiveRange: (activeRange: Set<ModelArtifact>) => void
   selectArtifactsInRange: (to: ModelArtifact) => void
@@ -34,13 +32,9 @@ interface FileExplorer {
   removeArtifacts: (artifacts: Set<ModelArtifact>) => void
   removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
   moveArtifacts: (artifacts: Set<ModelArtifact>, target: ModelDirectory) => void
-  setShowConfirmation: (show: boolean) => void
-  setConfirmation: (confirmation?: Confirmation) => void
 }
 
 export const FileExplorerContext = createContext<FileExplorer>({
-  confirmation: undefined,
-  showConfirmation: false,
   activeRange: new Set(),
   setActiveRange: () => {},
   selectArtifactsInRange: () => {},
@@ -50,8 +44,6 @@ export const FileExplorerContext = createContext<FileExplorer>({
   removeArtifacts: () => {},
   removeArtifactWithConfirmation: () => {},
   moveArtifacts: () => {},
-  setShowConfirmation: () => {},
-  setConfirmation: () => {},
 })
 
 export default function FileExplorerProvider({
@@ -64,17 +56,13 @@ export default function FileExplorerProvider({
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
   const setFiles = useStoreProject(s => s.setFiles)
 
+  const addConfirmation = useStoreContext(s => s.addConfirmation)
+
   const tab = useStoreEditor(s => s.tab)
   const closeTab = useStoreEditor(s => s.closeTab)
 
   const [isLoading, setIsLoading] = useState(false)
   const [activeRange, setActiveRange] = useState(new Set<ModelArtifact>())
-  const [confirmation, setConfirmation] = useState<Confirmation>()
-  const [showConfirmation, setShowConfirmation] = useState(false)
-
-  useEffect(() => {
-    setShowConfirmation(isNotNil(confirmation))
-  }, [confirmation])
 
   useEffect(() => {
     setSelectedFile(tab?.file)
@@ -266,34 +254,10 @@ export default function FileExplorerProvider({
   }
 
   function removeArtifactWithConfirmation(artifact: ModelArtifact): void {
-    let confirmation: Confirmation = {
-      headline: `Removing ${
-        artifact instanceof ModelDirectory ? 'Directory' : 'File'
-      }`,
-      description: `Are you sure you want to remove the ${
-        artifact instanceof ModelDirectory ? 'directory' : 'file'
-      } "${artifact.name}"?`,
-      yesText: 'Yes, Remove',
-      noText: 'No, Cancel',
-      action: () => {
-        if (artifact instanceof ModelDirectory) {
-          if (artifact.parent != null) {
-            removeArtifacts(new Set([artifact]))
-          }
-        }
-
-        if (artifact instanceof ModelFile) {
-          if (artifact.parent != null) {
-            removeArtifacts(new Set([artifact]))
-          }
-        }
-      },
-    }
-
     if (activeRange.has(artifact)) {
       // User selected multiple including current directory
       // so here we should prompt to delete all selected
-      confirmation = {
+      addConfirmation({
         headline: 'Removing Selected Files/Directories',
         description: `Are you sure you want to remove ${activeRange.size} items?`,
         yesText: 'Yes, Remove',
@@ -302,10 +266,24 @@ export default function FileExplorerProvider({
         action: () => {
           removeArtifacts(activeRange)
         },
-      }
+      })
+    } else {
+      addConfirmation({
+        headline: `Removing ${
+          artifact instanceof ModelDirectory ? 'Directory' : 'File'
+        }`,
+        description: `Are you sure you want to remove the ${
+          artifact instanceof ModelDirectory ? 'directory' : 'file'
+        } "${artifact.name}"?`,
+        yesText: 'Yes, Remove',
+        noText: 'No, Cancel',
+        action: () => {
+          if (isNotNil(artifact.parent)) {
+            removeArtifacts(new Set([artifact]))
+          }
+        },
+      })
     }
-
-    setConfirmation(confirmation)
   }
 
   function moveArtifacts(
@@ -362,7 +340,7 @@ export default function FileExplorerProvider({
     })
 
     if (isArrayNotEmpty(duplicates)) {
-      setConfirmation({
+      addConfirmation({
         headline: 'Moving Duplicates',
         description: `All duplicated names will be renamed!`,
         yesText: 'Yes, Rename',
@@ -394,8 +372,6 @@ export default function FileExplorerProvider({
   return (
     <FileExplorerContext.Provider
       value={{
-        confirmation,
-        showConfirmation,
         activeRange,
         createDirectory,
         createFile,
@@ -404,8 +380,6 @@ export default function FileExplorerProvider({
         removeArtifactWithConfirmation,
         moveArtifacts,
         selectArtifactsInRange,
-        setConfirmation,
-        setShowConfirmation,
         setActiveRange(activeRange) {
           setActiveRange(
             () =>
