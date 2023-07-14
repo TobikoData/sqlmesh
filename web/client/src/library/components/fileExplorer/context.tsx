@@ -9,8 +9,13 @@ import {
 import { useStoreProject } from '@context/project'
 import { ModelArtifact } from '@models/artifact'
 import { ModelDirectory } from '@models/directory'
-import { getAllFilesInDirectory, toUniqueName } from './help'
-import { isArrayNotEmpty, isFalse, isStringEmptyOrNil } from '@utils/index'
+import { getAllFilesInDirectory } from './help'
+import {
+  isArrayNotEmpty,
+  isFalse,
+  isStringEmptyOrNil,
+  toUniqueName,
+} from '@utils/index'
 import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
 import { type ResponseWithDetail } from '@api/instance'
@@ -30,14 +35,14 @@ interface FileExplorer {
 
 export const FileExplorerContext = createContext<FileExplorer>({
   activeRange: new Set(),
-  setActiveRange: () => { },
-  selectArtifactsInRange: () => { },
-  createDirectory: () => { },
-  createFile: () => { },
-  renameArtifact: () => { },
-  removeArtifacts: () => { },
-  removeArtifactWithConfirmation: () => { },
-  moveArtifacts: () => { },
+  setActiveRange: () => {},
+  selectArtifactsInRange: () => {},
+  createDirectory: () => {},
+  createFile: () => {},
+  renameArtifact: () => {},
+  removeArtifacts: () => {},
+  removeArtifactWithConfirmation: () => {},
+  moveArtifacts: () => {},
 })
 
 export default function FileExplorerProvider({
@@ -263,10 +268,12 @@ export default function FileExplorerProvider({
       })
     } else {
       addConfirmation({
-        headline: `Removing ${artifact instanceof ModelDirectory ? 'Directory' : 'File'
-          }`,
-        description: `Are you sure you want to remove the ${artifact instanceof ModelDirectory ? 'directory' : 'file'
-          } "${artifact.name}"?`,
+        headline: `Removing ${
+          artifact instanceof ModelDirectory ? 'Directory' : 'File'
+        }`,
+        description: `Are you sure you want to remove the ${
+          artifact instanceof ModelDirectory ? 'directory' : 'file'
+        } "${artifact.name}"?`,
         yesText: 'Yes, Remove',
         noText: 'No, Cancel',
         action: () => {

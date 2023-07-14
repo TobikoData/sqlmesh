@@ -237,7 +237,7 @@ function FileExplorerArtifactContainer({
         activeRange.has(artifact)
           ? 'text-brand-100 !bg-brand-500 dark:bg-brand-700 dark:text-brand-100'
           : isSelected &&
-          'bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
+              'bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
       )}
       style={style}
       onClick={handleSelect}
