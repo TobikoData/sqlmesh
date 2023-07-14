@@ -12,7 +12,7 @@ from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
-from sqlmesh.utils import debug_mode_enabled, sqlglot_dialects
+from sqlmesh.utils import debug_mode_enabled
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
 
@@ -94,12 +94,7 @@ def cli(
 
 
 @cli.command("init")
-@click.option(
-    "dialect",
-    required=True,
-    type=str,
-    help=f"Default model dialect. Supported values: {sqlglot_dialects()}.",
-)
+@click.option("sql_dialect")
 @click.option(
     "-t",
     "--template",
@@ -108,13 +103,13 @@ def cli(
 )
 @click.pass_context
 @error_handler
-def init(ctx: click.Context, dialect: str, template: t.Optional[str] = None) -> None:
-    """Create a new SQLMesh repository."""
+def init(ctx: click.Context, sql_dialect: str, template: t.Optional[str] = None) -> None:
+    """Create a new SQLMesh repository with a default SQL dialect."""
     try:
         project_template = ProjectTemplate(template.lower() if template else "default")
     except ValueError:
         raise click.ClickException(f"Invalid project template '{template}'")
-    init_example_project(ctx.obj, dialect=dialect, template=project_template)
+    init_example_project(ctx.obj, dialect=sql_dialect, template=project_template)
 
 
 @cli.command("render")
