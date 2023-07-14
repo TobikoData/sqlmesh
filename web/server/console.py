@@ -35,10 +35,10 @@ class ApiConsole(TerminalConsole):
             data=json.dumps(payload),
         )
 
-    def start_snapshot_progress(
+    def start_evaluation_progress(
         self, snapshot: Snapshot, total_batches: int, environment: str
     ) -> None:
-        """Indicates that a new load progress has begun."""
+        """Indicates that a new snapshot evaluation progress has begun."""
         view_name = snapshot.qualified_view_name.for_environment(environment)
         self.current_task_status[snapshot.name] = {
             "completed": 0,
@@ -47,8 +47,8 @@ class ApiConsole(TerminalConsole):
             "view_name": view_name,
         }
 
-    def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:
-        """Update snapshot progress."""
+    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
+        """Update snapshot evaluation progress."""
         if self.current_task_status:
             self.current_task_status[snapshot_name]["completed"] += num_batches
             if (
@@ -60,8 +60,8 @@ class ApiConsole(TerminalConsole):
                 self._make_event({"tasks": self.current_task_status}, event="tasks")
             )
 
-    def stop_snapshot_progress(self, success: bool = True) -> None:
-        """Stop the load progress"""
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        """Stop the snapshot evaluation progress."""
         self.current_task_status = {}
         if success:
             self.queue.put_nowait(
@@ -115,7 +115,6 @@ class ApiConsole(TerminalConsole):
                 )
 
     def log_exception(self) -> None:
-        """Log an exception."""
         self.queue.put_nowait(
             self._make_event(
                 event="errors",
