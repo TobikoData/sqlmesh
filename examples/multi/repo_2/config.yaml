@@ -13,4 +13,4 @@ gateways:
 default_gateway: local
 
 model_defaults:
-    dialect: ''
+    dialect: 'duckdb'

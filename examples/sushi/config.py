@@ -23,7 +23,8 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 # An in memory DuckDB config.
 config = Config(
-    default_connection=DuckDBConnectionConfig(), model_defaults=ModelDefaultsConfig(dialect="")
+    default_connection=DuckDBConnectionConfig(),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 
 
