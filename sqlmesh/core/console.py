@@ -283,7 +283,7 @@ class TerminalConsole(Console):
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=num_tasks)
 
     def stop_promotion_progress(self, success: bool = True) -> None:
-        """Stop the snapshot promotion progress"""
+        """Stop the snapshot promotion progress."""
         self.promotion_task = None
         if self.promotion_progress is not None:
             self.promotion_progress.stop()
