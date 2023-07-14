@@ -1,4 +1,5 @@
 import os
+import pathlib
 from pathlib import Path
 from unittest import mock
 
@@ -18,6 +19,7 @@ from sqlmesh.core.config.loader import (
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
+from tests.utils.test_filesystem import create_temp_file
 
 
 @pytest.fixture(scope="session")
@@ -171,6 +173,25 @@ def test_load_config_multiple_config_files_in_folder(tmp_path):
 def test_load_config_no_config():
     with pytest.raises(ConfigError, match=r"^SQLMesh project config could not be found.*"):
         load_config_from_paths(load_from_env=False)
+
+
+def test_load_config_no_dialect(tmp_path):
+    project_config = create_temp_file(
+        tmp_path,
+        pathlib.Path("config.yaml"),
+        """
+gateways:
+    local:
+        connection:
+            type: duckdb
+            database: db.db
+""",
+    )
+
+    with pytest.raises(
+        ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
+    ):
+        load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
 
 
 def test_load_config_unsupported_extension(tmp_path):
