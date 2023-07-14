@@ -90,6 +90,10 @@ def test_create_external_models(tmpdir, assert_exp_eq):
         FROM "sushi"."raw_fruits" AS "raw_fruits"
         """,
     )
+    # rerunning create external models should refetch existing external models
+    context.create_external_models()
+    context.load()
+    assert context.models["sushi.raw_fruits"]
 
 
 def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
