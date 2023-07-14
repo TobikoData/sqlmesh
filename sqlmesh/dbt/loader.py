@@ -100,14 +100,11 @@ class DbtLoader(Loader):
             context.set_and_render_variables(package.variables, package.name)
             package_models: t.Dict[str, BaseModelConfig] = {**package.models, **package.seeds}
 
-            models.update(
-                {
-                    model.sql_name: cache.get_or_load_model(
-                        model.path, lambda: self._to_sqlmesh(model, context)
-                    )
-                    for model in package_models.values()
-                }
-            )
+            for model in package_models.values():
+                sqlmesh_model = cache.get_or_load_model(
+                    model.path, lambda: self._to_sqlmesh(model, context)
+                )
+                models[sqlmesh_model.name] = sqlmesh_model
 
         models.update(self._load_external_models())
 
