@@ -3,7 +3,8 @@ import Modal from './Modal'
 
 interface PropsModalConfirmation extends React.HTMLAttributes<HTMLElement> {
   show: boolean
-  onClose: () => void
+  onClose?: () => void
+  afterLeave?: () => void
 }
 
 export interface Confirmation {
@@ -15,6 +16,7 @@ export interface Confirmation {
   tagline?: string
   yesText: string
   noText: string
+  children?: React.ReactNode
 }
 
 export interface WithConfirmation {
@@ -25,11 +27,13 @@ function ModalConfirmation({
   show,
   children,
   onClose,
+  afterLeave,
 }: PropsModalConfirmation): JSX.Element {
   return (
     <Modal
       show={show}
       onClose={onClose}
+      afterLeave={afterLeave}
     >
       <Dialog.Panel className="w-[30rem] transform rounded-xl bg-theme text-left align-middle shadow-xl transition-all">
         {children}
