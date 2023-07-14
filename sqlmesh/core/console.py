@@ -228,7 +228,7 @@ class TerminalConsole(Console):
         if self.creation_progress is None:
             self.creation_progress = Progress(
                 TextColumn(
-                    f"[bold blue]Creating snapshot tables for '{environment}'", justify="right"
+                    f"[bold blue]Creating new model versions for '{environment}'", justify="right"
                 ),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
@@ -241,7 +241,7 @@ class TerminalConsole(Console):
 
             self.creation_progress.start()
             self.creation_task = self.creation_progress.add_task(
-                f"Creating snapshot tables for {environment}...",
+                f"Creating new model versions for {environment}...",
                 total=total_tasks,
             )
 
@@ -257,7 +257,7 @@ class TerminalConsole(Console):
             self.creation_progress.stop()
             self.creation_progress = None
             if success:
-                self.log_success("All snapshot tables have been created successfully")
+                self.log_success("All model versions have been created successfully")
 
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
