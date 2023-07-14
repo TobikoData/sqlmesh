@@ -44,30 +44,42 @@ class Console(abc.ABC):
     with them when their input is needed."""
 
     @abc.abstractmethod
-    def start_snapshot_progress(
+    def start_evaluation_progress(
         self, snapshot: Snapshot, total_batches: int, environment: str
     ) -> None:
-        """Indicates that a new load progress has begun."""
+        """Indicates that a new snapshot evaluation progress has begun."""
 
     @abc.abstractmethod
-    def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:
-        """Update snapshot progress."""
+    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
+        """Update the snapshot evaluation progress."""
 
     @abc.abstractmethod
-    def stop_snapshot_progress(self, success: bool = True) -> None:
-        """Stop the load progress."""
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        """Stop the snapshot evaluation progress."""
+
+    @abc.abstractmethod
+    def start_creation_progress(self, environment: str, total_tasks: int) -> None:
+        """Indicates that a new snapshot creation progress has begun."""
+
+    @abc.abstractmethod
+    def update_creation_progress(self, num_tasks: int) -> None:
+        """Update the snapshot creation progress."""
+
+    @abc.abstractmethod
+    def stop_creation_progress(self, success: bool = True) -> None:
+        """Stop the snapshot creation progress."""
 
     @abc.abstractmethod
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
-        """Indicates that a new promotion progress has begun."""
+        """Indicates that a new snapshot promotion progress has begun."""
 
     @abc.abstractmethod
     def update_promotion_progress(self, num_tasks: int) -> None:
-        """Update promotion progress."""
+        """Update the snapshot promotion progress."""
 
     @abc.abstractmethod
     def stop_promotion_progress(self, success: bool = True) -> None:
-        """Stop the promotion progress."""
+        """Stop the snapshot promotion progress."""
 
     @abc.abstractmethod
     def start_migration_progress(self, total_tasks: int) -> None:
@@ -75,7 +87,7 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def update_migration_progress(self, num_tasks: int) -> None:
-        """Update migration progress."""
+        """Update the migration progress."""
 
     @abc.abstractmethod
     def stop_migration_progress(self, success: bool = True) -> None:
@@ -85,7 +97,7 @@ class Console(abc.ABC):
     def show_model_difference_summary(
         self, context_diff: ContextDiff, detailed: bool = False
     ) -> None:
-        """Displays a summary of differences for the given models"""
+        """Displays a summary of differences for the given models."""
 
     @abc.abstractmethod
     def plan(self, plan: Plan, auto_apply: bool) -> None:
@@ -151,6 +163,8 @@ class TerminalConsole(Console):
         self.console: RichConsole = console or srich.console
         self.evaluation_progress: t.Optional[Progress] = None
         self.evaluation_tasks: t.Dict[str, t.Tuple[TaskID, int]] = {}
+        self.creation_progress: t.Optional[Progress] = None
+        self.creation_task: t.Optional[TaskID] = None
         self.promotion_progress: t.Optional[Progress] = None
         self.promotion_task: t.Optional[TaskID] = None
         self.migration_progress: t.Optional[Progress] = None
@@ -166,10 +180,10 @@ class TerminalConsole(Console):
     def _confirm(self, message: str, **kwargs: t.Any) -> bool:
         return Confirm.ask(message, console=self.console, **kwargs)
 
-    def start_snapshot_progress(
+    def start_evaluation_progress(
         self, snapshot: Snapshot, total_batches: int, environment: str
     ) -> None:
-        """Indicates that a new load progress has begun."""
+        """Indicates that a new snapshot evaluation progress has begun."""
         if not self.evaluation_progress:
             self.evaluation_progress = Progress(
                 TextColumn("[bold blue]{task.fields[view_name]}", justify="right"),
@@ -194,14 +208,14 @@ class TerminalConsole(Console):
             total_batches,
         )
 
-    def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:
-        """Update snapshot progress."""
+    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
+        """Update the snapshot evaluation progress."""
         if self.evaluation_progress and self.evaluation_tasks:
             task_id = self.evaluation_tasks[snapshot_name][0]
             self.evaluation_progress.update(task_id, refresh=True, advance=num_batches)
 
-    def stop_snapshot_progress(self, success: bool = True) -> None:
-        """Stop the load progress"""
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        """Stop the snapshot evaluation progress."""
         self.evaluation_tasks = {}
         if self.evaluation_progress:
             self.evaluation_progress.stop()
@@ -209,8 +223,44 @@ class TerminalConsole(Console):
             if success:
                 self.log_success("All model batches have been executed successfully")
 
+    def start_creation_progress(self, environment: str, total_tasks: int) -> None:
+        """Indicates that a new creation progress has begun."""
+        if self.creation_progress is None:
+            self.creation_progress = Progress(
+                TextColumn(
+                    f"[bold blue]Creating snapshot tables for '{environment}'", justify="right"
+                ),
+                BarColumn(bar_width=40),
+                "[progress.percentage]{task.percentage:>3.1f}%",
+                "•",
+                srich.BatchColumn(),
+                "•",
+                TimeElapsedColumn(),
+                console=self.console,
+            )
+
+            self.creation_progress.start()
+            self.creation_task = self.creation_progress.add_task(
+                f"Creating snapshot tables for {environment}...",
+                total=total_tasks,
+            )
+
+    def update_creation_progress(self, num_tasks: int) -> None:
+        """Update the snapshot creation progress."""
+        if self.creation_progress is not None and self.creation_task is not None:
+            self.creation_progress.update(self.creation_task, refresh=True, advance=num_tasks)
+
+    def stop_creation_progress(self, success: bool = True) -> None:
+        """Stop the snapshot creation progress."""
+        self.creation_task = None
+        if self.creation_progress is not None:
+            self.creation_progress.stop()
+            self.creation_progress = None
+            if success:
+                self.log_success("All snapshot tables have been created successfully")
+
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
-        """Indicates that a new promotion progress has begun."""
+        """Indicates that a new snapshot promotion progress has begun."""
         if self.promotion_progress is None:
             self.promotion_progress = Progress(
                 TextColumn(f"[bold blue]Virtually Updating '{environment}'", justify="right"),
@@ -228,12 +278,12 @@ class TerminalConsole(Console):
             )
 
     def update_promotion_progress(self, num_tasks: int) -> None:
-        """Update promotion progress."""
+        """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
             self.promotion_progress.update(self.promotion_task, refresh=True, advance=num_tasks)
 
     def stop_promotion_progress(self, success: bool = True) -> None:
-        """Stop the promotion progress"""
+        """Stop the snapshot promotion progress"""
         self.promotion_task = None
         if self.promotion_progress is not None:
             self.promotion_progress.stop()
@@ -262,7 +312,7 @@ class TerminalConsole(Console):
             )
 
     def update_migration_progress(self, num_tasks: int) -> None:
-        """Update migration progress."""
+        """Update the migration progress."""
         if self.migration_progress is not None and self.migration_task is not None:
             self.migration_progress.update(self.migration_task, refresh=True, advance=num_tasks)
 
@@ -361,7 +411,7 @@ class TerminalConsole(Console):
             self._prompt_promote(plan)
 
     def _prompt_categorize(self, plan: Plan, auto_apply: bool) -> None:
-        """Get the user's change category for the directly modified models"""
+        """Get the user's change category for the directly modified models."""
         self.show_model_difference_summary(plan.context_diff)
 
         self._show_categorized_snapshots(plan)
@@ -398,7 +448,7 @@ class TerminalConsole(Console):
             self._print(tree)
 
     def _show_missing_dates(self, plan: Plan) -> None:
-        """Displays the models with missing dates"""
+        """Displays the models with missing dates."""
         if not plan.missing_intervals:
             return
         backfill = Tree("[bold]Models needing backfill (missing dates):")
@@ -608,13 +658,14 @@ class TerminalConsole(Console):
 
 
 def add_to_layout_widget(target_widget: LayoutWidget, *widgets: widgets.Widget) -> LayoutWidget:
-    """Helper function to add a widget to a layout widget
+    """Helper function to add a widget to a layout widget.
+
     Args:
-        target_widget: The layout widget to add the other widget(s) to
-        *widgets: The widgets to add to the layout widget
+        target_widget: The layout widget to add the other widget(s) to.
+        *widgets: The widgets to add to the layout widget.
 
     Returns:
-        The layout widget with the children added
+        The layout widget with the children added.
     """
     target_widget.children += tuple(widgets)
     return target_widget
@@ -914,7 +965,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         """Shows a summary of the differences.
 
         Args:
-            context_diff: The context diff to use to print the summary
+            context_diff: The context diff to use to print the summary.
             detailed: Show the actual SQL differences if True.
         """
         if context_diff.is_new_environment:
@@ -972,7 +1023,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 self._print("\n")
 
     def _show_missing_dates(self, plan: Plan) -> None:
-        """Displays the models with missing dates"""
+        """Displays the models with missing dates."""
         if not plan.missing_intervals:
             return
         self._print("**Models needing backfill (missing dates):**\n\n")
@@ -1048,17 +1099,17 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self._print(message)
         return super()._confirm("", **kwargs)
 
-    def start_snapshot_progress(
+    def start_evaluation_progress(
         self, snapshot: Snapshot, total_batches: int, environment: str
     ) -> None:
-        """Indicates that a new load progress has begun."""
+        """Indicates that a new snapshot evaluation progress has begun."""
         if not self.evaluation_batch_progress.get(snapshot.name):
             view_name = snapshot.qualified_view_name.for_environment(environment)
             self.evaluation_batch_progress[snapshot.name] = (view_name, 0, total_batches)
             print(f"Starting '{view_name}', Total batches: {total_batches}")
 
-    def update_snapshot_progress(self, snapshot_name: str, num_batches: int) -> None:
-        """Update snapshot progress."""
+    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
+        """Update the snapshot evaluation progress."""
         view_name, loaded_batches, total_batches = self.evaluation_batch_progress[snapshot_name]
         loaded_batches += 1
         self.evaluation_batch_progress[snapshot_name] = (view_name, loaded_batches, total_batches)
@@ -1072,18 +1123,18 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
             total = len(self.evaluation_batch_progress)
             print(f"Completed Loading {total_finished_loading}/{total} Models")
 
-    def stop_snapshot_progress(self, success: bool = True) -> None:
-        """Stop the load progress"""
+    def stop_evaluation_progress(self, success: bool = True) -> None:
+        """Stop the snapshot evaluation progress."""
         self.evaluation_batch_progress = {}
         print(f"Loading {'succeeded' if success else 'failed'}")
 
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
-        """Indicates that a new promotion progress has begun."""
+        """Indicates that a new snapshot promotion progress has begun."""
         self.promotion_status = (0, total_tasks)
         print(f"Virtually Updating '{environment}'")
 
     def update_promotion_progress(self, num_tasks: int) -> None:
-        """Update promotion progress."""
+        """Update the snapshot promotion progress."""
         num_promotions, total_promotions = self.promotion_status
         num_promotions += num_tasks
         self.promotion_status = (num_promotions, total_promotions)
@@ -1091,7 +1142,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
             print(f"Virtually Updated {num_promotions}/{total_promotions}")
 
     def stop_promotion_progress(self, success: bool = True) -> None:
-        """Stop the promotion progress"""
+        """Stop the snapshot promotion progress"""
         print(f"Virtual Update {'succeeded' if success else 'failed'}")
 
 
