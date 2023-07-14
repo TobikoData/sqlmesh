@@ -92,9 +92,9 @@ class SQLMeshMagics(Magics):
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
     @argument(
-        "dialect",
+        "sql_dialect",
         type=str,
-        help=f"Default model dialect. Supported values: {sqlglot_dialects()}.",
+        help=f"Default model SQL dialect. Supported values: {sqlglot_dialects()}.",
     )
     @argument(
         "--template",
@@ -112,7 +112,7 @@ class SQLMeshMagics(Magics):
             )
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
-        init_example_project(args.path, args.dialect, project_template)
+        init_example_project(args.path, args.sql_dialect, project_template)
         self.display(self.success_message({"green-bold": "SQLMesh project scaffold created"}))
 
     @magic_arguments()
