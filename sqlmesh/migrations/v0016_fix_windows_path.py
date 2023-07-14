@@ -18,13 +18,11 @@ def migrate(state_sync):  # type: ignore
         parsed_snapshot = json.loads(snapshot)
         model = parsed_snapshot["model"]
         python_env = model.get("python_env")
-        if not python_env:
-            continue
-        for py_definition in python_env.values():
-            path = py_definition.get("path")
-            if not path:
-                continue
-            py_definition["path"] = path.replace("\\", "/")
+        if python_env:
+            for py_definition in python_env.values():
+                path = py_definition.get("path")
+                if path:
+                    py_definition["path"] = path.replace("\\", "/")
 
         new_snapshots.append(
             {
