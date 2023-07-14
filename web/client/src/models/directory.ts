@@ -1,4 +1,4 @@
-import { isFalse, isNil } from '@utils/index'
+import { isFalse } from '@utils/index'
 import type { Directory, File } from '../api/client'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { ModelFile } from './file'
@@ -30,21 +30,20 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
       parent,
     )
 
-    if (parent != null) {
-      this.level = parent.level + 1
-    }
-
     if ((initial as ModelDirectory)?.isModel) {
       this.directories = (initial as ModelDirectory).directories
       this.files = (initial as ModelDirectory).files
     } else {
-      this.directories = this.initial.directories?.map(
-        d => new ModelDirectory(d, this),
-      )
-      this.files = this.initial.files?.map(f => new ModelFile(f, this))
-    }
+      this.directories = []
+      this.files = []
 
-    this._isOpen = isNil(parent)
+      this.initial.directories.forEach(d => {
+        this.addDirectory(new ModelDirectory(d))
+      })
+      this.initial.files.forEach(f => {
+        this.addFile(new ModelFile(f))
+      })
+    }
   }
 
   get isChanged(): boolean {

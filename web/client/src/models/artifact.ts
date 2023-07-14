@@ -1,7 +1,6 @@
-import { isStringEmptyOrNil } from '@utils/index'
+import { isStringEmptyOrNil, toUniqueName } from '@utils/index'
 import { type ModelDirectory } from './directory'
 import { ModelInitial } from './initial'
-import { toUniqueName } from '@components/fileExplorer/help'
 
 export interface InitialArtifact {
   name: string
