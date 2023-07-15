@@ -344,12 +344,6 @@ def _model_sql(self: Generator, expression: Model) -> str:
 
 
 def _model_kind_sql(self: Generator, expression: ModelKind) -> str:
-    # props = {
-    #     prop.this: self.sql(prop, "value") for prop in expression.expressions
-    # }
-    # if "path" in props:
-    #     # Replace windows paths with unix paths
-    #     props["path"] = props["path"].replace("\\", "/")
     props = ",\n".join(
         self.indent(f"{prop.this} {self.sql(prop, 'value')}") for prop in expression.expressions
     )
