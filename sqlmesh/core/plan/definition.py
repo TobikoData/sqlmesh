@@ -337,6 +337,10 @@ class Plan:
 
         for child in self.indirectly_modified[snapshot.name]:
             child_snapshot = self.context_diff.snapshots[child]
+            # If the child already has a version then the snapshot must have previously existed
+            # and therefore we don't want to change its categorization.
+            if child_snapshot.version:
+                continue
 
             if choice in (
                 SnapshotChangeCategory.BREAKING,
