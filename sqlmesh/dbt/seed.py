@@ -22,6 +22,6 @@ class SeedConfig(BaseModelConfig):
         """Converts the dbt seed into a SQLMesh model."""
         return create_seed_model(
             self.sql_name,
-            SeedKind(path=self.path.absolute()),
+            SeedKind(path=self.path.absolute().as_posix()),
             **self.sqlmesh_model_kwargs(context),
         )

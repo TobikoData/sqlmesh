@@ -151,7 +151,7 @@ class GithubEvent:
 
     @classmethod
     def from_path(cls, path: t.Union[str, pathlib.Path]) -> GithubEvent:
-        with open(path) as f:
+        with open(pathlib.Path(path)) as f:
             return cls.from_obj(json.load(f))
 
     @classmethod

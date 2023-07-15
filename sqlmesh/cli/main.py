@@ -73,7 +73,9 @@ def cli(
 
         # Enable threadumps.
         faulthandler.enable()
-        faulthandler.register(signal.SIGUSR1.value)
+        # Windows doesn't support register so we check for it here
+        if hasattr(faulthandler, "register"):
+            faulthandler.register(signal.SIGUSR1.value)
         enable_logging(level=logging.DEBUG)
     elif ignore_warnings:
         logging.getLogger().setLevel(logging.ERROR)
