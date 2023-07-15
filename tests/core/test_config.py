@@ -176,7 +176,7 @@ def test_load_config_no_config():
 
 
 def test_load_config_no_dialect(tmp_path):
-    project_config = create_temp_file(
+    create_temp_file(
         tmp_path,
         pathlib.Path("config.yaml"),
         """
@@ -188,10 +188,25 @@ gateways:
 """,
     )
 
+    create_temp_file(
+        tmp_path,
+        pathlib.Path("config.py"),
+        """
+from sqlmesh.core.config import Config, DuckDBConnectionConfig
+
+config = Config(default_connection=DuckDBConnectionConfig())
+""",
+    )
+
     with pytest.raises(
         ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
     ):
         load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
+
+    with pytest.raises(
+        ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
+    ):
+        load_config_from_paths(project_paths=[tmp_path / "config.py"])
 
 
 def test_load_config_unsupported_extension(tmp_path):
