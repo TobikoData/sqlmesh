@@ -197,3 +197,17 @@ def test_parse_jinja_with_semicolons():
     assert isinstance(expressions[2], JinjaStatement)
     assert isinstance(expressions[3], exp.Drop)
     assert isinstance(expressions[4], exp.Drop)
+
+
+def test_seed():
+    expressions = parse(
+        """
+        MODEL (
+            kind SEED (
+                path '..\..\..\data\data.csv',
+            ),
+        );
+    """
+    )
+    assert len(expressions) == 1
+    assert "../../../data/data.csv" in expressions[0].sql()
