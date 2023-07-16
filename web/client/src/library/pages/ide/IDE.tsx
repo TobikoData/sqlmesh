@@ -17,7 +17,14 @@ import {
   type PlanTasks,
 } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
-import { debounceAsync, isFalse, isObject, isObjectEmpty } from '~/utils'
+import {
+  debounceAsync,
+  isArrayEmpty,
+  isFalse,
+  isNil,
+  isObject,
+  isObjectEmpty,
+} from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
 import { EnumSize, EnumVariant } from '~/types/enum'
@@ -29,11 +36,12 @@ import { type Model } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
-import { useStoreEditor } from '@context/editor'
+import { type EditorTab, useStoreEditor } from '@context/editor'
 import { type ModelFile } from '@models/file'
 import ModalConfirmation, {
   type Confirmation,
 } from '@components/modal/ModalConfirmation'
+import { ModelDirectory } from '@models/directory'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -73,6 +81,7 @@ export default function PageIDE(): JSX.Element {
   const setProject = useStoreProject(s => s.setProject)
   const setFiles = useStoreProject(s => s.setFiles)
 
+  const tab = useStoreEditor(s => s.tab)
   const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
   const storedTabsId = useStoreEditor(s => s.storedTabsId)
   const selectTab = useStoreEditor(s => s.selectTab)
@@ -125,7 +134,14 @@ export default function PageIDE(): JSX.Element {
     })
 
     void debouncedGetFiles().then(({ data }) => {
-      setProject(data)
+      if (isNil(data)) return
+
+      const project = new ModelDirectory(data)
+      const files = project.allFiles
+
+      setFiles(files)
+      restoreEditorTabsFromSaved(files)
+      setProject(project)
     })
 
     return () => {
@@ -151,13 +167,6 @@ export default function PageIDE(): JSX.Element {
       navigate(EnumRoutes.IdeEditor)
     }
   }, [location])
-
-  useEffect(() => {
-    const files = project?.allFiles ?? []
-
-    setFiles(files)
-    restoreEditorTabsFromSaved(files)
-  }, [project])
 
   useEffect(() => {
     if (dataEnvironments == null || isObjectEmpty(dataEnvironments)) return
@@ -228,15 +237,30 @@ export default function PageIDE(): JSX.Element {
   }
 
   function restoreEditorTabsFromSaved(files: ModelFile[]): void {
-    files.forEach(file => {
-      if (storedTabsIds.includes(file.id)) {
-        const tab = createTab(file)
+    console.log('restoreEditorTabsFromSaved', {
+      storedTabsIds,
+      storedTabsId,
+    })
+    if (isArrayEmpty(storedTabsIds)) return
 
-        if (storedTabsId === file.id) {
-          selectTab(tab)
-        } else {
-          addTab(tab)
-        }
+    storedTabsIds.forEach(({ id, content }) => {
+      const file = files.find(file => file.id === id)
+      let storedTab: EditorTab
+
+      if (isNil(file)) {
+        storedTab = isNil(tab) || tab.file.isChanged ? createTab() : tab
+
+        storedTab.file.content = content ?? ''
+      } else {
+        storedTab = createTab(file)
+
+        storedTab.file.content = content ?? storedTab.file.content
+      }
+
+      addTab(storedTab)
+
+      if (storedTabsId === id || (isNil(id) && storedTabsId === content)) {
+        selectTab(storedTab)
       }
     })
   }

@@ -1,6 +1,6 @@
 import { type LineageColumn } from '@api/client'
 import { type TableColumn, type TableRow } from '@components/table/help'
-import { uid } from '@utils/index'
+import { isFalse, isNotNil, uid } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { type ErrorKey, type ErrorIDE } from '~/library/pages/ide/context'
@@ -17,9 +17,14 @@ export interface Lineage {
   columns?: Record<string, LineageColumn>
 }
 
+export interface StoredTab {
+  id?: ID
+  content?: string
+}
+
 interface EditorStore {
   storedTabsId?: ID
-  storedTabsIds: ID[]
+  storedTabsIds: StoredTab[]
   tabs: Map<ModelFile, EditorTab>
   tab?: EditorTab
   engine: Worker
@@ -65,17 +70,20 @@ export interface EditorTab {
   el?: HTMLElement
 }
 
-const [getStoredTabs, setStoredTabs] = useLocalStorage<{ ids: ID[]; id: ID }>(
-  'tabs',
-)
+const [getStoredTabs, setStoredTabs] = useLocalStorage<{
+  tabs: StoredTab[]
+  id?: ID
+}>('tabs')
 
 const initialFile = createLocalFile()
 const initialTab: EditorTab = createTab(initialFile)
 const initialTabs = new Map([[initialFile, initialTab]])
 
 export const useStoreEditor = create<EditorStore>((set, get) => ({
-  storedTabsIds: getStoredTabs()?.ids ?? [],
+  storedTabsIds: getStoredTabs()?.tabs ?? [],
   storedTabsId: getStoredTabs()?.id,
+  // tab: undefined,
+  // tabs: new Map(),
   tab: initialTab,
   tabs: initialTabs,
   engine: sqlglotWorker,
@@ -101,19 +109,49 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   },
   updateStoredTabsIds() {
     const s = get()
-    const id = s.tab?.file.id
-    const ids = Array.from(get().tabs.values())
-      .filter(tab => tab.file.isRemote)
-      .map(tab => tab.file.id)
+    const tabs: StoredTab[] = []
+
+    for (const tab of s.tabs.values()) {
+      if (isFalse(tab.file.isChanged) && tab.file.isLocal) continue
+
+      if (tab.file.isLocal) {
+        // Local file that has content
+        tabs.push({
+          content: tab.file.content,
+        })
+      } else {
+        const output: StoredTab = {
+          id: tab.file.id,
+        }
+
+        if (tab.file.isChanged) {
+          output.content = tab.file.content
+        }
+
+        tabs.push(output)
+      }
+    }
+
+    let id: ID | undefined
+
+    if (isNotNil(s.tab)) {
+      if (s.tab.file.isLocal && s.tab.file.isChanged) {
+        id = s.tab.file.content
+      }
+
+      if (s.tab.file.isRemote) {
+        id = s.tab.file.id
+      }
+    }
 
     setStoredTabs({
       id,
-      ids,
+      tabs,
     })
 
     set(() => ({
       storedTabsId: id,
-      storedTabsIds: ids,
+      storedTabsIds: tabs,
     }))
   },
   refreshTab() {
@@ -129,7 +167,11 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
     }))
   },
   selectTab(tab) {
+    const s = get()
+
     set(() => ({ tab }))
+
+    s.updateStoredTabsIds()
   },
   addTab(tab) {
     const s = get()
