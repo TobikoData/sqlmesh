@@ -337,6 +337,10 @@ class Plan:
 
         for child in self.indirectly_modified[snapshot.name]:
             child_snapshot = self.context_diff.snapshots[child]
+            # If the snapshot isn't new then we are reverting to a previously existing snapshot
+            # and therefore we don't want to recategorize it.
+            if not self.is_new_snapshot(child_snapshot):
+                continue
 
             if choice in (
                 SnapshotChangeCategory.BREAKING,
