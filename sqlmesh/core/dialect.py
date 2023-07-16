@@ -267,8 +267,11 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
         )
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
-
-    return self.expression(exp.Property, this=key.name.lower(), value=value)
+    name = key.name.lower()
+    if name == "path" and value:
+        # Make sure if we get a windows path that it is converted to posix
+        value = exp.Literal.string(value.this.replace("\\", "/"))
+    return self.expression(exp.Property, this=name, value=value)
 
 
 def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
