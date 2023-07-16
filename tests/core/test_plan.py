@@ -623,3 +623,39 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
     # Restatements should still be supported when in dev.
     plan = Plan(context_diff_mock, is_dev=True, restate_models=["a"])
     assert plan.restatements == {"a"}
+
+
+def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
+    """
+    Make sure we can revert to previous snapshots with intervals if it already exists and not modify
+    it's existing change category
+    """
+    old_snapshot_a = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds"), depends_on={})
+    )
+    old_snapshot_b = make_snapshot(
+        SqlModel(name="b", query=parse_one("select 1, ds FROM a"), depends_on={"a"})
+    )
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds"), depends_on={}))
+    snapshot_b = make_snapshot(
+        SqlModel(name="b", query=parse_one("select 1, ds FROM a"), depends_on={"a"})
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.add_interval("2022-01-01", now())
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
+    context_diff_mock.added = set()
+    context_diff_mock.removed = set()
+    context_diff_mock.directly_modified.side_effect = lambda x: x == "a"
+    context_diff_mock.modified_snapshots = {
+        "a": (snapshot_a, old_snapshot_a),
+        "b": (snapshot_b, old_snapshot_b),
+    }
+    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
+    context_diff_mock.added_materialized_models = set()
+
+    plan = Plan(context_diff_mock)
+    plan.set_choice(snapshot_a, SnapshotChangeCategory.BREAKING)
+    # Make sure it does not get assigned INDIRECT_BREAKING
+    assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
