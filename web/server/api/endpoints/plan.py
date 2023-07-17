@@ -37,7 +37,7 @@ async def run_plan(
         plan = context.plan(
             environment=environment,
             no_prompts=True,
-            promote_all=True,
+            include_unmodified=True,
             start=plan_dates.start if plan_dates else None,
             end=plan_dates.end if plan_dates else None,
             create_from=plan_options.create_from,

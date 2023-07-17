@@ -506,7 +506,9 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
 
     assert Plan(context_diff_mock).environment.promoted_snapshot_ids is None
     assert (
-        Plan(context_diff_mock, is_dev=True, promote_all=True).environment.promoted_snapshot_ids
+        Plan(
+            context_diff_mock, is_dev=True, include_unmodified=True
+        ).environment.promoted_snapshot_ids
         is None
     )
 
