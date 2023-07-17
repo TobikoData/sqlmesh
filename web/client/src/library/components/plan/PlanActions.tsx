@@ -38,7 +38,7 @@ export default function PlanActions({
     no_auto_categorization,
     forward_only,
     restate_models,
-    promote_all,
+    include_unmodified,
     hasVirtualUpdate,
   } = usePlan()
 
@@ -189,7 +189,7 @@ export default function PlanActions({
                 and restate folowing models <b>{restate_models}</b>
               </span>
             )}
-            {promote_all && (
+            {include_unmodified && (
               <span className="inline-block mr-1">
                 with views for all models
               </span>

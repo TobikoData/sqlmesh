@@ -287,7 +287,7 @@ def test_plan_apply(sushi_context) -> None:
         "dev",
         start=yesterday_ds(),
         end=yesterday_ds(),
-        promote_all=True,
+        include_unmodified=True,
     )
     sushi_context.apply(plan)
     assert sushi_context.state_reader.get_environment("dev")

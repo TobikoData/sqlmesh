@@ -700,7 +700,7 @@
               "no_gaps": false,
               "forward_only": false,
               "no_auto_categorization": false,
-              "promote_all": false
+              "include_unmodified": false
             }
           },
           "categories": {
@@ -726,7 +726,7 @@
               "no_gaps": false,
               "forward_only": false,
               "no_auto_categorization": false,
-              "promote_all": false
+              "include_unmodified": false
             }
           }
         },
@@ -1238,9 +1238,9 @@
             "title": "No Auto Categorization",
             "default": false
           },
-          "promote_all": {
+          "include_unmodified": {
             "type": "boolean",
-            "title": "Promote All",
+            "title": "Include Unmodified",
             "default": false
           },
           "create_from": { "type": "string", "title": "Create From" },
