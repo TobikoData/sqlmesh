@@ -119,6 +119,8 @@ class BigQueryEngineAdapter(EngineAdapter):
                     f"{field.name} {dtype_to_sql(field.type)}" for field in struct_type.fields
                 )
                 return f"STRUCT<{fields}>"
+            if kind.name == "TYPE_KIND_UNSPECIFIED":
+                return "JSON"
             return kind.name
 
         table = self._get_table(table_name)
