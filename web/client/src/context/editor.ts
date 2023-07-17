@@ -82,8 +82,6 @@ const initialTabs = new Map([[initialFile, initialTab]])
 export const useStoreEditor = create<EditorStore>((set, get) => ({
   storedTabsIds: getStoredTabs()?.tabs ?? [],
   storedTabsId: getStoredTabs()?.id,
-  // tab: undefined,
-  // tabs: new Map(),
   tab: initialTab,
   tabs: initialTabs,
   engine: sqlglotWorker,
