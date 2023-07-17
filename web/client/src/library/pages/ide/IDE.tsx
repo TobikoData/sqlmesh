@@ -90,7 +90,7 @@ export default function PageIDE(): JSX.Element {
   const { refetch: planRun } = useApiPlanRun(environment.name, {
     planOptions: {
       skip_tests: true,
-      promote_all: true,
+      include_unmodified: true,
     },
   })
 

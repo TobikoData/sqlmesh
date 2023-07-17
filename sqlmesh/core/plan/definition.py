@@ -63,7 +63,7 @@ class Plan:
         categorizer_config: Auto categorization settings.
         auto_categorization_enabled: Whether to apply auto categorization.
         effective_from: The effective date from which to apply forward-only changes on production.
-        promote_all: Indicates whether to promote all models in the target development environment or only modified ones.
+        include_unmodified: Indicates whether to include unmodified models in the target development environment.
     """
 
     def __init__(
@@ -82,7 +82,7 @@ class Plan:
         categorizer_config: t.Optional[CategorizerConfig] = None,
         auto_categorization_enabled: bool = True,
         effective_from: t.Optional[TimeLike] = None,
-        promote_all: bool = False,
+        include_unmodified: bool = False,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -95,7 +95,7 @@ class Plan:
         self.environment_ttl = environment_ttl
         self.categorizer_config = categorizer_config or CategorizerConfig()
         self.auto_categorization_enabled = auto_categorization_enabled
-        self.promote_all = promote_all
+        self.include_unmodified = include_unmodified
         self._effective_from: t.Optional[TimeLike] = None
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
@@ -269,7 +269,7 @@ class Plan:
 
         snapshots = [s.table_info for s in self.snapshots]
         promoted_snapshot_ids = None
-        if self.is_dev and not self.promote_all:
+        if self.is_dev and not self.include_unmodified:
             promoted_snapshot_ids = [
                 s.snapshot_id for s in snapshots if s.name in self.context_diff.promotable_models
             ]
@@ -628,12 +628,12 @@ class Plan:
     def _ensure_new_env_with_changes(self) -> None:
         if (
             self.is_dev
-            and not self.promote_all
+            and not self.include_unmodified
             and self.context_diff.is_new_environment
             and not self.context_diff.has_snapshot_changes
         ):
             raise NoChangesPlanError(
-                "No changes were detected. Make a change or run with --promote-all to create a new environment without changes."
+                "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
 
 

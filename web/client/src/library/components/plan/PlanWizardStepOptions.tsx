@@ -26,7 +26,7 @@ export default function PlanWizardStepOptions({
     restate_models,
     isInitialPlanRun,
     create_from,
-    promote_all,
+    include_unmodified,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
@@ -174,14 +174,14 @@ export default function PlanWizardStepOptions({
                     <div className="w-full md:ml-2">
                       <div className="block my-2">
                         <InputToggle
-                          label="Promote All"
+                          label="Include Unmodified"
                           info="Indicates whether to create views for all models in the target development environment or only for modified ones"
-                          enabled={Boolean(promote_all)}
+                          enabled={Boolean(include_unmodified)}
                           disabled={isInitialPlanRun}
                           setEnabled={(value: boolean) => {
                             dispatch({
                               type: EnumPlanActions.PlanOptions,
-                              promote_all: value,
+                              include_unmodified: value,
                             })
                           }}
                         />

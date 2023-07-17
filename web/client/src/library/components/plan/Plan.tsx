@@ -120,7 +120,7 @@ function Plan({
           forward_only: false,
           no_auto_categorization: false,
           no_gaps: false,
-          promote_all: true,
+          include_unmodified: true,
         },
       ])
     }

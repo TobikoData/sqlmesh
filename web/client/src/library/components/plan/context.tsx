@@ -72,7 +72,7 @@ interface PlanOptions {
   forward_only: boolean
   auto_apply: boolean
   no_auto_categorization: boolean
-  promote_all: boolean
+  include_unmodified: boolean
   create_from?: string
   restate_models?: string
 }
@@ -137,7 +137,7 @@ const initial = {
   forward_only: false,
   auto_apply: false,
   no_auto_categorization: false,
-  promote_all: true,
+  include_unmodified: true,
   from: undefined,
   restate_models: undefined,
   create_from: undefined,
@@ -227,7 +227,7 @@ function reducer(
           forward_only: false,
           auto_apply: false,
           no_auto_categorization: false,
-          promote_all: true,
+          include_unmodified: true,
           create_from: undefined,
           restate_models: undefined,
         },

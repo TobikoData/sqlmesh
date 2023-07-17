@@ -267,9 +267,9 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     default=None,
 )
 @click.option(
-    "--promote-all",
+    "--include-unmodified",
     is_flag=True,
-    help="Promote all models in the target environment as opposed to only modified ones.",
+    help="Include unmodified models in the target environment.",
     default=None,
 )
 @click.pass_context

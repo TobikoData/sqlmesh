@@ -18,7 +18,7 @@ def sushi_plan(sushi_context: Context, mocker: MockerFixture) -> Plan:
     return Plan(
         sushi_context._context_diff("dev"),
         is_dev=True,
-        promote_all=True,
+        include_unmodified=True,
     )
 
 
