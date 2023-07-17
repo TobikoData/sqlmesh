@@ -104,7 +104,7 @@ class SQLMeshMagics(Magics):
     )
     @line_magic
     def init(self, line: str) -> None:
-        """Creates a SQLMesh project scaffold."""
+        """Creates a SQLMesh project scaffold with a default SQL dialect."""
         args = parse_argstring(self.init, line)
         try:
             project_template = ProjectTemplate(
