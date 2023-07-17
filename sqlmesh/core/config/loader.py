@@ -23,7 +23,7 @@ def load_config_from_paths(
     python_config: t.Optional[Config] = None
     non_python_configs = []
 
-    if not project_paths or not any([path.exists() for path in project_paths]):
+    if not project_paths or not any(path.exists() for path in project_paths):
         raise ConfigError(
             "SQLMesh project config could not be found. Point the cli to the project path with `sqlmesh -p`. If you haven't set up the SQLMesh project, run `sqlmesh init`."
         )
