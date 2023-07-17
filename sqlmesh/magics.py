@@ -292,9 +292,9 @@ class SQLMeshMagics(Magics):
         default=None,
     )
     @argument(
-        "--promote-all",
+        "--include-unmodified",
         action="store_true",
-        help="Promote all models in the target environment as opposed to only modified ones.",
+        help="Include unmodified models in the target environment.",
         default=None,
     )
     @line_magic
@@ -322,7 +322,7 @@ class SQLMeshMagics(Magics):
             auto_apply=args.auto_apply,
             no_auto_categorization=args.no_auto_categorization,
             effective_from=args.effective_from,
-            promote_all=args.promote_all,
+            include_unmodified=args.include_unmodified,
         )
         self._context.console = console
 

@@ -43,7 +43,7 @@ async def apply(
         context.plan,
         environment=environment,
         no_prompts=True,
-        promote_all=plan_options.promote_all,
+        include_unmodified=plan_options.include_unmodified,
         start=plan_dates.start if plan_dates else None,
         end=plan_dates.end if plan_dates else None,
         skip_tests=plan_options.skip_tests,
