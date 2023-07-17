@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import typing as t
 
-from pydantic import Field, validator
+from pydantic import validator
 from sqlglot import exp
 from sqlglot.helper import ensure_list
 
@@ -12,6 +12,7 @@ from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
+    IncrementalUnsafeKind,
     Model,
     ModelKind,
     ModelKindName,
@@ -66,7 +67,7 @@ class ModelConfig(BaseModelConfig):
 
     # sqlmesh fields
     sql: SqlStr = SqlStr("")
-    time_column_: t.Optional[str] = Field(None, alias="time_column")
+    time_column: t.Optional[str] = None
     cron: t.Optional[str] = None
     dialect: t.Optional[str] = None
     batch_size: t.Optional[int] = None
@@ -115,21 +116,9 @@ class ModelConfig(BaseModelConfig):
         **BaseModelConfig._FIELD_UPDATE_STRATEGY,
         **{
             "sql": UpdateStrategy.IMMUTABLE,
-            "time_column_": UpdateStrategy.IMMUTABLE,
+            "time_column": UpdateStrategy.IMMUTABLE,
         },
     }
-
-    @property
-    def time_column(self) -> t.Optional[str]:
-        if self.time_column_:
-            return self.time_column_
-        if (
-            isinstance(self.partition_by, dict)
-            and self.partition_by["data_type"] != "int64"
-            and self.incremental_strategy in INCREMENTAL_BY_TIME_STRATEGIES
-        ):
-            return self.partition_by["field"]
-        return None
 
     @property
     def model_dialect(self) -> t.Optional[str]:
@@ -165,7 +154,7 @@ class ModelConfig(BaseModelConfig):
                 is_supported = True
                 if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
                     logger.warning(
-                        "SQLMesh IncrementalByTime is not compatible with '%s' incremental strategy in model '%s'. Supported strategies include %s.",
+                        "SQLMesh incremental by time strategy is not compatible with '%s' incremental strategy in model '%s'. Supported strategies include %s.",
                         strategy,
                         self.sql_name,
                         collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
@@ -178,6 +167,7 @@ class ModelConfig(BaseModelConfig):
                     forward_only=not is_supported,
                     disable_restatement=not is_supported,
                 )
+
             if self.unique_key:
                 strategy = self.incremental_strategy or target.default_incremental_strategy(
                     IncrementalByUniqueKeyKind
@@ -187,16 +177,21 @@ class ModelConfig(BaseModelConfig):
                     and strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
                 ):
                     raise ConfigError(
-                        f"{self.sql_name}: SQLMesh IncrementalByUniqueKey is not compatible with '{strategy}'"
+                        f"{self.sql_name}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key, **incremental_kwargs)
 
-            raise ConfigError(
-                f"{self.sql_name}: Incremental materialization requires either a "
-                f"time_column ({collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES)}) or a "
-                f"unique_key ({collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(['none']))}) configuration."
+            logger.warning(
+                "Incremental materialization in model '%s' requires either a time_column (%s) or a unique_key (%s) configuration",
+                self.sql_name,
+                collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
+                collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(["none"])),
             )
+            strategy = self.incremental_strategy or target.default_incremental_strategy(
+                IncrementalUnsafeKind
+            )
+            return IncrementalUnsafeKind(insert_overwrite=strategy == "insert_overwrite")
         if materialization == Materialization.EPHEMERAL:
             return ModelKind(name=ModelKindName.EMBEDDED)
         raise ConfigError(f"{materialization.value} materialization not supported.")

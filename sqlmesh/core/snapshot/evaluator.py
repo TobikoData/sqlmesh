@@ -34,7 +34,7 @@ from sqlglot.executor import execute
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
-from sqlmesh.core.model import Model, ViewKind
+from sqlmesh.core.model import IncrementalUnsafeKind, Model, ViewKind
 from sqlmesh.core.snapshot import (
     QualifiedViewName,
     Snapshot,
@@ -130,6 +130,7 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
+            dbt_is_incremental=snapshot.is_incremental_unsafe and bool(snapshot.intervals),
             **kwargs,
         )
 
@@ -486,6 +487,8 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         klass = IncrementalByTimeRangeStrategy
     elif snapshot.is_incremental_by_unique_key:
         klass = IncrementalByUniqueKeyStrategy
+    elif snapshot.is_incremental_unsafe:
+        klass = IncrementalUnsafeStrategy
     elif snapshot.is_view:
         klass = ViewStrategy
     else:
@@ -782,6 +785,24 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
             columns_to_types=model.columns_to_types,
             unique_key=model.unique_key,
         )
+
+
+class IncrementalUnsafeStrategy(MaterializableStrategy):
+    def insert(
+        self,
+        model: Model,
+        name: str,
+        query_or_df: QueryOrDF,
+        snapshots: t.Dict[str, Snapshot],
+        is_dev: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        if isinstance(model.kind, IncrementalUnsafeKind) and model.kind.insert_overwrite:
+            self.adapter.insert_overwrite(
+                name, query_or_df, columns_to_types=model.columns_to_types
+            )
+        else:
+            self.append(model, name, query_or_df, snapshots, is_dev, **kwargs)
 
 
 class FullRefreshStrategy(MaterializableStrategy):

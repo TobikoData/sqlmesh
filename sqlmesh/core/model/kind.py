@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import typing as t
 from enum import Enum
 
@@ -12,6 +13,11 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.model.common import bool_validator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
+
+if sys.version_info >= (3, 9):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
 
 
 class ModelKindMixin:
@@ -27,6 +33,10 @@ class ModelKindMixin:
     @property
     def is_incremental_by_unique_key(self) -> bool:
         return self.model_kind_name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
+
+    @property
+    def is_incremental_unsafe(self) -> bool:
+        return self.model_kind_name == ModelKindName.INCREMENTAL_UNSAFE
 
     @property
     def is_full(self) -> bool:
@@ -60,7 +70,7 @@ class ModelKindMixin:
     @property
     def only_latest(self) -> bool:
         """Whether or not this model only cares about latest date to render."""
-        return self.is_view or self.is_full
+        return self.is_view or self.is_full or self.is_incremental_unsafe
 
 
 class ModelKindName(str, ModelKindMixin, Enum):
@@ -68,6 +78,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
 
     INCREMENTAL_BY_TIME_RANGE = "INCREMENTAL_BY_TIME_RANGE"
     INCREMENTAL_BY_UNIQUE_KEY = "INCREMENTAL_BY_UNIQUE_KEY"
+    INCREMENTAL_UNSAFE = "INCREMENTAL_UNSAFE"
     FULL = "FULL"
     VIEW = "VIEW"
     EMBEDDED = "EMBEDDED"
@@ -244,6 +255,14 @@ class IncrementalByUniqueKeyKind(_Incremental):
         if isinstance(v, exp.Tuple):
             return [e.this for e in v.expressions]
         return [i.this if isinstance(i, exp.Identifier) else str(i) for i in v]
+
+
+class IncrementalUnsafeKind(ModelKind):
+    name: ModelKindName = Field(ModelKindName.INCREMENTAL_UNSAFE, const=True)
+    insert_overwrite: bool = False
+    disable_restatement: Literal[True] = True
+
+    _bool_validator = bool_validator
 
 
 class ViewKind(ModelKind):

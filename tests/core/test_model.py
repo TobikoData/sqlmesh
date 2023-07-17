@@ -16,6 +16,7 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
+    IncrementalUnsafeKind,
     ModelCache,
     ModelMeta,
     SeedKind,
@@ -23,6 +24,7 @@ from sqlmesh.core.model import (
     TimeColumn,
     create_external_model,
     create_seed_model,
+    create_sql_model,
     load_model,
     model,
 )
@@ -1563,3 +1565,20 @@ def test_model_normalization():
     assert model.partitioned_by[0].sql(dialect="bigquery") == "foo(`ds`)"
     assert model.name == '"project-1".db.tbl'
     assert model.depends_on == {'"project-1".db.raw', '"project-2".db.raw'}
+
+
+def test_incremental_unsafe_validation():
+    model = create_sql_model(
+        "a",
+        d.parse_one("SELECT a, ds FROM table_a"),
+        kind=IncrementalUnsafeKind(insert_overwrite=True),
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match=r"Unsafe incremental models with insert / overwrite enabled must specify the partitioned_by field.*",
+    ):
+        model.validate_definition()
+
+    model = model.copy(update={"partitioned_by_": [exp.to_column("ds")]})
+    model.validate_definition()

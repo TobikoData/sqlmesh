@@ -145,10 +145,6 @@ def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
     return os.environ.get(name, default)
 
 
-def is_incremental() -> bool:
-    return False
-
-
 def log(msg: str, info: bool = False) -> str:
     print(msg)
     return ""
@@ -264,7 +260,6 @@ BUILTIN_GLOBALS = {
     "flags": Flags(),
     "fromjson": from_json,
     "fromyaml": from_yaml,
-    "is_incremental": is_incremental,
     "log": no_log,
     "modules": Modules(),
     "print": no_log,
@@ -319,6 +314,9 @@ def create_builtin_globals(
     variables = jinja_globals.pop("vars", None)
     if variables is not None:
         builtin_globals["var"] = generate_var(variables)
+
+    is_incremental = jinja_globals.pop("dbt_is_incremental", False)
+    builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(
         {k: builtin_globals.get(k) for k in ("ref", "source", "config")}

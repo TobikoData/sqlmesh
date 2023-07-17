@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
+    IncrementalUnsafeKind,
     ModelKind,
     ModelKindName,
     PythonModel,
@@ -260,6 +261,37 @@ def test_evaluate_materialized_view_with_latest_macro(
         model.render_query(latest="2020-01-02"),
         model.columns_to_types,
         materialized=True,
+    )
+
+
+@pytest.mark.parametrize("insert_overwrite", [False, True])
+def test_evaluate_incremental_unsafe(
+    mocker: MockerFixture, make_snapshot, adapter_mock, insert_overwrite
+):
+    model = SqlModel(
+        name="test_schema.test_model",
+        query=parse_one("SELECT 1, ds FROM tbl_a"),
+        kind=IncrementalUnsafeKind(insert_overwrite=insert_overwrite),
+    )
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator = SnapshotEvaluator(adapter_mock)
+    evaluator.evaluate(
+        snapshot,
+        "2020-01-01",
+        "2020-01-02",
+        "2020-01-02",
+        snapshots={},
+    )
+
+    expected_call = (
+        adapter_mock.insert_overwrite if insert_overwrite else adapter_mock.insert_append
+    )
+    expected_call.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        columns_to_types=model.columns_to_types,
     )
 
 

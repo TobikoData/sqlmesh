@@ -12,6 +12,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
+    IncrementalUnsafeKind,
     ModelKind,
     ModelKindName,
     SqlModel,
@@ -89,14 +90,24 @@ def test_model_kind():
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
     ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="bar")
+    ).model_kind(target) == IncrementalUnsafeKind(insert_overwrite=True)
 
-    with pytest.raises(ConfigError) as exception:
+    assert (
         ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(target)
+        == IncrementalUnsafeKind()
+    )
+
+    assert ModelConfig(
+        materialized=Materialization.INCREMENTAL,
+        incremental_strategy="insert_overwrite",
+        partition_by={"field": "bar", "data_type": "int64"},
+    ).model_kind(target) == IncrementalUnsafeKind(insert_overwrite=True)
+
     with pytest.raises(ConfigError) as exception:
         ModelConfig(
             materialized=Materialization.INCREMENTAL,
@@ -114,12 +125,6 @@ def test_model_kind():
             materialized=Materialization.INCREMENTAL,
             unique_key=["bar"],
             incremental_strategy="append",
-        ).model_kind(target)
-    with pytest.raises(ConfigError) as exception:
-        assert ModelConfig(
-            materialized=Materialization.INCREMENTAL,
-            incremental_strategy="insert_ovewrite",
-            partition_by={"field": "bar", "data_type": "int64"},
         ).model_kind(target)
 
 
@@ -222,7 +227,7 @@ def test_project_name_jinja(sushi_test_project: Project):
     assert context.render("{{ project_name }}") == "sushi"
 
 
-def test_schema_jinja(sushi_test_project: Project):
+def test_schema_jinja(sushi_test_project: Project, assert_exp_eq):
     model_config = ModelConfig(
         name="model",
         package_name="package",
@@ -230,9 +235,10 @@ def test_schema_jinja(sushi_test_project: Project):
         sql="SELECT 1 AS one FROM {{ schema }}",
     )
     context = sushi_test_project.context
-    model_config.to_sqlmesh(
-        context
-    ).render_query_or_raise().sql() == "SELECT 1 AS one FROM sushi AS sushi"
+    assert_exp_eq(
+        model_config.to_sqlmesh(context).render_query_or_raise().sql(),
+        'SELECT 1 AS "one" FROM "sushi" AS "sushi"',
+    )
 
 
 def test_config_jinja(sushi_test_project: Project):
@@ -548,3 +554,28 @@ def test_relation_info_to_relation():
         BaseRelation,
         Policy(database=True, schema=True, identifier=True),
     ).quote_policy == Policy(database=False, schema=False, identifier=False)
+
+
+def test_is_incremental(sushi_test_project: Project, assert_exp_eq):
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        sql="""
+        SELECT 1 AS one FROM tbl_a
+        {% if is_incremental() %}
+        WHERE ds > (SELECT MAX(ds) FROM model)
+        {% endif %}
+        """,
+    )
+    context = sushi_test_project.context
+
+    assert_exp_eq(
+        model_config.to_sqlmesh(context).render_query_or_raise().sql(),
+        'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a"',
+    )
+
+    assert_exp_eq(
+        model_config.to_sqlmesh(context).render_query_or_raise(dbt_is_incremental=True).sql(),
+        'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a" WHERE "ds" > (SELECT MAX("ds") FROM "model" AS "model")',
+    )
