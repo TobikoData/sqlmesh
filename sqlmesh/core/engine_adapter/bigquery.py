@@ -395,10 +395,8 @@ class BigQueryEngineAdapter(EngineAdapter):
         # the api doesn't support backticks, so we can't call exp.table_name or sql
         return ".".join(part.name for part in exp.to_table(table_name).parts)
 
-    def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
-    ) -> DF:
-        self.execute(query, normalize_identifiers=normalize_identifiers)
+    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+        self.execute(query)
         return self.cursor._query_job.to_dataframe()
 
     def _create_table_properties(
@@ -471,7 +469,6 @@ class BigQueryEngineAdapter(EngineAdapter):
         self,
         expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
-        normalize_identifiers: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
@@ -482,12 +479,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         )
 
         for e in ensure_list(expressions):
-            sql = (
-                self._to_sql(e, normalize_identifiers=normalize_identifiers, **to_sql_kwargs)
-                if isinstance(e, exp.Expression)
-                else e
-            )
-
+            sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
             logger.debug(f"Executing SQL:\n{sql}")
 
             # BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.

@@ -5,8 +5,8 @@ import typing as t
 
 from pandas.io.sql import read_sql_query
 from sqlglot import exp
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
-from sqlmesh.core.dialect import normalize_and_quote_identifiers
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.shared import TransactionType
 
@@ -37,20 +37,13 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter):
         if not self.table_exists(table_name):
             return self.ctas(table_name, query_or_df, columns_to_types, exists=False, **kwargs)
         with self.transaction(TransactionType.DDL):
-            table = normalize_and_quote_identifiers(exp.to_table(table_name))
+            table = quote_identifiers(exp.to_table(table_name))
             sql = f"TRUNCATE {table.sql(dialect=self.dialect)}"
             self.execute(sql)
             return self.insert_append(table_name, query_or_df, columns_to_types)
 
-    def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
-    ) -> DF:
+    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         """Fetches a Pandas DataFrame from a SQL query."""
-        sql = (
-            self._to_sql(query, normalize_identifiers=normalize_identifiers)
-            if isinstance(query, exp.Expression)
-            else query
-        )
-
+        sql = self._to_sql(query) if isinstance(query, exp.Expression) else query
         logger.debug(f"Executing SQL:\n{sql}")
         return read_sql_query(sql, self.cursor.connection)

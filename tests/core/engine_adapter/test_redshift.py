@@ -20,7 +20,7 @@ def test_columns(mocker: MockerFixture):
 
     resp = adapter.columns("db.table")
     cursor_mock.execute.assert_called_once_with(
-        """SELECT "column_name", "data_type" FROM "svv_columns" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
+        """SELECT "column_name", "data_type" FROM "SVV_COLUMNS" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
     )
     assert resp == {"col": exp.DataType.build("INT")}
 

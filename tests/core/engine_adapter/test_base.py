@@ -687,9 +687,9 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__merge_target__" USING (SELECT "id", "ts", "val" FROM "source") AS "__merge_source__" ON "__merge_target__"."id" = "__merge_source__"."id" '
-        'WHEN MATCHED THEN UPDATE SET "__merge_target__"."id" = "__merge_source__"."id", "__merge_target__"."ts" = "__merge_source__"."ts", "__merge_target__"."val" = "__merge_source__"."val" '
-        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__merge_source__"."id", "__merge_source__"."ts", "__merge_source__"."val")'
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
+        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
+        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
     cursor_mock.reset_mock()
@@ -704,9 +704,9 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__merge_target__" USING (SELECT "id", "ts", "val" FROM "source") AS "__merge_source__" ON "__merge_target__"."id" = "__merge_source__"."id" AND "__merge_target__"."ts" = "__merge_source__"."ts" '
-        'WHEN MATCHED THEN UPDATE SET "__merge_target__"."id" = "__merge_source__"."id", "__merge_target__"."ts" = "__merge_source__"."ts", "__merge_target__"."val" = "__merge_source__"."val" '
-        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__merge_source__"."id", "__merge_source__"."ts", "__merge_source__"."val")'
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
+        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
+        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
 
@@ -728,9 +728,9 @@ def test_merge_pandas(mocker: MockerFixture):
         unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__merge_target__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__merge_source__" ON "__merge_target__"."id" = "__merge_source__"."id" '
-        'WHEN MATCHED THEN UPDATE SET "__merge_target__"."id" = "__merge_source__"."id", "__merge_target__"."ts" = "__merge_source__"."ts", "__merge_target__"."val" = "__merge_source__"."val" '
-        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__merge_source__"."id", "__merge_source__"."ts", "__merge_source__"."val")'
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
+        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
+        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
     cursor_mock.reset_mock()
@@ -745,9 +745,9 @@ def test_merge_pandas(mocker: MockerFixture):
         unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__merge_target__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__merge_source__" ON "__merge_target__"."id" = "__merge_source__"."id" AND "__merge_target__"."ts" = "__merge_source__"."ts" '
-        'WHEN MATCHED THEN UPDATE SET "__merge_target__"."id" = "__merge_source__"."id", "__merge_target__"."ts" = "__merge_source__"."ts", "__merge_target__"."val" = "__merge_source__"."val" '
-        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__merge_source__"."id", "__merge_source__"."ts", "__merge_source__"."val")'
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
+        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
+        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
 

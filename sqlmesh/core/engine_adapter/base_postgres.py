@@ -100,7 +100,6 @@ class BasePostgresEngineAdapter(EngineAdapter):
         self,
         expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
-        normalize_identifiers: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """
@@ -112,7 +111,6 @@ class BasePostgresEngineAdapter(EngineAdapter):
         super().execute(
             expressions,
             ignore_unsupported_errors=ignore_unsupported_errors,
-            normalize_identifiers=normalize_identifiers,
             **kwargs,
         )
         if not self._connection_pool.is_transaction_active:

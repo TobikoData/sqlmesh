@@ -106,29 +106,23 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             self._spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         return self._spark
 
-    def _fetch_native_df(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
-    ) -> DF:
+    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
         if self.is_spark_session_cursor:
-            return super()._fetch_native_df(query, normalize_identifiers=normalize_identifiers)
+            return super()._fetch_native_df(query)
         if self._use_spark_session:
             logger.debug(f"Executing SQL:\n{query}")
             return self.spark.sql(
-                self._to_sql(query, normalize_identifiers=normalize_identifiers)
-                if isinstance(query, exp.Expression)
-                else query
+                self._to_sql(query) if isinstance(query, exp.Expression) else query
             )
         self.execute(query)
         return self.cursor.fetchall_arrow().to_pandas()
 
-    def fetchdf(
-        self, query: t.Union[exp.Expression, str], normalize_identifiers: bool = False
-    ) -> pd.DataFrame:
+    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
         """
         Returns a Pandas DataFrame from a query or expression.
         """
-        df = self._fetch_native_df(query, normalize_identifiers=normalize_identifiers)
+        df = self._fetch_native_df(query)
         if not isinstance(df, pd.DataFrame):
             return df.toPandas()
         return df
