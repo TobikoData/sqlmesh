@@ -22,7 +22,7 @@ def migrate(state_sync):  # type: ignore
         snapshot = json.loads(snapshot)
         snapshots_to_kind[(name, identifier)] = snapshot["model"]["kind"]["name"]
 
-    environments = engine_adapter.fetchall(f"SELECT * FROM {environments_table}")
+    environments = engine_adapter.fetchall(exp.select("*").from_(environments_table))
     new_environments = []
 
     for (

@@ -4,7 +4,6 @@ import typing as t
 
 import pandas as pd
 from sqlglot import exp
-from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
@@ -64,12 +63,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
     ) -> None:
         from snowflake.connector.pandas_tools import write_pandas
 
-        table = normalize_identifiers(exp.to_table(table_name), dialect=self.dialect)
-
-        new_column_names = {
-            col: col if exp.to_identifier(col).quoted else col.upper() for col in df.columns
-        }
-        df = df.rename(columns=new_column_names)
+        table = exp.to_table(table_name)
 
         # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
         #
