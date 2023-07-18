@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from faker import Faker
 from models.src.shared import DATA_START_DATE_STR, iter_dates, set_seed  # type: ignore
-from sqlglot import exp
+from sqlglot import parse_one
 
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind, TimeColumn
@@ -50,15 +50,25 @@ def execute(
     customer_details_table_name = context.table("src.customer_details")
     menu_item_details_table_name = context.table("src.menu_item_details")
 
+    # We use parse_one here instead of a raw string because this is a multi-dialect
+    # project and we want to ensure that the resulting query is properly quoted for
+    # before executing it (quotes can differ per dialect)
     df_customers = context.fetchdf(
-        exp.select("id AS customer_id", "register_ds", copy=False)
-        .from_(customer_details_table_name, copy=False)
-        .where(f"register_ds <= '{to_ds(end)}'", copy=False),
+        parse_one(
+            f"""
+            SELECT
+                id AS customer_id,
+                register_ds
+            FROM {customer_details_table_name}
+            WHERE
+                register_ds <= '{to_ds(end)}'
+            """
+        ),
         quote_identifiers=True,
     )
 
     df_menu_items = context.fetchdf(
-        exp.select("id AS item_id", copy=False).from_(menu_item_details_table_name, copy=False),
+        parse_one(f"SELECT id AS item_id FROM {menu_item_details_table_name}"),
         quote_identifiers=True,
     )
 
