@@ -130,7 +130,7 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
-            dbt_is_incremental=snapshot.is_incremental_unmanaged and bool(snapshot.intervals),
+            dbt_is_incremental=bool(snapshot.intervals),
             **kwargs,
         )
 
