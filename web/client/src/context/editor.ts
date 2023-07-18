@@ -1,6 +1,6 @@
 import { type LineageColumn } from '@api/client'
 import { type TableColumn, type TableRow } from '@components/table/help'
-import { isFalse, isNotNil, uid } from '@utils/index'
+import { isFalse, isNil, isNotNil, uid } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { type ErrorKey, type ErrorIDE } from '~/library/pages/ide/context'
@@ -23,8 +23,8 @@ export interface StoredTab {
 }
 
 interface EditorStore {
-  storedTabsId?: ID
-  storedTabsIds: StoredTab[]
+  storedTabId?: ID
+  storedTabs: StoredTab[]
   tabs: Map<ModelFile, EditorTab>
   tab?: EditorTab
   engine: Worker
@@ -39,6 +39,7 @@ interface EditorStore {
   replaceTab: (from: EditorTab, to: EditorTab) => void
   updateStoredTabsIds: () => void
   addTab: (tab: EditorTab) => void
+  addTabs: (tabs: EditorTab[]) => void
   closeTab: (file: ModelFile) => void
   createTab: (file?: ModelFile) => EditorTab
   setDialects: (dialects: Dialect[]) => void
@@ -75,13 +76,18 @@ const [getStoredTabs, setStoredTabs] = useLocalStorage<{
   id?: ID
 }>('tabs')
 
+const { tabs: storedTabs = [], id: storedTabId } = getStoredTabs() ?? {}
 const initialFile = createLocalFile()
 const initialTab: EditorTab = createTab(initialFile)
-const initialTabs = new Map([[initialFile, initialTab]])
+const initialTabs = new Map(
+  storedTabs.length > 0 && isNotNil(storedTabId)
+    ? []
+    : [[initialFile, initialTab]],
+)
 
 export const useStoreEditor = create<EditorStore>((set, get) => ({
-  storedTabsIds: getStoredTabs()?.tabs ?? [],
-  storedTabsId: getStoredTabs()?.id,
+  storedTabs,
+  storedTabId,
   tab: initialTab,
   tabs: initialTabs,
   engine: sqlglotWorker,
@@ -107,40 +113,34 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   },
   updateStoredTabsIds() {
     const s = get()
+
+    if (isNil(s.tab)) {
+      setStoredTabs({
+        id: undefined,
+        tabs: [],
+      })
+
+      set(() => ({
+        storedTabId: undefined,
+        storedTabs: [],
+      }))
+
+      return
+    }
+
     const tabs: StoredTab[] = []
 
     for (const tab of s.tabs.values()) {
       if (isFalse(tab.file.isChanged) && tab.file.isLocal) continue
 
-      if (tab.file.isLocal) {
-        // Local file that has content
-        tabs.push({
-          content: tab.file.content,
-        })
-      } else {
-        const output: StoredTab = {
-          id: tab.file.id,
-        }
-
-        if (tab.file.isChanged) {
-          output.content = tab.file.content
-        }
-
-        tabs.push(output)
-      }
+      tabs.push({
+        id: tab.file.id,
+        content: tab.file.isChanged ? tab.file.content : undefined,
+      })
     }
 
-    let id: ID | undefined
-
-    if (isNotNil(s.tab)) {
-      if (s.tab.file.isLocal && s.tab.file.isChanged) {
-        id = s.tab.file.content
-      }
-
-      if (s.tab.file.isRemote) {
-        id = s.tab.file.id
-      }
-    }
+    const id =
+      s.tab.file.isChanged || s.tab.file.isRemote ? s.tab.file.id : undefined
 
     setStoredTabs({
       id,
@@ -148,8 +148,8 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
     })
 
     set(() => ({
-      storedTabsId: id,
-      storedTabsIds: tabs,
+      storedTabId: id,
+      storedTabs: tabs,
     }))
   },
   refreshTab() {
@@ -170,6 +170,17 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
     set(() => ({ tab }))
 
     s.updateStoredTabsIds()
+  },
+  addTabs(tabs) {
+    const s = get()
+
+    for (const tab of tabs) {
+      s.tabs.set(tab.file, tab)
+    }
+
+    set(() => ({
+      tabs: new Map(s.tabs),
+    }))
   },
   addTab(tab) {
     const s = get()
@@ -244,8 +255,9 @@ function createTab(file: ModelFile = createLocalFile()): EditorTab {
   }
 }
 
-function createLocalFile(): ModelFile {
+export function createLocalFile(id?: ID): ModelFile {
   return new ModelFile({
+    id,
     name: '',
     path: '',
     content:

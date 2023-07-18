@@ -36,7 +36,7 @@ import { type Model } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
-import { type EditorTab, useStoreEditor } from '@context/editor'
+import { useStoreEditor, createLocalFile } from '@context/editor'
 import { type ModelFile } from '@models/file'
 import ModalConfirmation, {
   type Confirmation,
@@ -81,12 +81,11 @@ export default function PageIDE(): JSX.Element {
   const setProject = useStoreProject(s => s.setProject)
   const setFiles = useStoreProject(s => s.setFiles)
 
-  const tab = useStoreEditor(s => s.tab)
-  const storedTabsIds = useStoreEditor(s => s.storedTabsIds)
-  const storedTabsId = useStoreEditor(s => s.storedTabsId)
+  const storedTabs = useStoreEditor(s => s.storedTabs)
+  const storedTabId = useStoreEditor(s => s.storedTabId)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
-  const addTab = useStoreEditor(s => s.addTab)
+  const addTabs = useStoreEditor(s => s.addTabs)
 
   const subscribe = useChannelEvents()
 
@@ -237,32 +236,23 @@ export default function PageIDE(): JSX.Element {
   }
 
   function restoreEditorTabsFromSaved(files: ModelFile[]): void {
-    console.log('restoreEditorTabsFromSaved', {
-      storedTabsIds,
-      storedTabsId,
+    if (isArrayEmpty(storedTabs)) return
+
+    const tabs = storedTabs.map(({ id, content }) => {
+      const file = files.find(file => file.id === id) ?? createLocalFile(id)
+      const storedTab = createTab(file)
+
+      storedTab.file.content = content ?? storedTab.file.content ?? ''
+
+      return storedTab
     })
-    if (isArrayEmpty(storedTabsIds)) return
+    const tab = tabs.find(tab => tab.file.id === storedTabId)
 
-    storedTabsIds.forEach(({ id, content }) => {
-      const file = files.find(file => file.id === id)
-      let storedTab: EditorTab
+    addTabs(tabs)
 
-      if (isNil(file)) {
-        storedTab = isNil(tab) || tab.file.isChanged ? createTab() : tab
+    if (isNil(tab)) return
 
-        storedTab.file.content = content ?? ''
-      } else {
-        storedTab = createTab(file)
-
-        storedTab.file.content = content ?? storedTab.file.content
-      }
-
-      addTab(storedTab)
-
-      if (storedTabsId === id || (isNil(id) && storedTabsId === content)) {
-        selectTab(storedTab)
-      }
-    })
+    selectTab(tab)
   }
 
   function closeModalConfirmation(confirmation?: Confirmation): void {
