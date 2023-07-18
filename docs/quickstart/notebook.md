@@ -27,8 +27,7 @@ Inform SQLMesh of the project location by setting a context with the `%context` 
 
 You can specify multiple directories in one call to `%context` if your SQLMesh project has [multiple repositories](../guides/multi_repo.md). 
 
-## 2. Plan and apply environments
-### 2.1 Create a prod environment
+## 2. Create a prod environment
 
 SQLMesh's key actions are creating and applying *plans* to *environments*. At this point, the only environment is the empty `prod` environment.
 
@@ -57,28 +56,10 @@ The first output block shows the completion percentage and run time for each mod
 
 You've now created a new production environment with all of history backfilled.
 
-### 2.2 Create a dev environment
-Now that you've created a production environment, it's time to create a development environment so that you can modify models without affecting production. 
+## 3. Update a model
 
-Run `%plan dev` to create a development environment called `dev`. The following output will be displayed:
+Now that we have have populated the `prod` environment, let's modify one of the SQL models.
 
-![Notebook output after dev plan creation](./notebook/nb-quickstart_plan-dev.png)
-
-The output does not list any added or modified models because `dev` is being created from the existing `prod` environment without modification. 
-
-The `New environment` line shows that when you apply the plan creating the `dev` environment, it will only involve a Virtual Update. This is because SQLMesh is able to safely reuse the tables you've already backfilled in the `prod` environment. 
-
-Click the green button to perform the Virtual Update:
-
-![Notebook output after dev plan application](./notebook/nb-quickstart_apply-plan-dev.png)
-
-The output confirms that the `dev` environment has been updated successfully.
-
-## 3. Make your first update
-
-Now that we have have populated both `prod` and `dev` environments, let's modify one of the SQL models, validate it in `dev`, and push it to `prod`.
-
-### 3.1 Edit the configuration
 We can modify the incremental SQL model using the `%model` *line* notebook magic (note the single `%`) and the model name:
 
 ![%model line magic for sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-line.png)
@@ -91,59 +72,69 @@ We modify the incremental SQL model by adding a new column to the query. When we
 
 ![%%model cell magic for updated sqlmesh_example.incremental_model](./notebook/nb-quickstart_model-cell-updated.png)
 
-## 4. Plan and apply updates
-We can preview the impact of the change using the `%plan dev` command:
+## 4. Work with a development environment
 
-![Notebook output after model modification and %plan dev](./notebook/nb-quickstart_plan-dev-modified.png)
+### 4.1 Create a dev environment
+Now that you've modified a model, it's time to create a development environment so that you can validate the model change without affecting production. 
+
+Run `%plan dev` to create a development environment called `dev`. The following output will be displayed:
+
+![Notebook output after dev plan creation](./notebook/nb-quickstart_plan-dev.png)
 
 The first block of output notes that `%plan` successfully executed the project's test `tests/test_full_model.yaml` with duckdb.
 
-The second block "Summary of differences against `dev`" summarizes the differences between the modified project components and the existing `dev` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. 
+The `New environment` line describes what environments the plan will affect when applied - a new `dev` environment will be created from the existing `prod` environment.
 
-The third block shows the modifications we made to the rendered query.
+The `Summary of differences` section summarizes the differences between the modified model and the new `dev` environment (right now just a copy of `prod`), detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. It shows a diff between the existing and updated model.
 
-The next block shows that we directly modified the incremental model. SQLMesh understood that the change was additive (added a column not used by `full_model`) and automatically classified it as a non-breaking change.
+SQLMesh automatically classified the change as `Non-breaking` because understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
 
-The final block describes the models requiring backfill, including the incremental model from our start date `2020-01-01`. We can modify the backfill start and end dates for the incremental model with the date picker widget, if desired. 
+The `Models needing backfill` section shows that only the directly modified `incremental_model` needs backfill and provides a date picker to specify the start and end dates for the backfill. 
 
-Click the green `Apply - Backfill Tables` button to apply the plan and execute the backfill:
+Click the green button to perform the backfill:
 
-![Notebook output after model modification and applying the updated plan](./notebook/nb-quickstart_apply-plan-dev-modified.png)
+![Notebook output after dev plan application](./notebook/nb-quickstart_apply-plan-dev.png)
 
-SQLMesh applies the change to `sqlmesh_example.incremental_model` and backfills the model. SQLMesh did not need to backfill `sqlmesh_example.full_model` since the change was `non-breaking`.
+The output shows that SQLMesh created a new model version in `dev`. The last line of the output shows that SQLMesh applied the change to `sqlmesh_example__dev.incremental_model`. In the model schema, the suffix "`__dev`" indicates that it is in the `dev` environment. 
 
-### 4.1 Validate updates in dev
+SQLMesh did not need to backfill anything for the `full_model` since the change was `Non-breaking`.
+
+### 4.2 Validate updates in dev
 You can now view this change by querying data from `incremental_model` with the `%%fetchdf` *cell* magic (note the two `%` symbols) and the SQL query `select * from sqlmesh_example__dev.incremental_model`. 
 
-Note that the environment name `__dev` is appended to the schema namespace `sqlmesh_example` in the query: `select * from sqlmesh_example__dev.incremental_model`.
+Note that the environment name `__dev` is appended to the schema namespace `sqlmesh_example` in the query:
 
 ![Notebook output after executing %%fetchdf on `dev` incremental_model](./notebook/nb-quickstart_fetchdf-dev.png)
 
 You can see that `new_column` was added to the dataset. 
 
-The production table was not modified; you can validate this by querying the production table using `%%fetchdf` and the query `select * from sqlmesh_example.incremental_model`. Note that nothing has been appended to the schema namespace `sqlmesh_example` because `prod` is the default environment.
+The production table was not modified; you can validate this by querying the production table using `%%fetchdf` and the query `select * from sqlmesh_example.incremental_model`. 
+
+Note that nothing has been appended to the schema namespace `sqlmesh_example` because `prod` is the default environment:
 
 ![Notebook output after executing %%fetchdf on prod incremental_model before model update applied](./notebook/nb-quickstart_fetchdf-prod.png)
 
 The production table does not have `new_column` because the changes to `dev` have not yet been applied to `prod`.
 
-### 4.2 Apply updates to prod
-Now that we've tested the changes in dev, it's time to move them to prod. Run `%plan` to plan and apply your changes to the prod environment. 
+## 5. Update the prod environment
+Now that we've tested the changes in dev, it's time to move them to production. Run `%plan` to plan and apply your changes to the `prod` environment:
+
+![Notebook output after executing %plan on prod](./notebook/nb-quickstart_apply-plan-prod-modified.png)
 
 Click the green `Apply - Virtual Update` button to apply the plan and execute the backfill:
 
-![Notebook output after executing %plan on prod and applying changes](./notebook/nb-quickstart_apply-plan-prod-modified.png)
+![Notebook output after executing applying virtual update on prod](./notebook/nb-quickstart_apply-plan-prod-modified-update.png)
 
 Note that a backfill was not necessary and only a Virtual Update occurred.
 
-### 4.3. Validate updates in prod
+### 5.2 Validate updates in prod
 Double-check that the data updated in `prod` by running `%%fetchdf` with the SQL query `select * from sqlmesh_example.incremental_model`:
 
 ![Notebook output after executing %%fetchdf on prod incremental_model after model update applied](./notebook/nb-quickstart_fetchdf-prod-modified.png)
 
 `new_column` is now present in the `prod` incremental model.
 
-## 5. Next steps
+## 6. Next steps
 
 Congratulations, you've now conquered the basics of using SQLMesh!
 
