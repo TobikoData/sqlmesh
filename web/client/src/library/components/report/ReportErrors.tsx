@@ -3,9 +3,10 @@ import pluralize from 'pluralize'
 import clsx from 'clsx'
 import { useState, Fragment } from 'react'
 import { useIDE, type ErrorIDE, type ErrorKey } from '../../pages/ide/context'
-import { toDate, toDateFormat } from '@utils/index'
+import { isNotNil, toDate, toDateFormat } from '@utils/index'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { Divider } from '@components/divider/Divider'
+import { useStoreContext } from '@context/context'
 
 export default function ReportErrors(): JSX.Element {
   const { errors } = useIDE()
@@ -93,6 +94,8 @@ export function DisplayError({
   scope: ErrorKey
   error: ErrorIDE
 }): JSX.Element {
+  const version = useStoreContext(s => s.version)
+
   return (
     <div>
       <div className="flex w-full">
@@ -117,6 +120,11 @@ export function DisplayError({
           </div>
         </div>
         <div className="w-full px-4">
+          {isNotNil(version) && (
+            <small className="block">
+              <b>Version</b>: {version}
+            </small>
+          )}
           {error.type != null && (
             <small className="block">
               <b>Type</b>: {error.type}
