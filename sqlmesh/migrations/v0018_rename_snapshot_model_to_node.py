@@ -16,7 +16,7 @@ def migrate(state_sync):  # type: ignore
         exp.select("name", "identifier", "version", "snapshot", "kind_name").from_(snapshots_table)
     ):
         parsed_snapshot = json.loads(snapshot)
-        parsed_snapshot["node"] = parsed_snapshot.pop["model"]
+        parsed_snapshot["node"] = parsed_snapshot.pop("model")
 
         new_snapshots.append(
             {
