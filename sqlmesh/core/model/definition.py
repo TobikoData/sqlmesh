@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import logging
 import sys
 import types
@@ -23,13 +24,20 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator
-from sqlmesh.core.model.kind import ModelKindName, SeedKind, _Incremental
+from sqlmesh.core.model.kind import (
+    IncrementalByTimeRangeKind,
+    IncrementalByUniqueKeyKind,
+    ModelKindName,
+    SeedKind,
+    _Incremental,
+)
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
+from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
 from sqlmesh.utils.metaprogramming import (
     Executable,
@@ -48,9 +56,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
-    from typing import Annotated, Literal
+    from typing import Literal
 else:
-    from typing_extensions import Annotated, Literal
+    from typing_extensions import Literal
 
 logger = logging.getLogger(__name__)
 
@@ -628,6 +636,103 @@ class _Model(ModelMeta, frozen=True):
         """
         raise NotImplementedError
 
+    @property
+    def data_hash(self) -> str:
+        """
+        Computes the data hash for the node.
+
+        Returns:
+            The data hash for the node.
+        """
+        return hash_data(self._data_hash_fields)
+
+    @property
+    def _data_hash_fields(self) -> t.List[str]:
+        data = [
+            str(self.sorted_python_env),
+            self.kind.name,
+            self.cron,
+            self.storage_format,
+            str(self.lookback),
+            *(expr.sql() for expr in (self.partitioned_by or [])),
+            *(self.clustered_by or []),
+            self.stamp,
+        ]
+
+        for column_name, column_type in (self.columns_to_types_ or {}).items():
+            data.append(column_name)
+            data.append(column_type.sql())
+
+        if isinstance(self.kind, IncrementalByTimeRangeKind):
+            data.append(self.kind.time_column.column)
+            data.append(self.kind.time_column.format)
+        elif isinstance(self.kind, IncrementalByUniqueKeyKind):
+            data.extend(self.kind.unique_key)
+
+        return data  # type: ignore
+
+    def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+        """
+        Computes the metadata hash for the node.
+
+        Args:
+            audits: Available audits by name.
+
+        Returns:
+            The metadata hash for the node.
+        """
+        from sqlmesh.core.audit import BUILT_IN_AUDITS
+
+        metadata = [
+            self.dialect,
+            self.owner,
+            self.description,
+            str(self.start) if self.start else None,
+            str(self.retention) if self.retention else None,
+            str(self.batch_size) if self.batch_size is not None else None,
+            json.dumps(self.mapping_schema, sort_keys=True),
+            *sorted(self.tags),
+            *sorted(self.grain),
+            str(self.forward_only),
+            str(self.disable_restatement),
+        ]
+
+        for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
+            metadata.append(audit_name)
+
+            if audit_name in BUILT_IN_AUDITS:
+                for arg_name, arg_value in audit_args.items():
+                    metadata.append(arg_name)
+                    metadata.append(arg_value.sql(comments=True))
+            elif audit_name in audits:
+                audit = audits[audit_name]
+                query = (
+                    audit.query
+                    if self.hash_raw_query
+                    else audit.render_query(self, **t.cast(t.Dict[str, t.Any], audit_args))
+                    or audit.query
+                )
+                metadata.extend(
+                    [
+                        query.sql(comments=True),
+                        audit.dialect,
+                        str(audit.skip),
+                        str(audit.blocking),
+                    ]
+                )
+            else:
+                raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
+
+        # Add comments from the query.
+        if self.is_sql:
+            rendered_query = self.render_query()
+            if rendered_query:
+                for e, _, _ in rendered_query.walk():
+                    if e.comments:
+                        metadata.extend(e.comments)
+
+        return hash_data(metadata)
+
 
 class _SqlBasedModel(_Model):
     pre_statements_: t.Optional[t.List[exp.Expression]] = Field(
@@ -727,6 +832,20 @@ class _SqlBasedModel(_Model):
                 only_latest=self.kind.only_latest,
             )
         return self.__statement_renderers[expression_key]
+
+    @property
+    def _data_hash_fields(self) -> t.List[str]:
+        pre_statements = (
+            self.pre_statements if self.hash_raw_query else self.render_pre_statements()
+        )
+        post_statements = (
+            self.post_statements if self.hash_raw_query else self.render_post_statements()
+        )
+        macro_defs = self.macro_definitions if self.hash_raw_query else []
+        return [
+            *super()._data_hash_fields,
+            *[e.sql(comments=False) for e in (*pre_statements, *post_statements, *macro_defs)],
+        ]
 
 
 class SqlModel(_SqlBasedModel):
@@ -926,6 +1045,24 @@ class SqlModel(_SqlBasedModel):
             )
         return self.__query_renderer
 
+    @property
+    def _data_hash_fields(self) -> t.List[str]:
+        data = super()._data_hash_fields
+
+        query = self.query if self.hash_raw_query else self.render_query() or self.query
+        data.append(query.sql(comments=False))
+
+        for macro_name, macro in sorted(self.jinja_macros.root_macros.items()):
+            data.append(macro_name)
+            data.append(macro.definition)
+
+        for _, package in sorted(self.jinja_macros.packages.items(), key=lambda x: x[0]):
+            for macro_name, macro in sorted(package.items(), key=lambda x: x[0]):
+                data.append(macro_name)
+                data.append(macro.definition)
+
+        return data
+
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, query: {self.query.sql(dialect=self.dialect)[0:30]}>"
 
@@ -1087,6 +1224,14 @@ class SeedModel(_SqlBasedModel):
         if not self.is_hydrated:
             raise SQLMeshError(f"Seed model '{self.name}' is not hydrated.")
 
+    @property
+    def _data_hash_fields(self) -> t.List[str]:
+        data = super()._data_hash_fields
+        for column_name, column_hash in self.column_hashes.items():
+            data.append(column_name)
+            data.append(column_hash)
+        return data
+
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, seed: {self.kind.path}>"
 
@@ -1139,6 +1284,12 @@ class PythonModel(_Model):
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         return None
 
+    @property
+    def _data_hash_fields(self) -> t.List[str]:
+        data = super()._data_hash_fields
+        data.append(self.entrypoint)
+        return data
+
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, entrypoint: {self.entrypoint}>"
 
@@ -1156,9 +1307,7 @@ class ExternalModel(_Model):
         return None
 
 
-Model = Annotated[
-    t.Union[SqlModel, SeedModel, PythonModel, ExternalModel], Field(discriminator="source_type")
-]
+Model = t.Union[SqlModel, SeedModel, PythonModel, ExternalModel]
 
 
 def load_model(

@@ -10,7 +10,7 @@ from sqlglot import parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
-from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils import AttributeDict
 
 
