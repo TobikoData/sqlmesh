@@ -2,14 +2,13 @@ import asyncio
 import typing as t
 
 from fastapi import APIRouter, Request
-
-from web.server.sse import SSEResponse
+from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 router = APIRouter()
 
 
 @router.get("")
-async def events(request: Request) -> SSEResponse:
+async def events(request: Request) -> EventSourceResponse:
     """SQLMesh console server sent events"""
 
     async def generator() -> t.AsyncGenerator:
@@ -22,4 +21,6 @@ async def events(request: Request) -> SSEResponse:
         finally:
             request.app.state.console_listeners.remove(queue)
 
-    return SSEResponse(generator())
+    return EventSourceResponse(
+        generator(), ping=300, ping_message_factory=lambda: ServerSentEvent(comment="ping")
+    )

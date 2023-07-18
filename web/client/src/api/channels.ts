@@ -10,25 +10,20 @@ export function useChannelEvents(): <TData = any>(
   topic: string,
   callback: ChannelCallback<TData>,
 ) => Optional<() => void> {
-  return (topic, callback) => subscribe(topic, callback)
-}
+  return (topic, callback) => {
+    if (isNil(topic) || CHANNELS.has(topic)) return CHANNELS.get(topic)
 
-function subscribe<TData = any>(
-  topic: string,
-  callback: ChannelCallback<TData>,
-): Optional<() => void> {
-  if (isNil(topic) || CHANNELS.has(topic)) return CHANNELS.get(topic)
+    const handler = handleChannelTopicCallback(topic, callback)
 
-  const handler = handleChannelTopicCallback<TData>(topic, callback)
+    SSE_CHANNEL.addEventListener(topic, handler)
 
-  SSE_CHANNEL.addEventListener(topic, handler)
+    CHANNELS.set(topic, () => {
+      SSE_CHANNEL.removeEventListener(topic, handler)
+      CHANNELS.delete(topic)
+    })
 
-  CHANNELS.set(topic, () => {
-    SSE_CHANNEL.removeEventListener(topic, handler)
-    CHANNELS.delete(topic)
-  })
-
-  return CHANNELS.get(topic)
+    return CHANNELS.get(topic)
+  }
 }
 
 function handleChannelTopicCallback<TData = any>(
@@ -47,5 +42,13 @@ function handleChannelTopicCallback<TData = any>(
 }
 
 function getEventSource(source: string): EventSource {
-  return new EventSource(source)
+  const eventSource = new window.EventSource(source, {
+    withCredentials: true,
+  })
+
+  eventSource.addEventListener('error', (e: MessageEvent) => {
+    console.log('error', e)
+  })
+
+  return eventSource
 }

@@ -445,7 +445,14 @@ def ui(
     host = host or "127.0.0.1"
     port = 8000 if port is None else port
     os.environ["PROJECT_PATH"] = str(obj.path)
-    uvicorn.run("web.server.main:app", host=host, port=port, log_level="info")
+    uvicorn.run(
+        "web.server.main:app",
+        host=host,
+        port=port,
+        log_level="info",
+        timeout_graceful_shutdown=1,
+        timeout_keep_alive=299,
+    )
 
 
 @cli.command("migrate")

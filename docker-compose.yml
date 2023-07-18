@@ -37,7 +37,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    command: python -m uvicorn web.server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh --timeout-graceful-shutdown 1
+    command: python -m uvicorn web.server.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /sqlmesh/web/server --reload-dir /sqlmesh/sqlmesh --timeout-keep-alive 299 --timeout-graceful-shutdown 1
     ports:
       - 8000:8000
     volumes:
