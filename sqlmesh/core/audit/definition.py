@@ -10,7 +10,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.common import bool_validator, expression_validator
-from sqlmesh.core.model.definition import Model, _Model
+from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
@@ -160,7 +160,7 @@ class Audit(AuditMeta, frozen=True):
 
     def render_query(
         self,
-        snapshot_or_model: t.Union[Snapshot, Model],
+        snapshot_or_model: t.Union[Snapshot, _Model],
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
@@ -238,7 +238,7 @@ class Audit(AuditMeta, frozen=True):
         """All macro definitions from the list of expressions."""
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
-    def _create_query_renderer(self, model: Model) -> QueryRenderer:
+    def _create_query_renderer(self, model: _Model) -> QueryRenderer:
         return QueryRenderer(
             self.query,
             self.dialect or model.dialect,

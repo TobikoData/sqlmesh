@@ -11,6 +11,9 @@ from sqlmesh.utils.date import TimeLike, to_datetime
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.audit import Audit
+
 
 class IntervalUnit(str, Enum):
     """IntervalUnit is the inferred granularity of an incremental model.
@@ -90,6 +93,13 @@ class Node(PydanticModel):
     def batch_size(self) -> t.Optional[int]:
         """The maximal number of units in a single task for a backfill."""
         return None
+
+    @property
+    def data_hash(self) -> str:
+        raise NotImplementedError
+
+    def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+        raise NotImplementedError
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Returns the IntervalUnit of the model

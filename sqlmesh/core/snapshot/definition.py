@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import typing as t
 from collections import defaultdict
@@ -12,18 +11,9 @@ from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit
-from sqlmesh.core.model import (
-    Model,
-    ModelKindMixin,
-    ModelKindName,
-    PythonModel,
-    SeedModel,
-    SqlModel,
-    ViewKind,
-    kind,
-)
-from sqlmesh.core.model.definition import _Model, _SqlBasedModel
+from sqlmesh.core.audit import Audit
+from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
+from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
@@ -38,7 +28,7 @@ from sqlmesh.utils.date import (
     yesterday,
 )
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.hashing import crc32
+from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.pydantic import PydanticModel
 
 if sys.version_info >= (3, 9):
@@ -96,10 +86,10 @@ class SnapshotFingerprint(PydanticModel, frozen=True):
     parent_metadata_hash: str = "0"
 
     def to_version(self) -> str:
-        return _hash([self.data_hash, self.parent_data_hash])
+        return hash_data([self.data_hash, self.parent_data_hash])
 
     def to_identifier(self) -> str:
-        return _hash(
+        return hash_data(
             [
                 self.data_hash,
                 self.metadata_hash,
@@ -874,18 +864,6 @@ def fingerprint_from_node(
     audits: t.Optional[t.Dict[str, Audit]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
-    """Helper function to generate a fingerprint based on node and environment."""
-    # only model nodes right now
-    return fingerprint_from_model(node, nodes=nodes, audits=audits, cache=cache)
-
-
-def fingerprint_from_model(
-    model: Model,
-    *,
-    nodes: t.Dict[str, SnapshotNode],
-    audits: t.Optional[t.Dict[str, Audit]] = None,
-    cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
-) -> SnapshotFingerprint:
     """Helper function to generate a fingerprint based on a model's query and environment.
 
     This method tries to remove non meaningful differences to avoid ever changing fingerprints.
@@ -904,7 +882,7 @@ def fingerprint_from_model(
     """
     cache = {} if cache is None else cache
 
-    if model.name not in cache:
+    if node.name not in cache:
         parents = [
             fingerprint_from_node(
                 nodes[table],
@@ -912,143 +890,24 @@ def fingerprint_from_model(
                 audits=audits,
                 cache=cache,
             )
-            for table in model.depends_on
+            for table in node.depends_on
             if table in nodes
         ]
 
-        parent_data_hash = _hash(sorted(p.to_version() for p in parents))
+        parent_data_hash = hash_data(sorted(p.to_version() for p in parents))
 
-        parent_metadata_hash = _hash(
+        parent_metadata_hash = hash_data(
             sorted(h for p in parents for h in (p.metadata_hash, p.parent_metadata_hash))
         )
 
-        cache[model.name] = SnapshotFingerprint(
-            data_hash=_model_data_hash(model),
-            metadata_hash=_model_metadata_hash(model, audits or {}),
+        cache[node.name] = SnapshotFingerprint(
+            data_hash=node.data_hash,
+            metadata_hash=node.metadata_hash(audits or {}),
             parent_data_hash=parent_data_hash,
             parent_metadata_hash=parent_metadata_hash,
         )
 
-    return cache[model.name]
-
-
-def _model_data_hash(model: Model) -> str:
-    data = [
-        str(model.sorted_python_env),
-        model.kind.name,
-        model.cron,
-        model.storage_format,
-        str(model.lookback),
-        *(expr.sql() for expr in (model.partitioned_by or [])),
-        *(model.clustered_by or []),
-        model.stamp,
-    ]
-
-    if isinstance(model, _SqlBasedModel):
-        pre_statements = (
-            model.pre_statements if model.hash_raw_query else model.render_pre_statements()
-        )
-        post_statements = (
-            model.post_statements if model.hash_raw_query else model.render_post_statements()
-        )
-        macro_defs = model.macro_definitions if model.hash_raw_query else []
-    else:
-        pre_statements = []
-        post_statements = []
-        macro_defs = []
-
-    if isinstance(model, SqlModel):
-        query = model.query if model.hash_raw_query else model.render_query() or model.query
-
-        for e in (query, *pre_statements, *post_statements, *macro_defs):
-            data.append(e.sql(comments=False))
-
-        for macro_name, macro in sorted(model.jinja_macros.root_macros.items(), key=lambda x: x[0]):
-            data.append(macro_name)
-            data.append(macro.definition)
-
-        for _, package in sorted(model.jinja_macros.packages.items(), key=lambda x: x[0]):
-            for macro_name, macro in sorted(package.items(), key=lambda x: x[0]):
-                data.append(macro_name)
-                data.append(macro.definition)
-
-    elif isinstance(model, PythonModel):
-        data.append(model.entrypoint)
-    elif isinstance(model, SeedModel):
-        for e in (*pre_statements, *post_statements, *macro_defs):
-            data.append(e.sql(comments=False))
-
-        for column_name, column_hash in model.column_hashes.items():
-            data.append(column_name)
-            data.append(column_hash)
-
-    for column_name, column_type in (model.columns_to_types_ or {}).items():
-        data.append(column_name)
-        data.append(column_type.sql())
-
-    if isinstance(model.kind, kind.IncrementalByTimeRangeKind):
-        data.append(model.kind.time_column.column)
-        data.append(model.kind.time_column.format)
-    elif isinstance(model.kind, kind.IncrementalByUniqueKeyKind):
-        data.extend(model.kind.unique_key)
-
-    return _hash(data)
-
-
-def _model_metadata_hash(model: Model, audits: t.Dict[str, Audit]) -> str:
-    metadata = [
-        model.dialect,
-        model.owner,
-        model.description,
-        str(model.start) if model.start else None,
-        str(model.retention) if model.retention else None,
-        str(model.batch_size) if model.batch_size is not None else None,
-        json.dumps(model.mapping_schema, sort_keys=True),
-        *sorted(model.tags),
-        *sorted(model.grain),
-        str(model.forward_only),
-        str(model.disable_restatement),
-    ]
-
-    for audit_name, audit_args in sorted(model.audits, key=lambda a: a[0]):
-        metadata.append(audit_name)
-
-        if audit_name in BUILT_IN_AUDITS:
-            for arg_name, arg_value in audit_args.items():
-                metadata.append(arg_name)
-                metadata.append(arg_value.sql(comments=True))
-        elif audit_name in audits:
-            audit = audits[audit_name]
-            query = (
-                audit.query
-                if model.hash_raw_query
-                else audit.render_query(model, **t.cast(t.Dict[str, t.Any], audit_args))
-                or audit.query
-            )
-            metadata.extend(
-                [
-                    query.sql(comments=True),
-                    audit.dialect,
-                    str(audit.skip),
-                    str(audit.blocking),
-                ]
-            )
-        else:
-            raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
-
-    # Add comments from the model query.
-    if model.is_sql:
-        rendered_query = model.render_query()
-        if rendered_query:
-            for e, _, _ in rendered_query.walk():
-                if e.comments:
-                    metadata.extend(e.comments)
-
-    return _hash(metadata)
-
-
-def _hash(data: t.Iterable[t.Optional[str]]) -> str:
-    return crc32(data)
+    return cache[node.name]
 
 
 def _parents_from_node(
