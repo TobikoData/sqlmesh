@@ -528,7 +528,7 @@
     "/api/meta": {
       "get": {
         "summary": "Get Api Meta",
-        "description": "Get the context",
+        "description": "Get the metadata",
         "operationId": "get_api_meta_api_meta_get",
         "responses": {
           "200": {
