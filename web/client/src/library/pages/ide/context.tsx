@@ -11,6 +11,7 @@ export const EnumErrorKey = {
   EvaluateModel: 'evaluate-model',
   RenderModel: 'render-model',
   ColumnLineage: 'column-lineage',
+  Meta: 'meta',
 } as const
 
 export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]

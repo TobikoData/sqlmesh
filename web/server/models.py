@@ -59,13 +59,8 @@ class Directory(BaseModel):
     files: t.List[File] = []
 
 
-class Context(BaseModel):
-    concurrent_tasks: int
-    engine_adapter: str
-    time_column_format: str
-    scheduler: str
-    models: t.List[str] = []
-    config: str
+class Meta(BaseModel):
+    version: str
 
 
 class ChangeDirect(BaseModel):

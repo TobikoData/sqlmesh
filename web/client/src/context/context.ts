@@ -15,6 +15,7 @@ import {
 import { isStringEmptyOrNil } from '~/utils'
 
 interface ContextStore {
+  version?: string
   showConfirmation: boolean
   confirmations: Confirmation[]
   environment: ModelEnvironment
@@ -22,6 +23,7 @@ interface ContextStore {
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
   models: Map<string, ModelSQLMeshModel>
+  setVersion: (version?: string) => void
   setShowConfirmation: (showConfirmation: boolean) => void
   addConfirmation: (confirmation: Confirmation) => void
   removeConfirmation: () => void
@@ -48,6 +50,7 @@ const environments = new Set(ModelEnvironment.getDefaultEnvironments())
 const environment = environments.values().next().value
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
+  version: undefined,
   showConfirmation: false,
   confirmations: [],
   environment,
@@ -55,6 +58,11 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
+  setVersion(version) {
+    set(() => ({
+      version,
+    }))
+  },
   setShowConfirmation(showConfirmation) {
     set(() => ({
       showConfirmation,
