@@ -34,7 +34,9 @@ from sqlmesh.utils.errors import SQLMeshError
 
 @pytest.fixture
 def state_sync(duck_conn):
-    state_sync = EngineAdapterStateSync(create_engine_adapter(lambda: duck_conn, "duckdb"))
+    state_sync = EngineAdapterStateSync(
+        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
+    )
     state_sync.migrate()
     return state_sync
 
