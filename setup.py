@@ -115,6 +115,7 @@ setup(
         ],
         "snowflake": [
             "snowflake-connector-python[pandas,secure-local-storage]",
+            "pyarrow>=10.0.1,<10.1.0",
         ],
         "web": [
             "fastapi==0.100.0",

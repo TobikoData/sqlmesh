@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from faker import Faker
 from models.src.shared import DATA_START_DATE_STR, iter_dates, set_seed  # type: ignore
+from sqlglot import exp
 
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind, TimeColumn
@@ -50,22 +51,15 @@ def execute(
     menu_item_details_table_name = context.table("src.menu_item_details")
 
     df_customers = context.fetchdf(
-        f"""
-        SELECT
-            id AS customer_id,
-            register_ds
-        FROM {customer_details_table_name}
-        WHERE
-            register_ds <= '{to_ds(end)}'
-        """
+        exp.select("id AS customer_id", "register_ds", copy=False)
+        .from_(customer_details_table_name, copy=False)
+        .where(f"register_ds <= '{to_ds(end)}'", copy=False),
+        quote_identifiers=True,
     )
 
     df_menu_items = context.fetchdf(
-        f"""
-        SELECT
-            id AS item_id
-        FROM {menu_item_details_table_name}
-        """
+        exp.select("id AS item_id", copy=False).from_(menu_item_details_table_name, copy=False),
+        quote_identifiers=True,
     )
 
     num_menu_items = len(df_menu_items.index)

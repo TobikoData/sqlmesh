@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from models.src.shared import DATA_START_DATE_STR, set_seed  # type: ignore
+from sqlglot import exp
 
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind, TimeColumn
@@ -44,26 +45,22 @@ def execute(
     order_item_f_table_name = context.table("db.order_item_f")
 
     df_item_d = context.fetchdf(
-        f"""
-        SELECT
-            item_id,
-            item_price
-        FROM {item_d_table_name}
-        """
+        exp.select("item_id", "item_price", copy=False).from_(item_d_table_name, copy=False),
+        quote_identifiers=True,
     )
 
     df_order_item_f = context.fetchdf(
-        f"""
-        SELECT
-            order_id,
-            customer_id,
-            item_id,
-            quantity,
-            order_ds
-        FROM {order_item_f_table_name}
-        WHERE
-            order_ds BETWEEN '{to_ds(start)}' AND '{to_ds(end)}'
-        """
+        exp.select(
+            "order_id",
+            "customer_id",
+            "item_id",
+            "quantity",
+            "order_ds",
+            copy=False,
+        )
+        .from_(order_item_f_table_name, copy=False)
+        .where(f"order_ds BETWEEN '{to_ds(start)}' AND '{to_ds(end)}'", copy=False),
+        quote_identifiers=True,
     )
 
     df_order_item_f = df_order_item_f.merge(df_item_d, how="inner", on="item_id")

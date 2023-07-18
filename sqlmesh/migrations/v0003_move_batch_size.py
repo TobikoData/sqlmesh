@@ -8,7 +8,9 @@ def migrate(state_sync):  # type: ignore
 
     snapshots_table = f"{state_sync.schema}._snapshots"
 
-    for row in state_sync.engine_adapter.fetchall(exp.select("*").from_(snapshots_table)):
+    for row in state_sync.engine_adapter.fetchall(
+        exp.select("*").from_(snapshots_table), quote_identifiers=True
+    ):
         name, identifier, _, snapshot = row
         snapshot = json.loads(snapshot)
         model = snapshot["model"]

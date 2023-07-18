@@ -20,10 +20,12 @@ class SnowflakeEngineAdapter(EngineAdapter):
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> DF:
         from snowflake.connector.errors import NotSupportedError
 
-        self.execute(query)
+        self.execute(query, quote_identifiers=quote_identifiers)
 
         try:
             return self.cursor.fetch_pandas_all()
@@ -43,7 +45,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
         """
         target = nullsafe_join(".", catalog_name, schema_name)
         sql = f"SHOW TERSE OBJECTS IN {target}"
-        df = self.fetchdf(sql)
+        df = self.fetchdf(sql, quote_identifiers=True)
         return [
             DataObject(
                 catalog=row.database_name,  # type: ignore

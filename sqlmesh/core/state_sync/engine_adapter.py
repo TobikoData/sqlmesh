@@ -234,6 +234,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 lock_for_update=True,
             ),
             ignore_unsupported_errors=True,
+            quote_identifiers=True,
         )
         environments = [self._environment_from_row(r) for r in rows]
 
@@ -255,7 +256,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             for name, identifier in self.engine_adapter.fetchall(
                 exp.select("name", "identifier")
                 .from_(self.snapshots_table)
-                .where(self._snapshot_id_filter(snapshot_ids))
+                .where(self._snapshot_id_filter(snapshot_ids)),
+                quote_identifiers=True,
             )
         }
 
@@ -273,7 +275,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
         if exclude_external:
             query = query.where(exp.column("kind_name").neq(ModelKindName.EXTERNAL.value))
-        return {name for name, in self.engine_adapter.fetchall(query)}
+        return {name for name, in self.engine_adapter.fetchall(query, quote_identifiers=True)}
 
     def reset(self) -> None:
         """Resets the state store to the state when it was first initialized."""
@@ -315,7 +317,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return [
             self._environment_from_row(row)
             for row in self.engine_adapter.fetchall(
-                self._environments_query(), ignore_unsupported_errors=True
+                self._environments_query(), ignore_unsupported_errors=True, quote_identifiers=True
             )
         ]
 
@@ -367,7 +369,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
 
-        for row in self.engine_adapter.fetchall(query, ignore_unsupported_errors=True):
+        for row in self.engine_adapter.fetchall(
+            query, ignore_unsupported_errors=True, quote_identifiers=True
+        ):
             snapshot = Snapshot.parse_raw(row[0])
             snapshot_id = snapshot.snapshot_id
             if snapshot_id in snapshots:
@@ -419,7 +423,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if lock_for_update:
             query = query.lock(copy=False)
 
-        snapshot_rows = self.engine_adapter.fetchall(query, ignore_unsupported_errors=True)
+        snapshot_rows = self.engine_adapter.fetchall(
+            query, ignore_unsupported_errors=True, quote_identifiers=True
+        )
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
@@ -431,7 +437,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         query = exp.select("*").from_(self.versions_table)
         if lock_for_update:
             query.lock(copy=False)
-        row = self.engine_adapter.fetchone(query)
+        row = self.engine_adapter.fetchone(query, quote_identifiers=True)
         if not row:
             return no_version
         return Versions(schema_version=row[0], sqlglot_version=row[1])
@@ -457,6 +463,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 lock_for_update=lock_for_update,
             ),
             ignore_unsupported_errors=True,
+            quote_identifiers=True,
         )
 
         if not row:
@@ -553,7 +560,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         elif snapshots is not None:
             return (set(), [])
 
-        rows = self.engine_adapter.fetchall(query)
+        rows = self.engine_adapter.fetchall(query, quote_identifiers=True)
         interval_ids = {row[0] for row in rows}
 
         intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
