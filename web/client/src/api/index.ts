@@ -52,7 +52,7 @@ export function useApiMeta(): UseQueryResult<Meta> {
   const { addError, removeError } = useIDE()
 
   return useQuery<Meta, ErrorIDE>({
-    queryKey: [`/api/meat`],
+    queryKey: [`/api/meta`],
     queryFn: async ({ signal }) => {
       removeError(EnumErrorKey.Meta)
 
