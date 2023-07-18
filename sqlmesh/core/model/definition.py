@@ -644,6 +644,10 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The data hash for the node.
         """
+        return hash_data(self._data_hash_fields)
+
+    @property
+    def _data_hash_fields(self) -> t.List[str]:
         data = [
             str(self.sorted_python_env),
             self.kind.name,
@@ -653,7 +657,6 @@ class _Model(ModelMeta, frozen=True):
             *(expr.sql() for expr in (self.partitioned_by or [])),
             *(self.clustered_by or []),
             self.stamp,
-            *self._additional_data_for_hash,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -666,11 +669,7 @@ class _Model(ModelMeta, frozen=True):
         elif isinstance(self.kind, IncrementalByUniqueKeyKind):
             data.extend(self.kind.unique_key)
 
-        return hash_data(data)
-
-    @property
-    def _additional_data_for_hash(self) -> t.List[str]:
-        return []
+        return data  # type: ignore
 
     def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
         """
@@ -835,7 +834,7 @@ class _SqlBasedModel(_Model):
         return self.__statement_renderers[expression_key]
 
     @property
-    def _additional_data_for_hash(self) -> t.List[str]:
+    def _data_hash_fields(self) -> t.List[str]:
         pre_statements = (
             self.pre_statements if self.hash_raw_query else self.render_pre_statements()
         )
@@ -843,7 +842,10 @@ class _SqlBasedModel(_Model):
             self.post_statements if self.hash_raw_query else self.render_post_statements()
         )
         macro_defs = self.macro_definitions if self.hash_raw_query else []
-        return [e.sql(comments=False) for e in (*pre_statements, *post_statements, *macro_defs)]
+        return [
+            *super()._data_hash_fields,
+            *[e.sql(comments=False) for e in (*pre_statements, *post_statements, *macro_defs)],
+        ]
 
 
 class SqlModel(_SqlBasedModel):
@@ -1044,11 +1046,13 @@ class SqlModel(_SqlBasedModel):
         return self.__query_renderer
 
     @property
-    def _additional_data_for_hash(self) -> t.List[str]:
-        query = self.query if self.hash_raw_query else self.render_query() or self.query
-        data = [query.sql(comments=False), *super()._additional_data_for_hash]
+    def _data_hash_fields(self) -> t.List[str]:
+        data = super()._data_hash_fields
 
-        for macro_name, macro in sorted(self.jinja_macros.root_macros.items(), key=lambda x: x[0]):
+        query = self.query if self.hash_raw_query else self.render_query() or self.query
+        data.append(query.sql(comments=False))
+
+        for macro_name, macro in sorted(self.jinja_macros.root_macros.items()):
             data.append(macro_name)
             data.append(macro.definition)
 
@@ -1221,12 +1225,11 @@ class SeedModel(_SqlBasedModel):
             raise SQLMeshError(f"Seed model '{self.name}' is not hydrated.")
 
     @property
-    def _additional_data_for_hash(self) -> t.List[str]:
-        data = super()._additional_data_for_hash
+    def _data_hash_fields(self) -> t.List[str]:
+        data = super()._data_hash_fields
         for column_name, column_hash in self.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
-
         return data
 
     def __repr__(self) -> str:
@@ -1282,8 +1285,10 @@ class PythonModel(_Model):
         return None
 
     @property
-    def _additional_data_for_hash(self) -> t.List[str]:
-        return [self.entrypoint]
+    def _data_hash_fields(self) -> t.List[str]:
+        data = super()._data_hash_fields
+        data.append(self.entrypoint)
+        return data
 
     def __repr__(self) -> str:
         return f"Model<name: {self.name}, entrypoint: {self.entrypoint}>"

@@ -36,7 +36,7 @@ class IntervalUnit(str, Enum):
 
 class Node(PydanticModel):
     """
-    Node is the core abstraction for entity that can be executed within the orchestrator.
+    Node is the core abstraction for entity that can be executed within the scheduler.
 
     Args:
         name: The name of the node.
