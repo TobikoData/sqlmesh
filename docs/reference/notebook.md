@@ -55,13 +55,19 @@ positional arguments:
 
 ## init
 ```
-%init [--template TEMPLATE] path
+%init [--template TEMPLATE] path sql_dialect
 
-Creates a SQLMesh project scaffold.
+Creates a SQLMesh project scaffold with a default SQL dialect.
 
 positional arguments:
   path                  The path where the new SQLMesh project should be
                         created.
+  sql_dialect           Default model SQL dialect. Supported values: '',
+                        'bigquery', 'clickhouse', 'databricks', 'drill',
+                        'duckdb', 'hive', 'mysql', 'oracle', 'postgres',
+                        'presto', 'redshift', 'snowflake', 'spark', 'spark2',
+                        'sqlite', 'starrocks', 'tableau', 'teradata', 'trino',
+                        'tsql'.
 
 options:
   --template TEMPLATE, -t TEMPLATE

@@ -13,7 +13,8 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 
 def load_config_from_paths(
-    *paths: Path,
+    project_paths: t.List[Path] = [],
+    personal_paths: t.List[Path] = [],
     config_name: str = "config",
     load_from_env: bool = True,
 ) -> Config:
@@ -21,7 +22,13 @@ def load_config_from_paths(
     visited_folders: t.Set[Path] = set()
     python_config: t.Optional[Config] = None
     non_python_configs = []
-    for path in paths:
+
+    if not project_paths or not any(path.exists() for path in project_paths):
+        raise ConfigError(
+            "SQLMesh project config could not be found. Point the cli to the project path with `sqlmesh -p`. If you haven't set up the SQLMesh project, run `sqlmesh init`."
+        )
+
+    for path in [*project_paths, *personal_paths]:
         if not path.exists():
             continue
 
@@ -57,9 +64,18 @@ def load_config_from_paths(
             "SQLMesh config could not be found. Point the cli to the right path with `sqlmesh -p`. If you haven't set up SQLMesh, run `sqlmesh init`."
         )
 
+    no_dialect_err_msg = "Default model SQL dialect is a required configuration parameter. Set it in the `model_defaults` `dialect` key in your config file."
+
     non_python_config = Config.parse_obj(merge_dicts(*non_python_configs))
     if python_config:
+        model_defaults = python_config.model_defaults
+        if model_defaults.dialect is None:
+            raise ConfigError(no_dialect_err_msg)
         return python_config.update_with(non_python_config)
+
+    model_defaults = non_python_config.model_defaults
+    if model_defaults.dialect is None:
+        raise ConfigError(no_dialect_err_msg)
     return non_python_config
 
 

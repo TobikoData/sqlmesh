@@ -236,6 +236,7 @@ class Context(BaseContext):
         self._jinja_macros = JinjaMacroRegistry()
 
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
+
         self.gateway = gateway
         self._scheduler = self.config.get_scheduler(self.gateway)
         self.environment_ttl = self.config.environment_ttl
@@ -1154,10 +1155,8 @@ class Context(BaseContext):
         with env_vars(config_env_vars if config_env_vars else {}):
             return {
                 path: load_config_from_paths(
-                    path / "config.py",
-                    path / "config.yml",
-                    path / "config.yaml",
-                    *personal_paths,
+                    project_paths=[path / "config.py", path / "config.yml", path / "config.yaml"],
+                    personal_paths=personal_paths,
                     config_name=config,
                 )
                 for path in paths

@@ -15,6 +15,8 @@ from copy import deepcopy
 from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
+from sqlglot.dialects.dialect import Dialects
+
 T = t.TypeVar("T")
 KEY = t.TypeVar("KEY", bound=t.Hashable)
 VALUE = t.TypeVar("VALUE")
@@ -256,3 +258,7 @@ def merge_dicts(*args: t.Dict) -> t.Dict:
         return a
 
     return reduce(merge, args, {})
+
+
+def sqlglot_dialects() -> str:
+    return "'" + "', '".join(Dialects.__members__.values()) + "'"

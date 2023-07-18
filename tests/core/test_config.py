@@ -1,4 +1,5 @@
 import os
+import pathlib
 from pathlib import Path
 from unittest import mock
 
@@ -18,6 +19,7 @@ from sqlmesh.core.config.loader import (
 from sqlmesh.core.notification_target import ConsoleNotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
+from tests.utils.test_filesystem import create_temp_file
 
 
 @pytest.fixture(scope="session")
@@ -31,6 +33,9 @@ gateways:
         connection:
             type: duckdb
             database: test_db
+
+model_defaults:
+    dialect: ''
         """
         )
     return config_path
@@ -41,8 +46,8 @@ def python_config_path(tmp_path_factory) -> Path:
     config_path = tmp_path_factory.mktemp("python_config") / "config.py"
     with open(config_path, "w") as fd:
         fd.write(
-            """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
-config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()))
+            """from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig, ModelDefaultsConfig
+config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()), model_defaults=ModelDefaultsConfig(dialect=''))
         """
         )
     return config_path
@@ -139,13 +144,16 @@ def test_default_gateway():
 
 
 def test_load_config_from_paths(yaml_config_path: Path, python_config_path: Path):
-    config = load_config_from_paths(yaml_config_path, python_config_path)
+    config = load_config_from_paths(
+        project_paths=[yaml_config_path, python_config_path],
+    )
 
     assert config == Config(
         gateways={  # type: ignore
             "another_gateway": GatewayConfig(connection=DuckDBConnectionConfig(database="test_db")),
             "": GatewayConfig(connection=DuckDBConnectionConfig()),
-        }
+        },
+        model_defaults=ModelDefaultsConfig(dialect=""),
     )
 
 
@@ -159,12 +167,46 @@ def test_load_config_multiple_config_files_in_folder(tmp_path):
         fd.write("project: project_b")
 
     with pytest.raises(ConfigError, match=r"^Multiple configuration files found in folder.*"):
-        load_config_from_paths(config_a_path, config_b_path)
+        load_config_from_paths(project_paths=[config_a_path, config_b_path])
 
 
 def test_load_config_no_config():
-    with pytest.raises(ConfigError, match=r"^SQLMesh config could not be found.*"):
+    with pytest.raises(ConfigError, match=r"^SQLMesh project config could not be found.*"):
         load_config_from_paths(load_from_env=False)
+
+
+def test_load_config_no_dialect(tmp_path):
+    create_temp_file(
+        tmp_path,
+        pathlib.Path("config.yaml"),
+        """
+gateways:
+    local:
+        connection:
+            type: duckdb
+            database: db.db
+""",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path("config.py"),
+        """
+from sqlmesh.core.config import Config, DuckDBConnectionConfig
+
+config = Config(default_connection=DuckDBConnectionConfig())
+""",
+    )
+
+    with pytest.raises(
+        ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
+    ):
+        load_config_from_paths(project_paths=[tmp_path / "config.yaml"])
+
+    with pytest.raises(
+        ConfigError, match=r"^Default model SQL dialect is a required configuration parameter.*"
+    ):
+        load_config_from_paths(project_paths=[tmp_path / "config.py"])
 
 
 def test_load_config_unsupported_extension(tmp_path):
@@ -172,7 +214,7 @@ def test_load_config_unsupported_extension(tmp_path):
     config_path.touch()
 
     with pytest.raises(ConfigError, match=r"^Unsupported config file extension 'txt'.*"):
-        load_config_from_paths(config_path)
+        load_config_from_paths(project_paths=[config_path])
 
 
 def test_load_config_from_env():
