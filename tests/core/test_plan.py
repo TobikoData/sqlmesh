@@ -364,12 +364,12 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
 
     downstream_snapshot = make_snapshot(
         SqlModel(name="b", query=parse_one("select * from tbl"), depends_on={"a"}),
-        models={"a": snapshot.model},
+        nodes={"a": snapshot.model},
     )
     downstream_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_downstream_snapshot = make_snapshot(
         downstream_snapshot.model,
-        models={"a": updated_snapshot.model},
+        nodes={"a": updated_snapshot.model},
     )
 
     context_diff_mock = mocker.Mock()

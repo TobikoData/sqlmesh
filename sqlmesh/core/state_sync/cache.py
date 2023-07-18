@@ -110,8 +110,8 @@ class CachingStateSync(StateSync):
 
         return existing
 
-    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
-        return self.state_sync.models_exist(names, exclude_external)
+    def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+        return self.state_sync.nodes_exist(names, exclude_external)
 
     def get_environment(self, environment: str) -> t.Optional[Environment]:
         return self.state_sync.get_environment(environment)

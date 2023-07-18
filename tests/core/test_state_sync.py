@@ -356,7 +356,7 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
             kind=ModelKind(name=ModelKindName.FULL),
             query=parse_one("select * from a"),
         ),
-        models={"a": snapshot_a.model},
+        nodes={"a": snapshot_a.model},
     )
     snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
 
@@ -860,7 +860,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     customer_revenue_by_day = new_snapshots.loc[
         new_snapshots["name"] == "sushi.customer_revenue_by_day"
     ].iloc[0]
-    assert json.loads(customer_revenue_by_day["snapshot"])["model"]["query"].startswith(
+    assert json.loads(customer_revenue_by_day["snapshot"])["node"]["query"].startswith(
         "JINJA_QUERY_BEGIN"
     )
 
@@ -954,7 +954,7 @@ def test_seed_hydration(
     assert stored_snapshot.model.seed.content == "header\n1\n2"
 
 
-def test_models_exist(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+def test_nodes_exist(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
     snapshot = make_snapshot(
         SqlModel(
             name="a",
@@ -964,11 +964,11 @@ def test_models_exist(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
 
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    assert not state_sync.models_exist([snapshot.name])
+    assert not state_sync.nodes_exist([snapshot.name])
 
     state_sync.push_snapshots([snapshot])
 
-    assert state_sync.models_exist([snapshot.name]) == {snapshot.name}
+    assert state_sync.nodes_exist([snapshot.name]) == {snapshot.name}
 
 
 def test_invalidate_environment(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):

@@ -8,7 +8,7 @@ from pydantic import BaseModel, validator
 from sqlglot import exp
 
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike
 

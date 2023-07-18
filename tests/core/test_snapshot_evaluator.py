@@ -19,7 +19,7 @@ from sqlmesh.core.model import (
     ViewKind,
     load_model,
 )
-from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
