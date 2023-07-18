@@ -3,7 +3,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
 import { useApiFileByPath } from '~/api'
-import { debounceAsync, isNil, isStringNotEmpty } from '~/utils'
+import { debounceAsync, isNil } from '~/utils'
 import { isCancelledError } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
@@ -133,7 +133,7 @@ function CodeEditorRemoteFile({
     const tempFile = files.get(path)
 
     if (tempFile == null) return
-    if (isStringNotEmpty(tempFile.content)) {
+    if (tempFile.isSynced) {
       setFile(tempFile)
       return
     }
