@@ -250,9 +250,9 @@ export default function PageIDE(): JSX.Element {
 
     addTabs(tabs)
 
-    if (isNil(tab)) return
-
-    selectTab(tab)
+    if (isNotNil(tab)) {
+      selectTab(tab)
+    }
   }
 
   function closeModalConfirmation(confirmation?: Confirmation): void {
