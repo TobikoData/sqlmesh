@@ -64,11 +64,12 @@ def get_all_models(context: Context) -> t.List[models.Model]:
         )
         clustered_by = ", ".join(model.clustered_by) if model.clustered_by else None
         lookback = model.lookback if model.lookback > 0 else None
+        columns_to_types = model.columns_to_types or {}
         columns = [
             models.Column(
                 name=name, type=str(data_type), description=model.column_descriptions.get(name)
             )
-            for name, data_type in model.columns_to_types_or_raise.items()
+            for name, data_type in columns_to_types.items()
         ]
         details = models.ModelDetails(
             owner=model.owner,

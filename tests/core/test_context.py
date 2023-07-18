@@ -19,7 +19,7 @@ from tests.utils.test_filesystem import create_temp_file
 
 def test_global_config():
     context = Context(paths="examples/sushi")
-    assert context.config.dialect is None
+    assert context.config.dialect == "duckdb"
     assert context.config.time_column_format == "%Y-%m-%d"
 
 
@@ -319,15 +319,18 @@ gateways:
             type: snowflake
             account: 123
             user: CDE
+
+model_defaults:
+    dialect: snowflake
 """,
         )
         with pytest.raises(
             ConfigError,
             match="User and password must be provided if using default authentication",
         ):
-            context._load_configs("config", [project_config.parent])
+            context._load_configs("config", paths=[project_config.parent])
         context.sqlmesh_path = home_path
-        loaded_configs = context._load_configs("config", [project_config.parent])
+        loaded_configs = context._load_configs("config", paths=[project_config.parent])
         assert len(loaded_configs) == 1
         snowflake_connection = list(loaded_configs.values())[0].gateways["snowflake"].connection  # type: ignore
         assert isinstance(snowflake_connection, SnowflakeConnectionConfig)

@@ -148,9 +148,9 @@ Options:
 ```
 
 ## init
-Usage: sqlmesh init [OPTIONS]
+Usage: sqlmesh init [OPTIONS] SQL_DIALECT
 
-  Create a new SQLMesh repository.
+  Create a new SQLMesh repository with a default SQL dialect.
 
 Options:
   -t, --template TEXT  Project template. Support values: airflow, dbt,

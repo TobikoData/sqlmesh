@@ -21,7 +21,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
-from sqlmesh.utils import yaml
+from sqlmesh.utils import sqlglot_dialects, yaml
 from sqlmesh.utils.errors import MagicError, MissingContextException
 
 CONTEXT_VARIABLE_NAMES = [
@@ -92,6 +92,11 @@ class SQLMeshMagics(Magics):
     @magic_arguments()
     @argument("path", type=str, help="The path where the new SQLMesh project should be created.")
     @argument(
+        "sql_dialect",
+        type=str,
+        help=f"Default model SQL dialect. Supported values: {sqlglot_dialects()}.",
+    )
+    @argument(
         "--template",
         "-t",
         type=str,
@@ -99,7 +104,7 @@ class SQLMeshMagics(Magics):
     )
     @line_magic
     def init(self, line: str) -> None:
-        """Creates a SQLMesh project scaffold."""
+        """Creates a SQLMesh project scaffold with a default SQL dialect."""
         args = parse_argstring(self.init, line)
         try:
             project_template = ProjectTemplate(
@@ -107,7 +112,7 @@ class SQLMeshMagics(Magics):
             )
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
-        init_example_project(args.path, project_template)
+        init_example_project(args.path, args.sql_dialect, project_template)
         self.display(self.success_message({"green-bold": "SQLMesh project scaffold created"}))
 
     @magic_arguments()

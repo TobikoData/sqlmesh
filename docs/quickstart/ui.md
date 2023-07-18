@@ -26,10 +26,12 @@ cd sqlmesh-example
 
 If using a python virtual environment, ensure it's activated by running `source .env/bin/activate` from the folder used during [installation](../installation.md).
 
-Create a SQLMesh project scaffold:
+Create a SQLMesh scaffold with the following command, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed. 
+
+In this example, we specify the `snowflake` dialect:
 
 ```bash
-sqlmesh init
+sqlmesh init snowflake
 ```
 
 See the [quick start overview](../quick_start.md#project-directories-and-files) for more information about the project directories, files, data, and models.
