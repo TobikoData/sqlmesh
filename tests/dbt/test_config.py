@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from dbt.adapters.base import BaseRelation
 
+from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.core.model import SqlModel
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
@@ -82,7 +83,7 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
         owner="Sally",
         tags=["test", "incremental"],
     )
-    context = DbtContext()
+    context = DbtContext(model_defaults=ModelDefaultsConfig(dialect="duckdb"))
     context.project_name = "Foo"
     context.target = DuckDbConfig(name="target", schema="foo")
     model = model_config.to_sqlmesh(context)
@@ -116,7 +117,7 @@ def test_test_to_sqlmesh_fields():
         enabled=True,
     )
 
-    context = DbtContext()
+    context = DbtContext(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
     audit = test_config.to_sqlmesh(context)
 
     assert audit.name == "foo_test"
