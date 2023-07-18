@@ -864,7 +864,7 @@ def fingerprint_from_node(
     audits: t.Optional[t.Dict[str, Audit]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
-    """Helper function to generate a fingerprint based on a model's query and environment.
+    """Helper function to generate a fingerprint based on the data and metadata of the node and its parents.
 
     This method tries to remove non meaningful differences to avoid ever changing fingerprints.
     The fingerprint is made up of two parts split by an underscore -- query_metadata. The query hash is

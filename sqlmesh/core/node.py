@@ -96,9 +96,24 @@ class Node(PydanticModel):
 
     @property
     def data_hash(self) -> str:
+        """
+        Computes the data hash for the node.
+
+        Returns:
+            The data hash for the node.
+        """
         raise NotImplementedError
 
     def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+        """
+        Computes the metadata hash for the node.
+
+        Args:
+            audits: Available audits by name.
+
+        Returns:
+            The metadata hash for the node.
+        """
         raise NotImplementedError
 
     def interval_unit(self, sample_size: int = 10) -> IntervalUnit:

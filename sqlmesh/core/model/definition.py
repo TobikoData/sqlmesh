@@ -638,6 +638,12 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def data_hash(self) -> str:
+        """
+        Computes the data hash for the node.
+
+        Returns:
+            The data hash for the node.
+        """
         data = [
             str(self.sorted_python_env),
             self.kind.name,
@@ -667,6 +673,15 @@ class _Model(ModelMeta, frozen=True):
         return []
 
     def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+        """
+        Computes the metadata hash for the node.
+
+        Args:
+            audits: Available audits by name.
+
+        Returns:
+            The metadata hash for the node.
+        """
         from sqlmesh.core.audit import BUILT_IN_AUDITS
 
         metadata = [
