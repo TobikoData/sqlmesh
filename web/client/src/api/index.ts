@@ -38,13 +38,37 @@ import {
   getTableDiffApiTableDiffGet,
   type GetTableDiffApiTableDiffGetParams,
   type TableDiff,
-  FetchdfInput,
+  type FetchdfInput,
+  Meta,
+  getApiMetaApiMetaGet,
 } from './client'
 import {
   useIDE,
   type ErrorIDE,
   EnumErrorKey,
 } from '~/library/pages/ide/context'
+
+export function useApiMeta(): UseQueryResult<Meta> {
+  const { addError, removeError } = useIDE()
+
+  return useQuery<Meta, ErrorIDE>({
+    queryKey: [`/api/meta`],
+    queryFn: async ({ signal }) => {
+      removeError(EnumErrorKey.Meta)
+
+      return await getApiMetaApiMetaGet({ signal })
+    },
+    cacheTime: 0,
+    enabled: false,
+    onError(error) {
+      if (isCancelledError(error)) {
+        console.log('getApiMetaApiMetaGet', 'Request aborted by React Query')
+      } else {
+        addError(EnumErrorKey.Meta, error)
+      }
+    },
+  })
+}
 
 export function useApiModelLineage(
   modelName: string,

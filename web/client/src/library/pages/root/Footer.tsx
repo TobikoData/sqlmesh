@@ -1,6 +1,14 @@
+import { useStoreContext } from '@context/context'
+import { isNotNil } from '@utils/index'
+
 export default function Footer(): JSX.Element {
+  const version = useStoreContext(s => s.version)
+
   return (
     <footer className="px-2 py-1 text-xs flex justify-between">
+      {isNotNil(version) && (
+        <span className="font-black inline-block mr-4">{version}</span>
+      )}
       <small className="text-xs">
         © {new Date().getFullYear()}
         &nbsp;

@@ -525,17 +525,17 @@
         }
       }
     },
-    "/api/context": {
+    "/api/meta": {
       "get": {
-        "summary": "Get Api Context",
-        "description": "Get the context",
-        "operationId": "get_api_context_api_context_get",
+        "summary": "Get Api Meta",
+        "description": "Get the metadata",
+        "operationId": "get_api_meta_api_meta_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Context" }
+                "schema": { "$ref": "#/components/schemas/Meta" }
               }
             }
           }
@@ -788,36 +788,6 @@
         "required": ["name", "type"],
         "title": "Column"
       },
-      "Context": {
-        "properties": {
-          "concurrent_tasks": {
-            "type": "integer",
-            "title": "Concurrent Tasks"
-          },
-          "engine_adapter": { "type": "string", "title": "Engine Adapter" },
-          "time_column_format": {
-            "type": "string",
-            "title": "Time Column Format"
-          },
-          "scheduler": { "type": "string", "title": "Scheduler" },
-          "models": {
-            "items": { "type": "string" },
-            "type": "array",
-            "title": "Models",
-            "default": []
-          },
-          "config": { "type": "string", "title": "Config" }
-        },
-        "type": "object",
-        "required": [
-          "concurrent_tasks",
-          "engine_adapter",
-          "time_column_format",
-          "scheduler",
-          "config"
-        ],
-        "title": "Context"
-      },
       "ContextEnvironment": {
         "properties": {
           "environment": { "type": "string", "title": "Environment" },
@@ -1066,6 +1036,12 @@
         },
         "type": "object",
         "title": "LineageColumn"
+      },
+      "Meta": {
+        "properties": { "version": { "type": "string", "title": "Version" } },
+        "type": "object",
+        "required": ["version"],
+        "title": "Meta"
       },
       "Model": {
         "properties": {
