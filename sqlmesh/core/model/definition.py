@@ -624,12 +624,12 @@ class _Model(ModelMeta, frozen=True):
             )
 
         if (
-            self.kind.is_incremental_unsafe
+            self.kind.is_incremental_unmanaged
             and getattr(self.kind, "insert_overwrite", False)
             and not self.partitioned_by_
         ):
             raise_config_error(
-                "Unsafe incremental models with insert / overwrite enabled must specify the partitioned_by field",
+                "Unmanaged incremental models with insert / overwrite enabled must specify the partitioned_by field",
                 self._path,
             )
 

@@ -23,7 +23,7 @@ from sqlmesh.core.config.connection import (
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
-    IncrementalUnsafeKind,
+    IncrementalUnmanagedKind,
 )
 from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.dbt.util import DBT_VERSION
@@ -38,7 +38,7 @@ else:
 IncrementalKind = t.Union[
     t.Type[IncrementalByUniqueKeyKind],
     t.Type[IncrementalByTimeRangeKind],
-    t.Type[IncrementalUnsafeKind],
+    t.Type[IncrementalUnmanagedKind],
 ]
 
 

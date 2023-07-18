@@ -445,9 +445,13 @@ class Plan:
             ]
 
             if not self.is_dev:
-                for d in downstream:
-                    if snapshots[d].model.disable_restatement:
-                        raise PlanError(f"Restatement is disabled for model '{d}'.")
+                models_with_disabled_restatement = [
+                    f"'{d}'" for d in downstream if snapshots[d].model.disable_restatement
+                ]
+                if models_with_disabled_restatement:
+                    raise PlanError(
+                        f"Restatement is disabled for models: {', '.join(models_with_disabled_restatement)}."
+                    )
 
             if not downstream:
                 raise PlanError(

@@ -34,7 +34,7 @@ from sqlglot.executor import execute
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
-from sqlmesh.core.model import IncrementalUnsafeKind, Model, ViewKind
+from sqlmesh.core.model import IncrementalUnmanagedKind, Model, ViewKind
 from sqlmesh.core.snapshot import (
     QualifiedViewName,
     Snapshot,
@@ -130,7 +130,7 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
-            dbt_is_incremental=snapshot.is_incremental_unsafe and bool(snapshot.intervals),
+            dbt_is_incremental=snapshot.is_incremental_unmanaged and bool(snapshot.intervals),
             **kwargs,
         )
 
@@ -487,8 +487,8 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         klass = IncrementalByTimeRangeStrategy
     elif snapshot.is_incremental_by_unique_key:
         klass = IncrementalByUniqueKeyStrategy
-    elif snapshot.is_incremental_unsafe:
-        klass = IncrementalUnsafeStrategy
+    elif snapshot.is_incremental_unmanaged:
+        klass = IncrementalUnmanagedStrategy
     elif snapshot.is_view:
         klass = ViewStrategy
     else:
@@ -787,7 +787,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         )
 
 
-class IncrementalUnsafeStrategy(MaterializableStrategy):
+class IncrementalUnmanagedStrategy(MaterializableStrategy):
     def insert(
         self,
         model: Model,
@@ -797,7 +797,7 @@ class IncrementalUnsafeStrategy(MaterializableStrategy):
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
-        if isinstance(model.kind, IncrementalUnsafeKind) and model.kind.insert_overwrite:
+        if isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
             self.adapter.insert_overwrite(
                 name, query_or_df, columns_to_types=model.columns_to_types
             )

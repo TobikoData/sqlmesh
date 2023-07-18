@@ -12,7 +12,7 @@ from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
-    IncrementalUnsafeKind,
+    IncrementalUnmanagedKind,
     Model,
     ModelKind,
     ModelKindName,
@@ -183,15 +183,15 @@ class ModelConfig(BaseModelConfig):
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key, **incremental_kwargs)
 
             logger.warning(
-                "Incremental materialization in model '%s' requires either a time_column (%s) or a unique_key (%s) configuration",
+                "Using unmanaged incremental materialization for model '%s'. Some features might not be available. Consider adding either a time_column (%s) or a unique_key (%s) configuration to mitigate this",
                 self.sql_name,
                 collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
                 collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(["none"])),
             )
             strategy = self.incremental_strategy or target.default_incremental_strategy(
-                IncrementalUnsafeKind
+                IncrementalUnmanagedKind
             )
-            return IncrementalUnsafeKind(insert_overwrite=strategy == "insert_overwrite")
+            return IncrementalUnmanagedKind(insert_overwrite=strategy == "insert_overwrite")
         if materialization == Materialization.EPHEMERAL:
             return ModelKind(name=ModelKindName.EMBEDDED)
         raise ConfigError(f"{materialization.value} materialization not supported.")

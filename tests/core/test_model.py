@@ -16,7 +16,7 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
-    IncrementalUnsafeKind,
+    IncrementalUnmanagedKind,
     ModelCache,
     ModelMeta,
     SeedKind,
@@ -1567,16 +1567,16 @@ def test_model_normalization():
     assert model.depends_on == {'"project-1".db.raw', '"project-2".db.raw'}
 
 
-def test_incremental_unsafe_validation():
+def test_incremental_unmanaged_validation():
     model = create_sql_model(
         "a",
         d.parse_one("SELECT a, ds FROM table_a"),
-        kind=IncrementalUnsafeKind(insert_overwrite=True),
+        kind=IncrementalUnmanagedKind(insert_overwrite=True),
     )
 
     with pytest.raises(
         ConfigError,
-        match=r"Unsafe incremental models with insert / overwrite enabled must specify the partitioned_by field.*",
+        match=r"Unmanaged incremental models with insert / overwrite enabled must specify the partitioned_by field.*",
     ):
         model.validate_definition()
 

@@ -12,7 +12,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
-    IncrementalUnsafeKind,
+    IncrementalUnmanagedKind,
     ModelKind,
     ModelKindName,
     SqlModel,
@@ -95,18 +95,18 @@ def test_model_kind():
         materialized=Materialization.INCREMENTAL,
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
-    ).model_kind(target) == IncrementalUnsafeKind(insert_overwrite=True)
+    ).model_kind(target) == IncrementalUnmanagedKind(insert_overwrite=True)
 
     assert (
         ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(target)
-        == IncrementalUnsafeKind()
+        == IncrementalUnmanagedKind()
     )
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar", "data_type": "int64"},
-    ).model_kind(target) == IncrementalUnsafeKind(insert_overwrite=True)
+    ).model_kind(target) == IncrementalUnmanagedKind(insert_overwrite=True)
 
     with pytest.raises(ConfigError) as exception:
         ModelConfig(
