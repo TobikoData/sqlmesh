@@ -1,7 +1,6 @@
 MODEL (
   name db.item_d,
   kind VIEW,
-  dialect "",
   cron '@daily',
   owner jen,
   start '2022-06-01 00:00:00+00:00',
