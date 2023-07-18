@@ -45,8 +45,8 @@ def execute(
     order_item_f_table_name = context.table("db.order_item_f")
 
     # We use parse_one here instead of a raw string because this is a multi-dialect
-    # project and we want to ensure that the resulting query is properly quoted for
-    # before executing it (quotes can differ per dialect)
+    # project and we want to ensure that the resulting query is properly quoted in
+    # the target dialect before executing it
     df_item_d = context.fetchdf(
         parse_one(f"SELECT item_id, item_price FROM {item_d_table_name}"),
         quote_identifiers=True,

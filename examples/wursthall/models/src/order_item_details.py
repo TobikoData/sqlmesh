@@ -51,8 +51,8 @@ def execute(
     menu_item_details_table_name = context.table("src.menu_item_details")
 
     # We use parse_one here instead of a raw string because this is a multi-dialect
-    # project and we want to ensure that the resulting query is properly quoted for
-    # before executing it (quotes can differ per dialect)
+    # project and we want to ensure that the resulting query is properly quoted in
+    # the target dialect before executing it
     df_customers = context.fetchdf(
         parse_one(
             f"""
