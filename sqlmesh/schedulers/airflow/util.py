@@ -15,6 +15,7 @@ from airflow.utils.session import provide_session
 from airflow.utils.state import DagRunState
 from sqlalchemy.orm import Session
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.config import ConnectionConfig
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
@@ -36,13 +37,23 @@ SQLMESH_STATE_CONN_ID = "sqlmesh_state_db"
 
 @contextlib.contextmanager
 def scoped_state_sync() -> t.Iterator[StateSync]:
+    state_schema = c.SQLMESH
     try:
         connection = Connection.get_connection_from_secrets(SQLMESH_STATE_CONN_ID)
+
+        connection_config_raw = connection.extra
+        state_schema = connection_config_raw.get("state_schema", state_schema)
+        if "type" not in connection_config_raw:
+            logger.info(
+                "SQLMesh connection in Airflow did not have type defined. "
+                "Therefore using Airflow database connection"
+            )
+            raise AirflowException
 
         logger.info("Using connection '%s' for state sync", connection.conn_id)
 
         connection_config: ConnectionConfig = pydantic.parse_raw_as(
-            ConnectionConfig, connection.extra  # type: ignore
+            ConnectionConfig, connection_config_raw  # type: ignore
         )
         engine_adapter = connection_config.create_engine_adapter()
     except AirflowException:
@@ -54,7 +65,7 @@ def scoped_state_sync() -> t.Iterator[StateSync]:
         )
 
     try:
-        yield EngineAdapterStateSync(engine_adapter)
+        yield EngineAdapterStateSync(engine_adapter, state_schema)
     finally:
         engine_adapter.close()
 
