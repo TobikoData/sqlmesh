@@ -15,4 +15,5 @@ pip install sqlmesh
 ```
 
 ## Next steps
-* [Jump right in with the quickstart](quick_start.md)
+* Jump right in with the [quickstart example project](quick_start.md).
+* Have an existing dbt project? [Check out SQLMesh's dbt adapter](./integrations/dbt.md).

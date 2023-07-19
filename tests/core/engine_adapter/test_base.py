@@ -24,8 +24,8 @@ def test_create_view(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("CREATE OR REPLACE VIEW test_view AS SELECT a FROM tbl"),
-            call("CREATE VIEW test_view AS SELECT a FROM tbl"),
+            call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
+            call('CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
         ]
     )
 
@@ -44,8 +44,8 @@ def test_create_materialized_view(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("CREATE OR REPLACE MATERIALIZED VIEW test_view AS SELECT a FROM tbl"),
-            call("CREATE MATERIALIZED VIEW test_view AS SELECT a FROM tbl"),
+            call('CREATE OR REPLACE MATERIALIZED VIEW "test_view" AS SELECT "a" FROM "tbl"'),
+            call('CREATE MATERIALIZED VIEW "test_view" AS SELECT "a" FROM "tbl"'),
         ]
     )
 
@@ -61,8 +61,8 @@ def test_create_schema(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("CREATE SCHEMA IF NOT EXISTS test_schema"),
-            call("CREATE SCHEMA test_schema"),
+            call('CREATE SCHEMA IF NOT EXISTS "test_schema"'),
+            call('CREATE SCHEMA "test_schema"'),
         ]
     )
 
@@ -90,7 +90,7 @@ def test_columns(mocker: MockerFixture):
         "ds": exp.DataType.build("string"),
     }
 
-    cursor_mock.execute.assert_called_once_with("DESCRIBE test_table")
+    cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
 
 
 def test_table_exists(mocker: MockerFixture):
@@ -100,9 +100,7 @@ def test_table_exists(mocker: MockerFixture):
 
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     assert adapter.table_exists("test_table")
-    cursor_mock.execute.assert_called_once_with(
-        "DESCRIBE test_table",
-    )
+    cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
 
     cursor_mock = mocker.Mock()
     cursor_mock.execute.side_effect = RuntimeError("error")
@@ -110,9 +108,7 @@ def test_table_exists(mocker: MockerFixture):
 
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     assert not adapter.table_exists("test_table")
-    cursor_mock.execute.assert_called_once_with(
-        "DESCRIBE test_table",
-    )
+    cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
 
 
 def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
@@ -133,8 +129,8 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("DELETE FROM test_table WHERE b BETWEEN '2022-01-01' AND '2022-01-02'"),
-            call("INSERT INTO test_table (a) SELECT a FROM tbl"),
+            call("""DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""),
+            call('INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'),
         ]
     )
 
@@ -154,7 +150,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite(mocker: Mo
     )
 
     cursor_mock.execute.assert_called_once_with(
-        "INSERT OVERWRITE TABLE test_table (a, b) SELECT * FROM (SELECT a, b FROM tbl) AS _subquery WHERE b BETWEEN '2022-01-01' AND '2022-01-02'"
+        """INSERT OVERWRITE TABLE "test_table" ("a", "b") SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
@@ -174,7 +170,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(moc
     )
 
     cursor_mock.execute.assert_called_once_with(
-        "INSERT OVERWRITE TABLE test_table (a, ds) SELECT * FROM (SELECT CAST(a AS INT) AS a, CAST(ds AS TEXT) AS ds FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS test_table(a, ds)) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-02'"
+        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
@@ -193,7 +189,7 @@ def test_insert_overwrite_by_time_partition_replace_where(mocker: MockerFixture)
     )
 
     cursor_mock.execute.assert_called_once_with(
-        "INSERT INTO test_table (a, b) REPLACE WHERE b BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT a, b FROM tbl) AS _subquery WHERE b BETWEEN '2022-01-01' AND '2022-01-02'"
+        """INSERT INTO "test_table" ("a", "b") REPLACE WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
@@ -213,7 +209,7 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(mocker: MockerF
     )
 
     cursor_mock.execute.assert_called_once_with(
-        "INSERT INTO test_table (a, ds) REPLACE WHERE ds BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST(a AS INT) AS a, CAST(ds AS TEXT) AS ds FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS test_table(a, ds)) AS _subquery WHERE ds BETWEEN '2022-01-01' AND '2022-01-02'"
+        """INSERT INTO "test_table" ("a", "ds") REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
@@ -229,7 +225,9 @@ def test_insert_append_query(mocker: MockerFixture):
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
-    cursor_mock.execute.assert_called_once_with("INSERT INTO test_table (a) SELECT a FROM tbl")
+    cursor_mock.execute.assert_called_once_with(
+        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'
+    )
 
 
 def test_insert_append_pandas(mocker: MockerFixture):
@@ -254,7 +252,7 @@ def test_insert_append_pandas(mocker: MockerFixture):
     cursor_mock.execute.assert_has_calls(
         [
             call(
-                "INSERT INTO test_table (a, b) SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (1, 4), (2, 5), (3, 6)) AS t(a, b)",
+                'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")',
             ),
         ]
     )
@@ -274,7 +272,7 @@ def test_create_table(mocker: MockerFixture):
     adapter.create_table("test_table", columns_to_types)
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb TEXT)"
+        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT)'
     )
 
 
@@ -297,7 +295,7 @@ def test_create_table_properties(mocker: MockerFixture):
     )
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb TEXT)"
+        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT)'
     )
 
 
@@ -335,12 +333,12 @@ def test_create_table_properties(mocker: MockerFixture):
                 "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN c""",
-                """ALTER TABLE test_table DROP COLUMN d""",
-                """ALTER TABLE test_table ADD COLUMN f VARCHAR(100) FIRST""",
-                """ALTER TABLE test_table ADD COLUMN e TEXT AFTER a""",
-                """ALTER TABLE test_table ADD COLUMN nested.nested_b INT AFTER nested_a""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_b INT AFTER array_a""",
+                'ALTER TABLE "test_table" DROP COLUMN "c"',
+                'ALTER TABLE "test_table" DROP COLUMN "d"',
+                'ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100) FIRST',
+                'ALTER TABLE "test_table" ADD COLUMN "e" TEXT AFTER "a"',
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INT AFTER "nested_a"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INT AFTER "array_a"',
             ],
         ),
         (
@@ -373,12 +371,12 @@ def test_create_table_properties(mocker: MockerFixture):
                 "e": "TEXT",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN c""",
-                """ALTER TABLE test_table DROP COLUMN d""",
-                """ALTER TABLE test_table ADD COLUMN f VARCHAR(100)""",
-                """ALTER TABLE test_table ADD COLUMN e TEXT""",
-                """ALTER TABLE test_table ADD COLUMN nested.nested_b INT""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_b INT""",
+                'ALTER TABLE "test_table" DROP COLUMN "c"',
+                'ALTER TABLE "test_table" DROP COLUMN "d"',
+                'ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)',
+                'ALTER TABLE "test_table" ADD COLUMN "e" TEXT',
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INT',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INT',
             ],
         ),
         (
@@ -410,14 +408,14 @@ def test_create_table_properties(mocker: MockerFixture):
                 "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN c""",
-                """ALTER TABLE test_table DROP COLUMN d""",
-                """ALTER TABLE test_table ADD COLUMN f VARCHAR(100)""",
-                """ALTER TABLE test_table ADD COLUMN e TEXT""",
-                """ALTER TABLE test_table DROP COLUMN nested""",
-                """ALTER TABLE test_table ADD COLUMN nested STRUCT<nested_a INT, nested_b INT, nested_c INT>""",
-                """ALTER TABLE test_table DROP COLUMN array_col""",
-                """ALTER TABLE test_table ADD COLUMN array_col ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>""",
+                'ALTER TABLE "test_table" DROP COLUMN "c"',
+                'ALTER TABLE "test_table" DROP COLUMN "d"',
+                'ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)',
+                'ALTER TABLE "test_table" ADD COLUMN "e" TEXT',
+                'ALTER TABLE "test_table" DROP COLUMN "nested"',
+                'ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INT, "nested_b" INT, "nested_c" INT>',
+                'ALTER TABLE "test_table" DROP COLUMN "array_col"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INT, "array_b" INT, "array_c" INT>>',
             ],
         ),
         (
@@ -449,14 +447,14 @@ def test_create_table_properties(mocker: MockerFixture):
                 "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN c""",
-                """ALTER TABLE test_table DROP COLUMN d""",
-                """ALTER TABLE test_table ADD COLUMN f VARCHAR(100)""",
-                """ALTER TABLE test_table ADD COLUMN e TEXT""",
-                """ALTER TABLE test_table DROP COLUMN nested""",
-                """ALTER TABLE test_table ADD COLUMN nested STRUCT<nested_a INT, nested_b INT, nested_c INT>""",
-                """ALTER TABLE test_table DROP COLUMN array_col""",
-                """ALTER TABLE test_table ADD COLUMN array_col ARRAY<STRUCT<array_a INT, array_b INT, array_c INT>>""",
+                'ALTER TABLE "test_table" DROP COLUMN "c"',
+                'ALTER TABLE "test_table" DROP COLUMN "d"',
+                'ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)',
+                'ALTER TABLE "test_table" ADD COLUMN "e" TEXT',
+                'ALTER TABLE "test_table" DROP COLUMN "nested"',
+                'ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INT, "nested_b" INT, "nested_c" INT>',
+                'ALTER TABLE "test_table" DROP COLUMN "array_col"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INT, "array_b" INT, "array_c" INT>>',
             ],
         ),
         # Test multiple operations on a column with positional and nested features enabled
@@ -479,12 +477,12 @@ def test_create_table_properties(mocker: MockerFixture):
                 "array_col": """ARRAY<STRUCT<array_a INT, "array_b" INT, array_d INT, array_e INT>>""",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN nested."nested_c\"""",
-                """ALTER TABLE test_table ADD COLUMN nested."nested_b" INT AFTER nested_a""",
-                """ALTER TABLE test_table ADD COLUMN nested.nested_d INT AFTER "nested_b\"""",
-                """ALTER TABLE test_table DROP COLUMN array_col.element."array_c\"""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element."array_b" INT AFTER array_a""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_d INT AFTER "array_b\"""",
+                'ALTER TABLE "test_table" DROP COLUMN "nested"."nested_c"',
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INT AFTER "nested_a"',
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_d" INT AFTER "nested_b"',
+                'ALTER TABLE "test_table" DROP COLUMN "array_col"."element"."array_c"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INT AFTER "array_a"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_d" INT AFTER "array_b"',
             ],
         ),
         # Test multiple operations on a column with positional and nested features enabled and that when adding
@@ -508,13 +506,13 @@ def test_create_table_properties(mocker: MockerFixture):
                 "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT>>",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN nested.nested_c""",
+                'ALTER TABLE "test_table" DROP COLUMN "nested"."nested_c"',
                 # Position is not included since we are adding to last so we don't need to specify position
-                """ALTER TABLE test_table ADD COLUMN nested.nested_b INT""",
-                """ALTER TABLE test_table ADD COLUMN nested.nested_d INT""",
-                """ALTER TABLE test_table DROP COLUMN array_col.element.array_c""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_b INT""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_d INT""",
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INT',
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_d" INT',
+                'ALTER TABLE "test_table" DROP COLUMN "array_col"."element"."array_c"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INT',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_d" INT',
             ],
         ),
         # Test multiple operations on a column with positional and no nested features enabled
@@ -539,10 +537,10 @@ def test_create_table_properties(mocker: MockerFixture):
                 "col_c": "INT",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN nested""",
-                """ALTER TABLE test_table ADD COLUMN nested STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT> FIRST""",
-                """ALTER TABLE test_table DROP COLUMN array_col""",
-                """ALTER TABLE test_table ADD COLUMN array_col ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>> AFTER nested""",
+                'ALTER TABLE "test_table" DROP COLUMN "nested"',
+                'ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INT, "nested_b" INT, "nested_d" INT, "nested_e" INT> FIRST',
+                'ALTER TABLE "test_table" DROP COLUMN "array_col"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INT, "array_b" INT, "array_d" INT, "array_e" INT>> AFTER "nested"',
             ],
         ),
         # Test multiple operations on a column with no positional and nested features enabled
@@ -567,12 +565,12 @@ def test_create_table_properties(mocker: MockerFixture):
                 "col_c": "INT",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN nested.nested_c""",
-                """ALTER TABLE test_table ADD COLUMN nested.nested_b INT""",
-                """ALTER TABLE test_table ADD COLUMN nested.nested_d INT""",
-                """ALTER TABLE test_table DROP COLUMN array_col.element.array_c""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_b INT""",
-                """ALTER TABLE test_table ADD COLUMN array_col.element.array_d INT""",
+                'ALTER TABLE "test_table" DROP COLUMN "nested"."nested_c"',
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INT',
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_d" INT',
+                'ALTER TABLE "test_table" DROP COLUMN "array_col"."element"."array_c"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INT',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_d" INT',
             ],
         ),
         # Test multiple operations on a column with no positional or nested features enabled
@@ -596,10 +594,10 @@ def test_create_table_properties(mocker: MockerFixture):
                 "array_col": "ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>",
             },
             [
-                """ALTER TABLE test_table DROP COLUMN nested""",
-                """ALTER TABLE test_table ADD COLUMN nested STRUCT<nested_a INT, nested_b INT, nested_d INT, nested_e INT>""",
-                """ALTER TABLE test_table DROP COLUMN array_col""",
-                """ALTER TABLE test_table ADD COLUMN array_col ARRAY<STRUCT<array_a INT, array_b INT, array_d INT, array_e INT>>""",
+                'ALTER TABLE "test_table" DROP COLUMN "nested"',
+                'ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INT, "nested_b" INT, "nested_d" INT, "nested_e" INT>',
+                'ALTER TABLE "test_table" DROP COLUMN "array_col"',
+                'ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INT, "array_b" INT, "array_d" INT, "array_e" INT>>',
             ],
         ),
         # Test deeply nested structures
@@ -618,7 +616,7 @@ def test_create_table_properties(mocker: MockerFixture):
                 "nested": """STRUCT<nested_1_a STRUCT<"nested_2_a" ARRAY<STRUCT<nested_3_a STRUCT<nested_4_a ARRAY<STRUCT<"nested_5_a" ARRAY<STRUCT<nested_6_a INT, nested_6_b INT>>>>>>>>>""",
             },
             [
-                """ALTER TABLE test_table ADD COLUMN nested.nested_1_a."nested_2_a".element.nested_3_a.nested_4_a.element."nested_5_a".element.nested_6_b INT""",
+                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_1_a"."nested_2_a"."element"."nested_3_a"."nested_4_a"."element"."nested_5_a"."element"."nested_6_b" INT',
             ],
         ),
     ],
@@ -680,7 +678,7 @@ def test_merge(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.merge(
         target_table="target",
-        source_table="SELECT id, ts, val FROM source",
+        source_table=t.cast(exp.Select, parse_one("SELECT id, ts, val FROM source")),
         columns_to_types={
             "id": exp.DataType.Type.INT,
             "ts": exp.DataType.Type.TIMESTAMP,
@@ -689,15 +687,15 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
-        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
-        "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
+        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
+        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
     cursor_mock.reset_mock()
     adapter.merge(
         target_table="target",
-        source_table="SELECT id, ts, val FROM source",
+        source_table=parse_one("SELECT id, ts, val FROM source"),
         columns_to_types={
             "id": exp.DataType.Type.INT,
             "ts": exp.DataType.Type.TIMESTAMP,
@@ -706,9 +704,9 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id AND __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts "
-        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
-        "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
+        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
+        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
 
@@ -730,9 +728,9 @@ def test_merge_pandas(mocker: MockerFixture):
         unique_key=["id"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT CAST(id AS INT) AS id, CAST(ts AS TIMESTAMP) AS ts, CAST(val AS INT) AS val FROM (VALUES (1, 4), (2, 5), (3, 6)) AS t(id, ts, val)) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
-        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
-        "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
+        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
+        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
     cursor_mock.reset_mock()
@@ -747,9 +745,9 @@ def test_merge_pandas(mocker: MockerFixture):
         unique_key=["id", "ts"],
     )
     cursor_mock.execute.assert_called_once_with(
-        "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT CAST(id AS INT) AS id, CAST(ts AS TIMESTAMP) AS ts, CAST(val AS INT) AS val FROM (VALUES (1, 4), (2, 5), (3, 6)) AS t(id, ts, val)) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id AND __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts "
-        "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
-        "WHEN NOT MATCHED THEN INSERT (id, ts, val) VALUES (__MERGE_SOURCE__.id, __MERGE_SOURCE__.ts, __MERGE_SOURCE__.val)"
+        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
+        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
+        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
 
@@ -762,7 +760,7 @@ def test_replace_query(mocker: MockerFixture):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE OR REPLACE TABLE test_table AS SELECT a FROM tbl"
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"'
     )
 
 
@@ -777,10 +775,10 @@ def test_replace_query_pandas(mocker: MockerFixture):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("DROP TABLE IF EXISTS test_table"),
-            call("CREATE TABLE IF NOT EXISTS test_table (a int, b int)"),
+            call('DROP TABLE IF EXISTS "test_table"'),
+            call('CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)'),
             call(
-                "INSERT INTO test_table (a, b) SELECT CAST(a AS INT) AS a, CAST(b AS INT) AS b FROM (VALUES (1, 4), (2, 5), (3, 6)) AS t(a, b)"
+                'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
             ),
         ]
     )
@@ -795,7 +793,7 @@ def test_create_table_like(mocker: MockerFixture):
     adapter.create_table_like("target_table", "source_table")
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS target_table LIKE source_table"
+        'CREATE TABLE IF NOT EXISTS "target_table" LIKE "source_table"'
     )
 
 
@@ -813,7 +811,7 @@ def test_create_table_primary_key(mocker: MockerFixture):
     adapter.create_table("test_table", columns_to_types, primary_key=("cola", "colb"))
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS test_table (cola INT, colb TEXT, PRIMARY KEY (cola, colb))"
+        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT, PRIMARY KEY ("cola", "colb"))'
     )
 
 
@@ -826,7 +824,7 @@ def test_create_index(mocker: MockerFixture):
     adapter.create_index("test_table", "test_index", ("cola", "colb"))
 
     cursor_mock.execute.assert_called_once_with(
-        "CREATE INDEX IF NOT EXISTS test_index ON test_table (cola, colb)"
+        'CREATE INDEX IF NOT EXISTS "test_index" ON "test_table" ("cola", "colb")'
     )
 
 
@@ -838,4 +836,4 @@ def test_rename_table(mocker: MockerFixture):
     adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.rename_table("old_table", "new_table")
 
-    cursor_mock.execute.assert_called_once_with("ALTER TABLE old_table RENAME TO new_table")
+    cursor_mock.execute.assert_called_once_with('ALTER TABLE "old_table" RENAME TO "new_table"')

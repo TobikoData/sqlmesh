@@ -127,7 +127,7 @@ class ContextDiff(PydanticModel):
 
             if existing:
                 # Keep the original model instance to preserve the query cache.
-                existing.model = snapshot.model
+                existing.node = snapshot.node
 
                 merged_snapshots[name] = existing.copy()
                 if modified:

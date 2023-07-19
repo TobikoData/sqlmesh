@@ -20,10 +20,12 @@ class SnowflakeEngineAdapter(EngineAdapter):
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> DF:
         from snowflake.connector.errors import NotSupportedError
 
-        self.execute(query)
+        self.execute(query, quote_identifiers=quote_identifiers)
 
         try:
             return self.cursor.fetch_pandas_all()
@@ -43,7 +45,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
         """
         target = nullsafe_join(".", catalog_name, schema_name)
         sql = f"SHOW TERSE OBJECTS IN {target}"
-        df = self.fetchdf(sql)
+        df = self.fetchdf(sql, quote_identifiers=True)
         return [
             DataObject(
                 catalog=row.database_name,  # type: ignore
@@ -65,29 +67,16 @@ class SnowflakeEngineAdapter(EngineAdapter):
 
         table = exp.to_table(table_name)
 
-        table_identifier = table.name
-        if not table.this.quoted:
-            table_identifier = table_identifier.upper()
-
-        if "db" in table.args:
-            table_db = table.db
-            if not table.args["db"].quoted:
-                table_db = table_db.upper()
-        else:
-            table_db = None
-
-        new_column_names = {
-            col: col if exp.to_identifier(col).quoted else col.upper() for col in df.columns  # type: ignore
-        }
-        df = df.rename(columns=new_column_names)
-
         # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
-        self.cursor.execute(f'USE SCHEMA "{table_db}"')
+        #
+        # The above issue has already been fixed upstream, but we keep the following
+        # line anyway in order to support a wider range of Snowflake versions.
+        self.cursor.execute(f'USE SCHEMA "{table.db}"')
 
         write_pandas(
             self._connection_pool.get(),
             df,
-            table_identifier,
-            schema=table_db,
+            table.name,
+            schema=table.db,
             chunk_size=self.DEFAULT_BATCH_SIZE,
         )

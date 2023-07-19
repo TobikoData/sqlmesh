@@ -130,27 +130,33 @@ class BaseContext(abc.ABC):
         """
         return self._model_tables[model_name]
 
-    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
+    def fetchdf(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> pd.DataFrame:
         """Fetches a dataframe given a sql string or sqlglot expression.
 
         Args:
             query: SQL string or sqlglot expression.
+            quote_identifiers: Whether to quote all identifiers in the query.
 
         Returns:
             The default dataframe is Pandas, but for Spark a PySpark dataframe is returned.
         """
-        return self.engine_adapter.fetchdf(query)
+        return self.engine_adapter.fetchdf(query, quote_identifiers=quote_identifiers)
 
-    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
+    def fetch_pyspark_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> PySparkDataFrame:
         """Fetches a PySpark dataframe given a sql string or sqlglot expression.
 
         Args:
             query: SQL string or sqlglot expression.
+            quote_identifiers: Whether to quote all identifiers in the query.
 
         Returns:
             A PySpark dataframe.
         """
-        return self.engine_adapter.fetch_pyspark_df(query)
+        return self.engine_adapter.fetch_pyspark_df(query, quote_identifiers=quote_identifiers)
 
 
 class ExecutionContext(BaseContext):
@@ -543,7 +549,7 @@ class Context(BaseContext):
 
             snapshot = Snapshot.from_model(
                 model,
-                models=models,
+                nodes=models,
                 audits=audits,
                 cache=fingerprint_cache,
                 ttl=ttl,
@@ -555,7 +561,7 @@ class Context(BaseContext):
 
         for snapshot in stored_snapshots.values():
             # Keep the original model instance to preserve the query cache.
-            snapshot.model = snapshots[snapshot.name].model
+            snapshot.node = snapshots[snapshot.name].node
 
         return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in snapshots.items()}
 

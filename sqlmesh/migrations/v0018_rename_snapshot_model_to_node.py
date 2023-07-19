@@ -1,11 +1,8 @@
-"""Fix expressions that contain jinja."""
+"""Replace snapshot model field with node."""
 import json
-import typing as t
 
 import pandas as pd
 from sqlglot import exp
-
-from sqlmesh.utils.jinja import has_jinja
 
 
 def migrate(state_sync):  # type: ignore
@@ -20,19 +17,7 @@ def migrate(state_sync):  # type: ignore
         quote_identifiers=True,
     ):
         parsed_snapshot = json.loads(snapshot)
-        audits = parsed_snapshot.get("audits", [])
-        model = parsed_snapshot["model"]
-
-        if "query" in model and has_jinja(model["query"]):
-            model["query"] = _wrap_query(model["query"])
-
-        _wrap_statements(model, "pre_statements")
-        _wrap_statements(model, "post_statements")
-
-        for audit in audits:
-            if has_jinja(audit["query"]):
-                audit["query"] = _wrap_query(audit["query"])
-            _wrap_statements(audit, "expressions")
+        parsed_snapshot["node"] = parsed_snapshot.pop("model")
 
         new_snapshots.append(
             {
@@ -59,22 +44,3 @@ def migrate(state_sync):  # type: ignore
             },
             contains_json=True,
         )
-
-
-def _wrap_statements(obj: t.Dict, key: str) -> None:
-    updated_statements = []
-    for statement in obj.get(key, []):
-        if has_jinja(statement):
-            statement = _wrap_statement(statement)
-        updated_statements.append(statement)
-
-    if updated_statements:
-        obj[key] = updated_statements
-
-
-def _wrap_query(sql: str) -> str:
-    return f"JINJA_QUERY_BEGIN;\n{sql}\nJINJA_END;"
-
-
-def _wrap_statement(sql: str) -> str:
-    return f"JINJA_STATEMENT_BEGIN;\n{sql}\nJINJA_END;"

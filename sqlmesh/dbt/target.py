@@ -257,7 +257,7 @@ class PostgresConfig(TargetConfig):
     password: str
     port: int
     dbname: str
-    keepalives_idle: int = 0
+    keepalives_idle: t.Optional[int] = None
     connect_timeout: int = 10
     retries: int = 1  # Currently Unsupported by SQLMesh
     search_path: t.Optional[str] = None  # Currently Unsupported by SQLMesh
@@ -286,7 +286,7 @@ class PostgresConfig(TargetConfig):
             user=self.user,
             password=self.password,
             port=self.port,
-            database=self.schema_,
+            database=self.dbname,
             keepalives_idle=self.keepalives_idle,
             concurrent_tasks=self.threads,
             connect_timeout=self.connect_timeout,

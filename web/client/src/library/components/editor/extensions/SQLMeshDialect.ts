@@ -72,8 +72,7 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
         const keywordFrom = ctx.matchBefore(/from.+/i)
         const keywordKind = ctx.matchBefore(/kind.+/i)
         const keywordDialect = ctx.matchBefore(/dialect.+/i)
-        const matchModels =
-          text.match(/MODEL \((?:[^)(]+|\((?:[^)(]+|\([^)(]*\))*\))*\)/g) ?? []
+        const matchModels = text.match(/MODEL \(([\s\S]+?)\);/g) ?? []
         const isInsideModel = matchModels
           .filter(str => str.includes(match))
           .map<[number, number]>(str => [

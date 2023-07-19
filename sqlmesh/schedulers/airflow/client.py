@@ -101,7 +101,7 @@ class AirflowClient:
             ).snapshot_ids
         )
 
-    def models_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
+    def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         flags = ["exclude_external"] if exclude_external else []
         return set(
             common.ExistingModelsResponse.parse_obj(

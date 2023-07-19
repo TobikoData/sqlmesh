@@ -1,7 +1,7 @@
 import { type File, FileType } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
-import { isStringEmptyOrNil, toUniqueName } from '@utils/index'
+import { isFalse, isStringEmptyOrNil, toUniqueName } from '@utils/index'
 
 export const EnumFileExtensions = {
   SQL: '.sql',
@@ -57,8 +57,12 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     this._type = newType ?? getFileType(this.path)
   }
 
+  get isSynced(): boolean {
+    return isFalse(isStringEmptyOrNil(this._content))
+  }
+
   get isEmpty(): boolean {
-    return this.content === ''
+    return isStringEmptyOrNil(this.content)
   }
 
   get isSupported(): boolean {
@@ -92,8 +96,16 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   updateContent(newContent: string = ''): void {
+    // When modifying a file locally, we only modify the content.
+    // Therefore, if we have content but the variable "_content" is empty,
+    // it is likely because we restored the file content from localStorage.
+    // After updating "_content", we still want to retain the content
+    // because it is unsaved changes.
+    if (this.isSynced) {
+      this.content = newContent
+    }
+
     this._content = newContent
-    this.content = newContent
   }
 
   update(newFile?: File): void {

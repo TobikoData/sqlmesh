@@ -23,8 +23,8 @@ def test_replace_query_already_exists(mocker: MockerFixture):
     adapter.replace_query("db.table", parse_one("SELECT col FROM db.other_table"))
     cursor_mock.execute.assert_has_calls(
         [
-            call("""TRUNCATE db.table"""),
-            call("""INSERT INTO db.table SELECT col FROM db.other_table"""),
+            call('TRUNCATE "db"."table"'),
+            call('INSERT INTO "db"."table" SELECT "col" FROM "db"."other_table"'),
         ]
     )
 
@@ -44,5 +44,5 @@ def test_replace_query_does_not_exist(mocker: MockerFixture):
 
     adapter.replace_query("db.table", parse_one("SELECT col FROM db.other_table"))
     cursor_mock.execute.assert_called_once_with(
-        """CREATE TABLE db.table AS SELECT col FROM db.other_table"""
+        'CREATE TABLE "db"."table" AS SELECT "col" FROM "db"."other_table"'
     )

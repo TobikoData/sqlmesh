@@ -26,7 +26,7 @@ def snapshot() -> Snapshot:
                 parse_one("@DEF(key, 'value')"),
             ],
         ),
-        models={},
+        nodes={},
         ttl="in 1 week",
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -70,7 +70,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "indirect_versions": {},
                 "intervals": [],
                 "dev_intervals": [],
-                "model": {
+                "node": {
                     "audits": [],
                     "clustered_by": [],
                     "cron": "@daily",
@@ -129,7 +129,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "promoted_snapshot_ids": [
                 {
                     "name": "test_model",
-                    "identifier": "972402299",
+                    "identifier": "1863656389",
                 }
             ],
         },
@@ -200,7 +200,7 @@ def test_models_exist(mocker: MockerFixture, snapshot: Snapshot):
     models_exist_mock.return_value = models_exist_response_mock
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    result = client.models_exist(model_names, exclude_external=True)
+    result = client.nodes_exist(model_names, exclude_external=True)
 
     assert result == set(model_names)
 

@@ -19,7 +19,7 @@ from sqlmesh.core.model import (
     ViewKind,
     load_model,
 )
-from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -358,9 +358,9 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
 
     cursor_mock.execute.assert_has_calls(
         [
-            call("""ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 DROP COLUMN b"""),
+            call('ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" DROP COLUMN "b"'),
             call(
-                """ALTER TABLE sqlmesh__test_schema.test_schema__test_model__1 ADD COLUMN a INT"""
+                'ALTER TABLE "sqlmesh__test_schema"."test_schema__test_model__1" ADD COLUMN "a" INT'
             ),
         ]
     )
@@ -388,7 +388,7 @@ def test_migrate_view(mocker: MockerFixture, make_snapshot):
     cursor_mock.execute.assert_has_calls(
         [
             call(
-                'CREATE OR REPLACE VIEW sqlmesh__test_schema.test_schema__test_model__1 AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
+                'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
             )
         ]
     )

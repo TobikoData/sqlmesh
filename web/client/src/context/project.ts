@@ -1,10 +1,9 @@
 import { create } from 'zustand'
 import { ModelDirectory, type ModelFile } from '../models'
-import { type Directory } from '~/api/client'
 
 interface ProjectStore {
   project: ModelDirectory
-  setProject: (project?: Directory) => void
+  setProject: (project?: ModelDirectory) => void
   files: Map<ID, ModelFile>
   setFiles: (files: ModelFile[]) => void
   selectedFile?: ModelFile
@@ -17,7 +16,7 @@ export const useStoreProject = create<ProjectStore>((set, get) => ({
   files: new Map(),
   setProject(project) {
     set(() => ({
-      project: new ModelDirectory(project),
+      project,
     }))
   },
   setFiles(files) {

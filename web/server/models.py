@@ -8,7 +8,7 @@ from pydantic import BaseModel, validator
 from sqlglot import exp
 
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike
 
@@ -59,13 +59,8 @@ class Directory(BaseModel):
     files: t.List[File] = []
 
 
-class Context(BaseModel):
-    concurrent_tasks: int
-    engine_adapter: str
-    time_column_format: str
-    scheduler: str
-    models: t.List[str] = []
-    config: str
+class Meta(BaseModel):
+    version: str
 
 
 class ChangeDirect(BaseModel):

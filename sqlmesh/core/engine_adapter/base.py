@@ -19,6 +19,7 @@ import pandas as pd
 from sqlglot import Dialect, exp
 from sqlglot.errors import ErrorLevel
 from sqlglot.helper import ensure_list
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
@@ -39,7 +40,7 @@ if t.TYPE_CHECKING:
         Query,
         QueryOrDF,
     )
-    from sqlmesh.core.model.meta import IntervalUnit
+    from sqlmesh.core.node import IntervalUnit
 
 logger = logging.getLogger(__name__)
 
@@ -698,7 +699,9 @@ class EngineAdapter:
         match_expressions: t.List[exp.When],
     ) -> None:
         this = exp.alias_(exp.to_table(target_table), alias=MERGE_TARGET_ALIAS, table=True)
-        using = exp.Subquery(this=source_table, alias=MERGE_SOURCE_ALIAS)
+        using = exp.alias_(
+            exp.Subquery(this=source_table), alias=MERGE_SOURCE_ALIAS, copy=False, table=True
+        )
         self.execute(
             exp.Merge(
                 this=this,
@@ -778,33 +781,49 @@ class EngineAdapter:
         self,
         query: t.Union[exp.Expression, str],
         ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = False,
     ) -> t.Tuple:
-        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
+        self.execute(
+            query,
+            ignore_unsupported_errors=ignore_unsupported_errors,
+            quote_identifiers=quote_identifiers,
+        )
         return self.cursor.fetchone()
 
     def fetchall(
         self,
         query: t.Union[exp.Expression, str],
         ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = False,
     ) -> t.List[t.Tuple]:
-        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
+        self.execute(
+            query,
+            ignore_unsupported_errors=ignore_unsupported_errors,
+            quote_identifiers=quote_identifiers,
+        )
         return self.cursor.fetchall()
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
-        self.execute(query)
+        self.execute(query, quote_identifiers=quote_identifiers)
         return self.cursor.fetchdf()
 
-    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
+    def fetchdf(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> pd.DataFrame:
         """Fetches a Pandas DataFrame from the cursor"""
-        df = self._fetch_native_df(query)
+        df = self._fetch_native_df(query, quote_identifiers=quote_identifiers)
         if not isinstance(df, pd.DataFrame):
             raise NotImplementedError(
                 "The cursor's `fetch_native_df` method is not returning a pandas DataFrame. Need to update `fetchdf` so a Pandas DataFrame is returned"
             )
         return df
 
-    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
+    def fetch_pyspark_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> PySparkDataFrame:
         """Fetches a PySpark DataFrame from the cursor"""
         raise NotImplementedError(f"Engine does not support PySpark DataFrames: {type(self)}")
 
@@ -835,6 +854,7 @@ class EngineAdapter:
         self,
         expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
@@ -843,7 +863,11 @@ class EngineAdapter:
         )
 
         for e in ensure_list(expressions):
-            sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
+            sql = (
+                self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
+                if isinstance(e, exp.Expression)
+                else e
+            )
             logger.debug(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
 
@@ -882,7 +906,7 @@ class EngineAdapter:
         """Creates a SQLGlot table properties expression for ddl."""
         return None
 
-    def _to_sql(self, e: exp.Expression, **kwargs: t.Any) -> str:
+    def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
         """
         Converts an expression to a SQL string. Has a set of default kwargs to apply, and then default
         kwargs defined for the given dialect, and then kwargs provided by the user when defining the engine
@@ -896,7 +920,11 @@ class EngineAdapter:
             **self.sql_gen_kwargs,
             **kwargs,
         }
-        return e.sql(**sql_gen_kwargs)  # type: ignore
+
+        if quote:
+            quote_identifiers(expression)
+
+        return expression.sql(**sql_gen_kwargs)  # type: ignore
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
@@ -917,9 +945,11 @@ class EngineAdapter:
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
         table.set("this", exp.to_identifier(f"__temp_{table.name}_{uuid.uuid4().hex}"))
+
         if table_only:
             table.set("db", None)
             table.set("catalog", None)
+
         return table
 
     def _add_where_to_query(self, query: Query, where: t.Optional[exp.Expression]) -> Query:
@@ -933,8 +963,10 @@ class EngineAdapter:
             .from_(query.subquery("_subquery", copy=False), copy=False)
             .where(where, copy=False)
         )
+
         if with_:
             query.set("with", with_)
+
         return query
 
 
