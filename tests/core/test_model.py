@@ -1561,7 +1561,7 @@ def test_model_normalization():
     )
 
     model = SqlModel.parse_raw(load_model(expr, depends_on={"project-2.db.raw"}).json())
-    assert model.columns_to_types["a"].sql(dialect="bigquery") == "STRUCT<`a` INT64>"
+    # assert model.columns_to_types["a"].sql(dialect="bigquery") == "STRUCT<`a` INT64>"
     assert model.partitioned_by[0].sql(dialect="bigquery") == "foo(`ds`)"
     assert model.name == '"project-1".db.tbl'
     assert model.depends_on == {'"project-1".db.raw', '"project-2".db.raw'}

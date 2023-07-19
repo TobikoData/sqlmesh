@@ -122,7 +122,6 @@ class ModelConfig(BaseModelConfig):
         },
     }
 
-    @property
     def model_materialization(self) -> Materialization:
         return Materialization(self.materialized.lower())
 

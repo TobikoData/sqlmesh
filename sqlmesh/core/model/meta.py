@@ -115,7 +115,6 @@ class ModelMeta(Node):
         ]
 
         for partition in partitions:
-            partition.meta["dialect"] = dialect
             num_cols = len(list(partition.find_all(exp.Column)))
             error_msg: t.Optional[str] = None
             if num_cols == 0:
@@ -132,20 +131,13 @@ class ModelMeta(Node):
     def _columns_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
-        dialect = values.get("dialect")
-        columns_to_types = {}
         if isinstance(v, exp.Schema):
-            for column in v.expressions:
-                expr = column.args["kind"]
-                expr.meta["dialect"] = dialect
-                columns_to_types[column.name] = expr
-            return columns_to_types
+            return {column.name: column.args["kind"] for column in v.expressions}
         if isinstance(v, dict):
-            for k, data_type in v.items():
-                expr = exp.DataType.build(data_type, dialect=dialect)
-                expr.meta["dialect"] = dialect
-                columns_to_types[k] = expr
-            return columns_to_types
+            return {
+                k: exp.DataType.build(data_type, dialect=values.get("dialect"))
+                for k, data_type in v.items()
+            }
         return v
 
     @validator("depends_on_", pre=True)
