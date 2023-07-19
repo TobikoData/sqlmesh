@@ -37,6 +37,7 @@ class PostgresEngineAdapter(BasePostgresEngineAdapter):
         if not self.table_exists(table_name):
             return self.ctas(table_name, query_or_df, columns_to_types, exists=False, **kwargs)
         with self.transaction(TransactionType.DDL):
+            # TODO: remove quote_identifiers when sqlglot has an expression to represent TRUNCATE
             table = quote_identifiers(exp.to_table(table_name))
             sql = f"TRUNCATE {table.sql(dialect=self.dialect)}"
             self.execute(sql)
