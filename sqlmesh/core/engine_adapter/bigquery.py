@@ -87,6 +87,18 @@ class BigQueryEngineAdapter(EngineAdapter):
             params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
         return params
 
+    def _begin_session(self) -> None:
+        from google.cloud.bigquery import QueryJobConfig
+
+        job = self.client.query("SELECT 1;", job_config=QueryJobConfig(create_session=True))
+        session_info = job.session_info
+        session_id = session_info.session_id if session_info else None
+        self._connection_pool.set_attribute("session_id", session_id)
+        job.result()
+
+    def _end_session(self) -> None:
+        self._connection_pool.set_attribute("session_id", None)
+
     def create_schema(self, schema_name: str, ignore_if_exists: bool = True) -> None:
         """Create a schema from a name or qualified table name."""
         from google.api_core.exceptions import Conflict
@@ -487,6 +499,7 @@ class BigQueryEngineAdapter(EngineAdapter):
     ) -> None:
         """Execute a sql query."""
         from google.cloud.bigquery import QueryJobConfig
+        from google.cloud.bigquery.query import ConnectionProperty
 
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
@@ -503,7 +516,18 @@ class BigQueryEngineAdapter(EngineAdapter):
             # BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
             # So we update the cursor's query job and query data with the results of the new query job. This makes sure
             # that other cursor based operations execute correctly.
-            job_config = QueryJobConfig(**self._job_params)
+            session_id = self._connection_pool.get_attribute("session_id")
+            connection_properties = (
+                [
+                    ConnectionProperty(key="session_id", value=session_id),
+                ]
+                if session_id
+                else []
+            )
+
+            job_config = QueryJobConfig(
+                **self._job_params, connection_properties=connection_properties
+            )
             self.cursor._query_job = self._db_call(
                 self.client.query,
                 query=sql,

@@ -364,3 +364,18 @@ def test_merge(mocker: MockerFixture):
         "job_config",
         "table",
     ]
+
+
+def test_begin_end_session(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    cursor_mock.connection = connection_mock
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+
+    with adapter.session():
+        assert adapter._connection_pool.get_attribute("session_id") is not None
+
+    assert adapter._connection_pool.get_attribute("session_id") is None
+    connection_mock._client.query.assert_called_once_with("SELECT 1;", job_config=mocker.ANY)

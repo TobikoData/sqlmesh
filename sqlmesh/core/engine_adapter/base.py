@@ -840,7 +840,7 @@ class EngineAdapter:
     @contextlib.contextmanager
     def transaction(
         self, transaction_type: TransactionType = TransactionType.DML
-    ) -> t.Generator[None, None, None]:
+    ) -> t.Iterator[None]:
         """A transaction context manager."""
         if self._connection_pool.is_transaction_active or not self.supports_transactions(
             transaction_type
@@ -859,6 +859,21 @@ class EngineAdapter:
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         """Whether or not the engine adapter supports transactions for the given transaction type."""
         return True
+
+    @contextlib.contextmanager
+    def session(self) -> t.Iterator[None]:
+        """A session context manager."""
+        self._begin_session()
+        try:
+            yield
+        finally:
+            self._end_session()
+
+    def _begin_session(self) -> None:
+        """Begin a new session."""
+
+    def _end_session(self) -> None:
+        """End the existing session."""
 
     def execute(
         self,
