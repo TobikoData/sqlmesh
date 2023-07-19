@@ -592,6 +592,16 @@ class EngineAdapter:
                 ):
                     self.execute(exp.insert(expression, table_name, columns=column_names))
 
+    def insert_overwrite(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        self._insert_overwrite_by_condition(
+            table_name, query_or_df, columns_to_types=columns_to_types
+        )
+
     def insert_overwrite_by_time_partition(
         self,
         table_name: TableName,

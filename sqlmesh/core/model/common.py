@@ -67,6 +67,7 @@ bool_validator = validator(
     "blocking",
     "forward_only",
     "disable_restatement",
+    "insert_overwrite",
     pre=True,
     allow_reuse=True,
     check_fields=False,

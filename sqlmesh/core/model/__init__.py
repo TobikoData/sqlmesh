@@ -14,6 +14,7 @@ from sqlmesh.core.model.definition import (
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
+    IncrementalUnmanagedKind,
     ModelKind,
     ModelKindMixin,
     ModelKindName,
