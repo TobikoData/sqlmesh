@@ -149,7 +149,6 @@ def sushi_context_fixed_date(mocker: MockerFixture) -> Context:
             context.upsert_model(model.name, start="2022-01-01")
 
     plan = context.plan("prod")
-    plan.set_start("1 week ago")
     push_plan(context, plan)
     return context
 
@@ -192,7 +191,6 @@ def init_and_plan_context(
     confirm.ask.return_value = False
 
     plan = sushi_context.plan("prod")
-    plan.set_start(start)
 
     return (sushi_context, plan)
 
