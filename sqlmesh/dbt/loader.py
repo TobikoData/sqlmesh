@@ -175,12 +175,17 @@ class DbtLoader(Loader):
         max_mtime: t.Optional[float] = None
 
         for nested in root.iterdir():
-            if nested.is_dir():
-                result.update(self._compute_yaml_max_mtime_per_subfolder(nested))
-            elif nested.suffix.lower() in (".yaml", ".yml"):
-                yaml_mtime = self._path_mtimes.get(nested)
-                if yaml_mtime:
-                    max_mtime = max(max_mtime, yaml_mtime) if max_mtime is not None else yaml_mtime
+            try:
+                if nested.is_dir():
+                    result.update(self._compute_yaml_max_mtime_per_subfolder(nested))
+                elif nested.suffix.lower() in (".yaml", ".yml"):
+                    yaml_mtime = self._path_mtimes.get(nested)
+                    if yaml_mtime:
+                        max_mtime = (
+                            max(max_mtime, yaml_mtime) if max_mtime is not None else yaml_mtime
+                        )
+            except PermissionError:
+                pass
 
         if max_mtime is not None:
             result[root] = max_mtime
