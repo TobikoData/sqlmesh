@@ -239,16 +239,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.environments_table,
             where=filter_expr,
         )
-        schema_names: t.Set[str] = set()
-        for environment in environments:
-            schema_names.update(
-                {
-                    exp.to_table(snapshot.qualified_view_name.for_environment(environment.name)).db
-                    for snapshot in environment.snapshots
-                }
-            )
-        for schema_name in schema_names:
-            self.engine_adapter.drop_schema(schema_name, ignore_if_not_exists=True, cascade=True)
 
         return environments
 
