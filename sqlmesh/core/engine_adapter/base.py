@@ -40,7 +40,6 @@ if t.TYPE_CHECKING:
         Query,
         QueryOrDF,
     )
-    from sqlmesh.core.node import IntervalUnit
 
 logger = logging.getLogger(__name__)
 

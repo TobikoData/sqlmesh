@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import typing as t
-from enum import Enum
 
 from pydantic import Field
 from sqlglot import exp
 
 from sqlmesh.utils.cron import CroniterCache
-from sqlmesh.utils.date import TimeLike, to_datetime
+from sqlmesh.utils.date import IntervalUnit, TimeLike, to_datetime
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
@@ -18,101 +17,6 @@ from sqlmesh.utils.pydantic import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit
-
-
-class IntervalUnit(str, Enum):
-    """IntervalUnit is the inferred granularity of an incremental model.
-
-    IntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred
-    based on the cron schedule of a model. The minimum time delta between a sample set of dates
-    is used to determine which unit a model's schedule is.
-    """
-
-    YEAR = "year"
-    MONTH = "month"
-    DAY = "day"
-    HOUR = "hour"
-    MINUTE = "minute"
-
-    @classmethod
-    def from_cron(klass, cron: str, sample_size: int = 10) -> IntervalUnit:
-        croniter = CroniterCache(cron)
-        samples = [croniter.get_next() for _ in range(sample_size)]
-        min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-        for unit, seconds in sorted(INTERVAL_SECONDS.items(), key=lambda x: x[1], reverse=True):
-            if seconds <= min_interval:
-                return unit
-        raise ConfigError(f"Invalid cron '{cron}': must have a cadence of 1 minute or more.")
-
-    @property
-    def is_date_granularity(self) -> bool:
-        return self in (IntervalUnit.YEAR, IntervalUnit.MONTH, IntervalUnit.DAY)
-
-    @property
-    def _cron_expr(self) -> str:
-        if self == IntervalUnit.MINUTE:
-            return "* * * * *"
-        if self == IntervalUnit.HOUR:
-            return "0 * * * *"
-        if self == IntervalUnit.DAY:
-            return "0 0 * * *"
-        if self == IntervalUnit.MONTH:
-            return "0 0 1 * *"
-        if self == IntervalUnit.YEAR:
-            return "0 0 1 1 *"
-        return ""
-
-    def croniter(self, value: TimeLike) -> CroniterCache:
-        return CroniterCache(self._cron_expr, value)
-
-    def cron_next(self, value: TimeLike) -> TimeLike:
-        """
-        Get the next timestamp given a time-like value for this interval unit.
-
-        Args:
-            value: A variety of date formats.
-
-        Returns:
-            The timestamp for the next run.
-        """
-        return self.croniter(value).get_next()
-
-    def cron_prev(self, value: TimeLike) -> TimeLike:
-        """
-        Get the previous timestamp given a time-like value for this interval unit.
-
-        Args:
-            value: A variety of date formats.
-
-        Returns:
-            The timestamp for the previous run.
-        """
-        return self.croniter(value).get_prev()
-
-    def cron_floor(self, value: TimeLike) -> TimeLike:
-        """
-        Get the floor timestamp given a time-like value for this interval unit.
-
-        Args:
-            value: A variety of date formats.
-
-        Returns:
-            The timestamp floor.
-        """
-        return self.croniter(self.cron_next(value)).get_prev()
-
-    @property
-    def seconds(self) -> int:
-        return INTERVAL_SECONDS[self]
-
-
-INTERVAL_SECONDS = {
-    IntervalUnit.YEAR: 60 * 60 * 24 * 365,
-    IntervalUnit.MONTH: 60 * 60 * 24 * 28,
-    IntervalUnit.DAY: 60 * 60 * 24,
-    IntervalUnit.HOUR: 60 * 60,
-    IntervalUnit.MINUTE: 60,
-}
 
 
 class Node(PydanticModel):
