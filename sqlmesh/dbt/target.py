@@ -286,7 +286,7 @@ class PostgresConfig(TargetConfig):
             user=self.user,
             password=self.password,
             port=self.port,
-            database=self.schema_,
+            database=self.dbname,
             keepalives_idle=self.keepalives_idle,
             concurrent_tasks=self.threads,
             connect_timeout=self.connect_timeout,
