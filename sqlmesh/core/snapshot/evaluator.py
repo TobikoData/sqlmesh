@@ -690,10 +690,10 @@ class PromotableStrategy(EvaluationStrategy):
         model = snapshot.model  # type: ignore
         if (
             isinstance(model.kind, IncrementalByTimeRangeKind) 
-            and model.kind.lookforward > 0
+            and model.kind.lambda_intervals > 0
             and snapshot.intervals
         ):
-            n = model.kind.lookforward
+            n = model.kind.lambda_intervals
             unit = model.interval_unit()
             start = to_datetime(snapshot.intervals[-1][-1])  # type: ignore
             if unit == IntervalUnit.YEAR:
