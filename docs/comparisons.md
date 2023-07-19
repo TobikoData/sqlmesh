@@ -22,7 +22,7 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 | -------                           | --- | -------
 | Modeling
 | `SQL models`                      | ✅ | [✅](../concepts/models/overview)
-| `Python models`                   | ✅ | [✅✅](../concepts/models/python_models)
+| `Python models`                   | ✅ | [✅](../concepts/models/python_models)
 | `Jinja support`                   | ✅ | ✅
 | `Jinja macros`                    | ✅ | [✅](../concepts/macros/jinja_macros)
 | `Python macros`                   | ❌ | [✅](../concepts/macros/sqlmesh_macros)
