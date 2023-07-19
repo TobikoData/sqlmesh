@@ -97,8 +97,14 @@ def test_model_kind():
         partition_by={"field": "bar"},
     ).model_kind(target) == IncrementalUnmanagedKind(insert_overwrite=True)
 
+    assert ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(
+        target
+    ) == IncrementalUnmanagedKind(insert_overwrite=True)
+
     assert (
-        ModelConfig(materialized=Materialization.INCREMENTAL).model_kind(target)
+        ModelConfig(
+            materialized=Materialization.INCREMENTAL, incremental_strategy="append"
+        ).model_kind(target)
         == IncrementalUnmanagedKind()
     )
 

@@ -120,6 +120,8 @@ class ModelKind(PydanticModel, ModelKindMixin):
                     klass = IncrementalByTimeRangeKind
                 elif v.get("name") == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
                     klass = IncrementalByUniqueKeyKind
+                elif v.get("name") == ModelKindName.INCREMENTAL_UNMANAGED:
+                    klass = IncrementalUnmanagedKind
                 elif v.get("name") == ModelKindName.SEED:
                     klass = SeedKind
                 elif v.get("name") == ModelKindName.VIEW:
