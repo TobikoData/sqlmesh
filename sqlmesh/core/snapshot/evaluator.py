@@ -34,7 +34,8 @@ from sqlglot.executor import execute
 from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
-from sqlmesh.core.model import Model, ViewKind
+from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, ViewKind
+from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     QualifiedViewName,
     Snapshot,
@@ -43,7 +44,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
 )
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
-from sqlmesh.utils.date import TimeLike, now
+from sqlmesh.utils.date import TimeLike, now, timedelta, to_datetime
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -430,7 +431,7 @@ class SnapshotEvaluator:
     ) -> None:
         table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
         _evaluation_strategy(snapshot, self.adapter).promote(
-            snapshot.qualified_view_name, environment, table_name
+            snapshot.qualified_view_name, environment, table_name, snapshot
         )
 
         if on_complete is not None:
@@ -579,7 +580,13 @@ class EvaluationStrategy(abc.ABC):
         """
 
     @abc.abstractmethod
-    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
+    def promote(
+        self,
+        view_name: QualifiedViewName,
+        environment: str,
+        table_name: str,
+        snapshot: SnapshotInfoLike,
+    ) -> None:
         """Updates the target view to point to the target table.
 
         Args:
@@ -641,7 +648,13 @@ class SymbolicStrategy(EvaluationStrategy):
     def delete(self, name: str) -> None:
         pass
 
-    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
+    def promote(
+        self,
+        view_name: QualifiedViewName,
+        environment: str,
+        table_name: str,
+        snapshot: SnapshotInfoLike,
+    ) -> None:
         pass
 
     def demote(self, view_name: QualifiedViewName, environment: str) -> None:
@@ -649,23 +662,54 @@ class SymbolicStrategy(EvaluationStrategy):
 
 
 class EmbeddedStrategy(SymbolicStrategy):
-    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
+    def promote(
+        self,
+        view_name: QualifiedViewName,
+        environment: str,
+        table_name: str,
+        snapshot: SnapshotInfoLike,
+    ) -> None:
         target_name = view_name.for_environment(environment)
         logger.info("Dropping view '%s' for non-materialized table", target_name)
         self.adapter.drop_view(target_name)
 
 
 class PromotableStrategy(EvaluationStrategy):
-    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
+    def promote(
+        self,
+        view_name: QualifiedViewName,
+        environment: str,
+        table_name: str,
+        snapshot: SnapshotInfoLike,
+    ) -> None:
         schema = view_name.schema_for_environment(environment=environment)
         if schema is not None:
             self.adapter.create_schema(schema)
 
+        view_node = exp.select("*").from_(table_name, dialect=self.adapter.dialect)
+        model = snapshot.model  # type: ignore
+        if isinstance(model.kind, IncrementalByTimeRangeKind) and model.kind.lookforward > 0:
+            n = model.kind.lookforward
+            unit = model.interval_unit()
+            start = to_datetime(snapshot.intervals[-1][-1])  # type: ignore
+            if unit == IntervalUnit.YEAR:
+                end = start + timedelta(days=n * 365)
+            elif unit == IntervalUnit.DAY:
+                end = start + timedelta(days=n)
+            elif unit == IntervalUnit.HOUR:
+                end = start + timedelta(hours=n)
+            elif unit == IntervalUnit.MINUTE:
+                end = start + timedelta(minutes=n)
+            else:
+                raise SQLMeshError(f"Unexpected interval unit: {unit}")
+            forward_view = model.render_query_or_raise(
+                start=start, end=end, latest=end, engine_adapter=self.adapter
+            )
+            view_node.union(forward_view, distinct=False, dialect=self.adapter.dialect, copy=False)
+
         target_name = view_name.for_environment(environment)
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
-        self.adapter.create_view(
-            target_name, exp.select("*").from_(table_name, dialect=self.adapter.dialect)
-        )
+        self.adapter.create_view(target_name, view_node)
 
     def demote(self, view_name: QualifiedViewName, environment: str) -> None:
         target_name = view_name.for_environment(environment)

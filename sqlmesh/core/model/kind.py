@@ -226,6 +226,7 @@ class _Incremental(ModelKind):
 class IncrementalByTimeRangeKind(_Incremental):
     name: ModelKindName = Field(ModelKindName.INCREMENTAL_BY_TIME_RANGE, const=True)
     time_column: TimeColumn
+    lookforward: int = 0
 
     _time_column_validator = TimeColumn.field_validator()
 
