@@ -1169,9 +1169,7 @@ class Context(BaseContext):
             self.snapshot_evaluator.demote(expired_environment.snapshots, expired_environment.name)
             expired_schemas.update(
                 {
-                    exp.to_table(
-                        snapshot.qualified_view_name.for_environment(expired_environment.name)
-                    ).db
+                    snapshot.qualified_view_name.schema_for_environment(expired_environment.name)
                     for snapshot in expired_environment.snapshots
                 }
             )
