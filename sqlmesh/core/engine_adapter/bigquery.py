@@ -354,6 +354,44 @@ class BigQueryEngineAdapter(EngineAdapter):
         ) as source_table:
             return super().merge(target_table, source_table, columns_to_types, unique_key)
 
+    def insert_overwrite_by_partition(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        partitioned_by: t.List[exp.Expression],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        if len(partitioned_by) != 1:
+            raise SQLMeshError(
+                f"Bigquery only supports partitioning by one column, {len(partitioned_by)} were provided."
+            )
+
+        partition_exp = partitioned_by[0]
+        partition_sql = partition_exp.sql(dialect=self.dialect)
+        partition_column = list(partition_exp.find_all(exp.Column))[0]
+
+        with self.session(), self.temp_table(query_or_df, name=table_name) as temp_table_name:
+            if columns_to_types is None:
+                columns_to_types = self.columns(temp_table_name)
+
+            partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
+            temp_table_name_sql = temp_table_name.sql(dialect=self.dialect)
+            self.execute(
+                f"DECLARE target_partitions ARRAY<{partition_type_sql}> DEFAULT (SELECT AS STRUCT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
+            )
+
+            where = exp.In(
+                this=partition_exp,
+                unnest=exp.Unnest(expressions=[exp.to_column("target_partitions")]),
+            )
+
+            self._insert_overwrite_by_condition(
+                table_name,
+                exp.select("*").from_(temp_table_name),
+                where=where,
+                columns_to_types=columns_to_types,
+            )
+
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,

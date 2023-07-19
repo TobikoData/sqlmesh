@@ -800,8 +800,8 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         if isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
-            self.adapter.insert_overwrite(
-                name, query_or_df, columns_to_types=model.columns_to_types
+            self.adapter.insert_overwrite_by_partition(
+                name, query_or_df, model.partitioned_by, columns_to_types=model.columns_to_types
             )
         else:
             self.append(model, name, query_or_df, snapshots, is_dev, **kwargs)

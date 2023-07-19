@@ -592,10 +592,11 @@ class EngineAdapter:
                 ):
                     self.execute(exp.insert(expression, table_name, columns=column_names))
 
-    def insert_overwrite(
+    def insert_overwrite_by_partition(
         self,
         table_name: TableName,
         query_or_df: QueryOrDF,
+        partitioned_by: t.List[exp.Expression],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         self._insert_overwrite_by_condition(
@@ -905,7 +906,7 @@ class EngineAdapter:
             self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager
-    def temp_table(self, query_or_df: QueryOrDF, name: str = "diff") -> t.Iterator[exp.Table]:
+    def temp_table(self, query_or_df: QueryOrDF, name: TableName = "diff") -> t.Iterator[exp.Table]:
         """A context manager for working a temp table.
 
         The table will be created with a random guid and cleaned up after the block.
@@ -976,7 +977,7 @@ class EngineAdapter:
         """
         Returns the name of the temp table that should be used for the given table name.
         """
-        table = t.cast(exp.Table, exp.to_table(table).copy())
+        table = t.cast(exp.Table, exp.to_table(table, dialect=self.dialect).copy())
         table.set("this", exp.to_identifier(f"__temp_{table.name}_{uuid.uuid4().hex}"))
 
         if table_only:
