@@ -99,6 +99,9 @@ class BigQueryEngineAdapter(EngineAdapter):
     def _end_session(self) -> None:
         self._session_id = None
 
+    def _is_session_active(self) -> bool:
+        return self._session_id is not None
+
     def create_schema(self, schema_name: str, ignore_if_exists: bool = True) -> None:
         """Create a schema from a name or qualified table name."""
         from google.api_core.exceptions import Conflict

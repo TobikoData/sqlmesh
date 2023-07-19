@@ -863,6 +863,10 @@ class EngineAdapter:
     @contextlib.contextmanager
     def session(self) -> t.Iterator[None]:
         """A session context manager."""
+        if self._is_session_active():
+            yield
+            return
+
         self._begin_session()
         try:
             yield
@@ -874,6 +878,10 @@ class EngineAdapter:
 
     def _end_session(self) -> None:
         """End the existing session."""
+
+    def _is_session_active(self) -> bool:
+        """Indicates whether or not a session is active."""
+        return False
 
     def execute(
         self,
