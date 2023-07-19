@@ -1164,14 +1164,11 @@ class Context(BaseContext):
 
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()
-        expired_schemas: t.Set[str] = set()
-        for expired_environment in expired_environments:
-            expired_schemas.update(
-                {
-                    snapshot.qualified_view_name.schema_for_environment(expired_environment.name)
-                    for snapshot in expired_environment.snapshots
-                }
-            )
+        expired_schemas = {
+            snapshot.qualified_view_name.schema_for_environment(expired_environment.name)
+            for expired_environment in expired_environments
+            for snapshot in expired_environment.snapshots
+        }
         for expired_schema in expired_schemas:
             self.engine_adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
 
