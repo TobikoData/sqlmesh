@@ -16,7 +16,8 @@ def migrate(state_sync):  # type: ignore
     new_snapshots = []
 
     for name, identifier, version, snapshot, kind_name in engine_adapter.fetchall(
-        exp.select("name", "identifier", "version", "snapshot", "kind_name").from_(snapshots_table)
+        exp.select("name", "identifier", "version", "snapshot", "kind_name").from_(snapshots_table),
+        quote_identifiers=True,
     ):
         parsed_snapshot = json.loads(snapshot)
         model = parsed_snapshot["model"]

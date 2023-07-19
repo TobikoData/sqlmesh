@@ -47,11 +47,17 @@ class SparkEngineAdapter(EngineAdapter):
             raise SQLMeshError("Ensure PySpark DF can only be run on a PySpark or Pandas DataFrame")
         return self.spark.createDataFrame(df)
 
-    def fetchdf(self, query: t.Union[exp.Expression, str]) -> pd.DataFrame:
-        return self.fetch_pyspark_df(query).toPandas()
+    def fetchdf(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> pd.DataFrame:
+        return self.fetch_pyspark_df(query, quote_identifiers=quote_identifiers).toPandas()
 
-    def fetch_pyspark_df(self, query: t.Union[exp.Expression, str]) -> PySparkDataFrame:
-        return self._ensure_pyspark_df(self._fetch_native_df(query))
+    def fetch_pyspark_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> PySparkDataFrame:
+        return self._ensure_pyspark_df(
+            self._fetch_native_df(query, quote_identifiers=quote_identifiers)
+        )
 
     def _insert_overwrite_by_condition(
         self,

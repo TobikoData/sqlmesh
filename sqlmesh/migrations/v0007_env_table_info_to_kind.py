@@ -17,12 +17,15 @@ def migrate(state_sync):  # type: ignore
     snapshots_to_kind = {}
 
     for name, identifier, snapshot in engine_adapter.fetchall(
-        exp.select("name", "identifier", "snapshot").from_(f"{schema}._snapshots")
+        exp.select("name", "identifier", "snapshot").from_(f"{schema}._snapshots"),
+        quote_identifiers=True,
     ):
         snapshot = json.loads(snapshot)
         snapshots_to_kind[(name, identifier)] = snapshot["model"]["kind"]["name"]
 
-    environments = engine_adapter.fetchall(f"SELECT * FROM {environments_table}")
+    environments = engine_adapter.fetchall(
+        exp.select("*").from_(environments_table), quote_identifiers=True
+    )
     new_environments = []
 
     for (

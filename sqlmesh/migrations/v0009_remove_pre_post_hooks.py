@@ -13,7 +13,8 @@ def migrate(state_sync):  # type: ignore
     new_snapshots = []
 
     for name, identifier, version, snapshopt in engine_adapter.fetchall(
-        exp.select("name", "identifier", "version", "snapshot").from_(snapshots_table)
+        exp.select("name", "identifier", "version", "snapshot").from_(snapshots_table),
+        quote_identifiers=True,
     ):
         snapshot = json.loads(snapshopt)
         pre_hooks = snapshot["model"].pop("pre", [])

@@ -340,7 +340,9 @@ class SnapshotEvaluator:
                 **audit_args,
                 **kwargs,
             )
-            count, *_ = self.adapter.fetchone(select("COUNT(*)").from_(query.subquery("audit")))
+            count, *_ = self.adapter.fetchone(
+                select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
+            )
             if count and raise_exception:
                 message = f"Audit '{audit_name}' for model '{snapshot.model.name}' failed.\nGot {count} results, expected 0.\n{query}"
                 if audit.blocking:

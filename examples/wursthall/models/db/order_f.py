@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from models.src.shared import DATA_START_DATE_STR, set_seed  # type: ignore
+from sqlglot import parse_one
 
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind, TimeColumn
@@ -43,27 +44,29 @@ def execute(
     item_d_table_name = context.table("db.item_d")
     order_item_f_table_name = context.table("db.order_item_f")
 
+    # We use parse_one here instead of a raw string because this is a multi-dialect
+    # project and we want to ensure that the resulting query is properly quoted in
+    # the target dialect before executing it
     df_item_d = context.fetchdf(
-        f"""
-        SELECT
-            item_id,
-            item_price
-        FROM {item_d_table_name}
-        """
+        parse_one(f"SELECT item_id, item_price FROM {item_d_table_name}"),
+        quote_identifiers=True,
     )
 
     df_order_item_f = context.fetchdf(
-        f"""
-        SELECT
-            order_id,
-            customer_id,
-            item_id,
-            quantity,
-            order_ds
-        FROM {order_item_f_table_name}
-        WHERE
-            order_ds BETWEEN '{to_ds(start)}' AND '{to_ds(end)}'
-        """
+        parse_one(
+            f"""
+            SELECT
+                order_id,
+                customer_id,
+                item_id,
+                quantity,
+                order_ds
+            FROM {order_item_f_table_name}
+            WHERE
+                order_ds BETWEEN '{to_ds(start)}' AND '{to_ds(end)}'
+            """
+        ),
+        quote_identifiers=True,
     )
 
     df_order_item_f = df_order_item_f.merge(df_item_d, how="inner", on="item_id")
