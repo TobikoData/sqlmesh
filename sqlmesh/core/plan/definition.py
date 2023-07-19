@@ -441,12 +441,17 @@ class Plan:
 
             snapshots = self.context_diff.snapshots
             downstream = [
-                d
-                for d in downstream
-                if snapshots[d].is_materialized
-                and (not snapshots[d].model.disable_restatement or self.is_dev)
-                and not snapshots[d].is_seed
+                d for d in downstream if snapshots[d].is_materialized and not snapshots[d].is_seed
             ]
+
+            if not self.is_dev:
+                models_with_disabled_restatement = [
+                    f"'{d}'" for d in downstream if snapshots[d].model.disable_restatement
+                ]
+                if models_with_disabled_restatement:
+                    raise PlanError(
+                        f"Restatement is disabled for models: {', '.join(models_with_disabled_restatement)}."
+                    )
 
             if not downstream:
                 raise PlanError(

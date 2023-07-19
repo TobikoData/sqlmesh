@@ -20,7 +20,11 @@ from sqlmesh.core.config.connection import (
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
 )
-from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKeyKind
+from sqlmesh.core.model import (
+    IncrementalByTimeRangeKind,
+    IncrementalByUniqueKeyKind,
+    IncrementalUnmanagedKind,
+)
 from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
@@ -31,7 +35,11 @@ if sys.version_info >= (3, 9):
 else:
     from typing_extensions import Literal
 
-IncrementalKind = t.Union[t.Type[IncrementalByUniqueKeyKind], t.Type[IncrementalByTimeRangeKind]]
+IncrementalKind = t.Union[
+    t.Type[IncrementalByUniqueKeyKind],
+    t.Type[IncrementalByTimeRangeKind],
+    t.Type[IncrementalUnmanagedKind],
+]
 
 
 class TargetConfig(abc.ABC, DbtConfig):

@@ -29,7 +29,6 @@ from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKindName,
     SeedKind,
-    _Incremental,
 )
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
@@ -574,11 +573,11 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def forward_only(self) -> bool:
-        return isinstance(self.kind, _Incremental) and self.kind.forward_only
+        return getattr(self.kind, "forward_only", False)
 
     @property
     def disable_restatement(self) -> bool:
-        return isinstance(self.kind, _Incremental) and self.kind.disable_restatement
+        return getattr(self.kind, "disable_restatement", False)
 
     def validate_definition(self) -> None:
         """Validates the model's definition.
@@ -620,7 +619,17 @@ class _Model(ModelMeta, frozen=True):
 
         if self.kind.is_incremental_by_time_range and not self.time_column:
             raise_config_error(
-                "Incremental by time range models must have a time_column field.",
+                "Incremental by time range models must have a time_column field",
+                self._path,
+            )
+
+        if (
+            self.kind.is_incremental_unmanaged
+            and getattr(self.kind, "insert_overwrite", False)
+            and not self.partitioned_by_
+        ):
+            raise_config_error(
+                "Unmanaged incremental models with insert / overwrite enabled must specify the partitioned_by field",
                 self._path,
             )
 

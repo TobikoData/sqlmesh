@@ -77,7 +77,7 @@ To enable incremental_by_time_range incrementality, the model configuration shou
 
 ### Incremental logic
 
-SQLMesh will ignore dbt's incremental jinja block `{% if is_incremental() %}` and requires a new jinja block gated by `{% if sqlmesh_incremental is defined %}`. The new block should contain the `WHERE` clause selecting the time interval. 
+SQLMesh requires a new jinja block gated by `{% if sqlmesh_incremental is defined %}`. The new block should supersede the existing `{% if is_incremental() %}` block and contain the `WHERE` clause selecting the time interval.
 
 For example, the SQL `WHERE` clause with the "ds" column goes in a new jinja block gated by `{% if sqlmesh_incremental is defined %}` as follows:
 
@@ -85,6 +85,8 @@ For example, the SQL `WHERE` clause with the "ds" column goes in a new jinja blo
 > {% if sqlmesh_incremental is defined %}
 >   WHERE
 >     ds BETWEEN '{{ start_ds }}' AND '{{ end_ds }}'
+> {% elif is_incremental() %}
+>   ; < your existing is_incremental block >
 > {% endif %}
 ```
 

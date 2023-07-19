@@ -614,7 +614,7 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
     context_diff_mock.environment = "test_dev"
     context_diff_mock.previous_plan_id = "previous_plan_id"
 
-    with pytest.raises(PlanError, match="Cannot restate from 'a'.*"):
+    with pytest.raises(PlanError, match="Restatement is disabled for models: 'a'.*"):
         Plan(context_diff_mock, restate_models=["a"])
 
     # Effective from doesn't apply to snapshots for which restatements are disabled.
