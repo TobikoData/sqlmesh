@@ -4,7 +4,6 @@ MODEL (
     time_column (register_ds, '%Y-%m-%d'),
     batch_size 200,
   ),
-  dialect "",
   cron '@daily',
   owner jen,
   start '2022-06-01 00:00:00+00:00',

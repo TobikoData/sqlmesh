@@ -47,6 +47,7 @@ class BigQueryEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
+
     # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
     # Can explore doing this with the API in the future
     SCHEMA_DIFFER = SchemaDiffer(
@@ -140,12 +141,17 @@ class BigQueryEngineAdapter(EngineAdapter):
         self,
         query: t.Union[exp.Expression, str],
         ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = False,
     ) -> t.Tuple:
         """
         BigQuery's `fetchone` method doesn't call execute and therefore would not benefit from the execute
         configuration we have in place. Therefore this implementation calls execute instead.
         """
-        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
+        self.execute(
+            query,
+            ignore_unsupported_errors=ignore_unsupported_errors,
+            quote_identifiers=quote_identifiers,
+        )
         try:
             return next(self.cursor._query_data)
         except StopIteration:
@@ -155,12 +161,17 @@ class BigQueryEngineAdapter(EngineAdapter):
         self,
         query: t.Union[exp.Expression, str],
         ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = False,
     ) -> t.List[t.Tuple]:
         """
         BigQuery's `fetchone` method doesn't call execute and therefore would not benefit from the execute
         configuration we have in place. Therefore this implementation calls execute instead.
         """
-        self.execute(query, ignore_unsupported_errors=ignore_unsupported_errors)
+        self.execute(
+            query,
+            ignore_unsupported_errors=ignore_unsupported_errors,
+            quote_identifiers=quote_identifiers,
+        )
         return list(self.cursor._query_data)
 
     def _create_table_from_df(
@@ -395,8 +406,10 @@ class BigQueryEngineAdapter(EngineAdapter):
         # the api doesn't support backticks, so we can't call exp.table_name or sql
         return ".".join(part.name for part in exp.to_table(table_name).parts)
 
-    def _fetch_native_df(self, query: t.Union[exp.Expression, str]) -> DF:
-        self.execute(query)
+    def _fetch_native_df(
+        self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
+    ) -> DF:
+        self.execute(query, quote_identifiers=quote_identifiers)
         return self.cursor._query_job.to_dataframe()
 
     def _create_table_properties(
@@ -469,6 +482,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         self,
         expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
         ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
@@ -479,7 +493,11 @@ class BigQueryEngineAdapter(EngineAdapter):
         )
 
         for e in ensure_list(expressions):
-            sql = self._to_sql(e, **to_sql_kwargs) if isinstance(e, exp.Expression) else e
+            sql = (
+                self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
+                if isinstance(e, exp.Expression)
+                else e
+            )
             logger.debug(f"Executing SQL:\n{sql}")
 
             # BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
