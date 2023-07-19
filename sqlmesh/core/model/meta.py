@@ -109,12 +109,17 @@ class ModelMeta(Node):
                 d.parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
                 for entry in ensure_list(v)
             ]
-        partitions = [
-            exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
-            for expr in partitions
-        ]
 
-        for partition in partitions:
+        validated_partitions = []
+        for expr in partitions:
+            if isinstance(expr, exp.Identifier):
+                column = exp.to_column(expr.name)
+                column.meta["sql"] = expr.meta["sql"]
+                expr = column
+
+            validated_partitions.append(expr)
+
+        for partition in validated_partitions:
             num_cols = len(list(partition.find_all(exp.Column)))
             error_msg: t.Optional[str] = None
             if num_cols == 0:
@@ -125,7 +130,7 @@ class ModelMeta(Node):
             if error_msg:
                 raise ConfigError(f"partitioned_by field '{partition}' {error_msg}")
 
-        return partitions
+        return validated_partitions
 
     @validator("columns_to_types_", pre=True)
     def _columns_validator(

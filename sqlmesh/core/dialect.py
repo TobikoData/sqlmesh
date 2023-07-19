@@ -267,11 +267,25 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
         )
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
+
     name = key.name.lower()
     if name == "path" and value:
         # Make sure if we get a windows path that it is converted to posix
         value = exp.Literal.string(value.this.replace("\\", "/"))
+
     return self.expression(exp.Property, this=name, value=value)
+
+
+def _parse_types(
+    self: Parser, check_func: bool = False, schema: bool = False
+) -> t.Optional[exp.Expression]:
+    start = self._curr
+    parsed_type = self.__parse_types(check_func=check_func, schema=schema)  # type: ignore
+
+    if schema and parsed_type:
+        parsed_type.meta["sql"] = self._find_sql(start, self._prev)
+
+    return parsed_type
 
 
 def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
@@ -614,6 +628,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_with)
     _override(Parser, _parse_having)
     _override(Parser, _parse_lambda)
+    _override(Parser, _parse_types)
 
 
 def select_from_values(
