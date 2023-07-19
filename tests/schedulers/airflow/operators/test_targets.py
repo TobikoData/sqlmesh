@@ -1,4 +1,5 @@
 import typing as t
+from unittest.mock import call
 
 import pytest
 from airflow.exceptions import AirflowSkipException
@@ -134,7 +135,6 @@ def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable
 
     context = Context(ti=task_instance_mock)  # type: ignore
 
-    evaluator_demote_mock = mocker.patch("sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.demote")
     evaluator_cleanup_mock = mocker.patch(
         "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.cleanup"
     )
@@ -143,9 +143,12 @@ def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable
 
     target = targets.SnapshotCleanupTarget()
 
-    target.execute(context, lambda: mocker.Mock(), "spark")
+    evaluator_adapter_mock = mocker.MagicMock()
+    target.execute(context, lambda: evaluator_adapter_mock, "spark")
 
-    evaluator_demote_mock.assert_called_once_with([snapshot.table_info], "test_env")
+    evaluator_adapter_mock.cursor().execute.assert_has_calls(
+        [call("DROP SCHEMA IF EXISTS default__test_env CASCADE")]
+    )
     evaluator_cleanup_mock.assert_called_once_with([snapshot.table_info])
 
     task_instance_mock.xcom_pull.assert_called_once_with(key="snapshot_cleanup_command")
