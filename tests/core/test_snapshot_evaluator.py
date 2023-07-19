@@ -62,8 +62,13 @@ def adapter_mock(mocker: MockerFixture):
     transaction_mock.__enter__ = mocker.Mock()
     transaction_mock.__exit__ = mocker.Mock()
 
+    session_mock = mocker.Mock()
+    session_mock.__enter__ = mocker.Mock()
+    session_mock.__exit__ = mocker.Mock()
+
     adapter_mock = mocker.Mock()
     adapter_mock.transaction.return_value = transaction_mock
+    adapter_mock.session.return_value = session_mock
     adapter_mock.dialect = "duckdb"
     return adapter_mock
 

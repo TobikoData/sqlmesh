@@ -87,6 +87,21 @@ class BigQueryEngineAdapter(EngineAdapter):
             params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
         return params
 
+    def _begin_session(self) -> None:
+        from google.cloud.bigquery import QueryJobConfig
+
+        job = self.client.query("SELECT 1;", job_config=QueryJobConfig(create_session=True))
+        session_info = job.session_info
+        session_id = session_info.session_id if session_info else None
+        self._session_id = session_id
+        job.result()
+
+    def _end_session(self) -> None:
+        self._session_id = None
+
+    def _is_session_active(self) -> bool:
+        return self._session_id is not None
+
     def create_schema(self, schema_name: str, ignore_if_exists: bool = True) -> None:
         """Create a schema from a name or qualified table name."""
         from google.api_core.exceptions import Conflict
@@ -153,7 +168,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             quote_identifiers=quote_identifiers,
         )
         try:
-            return next(self.cursor._query_data)
+            return next(self._query_data)
         except StopIteration:
             return ()
 
@@ -172,7 +187,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             ignore_unsupported_errors=ignore_unsupported_errors,
             quote_identifiers=quote_identifiers,
         )
-        return list(self.cursor._query_data)
+        return list(self._query_data)
 
     def _create_table_from_df(
         self,
@@ -410,7 +425,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:
         self.execute(query, quote_identifiers=quote_identifiers)
-        return self.cursor._query_job.to_dataframe()
+        return self._query_job.to_dataframe()
 
     def _create_table_properties(
         self,
@@ -487,6 +502,7 @@ class BigQueryEngineAdapter(EngineAdapter):
     ) -> None:
         """Execute a sql query."""
         from google.cloud.bigquery import QueryJobConfig
+        from google.cloud.bigquery.query import ConnectionProperty
 
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
@@ -503,19 +519,30 @@ class BigQueryEngineAdapter(EngineAdapter):
             # BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
             # So we update the cursor's query job and query data with the results of the new query job. This makes sure
             # that other cursor based operations execute correctly.
-            job_config = QueryJobConfig(**self._job_params)
-            self.cursor._query_job = self._db_call(
+            session_id = self._session_id
+            connection_properties = (
+                [
+                    ConnectionProperty(key="session_id", value=session_id),
+                ]
+                if session_id
+                else []
+            )
+
+            job_config = QueryJobConfig(
+                **self._job_params, connection_properties=connection_properties
+            )
+            self._query_job = self._db_call(
                 self.client.query,
                 query=sql,
                 job_config=job_config,
                 timeout=self._extra_config.get("job_creation_timeout_seconds"),
             )
             results = self._db_call(
-                self.cursor._query_job.result,
+                self._query_job.result,
                 timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
             )
-            self.cursor._query_data = iter(results) if results.total_rows else iter([])
-            query_results = self.cursor._query_job._query_results
+            self._query_data = iter(results) if results.total_rows else iter([])
+            query_results = self._query_job._query_results
             self.cursor._set_rowcount(query_results)
             self.cursor._set_description(query_results.schema)
 
@@ -540,6 +567,30 @@ class BigQueryEngineAdapter(EngineAdapter):
             )
             for table in all_tables
         ]
+
+    @property
+    def _query_data(self) -> t.Any:
+        return self._connection_pool.get_attribute("query_data")
+
+    @_query_data.setter
+    def _query_data(self, value: t.Any) -> None:
+        return self._connection_pool.set_attribute("query_data", value)
+
+    @property
+    def _query_job(self) -> t.Any:
+        return self._connection_pool.get_attribute("query_job")
+
+    @_query_job.setter
+    def _query_job(self, value: t.Any) -> None:
+        return self._connection_pool.set_attribute("query_job", value)
+
+    @property
+    def _session_id(self) -> t.Any:
+        return self._connection_pool.get_attribute("session_id")
+
+    @_session_id.setter
+    def _session_id(self, value: t.Any) -> None:
+        return self._connection_pool.set_attribute("session_id", value)
 
 
 class _ErrorCounter:

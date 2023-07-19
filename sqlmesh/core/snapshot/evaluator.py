@@ -145,7 +145,7 @@ class SnapshotEvaluator:
             transaction_type=TransactionType.DDL
             if model.kind.is_view or model.kind.is_full
             else TransactionType.DML
-        ):
+        ), self.adapter.session():
             if not limit:
                 self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
