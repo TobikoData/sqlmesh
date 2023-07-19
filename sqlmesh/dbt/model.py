@@ -191,7 +191,9 @@ class ModelConfig(BaseModelConfig):
             strategy = self.incremental_strategy or target.default_incremental_strategy(
                 IncrementalUnmanagedKind
             )
-            return IncrementalUnmanagedKind(insert_overwrite=strategy == "insert_overwrite")
+            return IncrementalUnmanagedKind(
+                insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES
+            )
         if materialization == Materialization.EPHEMERAL:
             return ModelKind(name=ModelKindName.EMBEDDED)
         raise ConfigError(f"{materialization.value} materialization not supported.")
