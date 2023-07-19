@@ -686,9 +686,13 @@ class PromotableStrategy(EvaluationStrategy):
         if schema is not None:
             self.adapter.create_schema(schema)
 
-        view_node = exp.select("*").from_(table_name, dialect=self.adapter.dialect)
+        target_view = exp.select("*").from_(table_name, dialect=self.adapter.dialect)
         model = snapshot.model  # type: ignore
-        if isinstance(model.kind, IncrementalByTimeRangeKind) and model.kind.lookforward > 0:
+        if (
+            isinstance(model.kind, IncrementalByTimeRangeKind) 
+            and model.kind.lookforward > 0
+            and snapshot.intervals
+        ):
             n = model.kind.lookforward
             unit = model.interval_unit()
             start = to_datetime(snapshot.intervals[-1][-1])  # type: ignore
@@ -705,11 +709,11 @@ class PromotableStrategy(EvaluationStrategy):
             forward_view = model.render_query_or_raise(
                 start=start, end=end, latest=end, engine_adapter=self.adapter
             )
-            view_node.union(forward_view, distinct=False, dialect=self.adapter.dialect, copy=False)
+            target_view = target_view.union(forward_view, distinct=False, dialect=self.adapter.dialect, copy=False)
 
         target_name = view_name.for_environment(environment)
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
-        self.adapter.create_view(target_name, view_node)
+        self.adapter.create_view(target_name, target_view)
 
     def demote(self, view_name: QualifiedViewName, environment: str) -> None:
         target_name = view_name.for_environment(environment)
