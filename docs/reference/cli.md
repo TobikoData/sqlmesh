@@ -23,7 +23,7 @@ Commands:
   format                  Format all models in a given directory.
   ide                     Start a browser-based SQLMesh IDE.
   info                    Print info.
-  init                    Create a new SQLMesh repository.
+  init                    Create a new SQLMesh repository with a default SQL dialect.
   migrate                 Migrate SQLMesh to the current running version.
   plan                    Plan a migration of the current context's...
   prompt                  Uses LLM to generate a SQL query from a prompt.
@@ -148,6 +148,7 @@ Options:
 ```
 
 ## init
+```
 Usage: sqlmesh init [OPTIONS] SQL_DIALECT
 
   Create a new SQLMesh repository with a default SQL dialect.
@@ -156,6 +157,7 @@ Options:
   -t, --template TEXT  Project template. Support values: airflow, dbt,
                        default.
   --help               Show this message and exit.
+```
 
 ## migrate
 ```
