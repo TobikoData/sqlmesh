@@ -14,8 +14,8 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
-from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.date import (
+    IntervalUnit,
     TimeLike,
     is_date,
     make_inclusive,
@@ -23,6 +23,7 @@ from sqlmesh.utils.date import (
     now_timestamp,
     to_datetime,
     to_ds,
+    to_end_date,
     to_timestamp,
     yesterday,
 )
@@ -356,7 +357,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         updated_ts: Epoch millis timestamp when a snapshot was last updated.
         ttl: The time-to-live of a snapshot determines when it should be deleted after it's no longer referenced
             in any environment.
-        previous: The snapshot data version that this snapshot was based on. If this snapshot is new, then previous will be None.
+        previous_versions: The snapshot data version that this snapshot was based on. If this snapshot is new, then previous will be None.
         version: User specified version for a snapshot that is used for physical storage.
             By default, the version is the fingerprint, but not all changes to models require a backfill.
             If a user passes a previous version, that will be used instead and no backfill will be required.
@@ -580,6 +581,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A [start, end) pair.
         """
+        # start_ts = to_timestamp(self.model.cron_floor(start))
+        # end_ts = to_timestamp(
+        #     self.model.cron_next(end)
+        #     if is_date(end) and self.model.interval_unit() == IntervalUnit.DAY
+        #     else self.model.cron_floor(end)
+        # )
+        # XXX(reakman): Fix this
         end = execution_time or now() if for_removal and self.depends_on_past else end
         interval_unit = self.model.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
@@ -587,6 +595,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if is_date(end):
             end = to_datetime(end) + timedelta(days=1)
         end_ts = to_timestamp(interval_unit.cron_floor(end))
+
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
             raise ValueError(
@@ -621,6 +630,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         end: TimeLike,
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Set[str]] = None,
+        snapshot_start: t.Optional[TimeLike] = None,
         is_dev: bool = False,
         ignore_cron: bool = False,
     ) -> Intervals:
@@ -652,11 +662,19 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         execution_time = execution_time or now()
+        # Latest can be none if the start date has not been set yet for the model
+        # so if that happens we just default to end if the model depends on past
+        snapshot_latest = self.get_latest(snapshot_start)
+        end = (
+            max([snapshot_latest, end], key=lambda x: to_timestamp(x))
+            if self.depends_on_past and snapshot_latest
+            else end
+        )
 
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
-                start, end, execution_time, strict=False, for_removal=self.name in restatements
+                start, end, execution_time, strict=False
             )
         )
 
@@ -702,7 +720,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
-            for low, high in intervals:
+            intervals = (
+                self.dev_intervals
+                if is_dev and self.is_paused and self.is_forward_only
+                else self.intervals
+            )
+            current_intervals = (
+                [] if self.depends_on_past and self.name in restatements else intervals
+            )
+            for low, high in current_intervals:
                 if compare_ts < low:
                     missing.append((current_ts, next_ts))
                     break
@@ -778,6 +804,49 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def version_get_or_generate(self) -> str:
         """Helper method to get the version or generate it from the fingerprint."""
         return self.version or self.fingerprint.to_version()
+
+    def is_valid_start(
+        self, start: t.Optional[TimeLike], snapshot_start: t.Optional[TimeLike] = None
+    ) -> bool:
+        """Checks if the given start and end are valid for this snapshot.
+        Args:
+            start: The start date/time of the interval (inclusive)
+            snapshot_start: The start date/time of the snapshot (inclusive)
+        """
+        # The snapshot may not have a start defined. If so we use the provided snapshot start.
+        if self.depends_on_past and start:
+            if not snapshot_start:
+                raise SQLMeshError("Snapshot must have a start defined if it depends on past")
+            start_ts = to_timestamp(self.model.cron_floor(start))
+            if not self.intervals:
+                return to_timestamp(snapshot_start) >= start_ts
+            # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
+            # provided start_ts. Otherwise we know that we are doing a non-contiguous load and therefore this is not
+            # a valid start.
+            missing_intervals = self.missing_intervals(
+                snapshot_start, make_inclusive_end(now()), snapshot_start=snapshot_start
+            )
+            earliest_interval = missing_intervals[0][0] if missing_intervals else None
+            if earliest_interval:
+                return earliest_interval >= start_ts
+        return True
+
+    def get_latest(self, snapshot_start: t.Optional[TimeLike] = None) -> t.Optional[TimeLike]:
+        """The latest interval loaded for the snapshot. Snapshot start is used if intervals are not defined"""
+        return (
+            to_end_date(
+                (to_timestamp(max(x[1] for x in self.intervals)), self.model.interval_unit())
+            )
+            if self.intervals
+            else snapshot_start
+        )
+
+    @property
+    def is_seed_hydrated(self) -> bool:
+        """
+        Indicates if the model is a seed and is hydrated. If the model is not a seed then we return True.
+        """
+        return getattr(self.model, "is_hydrated", True)
 
     @property
     def physical_schema(self) -> str:
@@ -1059,6 +1128,7 @@ def missing_intervals(
     restatements = set(restatements or [])
 
     for snapshot in snapshots:
+        snapshot_start = start_date(snapshot, snapshots, cache)
         if snapshot.name in restatements:
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
@@ -1067,11 +1137,12 @@ def missing_intervals(
         intervals = snapshot.missing_intervals(
             max(
                 start_dt,
-                to_datetime(start_date(snapshot, snapshots, cache) or start_dt),
+                to_datetime(snapshot_start or start_dt),
             ),
             end_date,
             execution_time=execution_time,
             restatements=restatements,
+            snapshot_start=snapshot_start,
             is_dev=is_dev,
             ignore_cron=ignore_cron,
         )

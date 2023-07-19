@@ -17,7 +17,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.model import Model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
-from sqlmesh.core.snapshot import Snapshot
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotIntervals
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import TimeLike, to_date, to_ds
 
@@ -217,8 +217,13 @@ def assert_exp_eq() -> t.Callable:
 
 @pytest.fixture
 def make_snapshot() -> t.Callable:
-    def _make_function(model: Model, version: t.Optional[str] = None, **kwargs) -> Snapshot:
-        return Snapshot.from_model(
+    def _make_function(
+        model: Model,
+        version: t.Optional[str] = None,
+        change_category: t.Optional[SnapshotChangeCategory] = None,
+        **kwargs,
+    ) -> Snapshot:
+        snapshot = Snapshot.from_model(
             model,
             **{  # type: ignore
                 "nodes": {},
@@ -226,6 +231,29 @@ def make_snapshot() -> t.Callable:
                 **kwargs,
             },
             version=version,
+        )
+        if change_category:
+            snapshot.categorize_as(change_category)
+        return snapshot
+
+    return _make_function
+
+
+@pytest.fixture
+def make_snapshot_intervals() -> t.Callable:
+    def _make_function(
+        snapshot: Snapshot,
+        **kwargs,
+    ) -> SnapshotIntervals:
+        return SnapshotIntervals(
+            **{
+                "name": snapshot.name,
+                "identifier": snapshot.identifier,
+                "version": snapshot.version,
+                "intervals": snapshot.intervals.copy(),
+                "dev_intervals": snapshot.dev_intervals.copy(),
+                **kwargs,
+            }
         )
 
     return _make_function

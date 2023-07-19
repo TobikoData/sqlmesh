@@ -12,8 +12,8 @@ from sqlglot import parse_one
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
-from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils import AttributeDict
+from sqlmesh.utils.date import IntervalUnit
 
 
 def test_insert_overwrite_by_time_partition_query(

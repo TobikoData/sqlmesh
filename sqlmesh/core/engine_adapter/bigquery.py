@@ -16,9 +16,8 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     TransactionType,
 )
-from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils.date import to_datetime
+from sqlmesh.utils.date import IntervalUnit, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 

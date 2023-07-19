@@ -316,7 +316,7 @@ def compute_interval_params(
     restatements: t.Optional[t.Set[str]] = None,
     ignore_cron: bool = False,
 ) -> SnapshotToBatches:
-    """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
+    """Find the optimal date interval parameters based on what needs processing and maximal batch size.
 
     For each model name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
     calculate the missing intervals that need to be processed given the passed in start and end intervals.
@@ -328,7 +328,6 @@ def compute_interval_params(
 
     Args:
         snapshots: A set of target snapshots for which intervals should be computed.
-        intervals: A list of all snapshot intervals that should be considered.
         start: Start of the interval.
         end: End of the interval.
         is_dev: Whether or not these intervals are for development.

@@ -109,3 +109,7 @@ class Environment(EnvironmentNamingInfo):
     @property
     def naming_info(self) -> EnvironmentNamingInfo:
         return EnvironmentNamingInfo(name=self.name, suffix_target=self.suffix_target)
+
+    @property
+    def is_dev(self) -> bool:
+        return self.name != c.PROD

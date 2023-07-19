@@ -18,8 +18,10 @@ from sqlmesh.core.model.kind import (
 )
 from sqlmesh.core.node import Node, str_or_exp_to_str
 from sqlmesh.core.reference import Reference
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import IntervalUnit, TimeLike
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import PydanticModel
+
 from sqlmesh.utils.pydantic import (
     field_validator,
     field_validator_v1_args,

@@ -29,6 +29,7 @@ from sqlmesh.core.snapshot import (
     categorize_change,
     fingerprint_from_node,
     has_paused_forward_only,
+    start_date,
 )
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
@@ -235,10 +236,20 @@ def test_incremental_time_self_reference(make_snapshot):
         )
     )
     snapshot.add_interval(to_date("1 week ago"), to_date("1 day ago"))
-    assert snapshot.missing_intervals(to_date("1 week ago"), to_date("1 day ago")) == []
+    assert (
+        snapshot.missing_intervals(
+            to_date("1 week ago"),
+            to_date("1 day ago"),
+            snapshot_start=start_date(snapshot, [snapshot]),
+        )
+        == []
+    )
     snapshot.remove_interval(to_date("1 week ago"), to_date("1 week ago"))
     assert snapshot.missing_intervals(
-        to_date("1 week ago"), to_date("1 week ago"), restatements={"name"}
+        to_date("1 week ago"),
+        to_date("1 week ago"),
+        restatements={"name"},
+        snapshot_start=start_date(snapshot, [snapshot]),
     ) == [
         (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
         for x in reversed(range(7))
@@ -1107,3 +1118,26 @@ def test_model_custom_interval_unit(make_snapshot):
     )
 
     assert len(snapshot.missing_intervals("2023-01-29", "2023-01-29")) == 24
+
+
+def test_is_valid_start(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test",
+            query="SELECT 1 FROM test",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+        change_category=SnapshotChangeCategory.BREAKING,
+    )
+    assert snapshot.depends_on_past
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")
+    snapshot.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert snapshot.is_valid_start("2023-01-02", "2023-01-01")
+    assert not snapshot.is_valid_start("2023-01-03", "2023-01-01")
+    snapshot.intervals = []
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")

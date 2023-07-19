@@ -27,7 +27,7 @@ from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
-from sqlmesh.utils.date import TimeLike, make_inclusive
+from sqlmesh.utils.date import IntervalUnit, TimeLike, make_inclusive
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 

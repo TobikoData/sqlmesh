@@ -10,9 +10,8 @@ from sqlglot import exp
 from watchfiles import Change
 
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import IntervalUnit, TimeLike
 from sqlmesh.utils.pydantic import (
     PYDANTIC_MAJOR_VERSION,
     field_validator,

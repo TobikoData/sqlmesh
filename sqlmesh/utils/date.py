@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import typing as t
 import warnings
+from enum import Enum
 
 warnings.filterwarnings(
     "ignore",
@@ -22,6 +23,25 @@ DATE_INT_FMT = "%Y%m%d"
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.scheduler import Interval
+
+
+class IntervalUnit(str, Enum):
+    """IntervalUnit is the inferred granularity of an incremental model.
+
+    IntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred
+    based on the cron schedule of a model. The minimum time delta between a sample set of dates
+    is used to determine which unit a model's schedule is.
+    """
+
+    YEAR = "year"
+    MONTH = "month"
+    DAY = "day"
+    HOUR = "hour"
+    MINUTE = "minute"
+
+    @property
+    def is_date_granularity(self) -> bool:
+        return self in (IntervalUnit.YEAR, IntervalUnit.MONTH, IntervalUnit.DAY)
 
 
 def now(minute_floor: bool = True) -> datetime:
@@ -277,3 +297,14 @@ def time_like_to_str(time_like: TimeLike) -> str:
     if is_date(time_like):
         return to_ds(time_like)
     return to_datetime(time_like).isoformat()
+
+
+def to_end_date(
+    end_and_units: t.Union[t.Tuple[int, IntervalUnit], t.List[t.Tuple[int, IntervalUnit]]]
+) -> TimeLike:
+    end_and_units = [end_and_units] if isinstance(end_and_units, tuple) else end_and_units
+
+    end, unit = max(end_and_units)
+    if unit == IntervalUnit.DAY:
+        return to_date(make_inclusive_end(end))
+    return end

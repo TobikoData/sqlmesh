@@ -9,6 +9,7 @@ MODEL (
     time_column (ds, 'YYYY-MM-dd'),
     batch_size 1
   ),
+  start "1 week ago",
   owner jen,
   cron '@daily',
   dialect hive,
