@@ -372,10 +372,25 @@ def test_begin_end_session(mocker: MockerFixture):
     cursor_mock.connection = connection_mock
     connection_mock.cursor.return_value = cursor_mock
 
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+    query_result_mock = mocker.Mock()
+    query_result_mock.total_rows = 0
+    job_mock = mocker.Mock()
+    job_mock.result.return_value = query_result_mock
+    connection_mock._client.query.return_value = job_mock
+
+    adapter = BigQueryEngineAdapter(lambda: connection_mock, job_retries=0)
 
     with adapter.session():
         assert adapter._connection_pool.get_attribute("session_id") is not None
+        adapter.execute("SELECT 2;")
 
     assert adapter._connection_pool.get_attribute("session_id") is None
-    connection_mock._client.query.assert_called_once_with("SELECT 1;", job_config=mocker.ANY)
+
+    begin_session_call = connection_mock._client.query.call_args_list[0]
+    assert begin_session_call[0][0] == "SELECT 1;"
+
+    execute_call = connection_mock._client.query.call_args_list[1]
+    assert execute_call[1]["query"] == "SELECT 2;"
+    assert len(execute_call[1]["job_config"].connection_properties) == 1
+    assert execute_call[1]["job_config"].connection_properties[0].key == "session_id"
+    assert execute_call[1]["job_config"].connection_properties[0].value
