@@ -1166,7 +1166,6 @@ class Context(BaseContext):
         expired_environments = self.state_sync.delete_expired_environments()
         expired_schemas: t.Set[str] = set()
         for expired_environment in expired_environments:
-            self.snapshot_evaluator.demote(expired_environment.snapshots, expired_environment.name)
             expired_schemas.update(
                 {
                     snapshot.qualified_view_name.schema_for_environment(expired_environment.name)

@@ -117,7 +117,6 @@ def cleanup(
 
     expired_schemas: t.Set[str] = set()
     for environment in command_payload.environments:
-        evaluator.demote(environment.snapshots, environment.name)
         expired_schemas.update(
             {
                 snapshot.qualified_view_name.schema_for_environment(environment.name)
