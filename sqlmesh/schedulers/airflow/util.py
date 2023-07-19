@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import logging
 import typing as t
 from datetime import timedelta
@@ -41,9 +42,9 @@ def scoped_state_sync() -> t.Iterator[StateSync]:
     try:
         connection = Connection.get_connection_from_secrets(SQLMESH_STATE_CONN_ID)
 
-        connection_config_raw = connection.extra
-        state_schema = connection_config_raw.get("state_schema", state_schema)
-        if "type" not in connection_config_raw:
+        connection_config_dict = json.loads(connection.extra)
+        state_schema = connection_config_dict.get("state_schema", state_schema)
+        if "type" not in connection_config_dict:
             logger.info(
                 "SQLMesh connection in Airflow did not have type defined. "
                 "Therefore using Airflow database connection"
@@ -52,8 +53,8 @@ def scoped_state_sync() -> t.Iterator[StateSync]:
 
         logger.info("Using connection '%s' for state sync", connection.conn_id)
 
-        connection_config: ConnectionConfig = pydantic.parse_raw_as(
-            ConnectionConfig, connection_config_raw  # type: ignore
+        connection_config: ConnectionConfig = pydantic.parse_obj_as(
+            ConnectionConfig, connection_config_dict  # type: ignore
         )
         engine_adapter = connection_config.create_engine_adapter()
     except AirflowException:
