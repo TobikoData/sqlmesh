@@ -4,7 +4,6 @@ import typing as t
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
@@ -26,7 +25,6 @@ class DbtContext:
     """Context for DBT environment"""
 
     project_root: Path = Path()
-    model_defaults: t.Optional[ModelDefaultsConfig] = None
     target_name: t.Optional[str] = None
     profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
@@ -52,8 +50,8 @@ class DbtContext:
     _manifest: t.Optional[ManifestHelper] = None
 
     @property
-    def dialect(self) -> t.Optional[str]:
-        return self.model_defaults.dialect if self.model_defaults else None
+    def dialect(self) -> str:
+        return self.engine_adapter.dialect if self.engine_adapter is not None else ""
 
     @property
     def project_name(self) -> t.Optional[str]:

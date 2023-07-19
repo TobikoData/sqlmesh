@@ -6,12 +6,7 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.config import (
-    Config,
-    ConnectionConfig,
-    GatewayConfig,
-    ModelDefaultsConfig,
-)
+from sqlmesh.core.config import Config, ConnectionConfig, GatewayConfig
 from sqlmesh.core.loader import LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelCache
@@ -21,7 +16,6 @@ from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 logger = logging.getLogger(__name__)
@@ -33,29 +27,16 @@ if t.TYPE_CHECKING:
 def sqlmesh_config(
     project_root: t.Optional[Path] = None,
     state_connection: t.Optional[ConnectionConfig] = None,
-    default_sql_dialect: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Config:
-    if default_sql_dialect is None:
-        raise ConfigError(
-            """Default model SQL dialect is a required configuration parameter. In the project's config.py file, set it in the `sqlmesh_config()` argument `default_sql_dialect`. 
-
-For example: 
-    `config = sqlmesh_config(Path(__file__).parent, default_sql_dialect=SQL_DIALECT_IN_QUOTES]))`
-"""
-        )
-
     project_root = project_root or Path()
-    context = DbtContext(
-        project_root=project_root, model_defaults=ModelDefaultsConfig(dialect=default_sql_dialect)
-    )
+    context = DbtContext(project_root=project_root)
     profile = Profile.load(context)
 
     return Config(
         default_gateway=profile.target_name,
         gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
-        model_defaults=ModelDefaultsConfig(dialect=default_sql_dialect),
         **kwargs,
     )
 
@@ -130,11 +111,7 @@ class DbtLoader(Loader):
             return self._project
 
         self._project = Project.load(
-            DbtContext(
-                project_root=self._context.path,
-                target_name=self._context.gateway,
-                model_defaults=self._context.config.model_defaults,
-            )
+            DbtContext(project_root=self._context.path, target_name=self._context.gateway)
         )
         for path in self._project.project_files:
             self._track_file(path)
