@@ -315,7 +315,7 @@ def create_builtin_globals(
     if variables is not None:
         builtin_globals["var"] = generate_var(variables)
 
-    is_incremental = jinja_globals.pop("dbt_is_incremental", False)
+    is_incremental = jinja_globals.pop("has_intervals", False)
     builtin_globals["is_incremental"] = lambda: is_incremental
 
     builtin_globals["builtins"] = AttributeDict(

@@ -576,6 +576,6 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq):
     )
 
     assert_exp_eq(
-        model_config.to_sqlmesh(context).render_query_or_raise(dbt_is_incremental=True).sql(),
+        model_config.to_sqlmesh(context).render_query_or_raise(has_intervals=True).sql(),
         'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a" WHERE "ds" > (SELECT MAX("ds") FROM "model" AS "model")',
     )

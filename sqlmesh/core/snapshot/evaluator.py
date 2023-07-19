@@ -130,7 +130,7 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             latest=latest,
-            dbt_is_incremental=bool(snapshot.intervals),
+            has_intervals=bool(snapshot.intervals),
             **kwargs,
         )
 
