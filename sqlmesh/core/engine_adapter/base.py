@@ -977,7 +977,7 @@ class EngineAdapter:
         """
         Returns the name of the temp table that should be used for the given table name.
         """
-        table = t.cast(exp.Table, exp.to_table(table, dialect=self.dialect).copy())
+        table = t.cast(exp.Table, exp.to_table(table).copy())
         table.set("this", exp.to_identifier(f"__temp_{table.name}_{uuid.uuid4().hex}"))
 
         if table_only:

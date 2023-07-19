@@ -377,7 +377,7 @@ class BigQueryEngineAdapter(EngineAdapter):
             partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
             temp_table_name_sql = temp_table_name.sql(dialect=self.dialect)
             self.execute(
-                f"DECLARE target_partitions ARRAY<{partition_type_sql}> DEFAULT (SELECT AS STRUCT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
+                f"DECLARE target_partitions ARRAY<{partition_type_sql}> DEFAULT (SELECT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
             )
 
             where = exp.In(

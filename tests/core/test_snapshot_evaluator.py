@@ -277,6 +277,7 @@ def test_evaluate_incremental_unmanaged(
         name="test_schema.test_model",
         query=parse_one("SELECT 1, ds FROM tbl_a"),
         kind=IncrementalUnmanagedKind(insert_overwrite=insert_overwrite),
+        partitioned_by=["ds"],
     )
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -290,14 +291,19 @@ def test_evaluate_incremental_unmanaged(
         snapshots={},
     )
 
-    expected_call = (
-        adapter_mock.insert_overwrite if insert_overwrite else adapter_mock.insert_append
-    )
-    expected_call.assert_called_once_with(
-        snapshot.table_name(),
-        model.render_query(),
-        columns_to_types=model.columns_to_types,
-    )
+    if insert_overwrite:
+        adapter_mock.insert_overwrite_by_partition.assert_called_once_with(
+            snapshot.table_name(),
+            model.render_query(),
+            [exp.to_column("ds")],
+            columns_to_types=model.columns_to_types,
+        )
+    else:
+        adapter_mock.insert_append.assert_called_once_with(
+            snapshot.table_name(),
+            model.render_query(),
+            columns_to_types=model.columns_to_types,
+        )
 
 
 def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snapshot):
