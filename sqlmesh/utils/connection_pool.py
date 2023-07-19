@@ -1,6 +1,7 @@
 import abc
 import logging
 import typing as t
+from collections import defaultdict
 from threading import Lock, get_ident
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,26 @@ class ConnectionPool(abc.ABC):
 
         Returns:
             A connection instance.
+        """
+
+    @abc.abstractmethod
+    def get_attribute(self, key: str) -> t.Optional[t.Any]:
+        """Returns an attribute associated with the connection.
+
+        Args:
+            key: Attribute key.
+
+        Returns:
+            Attribute value or None if not found.
+        """
+
+    @abc.abstractmethod
+    def set_attribute(self, key: str, value: t.Any) -> None:
+        """Sets an attribute associated with the connection.
+
+        Args:
+            key: Attribute key.
+            value: Attribute value.
         """
 
     @abc.abstractmethod
@@ -96,6 +117,7 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
         self._thread_connections: t.Dict[t.Hashable, t.Any] = {}
         self._thread_cursors: t.Dict[t.Hashable, t.Any] = {}
         self._thread_transactions: t.Set[t.Hashable] = set()
+        self._thread_attributes: t.Dict[t.Hashable, t.Dict[str, t.Any]] = defaultdict(dict)
         self._thread_connections_lock = Lock()
         self._thread_cursors_lock = Lock()
         self._thread_transactions_lock = Lock()
@@ -113,6 +135,14 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
             if thread_id not in self._thread_connections:
                 self._thread_connections[thread_id] = self._connection_factory()
             return self._thread_connections[thread_id]
+
+    def get_attribute(self, key: str) -> t.Optional[t.Any]:
+        thread_id = get_ident()
+        return self._thread_attributes[thread_id].get(key)
+
+    def set_attribute(self, key: str, value: t.Any) -> None:
+        thread_id = get_ident()
+        self._thread_attributes[thread_id][key] = value
 
     def begin(self) -> None:
         self._do_begin()
@@ -147,6 +177,7 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
                 self._thread_connections.pop(thread_id)
                 self._thread_cursors.pop(thread_id, None)
                 self._discard_transaction(thread_id)
+            self._thread_attributes.pop(thread_id, None)
 
     def close_all(self, exclude_calling_thread: bool = False) -> None:
         calling_thread_id = get_ident()
@@ -158,6 +189,7 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
                     self._thread_connections.pop(thread_id)
                     self._thread_cursors.pop(thread_id, None)
                     self._discard_transaction(thread_id)
+                self._thread_attributes.pop(thread_id, None)
 
     def _discard_transaction(self, thread_id: t.Hashable) -> None:
         with self._thread_transactions_lock:
@@ -169,6 +201,7 @@ class SingletonConnectionPool(_TransactionManagementMixin):
         self._connection_factory = connection_factory
         self._connection: t.Optional[t.Any] = None
         self._cursor: t.Optional[t.Any] = None
+        self._attributes: t.Dict[str, t.Any] = {}
         self._is_transaction_active: bool = False
 
     def get_cursor(self) -> t.Any:
@@ -180,6 +213,12 @@ class SingletonConnectionPool(_TransactionManagementMixin):
         if not self._connection:
             self._connection = self._connection_factory()
         return self._connection
+
+    def get_attribute(self, key: str) -> t.Optional[t.Any]:
+        return self._attributes.get(key)
+
+    def set_attribute(self, key: str, value: t.Any) -> None:
+        self._attributes[key] = value
 
     def begin(self) -> None:
         self._do_begin()
@@ -206,6 +245,7 @@ class SingletonConnectionPool(_TransactionManagementMixin):
         self._connection = None
         self._cursor = None
         self._is_transaction_active = False
+        self._attributes.clear()
 
     def close_all(self, exclude_calling_thread: bool = False) -> None:
         if not exclude_calling_thread:
