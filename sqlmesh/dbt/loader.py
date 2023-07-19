@@ -6,7 +6,12 @@ from pathlib import Path
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
-from sqlmesh.core.config import Config, ConnectionConfig, GatewayConfig
+from sqlmesh.core.config import (
+    Config,
+    ConnectionConfig,
+    GatewayConfig,
+    ModelDefaultsConfig,
+)
 from sqlmesh.core.loader import LoadedProject, Loader
 from sqlmesh.core.macros import MacroRegistry
 from sqlmesh.core.model import Model, ModelCache
@@ -37,6 +42,7 @@ def sqlmesh_config(
         default_gateway=profile.target_name,
         gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
+        model_defaults=ModelDefaultsConfig(dialect=profile.target.type),
         **kwargs,
     )
 
