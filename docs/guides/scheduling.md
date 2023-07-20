@@ -76,7 +76,7 @@ On the client side, you must configure the connection to your Airflow cluster in
 
 Alternatively, the configuration above can be generated automatically as part of the project initialization using the `airflow` template:
 ```bash
-sqlmesh init -t airflow
+sqlmesh init [PROJECT SQL DIALECT] -t airflow
 ```
 
 For Airflow configuration types specific to Google Cloud Composer, configure the file as follows:
