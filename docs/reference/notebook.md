@@ -24,18 +24,18 @@ import sqlmesh
 
 ### Quick start project
 
-If desired, you can create the [quick start example project](../quick_start.md) with the Python `init_example_project` function:
+If desired, you can create the [quick start example project](../quick_start.md) with the Python `init_example_project` function. The function requires a default SQL dialect for the project's models; this example uses `snowflake`:
 
 ```python
 from sqlmesh.cli.example_project import init_example_project
 
-init_example_project("path_to_project_directory")
+init_example_project("path_to_project_directory", dialect="snowflake")
 ```
 
 Alternatively, create the project with a notebook magic:
 
 ```python
-%init path_to_project_directory
+%init path_to_project_directory snowflake
 ```
 
 ### Databricks notebooks
@@ -55,7 +55,7 @@ positional arguments:
 
 ## init
 ```
-%init [--template TEMPLATE] path sql_dialect
+%init path sql_dialect [--template TEMPLATE] 
 
 Creates a SQLMesh project scaffold with a default SQL dialect.
 
@@ -77,13 +77,13 @@ options:
 
 ## plan
 ```
-%plan [--start START] [--end END] [--latest LATEST]
+%plan environment [--start START] [--end END] [--latest LATEST]
             [--create-from CREATE_FROM] [--skip-tests]
             [--restate-model [RESTATE_MODEL ...]] [--no-gaps]
             [--skip-backfill] [--forward-only]
             [--effective-from EFFECTIVE_FROM] [--no-prompts] [--auto-apply]
             [--no-auto-categorization]
-            [environment]
+            
 
 Goes through a set of prompts to both establish a plan and apply it
 
@@ -125,9 +125,8 @@ options:
 
 ## evaluate
 ```
-%evaluate [--start START] [--end END] [--latest LATEST] [--limit LIMIT]
-                model
-
+%evaluate model [--start START] [--end END] [--latest LATEST] [--limit LIMIT]
+                
 Evaluate a model query and fetches a dataframe.
 
 positional arguments:
@@ -145,9 +144,9 @@ options:
 
 ## render
 ```
-%render [--start START] [--end END] [--latest LATEST] [--expand EXPAND]
+%render model [--start START] [--end END] [--latest LATEST] [--expand EXPAND]
               [--dialect DIALECT]
-              model
+              
 
 Renders a model's query, optionally expanding referenced models.
 
@@ -180,7 +179,7 @@ positional arguments:
 
 ## test
 ```
-%test [--ls] model [test_name]
+%test model [test_name] [--ls]
 
 Allow the user to list tests for a model, output a specific test, and
 then write their changes back.
