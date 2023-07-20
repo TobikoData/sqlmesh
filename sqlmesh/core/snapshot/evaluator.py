@@ -396,7 +396,7 @@ class SnapshotEvaluator:
             is_dev=is_dev,
         )
 
-        with self.adapter.transaction(TransactionType.DDL):
+        with self.adapter.transaction(TransactionType.DDL), self.adapter.session():
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
             _evaluation_strategy(snapshot, self.adapter).create(
