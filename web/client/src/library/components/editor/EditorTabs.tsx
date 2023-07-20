@@ -37,12 +37,6 @@ export default function EditorTabs(): JSX.Element {
     return [local, remote]
   }, [tabs])
 
-  // useEffect(() => {
-  //   if (isNotNil(tab) && tab.file.isRemote && isFalse(files.has(tab.file.id))) {
-  //     closeTab(tab.file)
-  //   }
-  // }, [files])
-
   useEffect(() => {
     if (
       isNil(selectedFile) ||
