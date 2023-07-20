@@ -368,7 +368,12 @@ class BigQueryEngineAdapter(EngineAdapter):
 
         partition_exp = partitioned_by[0]
         partition_sql = partition_exp.sql(dialect=self.dialect)
-        partition_column = list(partition_exp.find_all(exp.Column))[0]
+        partition_column = partition_exp.find(exp.Column)
+
+        if not partition_column:
+            raise SQLMeshError(
+                f"The partition expression '{partition_sql}' doesn't contain a column."
+            )
 
         with self.session(), self.temp_table(query_or_df, name=table_name) as temp_table_name:
             if columns_to_types is None:
@@ -380,10 +385,7 @@ class BigQueryEngineAdapter(EngineAdapter):
                 f"DECLARE target_partitions ARRAY<{partition_type_sql}> DEFAULT (SELECT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
             )
 
-            where = exp.In(
-                this=partition_exp,
-                unnest=exp.Unnest(expressions=[exp.to_column("target_partitions")]),
-            )
+            where = t.cast(exp.Condition, partition_exp).isin(unnest="target_partitions")
 
             self._insert_overwrite_by_condition(
                 table_name,
