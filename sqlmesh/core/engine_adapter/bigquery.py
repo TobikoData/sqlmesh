@@ -382,10 +382,10 @@ class BigQueryEngineAdapter(EngineAdapter):
             partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
             temp_table_name_sql = temp_table_name.sql(dialect=self.dialect)
             self.execute(
-                f"DECLARE target_partitions ARRAY<{partition_type_sql}> DEFAULT (SELECT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
+                f"DECLARE _sqlmesh_target_partitions_ ARRAY<{partition_type_sql}> DEFAULT (SELECT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
             )
 
-            where = t.cast(exp.Condition, partition_exp).isin(unnest="target_partitions")
+            where = t.cast(exp.Condition, partition_exp).isin(unnest="_sqlmesh_target_partitions_")
 
             self._insert_overwrite_by_condition(
                 table_name,

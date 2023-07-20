@@ -73,8 +73,8 @@ def test_insert_overwrite_by_partition_query(mocker: MockerFixture):
     assert sql_calls == [
         "CREATE SCHEMA IF NOT EXISTS `test_schema`",
         f"CREATE TABLE IF NOT EXISTS `test_schema`.`__temp_test_table_{temp_table_uuid.hex}` AS SELECT `a`, `ds` FROM `tbl`",
-        f"DECLARE target_partitions ARRAY<DATETIME> DEFAULT (SELECT ARRAY_AGG(DISTINCT DATETIME_TRUNC(ds, MONTH)) FROM test_schema.__temp_test_table_{temp_table_uuid.hex});",
-        f"MERGE INTO `test_schema`.`test_table` AS `__MERGE_TARGET__` USING (SELECT * FROM (SELECT * FROM `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`) AS `_subquery` WHERE DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`target_partitions`)) AS `__MERGE_SOURCE__` ON FALSE WHEN NOT MATCHED BY SOURCE AND DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`target_partitions`) THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
+        f"DECLARE _sqlmesh_target_partitions_ ARRAY<DATETIME> DEFAULT (SELECT ARRAY_AGG(DISTINCT DATETIME_TRUNC(ds, MONTH)) FROM test_schema.__temp_test_table_{temp_table_uuid.hex});",
+        f"MERGE INTO `test_schema`.`test_table` AS `__MERGE_TARGET__` USING (SELECT * FROM (SELECT * FROM `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`) AS `_subquery` WHERE DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`)) AS `__MERGE_SOURCE__` ON FALSE WHEN NOT MATCHED BY SOURCE AND DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`) THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
         f"DROP TABLE IF EXISTS `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`",
     ]
 
