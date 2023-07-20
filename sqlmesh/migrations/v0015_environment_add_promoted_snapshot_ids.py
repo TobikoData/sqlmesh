@@ -4,7 +4,7 @@ from sqlglot import exp
 
 def migrate(state_sync):  # type: ignore
     engine_adapter = state_sync.engine_adapter
-    environments_table = f"_environments"
+    environments_table = "_environments"
     if state_sync.schema:
         environments_table = f"{state_sync.schema}.{environments_table}"
 

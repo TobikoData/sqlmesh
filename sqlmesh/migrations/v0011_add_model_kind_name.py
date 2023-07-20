@@ -8,7 +8,7 @@ from sqlglot import exp
 def migrate(state_sync):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    snapshots_table = f"_snapshots"
+    snapshots_table = "_snapshots"
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
 

@@ -43,7 +43,7 @@ def scoped_state_sync() -> t.Iterator[StateSync]:
         connection = Connection.get_connection_from_secrets(SQLMESH_STATE_CONN_ID)
 
         connection_config_dict = json.loads(connection.extra)
-        state_schema = connection_config_dict.get("state_schema", state_schema)
+        state_schema = connection_config_dict.pop("state_schema", state_schema)
         if "type" not in connection_config_dict:
             logger.info(
                 "SQLMesh connection in Airflow did not have type defined. "

@@ -3,7 +3,7 @@
 
 def migrate(state_sync):  # type: ignore
     schema = state_sync.schema
-    intervals_table = f"_intervals"
+    intervals_table = "_intervals"
     if schema:
         intervals_table = f"{schema}.{intervals_table}"
 
