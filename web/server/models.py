@@ -301,3 +301,23 @@ class TableDiff(BaseModel):
     schema_diff: SchemaDiff
     row_diff: RowDiff
     on: t.List[t.Tuple[str, str]]
+
+
+class TestCase(BaseModel):
+    name: str
+    path: pathlib.Path
+
+
+class TestErrorOrFailure(TestCase):
+    tb: str
+
+
+class TestSkipped(TestCase):
+    reason: str
+
+
+class TestResult(BaseModel):
+    tests_run: int
+    failures: t.List[TestErrorOrFailure]
+    errors: t.List[TestErrorOrFailure]
+    skipped: t.List[TestSkipped]
