@@ -84,6 +84,7 @@ export default function PageIDE(): JSX.Element {
   const findAtrifactByPath = useStoreProject(s => s.findAtrifactByPath)
   const findParentByPath = useStoreProject(s => s.findParentByPath)
 
+  const tabs = useStoreEditor(s => s.tabs)
   const storedTabs = useStoreEditor(s => s.storedTabs)
   const storedTabId = useStoreEditor(s => s.storedTabId)
   const selectTab = useStoreEditor(s => s.selectTab)
@@ -158,6 +159,12 @@ export default function PageIDE(): JSX.Element {
           }
 
           if (artifact instanceof ModelDirectory) {
+            artifact.allFiles.forEach(file => {
+              if (tabs.has(file)) {
+                removeTab(file)
+              }
+            })
+
             artifact.parent?.removeDirectory(artifact)
           }
         }

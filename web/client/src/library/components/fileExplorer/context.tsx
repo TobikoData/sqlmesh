@@ -9,7 +9,6 @@ import {
 import { useStoreProject } from '@context/project'
 import { ModelArtifact } from '@models/artifact'
 import { ModelDirectory } from '@models/directory'
-import { getAllFilesInDirectory } from './help'
 import {
   isArrayNotEmpty,
   isFalse,
@@ -63,7 +62,6 @@ export default function FileExplorerProvider({
   const addConfirmation = useStoreContext(s => s.addConfirmation)
 
   const tab = useStoreEditor(s => s.tab)
-  const closeTab = useStoreEditor(s => s.closeTab)
 
   const [isLoading, setIsLoading] = useState(false)
   const [activeRange, setActiveRange] = useState(new Set<ModelArtifact>())
@@ -202,36 +200,10 @@ export default function FileExplorerProvider({
     })
 
     Promise.all(promises)
-      // .then(resolvedList => {
-      //   resolvedList.forEach((_, index) => {
-      //     const artifact = list[index]
-
-      //     if (artifact instanceof ModelFile) {
-      //       closeTab(artifact)
-
-      //       artifact.parent?.removeFile(artifact)
-      //     }
-
-      //     if (artifact instanceof ModelDirectory) {
-      //       if (artifact.isNotEmpty) {
-      //         const files = getAllFilesInDirectory(artifact)
-
-      //         files.forEach(file => {
-      //           closeTab(file)
-      //         })
-      //       }
-
-      //       artifact.parent?.removeDirectory(artifact)
-      //     }
-      //   })
-
-      //   setActiveRange(new Set())
-      //   setFiles(project.allFiles)
-      // })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log(error)
+      .then(() => {
+        setActiveRange(new Set())
       })
+      .catch(error => addError(EnumErrorKey.FileExplorer, error))
       .finally(() => {
         setIsLoading(false)
       })
