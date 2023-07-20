@@ -1,5 +1,7 @@
 # type: ignore
 import sys
+import typing as t
+import uuid
 
 import pandas as pd
 import pytest
@@ -35,15 +37,45 @@ def test_insert_overwrite_by_time_partition_query(mocker: MockerFixture):
             "ds": exp.DataType.build("string"),
         },
     )
-    sql_calls = [
-        # Python 3.7 support
-        call[0][0].sql(dialect="bigquery", identify=True)
-        if isinstance(call[0], tuple)
-        else call[0].sql(dialect="bigquery", identify=True)
-        for call in execute_mock.call_args_list
-    ]
+    sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         "MERGE INTO `test_table` AS `__MERGE_TARGET__` USING (SELECT * FROM (SELECT `a`, `ds` FROM `tbl`) AS `_subquery` WHERE `ds` BETWEEN '2022-01-01' AND '2022-01-05') AS `__MERGE_SOURCE__` ON FALSE WHEN NOT MATCHED BY SOURCE AND `ds` BETWEEN '2022-01-01' AND '2022-01-05' THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)"
+    ]
+
+
+def test_insert_overwrite_by_partition_query(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
+    temp_table_uuid = uuid.uuid4()
+    uuid4_mock = mocker.patch("uuid.uuid4")
+    uuid4_mock.return_value = temp_table_uuid
+
+    adapter.insert_overwrite_by_partition(
+        "test_schema.test_table",
+        parse_one("SELECT a, ds FROM tbl"),
+        partitioned_by=[
+            d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
+        ],
+        columns_to_types={
+            "a": exp.DataType.build("int"),
+            "ds": exp.DataType.build("DATETIME"),
+        },
+    )
+
+    sql_calls = _to_sql_calls(execute_mock)
+    assert sql_calls == [
+        "CREATE SCHEMA IF NOT EXISTS `test_schema`",
+        f"CREATE TABLE IF NOT EXISTS `test_schema`.`__temp_test_table_{temp_table_uuid.hex}` AS SELECT `a`, `ds` FROM `tbl`",
+        f"DECLARE _sqlmesh_target_partitions_ ARRAY<DATETIME> DEFAULT (SELECT ARRAY_AGG(DISTINCT DATETIME_TRUNC(ds, MONTH)) FROM test_schema.__temp_test_table_{temp_table_uuid.hex});",
+        f"MERGE INTO `test_schema`.`test_table` AS `__MERGE_TARGET__` USING (SELECT * FROM (SELECT * FROM `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`) AS `_subquery` WHERE DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`)) AS `__MERGE_SOURCE__` ON FALSE WHEN NOT MATCHED BY SOURCE AND DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`) THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
+        f"DROP TABLE IF EXISTS `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`",
     ]
 
 
@@ -130,13 +162,7 @@ def test_replace_query(mocker: MockerFixture):
     )
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
-    sql_calls = [
-        # Python 3.7 support
-        call[0][0].sql(dialect="bigquery", identify=True)
-        if isinstance(call[0], tuple)
-        else call[0].sql(dialect="bigquery", identify=True)
-        for call in execute_mock.call_args_list
-    ]
+    sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == ["CREATE OR REPLACE TABLE `test_table` AS SELECT `a` FROM `tbl`"]
 
 
@@ -221,13 +247,7 @@ def test_create_table_date_partition(
         clustered_by=["b"],
     )
 
-    sql_calls = [
-        # Python 3.7 support
-        call[0][0].sql(dialect="bigquery", identify=True)
-        if isinstance(call[0], tuple)
-        else call[0].sql(dialect="bigquery", identify=True)
-        for call in execute_mock.call_args_list
-    ]
+    sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement} CLUSTER BY `b`"
     ]
@@ -261,13 +281,7 @@ def test_create_table_time_partition(
         partition_interval_unit=IntervalUnit.HOUR,
     )
 
-    sql_calls = [
-        # Python 3.7 support
-        call[0][0].sql(dialect="bigquery", identify=True)
-        if isinstance(call[0], tuple)
-        else call[0].sql(dialect="bigquery", identify=True)
-        for call in execute_mock.call_args_list
-    ]
+    sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement}"
     ]
@@ -292,13 +306,7 @@ def test_merge(mocker: MockerFixture):
         },
         unique_key=["id"],
     )
-    sql_calls = [
-        # Python 3.7 support
-        call[0][0].sql(dialect="bigquery")
-        if isinstance(call[0], tuple)
-        else call[0].sql(dialect="bigquery")
-        for call in execute_mock.call_args_list
-    ]
+    sql_calls = _to_sql_calls(execute_mock, identify=False)
     assert sql_calls == [
         "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT id, ts, val FROM source) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
         "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
@@ -335,13 +343,7 @@ def test_merge(mocker: MockerFixture):
         unique_key=["id"],
     )
 
-    sql_calls = [
-        # Python 3.7 support
-        call[0][0].sql(dialect="bigquery")
-        if isinstance(call[0], tuple)
-        else call[0].sql(dialect="bigquery")
-        for call in execute_mock.call_args_list
-    ]
+    sql_calls = _to_sql_calls(execute_mock, identify=False)
     assert sql_calls == [
         "MERGE INTO target AS __MERGE_TARGET__ USING (SELECT id, ts, val FROM project.dataset.temp_table) AS __MERGE_SOURCE__ ON __MERGE_TARGET__.id = __MERGE_SOURCE__.id "
         "WHEN MATCHED THEN UPDATE SET __MERGE_TARGET__.id = __MERGE_SOURCE__.id, __MERGE_TARGET__.ts = __MERGE_SOURCE__.ts, __MERGE_TARGET__.val = __MERGE_SOURCE__.val "
@@ -399,3 +401,17 @@ def test_begin_end_session(mocker: MockerFixture):
     execute_b_call = connection_mock._client.query.call_args_list[2]
     assert execute_b_call[1]["query"] == "SELECT 3;"
     assert not execute_b_call[1]["job_config"].connection_properties
+
+
+def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
+    output = []
+    for call in execute_mock.call_args_list:
+        # Python 3.7 support
+        value = call[0][0] if isinstance(call[0], tuple) else call[0]
+        sql = (
+            value.sql(dialect="bigquery", identify=identify)
+            if isinstance(value, exp.Expression)
+            else str(value)
+        )
+        output.append(sql)
+    return output

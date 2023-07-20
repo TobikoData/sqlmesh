@@ -34,7 +34,6 @@ class TestConfig(GeneralConfig):
         owner: The name of the model under test.
         column_name: The name of the column under test.
         dependencies: The macros, refs, and sources the test depends upon.
-        dialect: The sql dialect of the test.
         package_name: Name of the package that defines the test.
         alias: The alias for the materialized table where failures are stored (Not supported).
         schema: The schema for the materialized table where the failures are stored (Not supported).
@@ -56,7 +55,6 @@ class TestConfig(GeneralConfig):
     owner: str
     column_name: t.Optional[str] = None
     dependencies: Dependencies = Dependencies()
-    dialect: str = ""
 
     # dbt fields
     package_name: str = ""
@@ -110,7 +108,7 @@ class TestConfig(GeneralConfig):
 
         audit = Audit(
             name=self.name,
-            dialect=self.dialect,
+            dialect=context.dialect,
             skip=skip,
             blocking=blocking,
             query=query,

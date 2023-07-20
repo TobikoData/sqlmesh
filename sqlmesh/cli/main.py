@@ -96,7 +96,7 @@ def cli(
 
 
 @cli.command("init")
-@click.argument("sql_dialect")
+@click.argument("sql_dialect", required=False)
 @click.option(
     "-t",
     "--template",
@@ -105,8 +105,10 @@ def cli(
 )
 @click.pass_context
 @error_handler
-def init(ctx: click.Context, sql_dialect: str, template: t.Optional[str] = None) -> None:
-    """Create a new SQLMesh repository with a default SQL dialect."""
+def init(
+    ctx: click.Context, sql_dialect: t.Optional[str] = None, template: t.Optional[str] = None
+) -> None:
+    """Create a new SQLMesh repository."""
     try:
         project_template = ProjectTemplate(template.lower() if template else "default")
     except ValueError:

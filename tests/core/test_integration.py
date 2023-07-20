@@ -711,6 +711,33 @@ def test_incremental_time_self_reference(
     )
 
 
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_invalidating_environment(sushi_context: Context):
+    def get_schemas() -> t.Set[str]:
+        return set(
+            sushi_context.state_sync.state_sync.engine_adapter.fetchdf("SHOW ALL TABLES")["schema"]  # type: ignore
+            .to_dict()
+            .values()
+        )
+
+    environment = "dev"
+    apply_to_environment(sushi_context, environment)
+    start_environment = sushi_context.state_sync.get_environment("dev")
+    assert start_environment is not None
+    start_schemas = get_schemas()
+    sushi_context.invalidate_environment("dev")
+    invalidate_environment = sushi_context.state_sync.get_environment("dev")
+    assert invalidate_environment is not None
+    schemas_prior_to_janitor = get_schemas()
+    assert invalidate_environment.expiration_ts < start_environment.expiration_ts  # type: ignore
+    assert start_schemas == schemas_prior_to_janitor
+    sushi_context._run_janitor()
+    schemas_after_janitor = get_schemas()
+    assert sushi_context.state_sync.get_environment("dev") is None
+    assert start_schemas - schemas_after_janitor == {"sushi__dev"}
+
+
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 

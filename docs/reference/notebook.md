@@ -57,7 +57,8 @@ positional arguments:
 ```
 %init path sql_dialect [--template TEMPLATE] 
 
-Creates a SQLMesh project scaffold with a default SQL dialect.
+Creates a SQLMesh project scaffold. Argument `sql_dialect` is required unless the dbt 
+template option is specified.
 
 positional arguments:
   path                  The path where the new SQLMesh project should be

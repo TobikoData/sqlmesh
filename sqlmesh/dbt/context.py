@@ -4,8 +4,6 @@ import typing as t
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from sqlmesh.core.config import ModelDefaultsConfig
-from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
@@ -26,7 +24,6 @@ class DbtContext:
     """Context for DBT environment"""
 
     project_root: Path = Path()
-    model_defaults: t.Optional[ModelDefaultsConfig] = None
     target_name: t.Optional[str] = None
     profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
@@ -35,8 +32,6 @@ class DbtContext:
             create_builtins_module=SQLMESH_DBT_PACKAGE, top_level_packages=["dbt"]
         )
     )
-
-    engine_adapter: t.Optional[EngineAdapter] = None
 
     _project_name: t.Optional[str] = None
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
@@ -52,8 +47,10 @@ class DbtContext:
     _manifest: t.Optional[ManifestHelper] = None
 
     @property
-    def dialect(self) -> t.Optional[str]:
-        return self.model_defaults.dialect if self.model_defaults else None
+    def dialect(self) -> str:
+        if not self.target:
+            raise SQLMeshError("Target must be configured before calling the dialect property.")
+        return self.target.type
 
     @property
     def project_name(self) -> t.Optional[str]:
@@ -180,7 +177,6 @@ class DbtContext:
             raise ConfigError("Project name must be set in the context in order to use a target.")
 
         self._target = value
-        self.engine_adapter = self._target.to_sqlmesh().create_engine_adapter()
         self._jinja_environment = None
 
     def render(self, source: str, **kwargs: t.Any) -> str:

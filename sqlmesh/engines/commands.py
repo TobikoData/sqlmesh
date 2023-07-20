@@ -114,8 +114,14 @@ def cleanup(
 ) -> None:
     if isinstance(command_payload, str):
         command_payload = CleanupCommandPayload.parse_raw(command_payload)
-    for environment in command_payload.environments:
-        evaluator.demote(environment.snapshots, environment.name)
+
+    expired_schemas = {
+        snapshot.qualified_view_name.schema_for_environment(environment.name)
+        for environment in command_payload.environments
+        for snapshot in environment.snapshots
+    }
+    for expired_schema in expired_schemas:
+        evaluator.adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
     evaluator.cleanup(command_payload.snapshots)
 
 

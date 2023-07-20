@@ -11,7 +11,7 @@ class ProjectTemplate(Enum):
     DEFAULT = "default"
 
 
-def _gen_config(dialect: str, template: ProjectTemplate) -> str:
+def _gen_config(dialect: t.Optional[str], template: ProjectTemplate) -> str:
 
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
@@ -46,7 +46,7 @@ model_defaults:
 
 from sqlmesh.dbt.loader import sqlmesh_config
 
-config = sqlmesh_config(Path(__file__).parent, default_sql_dialect='{dialect}'))
+config = sqlmesh_config(Path(__file__).parent)
 """,
     }
 
@@ -153,7 +153,9 @@ EXAMPLE_TEST = f"""test_example_full_model:
 
 
 def init_example_project(
-    path: t.Union[str, Path], dialect: str, template: ProjectTemplate = ProjectTemplate.DEFAULT
+    path: t.Union[str, Path],
+    dialect: t.Optional[str],
+    template: ProjectTemplate = ProjectTemplate.DEFAULT,
 ) -> None:
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
@@ -166,6 +168,11 @@ def init_example_project(
 
     if config_path.exists():
         raise click.ClickException(f"Found an existing config in '{config_path}'")
+
+    if not dialect and template != ProjectTemplate.DBT:
+        raise click.ClickException(
+            "Default SQL dialect is a required argument for SQLMesh projects"
+        )
 
     _create_config(config_path, dialect, template)
     if template == ProjectTemplate.DBT:
@@ -185,7 +192,7 @@ def _create_folders(target_folders: t.Sequence[Path]) -> None:
         (folder_path / ".gitkeep").touch()
 
 
-def _create_config(config_path: Path, dialect: str, template: ProjectTemplate) -> None:
+def _create_config(config_path: Path, dialect: t.Optional[str], template: ProjectTemplate) -> None:
     project_config = _gen_config(dialect, template)
 
     _write_file(

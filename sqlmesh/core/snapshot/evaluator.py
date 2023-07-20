@@ -396,7 +396,7 @@ class SnapshotEvaluator:
             is_dev=is_dev,
         )
 
-        with self.adapter.transaction(TransactionType.DDL):
+        with self.adapter.transaction(TransactionType.DDL), self.adapter.session():
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
             _evaluation_strategy(snapshot, self.adapter).create(
@@ -800,8 +800,8 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         **kwargs: t.Any,
     ) -> None:
         if isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
-            self.adapter.insert_overwrite(
-                name, query_or_df, columns_to_types=model.columns_to_types
+            self.adapter.insert_overwrite_by_partition(
+                name, query_or_df, model.partitioned_by, columns_to_types=model.columns_to_types
             )
         else:
             self.append(model, name, query_or_df, snapshots, is_dev, **kwargs)

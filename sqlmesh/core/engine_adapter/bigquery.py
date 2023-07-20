@@ -354,6 +354,46 @@ class BigQueryEngineAdapter(EngineAdapter):
         ) as source_table:
             return super().merge(target_table, source_table, columns_to_types, unique_key)
 
+    def insert_overwrite_by_partition(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        partitioned_by: t.List[exp.Expression],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        if len(partitioned_by) != 1:
+            raise SQLMeshError(
+                f"Bigquery only supports partitioning by one column, {len(partitioned_by)} were provided."
+            )
+
+        partition_exp = partitioned_by[0]
+        partition_sql = partition_exp.sql(dialect=self.dialect)
+        partition_column = partition_exp.find(exp.Column)
+
+        if not partition_column:
+            raise SQLMeshError(
+                f"The partition expression '{partition_sql}' doesn't contain a column."
+            )
+
+        with self.session(), self.temp_table(query_or_df, name=table_name) as temp_table_name:
+            if columns_to_types is None:
+                columns_to_types = self.columns(temp_table_name)
+
+            partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
+            temp_table_name_sql = temp_table_name.sql(dialect=self.dialect)
+            self.execute(
+                f"DECLARE _sqlmesh_target_partitions_ ARRAY<{partition_type_sql}> DEFAULT (SELECT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
+            )
+
+            where = t.cast(exp.Condition, partition_exp).isin(unnest="_sqlmesh_target_partitions_")
+
+            self._insert_overwrite_by_condition(
+                table_name,
+                exp.select("*").from_(temp_table_name),
+                where=where,
+                columns_to_types=columns_to_types,
+            )
+
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
@@ -401,7 +441,10 @@ class BigQueryEngineAdapter(EngineAdapter):
             )
 
     def table_exists(self, table_name: TableName) -> bool:
-        from google.cloud.exceptions import NotFound
+        try:
+            from google.cloud.exceptions import NotFound
+        except ModuleNotFoundError:
+            from google.api_core.exceptions import NotFound
 
         try:
             self._get_table(table_name)
@@ -609,7 +652,10 @@ class _ErrorCounter:
 
     @property
     def retryable_errors(self) -> t.Tuple[t.Type[Exception], ...]:
-        from google.cloud.exceptions import ServerError
+        try:
+            from google.cloud.exceptions import ServerError
+        except ModuleNotFoundError:
+            from google.api_core.exceptions import ServerError
         from requests.exceptions import ConnectionError
 
         return (ServerError, ConnectionError)
