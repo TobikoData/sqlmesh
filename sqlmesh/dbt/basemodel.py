@@ -71,7 +71,6 @@ class BaseModelConfig(GeneralConfig):
         database: Database the model is stored in
         schema: Custom schema name added to the model schema name
         alias: Relation identifier for this model instead of the filename
-        sql_header: SQL statement to run before table/view creation. Currently implemented as a pre-hook.
         pre-hook: List of SQL statements to run before the model is built.
         post-hook: List of SQL statements to run after the model is built.
         full_refresh: Forces the model to always do a full refresh or never do a full refresh
@@ -94,7 +93,6 @@ class BaseModelConfig(GeneralConfig):
     schema_: str = Field("", alias="schema")
     database: t.Optional[str] = None
     alias: t.Optional[str] = None
-    sql_header: t.Optional[str] = None
     pre_hook: t.List[Hook] = Field([], alias="pre-hook")
     post_hook: t.List[Hook] = Field([], alias="post-hook")
     full_refresh: t.Optional[bool] = None
@@ -229,10 +227,6 @@ class BaseModelConfig(GeneralConfig):
             if field_val:
                 optional_kwargs[field] = field_val
 
-        pre_hooks = self.pre_hook
-        if self.sql_header:
-            pre_hooks.insert(0, Hook(sql=self.sql_header))
-
         return {
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns) or None,
@@ -243,7 +237,7 @@ class BaseModelConfig(GeneralConfig):
             "jinja_macros": jinja_macros,
             "path": self.path,
             "hash_raw_query": True,
-            "pre_statements": [d.jinja_statement(hook.sql) for hook in pre_hooks],
+            "pre_statements": [d.jinja_statement(hook.sql) for hook in self.pre_hook],
             "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             "tags": self.tags,
             **optional_kwargs,
