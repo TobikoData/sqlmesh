@@ -6,9 +6,11 @@ import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
 from dbt.exceptions import CompilationError
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.engine_adapter import BigQueryEngineAdapter, SparkEngineAdapter
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -469,10 +471,14 @@ def test_parsetime_adapter_call(
     )
 
 
-def test_partition_by(sushi_test_project: Project):
+def test_partition_by(sushi_test_project: Project, mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
     context = sushi_test_project.context
+    context.engine_adapter = SparkEngineAdapter(lambda: connection_mock)
     model_config = ModelConfig(
-        dialect="spark",
         name="model",
         schema="test",
         package_name="package",
@@ -492,8 +498,8 @@ def test_partition_by(sushi_test_project: Project):
         exp.to_column("ts"),
     ]
 
+    context.engine_adapter = BigQueryEngineAdapter(lambda: connection_mock)
     model_config = ModelConfig(
-        dialect="bigquery",
         name="model",
         schema="test",
         package_name="package",

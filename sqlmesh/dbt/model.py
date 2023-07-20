@@ -51,8 +51,6 @@ class ModelConfig(BaseModelConfig):
         time_column: The name of the time column
         cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
-        dialect: The SQL dialect that the model's query is written in. By default,
-            this is assumed to be the dialect of the context.
         batch_size: The maximum number of incremental intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
@@ -69,7 +67,6 @@ class ModelConfig(BaseModelConfig):
     sql: SqlStr = SqlStr("")
     time_column: t.Optional[str] = None
     cron: t.Optional[str] = None
-    dialect: t.Optional[str] = None
     batch_size: t.Optional[int] = None
     lookback: t.Optional[int] = None
 
@@ -119,10 +116,6 @@ class ModelConfig(BaseModelConfig):
             "time_column": UpdateStrategy.IMMUTABLE,
         },
     }
-
-    @property
-    def model_dialect(self) -> t.Optional[str]:
-        return self.dialect or self.meta.get("dialect", None)
 
     @property
     def model_materialization(self) -> Materialization:
@@ -250,7 +243,7 @@ class ModelConfig(BaseModelConfig):
 
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
-        dialect = self.model_dialect or context.dialect
+        dialect = context.dialect
         query = d.jinja_query(self.sql_no_config)
 
         optional_kwargs: t.Dict[str, t.Any] = {}

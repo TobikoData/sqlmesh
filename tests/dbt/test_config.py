@@ -3,7 +3,9 @@ from pathlib import Path
 
 import pytest
 from dbt.adapters.base import BaseRelation
+from pytest_mock.plugin import MockerFixture
 
+from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
 from sqlmesh.core.model import SqlModel
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
@@ -61,7 +63,11 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_model_to_sqlmesh_fields(sushi_test_project: Project):
+def test_model_to_sqlmesh_fields(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
     model_config = ModelConfig(
         name="name",
         package_name="package",
@@ -78,13 +84,14 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
         batch_size=5,
         lookback=3,
         unique_key=["a"],
-        meta={"stamp": "bar", "dialect": "duckdb"},
+        meta={"stamp": "bar"},
         owner="Sally",
         tags=["test", "incremental"],
     )
     context = DbtContext()
     context.project_name = "Foo"
     context.target = DuckDbConfig(name="target", schema="foo")
+    context.engine_adapter = DuckDBEngineAdapter(lambda: connection_mock)
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)
@@ -104,12 +111,15 @@ def test_model_to_sqlmesh_fields(sushi_test_project: Project):
     assert kind.lookback == 3
 
 
-def test_test_to_sqlmesh_fields():
+def test_test_to_sqlmesh_fields(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
     sql = "SELECT * FROM FOO WHERE cost > 100"
     test_config = TestConfig(
         name="foo_test",
         sql=sql,
-        dialect="snowflake",
         owner="Foo",
         column_name="cost",
         severity="ERROR",
@@ -117,10 +127,13 @@ def test_test_to_sqlmesh_fields():
     )
 
     context = DbtContext()
+    context._project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="foo")
+    context.engine_adapter = DuckDBEngineAdapter(lambda: connection_mock)
     audit = test_config.to_sqlmesh(context)
 
     assert audit.name == "foo_test"
-    assert audit.dialect == "snowflake"
+    assert audit.dialect == "duckdb"
     assert audit.skip == False
     assert audit.blocking == True
     assert sql in audit.query.sql()
@@ -129,7 +142,6 @@ def test_test_to_sqlmesh_fields():
     test_config = TestConfig(
         name="foo_null_test",
         sql=sql,
-        dialect="duckdb",
         owner="Foo",
         column_name="id",
         severity="WARN",
