@@ -58,7 +58,7 @@ class ModelConfig(BaseModelConfig):
         cluster_by: Field(s) to use for clustering in data warehouses that support clustering
         incremental_strategy: Strategy used to build the incremental model
         materialized: How the model will be materialized in the database
-        sql_header: SQL statement to inject above create table/view as
+        sql_header: SQL statement to run before table/view creation. Currently implemented as a pre-hook.
         unique_key: List of columns that define row uniqueness for the model
         partition_by: List of partition columns or dictionary of bigquery partition by parameters ([dbt bigquery config](https://docs.getdbt.com/reference/resource-configs/bigquery-configs)).
     """
@@ -106,6 +106,9 @@ class ModelConfig(BaseModelConfig):
         if isinstance(v, dict):
             if not v.get("field"):
                 raise ConfigError("'field' key required for partition_by.")
+            if "granularity" in v and v["granularity"] not in GRANULARITY_TO_PARTITION_FORMAT:
+                granularity = v["granularity"]
+                raise ConfigError(f"Unexpected granularity '{granularity}' in partition_by '{v}'.")
             return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 
@@ -268,6 +271,15 @@ class ModelConfig(BaseModelConfig):
         if not context.target:
             raise ConfigError(f"Target required to load '{self.sql_name}' into SQLMesh.")
 
+        model_kwargs = self.sqlmesh_model_kwargs(context)
+        if self.sql_header:
+            model_kwargs["pre_statements"].insert(0, d.jinja_statement(self.sql_header))
+
+        if context.target.type == "bigquery":
+            dbt_max_partition_blob = self._dbt_max_partition_blob()
+            if dbt_max_partition_blob:
+                model_kwargs["pre_statements"].append(d.jinja_statement(dbt_max_partition_blob))
+
         return create_sql_model(
             self.sql_name,
             query,
@@ -275,5 +287,43 @@ class ModelConfig(BaseModelConfig):
             kind=self.model_kind(context.target),
             start=self.start,
             **optional_kwargs,
-            **self.sqlmesh_model_kwargs(context),
+            **model_kwargs,
         )
+
+    def _dbt_max_partition_blob(self) -> t.Optional[str]:
+        """Returns a SQL blob which declares the _dbt_max_partition variable. Only applicable to BigQuery."""
+        if (
+            not isinstance(self.partition_by, dict)
+            or self.model_materialization != Materialization.INCREMENTAL
+        ):
+            return None
+
+        data_type = self.partition_by["data_type"]
+        granularity = self.partition_by["granularity"]
+
+        parse_fun = f"parse_{data_type}" if data_type in ("date", "datetime", "timestamp") else None
+        if parse_fun:
+            parse_format = GRANULARITY_TO_PARTITION_FORMAT[granularity]
+            partition_exp = f"{parse_fun}('{parse_format}', partition_id)"
+        else:
+            partition_exp = "CAST(partition_id AS INT64)"
+
+        return f"""
+{{% if is_incremental() %}}
+  DECLARE _dbt_max_partition {data_type.upper()} DEFAULT (
+    SELECT MAX({partition_exp})
+    FROM `{{{{ target.database }}}}`.`{{{{ adapter.resolve_schema(this) }}}}`.INFORMATION_SCHEMA.PARTITIONS
+    WHERE table_name = '{{{{ adapter.resolve_identifier(this) }}}}'
+      AND partition_id IS NOT NULL
+      AND partition_id != '__NULL__'
+  );
+{{% endif %}}
+"""
+
+
+GRANULARITY_TO_PARTITION_FORMAT = {
+    "day": "%Y%m%d",
+    "month": "%Y%m",
+    "year": "%Y",
+    "hour": "%Y%m%d%H",
+}

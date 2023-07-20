@@ -6,6 +6,7 @@ import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
 from dbt.exceptions import CompilationError
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.context import Context
@@ -569,4 +570,40 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq):
     assert_exp_eq(
         model_config.to_sqlmesh(context).render_query_or_raise(has_intervals=True).sql(),
         'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a" WHERE "ds" > (SELECT MAX("ds") FROM "model" AS "model")',
+    )
+
+
+def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: MockerFixture):
+    model_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        partition_by={"field": "`ds`", "data_type": "datetime", "granularity": "month"},
+        materialized=Materialization.INCREMENTAL,
+        sql="""
+        SELECT 1 AS one FROM tbl_a
+        {% if is_incremental() %}
+        WHERE ds > _dbt_max_partition
+        {% endif %}
+        """,
+    )
+    context = sushi_test_project.context
+    context.target = BigQueryConfig(
+        name="test_target", schema="test_schema", database="test-project"
+    )
+
+    assert (
+        model_config.to_sqlmesh(context).pre_statements[-1].sql().strip()  # type: ignore
+        == """
+JINJA_STATEMENT_BEGIN;
+{% if is_incremental() %}
+  DECLARE _dbt_max_partition DATETIME DEFAULT (
+    SELECT MAX(parse_datetime('%Y%m', partition_id))
+    FROM `{{ target.database }}`.`{{ adapter.resolve_schema(this) }}`.INFORMATION_SCHEMA.PARTITIONS
+    WHERE table_name = '{{ adapter.resolve_identifier(this) }}'
+      AND partition_id IS NOT NULL
+      AND partition_id != '__NULL__'
+  );
+{% endif %}
+JINJA_END;""".strip()
     )

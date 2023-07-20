@@ -79,6 +79,14 @@ class BaseAdapter(abc.ABC):
     ) -> t.Tuple[AdapterResponse, agate.Table]:
         """Executes the given SQL statement and returns the results as an agate table."""
 
+    @abc.abstractmethod
+    def resolve_schema(self, relation: BaseRelation) -> t.Optional[str]:
+        """Resolves the relation's schema to its physical schema."""
+
+    @abc.abstractmethod
+    def resolve_identifier(self, relation: BaseRelation) -> t.Optional[str]:
+        """Resolves the relation's schema to its physical identifier."""
+
     def quote(self, identifier: str) -> str:
         """Returns a quoted identifier."""
         return exp.to_column(identifier).sql(dialect=self.dialect, identify=True)
@@ -137,6 +145,12 @@ class ParsetimeAdapter(BaseAdapter):
     ) -> t.Tuple[AdapterResponse, agate.Table]:
         self._raise_parsetime_adapter_call_error("execute SQL")
         raise
+
+    def resolve_schema(self, relation: BaseRelation) -> t.Optional[str]:
+        return relation.schema
+
+    def resolve_identifier(self, relation: BaseRelation) -> t.Optional[str]:
+        return relation.identifier
 
     @staticmethod
     def _raise_parsetime_adapter_call_error(action: str) -> None:
@@ -275,6 +289,20 @@ class RuntimeAdapter(BaseAdapter):
             assert isinstance(resp, pd.DataFrame)
             return AdapterResponse("Success"), pandas_to_agate(resp)
         return AdapterResponse("Success"), empty_table()
+
+    def resolve_schema(self, relation: BaseRelation) -> t.Optional[str]:
+        schema = self._map_table_name(relation.database, relation.schema, relation.identifier).db
+        if not schema:
+            return None
+        return schema
+
+    def resolve_identifier(self, relation: BaseRelation) -> t.Optional[str]:
+        identifier = self._map_table_name(
+            relation.database, relation.schema, relation.identifier
+        ).name
+        if not identifier:
+            return None
+        return identifier
 
     def _map_table_name(
         self, database: t.Optional[str], schema: t.Optional[str], identifier: t.Optional[str]
