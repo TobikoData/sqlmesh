@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import io
 import typing as t
 
 import pandas as pd
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, Request
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
+from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.errors import PlanError
 from web.server import models
 from web.server.exceptions import ApiException
@@ -155,3 +157,54 @@ async def render(
     dialect = options.dialect or context.config.dialect
 
     return models.Query(sql=rendered.sql(pretty=options.pretty, dialect=dialect))
+
+
+@router.get("/test")
+async def test(
+    test: t.Optional[str] = None,
+    verbose: bool = False,
+    context: Context = Depends(get_loaded_context),
+) -> models.TestResult:
+    """Run one or all model tests"""
+    test_output = io.StringIO()
+    try:
+        result = context.test(
+            tests=[str(context.path / test)] if test else None, verbose=verbose, stream=test_output
+        )
+    except Exception:
+        raise ApiException(
+            message="Unable to run tests",
+            origin="API -> commands -> test",
+        )
+    context.console.log_test_results(
+        result, test_output.getvalue(), context._test_engine_adapter.dialect
+    )
+    return models.TestResult(
+        errors=[
+            models.TestErrorOrFailure(
+                name=test.test_name,
+                path=test.path_relative_to(context.path),
+                tb=tb,
+            )
+            for test, tb in ((t.cast(ModelTest, test), tb) for test, tb in result.errors)
+        ],
+        failures=[
+            models.TestErrorOrFailure(
+                name=test.test_name,
+                path=test.path_relative_to(context.path),
+                tb=tb,
+            )
+            for test, tb in ((t.cast(ModelTest, test), tb) for test, tb in result.failures)
+        ],
+        skipped=[
+            models.TestSkipped(
+                name=test.test_name,
+                path=test.path_relative_to(context.path),
+                reason=reason,
+            )
+            for test, reason in (
+                (t.cast(ModelTest, test), reason) for test, reason in result.skipped
+            )
+        ],
+        tests_run=result.testsRun,
+    )

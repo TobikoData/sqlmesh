@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import abc
 import collections
-import contextlib
 import gc
 import traceback
 import typing as t
@@ -947,6 +946,7 @@ class Context(BaseContext):
         match_patterns: t.Optional[t.List[str]] = None,
         tests: t.Optional[t.List[str]] = None,
         verbose: bool = False,
+        stream: t.Optional[t.TextIO] = None,
     ) -> unittest.result.TestResult:
         """Discover and run model tests"""
         verbosity = 2 if verbose else 1
@@ -977,6 +977,7 @@ class Context(BaseContext):
                     models=self._models,
                     engine_adapter=self._test_engine_adapter,
                     verbosity=verbosity,
+                    stream=stream,
                 )
         finally:
             self._test_engine_adapter.close()
@@ -1097,8 +1098,7 @@ class Context(BaseContext):
 
     def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()
-        with contextlib.redirect_stderr(test_output_io):
-            result = self.test()
+        result = self.test(stream=test_output_io)
         return result, test_output_io.getvalue()
 
     def _run_plan_tests(
