@@ -102,6 +102,10 @@ class ModelTest(unittest.TestCase):
     def runTest(self) -> None:
         raise NotImplementedError
 
+    def path_relative_to(self, other: pathlib.Path) -> pathlib.Path | None:
+        """Compute a version of this test's path relative to the `other` path"""
+        return self.path.relative_to(other) if self.path else None
+
     @staticmethod
     def create_test(
         body: dict[str, t.Any],

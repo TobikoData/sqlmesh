@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import typing as t
 import unittest
 
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -20,6 +21,7 @@ def run_tests(
     models: dict[str, Model],
     engine_adapter: EngineAdapter,
     verbosity: int = 1,
+    stream: t.TextIO | None = None,
 ) -> unittest.result.TestResult:
     """Create a test suite of ModelTest objects and run it.
 
@@ -39,7 +41,9 @@ def run_tests(
         )
         for metadata in model_test_metadata
     )
-    return unittest.TextTestRunner(verbosity=verbosity, resultclass=ModelTextTestResult).run(suite)
+    return unittest.TextTestRunner(
+        stream=stream, verbosity=verbosity, resultclass=ModelTextTestResult
+    ).run(suite)
 
 
 def run_model_tests(
@@ -48,6 +52,7 @@ def run_model_tests(
     engine_adapter: EngineAdapter,
     verbosity: int = 1,
     patterns: list[str] | None = None,
+    stream: t.TextIO | None = None,
 ) -> unittest.result.TestResult:
     """Load and run tests.
 
@@ -68,4 +73,4 @@ def run_model_tests(
             loaded_tests.extend(load_model_test_file(path).values())
     if patterns:
         loaded_tests = filter_tests_by_patterns(loaded_tests, patterns)
-    return run_tests(loaded_tests, models, engine_adapter, verbosity)
+    return run_tests(loaded_tests, models, engine_adapter, verbosity, stream)
