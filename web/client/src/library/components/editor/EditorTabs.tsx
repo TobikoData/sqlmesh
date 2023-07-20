@@ -11,7 +11,6 @@ import { isFalse, isNil, isNotNil } from '@utils/index'
 import { useStoreContext } from '@context/context'
 
 export default function EditorTabs(): JSX.Element {
-  const files = useStoreProject(s => s.files)
   const selectedFile = useStoreProject(s => s.selectedFile)
 
   const tab = useStoreEditor(s => s.tab)
@@ -20,7 +19,6 @@ export default function EditorTabs(): JSX.Element {
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const replaceTab = useStoreEditor(s => s.replaceTab)
-  const closeTab = useStoreEditor(s => s.closeTab)
 
   const [tabsLocal, tabsRemote] = useMemo(() => {
     const local: EditorTab[] = []
@@ -39,11 +37,11 @@ export default function EditorTabs(): JSX.Element {
     return [local, remote]
   }, [tabs])
 
-  useEffect(() => {
-    if (isNotNil(tab) && tab.file.isRemote && isFalse(files.has(tab.file.id))) {
-      closeTab(tab.file)
-    }
-  }, [files])
+  // useEffect(() => {
+  //   if (isNotNil(tab) && tab.file.isRemote && isFalse(files.has(tab.file.id))) {
+  //     closeTab(tab.file)
+  //   }
+  // }, [files])
 
   useEffect(() => {
     if (

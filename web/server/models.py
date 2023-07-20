@@ -336,8 +336,3 @@ class ArtifactChange(BaseModel):
     type: t.Optional[ArtifactType] = None
     file: t.Optional[File] = None
     directory: t.Optional[Directory] = None
-
-
-class ArtifactChanges(BaseModel):
-    changes: t.List[ArtifactChange] = []
-    models: t.Optional[t.List[Model]] = None

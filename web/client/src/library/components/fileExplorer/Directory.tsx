@@ -411,7 +411,7 @@ function DirectoryDisplay({
 }): JSX.Element {
   return (
     <div className="w-full flex justify-between items-center py-[0.125rem]">
-      <span className="overflow-hidden overflow-ellipsis">
+      <span className="overflow-hidden overflow-ellipsis whitespace-nowrap">
         {directory.name}
       </span>
       <span className="inline-block text-xs rounded-full px-2 bg-primary-10 ml-2">

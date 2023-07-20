@@ -40,7 +40,6 @@ async def watch_project(queue: asyncio.Queue) -> None:
     ):
         should_load_context = False
         changes: t.List[models.ArtifactChange] = []
-        all_models: t.Optional[t.List[models.Model]] = None
 
         for (change, path) in list(entries):
             if change == Change.modified and os.path.isdir(path):
@@ -86,25 +85,21 @@ async def watch_project(queue: asyncio.Queue) -> None:
         if should_load_context:
             try:
                 context.load()
-            except Exception as e:
+                queue.put_nowait(
+                    Event(
+                        event="models", data=json.dumps(jsonable_encoder(get_all_models(context)))
+                    )
+                )
+            except Exception:
                 error = ApiException(
                     message="Error watching file changes",
                     origin="API -> watcher -> watch_project",
                 ).to_dict()
                 queue.put_nowait(Event(event="errors", data=json.dumps(error)))
-                raise e
-            all_models = get_all_models(context)
-
-        payload = models.ArtifactChanges(
-            changes=changes,
-            models=all_models,
-        )
 
         queue.put_nowait(
             Event(
                 event="file",
-                data=json.dumps(
-                    jsonable_encoder(payload.dict(exclude_none=True, exclude_unset=True))
-                ),
+                data=json.dumps(jsonable_encoder(changes)),
             )
         )

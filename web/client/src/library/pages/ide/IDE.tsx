@@ -134,7 +134,7 @@ export default function PageIDE(): JSX.Element {
     const unsubscribeFile = subscribe<{
       changes: any
       models: any
-    }>('file', ({ changes, models }) => {
+    }>('file', (changes: any) => {
       changes.forEach(({ change, path, file, directory, type }: any) => {
         if (change === 'modified') {
           const currentFile = findAtrifactByPath(file.path) as
@@ -181,10 +181,6 @@ export default function PageIDE(): JSX.Element {
         }
       })
 
-      if (isNotNil(models)) {
-        updateModels(models)
-      }
-
       refreshFiles()
     })
 
@@ -198,9 +194,9 @@ export default function PageIDE(): JSX.Element {
       const project = new ModelDirectory(data)
       const files = project.allFiles
 
-      setProject(project)
-      setFiles(files)
       restoreEditorTabsFromSaved(files)
+      setFiles(files)
+      setProject(project)
     })
 
     return () => {

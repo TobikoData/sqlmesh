@@ -126,16 +126,17 @@ function CodeEditorRemoteFile({
   )
   const keymaps = useKeymapsRemoteFile(path)
 
-  const [file, setFile] = useState<ModelFile>()
+  const [file, setFile] = useState<ModelFile | undefined>(files.get(path))
 
   useEffect(() => {
     void debouncedGetFileContent().then(({ data }) => {
       if (isNil(data)) return
 
       if (isNil(file)) {
+        console.log('New')
         setFile(new ModelFile(data))
       } else {
-        file?.update(data)
+        file.update(data)
       }
     })
 
@@ -143,11 +144,6 @@ function CodeEditorRemoteFile({
       debouncedGetFileContent.cancel()
     }
   }, [])
-
-  useEffect(() => {
-    // console.log('files', files)
-    setFile(files.get(path))
-  }, [files])
 
   return isFetching ? (
     <div className="flex justify-center items-center w-full h-full">

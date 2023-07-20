@@ -141,7 +141,7 @@ export default function SearchList<
             }
           }}
           autoFocus={autoFocus}
-        ></Popover.Button>
+        />
         <Transition
           show={showSearchResults}
           as={Fragment}
@@ -208,7 +208,7 @@ export default function SearchList<
             ) : (
               found.map(([item, index], idx) => (
                 <div
-                  key={item.name}
+                  key={index}
                   role="menuitem"
                   data-index={idx}
                   className={clsx(

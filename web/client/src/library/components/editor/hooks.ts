@@ -1,20 +1,13 @@
-import { useApiFileByPath, useMutationApiSaveFile } from '@api/index'
+import { useMutationApiSaveFile } from '@api/index'
 import { type Extension } from '@codemirror/state'
 import { type KeyBinding } from '@codemirror/view'
 import { useLineageFlow } from '@components/graph/context'
 import { useStoreEditor } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { useQueryClient, isCancelledError } from '@tanstack/react-query'
-import { type Column, type File } from '~/api/client'
-import {
-  debounceAsync,
-  debounceSync,
-  isFalse,
-  isNil,
-  isNotNil,
-  isStringEmptyOrNil,
-} from '@utils/index'
-import { useMemo, useCallback, useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { type Column } from '~/api/client'
+import { debounceSync, isFalse, isNil, isNotNil } from '@utils/index'
+import { useMemo, useCallback, useState } from 'react'
 import { events, HoverTooltip, SQLMeshModel } from './extensions'
 import { dracula, tomorrow } from 'thememirror'
 import { python } from '@codemirror/lang-python'
@@ -94,25 +87,7 @@ function useKeymapsRemoteFile(path: string): KeyBinding[] {
 
   if (isNil(file)) return []
 
-  const refreshTab = useStoreEditor(s => s.refreshTab)
-
-  const { refetch: getFileContent } = useApiFileByPath(file.path)
-  const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
-
-  const saveChangeSuccess = useCallback(
-    function saveChangeSuccess(newFile: File): void {
-      if (isNil(newFile)) return
-
-      file.update(newFile)
-
-      refreshTab()
-    },
-    [file.path],
-  )
-
-  const mutationSaveFile = useMutationApiSaveFile(client, {
-    onSuccess: saveChangeSuccess,
-  })
+  const mutationSaveFile = useMutationApiSaveFile(client)
 
   const saveChange = useCallback(
     function saveChange(): void {
@@ -128,27 +103,6 @@ function useKeymapsRemoteFile(path: string): KeyBinding[] {
     debounceSync(saveChange, 1000, true),
     [file.path],
   )
-
-  useEffect(() => {
-    if (isStringEmptyOrNil(file.content)) {
-      debouncedGetFileContent({
-        throwOnError: true,
-      })
-        .then(({ data }) => {
-          file.update(data)
-        })
-        .catch(error => {
-          if (isCancelledError(error)) {
-            console.log('getFileContent', 'Request aborted by React Query')
-          } else {
-            console.log('getFileContent', error)
-          }
-        })
-        .finally(() => {
-          refreshTab()
-        })
-    }
-  }, [file.path])
 
   return [
     {
