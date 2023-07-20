@@ -3,9 +3,7 @@ from pathlib import Path
 
 import pytest
 from dbt.adapters.base import BaseRelation
-from pytest_mock.plugin import MockerFixture
 
-from sqlmesh.core.engine_adapter import DuckDBEngineAdapter
 from sqlmesh.core.model import SqlModel
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
@@ -63,11 +61,7 @@ def test_update(current: t.Dict[str, t.Any], new: t.Dict[str, t.Any], expected: 
     assert {k: v for k, v in config.dict().items() if k in expected} == expected
 
 
-def test_model_to_sqlmesh_fields(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
+def test_model_to_sqlmesh_fields():
     model_config = ModelConfig(
         name="name",
         package_name="package",
@@ -91,7 +85,6 @@ def test_model_to_sqlmesh_fields(mocker: MockerFixture):
     context = DbtContext()
     context.project_name = "Foo"
     context.target = DuckDbConfig(name="target", schema="foo")
-    context.engine_adapter = DuckDBEngineAdapter(lambda: connection_mock)
     model = model_config.to_sqlmesh(context)
 
     assert isinstance(model, SqlModel)
@@ -111,11 +104,7 @@ def test_model_to_sqlmesh_fields(mocker: MockerFixture):
     assert kind.lookback == 3
 
 
-def test_test_to_sqlmesh_fields(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
+def test_test_to_sqlmesh_fields():
     sql = "SELECT * FROM FOO WHERE cost > 100"
     test_config = TestConfig(
         name="foo_test",
@@ -129,7 +118,6 @@ def test_test_to_sqlmesh_fields(mocker: MockerFixture):
     context = DbtContext()
     context._project_name = "Foo"
     context.target = DuckDbConfig(name="target", schema="foo")
-    context.engine_adapter = DuckDBEngineAdapter(lambda: connection_mock)
     audit = test_config.to_sqlmesh(context)
 
     assert audit.name == "foo_test"

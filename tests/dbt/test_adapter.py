@@ -13,10 +13,10 @@ from sqlmesh.utils.errors import ConfigError
 
 def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
-    renderer = runtime_renderer(context)
-    assert context.engine_adapter
+    assert context.target
+    engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
+    renderer = runtime_renderer(context, engine_adapter=engine_adapter)
 
-    engine_adapter = context.engine_adapter
     engine_adapter.create_schema("foo")
     engine_adapter.create_schema("ignored")
     engine_adapter.create_table(
@@ -77,10 +77,12 @@ def test_adapter_map_snapshot_tables(
     snapshot_mock.table_name_for_mapping.return_value = "sqlmesh.test_db__test_model"
 
     context = sushi_test_project.context
-    renderer = runtime_renderer(context, snapshots={"test_db.test_model": snapshot_mock})
-    assert context.engine_adapter
+    assert context.target
+    engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
+    renderer = runtime_renderer(
+        context, engine_adapter=engine_adapter, snapshots={"test_db.test_model": snapshot_mock}
+    )
 
-    engine_adapter = context.engine_adapter
     engine_adapter.create_schema("foo")
     engine_adapter.create_schema("sqlmesh")
     engine_adapter.create_table(

@@ -37,12 +37,14 @@ def sqlmesh_config(
     project_root = project_root or Path()
     context = DbtContext(project_root=project_root)
     profile = Profile.load(context)
+    model_defaults = kwargs.get("model_defaults", ModelDefaultsConfig())
+    model_defaults.dialect = profile.target.type
 
     return Config(
         default_gateway=profile.target_name,
         gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
-        model_defaults=ModelDefaultsConfig(dialect=profile.target.type),
+        model_defaults=model_defaults,
         **kwargs,
     )
 

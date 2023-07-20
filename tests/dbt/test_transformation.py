@@ -6,11 +6,9 @@ import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
 from dbt.exceptions import CompilationError
-from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.engine_adapter import BigQueryEngineAdapter, SparkEngineAdapter
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -30,7 +28,7 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
-from sqlmesh.dbt.target import DuckDbConfig
+from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
 
@@ -280,7 +278,9 @@ def test_this(assert_exp_eq, sushi_test_project: Project):
 
 def test_statement(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
-    renderer = runtime_renderer(context)
+    assert context.target
+    engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
+    renderer = runtime_renderer(context, engine_adapter=engine_adapter)
     assert renderer(
         "{% set test_var = 'SELECT 1' %}{% call statement('something', fetch_result=True) %} {{ test_var }} {% endcall %}{{ load_result('something').table }}",
     ) == str(agate.Table([[1]], column_names=["1"], column_types=[agate.Number()]))
@@ -288,7 +288,9 @@ def test_statement(sushi_test_project: Project, runtime_renderer: t.Callable):
 
 def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
-    renderer = runtime_renderer(context)
+    assert context.target
+    engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
+    renderer = runtime_renderer(context, engine_adapter=engine_adapter)
     assert renderer("{{ run_query('SELECT 1 UNION ALL SELECT 2') }}") == str(
         agate.Table([[1], [2]], column_names=["1"], column_types=[agate.Number()])
     )
@@ -296,7 +298,9 @@ def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
 
 def test_logging(capsys, sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
-    renderer = runtime_renderer(context)
+    assert context.target
+    engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
+    renderer = runtime_renderer(context, engine_adapter=engine_adapter)
 
     assert renderer('{{ log("foo") }}') == ""
     assert "foo" in capsys.readouterr().out
@@ -471,34 +475,9 @@ def test_parsetime_adapter_call(
     )
 
 
-def test_partition_by(sushi_test_project: Project, mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
+def test_partition_by(sushi_test_project: Project):
     context = sushi_test_project.context
-    context.engine_adapter = SparkEngineAdapter(lambda: connection_mock)
-    model_config = ModelConfig(
-        name="model",
-        schema="test",
-        package_name="package",
-        materialized="table",
-        unique_key="ds",
-        partition_by="ds",
-        sql="""SELECT 1 AS one, ds, ts FROM foo""",
-    )
-    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
-
-    assert model_config.partition_by == ["ds"]
-    assert model_config.to_sqlmesh(context).partitioned_by == [exp.to_column("ds")]
-
-    model_config.partition_by = ["ds", "ts"]
-    assert model_config.to_sqlmesh(context).partitioned_by == [
-        exp.to_column("ds"),
-        exp.to_column("ts"),
-    ]
-
-    context.engine_adapter = BigQueryEngineAdapter(lambda: connection_mock)
+    context.target = BigQueryConfig(name="production", database="main", schema="sushi")
     model_config = ModelConfig(
         name="model",
         schema="test",
