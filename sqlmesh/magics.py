@@ -94,6 +94,8 @@ class SQLMeshMagics(Magics):
     @argument(
         "sql_dialect",
         type=str,
+        nargs="?",
+        default=None,
         help=f"Default model SQL dialect. Supported values: {sqlglot_dialects()}.",
     )
     @argument(
