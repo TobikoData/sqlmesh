@@ -1,4 +1,6 @@
+import inspect
 import pathlib
+import pickle
 from datetime import date
 from tempfile import TemporaryDirectory
 
@@ -182,11 +184,15 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync, sushi_context.snapshot_evaluator
     )
-    plan_evaluator._promote(
-        Plan(
-            context_diff=sushi_context._context_diff("prod"),
-        )
+    plan = Plan(
+        context_diff=sushi_context._context_diff("prod"),
     )
+    serialized_plan = pickle.dumps(plan)
+    deserialized_plan = pickle.loads(serialized_plan)
+    for attr in dir(deserialized_plan):
+        if not attr.startswith("_") and not inspect.ismethod(getattr(deserialized_plan, attr)):
+            assert getattr(plan, attr) == getattr(deserialized_plan, attr)
+    plan_evaluator._promote(plan)
 
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")

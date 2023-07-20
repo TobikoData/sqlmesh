@@ -5,6 +5,8 @@ import typing as t
 from collections import defaultdict
 from enum import Enum
 
+import dill
+
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
@@ -641,6 +643,21 @@ class Plan:
             raise NoChangesPlanError(
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
+
+    def __getstate__(self) -> t.Dict[str, t.Any]:
+        state = self.__dict__.copy()
+        state["_dag"] = None
+        if state["_apply"] is not None:
+            state["_apply"] = dill.dumps(state["_apply"])
+        return state
+
+    def __setstate__(self, state: t.Dict[str, t.Any]) -> None:
+        self.__dict__.update(state)
+        self._dag = DAG()
+        for name, snapshot in self.context_diff.snapshots.items():
+            self._dag.add(name, snapshot.model.depends_on)
+        if self._apply is not None:
+            self._apply = dill.loads(self._apply)
 
 
 class PlanStatus(str, Enum):
