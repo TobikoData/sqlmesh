@@ -147,7 +147,7 @@ def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable
     target.execute(context, lambda: evaluator_adapter_mock, "spark")
 
     evaluator_adapter_mock.cursor().execute.assert_has_calls(
-        [call("DROP SCHEMA IF EXISTS default__test_env CASCADE")]
+        [call("DROP SCHEMA IF EXISTS `default__test_env` CASCADE")]
     )
     evaluator_cleanup_mock.assert_called_once_with([snapshot.table_info])
 
