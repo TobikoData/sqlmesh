@@ -42,6 +42,7 @@ interface EditorStore {
   addTabs: (tabs: EditorTab[]) => void
   closeTab: (file: ModelFile) => void
   createTab: (file?: ModelFile) => EditorTab
+  removeTab: (file: ModelFile) => void
   setDialects: (dialects: Dialect[]) => void
   refreshTab: () => void
   setPreviewQuery: (previewQuery?: string) => void
@@ -155,7 +156,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   refreshTab() {
     const tab = get().tab
 
-    if (tab == null) return
+    if (isNil(tab)) return
 
     get().selectTab({ ...tab })
   },
@@ -224,6 +225,19 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
 
     set(() => ({
       tabs: new Map(s.tabs),
+    }))
+
+    s.updateStoredTabsIds()
+  },
+  removeTab(file) {
+    const s = get()
+    const activeTab = isNotNil(s.tab) && file === s.tab.file ? undefined : s.tab
+
+    s.tabs.delete(file)
+
+    set(() => ({
+      tabs: new Map(s.tabs),
+      tab: activeTab,
     }))
 
     s.updateStoredTabsIds()

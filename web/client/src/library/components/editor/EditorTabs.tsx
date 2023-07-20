@@ -7,9 +7,11 @@ import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { useStoreProject } from '@context/project'
 import { ModelDirectory } from '@models/directory'
 import { ModelFile } from '@models/file'
-import { isFalse } from '@utils/index'
+import { isFalse, isNil, isNotNil } from '@utils/index'
+import { useStoreContext } from '@context/context'
 
 export default function EditorTabs(): JSX.Element {
+  const files = useStoreProject(s => s.files)
   const selectedFile = useStoreProject(s => s.selectedFile)
 
   const tab = useStoreEditor(s => s.tab)
@@ -18,6 +20,7 @@ export default function EditorTabs(): JSX.Element {
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const replaceTab = useStoreEditor(s => s.replaceTab)
+  const closeTab = useStoreEditor(s => s.closeTab)
 
   const [tabsLocal, tabsRemote] = useMemo(() => {
     const local: EditorTab[] = []
@@ -37,9 +40,14 @@ export default function EditorTabs(): JSX.Element {
   }, [tabs])
 
   useEffect(() => {
+    if (isNotNil(tab) && tab.file.isRemote && isFalse(files.has(tab.file.id))) {
+      closeTab(tab.file)
+    }
+  }, [files])
+
+  useEffect(() => {
     if (
-      tab == null ||
-      selectedFile == null ||
+      isNil(selectedFile) ||
       tab?.file === selectedFile ||
       selectedFile instanceof ModelDirectory
     )
@@ -47,6 +55,7 @@ export default function EditorTabs(): JSX.Element {
 
     const newTab = createTab(selectedFile)
     const shouldReplaceTab =
+      isNotNil(tab) &&
       tab.file instanceof ModelFile &&
       isFalse(tab.file.isChanged) &&
       tab.file.isRemote &&
@@ -113,6 +122,7 @@ export default function EditorTabs(): JSX.Element {
 
 function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
   const elTab = useRef<HTMLLIElement>(null)
+  const addConfirmation = useStoreContext(s => s.addConfirmation)
 
   const activeTab = useStoreEditor(s => s.tab)
   const selectTab = useStoreEditor(s => s.selectTab)
@@ -124,9 +134,24 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
     tab.el = elTab.current
   }, [elTab])
 
-  function closeEditorTab(tab: EditorTab): void {
-    closeTab(tab.file)
+  function closeEditorTabWithConfirmation(): void {
+    if (tab.file.isChanged) {
+      addConfirmation({
+        headline: 'Closing Tab',
+        description:
+          'All unsaved changes will be lost. Do you want to close tab anyway?',
+        yesText: 'Yes, Close Tab',
+        noText: 'No, Cancel',
+        action: () => {
+          closeTab(tab.file)
+        },
+      })
+    } else {
+      closeTab(tab.file)
+    }
   }
+
+  const isActive = tab.file.id === activeTab?.file.id
 
   return (
     <li
@@ -142,25 +167,25 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
     >
       <span
         className={clsx(
-          'flex border-2 justify-between items-center pl-2 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent border-r border-r-theme-darker dark:border-r-theme-lighter',
-          tab.file.id === activeTab?.file.id
-            ? 'bg-neutral-200 border-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
+          'flex border-2 justify-between items-center pl-1 pr-1 py-[0.125rem] min-w-[8rem] rounded-md group border-transparent border-r border-r-theme-darker dark:border-r-theme-lighter',
+          isActive
+            ? 'bg-neutral-200 border-neutral-200 text-neutral-900 dark:bg-dark-lighter dark:border-dark-lighter dark:text-primary-500'
             : 'bg-trasparent hover:bg-theme-darker dark:hover:bg-theme-lighter',
         )}
       >
         <small className="text-xs">{title}</small>
         <small
           className={clsx(
-            'group-hover:hidden text-xs inline-block mx-2 w-2 h-2  rounded-full',
+            'group-hover:hidden text-xs inline-block ml-3 mr-1 w-2 h-2 rounded-full',
             tab.file.isChanged ? 'bg-warning-500' : 'bg-transparent',
           )}
         ></small>
         <XCircleIcon
-          className="hidden group-hover:inline-block text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 cursor-pointer"
+          className="hidden group-hover:inline-block text-neutral-600 dark:text-neutral-100 w-4 h-4 ml-2 mr-0 cursor-pointer"
           onClick={(e: MouseEvent) => {
             e.stopPropagation()
 
-            closeEditorTab(tab)
+            closeEditorTabWithConfirmation()
           }}
         />
       </span>

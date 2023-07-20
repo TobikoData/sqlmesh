@@ -4,11 +4,10 @@ import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
 import { useApiFileByPath } from '~/api'
 import { debounceAsync, isNil } from '~/utils'
-import { isCancelledError } from '@tanstack/react-query'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
 import {
-  type ModelFile,
+  ModelFile,
   type FileExtensions,
   EnumFileExtensions,
 } from '@models/file'
@@ -121,39 +120,34 @@ function CodeEditorRemoteFile({
   const files = useStoreProject(s => s.files)
 
   const { refetch: getFileContent, isFetching } = useApiFileByPath(path)
-  const debouncedGetFileContent = debounceAsync(getFileContent, 1000, true)
-
+  const debouncedGetFileContent = useCallback(
+    debounceAsync(getFileContent, 1000, true),
+    [getFileContent],
+  )
   const keymaps = useKeymapsRemoteFile(path)
 
   const [file, setFile] = useState<ModelFile>()
 
   useEffect(() => {
-    setFile(undefined)
+    void debouncedGetFileContent().then(({ data }) => {
+      if (isNil(data)) return
 
-    const tempFile = files.get(path)
-
-    if (tempFile == null) return
-    if (tempFile.isSynced) {
-      setFile(tempFile)
-      return
-    }
-
-    debouncedGetFileContent({
-      throwOnError: true,
+      if (isNil(file)) {
+        setFile(new ModelFile(data))
+      } else {
+        file?.update(data)
+      }
     })
-      .then(({ data }) => {
-        tempFile.update(data)
 
-        setFile(tempFile)
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log('getFileContent', 'Request aborted by React Query')
-        } else {
-          console.log('getFileContent', error)
-        }
-      })
-  }, [path])
+    return () => {
+      debouncedGetFileContent.cancel()
+    }
+  }, [])
+
+  useEffect(() => {
+    // console.log('files', files)
+    setFile(files.get(path))
+  }, [files])
 
   return isFetching ? (
     <div className="flex justify-center items-center w-full h-full">
@@ -162,7 +156,7 @@ function CodeEditorRemoteFile({
         <h3 className="text-xl">Waiting for File...</h3>
       </Loading>
     </div>
-  ) : file == null ? (
+  ) : isNil(file) ? (
     <div className="flex justify-center items-center w-full h-full">
       <h3 className="text-xl">File Not Found</h3>
     </div>

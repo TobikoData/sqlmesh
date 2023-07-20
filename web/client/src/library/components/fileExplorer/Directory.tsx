@@ -3,7 +3,13 @@ import { FolderOpenIcon, FolderIcon } from '@heroicons/react/24/solid'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { ModelDirectory } from '~/models'
-import { isArrayNotEmpty, isFalse, isNotNil, isStringEmptyOrNil } from '~/utils'
+import {
+  isArrayNotEmpty,
+  isFalse,
+  isNil,
+  isNotNil,
+  isStringEmptyOrNil,
+} from '~/utils'
 import { useStoreProject } from '@context/project'
 import File from './File'
 import * as ContextMenu from '@radix-ui/react-context-menu'
@@ -151,7 +157,7 @@ const Directory = function Directory({
   }, [preview])
 
   useEffect(() => {
-    if (selectedFile == null || isOpen) return
+    if (isNil(selectedFile) || isOpen) return
 
     if (directory.hasFile(selectedFile)) {
       directory.open()

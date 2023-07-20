@@ -22,6 +22,7 @@ import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
 import { type ResponseWithDetail } from '@api/instance'
 import { useStoreContext } from '@context/context'
+import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 
 interface FileExplorer {
   activeRange: Set<ModelArtifact>
@@ -52,6 +53,8 @@ export default function FileExplorerProvider({
 }: {
   children: React.ReactNode
 }): JSX.Element {
+  const { addError, removeError } = useIDE()
+
   const project = useStoreProject(s => s.project)
   const files = useStoreProject(s => s.files)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
@@ -67,7 +70,7 @@ export default function FileExplorerProvider({
 
   useEffect(() => {
     setSelectedFile(tab?.file)
-  }, [tab])
+  }, [tab?.id])
 
   function selectArtifactsInRange(to: ModelArtifact): void {
     setActiveRange(activeRange => {
@@ -94,25 +97,18 @@ export default function FileExplorerProvider({
   function createDirectory(parent: ModelDirectory): void {
     if (isLoading) return
 
+    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const name = toUniqueName('new_directory')
 
     writeDirectoryApiDirectoriesPathPost(`${parent.path}/${name}`, {})
       .then(created => {
-        if (isFalse((created as any).ok)) {
-          console.warn([`Directory: ${parent.path}`, (created as any).detail])
+        if (isNil(created)) return
 
-          return
-        }
-
-        parent.addDirectory(new ModelDirectory(created, parent))
         parent.open()
       })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log(error)
-      })
+      .catch(error => addError(EnumErrorKey.FileExplorer, error))
       .finally(() => {
         setIsLoading(false)
       })
@@ -121,30 +117,18 @@ export default function FileExplorerProvider({
   function createFile(parent: ModelDirectory, extension = '.py'): void {
     if (isLoading) return
 
+    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const name = toUniqueName('new_file', extension)
 
     writeFileApiFilesPathPost(`${parent.path}/${name}`, { content: '' })
       .then(created => {
-        if (isFalse((created as any).ok)) {
-          console.warn([`File: ${parent.path}`, (created as any).detail])
+        if (isNil(created)) return
 
-          return
-        }
-
-        const file = new ModelFile(created, parent)
-
-        parent.addFile(file)
         parent.open()
-
-        setSelectedFile(file)
-        setFiles(project?.allFiles ?? [])
       })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log(error)
-      })
+      .catch(error => addError(EnumErrorKey.FileExplorer, error))
       .finally(() => {
         setIsLoading(false)
       })
@@ -153,6 +137,7 @@ export default function FileExplorerProvider({
   function renameArtifact(artifact: ModelArtifact, newName?: string): void {
     if (isLoading || isStringEmptyOrNil(newName) || isNil(newName)) return
 
+    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const currentName = artifact.name
@@ -165,8 +150,7 @@ export default function FileExplorerProvider({
         new_path: artifact.path,
       })
         .catch(error => {
-          // TODO: Show error notification
-          console.log(error)
+          addError(EnumErrorKey.FileExplorer, error)
 
           artifact.rename(currentName)
         })
@@ -177,7 +161,7 @@ export default function FileExplorerProvider({
             setSelectedFile(tab.file)
           }
 
-          setFiles(project?.allFiles ?? [])
+          setFiles(project.allFiles)
         })
     }
 
@@ -192,14 +176,13 @@ export default function FileExplorerProvider({
           files.delete(currentPath)
         })
         .catch(error => {
-          // TODO: Show error notification
-          console.log(error)
+          addError(EnumErrorKey.FileExplorer, error)
 
           artifact.rename(currentName)
         })
         .finally(() => {
           setIsLoading(false)
-          setFiles(project?.allFiles ?? [])
+          setFiles(project.allFiles)
         })
     }
   }
@@ -219,32 +202,32 @@ export default function FileExplorerProvider({
     })
 
     Promise.all(promises)
-      .then(resolvedList => {
-        resolvedList.forEach((_, index) => {
-          const artifact = list[index]
+      // .then(resolvedList => {
+      //   resolvedList.forEach((_, index) => {
+      //     const artifact = list[index]
 
-          if (artifact instanceof ModelFile) {
-            closeTab(artifact)
+      //     if (artifact instanceof ModelFile) {
+      //       closeTab(artifact)
 
-            artifact.parent?.removeFile(artifact)
-          }
+      //       artifact.parent?.removeFile(artifact)
+      //     }
 
-          if (artifact instanceof ModelDirectory) {
-            if (artifact.isNotEmpty) {
-              const files = getAllFilesInDirectory(artifact)
+      //     if (artifact instanceof ModelDirectory) {
+      //       if (artifact.isNotEmpty) {
+      //         const files = getAllFilesInDirectory(artifact)
 
-              files.forEach(file => {
-                closeTab(file)
-              })
-            }
+      //         files.forEach(file => {
+      //           closeTab(file)
+      //         })
+      //       }
 
-            artifact.parent?.removeDirectory(artifact)
-          }
-        })
+      //       artifact.parent?.removeDirectory(artifact)
+      //     }
+      //   })
 
-        setActiveRange(new Set())
-        setFiles(project?.allFiles ?? [])
-      })
+      //   setActiveRange(new Set())
+      //   setFiles(project.allFiles)
+      // })
       .catch(error => {
         // TODO: Show error notification
         console.log(error)
@@ -328,7 +311,7 @@ export default function FileExplorerProvider({
           writeDirectoryApiDirectoriesPathPost(artifactPath, { new_path }),
         )
 
-        artifact.allArtifacts.forEach(a => artifacts.delete(a))
+        artifact.allVisibleArtifacts.forEach(a => artifacts.delete(a))
       }
 
       if (artifact instanceof ModelFile) {
@@ -366,7 +349,7 @@ export default function FileExplorerProvider({
       .finally(() => {
         setIsLoading(false)
         setActiveRange(new Set())
-        setFiles(project?.allFiles ?? [])
+        setFiles(project.allFiles)
       })
   }
 
@@ -385,7 +368,7 @@ export default function FileExplorerProvider({
           setActiveRange(
             () =>
               new Set(
-                project.allArtifacts.filter(artifact =>
+                project.allVisibleArtifacts.filter(artifact =>
                   activeRange.has(artifact),
                 ),
               ),

@@ -24,60 +24,11 @@ def get_files(
     path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
 ) -> models.Directory:
     """Get all project files."""
-    ignore_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
-    macro_directory_path = Path(c.MACROS)
-    test_directory_path = Path(c.TESTS)
-
-    def walk_path(
-        path: str | Path,
-    ) -> tuple[list[models.Directory], list[models.File]]:
-        directories = []
-        files = []
-
-        with os.scandir(path) as entries:
-            for entry in entries:
-                entry_path = Path(entry.path)
-                if (
-                    entry.name == "__pycache__"
-                    or entry.name.startswith(".")
-                    or any(entry_path.match(pattern) for pattern in ignore_patterns)
-                ):
-                    continue
-
-                relative_path = entry_path.relative_to(settings.project_path)
-                if entry.is_dir(follow_symlinks=False):
-                    _directories, _files = walk_path(entry.path)
-                    directories.append(
-                        models.Directory(
-                            name=entry.name,
-                            path=str(relative_path),
-                            directories=_directories,
-                            files=_files,
-                        )
-                    )
-                else:
-                    file_type = None
-                    if is_relative_to(relative_path, macro_directory_path):
-                        file_type = models.FileType.macros
-                    elif is_relative_to(relative_path, test_directory_path):
-                        file_type = models.FileType.tests
-                    else:
-                        file_type = path_mapping.get(relative_path)
-                    files.append(
-                        models.File(
-                            name=entry.name,
-                            path=str(relative_path),
-                            type=file_type,
-                        )
-                    )
-        return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
-
-    directories, files = walk_path(settings.project_path)
-    return models.Directory(
-        name=os.path.basename(settings.project_path),
-        path="",
-        directories=directories,
-        files=files,
+    return _get_directory(
+        path=settings.project_path,
+        settings=settings,
+        path_mapping=path_mapping,
+        context=context,
     )
 
 
@@ -89,13 +40,12 @@ def get_file(
 ) -> models.File:
     """Get a file, including its contents."""
     try:
-        with open(settings.project_path / path) as f:
-            content = f.read()
+        file_path = Path(path)
+        file = _get_file(file_path, settings, path_mapping)
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
-    return models.File(
-        name=os.path.basename(path), path=path, content=content, type=path_mapping.get(Path(path))
-    )
+
+    return file
 
 
 @router.post("/{path:path}", response_model=models.File)
@@ -141,3 +91,89 @@ async def delete_file(
             message="File is a directory",
             origin="API -> files -> delete_file",
         )
+
+
+def _get_directory(
+    path: Path,
+    settings: Settings,
+    path_mapping: t.Dict[Path, models.FileType],
+    context: t.Optional[Context] = None,
+) -> models.Directory:
+    ignore_patterns = context.config.ignore_patterns if context else c.IGNORE_PATTERNS
+    macro_directory_path = Path(c.MACROS)
+    test_directory_path = Path(c.TESTS)
+
+    def walk_path(
+        path: str | Path,
+    ) -> tuple[list[models.Directory], list[models.File]]:
+        directories = []
+        files = []
+
+        with os.scandir(path) as entries:
+            for entry in entries:
+                entry_path = Path(entry.path)
+                if (
+                    entry.name == "__pycache__"
+                    or entry.name.startswith(".")
+                    or any(entry_path.match(pattern) for pattern in ignore_patterns)
+                ):
+                    continue
+
+                relative_path = entry_path.relative_to(settings.project_path)
+
+                if entry.is_dir(follow_symlinks=False):
+                    _directories, _files = walk_path(entry.path)
+                    directories.append(
+                        models.Directory(
+                            name=entry.name,
+                            path=str(relative_path),
+                            directories=_directories,
+                            files=_files,
+                        )
+                    )
+                if entry.is_file(follow_symlinks=False):
+                    file_type = None
+                    if is_relative_to(relative_path, macro_directory_path):
+                        file_type = models.FileType.macros
+                    elif is_relative_to(relative_path, test_directory_path):
+                        file_type = models.FileType.tests
+                    else:
+                        file_type = path_mapping.get(relative_path)
+                    files.append(
+                        models.File(
+                            name=entry.name,
+                            path=str(relative_path),
+                            type=file_type,
+                        )
+                    )
+        return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
+
+    directories, files = walk_path(path)
+    _path = str(path.relative_to(settings.project_path))
+    return models.Directory(
+        name=os.path.basename(path),
+        path="" if _path == "." else _path,
+        directories=directories,
+        files=files,
+    )
+
+
+def _get_file(
+    path: Path,
+    settings: Settings,
+    path_mapping: t.Dict[Path, models.FileType],
+) -> models.File:
+    """Get a file, including its contents."""
+    file_path = settings.project_path / path
+
+    try:
+        with open(file_path) as f:
+            content = f.read()
+    except FileNotFoundError as e:
+        raise e
+    return models.File(
+        name=os.path.basename(path),
+        path=str(path),
+        content=content,
+        type=path_mapping.get(path),
+    )

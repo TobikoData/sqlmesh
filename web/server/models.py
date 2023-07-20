@@ -37,7 +37,7 @@ class File(BaseModel):
     extension: str = ""
     is_supported: bool = False
     content: t.Optional[str] = None
-    type: t.Optional[FileType]
+    type: t.Optional[FileType] = None
 
     @validator("extension", always=True)
     def default_extension(cls, v: str, values: t.Dict[str, t.Any]) -> str:
@@ -89,7 +89,8 @@ class ModelsDiff(BaseModel):
 
         indirect = [
             ChangeIndirect(
-                model_name=current.name, direct=[parent.name for parent in current.parents]
+                model_name=current.name, direct=[
+                    parent.name for parent in current.parents]
             )
             for current, _ in context_diff.modified_snapshots.values()
             if context_diff.indirectly_modified(current.name)
@@ -118,7 +119,8 @@ class ModelsDiff(BaseModel):
                 metadata.add(snapshot_name)
 
         direct_change_model_names = [change.model_name for change in direct]
-        indirect_change_model_names = [change.model_name for change in indirect]
+        indirect_change_model_names = [
+            change.model_name for change in indirect]
 
         for change in indirect:
             change.direct = [
@@ -321,3 +323,21 @@ class TestResult(BaseModel):
     failures: t.List[TestErrorOrFailure]
     errors: t.List[TestErrorOrFailure]
     skipped: t.List[TestSkipped]
+
+
+class ArtifactType(str, enum.Enum):
+    file = "file"
+    directory = "directory"
+
+
+class ArtifactChange(BaseModel):
+    change: str
+    path: str
+    type: t.Optional[ArtifactType] = None
+    file: t.Optional[File] = None
+    directory: t.Optional[Directory] = None
+
+
+class ArtifactChanges(BaseModel):
+    changes: t.List[ArtifactChange] = []
+    models: t.Optional[t.List[Model]] = None

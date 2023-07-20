@@ -37,7 +37,7 @@ import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
 import { useStoreEditor, createLocalFile } from '@context/editor'
-import { type ModelFile } from '@models/file'
+import { ModelFile } from '@models/file'
 import ModalConfirmation, {
   type Confirmation,
 } from '@components/modal/ModalConfirmation'
@@ -80,12 +80,16 @@ export default function PageIDE(): JSX.Element {
   const project = useStoreProject(s => s.project)
   const setProject = useStoreProject(s => s.setProject)
   const setFiles = useStoreProject(s => s.setFiles)
+  const refreshFiles = useStoreProject(s => s.refreshFiles)
+  const findAtrifactByPath = useStoreProject(s => s.findAtrifactByPath)
+  const findParentByPath = useStoreProject(s => s.findParentByPath)
 
   const storedTabs = useStoreEditor(s => s.storedTabs)
   const storedTabId = useStoreEditor(s => s.storedTabId)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const addTabs = useStoreEditor(s => s.addTabs)
+  const removeTab = useStoreEditor(s => s.removeTab)
 
   const subscribe = useChannelEvents()
 
@@ -110,14 +114,14 @@ export default function PageIDE(): JSX.Element {
     getFiles,
   ])
 
+  const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
+    planRun,
+  ])
+
   const debouncedGetEnvironemnts = useCallback(
     debounceAsync(getEnvironments, 1000, true),
     [getEnvironments],
   )
-
-  const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
-    planRun,
-  ])
 
   useEffect(() => {
     const unsubscribeTasks = subscribe<PlanProgress>('tasks', updateTasks)
@@ -127,6 +131,62 @@ export default function PageIDE(): JSX.Element {
       'promote-environment',
       handlePromote,
     )
+    const unsubscribeFile = subscribe<{
+      changes: any
+      models: any
+    }>('file', ({ changes, models }) => {
+      changes.forEach(({ change, path, file, directory, type }: any) => {
+        if (change === 'modified') {
+          const currentFile = findAtrifactByPath(file.path) as
+            | ModelFile
+            | undefined
+
+          if (isNil(currentFile) || isNil(file)) return
+
+          currentFile.update(file)
+        }
+
+        if (change === 'deleted') {
+          const artifact = findAtrifactByPath(path)
+
+          if (isNil(artifact)) return
+
+          if (artifact instanceof ModelFile) {
+            removeTab(artifact)
+
+            artifact.parent?.removeFile(artifact)
+          }
+
+          if (artifact instanceof ModelDirectory) {
+            artifact.parent?.removeDirectory(artifact)
+          }
+        }
+
+        if (change === 'added') {
+          const artifact = findParentByPath(path)
+
+          if (isNil(artifact)) return
+
+          if (type === 'file') {
+            const newFile = new ModelFile(file, artifact)
+
+            artifact.addFile(newFile)
+          }
+
+          if (type === 'directory') {
+            const newDirectory = new ModelDirectory(directory, artifact)
+
+            artifact.addDirectory(newDirectory)
+          }
+        }
+      })
+
+      if (isNotNil(models)) {
+        updateModels(models)
+      }
+
+      refreshFiles()
+    })
 
     void debouncedGetModels().then(({ data }) => {
       updateModels(data)
@@ -138,9 +198,9 @@ export default function PageIDE(): JSX.Element {
       const project = new ModelDirectory(data)
       const files = project.allFiles
 
+      setProject(project)
       setFiles(files)
       restoreEditorTabsFromSaved(files)
-      setProject(project)
     })
 
     return () => {
@@ -157,6 +217,7 @@ export default function PageIDE(): JSX.Element {
       unsubscribeModels?.()
       unsubscribePromote?.()
       unsubscribeErrors?.()
+      unsubscribeFile?.()
     }
   }, [])
 
