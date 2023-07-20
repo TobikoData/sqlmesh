@@ -106,6 +106,9 @@ class ModelConfig(BaseModelConfig):
         if isinstance(v, dict):
             if not v.get("field"):
                 raise ConfigError("'field' key required for partition_by.")
+            if "granularity" in v and v["granularity"] not in GRANULARITY_TO_PARTITION_FORMAT:
+                granularity = v["granularity"]
+                raise ConfigError(f"Unexpected granularity '{granularity}' in partition_by '{v}'.")
             return {"data_type": "date", "granularity": "day", **v}
         raise ConfigError(f"Invalid format for partition_by '{v}'")
 
@@ -272,9 +275,10 @@ class ModelConfig(BaseModelConfig):
         if self.sql_header:
             model_kwargs["pre_statements"].insert(0, d.jinja_statement(self.sql_header))
 
-        dbt_max_partition_blob = self._dbt_max_partition_blob()
-        if dbt_max_partition_blob:
-            model_kwargs["pre_statements"].append(d.jinja_statement(dbt_max_partition_blob))
+        if context.target.type == "bigquery":
+            dbt_max_partition_blob = self._dbt_max_partition_blob()
+            if dbt_max_partition_blob:
+                model_kwargs["pre_statements"].append(d.jinja_statement(dbt_max_partition_blob))
 
         return create_sql_model(
             self.sql_name,
@@ -287,6 +291,7 @@ class ModelConfig(BaseModelConfig):
         )
 
     def _dbt_max_partition_blob(self) -> t.Optional[str]:
+        """Returns a SQL blob which declares the _dbt_max_partition variable. Only applicable to BigQuery."""
         if (
             not isinstance(self.partition_by, dict)
             or self.model_materialization != Materialization.INCREMENTAL
@@ -298,14 +303,10 @@ class ModelConfig(BaseModelConfig):
 
         parse_fun = f"parse_{data_type}" if data_type in ("date", "datetime", "timestamp") else None
         if parse_fun:
-            if granularity not in GRANULARITY_TO_PARTITION_FORMAT:
-                raise ConfigError(
-                    f"Unexpected granularity '{granularity}' in model '{self.sql_name}'."
-                )
             parse_format = GRANULARITY_TO_PARTITION_FORMAT[granularity]
             partition_exp = f"{parse_fun}('{parse_format}', partition_id)"
         else:
-            partition_exp = "partition_id"
+            partition_exp = "CAST(partition_id AS INT64)"
 
         return f"""
 {{% if is_incremental() %}}

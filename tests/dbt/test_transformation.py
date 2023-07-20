@@ -6,6 +6,7 @@ import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.contracts.relation import Policy
 from dbt.exceptions import CompilationError
+from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.context import Context
@@ -572,7 +573,7 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq):
     )
 
 
-def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq):
+def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: MockerFixture):
     model_config = ModelConfig(
         name="model",
         package_name="package",
@@ -587,6 +588,9 @@ def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq):
         """,
     )
     context = sushi_test_project.context
+    context.target = BigQueryConfig(
+        name="test_target", schema="test_schema", database="test-project"
+    )
 
     assert (
         model_config.to_sqlmesh(context).pre_statements[-1].sql().strip()  # type: ignore
