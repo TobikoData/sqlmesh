@@ -441,7 +441,10 @@ class BigQueryEngineAdapter(EngineAdapter):
             )
 
     def table_exists(self, table_name: TableName) -> bool:
-        from google.cloud.exceptions import NotFound
+        try:
+            from google.cloud.exceptions import NotFound
+        except ModuleNotFoundError:
+            from google.api_core.exceptions import NotFound
 
         try:
             self._get_table(table_name)
@@ -649,7 +652,10 @@ class _ErrorCounter:
 
     @property
     def retryable_errors(self) -> t.Tuple[t.Type[Exception], ...]:
-        from google.cloud.exceptions import ServerError
+        try:
+            from google.cloud.exceptions import ServerError
+        except ModuleNotFoundError:
+            from google.api_core.exceptions import ServerError
         from requests.exceptions import ConnectionError
 
         return (ServerError, ConnectionError)
