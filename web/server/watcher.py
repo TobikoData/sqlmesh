@@ -16,6 +16,7 @@ from web.server.api.endpoints.models import get_all_models
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context, get_path_mapping, get_settings
 from web.server.sse import Event
+from web.server.utils import is_relative_to
 
 
 async def watch_project(queue: asyncio.Queue) -> None:
@@ -43,7 +44,7 @@ async def watch_project(queue: asyncio.Queue) -> None:
                 continue
 
             should_load_context = should_load_context or ft.reduce(
-                lambda v, p: v or Path(path).is_relative_to(p), paths, False
+                lambda v, p: v or is_relative_to(Path(path), p), paths, False
             )
 
             relative_path = Path(path).relative_to(settings.project_path)
