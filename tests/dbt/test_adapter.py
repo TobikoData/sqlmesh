@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 import pytest
+from dbt.adapters.base import BaseRelation
 from dbt.adapters.base.column import Column
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
@@ -80,7 +81,11 @@ def test_adapter_map_snapshot_tables(
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
     renderer = runtime_renderer(
-        context, engine_adapter=engine_adapter, snapshots={"test_db.test_model": snapshot_mock}
+        context,
+        engine_adapter=engine_adapter,
+        snapshots={"test_db.test_model": snapshot_mock},
+        test_model=BaseRelation.create(schema="test_db", identifier="test_model"),
+        foo_bar=BaseRelation.create(schema="foo", identifier="bar"),
     )
 
     engine_adapter.create_schema("foo")
@@ -106,3 +111,9 @@ def test_adapter_map_snapshot_tables(
         renderer("{{ adapter.get_relation(database=none, schema='foo', identifier='bar') }}")
         == '"foo"."bar"'
     )
+
+    assert renderer("{{ adapter.resolve_schema(test_model) }}") == "sqlmesh"
+    assert renderer("{{ adapter.resolve_identifier(test_model) }}") == "test_db__test_model"
+
+    assert renderer("{{ adapter.resolve_schema(foo_bar) }}") == "foo"
+    assert renderer("{{ adapter.resolve_identifier(foo_bar) }}") == "bar"
