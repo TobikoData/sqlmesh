@@ -41,7 +41,7 @@ def get_file(
     """Get a file, including its contents."""
     try:
         file_path = Path(path)
-        file = _get_file(file_path, settings, path_mapping)
+        file = _get_file_with_content(file_path, settings, path_mapping)
     except FileNotFoundError:
         raise HTTPException(status_code=HTTP_404_NOT_FOUND)
 
@@ -94,7 +94,7 @@ async def delete_file(
 
 
 def _get_directory(
-    path: Path,
+    path: str | Path,
     settings: Settings,
     path_mapping: t.Dict[Path, models.FileType],
     context: t.Optional[Context] = None,
@@ -149,16 +149,16 @@ def _get_directory(
         return sorted(directories, key=lambda x: x.name), sorted(files, key=lambda x: x.name)
 
     directories, files = walk_path(path)
-    _path = str(path.relative_to(settings.project_path))
+    relative_path = str(Path(path).relative_to(settings.project_path))
     return models.Directory(
         name=os.path.basename(path),
-        path="" if _path == "." else _path,
+        path="" if relative_path == "." else relative_path,
         directories=directories,
         files=files,
     )
 
 
-def _get_file(
+def _get_file_with_content(
     path: Path,
     settings: Settings,
     path_mapping: t.Dict[Path, models.FileType],
