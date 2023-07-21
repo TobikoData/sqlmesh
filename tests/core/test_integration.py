@@ -716,7 +716,7 @@ def test_incremental_time_self_reference(
 def test_invalidating_environment(sushi_context: Context):
     def get_schemas() -> t.Set[str]:
         return set(
-            sushi_context.state_sync.state_sync.engine_adapter.fetchdf("SHOW ALL TABLES")["schema"]  # type: ignore
+            sushi_context.state_sync.state_sync.engine_adapter.fetchdf("SELECT * FROM information_schema.schemata")["schema_name"]  # type: ignore
             .to_dict()
             .values()
         )
@@ -726,6 +726,7 @@ def test_invalidating_environment(sushi_context: Context):
     start_environment = sushi_context.state_sync.get_environment("dev")
     assert start_environment is not None
     start_schemas = get_schemas()
+    assert "sushi__dev" in start_schemas
     sushi_context.invalidate_environment("dev")
     invalidate_environment = sushi_context.state_sync.get_environment("dev")
     assert invalidate_environment is not None
