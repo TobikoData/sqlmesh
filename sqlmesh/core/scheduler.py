@@ -167,7 +167,6 @@ class Scheduler:
                 )
             raise e
         self.state_sync.add_interval(snapshot, start, end, is_dev=is_dev)
-        self.console.update_evaluation_progress(snapshot.name, 1)
 
     def run(
         self,
@@ -202,13 +201,20 @@ class Scheduler:
             if snapshot in visited:
                 continue
             visited.add(snapshot)
-            intervals = batches[snapshot]
-            self.console.start_evaluation_progress(snapshot, len(intervals), environment)
+
+        self.console.start_evaluation_progress(
+            {snapshot: len(intervals) for snapshot, intervals in batches.items()},
+            environment,
+        )
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest
             snapshot, (start, end) = node
-            self.evaluate(snapshot, start, end, latest, is_dev=is_dev)
+            self.console.start_snapshot_evaluation_progress(snapshot)
+            try:
+                self.evaluate(snapshot, start, end, latest, is_dev=is_dev)
+            finally:
+                self.console.update_snapshot_evaluation_progress(snapshot, 1)
 
         try:
             with self.snapshot_evaluator.concurrent_context():

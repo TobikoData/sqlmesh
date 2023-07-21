@@ -35,27 +35,29 @@ class ApiConsole(TerminalConsole):
             data=json.dumps(payload),
         )
 
-    def start_evaluation_progress(
-        self, snapshot: Snapshot, total_batches: int, environment: str
-    ) -> None:
-        """Indicates that a new snapshot evaluation progress has begun."""
-        view_name = snapshot.qualified_view_name.for_environment(environment)
-        self.current_task_status[snapshot.name] = {
-            "completed": 0,
-            "total": total_batches,
-            "start": now_timestamp(),
-            "view_name": view_name,
+    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int], environment: str) -> None:
+        self.current_task_status = {
+            snapshot.name: {
+                "completed": 0,
+                "total": total_tasks,
+                "start": now_timestamp(),
+                "view_name": snapshot.qualified_view_name.for_environment(environment),
+            }
+            for snapshot, total_tasks in batches.items()
         }
 
-    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
+        pass
+
+    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
         """Update snapshot evaluation progress."""
         if self.current_task_status:
-            self.current_task_status[snapshot_name]["completed"] += num_batches
+            self.current_task_status[snapshot.name]["completed"] += num_batches
             if (
-                self.current_task_status[snapshot_name]["completed"]
-                >= self.current_task_status[snapshot_name]["total"]
+                self.current_task_status[snapshot.name]["completed"]
+                >= self.current_task_status[snapshot.name]["total"]
             ):
-                self.current_task_status[snapshot_name]["end"] = now_timestamp()
+                self.current_task_status[snapshot.name]["end"] = now_timestamp()
             self.queue.put_nowait(
                 self._make_event({"tasks": self.current_task_status}, event="tasks")
             )
