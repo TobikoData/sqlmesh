@@ -13,7 +13,7 @@ def test_format_files(tmp_path: pathlib.Path):
     f1 = create_temp_file(
         tmp_path,
         pathlib.Path(models_dir, "model_1.sql"),
-        "MODEL(name some.model, dialect 'duckdb'); SELECT 1 AS \"CaseSensitive\"",
+        "MODEL(name this.model, dialect 'duckdb'); SELECT 1 AS \"CaseSensitive\"",
     )
     f2 = create_temp_file(
         tmp_path,
@@ -24,9 +24,9 @@ def test_format_files(tmp_path: pathlib.Path):
     config = Config()
     context = Context(paths=str(tmp_path), config=config)
     context.load()
-    assert isinstance(context.models["some.model"], SqlModel)
+    assert isinstance(context.models["this.model"], SqlModel)
     assert isinstance(context.models["other.model"], SqlModel)
-    assert context.models["some.model"].query.sql() == 'SELECT 1 AS "CaseSensitive"'
+    assert context.models["this.model"].query.sql() == 'SELECT 1 AS "CaseSensitive"'
     assert context.models["other.model"].query.sql() == "SELECT 2 AS another_column"
 
     # Transpile project to BigQuery
@@ -36,10 +36,10 @@ def test_format_files(tmp_path: pathlib.Path):
     upd1 = f1.read_text(encoding="utf-8")
     assert (
         upd1
-        == "MODEL (\n  name some.model,\n  dialect 'bigquery'\n);\n\nSELECT\n  1 AS `CaseSensitive`"
+        == "MODEL (\n  name this.model,\n  dialect 'bigquery'\n);\n\nSELECT\n  1 AS `CaseSensitive`"
     )
     context.upsert_model(load_sql_based_model(parse(upd1, "bigquery")))
-    assert context.models["some.model"].dialect == "bigquery"
+    assert context.models["this.model"].dialect == "bigquery"
 
     # Ensure no dialect is added if it's not needed
     upd2 = f2.read_text(encoding="utf-8")

@@ -33,6 +33,7 @@ DEFAULT_MAX_LIMIT = 1000
 
 AUDITS = "audits"
 MACROS = "macros"
+METRICS = "metrics"
 MODELS = "models"
 SEEDS = "seeds"
 TESTS = "tests"

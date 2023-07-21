@@ -60,6 +60,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
+from sqlmesh.core.metric import Metric
 from sqlmesh.core.model import Model
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.notification_target import (
@@ -238,6 +239,7 @@ class Context(BaseContext):
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
+        self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
 
         self.path, self.config = t.cast(t.Tuple[Path, Config], next(iter(self.configs.items())))
@@ -372,6 +374,7 @@ class Context(BaseContext):
             self._macros = project.macros
             self._models = project.models
             self._audits = project.audits
+            self._metrics = project.metrics
             self.dag = project.dag
             gc.enable()
 
@@ -507,6 +510,11 @@ class Context(BaseContext):
     def models(self) -> MappingProxyType[str, Model]:
         """Returns all registered models in this context."""
         return MappingProxyType(self._models)
+
+    @property
+    def metrics(self) -> MappingProxyType[str, Metric]:
+        """Returns all registered metrics in this context."""
+        return MappingProxyType(self._metrics)
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:

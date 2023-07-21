@@ -18,6 +18,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroRegistry, macro
+from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
     Model,
     ModelCache,
@@ -38,6 +39,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
 
 
+# maybe move these two methods to context
 def update_model_schemas(
     dag: DAG[str], models: UniqueKeyDict[str, Model], context_path: Path
 ) -> None:
@@ -65,6 +67,7 @@ class LoadedProject:
     jinja_macros: JinjaMacroRegistry
     models: UniqueKeyDict[str, Model]
     audits: UniqueKeyDict[str, Audit]
+    metrics: UniqueKeyDict[str, Metric]
     dag: DAG[str]
 
 
@@ -115,13 +118,14 @@ class Loader(abc.ABC):
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()
 
-        audits = self._load_audits()
+        metrics = self._load_metrics()
 
         project = LoadedProject(
             macros=macros,
             jinja_macros=jinja_macros,
             models=models,
-            audits=audits,
+            audits=self._load_audits(),
+            metrics=expand_metrics(metrics),
             dag=self._dag,
         )
         return project
@@ -152,6 +156,9 @@ class Loader(abc.ABC):
     @abc.abstractmethod
     def _load_audits(self) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
+
+    def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
+        return UniqueKeyDict("metrics")
 
     def _load_external_models(self) -> UniqueKeyDict[str, Model]:
         models: UniqueKeyDict = UniqueKeyDict("models")
@@ -323,6 +330,27 @@ class SqlMeshLoader(Loader):
                     for audit in audits:
                         audits_by_name[audit.name] = audit
         return audits_by_name
+
+    def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
+        """Loads all metrics."""
+        metrics: UniqueKeyDict[str, MetricMeta] = UniqueKeyDict("metrics")
+
+        for context_path, config in self._context.configs.items():
+            for path in self._glob_paths(context_path / c.METRICS, config=config, extension=".sql"):
+                if not os.path.getsize(path):
+                    continue
+                self._track_file(path)
+
+                with open(path, "r", encoding="utf-8") as file:
+                    dialect = config.model_defaults.dialect
+                    try:
+                        for expression in parse(file.read(), default_dialect=dialect):
+                            metric = load_metric_ddl(expression, path=path, dialect=dialect)
+                            metrics[metric.name] = metric
+                    except SqlglotError as ex:
+                        raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
+
+        return metrics
 
     def _import_python_file(self, file: Path, context_path: Path) -> types.ModuleType:
         relative_path = file.relative_to(context_path)
