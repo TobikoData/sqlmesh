@@ -4,7 +4,9 @@ from sqlglot import exp
 
 def migrate(state_sync):  # type: ignore
     engine_adapter = state_sync.engine_adapter
-    intervals_table = f"{state_sync.schema}._intervals"
+    intervals_table = "_intervals"
+    if state_sync.schema:
+        intervals_table = f"{state_sync.schema}.{intervals_table}"
 
     engine_adapter.create_state_table(
         intervals_table,

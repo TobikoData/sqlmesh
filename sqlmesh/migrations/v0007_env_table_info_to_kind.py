@@ -13,11 +13,15 @@ def _hash(data):  # type: ignore
 def migrate(state_sync):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    environments_table = f"{schema}._environments"
+    environments_table = "_environments"
+    snapshots_table = "_snapshots"
+    if schema:
+        environments_table = f"{schema}.{environments_table}"
+        snapshots_table = f"{schema}.{snapshots_table}"
     snapshots_to_kind = {}
 
     for name, identifier, snapshot in engine_adapter.fetchall(
-        exp.select("name", "identifier", "snapshot").from_(f"{schema}._snapshots"),
+        exp.select("name", "identifier", "snapshot").from_(snapshots_table),
         quote_identifiers=True,
     ):
         snapshot = json.loads(snapshot)
