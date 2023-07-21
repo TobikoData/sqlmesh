@@ -26,7 +26,7 @@ export interface FetchOptions<B extends object = any> {
     | 'no-cache'
     | 'force-cache'
     | 'only-if-cached'
-  params?: Record<string, string | number>
+  params?: Record<string, string | number | boolean>
 }
 
 export async function fetchAPI<T = any, B extends object = any>(

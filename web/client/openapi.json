@@ -127,6 +127,49 @@
         }
       }
     },
+    "/api/commands/test": {
+      "get": {
+        "summary": "Test",
+        "description": "Run one or all model tests",
+        "operationId": "test_api_commands_test_get",
+        "parameters": [
+          {
+            "required": false,
+            "schema": { "type": "string", "title": "Test" },
+            "name": "test",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "title": "Verbose",
+              "default": false
+            },
+            "name": "verbose",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TestResult" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/files": {
       "get": {
         "summary": "Get Files",
@@ -1127,6 +1170,7 @@
         "enum": [
           "INCREMENTAL_BY_TIME_RANGE",
           "INCREMENTAL_BY_UNIQUE_KEY",
+          "INCREMENTAL_UNMANAGED",
           "FULL",
           "VIEW",
           "EMBEDDED",
@@ -1451,6 +1495,49 @@
         "type": "object",
         "required": ["schema_diff", "row_diff", "on"],
         "title": "TableDiff"
+      },
+      "TestErrorOrFailure": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "format": "path", "title": "Path" },
+          "tb": { "type": "string", "title": "Tb" }
+        },
+        "type": "object",
+        "required": ["name", "path", "tb"],
+        "title": "TestErrorOrFailure"
+      },
+      "TestResult": {
+        "properties": {
+          "tests_run": { "type": "integer", "title": "Tests Run" },
+          "failures": {
+            "items": { "$ref": "#/components/schemas/TestErrorOrFailure" },
+            "type": "array",
+            "title": "Failures"
+          },
+          "errors": {
+            "items": { "$ref": "#/components/schemas/TestErrorOrFailure" },
+            "type": "array",
+            "title": "Errors"
+          },
+          "skipped": {
+            "items": { "$ref": "#/components/schemas/TestSkipped" },
+            "type": "array",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": ["tests_run", "failures", "errors", "skipped"],
+        "title": "TestResult"
+      },
+      "TestSkipped": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "format": "path", "title": "Path" },
+          "reason": { "type": "string", "title": "Reason" }
+        },
+        "type": "object",
+        "required": ["name", "path", "reason"],
+        "title": "TestSkipped"
       },
       "ValidationError": {
         "properties": {
