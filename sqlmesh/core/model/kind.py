@@ -262,6 +262,7 @@ class IncrementalByUniqueKeyKind(_Incremental):
 class IncrementalUnmanagedKind(ModelKind):
     name: ModelKindName = Field(ModelKindName.INCREMENTAL_UNMANAGED, const=True)
     insert_overwrite: bool = False
+    forward_only: bool = True
     disable_restatement: Literal[True] = True
 
     _bool_validator = bool_validator
