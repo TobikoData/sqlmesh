@@ -29,6 +29,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
+from sqlmesh.core.node import Node
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
@@ -808,54 +809,99 @@ def test_render_definition():
 
 
 def test_cron():
-    daily = ModelMeta(name="x", cron="@daily")
+    daily = Node(name="x", cron="@daily")
     assert to_datetime(daily.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
     assert to_datetime(daily.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
     assert to_timestamp(daily.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
     assert to_timestamp(daily.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
+    interval = daily.interval_unit()
+    assert to_datetime(interval.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
+    assert to_datetime(interval.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
+    assert to_timestamp(interval.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
+    assert to_timestamp(interval.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
 
-    offset = ModelMeta(name="x", cron="1 0 * * *")
-    assert to_datetime(offset.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
-    assert to_datetime(offset.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
-    assert to_timestamp(offset.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
-    assert to_timestamp(offset.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
-
-    hourly = ModelMeta(name="x", cron="1 * * * *")
-    assert hourly.normalized_cron() == "0 * * * *"
-    assert to_timestamp(hourly.cron_prev("2020-01-01 10:00:00")) == to_timestamp(
-        "2020-01-01 09:00:00"
+    offset = Node(name="x", cron="1 0 * * *")
+    assert to_datetime(offset.cron_prev("2020-01-01")) == to_datetime("2019-12-31 00:01")
+    assert to_datetime(offset.cron_floor("2020-01-01")) == to_datetime("2019-12-31 00:01")
+    assert to_timestamp(offset.cron_floor("2020-01-01 10:00:00")) == to_timestamp(
+        "2020-01-01 00:01"
     )
-    assert to_timestamp(hourly.cron_prev("2020-01-01 10:01:00")) == to_timestamp(
-        "2020-01-01 10:00:00"
+    assert to_timestamp(offset.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02 00:01")
+    interval = offset.interval_unit()
+    assert to_datetime(interval.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
+    assert to_datetime(interval.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
+    assert to_timestamp(interval.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
+    assert to_timestamp(interval.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
+
+    hourly = Node(name="x", cron="1 * * * *")
+    assert to_timestamp(hourly.cron_prev("2020-01-01 10:00:00")) == to_timestamp(
+        "2020-01-01 09:01:00"
+    )
+    assert to_timestamp(hourly.cron_prev("2020-01-01 10:02:00")) == to_timestamp(
+        "2020-01-01 10:01:00"
     )
     assert to_timestamp(hourly.cron_floor("2020-01-01 10:01:00")) == to_timestamp(
+        "2020-01-01 10:01:00"
+    )
+    interval = hourly.interval_unit()
+    assert to_timestamp(interval.cron_prev("2020-01-01 10:00:00")) == to_timestamp(
+        "2020-01-01 09:00:00"
+    )
+    assert to_timestamp(interval.cron_prev("2020-01-01 10:01:00")) == to_timestamp(
+        "2020-01-01 10:00:00"
+    )
+    assert to_timestamp(interval.cron_floor("2020-01-01 10:01:00")) == to_timestamp(
         "2020-01-01 10:00:00"
     )
 
-    monthly = ModelMeta(name="x", cron="0 0 1 * *")
-    assert monthly.normalized_cron() == "0 0 1 * *"
+    monthly = Node(name="x", cron="0 0 2 * *")
     assert to_timestamp(monthly.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
-        "2019-12-01 00:00:00"
+        "2019-12-02 00:00:00"
     )
     assert to_timestamp(monthly.cron_prev("2020-02-01 00:00:00")) == to_timestamp(
-        "2020-01-01 00:00:00"
+        "2020-01-02 00:00:00"
     )
     assert to_timestamp(monthly.cron_next("2020-01-01 00:00:00")) == to_timestamp(
-        "2020-02-01 00:00:00"
+        "2020-01-02 00:00:00"
+    )
+    assert to_timestamp(monthly.cron_next("2020-01-02 00:00:00")) == to_timestamp(
+        "2020-02-02 00:00:00"
     )
     assert to_timestamp(monthly.cron_floor("2020-01-17 00:00:00")) == to_timestamp(
+        "2020-01-02 00:00:00"
+    )
+    interval = monthly.interval_unit()
+    assert to_timestamp(interval.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
+        "2019-12-01 00:00:00"
+    )
+    assert to_timestamp(interval.cron_prev("2020-02-01 00:00:00")) == to_timestamp(
+        "2020-01-01 00:00:00"
+    )
+    assert to_timestamp(interval.cron_next("2020-01-01 00:00:00")) == to_timestamp(
+        "2020-02-01 00:00:00"
+    )
+    assert to_timestamp(interval.cron_floor("2020-01-17 00:00:00")) == to_timestamp(
         "2020-01-01 00:00:00"
     )
 
-    yearly = ModelMeta(name="x", cron="0 0 1 1 *")
-    assert yearly.normalized_cron() == "0 0 1 1 *"
+    yearly = ModelMeta(name="x", cron="0 0 1 2 *")
     assert to_timestamp(yearly.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
-        "2019-01-01 00:00:00"
+        "2019-02-01 00:00:00"
     )
     assert to_timestamp(yearly.cron_next("2020-01-01 00:00:00")) == to_timestamp(
-        "2021-01-01 00:00:00"
+        "2020-02-01 00:00:00"
     )
     assert to_timestamp(yearly.cron_floor("2020-12-10 00:00:00")) == to_timestamp(
+        "2020-02-01 00:00:00"
+    )
+    interval = yearly.interval_unit()
+    assert to_timestamp(interval.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
+        "2019-01-01 00:00:00"
+    )
+    assert to_timestamp(interval.cron_next("2020-01-01 00:00:00")) == to_timestamp(
+        "2021-01-01 00:00:00"
+    )
+    assert to_timestamp(interval.cron_floor("2020-12-10 00:00:00")) == to_timestamp(
         "2020-01-01 00:00:00"
     )
 

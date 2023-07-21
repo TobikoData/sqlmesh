@@ -49,6 +49,7 @@ class Plan:
         start: The start time to backfill data.
         end: The end time to backfill data.
         latest: The latest time used for non incremental datasets.
+        execution_time: The date/time time reference to use for execution time. Defaults to now.
         apply: The callback to apply the plan.
         restate_models: A list of models for which the data should be restated for the time range
             specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
@@ -72,6 +73,7 @@ class Plan:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
@@ -100,6 +102,7 @@ class Plan:
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
         self._latest = latest or now()
+        self._execution_time = execution_time or now()
         self._apply = apply
         self._dag: DAG[str] = DAG()
 
@@ -426,8 +429,10 @@ class Plan:
                     snapshots.values(),
                     start=self._start,
                     end=self._end,
+                    execution_time=self._execution_time,
                     latest=self._latest,
                     restatements=self.restatements,
+                    ignore_cron=True,
                 ).items()
             }
 

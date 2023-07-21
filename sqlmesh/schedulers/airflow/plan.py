@@ -62,6 +62,7 @@ def create_plan_dag_spec(
             start=request.environment.start_at,
             end=end,
             latest=now(),
+            execution_time=now(),
             is_dev=request.is_dev,
             restatements=request.restatements,
         )

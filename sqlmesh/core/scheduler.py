@@ -73,8 +73,10 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         is_dev: bool = False,
         restatements: t.Optional[t.Set[str]] = None,
+        ignore_cron: bool = False,
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -90,9 +92,11 @@ class Scheduler:
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
             latest: The latest datetime to use for non-incremental queries.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             restatements: A set of snapshot names being restated.
+            ignore_cron: Whether to ignore the model's cron schedule.
         """
         restatements = restatements or set()
         validate_date_range(start, end)
@@ -104,8 +108,10 @@ class Scheduler:
             start=start or earliest_start_date(snapshots),
             end=end or now(),
             latest=latest or now(),
+            execution_time=execution_time or now(),
             is_dev=is_dev,
             restatements=restatements,
+            ignore_cron=ignore_cron,
         )
 
     def evaluate(
@@ -175,7 +181,9 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Set[str]] = None,
+        ignore_cron: bool = False,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
@@ -184,7 +192,9 @@ class Scheduler:
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
             latest: The latest datetime to use for non-incremental queries.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A set of snapshots to restate.
+            ignore_cron: Whether to ignore the model's cron schedule.
 
         Returns:
             True if the execution was successful and False otherwise.
@@ -194,7 +204,15 @@ class Scheduler:
 
         is_dev = environment != c.PROD
         latest = latest or now()
-        batches = self.batches(start, end, latest, is_dev=is_dev, restatements=restatements)
+        batches = self.batches(
+            start,
+            end,
+            latest,
+            execution_time,
+            is_dev=is_dev,
+            restatements=restatements,
+            ignore_cron=ignore_cron,
+        )
         dag = self._dag(batches)
 
         visited = set()
@@ -282,7 +300,9 @@ def compute_interval_params(
     end: TimeLike,
     latest: TimeLike,
     is_dev: bool,
+    execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Set[str]] = None,
+    ignore_cron: bool = False,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -301,7 +321,9 @@ def compute_interval_params(
         end: End of the interval.
         latest: The latest datetime to use for non-incremental queries.
         is_dev: Whether or not these intervals are for development.
+        execution_time: The date/time time reference to use for execution time.
         restatements: A set of snapshot names being restated.
+        ignore_cron: Whether to ignore the model's cron schedule.
 
     Returns:
         A dict containing all snapshots needing to be run with their associated interval params.
@@ -313,8 +335,10 @@ def compute_interval_params(
         start=start,
         end=end,
         latest=latest,
+        execution_time=execution_time,
         restatements=restatements,
         is_dev=is_dev,
+        ignore_cron=ignore_cron,
     ).items():
         batches = []
         batch_size = snapshot.model.batch_size

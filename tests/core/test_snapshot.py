@@ -990,3 +990,68 @@ def test_inclusive_exclusive_monthly(make_snapshot):
         to_timestamp("2023-01-01"),
         to_timestamp("2023-07-01"),
     )
+
+
+def test_model_custom_cron(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            cron="0 5 * * *",
+            start="2023-01-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    # Run at 5;00AM
+    assert snapshot.missing_intervals(
+        "2023-01-29", "2023-01-29", execution_time="2023-01-30 05:00:00"
+    ) == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+    assert snapshot.missing_intervals(
+        to_timestamp("2023-01-29"), to_timestamp("2023-01-30"), execution_time="2023-01-30 05:00:00"
+    ) == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+
+    # Run at 5;01AM
+    assert snapshot.missing_intervals(
+        "2023-01-29", "2023-01-29", execution_time="2023-01-30 05:01:00"
+    ) == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+    assert snapshot.missing_intervals(
+        to_timestamp("2023-01-29"), to_timestamp("2023-01-30"), execution_time="2023-01-30 05:01:00"
+    ) == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+
+    # Run at 4:59AM
+    assert (
+        snapshot.missing_intervals("2023-01-29", "2023-01-29", execution_time="2023-01-30 04:59:00")
+        == []
+    )
+    assert (
+        snapshot.missing_intervals(
+            to_timestamp("2023-01-29"),
+            to_timestamp("2023-01-30"),
+            execution_time="2023-01-30 04:59:00",
+        )
+        == []
+    )
+
+    # Run at 4:59AM and ignore cron
+    assert snapshot.missing_intervals(
+        "2023-01-29", "2023-01-29", execution_time="2023-01-30 04:59:00", ignore_cron=True
+    ) == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+    assert snapshot.missing_intervals(
+        to_timestamp("2023-01-29"),
+        to_timestamp("2023-01-30"),
+        execution_time="2023-01-30 04:59:00",
+        ignore_cron=True,
+    ) == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]

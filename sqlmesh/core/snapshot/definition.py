@@ -568,11 +568,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             A [start, end) pair.
         """
         end = latest or now() if for_removal and self.depends_on_past else end
-        start_ts = to_timestamp(self.model.cron_floor(start))
+        interval_unit = self.model.interval_unit()
+        start_ts = to_timestamp(interval_unit.cron_floor(start))
         end_ts = to_timestamp(
-            self.model.cron_next(end)
-            if is_date(end) and self.model.interval_unit() == IntervalUnit.DAY
-            else self.model.cron_floor(end)
+            interval_unit.cron_next(end)
+            if is_date(end) and interval_unit == IntervalUnit.DAY
+            else interval_unit.cron_floor(end)
         )
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
@@ -607,8 +608,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Set[str]] = None,
         is_dev: bool = False,
+        ignore_cron: bool = False,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -620,7 +623,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             latest: The date/time to use for latest (inclusive)
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A set of snapshot names being restated
+            is_dev: Indicates whether missing intervals are computed for the development environment.
+            ignore_cron: Whether to ignore the model's cron schedule.
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -636,7 +642,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         latest = make_inclusive_end(latest or now())
-        missing = []
 
         start_ts, end_ts = (
             to_timestamp(ts)
@@ -646,7 +651,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
         latest_ts = to_timestamp(latest)
 
-        croniter = self.model.croniter(start_ts)
+        upper_bound_ts = (
+            to_timestamp(self.model.cron_floor(execution_time or now()))
+            if not ignore_cron
+            else None
+        )
+        if upper_bound_ts:
+            latest_ts = min(latest_ts, upper_bound_ts)
+            end_ts = min(
+                end_ts, to_timestamp(self.model.interval_unit().cron_floor(upper_bound_ts))
+            )
+
+        croniter = self.model.interval_unit().croniter(start_ts)
         dates = [start_ts]
 
         # get all individual dates with the addition of extra lookback dates up to the latest date
@@ -669,6 +685,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             else:
                 break
 
+        missing = []
         for i in range(len(dates)):
             if dates[i] >= end_ts:
                 break
@@ -676,7 +693,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             next_ts = (
                 dates[i + 1]
                 if i + 1 < len(dates)
-                else to_timestamp(self.model.cron_next(current_ts))
+                else to_timestamp(self.model.interval_unit().cron_next(current_ts))
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
@@ -716,7 +733,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             unpaused_dt: The datetime object of when this snapshot was unpaused.
         """
-        self.unpaused_ts = to_timestamp(self.model.cron_floor(unpaused_dt)) if unpaused_dt else None
+        self.unpaused_ts = (
+            to_timestamp(self.model.interval_unit().cron_floor(unpaused_dt))
+            if unpaused_dt
+            else None
+        )
 
     def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot.
@@ -820,7 +841,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def normalized_effective_from_ts(self) -> t.Optional[int]:
         return (
-            to_timestamp(self.model.cron_floor(self.effective_from))
+            to_timestamp(self.model.interval_unit().cron_floor(self.effective_from))
             if self.effective_from
             else None
         )
@@ -1019,8 +1040,10 @@ def missing_intervals(
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
     latest: t.Optional[TimeLike] = None,
+    execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Iterable[str]] = None,
     is_dev: bool = False,
+    ignore_cron: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
@@ -1042,8 +1065,10 @@ def missing_intervals(
             ),
             end_date,
             latest=latest,
+            execution_time=execution_time,
             restatements=restatements,
             is_dev=is_dev,
+            ignore_cron=ignore_cron,
         )
         if intervals:
             missing[snapshot] = intervals

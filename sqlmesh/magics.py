@@ -341,6 +341,11 @@ class SQLMeshMagics(Magics):
     @argument("--start", "-s", type=str, help="Start date to evaluate.")
     @argument("--end", "-e", type=str, help="End date to evaluate.")
     @argument("--skip-janitor", action="store_true", help="Skip the janitor task.")
+    @argument(
+        "--ignore-cron",
+        action="store_true",
+        help="Run for all missing intervals, ignoring individual cron schedules.",
+    )
     @line_magic
     def run_dag(self, line: str) -> None:
         """Evaluate the DAG of models using the built-in scheduler."""
@@ -355,6 +360,7 @@ class SQLMeshMagics(Magics):
             start=args.start,
             end=args.end,
             skip_janitor=args.skip_janitor,
+            ignore_cron=args.ignore_cron,
         )
         self._context.console = console
 
