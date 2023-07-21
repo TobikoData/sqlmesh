@@ -110,16 +110,15 @@ class ModelMeta(Node):
                 for entry in ensure_list(v)
             ]
 
-        validated_partitions = []
-        for expr in partitions:
-            if isinstance(expr, exp.Identifier):
-                column = exp.to_column(expr.name)
-                column.meta["sql"] = expr.meta["sql"]
-                expr = column
+        partitions = [
+            exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
+            for expr in partitions
+        ]
 
-            validated_partitions.append(expr)
+        for partition in partitions:
+            partition.meta["dialect"] = dialect
 
-        for partition in validated_partitions:
+        for partition in partitions:
             num_cols = len(list(partition.find_all(exp.Column)))
             error_msg: t.Optional[str] = None
             if num_cols == 0:
@@ -130,19 +129,30 @@ class ModelMeta(Node):
             if error_msg:
                 raise ConfigError(f"partitioned_by field '{partition}' {error_msg}")
 
-        return validated_partitions
+        return partitions
 
     @validator("columns_to_types_", pre=True)
     def _columns_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        dialect = values.get("dialect")
+        columns_to_types = {}
         if isinstance(v, exp.Schema):
-            return {column.name: column.args["kind"] for column in v.expressions}
+            for column in v.expressions:
+                expr = column.args["kind"]
+                expr.meta["dialect"] = dialect
+                columns_to_types[column.name] = expr
+
+            return columns_to_types
+
         if isinstance(v, dict):
-            return {
-                k: exp.DataType.build(data_type, dialect=values.get("dialect"))
-                for k, data_type in v.items()
-            }
+            for k, data_type in v.items():
+                expr = exp.DataType.build(data_type, dialect=dialect)
+                expr.meta["dialect"] = dialect
+                columns_to_types[k] = expr
+
+            return columns_to_types
+
         return v
 
     @validator("depends_on_", pre=True)
