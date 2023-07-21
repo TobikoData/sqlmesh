@@ -117,6 +117,16 @@ class ModelMeta(Node):
 
         for partition in partitions:
             partition.meta["dialect"] = dialect
+            num_cols = len(list(partition.find_all(exp.Column)))
+
+            error_msg: t.Optional[str] = None
+            if num_cols == 0:
+                error_msg = "does not contain a column"
+            elif num_cols > 1:
+                error_msg = "contains multiple columns"
+
+            if error_msg:
+                raise ConfigError(f"partitioned_by field '{partition}' {error_msg}")
 
         return partitions
 
