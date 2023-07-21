@@ -561,7 +561,6 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
         if chunk_type == ChunkType.SQL:
             for expression in parser.parse(chunk, sql):
                 if expression:
-                    expression.meta["dialect"] = dialect
                     expression.meta["sql"] = parser._find_sql(chunk[0], chunk[-1])
                     expressions.append(expression)
         else:
@@ -569,7 +568,6 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
             segment = sql[start.end + 2 : end.start - 1]
             factory = jinja_query if chunk_type == ChunkType.JINJA_QUERY else jinja_statement
             expression = factory(segment.strip())
-            expression.meta["dialect"] = dialect
             expression.meta["sql"] = sql[start.start : end.end + 1]
             expressions.append(expression)
 
