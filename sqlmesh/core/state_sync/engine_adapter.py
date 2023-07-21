@@ -53,7 +53,7 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.core.state_sync.base import MIGRATIONS, SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
-from sqlmesh.utils import major_minor, random_id
+from sqlmesh.utils import major_minor, nullsafe_join, random_id
 from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -68,23 +68,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     Args:
         engine_adapter: The EngineAdapter to use to store and fetch snapshots.
-        schema: The schema to store state metadata in.
+        schema: The schema to store state metadata in. If None or empty string then no schema is defined
     """
 
     def __init__(
         self,
         engine_adapter: EngineAdapter,
-        schema: str = c.SQLMESH,
+        schema: t.Optional[str],
         console: t.Optional[Console] = None,
     ):
-        self.schema = schema
+        # Make sure that if an empty string is provided that we treat it as None
+        self.schema = schema or None
         self.engine_adapter = engine_adapter
         self.console = console or get_console()
-        self.snapshots_table = f"{schema}._snapshots"
-        self.environments_table = f"{schema}._environments"
-        self.seeds_table = f"{schema}._seeds"
-        self.intervals_table = f"{schema}._intervals"
-        self.versions_table = f"{schema}._versions"
+        self.snapshots_table = nullsafe_join(".", self.schema, "_snapshots")
+        self.environments_table = nullsafe_join(".", self.schema, "_environments")
+        self.seeds_table = nullsafe_join(".", self.schema, "_seeds")
+        self.intervals_table = nullsafe_join(".", self.schema, "_intervals")
+        self.versions_table = nullsafe_join(".", self.schema, "_versions")
 
         self._snapshot_columns_to_types = {
             "name": exp.DataType.build("text"),
