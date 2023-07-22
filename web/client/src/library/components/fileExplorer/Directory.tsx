@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, useEffect, useMemo } from 'react'
+import React, { useState, type MouseEvent, useEffect, useMemo } from 'react'
 import { FolderOpenIcon, FolderIcon } from '@heroicons/react/24/solid'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
@@ -157,7 +157,7 @@ const Directory = function Directory({
     }
   }, [selectedFile])
 
-  function handleSelect(e: MouseEvent): void {
+  function handleSelect(e: React.MouseEvent | React.KeyboardEvent): void {
     e.stopPropagation()
 
     if (e.shiftKey || e.metaKey) {

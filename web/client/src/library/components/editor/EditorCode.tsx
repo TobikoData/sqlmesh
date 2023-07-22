@@ -141,7 +141,6 @@ function CodeEditorDefault({
         extensions={extensionsAll}
         onChange={onChange}
         readOnly={isNil(onChange)}
-        autoFocus
       />
     </div>
   )

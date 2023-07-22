@@ -37,14 +37,14 @@ interface FileExplorer {
 
 export const FileExplorerContext = createContext<FileExplorer>({
   artifactRename: undefined,
-  setArtifactRename: () => {},
+  setArtifactRename: () => { },
   selectArtifactsInRange: () => new Set(),
-  createDirectory: () => {},
-  createFile: () => {},
-  renameArtifact: () => {},
-  removeArtifacts: () => {},
-  removeArtifactWithConfirmation: () => {},
-  moveArtifacts: () => {},
+  createDirectory: () => { },
+  createFile: () => { },
+  renameArtifact: () => { },
+  removeArtifacts: () => { },
+  removeArtifactWithConfirmation: () => { },
+  moveArtifacts: () => { },
 })
 
 export default function FileExplorerProvider({
@@ -133,7 +133,9 @@ export default function FileExplorerProvider({
   }
 
   function renameArtifact(artifact: ModelArtifact, newName?: string): void {
-    if (isLoading || isStringEmptyOrNil(newName) || isNil(newName)) return
+    newName = newName?.trim()
+
+    if (isLoading || isStringEmptyOrNil(newName)) return
 
     removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
@@ -141,7 +143,7 @@ export default function FileExplorerProvider({
     const currentName = artifact.name
     const currentPath = artifact.path
 
-    artifact.rename(newName.trim())
+    artifact.rename(newName)
 
     if (artifact instanceof ModelDirectory) {
       writeDirectoryApiDirectoriesPathPost(currentPath, {
@@ -224,12 +226,10 @@ export default function FileExplorerProvider({
       })
     } else {
       addConfirmation({
-        headline: `Removing ${
-          artifact instanceof ModelDirectory ? 'Directory' : 'File'
-        }`,
-        description: `Are you sure you want to remove the ${
-          artifact instanceof ModelDirectory ? 'directory' : 'file'
-        } "${artifact.name}"?`,
+        headline: `Removing ${artifact instanceof ModelDirectory ? 'Directory' : 'File'
+          }`,
+        description: `Are you sure you want to remove the ${artifact instanceof ModelDirectory ? 'directory' : 'file'
+          } "${artifact.name}"?`,
         yesText: 'Yes, Remove',
         noText: 'No, Cancel',
         action: () => {

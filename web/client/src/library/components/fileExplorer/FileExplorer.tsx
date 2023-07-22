@@ -54,10 +54,12 @@ const FileExplorer = function FileExplorer({
 
   return (
     <div
+      tabIndex={0}
       className={clsx(
         'flex flex-col h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
         className,
       )}
+      onKeyDown={handleKeyDown}
     >
       <SearchList<ModelFile>
         list={project.allFiles}
@@ -71,11 +73,7 @@ const FileExplorer = function FileExplorer({
         trigger={
           <FileExplorer.ContextMenuTrigger className="h-full pb-2">
             <DndProvider backend={HTML5Backend}>
-              <div
-                tabIndex={1}
-                className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
-                onKeyDown={handleKeyDown}
-              >
+              <div className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
                 <DragLayer />
                 <Directory
                   key={project.id}
@@ -197,10 +195,10 @@ function FileExplorerArtifactRename({
           close()
         }}
         onKeyDown={(e: React.KeyboardEvent) => {
-          e.stopPropagation()
-
           if (e.key === 'Enter') {
-            if (newName.trim() !== '') {
+            e.stopPropagation()
+
+            if (newName.trim() !== '' && newName !== artifact.name) {
               rename(artifact, newName)
             }
 
@@ -208,6 +206,8 @@ function FileExplorerArtifactRename({
           }
 
           if (e.key === 'Escape') {
+            e.stopPropagation()
+
             close()
           }
         }}
@@ -229,10 +229,13 @@ function FileExplorerArtifactContainer({
   isSelected?: boolean
   className?: string
   style?: React.CSSProperties
-  handleSelect?: (e: MouseEvent) => void
+  handleSelect: (e: React.MouseEvent | React.KeyboardEvent) => void
 }): JSX.Element {
+  const { setArtifactRename } = useFileExplorer()
+
   const activeRange = useStoreProject(s => s.activeRange)
   const inActiveRange = useStoreProject(s => s.inActiveRange)
+
   const isBottomGroupInActiveRange = useStoreProject(
     s => s.isBottomGroupInActiveRange,
   )
@@ -245,6 +248,7 @@ function FileExplorerArtifactContainer({
 
   return (
     <span
+      tabIndex={0}
       className={clsx(
         'w-full flex items-center group/file px-2',
         className,
@@ -267,6 +271,21 @@ function FileExplorerArtifactContainer({
       )}
       style={style}
       onClick={handleSelect}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          e.stopPropagation()
+
+          setArtifactRename(artifact)
+
+          handleSelect(e)
+        }
+
+        if (e.key === ' ') {
+          e.stopPropagation()
+
+          handleSelect(e)
+        }
+      }}
     >
       {children}
     </span>
