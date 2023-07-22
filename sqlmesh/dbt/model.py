@@ -69,6 +69,8 @@ class ModelConfig(BaseModelConfig):
     cron: t.Optional[str] = None
     batch_size: t.Optional[int] = None
     lookback: t.Optional[int] = None
+    forward_only: t.Optional[bool] = None
+    disable_restatement: t.Optional[bool] = None
 
     # DBT configuration fields
     cluster_by: t.Optional[t.List[str]] = None
@@ -263,7 +265,7 @@ class ModelConfig(BaseModelConfig):
                 d.parse_one(c, dialect=dialect).name for c in self.cluster_by
             ]
 
-        for field in ["cron"]:
+        for field in ["cron", "forward_only", "disable_restatement"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
                 optional_kwargs[field] = field_val
