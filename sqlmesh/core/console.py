@@ -8,12 +8,22 @@ import uuid
 
 from hyperscript import h
 from rich.console import Console as RichConsole
-from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedColumn
+from rich.live import Live
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskID,
+    TextColumn,
+    TimeElapsedColumn,
+)
 from rich.prompt import Confirm, Prompt
 from rich.status import Status
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.tree import Tree
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
@@ -44,21 +54,23 @@ class Console(abc.ABC):
     with them when their input is needed."""
 
     @abc.abstractmethod
-    def start_evaluation_progress(
-        self, snapshot: Snapshot, total_batches: int, environment: str
-    ) -> None:
+    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int]) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
 
     @abc.abstractmethod
-    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
-        """Update the snapshot evaluation progress."""
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot, environment: str) -> None:
+        """Starts the snapshot evaluation progress."""
+
+    @abc.abstractmethod
+    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
+        """Updates the snapshot evaluation progress."""
 
     @abc.abstractmethod
     def stop_evaluation_progress(self, success: bool = True) -> None:
-        """Stop the snapshot evaluation progress."""
+        """Stops the snapshot evaluation progress."""
 
     @abc.abstractmethod
-    def start_creation_progress(self, environment: str, total_tasks: int) -> None:
+    def start_creation_progress(self, total_tasks: int) -> None:
         """Indicates that a new snapshot creation progress has begun."""
 
     @abc.abstractmethod
@@ -161,14 +173,23 @@ class TerminalConsole(Console):
 
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         self.console: RichConsole = console or srich.console
-        self.evaluation_progress: t.Optional[Progress] = None
-        self.evaluation_tasks: t.Dict[str, t.Tuple[TaskID, int]] = {}
+
+        self.evaluation_progress_live: t.Optional[Live] = None
+        self.evaluation_total_progress: t.Optional[Progress] = None
+        self.evaluation_total_task: t.Optional[TaskID] = None
+        self.evaluation_model_progress: t.Optional[Progress] = None
+        self.evaluation_model_tasks: t.Dict[str, TaskID] = {}
+        self.evaluation_model_batches: t.Dict[Snapshot, int] = {}
+
         self.creation_progress: t.Optional[Progress] = None
         self.creation_task: t.Optional[TaskID] = None
+
         self.promotion_progress: t.Optional[Progress] = None
         self.promotion_task: t.Optional[TaskID] = None
+
         self.migration_progress: t.Optional[Progress] = None
         self.migration_task: t.Optional[TaskID] = None
+
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
@@ -180,13 +201,11 @@ class TerminalConsole(Console):
     def _confirm(self, message: str, **kwargs: t.Any) -> bool:
         return Confirm.ask(message, console=self.console, **kwargs)
 
-    def start_evaluation_progress(
-        self, snapshot: Snapshot, total_batches: int, environment: str
-    ) -> None:
+    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int]) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
-        if not self.evaluation_progress:
-            self.evaluation_progress = Progress(
-                TextColumn("[bold blue]{task.fields[view_name]}", justify="right"),
+        if not self.evaluation_progress_live:
+            self.evaluation_total_progress = Progress(
+                TextColumn("[bold blue]Evaluating models", justify="right"),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
@@ -195,41 +214,69 @@ class TerminalConsole(Console):
                 TimeElapsedColumn(),
                 console=self.console,
             )
-            self.evaluation_progress.start()
-            self.evaluation_tasks = {}
 
-        view_name = snapshot.qualified_view_name.for_environment(environment)
-        self.evaluation_tasks[snapshot.name] = (
-            self.evaluation_progress.add_task(
-                f"Running {view_name}...",
+            self.evaluation_model_progress = Progress(
+                TextColumn("{task.fields[view_name]}", justify="right"),
+                SpinnerColumn(spinner_name="simpleDots"),
+                console=self.console,
+            )
+
+            progress_table = Table.grid()
+            progress_table.add_row(self.evaluation_total_progress)
+            progress_table.add_row(self.evaluation_model_progress)
+
+            self.evaluation_progress_live = Live(progress_table, refresh_per_second=10)
+            self.evaluation_progress_live.start()
+
+            self.evaluation_total_task = self.evaluation_total_progress.add_task(
+                "Evaluating models...", total=sum(batches.values())
+            )
+
+            self.evaluation_model_batches = batches
+
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot, environment: str) -> None:
+        if self.evaluation_model_progress and snapshot.name not in self.evaluation_model_tasks:
+            view_name = snapshot.qualified_view_name.for_environment(environment)
+            self.evaluation_model_tasks[snapshot.name] = self.evaluation_model_progress.add_task(
+                f"Evaluating {view_name}...",
                 view_name=view_name,
-                total=total_batches,
-            ),
-            total_batches,
-        )
+                total=self.evaluation_model_batches[snapshot],
+            )
 
-    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
+    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
         """Update the snapshot evaluation progress."""
-        if self.evaluation_progress and self.evaluation_tasks:
-            task_id = self.evaluation_tasks[snapshot_name][0]
-            self.evaluation_progress.update(task_id, refresh=True, advance=num_batches)
+        if self.evaluation_total_progress and self.evaluation_model_progress:
+            self.evaluation_total_progress.update(
+                self.evaluation_total_task or TaskID(0), refresh=True, advance=num_batches
+            )
+
+            model_task_id = self.evaluation_model_tasks[snapshot.name]
+            self.evaluation_model_progress.update(model_task_id, refresh=True, advance=num_batches)
+            if (
+                self.evaluation_model_progress._tasks[model_task_id].completed
+                >= self.evaluation_model_batches[snapshot]
+            ):
+                self.evaluation_model_progress.remove_task(model_task_id)
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
         """Stop the snapshot evaluation progress."""
-        self.evaluation_tasks = {}
-        if self.evaluation_progress:
-            self.evaluation_progress.stop()
-            self.evaluation_progress = None
+        if self.evaluation_progress_live:
+            self.evaluation_progress_live.stop()
+            self.evaluation_progress_live = None
+            self.evaluation_total_progress = None
+            self.evaluation_total_task = None
+            self.evaluation_model_progress = None
+            self.evaluation_model_tasks = {}
+            self.evaluation_model_batches = {}
+            self.evaluation_environment = c.PROD
             if success:
                 self.log_success("All model batches have been executed successfully")
 
-    def start_creation_progress(self, environment: str, total_tasks: int) -> None:
+    def start_creation_progress(self, total_tasks: int) -> None:
         """Indicates that a new creation progress has begun."""
         if self.creation_progress is None:
             self.creation_progress = Progress(
-                TextColumn(
-                    f"[bold blue]Creating new model versions for '{environment}'", justify="right"
-                ),
+                TextColumn("[bold blue]Creating new model versions", justify="right"),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
@@ -241,7 +288,7 @@ class TerminalConsole(Console):
 
             self.creation_progress.start()
             self.creation_task = self.creation_progress.add_task(
-                f"Creating new model versions for {environment}...",
+                "Creating new model versions...",
                 total=total_tasks,
             )
 
@@ -1081,7 +1128,8 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
         super().__init__(*args, **kwargs)
-        self.evaluation_batch_progress: t.Dict[str, t.Tuple[str, int, int]] = {}
+        self.evaluation_batches: t.Dict[Snapshot, int] = {}
+        self.evaluation_batch_progress: t.Dict[str, t.Tuple[str, int]] = {}
         self.promotion_status: t.Tuple[int, int] = (0, 0)
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
@@ -1099,33 +1147,39 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self._print(message)
         return super()._confirm("", **kwargs)
 
-    def start_evaluation_progress(
-        self, snapshot: Snapshot, total_batches: int, environment: str
-    ) -> None:
-        """Indicates that a new snapshot evaluation progress has begun."""
+    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int]) -> None:
+        self.evaluation_batches = batches
+
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot, environment: str) -> None:
         if not self.evaluation_batch_progress.get(snapshot.name):
             view_name = snapshot.qualified_view_name.for_environment(environment)
-            self.evaluation_batch_progress[snapshot.name] = (view_name, 0, total_batches)
-            print(f"Starting '{view_name}', Total batches: {total_batches}")
+            self.evaluation_batch_progress[snapshot.name] = (view_name, 0)
+            print(f"Starting '{view_name}', Total batches: {self.evaluation_batches[snapshot]}")
 
-    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
-        """Update the snapshot evaluation progress."""
-        view_name, loaded_batches, total_batches = self.evaluation_batch_progress[snapshot_name]
-        loaded_batches += 1
-        self.evaluation_batch_progress[snapshot_name] = (view_name, loaded_batches, total_batches)
+    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
+        view_name, loaded_batches = self.evaluation_batch_progress[snapshot.name]
+        total_batches = self.evaluation_batches[snapshot]
+
+        loaded_batches += num_batches
+        self.evaluation_batch_progress[snapshot.name] = (view_name, loaded_batches)
+
         finished_loading = loaded_batches == total_batches
         status = "Loaded" if finished_loading else "Loading"
         print(f"{status} '{view_name}', Completed Batches: {loaded_batches}/{total_batches}")
         if finished_loading:
             total_finished_loading = len(
-                [x for x in self.evaluation_batch_progress.values() if x[1] == x[2]]
+                [
+                    s
+                    for s, total in self.evaluation_batches.items()
+                    if self.evaluation_batch_progress[s.name][1] == total
+                ]
             )
             total = len(self.evaluation_batch_progress)
             print(f"Completed Loading {total_finished_loading}/{total} Models")
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
-        """Stop the snapshot evaluation progress."""
         self.evaluation_batch_progress = {}
+        self.evaluation_batches = {}
         print(f"Loading {'succeeded' if success else 'failed'}")
 
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:

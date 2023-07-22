@@ -698,7 +698,7 @@ def test_incremental_time_self_reference(
     sushi_context.console = mocker.Mock(spec=Console)
     plan.apply()
     num_batch_calls = Counter(
-        [x[0][0] for x in sushi_context.console.update_evaluation_progress.call_args_list]  # type: ignore
+        [x[0][0] for x in sushi_context.console.update_snapshot_evaluation_progress.call_args_list]  # type: ignore
     )
     # Validate that we made 7 calls to the customer_revenue_lifetime snapshot and 1 call to the customer_revenue_by_day snapshot
     assert num_batch_calls == {

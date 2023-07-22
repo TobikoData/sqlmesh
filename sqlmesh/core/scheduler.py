@@ -167,7 +167,7 @@ class Scheduler:
                 )
             raise e
         self.state_sync.add_interval(snapshot, start, end, is_dev=is_dev)
-        self.console.update_evaluation_progress(snapshot.name, 1)
+        self.console.update_snapshot_evaluation_progress(snapshot, 1)
 
     def run(
         self,
@@ -197,17 +197,23 @@ class Scheduler:
         batches = self.batches(start, end, latest, is_dev=is_dev, restatements=restatements)
         dag = self._dag(batches)
 
+        total_tasks = 0
+
         visited = set()
         for snapshot, _ in dag.sorted:
             if snapshot in visited:
                 continue
             visited.add(snapshot)
-            intervals = batches[snapshot]
-            self.console.start_evaluation_progress(snapshot, len(intervals), environment)
+            total_tasks += len(batches[snapshot])
+
+        self.console.start_evaluation_progress(
+            {snapshot: len(intervals) for snapshot, intervals in batches.items()}
+        )
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest
             snapshot, (start, end) = node
+            self.console.start_snapshot_evaluation_progress(snapshot, environment)
             self.evaluate(snapshot, start, end, latest, is_dev=is_dev)
 
         try:

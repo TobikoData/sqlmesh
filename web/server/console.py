@@ -16,6 +16,7 @@ from web.server.sse import Event
 class ApiConsole(TerminalConsole):
     def __init__(self) -> None:
         super().__init__()
+        self.evaluation_batches: t.Dict[Snapshot, int] = {}
         self.current_task_status: t.Dict[str, t.Dict[str, t.Any]] = {}
         self.queue: asyncio.Queue = asyncio.Queue()
 
@@ -35,27 +36,27 @@ class ApiConsole(TerminalConsole):
             data=json.dumps(payload),
         )
 
-    def start_evaluation_progress(
-        self, snapshot: Snapshot, total_batches: int, environment: str
-    ) -> None:
-        """Indicates that a new snapshot evaluation progress has begun."""
+    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int]) -> None:
+        self.evaluation_batches = batches
+
+    def start_snapshot_evaluation_progress(self, snapshot: Snapshot, environment: str) -> None:
         view_name = snapshot.qualified_view_name.for_environment(environment)
         self.current_task_status[snapshot.name] = {
             "completed": 0,
-            "total": total_batches,
+            "total": self.evaluation_batches[snapshot],
             "start": now_timestamp(),
             "view_name": view_name,
         }
 
-    def update_evaluation_progress(self, snapshot_name: str, num_batches: int) -> None:
+    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
         """Update snapshot evaluation progress."""
         if self.current_task_status:
-            self.current_task_status[snapshot_name]["completed"] += num_batches
+            self.current_task_status[snapshot.name]["completed"] += num_batches
             if (
-                self.current_task_status[snapshot_name]["completed"]
-                >= self.current_task_status[snapshot_name]["total"]
+                self.current_task_status[snapshot.name]["completed"]
+                >= self.current_task_status[snapshot.name]["total"]
             ):
-                self.current_task_status[snapshot_name]["end"] = now_timestamp()
+                self.current_task_status[snapshot.name]["end"] = now_timestamp()
             self.queue.put_nowait(
                 self._make_event({"tasks": self.current_task_status}, event="tasks")
             )
@@ -63,6 +64,7 @@ class ApiConsole(TerminalConsole):
     def stop_evaluation_progress(self, success: bool = True) -> None:
         """Stop the snapshot evaluation progress."""
         self.current_task_status = {}
+        self.evaluation_batches = {}
         if success:
             self.queue.put_nowait(
                 self._make_event("All model batches have been executed successfully")
