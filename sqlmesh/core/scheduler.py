@@ -203,13 +203,14 @@ class Scheduler:
             visited.add(snapshot)
 
         self.console.start_evaluation_progress(
-            {snapshot: len(intervals) for snapshot, intervals in batches.items()}
+            {snapshot: len(intervals) for snapshot, intervals in batches.items()},
+            environment,
         )
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert latest
             snapshot, (start, end) = node
-            self.console.start_snapshot_evaluation_progress(snapshot, environment)
+            self.console.start_snapshot_evaluation_progress(snapshot)
             try:
                 self.evaluate(snapshot, start, end, latest, is_dev=is_dev)
             finally:
