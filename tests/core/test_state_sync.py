@@ -6,9 +6,10 @@ import duckdb
 import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse_one
+from sqlglot import exp
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import (

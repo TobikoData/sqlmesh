@@ -7,7 +7,7 @@ import unittest
 
 import numpy as np
 import pandas as pd
-from sqlglot import Expression, exp, parse_one
+from sqlglot import exp, parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
@@ -157,11 +157,11 @@ class ModelTest(unittest.TestCase):
 
 
 class SqlModelTest(ModelTest):
-    def execute(self, query: Expression) -> pd.DataFrame:
+    def execute(self, query: exp.Expression) -> pd.DataFrame:
         """Execute the query with the engine adapter and return a DataFrame"""
         return self.engine_adapter.fetchdf(query)
 
-    def test_ctes(self, ctes: t.Dict[str, Expression]) -> None:
+    def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
         """Run CTE queries and compare output to expected output"""
         for cte_name, value in self.body["outputs"].get("ctes", {}).items():
             with self.subTest(cte=cte_name):
