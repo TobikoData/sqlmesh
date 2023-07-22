@@ -109,6 +109,7 @@ class ModelMeta(Node):
                 d.parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
                 for entry in ensure_list(v)
             ]
+
         partitions = [
             exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
             for expr in partitions
@@ -117,6 +118,7 @@ class ModelMeta(Node):
         for partition in partitions:
             partition.meta["dialect"] = dialect
             num_cols = len(list(partition.find_all(exp.Column)))
+
             error_msg: t.Optional[str] = None
             if num_cols == 0:
                 error_msg = "does not contain a column"
@@ -139,13 +141,17 @@ class ModelMeta(Node):
                 expr = column.args["kind"]
                 expr.meta["dialect"] = dialect
                 columns_to_types[column.name] = expr
+
             return columns_to_types
+
         if isinstance(v, dict):
             for k, data_type in v.items():
                 expr = exp.DataType.build(data_type, dialect=dialect)
                 expr.meta["dialect"] = dialect
                 columns_to_types[k] = expr
+
             return columns_to_types
+
         return v
 
     @validator("depends_on_", pre=True)

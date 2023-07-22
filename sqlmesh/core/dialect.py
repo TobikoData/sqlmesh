@@ -267,11 +267,25 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
         )
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
+
     name = key.name.lower()
     if name == "path" and value:
         # Make sure if we get a windows path that it is converted to posix
         value = exp.Literal.string(value.this.replace("\\", "/"))
+
     return self.expression(exp.Property, this=name, value=value)
+
+
+def _parse_types(
+    self: Parser, check_func: bool = False, schema: bool = False
+) -> t.Optional[exp.Expression]:
+    start = self._curr
+    parsed_type = self.__parse_types(check_func=check_func, schema=schema)  # type: ignore
+
+    if schema and parsed_type:
+        parsed_type.meta["sql"] = self._find_sql(start, self._prev)
+
+    return parsed_type
 
 
 def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
@@ -288,6 +302,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
 
             key = key_expression.name.lower()
 
+            start = self._curr
             value: t.Optional[exp.Expression | str]
 
             if key in table_keys:
@@ -320,6 +335,9 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                     )
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
+
+            if isinstance(value, exp.Expression):
+                value.meta["sql"] = self._find_sql(start, self._prev)
 
             expressions.append(self.expression(exp.Property, this=key, value=value))
 
@@ -536,20 +554,21 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
             chunks[-1][0].append(token)
             pos += 1
 
+    parser = dialect.parser()
     expressions: t.List[exp.Expression] = []
 
     for chunk, chunk_type in chunks:
         if chunk_type == ChunkType.SQL:
-            for expression in dialect.parser().parse(chunk, sql):
+            for expression in parser.parse(chunk, sql):
                 if expression:
-                    expression.meta["dialect"] = dialect
+                    expression.meta["sql"] = parser._find_sql(chunk[0], chunk[-1])
                     expressions.append(expression)
         else:
             start, *_, end = chunk
             segment = sql[start.end + 2 : end.start - 1]
             factory = jinja_query if chunk_type == ChunkType.JINJA_QUERY else jinja_statement
             expression = factory(segment.strip())
-            expression.meta["dialect"] = dialect
+            expression.meta["sql"] = sql[start.start : end.end + 1]
             expressions.append(expression)
 
     return expressions
@@ -609,6 +628,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_with)
     _override(Parser, _parse_having)
     _override(Parser, _parse_lambda)
+    _override(Parser, _parse_types)
 
 
 def select_from_values(

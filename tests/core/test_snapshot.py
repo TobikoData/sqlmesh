@@ -5,9 +5,10 @@ from pathlib import Path
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, parse, parse_one, to_column
+from sqlglot import exp, to_column
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
+from sqlmesh.core.dialect import parse, parse_one
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     Model,
@@ -98,7 +99,7 @@ def test_json(snapshot: Snapshot):
             "name": "name",
             "partitioned_by": [],
             "owner": "owner",
-            "query": "SELECT @EACH(ARRAY(1, 2), x -> x), ds FROM parent.tbl",
+            "query": "SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
             "jinja_macros": {
                 "global_objs": {},
                 "packages": {},
