@@ -125,6 +125,9 @@ class Config(BaseConfig):
     def get_scheduler(self, gateway_name: t.Optional[str] = None) -> SchedulerConfig:
         return self.get_gateway(gateway_name).scheduler or self.default_scheduler
 
+    def get_state_schema(self, gateway_name: t.Optional[str] = None) -> t.Optional[str]:
+        return self.get_gateway(gateway_name).state_schema
+
     @property
     def dialect(self) -> t.Optional[str]:
         return self.model_defaults.dialect

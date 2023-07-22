@@ -6,7 +6,9 @@ from sqlglot import exp
 def migrate(state_sync):  # type: ignore
     """Move batch_size from the model and into the kind."""
 
-    snapshots_table = f"{state_sync.schema}._snapshots"
+    snapshots_table = "_snapshots"
+    if state_sync.schema:
+        snapshots_table = f"{state_sync.schema}.{snapshots_table}"
 
     for row in state_sync.engine_adapter.fetchall(
         exp.select("*").from_(snapshots_table), quote_identifiers=True

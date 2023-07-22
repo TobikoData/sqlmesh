@@ -9,11 +9,14 @@ from sqlglot import exp
 def migrate(state_sync):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
-    engine_adapter.create_schema(schema)
-
-    snapshots_table = f"{schema}._snapshots"
-    environments_table = f"{schema}._environments"
-    versions_table = f"{schema}._versions"
+    snapshots_table = "_snapshots"
+    environments_table = "_environments"
+    versions_table = "_versions"
+    if schema:
+        engine_adapter.create_schema(schema)
+        snapshots_table = f"{schema}.{snapshots_table}"
+        environments_table = f"{schema}.{environments_table}"
+        versions_table = f"{schema}.{versions_table}"
 
     engine_adapter.create_state_table(
         snapshots_table,

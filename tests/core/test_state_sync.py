@@ -8,6 +8,7 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
@@ -34,7 +35,9 @@ from sqlmesh.utils.errors import SQLMeshError
 
 @pytest.fixture
 def state_sync(duck_conn):
-    state_sync = EngineAdapterStateSync(create_engine_adapter(lambda: duck_conn, "duckdb"))
+    state_sync = EngineAdapterStateSync(
+        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
+    )
     state_sync.migrate()
     return state_sync
 
@@ -708,7 +711,9 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
     )
 
     # Start with a clean slate.
-    state_sync = EngineAdapterStateSync(create_engine_adapter(duckdb.connect, "duckdb"))
+    state_sync = EngineAdapterStateSync(
+        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH
+    )
 
     with pytest.raises(
         SQLMeshError,
@@ -767,7 +772,9 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> N
     backup_state_mock.assert_not_called()
 
     # Start with a clean slate.
-    state_sync = EngineAdapterStateSync(create_engine_adapter(duckdb.connect, "duckdb"))
+    state_sync = EngineAdapterStateSync(
+        create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH
+    )
 
     state_sync.migrate()
     migrate_rows_mock.assert_called_once()
