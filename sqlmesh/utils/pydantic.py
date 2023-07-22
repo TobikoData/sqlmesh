@@ -11,7 +11,7 @@ class PydanticModel(BaseModel):
         arbitrary_types_allowed = True
         extra = "forbid"
         json_encoders = {
-            exp.Expression: lambda e: e.meta.get("sql") or e.sql(e.meta.get("dialect"))
+            exp.Expression: lambda e: e.meta.get("sql") or e.sql(dialect=e.meta.get("dialect"))
         }
         underscore_attrs_are_private = True
         smart_union = True
