@@ -702,8 +702,8 @@ def test_incremental_time_self_reference(
     )
     # Validate that we made 7 calls to the customer_revenue_lifetime snapshot and 1 call to the customer_revenue_by_day snapshot
     assert num_batch_calls == {
-        "sushi.customer_revenue_lifetime": 7,
-        "sushi.customer_revenue_by_day": 1,
+        sushi_context.snapshots["sushi.customer_revenue_lifetime"]: 7,
+        sushi_context.snapshots["sushi.customer_revenue_by_day"]: 1,
     }
     # Validate that the results are the same as before the restate
     assert results == sushi_data_validator.validate(
