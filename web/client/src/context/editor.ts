@@ -38,11 +38,11 @@ interface EditorStore {
   selectTab: (tab?: EditorTab) => void
   replaceTab: (from: EditorTab, to: EditorTab) => void
   updateStoredTabsIds: () => void
+  inTabs: (file: ModelFile) => boolean
   addTab: (tab: EditorTab) => void
   addTabs: (tabs: EditorTab[]) => void
   closeTab: (file: ModelFile) => void
   createTab: (file?: ModelFile) => EditorTab
-  removeTab: (file: ModelFile) => void
   setDialects: (dialects: Dialect[]) => void
   refreshTab: () => void
   setPreviewQuery: (previewQuery?: string) => void
@@ -98,6 +98,9 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   previewConsole: undefined,
   previewDiff: undefined,
   direction: 'vertical',
+  inTabs(file) {
+    return get().tabs.has(file)
+  },
   replaceTab(from, to) {
     const s = get()
 
@@ -225,19 +228,6 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
 
     set(() => ({
       tabs: new Map(s.tabs),
-    }))
-
-    s.updateStoredTabsIds()
-  },
-  removeTab(file) {
-    const s = get()
-    const activeTab = isNotNil(s.tab) && file === s.tab.file ? undefined : s.tab
-
-    s.tabs.delete(file)
-
-    set(() => ({
-      tabs: new Map(s.tabs),
-      tab: activeTab,
     }))
 
     s.updateStoredTabsIds()

@@ -12,8 +12,8 @@ interface InitialDirectory extends InitialArtifact, Directory {
 export class ModelDirectory extends ModelArtifact<InitialDirectory> {
   private _isOpen = false
 
-  directories: ModelDirectory[]
-  files: ModelFile[]
+  directories: ModelDirectory[] = []
+  files: ModelFile[] = []
 
   syncStateOpen?: (state: boolean) => void
 
@@ -33,14 +33,9 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
       this.directories = (initial as ModelDirectory).directories
       this.files = (initial as ModelDirectory).files
     } else {
-      this.directories = []
-      this.files = []
-
-      this.initial.directories.forEach(d => {
-        this.addDirectory(new ModelDirectory(d, this))
-      })
-      this.initial.files.forEach(f => {
-        this.addFile(new ModelFile(f, this))
+      this.update({
+        files: this.initial.files,
+        directories: this.initial.directories,
       })
     }
   }
@@ -91,7 +86,7 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
 
   get allVisibleArtifacts(): ModelArtifact[] {
     return this.directories
-      .map(d => [d, d.allVisibleArtifacts])
+      .map(d => (d.isOpened ? [d, d.allVisibleArtifacts] : [d]))
       .flat(100)
       .concat(this.isOpened ? this.files : [])
   }
@@ -177,11 +172,31 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     this.directories = this.directories.filter(d => d !== directory)
   }
 
+  update({
+    files = [],
+    directories = [],
+  }: {
+    files: File[] | ModelFile[]
+    directories: Directory[] | ModelDirectory[]
+  }): void {
+    this.files = []
+    this.directories = []
+
+    directories.forEach(d => {
+      this.addDirectory(new ModelDirectory(d, this))
+    })
+    files.forEach(f => {
+      this.addFile(new ModelFile(f, this))
+    })
+  }
+
   static findArtifactByPath(
     directory: ModelDirectory,
     path: string,
   ): ModelArtifact | undefined {
-    return directory.allArtifacts.find(artifact => artifact.path === path)
+    return directory.path === path
+      ? directory
+      : directory.allArtifacts.find(artifact => artifact.path === path)
   }
 
   static findParentByPath(

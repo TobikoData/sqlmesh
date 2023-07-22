@@ -1,20 +1,12 @@
-import { useMutationApiSaveFile } from '@api/index'
 import { type Extension } from '@codemirror/state'
 import { type KeyBinding } from '@codemirror/view'
 import { useLineageFlow } from '@components/graph/context'
 import { useStoreEditor } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { useQueryClient } from '@tanstack/react-query'
 import { type Column } from '~/api/client'
-import { debounceSync, isFalse, isNil, isNotNil } from '@utils/index'
-import { useMemo, useCallback, useState } from 'react'
+import { isFalse, isNil, isNotNil } from '@utils/index'
+import { useMemo, useState } from 'react'
 import { events, HoverTooltip, SQLMeshModel } from './extensions'
-import { dracula, tomorrow } from 'thememirror'
-import { python } from '@codemirror/lang-python'
-import { StreamLanguage } from '@codemirror/language'
-import { yaml } from '@codemirror/legacy-modes/mode/yaml'
-import { EnumColorScheme, useColorScheme } from '@context/theme'
-import { type FileExtensions, EnumFileExtensions } from '@models/file'
 import { findModel, findColumn } from './extensions/help'
 import { useStoreProject } from '@context/project'
 import {
@@ -24,24 +16,9 @@ import {
 } from './extensions/SQLMeshDialect'
 
 export {
-  useDefaultExtensions,
   useDefaultKeymapsEditorTab,
   useSQLMeshModelExtensions,
-  useKeymapsRemoteFile,
   useSQLMeshDialect,
-}
-
-function useDefaultExtensions(type: FileExtensions): Extension[] {
-  const { mode } = useColorScheme()
-
-  return useMemo(() => {
-    return [
-      mode === EnumColorScheme.Dark ? dracula : tomorrow,
-      type === EnumFileExtensions.PY && python(),
-      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
-      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
-    ].filter(Boolean) as Extension[]
-  }, [type, mode])
 }
 
 function useDefaultKeymapsEditorTab(): KeyBinding[] {
@@ -72,46 +49,6 @@ function useDefaultKeymapsEditorTab(): KeyBinding[] {
       preventDefault: true,
       run() {
         closeTab(tab.file)
-
-        return true
-      },
-    },
-  ]
-}
-
-function useKeymapsRemoteFile(path: string): KeyBinding[] {
-  const client = useQueryClient()
-
-  const files = useStoreProject(s => s.files)
-  const file = files.get(path)
-
-  if (isNil(file)) return []
-
-  const mutationSaveFile = useMutationApiSaveFile(client)
-
-  const saveChange = useCallback(
-    function saveChange(): void {
-      mutationSaveFile.mutate({
-        path: file.path,
-        body: { content: file.content },
-      })
-    },
-    [file.path],
-  )
-
-  const debouncedSaveChange = useCallback(
-    debounceSync(saveChange, 1000, true),
-    [file.path],
-  )
-
-  return [
-    {
-      mac: 'Cmd-s',
-      win: 'Ctrl-s',
-      linux: 'Ctrl-s',
-      preventDefault: true,
-      run() {
-        debouncedSaveChange()
 
         return true
       },

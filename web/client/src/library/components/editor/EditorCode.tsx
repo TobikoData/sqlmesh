@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
-import { useApiFileByPath } from '~/api'
-import { debounceAsync, isNil } from '~/utils'
+import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
+import { debounceAsync, debounceSync, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
 import {
@@ -14,32 +14,45 @@ import {
 import clsx from 'clsx'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
-import {
-  useDefaultExtensions,
-  useKeymapsRemoteFile,
-  useSQLMeshDialect,
-} from './hooks'
+import { useSQLMeshDialect } from './hooks'
 import { useStoreProject } from '@context/project'
+import { useQueryClient } from '@tanstack/react-query'
+import { EnumColorScheme, useColorScheme } from '@context/theme'
+import { dracula, tomorrow } from 'thememirror'
+import { python } from '@codemirror/lang-python'
+import { StreamLanguage } from '@codemirror/language'
+import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 
-function CodeEditorSQLMesh({
+export { CodeEditorDefault, CodeEditorRemoteFile }
+
+function CodeEditorDefault({
   type,
   dialect = '',
   content = '',
-  children,
   className,
+  keymaps = [],
+  extensions = [],
+  onChange,
 }: {
   type: FileExtensions
   dialect?: string
-  content?: string
   className?: string
-  children: (options: {
-    extensions: Extension[]
-    content: string
-  }) => JSX.Element
+  content?: string
+  keymaps?: KeyBinding[]
+  extensions?: Extension[]
+  onChange?: (value: string) => void
 }): JSX.Element {
   const [SQLMeshDialect, SQLMeshDialectCleanUp] = useSQLMeshDialect()
+  const { mode } = useColorScheme()
 
-  const extensionsDefault = useDefaultExtensions(type)
+  const extensionsDefault = useMemo(() => {
+    return [
+      mode === EnumColorScheme.Dark ? dracula : tomorrow,
+      type === EnumFileExtensions.PY && python(),
+      type === EnumFileExtensions.YAML && StreamLanguage.define(yaml),
+      type === EnumFileExtensions.YML && StreamLanguage.define(yaml),
+    ].filter(Boolean) as Extension[]
+  }, [type, mode])
 
   const models = useStoreContext(s => s.models)
   const engine = useStoreEditor(s => s.engine)
@@ -61,15 +74,30 @@ function CodeEditorSQLMesh({
     [dialects],
   )
 
-  const extensions = useMemo(() => {
+  const extensionKeymap = useMemo(
+    () => keymap.of([...keymaps].flat()),
+    [keymaps],
+  )
+
+  const extensionsAll = useMemo(() => {
     return [
       ...extensionsDefault,
+      extensions,
+      extensionKeymap,
       type === EnumFileExtensions.SQL &&
         SQLMeshDialect(models, dialectOptions, dialectsTitles),
     ]
       .filter(Boolean)
       .flat() as Extension[]
-  }, [models, type, dialectsTitles, dialectOptions])
+  }, [
+    models,
+    type,
+    dialectsTitles,
+    dialectOptions,
+    extensionsDefault,
+    extensions,
+    extensionKeymap,
+  ])
 
   useEffect(() => {
     engine.postMessage({
@@ -105,7 +133,16 @@ function CodeEditorSQLMesh({
 
   return (
     <div className={clsx('flex w-full h-full', className)}>
-      {children({ extensions, content })}
+      <CodeMirror
+        height="100%"
+        width="100%"
+        className={clsx('flex w-full h-full font-mono text-sm', className)}
+        value={content}
+        extensions={extensionsAll}
+        onChange={onChange}
+        readOnly={isNil(onChange)}
+        autoFocus
+      />
     </div>
   )
 }
@@ -117,6 +154,8 @@ function CodeEditorRemoteFile({
   path: string
   children: (options: { file: ModelFile; keymaps: KeyBinding[] }) => JSX.Element
 }): JSX.Element {
+  const client = useQueryClient()
+
   const files = useStoreProject(s => s.files)
 
   const { refetch: getFileContent, isFetching } = useApiFileByPath(path)
@@ -124,16 +163,48 @@ function CodeEditorRemoteFile({
     debounceAsync(getFileContent, 1000, true),
     [getFileContent],
   )
-  const keymaps = useKeymapsRemoteFile(path)
 
   const [file, setFile] = useState<ModelFile | undefined>(files.get(path))
 
+  const mutationSaveFile = useMutationApiSaveFile(client)
+  const debouncedSaveChange = useCallback(
+    debounceSync(
+      function saveChange(): void {
+        mutationSaveFile.mutate({
+          path,
+          body: { content: file?.content },
+        })
+      },
+      1000,
+      true,
+    ),
+    [path],
+  )
+
+  const keymaps = useMemo(
+    () => [
+      {
+        mac: 'Cmd-s',
+        win: 'Ctrl-s',
+        linux: 'Ctrl-s',
+        preventDefault: true,
+        run() {
+          debouncedSaveChange()
+
+          return true
+        },
+      },
+    ],
+    [debouncedSaveChange],
+  )
+
   useEffect(() => {
+    if (isNotNil(file) && file.isSynced) return
+
     void debouncedGetFileContent().then(({ data }) => {
       if (isNil(data)) return
 
       if (isNil(file)) {
-        console.log('New')
         setFile(new ModelFile(data))
       } else {
         file.update(data)
@@ -160,44 +231,3 @@ function CodeEditorRemoteFile({
     children({ file, keymaps })
   )
 }
-
-const CodeEditor = function CodeEditor({
-  keymaps = [],
-  extensions = [],
-  content = '',
-  onChange,
-  className,
-}: {
-  content?: string
-  keymaps?: KeyBinding[]
-  extensions?: Extension[]
-  onChange?: (value: string) => void
-  className?: string
-}): JSX.Element {
-  const extensionKeymap = useMemo(
-    () => keymap.of([...keymaps].flat()),
-    [keymaps],
-  )
-  const extensionsAll = useMemo(
-    () => [...extensions, extensionKeymap].flat(),
-    [extensionKeymap, extensions],
-  )
-
-  return (
-    <CodeMirror
-      height="100%"
-      width="100%"
-      className={clsx('flex w-full h-full font-mono text-sm', className)}
-      value={content}
-      extensions={extensionsAll}
-      onChange={onChange}
-      readOnly={isNil(onChange)}
-      autoFocus
-    />
-  )
-}
-
-CodeEditor.Default = CodeEditorSQLMesh
-CodeEditor.RemoteFile = CodeEditorRemoteFile
-
-export default CodeEditor

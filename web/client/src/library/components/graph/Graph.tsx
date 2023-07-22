@@ -70,8 +70,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
 import { type ErrorIDE } from '~/library/pages/ide/context'
-import { Listbox, Popover, Transition } from '@headlessui/react'
-import CodeEditor from '@components/editor/EditorCode'
+import { Popover, Transition } from '@headlessui/react'
+import { CodeEditorDefault } from '@components/editor/EditorCode'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
 
@@ -136,19 +136,12 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                 leaveTo="opacity-0 translate-y-1"
               >
                 <Popover.Panel className="fixed bottom-0 left-10 z-10 transform cursor-pointer rounded-lg bg-theme border-4 border-primary-20">
-                  <CodeEditor.Default
+                  <CodeEditorDefault
                     content={source}
                     type={EnumFileExtensions.SQL}
-                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !h-[25vh] !max-w-[30rem]"
-                  >
-                    {({ extensions, content }) => (
-                      <CodeEditor
-                        extensions={extensions.concat(modelExtensions)}
-                        content={content}
-                        className="text-xs pr-2"
-                      />
-                    )}
-                  </CodeEditor.Default>
+                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !h-[25vh] !max-w-[30rem] text-xs pr-2"
+                    extensions={modelExtensions}
+                  />
                 </Popover.Panel>
               </Transition>
             </>
@@ -279,8 +272,8 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
               type === 'python'
                 ? 'Column lineage disabled for Python models'
                 : type === 'cte'
-                ? 'CTE'
-                : 'SQL Query'
+                  ? 'CTE'
+                  : 'SQL Query'
             }
             className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
           >
@@ -715,9 +708,8 @@ const ModelColumns = memo(function ModelColumns({
           >
             {showColumns
               ? 'Hide'
-              : `Show ${
-                  columns.length - columnsSelected.length - columnsRest.length
-                } More`}
+              : `Show ${columns.length - columnsSelected.length - columnsRest.length
+              } More`}
           </Button>
         </div>
       )}
@@ -949,8 +941,8 @@ function ModelNode({
       column.type = isNil(column.type)
         ? 'UNKNOWN'
         : column.type.startsWith('STRUCT')
-        ? 'STRUCT'
-        : column.type
+          ? 'STRUCT'
+          : column.type
     })
 
     return {
@@ -1070,10 +1062,9 @@ function GraphOptions({
               <Listbox.Option
                 key={key}
                 className={({ active }) =>
-                  `relative cursor-default select-none py-1 pl-10 pr-4 ${
-                    active
-                      ? 'bg-primary-10 text-primary-500'
-                      : 'text-neutral-700 dark:text-neutral-300'
+                  `relative cursor-default select-none py-1 pl-10 pr-4 ${active
+                    ? 'bg-primary-10 text-primary-500'
+                    : 'text-neutral-700 dark:text-neutral-300'
                   }`
                 }
                 value={key}

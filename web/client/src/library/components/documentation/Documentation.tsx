@@ -8,8 +8,11 @@ import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { ModelColumns } from '@components/graph/Graph'
 import { useLineageFlow } from '@components/graph/context'
 import TabList from '@components/tab/Tab'
-import CodeEditor from '@components/editor/EditorCode'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
+import {
+  CodeEditorDefault,
+  CodeEditorRemoteFile,
+} from '@components/editor/EditorCode'
 
 const Documentation = function Documentation({
   model,
@@ -90,7 +93,7 @@ const Documentation = function Documentation({
       )}
       {(withCode || withQuery) && (
         <Section headline="SQL">
-          <CodeEditor.RemoteFile path={model.path}>
+          <CodeEditorRemoteFile path={model.path}>
             {({ file }) => (
               <Tab.Group defaultIndex={withQuery ? 1 : 0}>
                 <TabList
@@ -112,18 +115,12 @@ const Documentation = function Documentation({
                         'ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2',
                       )}
                     >
-                      <CodeEditor.Default
+                      <CodeEditorDefault
                         content={file.content}
                         type={file.extension}
-                      >
-                        {({ extensions, content }) => (
-                          <CodeEditor
-                            extensions={extensions.concat(modelExtensions)}
-                            content={content}
-                            className="text-xs"
-                          />
-                        )}
-                      </CodeEditor.Default>
+                        extensions={modelExtensions}
+                        className="text-xs"
+                      />
                     </Tab.Panel>
                   )}
                   {withQuery && (
@@ -131,24 +128,18 @@ const Documentation = function Documentation({
                       unmount={false}
                       className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
                     >
-                      <CodeEditor.Default
+                      <CodeEditorDefault
                         type={EnumFileExtensions.SQL}
                         content={model.sql ?? ''}
-                      >
-                        {({ extensions, content }) => (
-                          <CodeEditor
-                            extensions={extensions.concat(modelExtensions)}
-                            content={content}
-                            className="text-xs"
-                          />
-                        )}
-                      </CodeEditor.Default>
+                        extensions={modelExtensions}
+                        className="text-xs"
+                      />
                     </Tab.Panel>
                   )}
                 </Tab.Panels>
               </Tab.Group>
             )}
-          </CodeEditor.RemoteFile>
+          </CodeEditorRemoteFile>
         </Section>
       )}
     </Container>

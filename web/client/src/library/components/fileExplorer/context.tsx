@@ -24,21 +24,21 @@ import { useStoreContext } from '@context/context'
 import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 
 interface FileExplorer {
-  activeRange: Set<ModelArtifact>
-  setActiveRange: (activeRange: Set<ModelArtifact>) => void
+  artifactRename?: ModelArtifact
+  setArtifactRename: (artifact?: ModelArtifact) => void
   selectArtifactsInRange: (to: ModelArtifact) => void
   createDirectory: (parent: ModelDirectory) => void
   createFile: (parent: ModelDirectory) => void
   renameArtifact: (artifact: ModelArtifact, newName?: string) => void
-  removeArtifacts: (artifacts: Set<ModelArtifact>) => void
+  removeArtifacts: (artifacts: ModelArtifact[]) => void
   removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
-  moveArtifacts: (artifacts: Set<ModelArtifact>, target: ModelDirectory) => void
+  moveArtifacts: (artifacts: ModelArtifact[], target: ModelDirectory) => void
 }
 
 export const FileExplorerContext = createContext<FileExplorer>({
-  activeRange: new Set(),
-  setActiveRange: () => {},
-  selectArtifactsInRange: () => {},
+  artifactRename: undefined,
+  setArtifactRename: () => {},
+  selectArtifactsInRange: () => new Set(),
   createDirectory: () => {},
   createFile: () => {},
   renameArtifact: () => {},
@@ -54,42 +54,42 @@ export default function FileExplorerProvider({
 }): JSX.Element {
   const { addError, removeError } = useIDE()
 
+  const activeRange = useStoreProject(s => s.activeRange)
   const project = useStoreProject(s => s.project)
   const files = useStoreProject(s => s.files)
+  const setActiveRange = useStoreProject(s => s.setActiveRange)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
   const setFiles = useStoreProject(s => s.setFiles)
+  const inActiveRange = useStoreProject(s => s.inActiveRange)
 
   const addConfirmation = useStoreContext(s => s.addConfirmation)
 
   const tab = useStoreEditor(s => s.tab)
 
   const [isLoading, setIsLoading] = useState(false)
-  const [activeRange, setActiveRange] = useState(new Set<ModelArtifact>())
+  const [artifactRename, setArtifactRename] = useState<ModelArtifact>()
 
   useEffect(() => {
     setSelectedFile(tab?.file)
   }, [tab?.id])
 
   function selectArtifactsInRange(to: ModelArtifact): void {
-    setActiveRange(activeRange => {
-      const IDX_FIRST = 0
-      const IDX_LAST = activeRange.size - 1
-      const artifacts = project.allArtifacts
-      const acitveAtrifacts = Array.from(activeRange)
-      const first = acitveAtrifacts[IDX_FIRST]
-      const last = acitveAtrifacts[IDX_LAST]
-      const indexTo = artifacts.indexOf(to)
-      const indexFirst = first == null ? IDX_FIRST : artifacts.indexOf(first)
-      const indexLast = last == null ? IDX_LAST : artifacts.indexOf(last)
+    const IDX_FIRST = 0
+    const IDX_LAST = activeRange.length - 1
+    const artifacts = project.allVisibleArtifacts
+    const first = activeRange[IDX_FIRST]
+    const last = activeRange[IDX_LAST]
+    const indexTo = artifacts.indexOf(to)
+    const indexFirst = first == null ? IDX_FIRST : artifacts.indexOf(first)
+    const indexLast = last == null ? IDX_LAST : artifacts.indexOf(last)
 
-      const indexStart = indexTo > indexFirst ? indexFirst : indexTo
-      const indexEnd =
-        indexTo > indexLast || (indexTo > indexFirst && indexTo < indexLast)
-          ? indexTo
-          : indexLast
+    const indexStart = indexTo > indexFirst ? indexFirst : indexTo
+    const indexEnd =
+      indexTo > indexLast || (indexTo > indexFirst && indexTo < indexLast)
+        ? indexTo
+        : indexLast
 
-      return new Set(artifacts.slice(indexStart, indexEnd + 1))
-    })
+    setActiveRange(artifacts.slice(indexStart, indexEnd + 1))
   }
 
   function createDirectory(parent: ModelDirectory): void {
@@ -185,13 +185,12 @@ export default function FileExplorerProvider({
     }
   }
 
-  function removeArtifacts(artifacts: Set<ModelArtifact>): void {
+  function removeArtifacts(artifacts: ModelArtifact[]): void {
     if (isLoading) return
 
     setIsLoading(true)
 
-    const list = Array.from(artifacts)
-    const promises = list.map(artifact => {
+    const promises = artifacts.map(artifact => {
       if (artifact instanceof ModelFile) {
         return deleteFileApiFilesPathDelete(artifact.path)
       }
@@ -201,7 +200,7 @@ export default function FileExplorerProvider({
 
     Promise.all(promises)
       .then(() => {
-        setActiveRange(new Set())
+        setActiveRange([])
       })
       .catch(error => addError(EnumErrorKey.FileExplorer, error))
       .finally(() => {
@@ -210,15 +209,15 @@ export default function FileExplorerProvider({
   }
 
   function removeArtifactWithConfirmation(artifact: ModelArtifact): void {
-    if (activeRange.has(artifact)) {
+    if (inActiveRange(artifact)) {
       // User selected multiple including current directory
       // so here we should prompt to delete all selected
       addConfirmation({
         headline: 'Removing Selected Files/Directories',
-        description: `Are you sure you want to remove ${activeRange.size} items?`,
+        description: `Are you sure you want to remove ${activeRange.length} items?`,
         yesText: 'Yes, Remove',
         noText: 'No, Cancel',
-        details: Array.from(activeRange).map(artifact => artifact.path),
+        details: activeRange.map(artifact => artifact.path),
         action: () => {
           removeArtifacts(activeRange)
         },
@@ -235,7 +234,7 @@ export default function FileExplorerProvider({
         noText: 'No, Cancel',
         action: () => {
           if (isNotNil(artifact.parent)) {
-            removeArtifacts(new Set([artifact]))
+            removeArtifacts([artifact])
           }
         },
       })
@@ -243,7 +242,7 @@ export default function FileExplorerProvider({
   }
 
   function moveArtifacts(
-    artifacts: Set<ModelArtifact>,
+    artifacts: ModelArtifact[],
     target: ModelDirectory,
     shouldRenameDuplicates = false,
   ): void {
@@ -283,7 +282,9 @@ export default function FileExplorerProvider({
           writeDirectoryApiDirectoriesPathPost(artifactPath, { new_path }),
         )
 
-        artifact.allVisibleArtifacts.forEach(a => artifacts.delete(a))
+        artifact.allVisibleArtifacts.forEach(a =>
+          artifacts.splice(artifacts.indexOf(a), 1),
+        )
       }
 
       if (artifact instanceof ModelFile) {
@@ -320,7 +321,7 @@ export default function FileExplorerProvider({
       })
       .finally(() => {
         setIsLoading(false)
-        setActiveRange(new Set())
+        setActiveRange([])
         setFiles(project.allFiles)
       })
   }
@@ -328,7 +329,8 @@ export default function FileExplorerProvider({
   return (
     <FileExplorerContext.Provider
       value={{
-        activeRange,
+        artifactRename,
+        setArtifactRename,
         createDirectory,
         createFile,
         renameArtifact,
@@ -336,16 +338,6 @@ export default function FileExplorerProvider({
         removeArtifactWithConfirmation,
         moveArtifacts,
         selectArtifactsInRange,
-        setActiveRange(activeRange) {
-          setActiveRange(
-            () =>
-              new Set(
-                project.allVisibleArtifacts.filter(artifact =>
-                  activeRange.has(artifact),
-                ),
-              ),
-          )
-        },
       }}
     >
       {children}

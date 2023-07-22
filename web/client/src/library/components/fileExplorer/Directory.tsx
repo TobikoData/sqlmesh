@@ -3,13 +3,7 @@ import { FolderOpenIcon, FolderIcon } from '@heroicons/react/24/solid'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { ModelDirectory } from '~/models'
-import {
-  isArrayNotEmpty,
-  isFalse,
-  isNil,
-  isNotNil,
-  isStringEmptyOrNil,
-} from '~/utils'
+import { isArrayNotEmpty, isFalse, isNil } from '~/utils'
 import { useStoreProject } from '@context/project'
 import File from './File'
 import * as ContextMenu from '@radix-ui/react-context-menu'
@@ -29,8 +23,10 @@ const Directory = function Directory({
   style?: React.CSSProperties
 }): JSX.Element {
   const selectedFile = useStoreProject(s => s.selectedFile)
+  const activeRange = useStoreProject(s => s.activeRange)
+  const setActiveRange = useStoreProject(s => s.setActiveRange)
+  const inActiveRange = useStoreProject(s => s.inActiveRange)
 
-  const [newName, setNewName] = useState<string>()
   const [isOpen, setIsOpen] = useState<boolean>(directory.isOpened)
   const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
   const [isDraggable, setIsDraggable] = useState(false)
@@ -46,8 +42,9 @@ const Directory = function Directory({
   })
 
   const {
-    activeRange,
-    setActiveRange,
+    setArtifactRename,
+    renameArtifact,
+    artifactRename,
     createDirectory,
     createFile,
     moveArtifacts,
@@ -61,18 +58,14 @@ const Directory = function Directory({
       drop(artifact: ModelArtifact, monitor) {
         if (isFalse(monitor.canDrop())) return
 
-        const artifacts = activeRange.has(artifact)
-          ? activeRange
-          : new Set([artifact])
+        const artifacts = inActiveRange(artifact) ? activeRange : [artifact]
 
         moveArtifacts(artifacts, directory)
 
         directory.open()
       },
       canDrop(artifact, monitor) {
-        const artifacts = Array.from(
-          activeRange.has(artifact) ? activeRange : [artifact],
-        )
+        const artifacts = inActiveRange(artifact) ? activeRange : [artifact]
 
         return (
           monitor.isOver({ shallow: true }) &&
@@ -105,7 +98,7 @@ const Directory = function Directory({
         setIsDraggable(false)
       },
       canDrag() {
-        return isStringEmptyOrNil(newName) && isDraggable
+        return artifactRename !== directory && isDraggable
       },
       collect(monitor) {
         return {
@@ -113,12 +106,12 @@ const Directory = function Directory({
         }
       },
     }),
-    [directory, newName, isDraggable],
+    [directory, artifactRename, isDraggable],
   )
 
   const [isAllDirectories, shouldClose, shouldOpen, shouldToggle] =
     useMemo(() => {
-      if (activeRange.size < 2) return [false, false, false, false]
+      if (activeRange.length < 2) return [false, false, false, false]
 
       let isAllDirectories = true
       let isAllOpened = true
@@ -150,7 +143,7 @@ const Directory = function Directory({
     // Setting syncStateOpen in order to have a mechanism
     // to trigger re-render every time ModelDirectory's "isOpen" state is changes
     directory.syncStateOpen = setIsOpen
-  }, [])
+  }, [directory])
 
   useEffect(() => {
     preview(getEmptyImage(), { captureDraggingState: true })
@@ -170,33 +163,33 @@ const Directory = function Directory({
     if (e.shiftKey || e.metaKey) {
       e.preventDefault()
     } else {
-      if (isNotNil(newName)) return
-
       directory.toggle()
     }
 
+    let ar: ModelArtifact[] = activeRange
+
     if (e.metaKey) {
-      if (activeRange.has(directory)) {
-        activeRange.delete(directory)
+      if (inActiveRange(directory)) {
+        ar = ar.filter(a => a !== directory)
       } else {
-        activeRange.add(directory)
+        ar.push(directory)
       }
 
-      setActiveRange(activeRange)
-    } else if (e.shiftKey) {
+      setActiveRange(ar)
+    } else if (e.shiftKey && ar.length > 0) {
       selectArtifactsInRange(directory)
     } else {
-      if (activeRange.size > 0) {
-        activeRange.clear()
+      if (ar.length > 0) {
+        ar = []
       }
 
-      activeRange.add(directory)
+      ar.push(directory)
 
-      setActiveRange(activeRange)
+      setActiveRange(ar)
     }
   }
 
-  const disabled = activeRange.size > 1 && activeRange.has(directory)
+  const disabled = activeRange.length > 1 && inActiveRange(directory)
 
   return (
     <div className={clsx('h-full', isDragging && 'opacity-50')}>
@@ -212,7 +205,7 @@ const Directory = function Directory({
             <FileExplorer.Container
               artifact={directory}
               className={clsx(
-                isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
+                artifactRename === directory && 'bg-primary-10',
                 isDraggable && 'bg-primary-10 !cursor-grabbing',
                 isOpenContextMenu && 'bg-primary-10',
                 className,
@@ -223,7 +216,13 @@ const Directory = function Directory({
               <Directory.Icons
                 isOpen={isOpen || (isOver && isFalse(isDragging))}
               />
-              {isStringEmptyOrNil(newName) ? (
+              {artifactRename === directory ? (
+                <FileExplorer.Rename
+                  artifact={artifactRename}
+                  rename={renameArtifact}
+                  close={() => setArtifactRename(undefined)}
+                />
+              ) : (
                 <FileExplorer.ContextMenu
                   trigger={
                     <FileExplorer.ContextMenuTrigger>
@@ -243,22 +242,20 @@ const Directory = function Directory({
                     onSelect={(e: Event) => {
                       e.stopPropagation()
 
-                      if (activeRange.size > 1 && activeRange.has(directory)) {
-                        ;(activeRange as Set<ModelDirectory>).forEach(
-                          artifact => {
-                            if (shouldClose) {
+                      if (activeRange.length > 1 && inActiveRange(directory)) {
+                        ;(activeRange as ModelDirectory[]).forEach(artifact => {
+                          if (shouldClose) {
+                            artifact.collapse()
+                          } else if (shouldOpen) {
+                            artifact.expand()
+                          } else if (shouldToggle) {
+                            if (artifact.isOpened) {
                               artifact.collapse()
-                            } else if (shouldOpen) {
+                            } else {
                               artifact.expand()
-                            } else if (shouldToggle) {
-                              if (artifact.isOpened) {
-                                artifact.collapse()
-                              } else {
-                                artifact.expand()
-                              }
                             }
-                          },
-                        )
+                          }
+                        })
                       } else {
                         if (directory.isOpened) {
                           directory.collapse()
@@ -267,7 +264,7 @@ const Directory = function Directory({
                         }
                       }
 
-                      setActiveRange(new Set())
+                      setActiveRange([])
                     }}
                   >
                     {isAllDirectories && shouldClose && 'Collapse All'}
@@ -331,7 +328,7 @@ const Directory = function Directory({
                     onSelect={(e: Event) => {
                       e.stopPropagation()
 
-                      setNewName(directory.name)
+                      setArtifactRename(directory)
                     }}
                   >
                     Rename
@@ -345,29 +342,24 @@ const Directory = function Directory({
                       removeArtifactWithConfirmation(directory)
                     }}
                   >
-                    Remove {activeRange.has(directory) ? activeRange.size : ''}
+                    Remove {inActiveRange(directory) ? activeRange.length : ''}
                     <div className="ml-auto pl-5"></div>
                   </ContextMenu.Item>
                 </FileExplorer.ContextMenu>
-              ) : (
-                <FileExplorer.Rename
-                  artifact={directory}
-                  newName={newName}
-                  setNewName={setNewName}
-                />
               )}
             </FileExplorer.Container>
           </div>
         )}
         {((isOver && isFalse(isDragging)) || isOpen || !directory.withParent) &&
           directory.withDirectories && (
-            <ul className={clsx(activeRange.has(directory) && 'bg-brand-5')}>
+            <ul className={clsx(inActiveRange(directory) && 'bg-brand-5')}>
               {directory.directories.map(dir => (
                 <li
                   key={dir.id}
                   title={dir.name}
                 >
                   <Directory
+                    key={dir.id}
                     directory={dir}
                     style={{
                       paddingLeft: directory.withParent
@@ -381,13 +373,14 @@ const Directory = function Directory({
           )}
         {((isOver && isFalse(isDragging)) || isOpen || !directory.withParent) &&
           directory.withFiles && (
-            <ul className={clsx(activeRange.has(directory) && 'bg-brand-5')}>
+            <ul className={clsx(inActiveRange(directory) && 'bg-brand-5')}>
               {directory.files.map(file => (
                 <li
                   key={file.id}
                   title={file.name}
                 >
                   <File
+                    key={file.id}
                     file={file}
                     style={{
                       paddingLeft: directory.withParent

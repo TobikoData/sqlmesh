@@ -82,15 +82,15 @@ export default function PageIDE(): JSX.Element {
   const setFiles = useStoreProject(s => s.setFiles)
   const refreshFiles = useStoreProject(s => s.refreshFiles)
   const findAtrifactByPath = useStoreProject(s => s.findAtrifactByPath)
-  const findParentByPath = useStoreProject(s => s.findParentByPath)
+  const setActiveRange = useStoreProject(s => s.setActiveRange)
 
-  const tabs = useStoreEditor(s => s.tabs)
   const storedTabs = useStoreEditor(s => s.storedTabs)
   const storedTabId = useStoreEditor(s => s.storedTabId)
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const addTabs = useStoreEditor(s => s.addTabs)
-  const removeTab = useStoreEditor(s => s.removeTab)
+  const closeTab = useStoreEditor(s => s.closeTab)
+  const inTabs = useStoreEditor(s => s.inTabs)
 
   const subscribe = useChannelEvents()
 
@@ -134,8 +134,10 @@ export default function PageIDE(): JSX.Element {
     )
     const unsubscribeFile = subscribe<{
       changes: any
-      models: any
-    }>('file', (changes: any) => {
+      directories: any
+    }>('file', ({ changes, directories }) => {
+      changes.sort((a: any) => (a.change === 'deleted' ? -1 : 1))
+
       changes.forEach(({ change, path, file, directory, type }: any) => {
         if (change === 'modified') {
           const currentFile = findAtrifactByPath(file.path) as
@@ -152,43 +154,53 @@ export default function PageIDE(): JSX.Element {
 
           if (isNil(artifact)) return
 
-          if (artifact instanceof ModelFile) {
-            removeTab(artifact)
-
-            artifact.parent?.removeFile(artifact)
-          }
-
           if (artifact instanceof ModelDirectory) {
-            artifact.allFiles.forEach(file => {
-              if (tabs.has(file)) {
-                removeTab(file)
-              }
-            })
-
             artifact.parent?.removeDirectory(artifact)
           }
-        }
 
-        if (change === 'added') {
-          const artifact = findParentByPath(path)
+          if (artifact instanceof ModelFile) {
+            artifact.parent?.removeFile(artifact)
 
-          if (isNil(artifact)) return
-
-          if (type === 'file') {
-            const newFile = new ModelFile(file, artifact)
-
-            artifact.addFile(newFile)
-          }
-
-          if (type === 'directory') {
-            const newDirectory = new ModelDirectory(directory, artifact)
-
-            artifact.addDirectory(newDirectory)
+            if (inTabs(artifact)) {
+              closeTab(artifact)
+            }
           }
         }
       })
 
+      for (const path in directories) {
+        const currentDirectory = findAtrifactByPath(path) as
+          | ModelDirectory
+          | undefined
+
+        if (isNil(currentDirectory)) continue
+
+        directories[path].directories.forEach((d: any) => {
+          const directory = findAtrifactByPath(d.path) as
+            | ModelDirectory
+            | undefined
+
+          if (isNil(directory)) {
+            currentDirectory.addDirectory(
+              new ModelDirectory(d, currentDirectory),
+            )
+          }
+        })
+
+        directories[path].files.forEach((f: any) => {
+          const file = findAtrifactByPath(f.path) as ModelFile | undefined
+
+          if (isNil(file)) {
+            currentDirectory.addFile(new ModelFile(f, currentDirectory))
+          }
+        })
+
+        currentDirectory.directories.sort((a, b) => (a.name > b.name ? 1 : -1))
+        currentDirectory.files.sort((a, b) => (a.name > b.name ? 1 : -1))
+      }
+
       refreshFiles()
+      setActiveRange()
     })
 
     void debouncedGetModels().then(({ data }) => {

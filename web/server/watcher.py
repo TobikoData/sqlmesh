@@ -38,38 +38,42 @@ async def watch_project(queue: asyncio.Queue) -> None:
     async for entries in awatch(context.path, watch_filter=watch_filter, force_polling=True):
         should_load_context = False
         changes: t.List[models.ArtifactChange] = []
+        directories: t.Dict[str, models.Directory] = {}
 
         for (change, path) in list(entries):
-            if change == Change.modified and os.path.isdir(path):
-                continue
+            relative_path = Path(path).relative_to(settings.project_path)
 
             should_load_context = should_load_context or ft.reduce(
                 lambda v, p: v or is_relative_to(Path(path), p), paths, False
             )
 
-            relative_path = Path(path).relative_to(settings.project_path)
-
-            if change == Change.deleted or os.path.exists(path) == False:
+            if change == Change.modified and os.path.isdir(path):
+                directory = _get_directory(path, settings, path_mapping, context)
+                directories[directory.path] = directory
+            elif change == Change.deleted or os.path.exists(path) == False:
                 changes.append(
                     models.ArtifactChange(
                         change=Change.deleted.name,
                         path=str(relative_path),
                     )
                 )
-            else:
+            elif change == Change.modified and os.path.isfile(path):
+                type = (
+                    models.ArtifactType.directory
+                    if os.path.isdir(path)
+                    else models.ArtifactType.file
+                )
+                file = (
+                    _get_file_with_content(relative_path, settings, path_mapping)
+                    if os.path.isfile(path)
+                    else None
+                )
                 changes.append(
                     models.ArtifactChange(
-                        type=models.ArtifactType.directory
-                        if os.path.isdir(path)
-                        else models.ArtifactType.file,
+                        type=type,
                         change=change.name,
                         path=str(relative_path),
-                        directory=_get_directory(path, settings, path_mapping, context)
-                        if os.path.isdir(path)
-                        else None,
-                        file=_get_file_with_content(relative_path, settings, path_mapping)
-                        if os.path.isfile(path)
-                        else None,
+                        file=file,
                     )
                 )
 
@@ -79,7 +83,14 @@ async def watch_project(queue: asyncio.Queue) -> None:
         queue.put_nowait(
             Event(
                 event="file",
-                data=json.dumps(jsonable_encoder(changes)),
+                data=json.dumps(
+                    jsonable_encoder(
+                        {
+                            "changes": changes,
+                            "directories": directories,
+                        }
+                    )
+                ),
             )
         )
 
