@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, useEffect } from 'react'
+import React, { useState, type MouseEvent, useEffect } from 'react'
 import { DocumentIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { useStoreProject } from '@context/project'
@@ -71,7 +71,7 @@ function File({
     preview(getEmptyImage(), { captureDraggingState: true })
   }, [preview])
 
-  function handleSelect(e: MouseEvent): void {
+  function handleSelect(e: React.MouseEvent | React.KeyboardEvent): void {
     e.stopPropagation()
 
     if (e.shiftKey) {
