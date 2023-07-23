@@ -229,22 +229,17 @@ function FileExplorerArtifactContainer({
   isSelected?: boolean
   className?: string
   style?: React.CSSProperties
-  handleSelect: (e: React.MouseEvent | React.KeyboardEvent) => void
+  handleSelect?: (e: React.MouseEvent | React.KeyboardEvent) => void
 }): JSX.Element {
-  const { setArtifactRename } = useFileExplorer()
+  const {
+    setArtifactRename,
+    isBottomGroupInActiveRange,
+    isTopGroupInActiveRange,
+    isMiddleGroupInActiveRange,
+  } = useFileExplorer()
 
   const activeRange = useStoreProject(s => s.activeRange)
   const inActiveRange = useStoreProject(s => s.inActiveRange)
-
-  const isBottomGroupInActiveRange = useStoreProject(
-    s => s.isBottomGroupInActiveRange,
-  )
-  const isTopGroupInActiveRange = useStoreProject(
-    s => s.isTopGroupInActiveRange,
-  )
-  const isMiddleGroupInActiveRange = useStoreProject(
-    s => s.isMiddleGroupInActiveRange,
-  )
 
   return (
     <span
@@ -277,13 +272,13 @@ function FileExplorerArtifactContainer({
 
           setArtifactRename(artifact)
 
-          handleSelect(e)
+          handleSelect?.(e)
         }
 
         if (e.key === ' ') {
           e.stopPropagation()
 
-          handleSelect(e)
+          handleSelect?.(e)
         }
       }}
     >

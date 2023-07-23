@@ -33,6 +33,9 @@ interface FileExplorer {
   removeArtifacts: (artifacts: ModelArtifact[]) => void
   removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
   moveArtifacts: (artifacts: ModelArtifact[], target: ModelDirectory) => void
+  isTopGroupInActiveRange: (artifact: ModelArtifact) => boolean
+  isBottomGroupInActiveRange: (artifact: ModelArtifact) => boolean
+  isMiddleGroupInActiveRange: (artifact: ModelArtifact) => boolean
 }
 
 export const FileExplorerContext = createContext<FileExplorer>({
@@ -45,6 +48,9 @@ export const FileExplorerContext = createContext<FileExplorer>({
   removeArtifacts: () => { },
   removeArtifactWithConfirmation: () => { },
   moveArtifacts: () => { },
+  isTopGroupInActiveRange: () => false,
+  isBottomGroupInActiveRange: () => false,
+  isMiddleGroupInActiveRange: () => false,
 })
 
 export default function FileExplorerProvider({
@@ -326,6 +332,46 @@ export default function FileExplorerProvider({
       })
   }
 
+  function isTopGroupInActiveRange(artifact: ModelArtifact): boolean {
+    const index = project.allVisibleArtifacts.indexOf(artifact)
+    const prev = project.allVisibleArtifacts[index - 1]
+    const next = project.allVisibleArtifacts[index + 1]
+
+    return (
+      inActiveRange(artifact) &&
+      (isNil(prev) || isFalse(inActiveRange(prev))) &&
+      isNotNil(next) &&
+      inActiveRange(next)
+    )
+  }
+
+  function isBottomGroupInActiveRange(artifact: ModelArtifact): boolean {
+    const index = project.allVisibleArtifacts.indexOf(artifact)
+    const prev = project.allVisibleArtifacts[index - 1]
+    const next = project.allVisibleArtifacts[index + 1]
+
+    return (
+      inActiveRange(artifact) &&
+      (isNil(next) || isFalse(inActiveRange(next))) &&
+      isNotNil(prev) &&
+      inActiveRange(prev)
+    )
+  }
+
+  function isMiddleGroupInActiveRange(artifact: ModelArtifact): boolean {
+    const index = project.allVisibleArtifacts.indexOf(artifact)
+    const prev = project.allVisibleArtifacts[index - 1]
+    const next = project.allVisibleArtifacts[index + 1]
+
+    return (
+      inActiveRange(artifact) &&
+      isNotNil(next) &&
+      inActiveRange(next) &&
+      isNotNil(prev) &&
+      inActiveRange(prev)
+    )
+  }
+
   return (
     <FileExplorerContext.Provider
       value={{
@@ -338,6 +384,9 @@ export default function FileExplorerProvider({
         removeArtifactWithConfirmation,
         moveArtifacts,
         selectArtifactsInRange,
+        isTopGroupInActiveRange,
+        isBottomGroupInActiveRange,
+        isMiddleGroupInActiveRange,
       }}
     >
       {children}
