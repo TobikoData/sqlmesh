@@ -80,17 +80,3 @@ function inActiveRange(
 ): boolean {
   return activeRange.includes(artifact)
 }
-
-// function inActiveRangeParent(artifact: ModelArtifact, activeRange: ModelArtifact[]): boolean {
-//   let parent = artifact.parent
-
-//   while (isNotNil(parent)) {
-//     if (inActiveRange(parent, activeRange)) {
-//       return true
-//     }
-
-//     parent = parent.parent
-//   }
-
-//   return false
-// }
