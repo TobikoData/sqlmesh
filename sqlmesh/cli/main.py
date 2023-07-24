@@ -289,6 +289,11 @@ def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.An
 @opt.start_time
 @opt.end_time
 @click.option("--skip-janitor", is_flag=True, help="Skip the janitor task.")
+@click.option(
+    "--ignore-cron",
+    is_flag=True,
+    help="Run for all missing intervals, ignoring individual cron schedules.",
+)
 @click.pass_context
 @error_handler
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
