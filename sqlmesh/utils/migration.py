@@ -1,7 +1,8 @@
 from sqlglot.dialects.dialect import DialectType
 
-# https://dev.mysql.com/doc/refman/8.0/en/storage-requirements.html#data-types-storage-reqs-strings
-MAX_TEXT_LENGTH = 65535
+# This is an ad-hoc upper bound which doesn't necessarily match MySQL's
+# TEXT storage specification, but it should be good for most use cases.
+MAX_TEXT_LENGTH = 1024
 
 
 def primary_key_text_type(dialect: DialectType) -> str:

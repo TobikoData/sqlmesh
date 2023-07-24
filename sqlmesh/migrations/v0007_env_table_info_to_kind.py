@@ -5,7 +5,7 @@ import zlib
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.utils.migrations import primary_key_text_type
+from sqlmesh.utils.migration import primary_key_text_type
 
 
 def _hash(data):  # type: ignore
