@@ -203,5 +203,4 @@ def run_all(
     command_namespace: t.Optional[str],
 ) -> None:
     """Runs all the commands in the correct order."""
-    print("Merge method: ", merge_method)
     return _run_all(ctx.obj["github"], merge_method, delete, command_namespace)
