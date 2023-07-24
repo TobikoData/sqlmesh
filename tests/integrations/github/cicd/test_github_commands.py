@@ -10,6 +10,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
     GithubController,
+    MergeMethod,
 )
 from sqlmesh.utils.errors import PlanError
 
@@ -75,7 +76,7 @@ def test_run_all_success_with_approvers_approved(
     github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
 ):
     controller = get_mocked_controller(github_pr_synchronized_approvers_controller, mocker)
-    command._run_all(controller, merge=False, delete=False)
+    command._run_all(controller, merge_method=None, delete=False)
     assert [
         (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
@@ -124,7 +125,7 @@ def test_run_all_success_no_approvers(
     controller = get_mocked_controller(
         github_pr_synchronized_approvers_controller, mocker, has_approvers=False
     )
-    command._run_all(controller, merge=True, delete=True)
+    command._run_all(controller, merge_method=MergeMethod.REBASE, delete=True)
     assert [
         (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
@@ -168,7 +169,7 @@ def test_run_all_success_with_approvers_approved_merge_delete(
     github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
 ):
     controller = get_mocked_controller(github_pr_synchronized_approvers_controller, mocker)
-    command._run_all(controller, merge=True, delete=True)
+    command._run_all(controller, merge_method=MergeMethod.REBASE, delete=True)
     assert [
         (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
@@ -207,7 +208,7 @@ def test_run_all_success_with_approvers_approved_merge_delete(
             replace_if_exists=False,
         ),
     ]
-    assert controller.merge_pr.called
+    assert controller.merge_pr.call_args_list == [call(merge_method=MergeMethod.REBASE)]
     assert controller.delete_pr_environment.called
 
 
@@ -217,7 +218,7 @@ def test_run_all_success_with_approvers_none_approved(
     controller = get_mocked_controller(
         github_pr_synchronized_approvers_controller, mocker, has_approval=False
     )
-    command._run_all(controller, merge=True, delete=True)
+    command._run_all(controller, merge_method=MergeMethod.REBASE, delete=True)
     assert [
         (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
@@ -265,7 +266,7 @@ def test_run_all_test_failed(
     controller = get_mocked_controller(
         github_pr_synchronized_approvers_controller, mocker, test_success=False
     )
-    command._run_all(controller, merge=True, delete=True)
+    command._run_all(controller, merge_method=MergeMethod.REBASE, delete=True)
     assert [
         (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
@@ -313,7 +314,7 @@ def test_pr_update_failure(
     controller = get_mocked_controller(
         github_pr_synchronized_approvers_controller, mocker, success_update_pr_environment=False
     )
-    command._run_all(controller, merge=True, delete=True)
+    command._run_all(controller, merge_method=MergeMethod.REBASE, delete=True)
     assert [
         (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
@@ -355,7 +356,7 @@ def test_deploy_to_prod_failure(
     controller = get_mocked_controller(
         github_pr_synchronized_approvers_controller, mocker, success_deploy_to_prod=False
     )
-    command._run_all(controller, merge=True, delete=True)
+    command._run_all(controller, merge_method=MergeMethod.REBASE, delete=True)
     assert [
         (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
@@ -402,7 +403,7 @@ def test_comment_command_invalid(
     github_pr_invalid_command_controller: GithubController, mocker: MockerFixture
 ):
     controller = get_mocked_controller(github_pr_invalid_command_controller, mocker)
-    command._run_all(controller, merge=True, delete=True)
+    command._run_all(controller, merge_method=MergeMethod.REBASE, delete=True)
     assert not controller._update_check.called
     assert not controller.deploy_to_prod.called
     assert not controller.update_pr_environment.called
@@ -415,7 +416,7 @@ def test_comment_command_deploy_prod(
     github_pr_command_deploy_prod_controller: GithubController, mocker: MockerFixture
 ):
     controller = get_mocked_controller(github_pr_command_deploy_prod_controller, mocker)
-    command._run_all(controller, merge=True, delete=True)
+    command._run_all(controller, merge_method=MergeMethod.SQUASH, delete=True)
     assert [
         (x[1]["name"], x[1]["status"], x[1]["conclusion"])
         for x in controller._update_check.call_args_list
@@ -452,5 +453,5 @@ def test_comment_command_deploy_prod(
             replace_if_exists=False,
         ),
     ]
-    assert controller.merge_pr.called
+    assert controller.merge_pr.call_args_list == [call(merge_method=MergeMethod.SQUASH)]
     assert controller.delete_pr_environment.called

@@ -66,7 +66,7 @@ jobs:
         shell: bash
       - name: Run CI/CD Bot
         run: |
-          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all --merge --delete
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all --merge_method merge --delete
 ```
 3. (Optional) If you want to designate users as required approvers, update your SQLMesh config file to represent this. YAML Example:
 ```yaml
@@ -98,7 +98,8 @@ See [Run All Configuration](#run-all-configuration) for the `--command_namespace
 The `run-all` config command will run all of the actions in a single step. 
 This means it checks for approvers, runs unit tests, creates PR environment, and then deploys to prod.
 It has two boolean flags that can be passed in to enable additional functionality:
-* `--merge` - This will merge the PR after deploying to production in order to keep your main branch in-sync with your data
+* `--merge_method` - Providing this option will result in merging the PR after deploying to production in order to keep your main branch in-sync with your data. 
+  * Options: `merge`, `squash`, `rebase`. Default: `merge`
 * `--delete` - This will delete the PR environment after deploying to production. 
     * Note: If using `--delete` then the runner will need a connection to the engine even if you are using Airflow. This is because the delete is done outside of Airflow.
     * Eventually want the SQLMesh Janitor to automatically do this cleanup which would remove the need for this flag.
@@ -182,7 +183,7 @@ jobs:
           credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
       - name: Run CI/CD Bot
         run: |
-          sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all --merge --delete
+          sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all --merge_method squash --delete
 ```
 
 ## Future Improvements

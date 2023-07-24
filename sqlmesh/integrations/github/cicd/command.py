@@ -9,16 +9,17 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
     GithubController,
+    MergeMethod,
 )
 from sqlmesh.utils.errors import CICDBotError, PlanError
 
 logger = logging.getLogger(__name__)
 
 
-merge_option = click.option(
-    "--merge",
-    is_flag=True,
-    help="Merge the PR after successfully deploying to production",
+merge_method_option = click.option(
+    "--merge-method",
+    type=click.Choice(MergeMethod),  # type: ignore
+    help="Enables merging PR after successfully deploying to production using the provided method. Defaults to `merge`",
 )
 
 delete_option = click.option(
@@ -114,7 +115,7 @@ def update_pr_environment(ctx: click.Context) -> None:
 
 def _deploy_production(
     controller: GithubController,
-    merge_pr_after_deploy: bool = True,
+    merge_method: t.Optional[MergeMethod],
     delete_environment_after_deploy: bool = True,
 ) -> bool:
     controller.update_prod_environment_check(status=GithubCheckStatus.IN_PROGRESS)
@@ -123,8 +124,8 @@ def _deploy_production(
         controller.update_prod_environment_check(
             status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SUCCESS
         )
-        if merge_pr_after_deploy:
-            controller.merge_pr()
+        if merge_method:
+            controller.merge_pr(merge_method=merge_method)
         if delete_environment_after_deploy:
             controller.delete_pr_environment()
         return True
@@ -136,19 +137,21 @@ def _deploy_production(
 
 
 @github.command()
-@merge_option
+@merge_method_option
 @delete_option
 @click.pass_context
-def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
+def deploy_production(
+    ctx: click.Context, merge_method: t.Optional[MergeMethod], delete: bool
+) -> None:
     """Deploys the production environment"""
     _deploy_production(
-        ctx.obj["github"], merge_pr_after_deploy=merge, delete_environment_after_deploy=delete
+        ctx.obj["github"], merge_method=merge_method, delete_environment_after_deploy=delete
     )
 
 
 def _run_all(
     controller: GithubController,
-    merge: bool,
+    merge_method: t.Optional[MergeMethod],
     delete: bool,
     command_namespace: t.Optional[str] = None,
 ) -> None:
@@ -176,7 +179,7 @@ def _run_all(
     pr_environment_updated = _update_pr_environment(controller)
     if tests_passed and has_required_approval and pr_environment_updated:
         _deploy_production(
-            controller, merge_pr_after_deploy=merge, delete_environment_after_deploy=delete
+            controller, merge_method=merge_method, delete_environment_after_deploy=delete
         )
     else:
         controller.update_prod_environment_check(
@@ -185,7 +188,7 @@ def _run_all(
 
 
 @github.command()
-@merge_option
+@merge_method_option
 @delete_option
 @click.option(
     "--command_namespace",
@@ -194,7 +197,11 @@ def _run_all(
 )
 @click.pass_context
 def run_all(
-    ctx: click.Context, merge: bool, delete: bool, command_namespace: t.Optional[str]
+    ctx: click.Context,
+    merge_method: t.Optional[MergeMethod],
+    delete: bool,
+    command_namespace: t.Optional[str],
 ) -> None:
     """Runs all the commands in the correct order."""
-    return _run_all(ctx.obj["github"], merge, delete, command_namespace)
+    print("Merge method: ", merge_method)
+    return _run_all(ctx.obj["github"], merge_method, delete, command_namespace)
