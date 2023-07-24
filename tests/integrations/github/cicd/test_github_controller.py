@@ -130,7 +130,7 @@ def test_merge_pr(
 ):
     controller = github_pr_synchronized_approvers_controller
     controller._pull_request = mocker.MagicMock()
-    controller.merge_pr()
+    controller.merge_pr(merge_method=MergeMethod.MERGE)
     controller._pull_request.method_calls == [call.merge(merge_method=MergeMethod.MERGE)]
 
 
