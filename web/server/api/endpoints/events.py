@@ -4,6 +4,8 @@ import typing as t
 from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
+from sqlmesh.utils.date import now_timestamp
+
 router = APIRouter()
 
 
@@ -22,5 +24,9 @@ async def events(request: Request) -> EventSourceResponse:
             request.app.state.console_listeners.remove(queue)
 
     return EventSourceResponse(
-        generator(), ping=300, ping_message_factory=lambda: ServerSentEvent(comment="ping")
+        generator(),
+        ping=10,
+        ping_message_factory=lambda: ServerSentEvent(
+            event="ping", data={"timestamp": now_timestamp()}
+        ),
     )
