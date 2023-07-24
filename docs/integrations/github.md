@@ -61,6 +61,8 @@ jobs:
         uses: actions/setup-python@v4
       - name: Checkout PR branch
         uses: actions/checkout@v3
+        with:
+          ref: refs/pull/${{ github.event.issue.pull_request && github.event.issue.number || github.event.pull_request.number  }}/merge
       - name: Install SQLMesh + Dependencies
         run: pip install -r requirements.txt
         shell: bash
@@ -172,6 +174,8 @@ jobs:
           python-version: '3.9'
       - name: Checkout PR branch
         uses: actions/checkout@v3
+        with:
+          ref: refs/pull/${{ github.event.issue.pull_request && github.event.issue.number || github.event.pull_request.number  }}/merge
       - name: Install Dependencies
         run: pip install -r requirements.txt
         shell: bash
