@@ -4,6 +4,8 @@ import json
 import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.utils.migrations import primary_key_text_type
+
 
 def migrate(state_sync):  # type: ignore
     engine_adapter = state_sync.engine_adapter
@@ -32,13 +34,15 @@ def migrate(state_sync):  # type: ignore
     if new_snapshots:
         engine_adapter.delete_from(snapshots_table, "TRUE")
 
+        pk_text_type = primary_key_text_type(engine_adapter.dialect)
+
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
             columns_to_types={
-                "name": exp.DataType.build("text"),
-                "identifier": exp.DataType.build("text"),
-                "version": exp.DataType.build("text"),
+                "name": exp.DataType.build(pk_text_type),
+                "identifier": exp.DataType.build(pk_text_type),
+                "version": exp.DataType.build(pk_text_type),
                 "snapshot": exp.DataType.build("text"),
                 "kind_name": exp.DataType.build("text"),
             },

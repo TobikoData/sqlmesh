@@ -5,6 +5,8 @@ import zlib
 import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.utils.migrations import primary_key_text_type
+
 
 def _hash(data):  # type: ignore
     return str(zlib.crc32(";".join("" if d is None else d for d in data).encode("utf-8")))
@@ -77,11 +79,13 @@ def migrate(state_sync):  # type: ignore
     if new_environments:
         engine_adapter.delete_from(environments_table, "TRUE")
 
+        pk_text_type = primary_key_text_type(engine_adapter.dialect)
+
         engine_adapter.insert_append(
             environments_table,
             pd.DataFrame(new_environments),
             columns_to_types={
-                "name": exp.DataType.build("text"),
+                "name": exp.DataType.build(pk_text_type),
                 "snapshots": exp.DataType.build("text"),
                 "start_at": exp.DataType.build("text"),
                 "end_at": exp.DataType.build("text"),
