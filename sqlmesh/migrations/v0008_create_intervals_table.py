@@ -16,7 +16,7 @@ def migrate(state_sync):  # type: ignore
         intervals_table,
         {
             "id": exp.DataType.build("text"),
-            "created_ts": exp.DataType.build(pk_text_type),
+            "created_ts": exp.DataType.build("bigint"),
             "name": exp.DataType.build(pk_text_type),
             "identifier": exp.DataType.build(pk_text_type),
             "version": exp.DataType.build(pk_text_type),
