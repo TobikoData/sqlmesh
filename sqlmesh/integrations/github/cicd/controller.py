@@ -659,11 +659,10 @@ class GithubController:
             conclusion_handler=conclusion_handler,
         )
 
-    def merge_pr(self, merge_method: t.Optional[MergeMethod] = None) -> None:
+    def merge_pr(self, merge_method: MergeMethod) -> None:
         """
         Merges the PR
         """
-        merge_method = merge_method or MergeMethod.MERGE
         self._pull_request.merge(merge_method=merge_method.value)
 
     def get_command_from_comment(self, namespace: t.Optional[str] = None) -> BotCommand:
