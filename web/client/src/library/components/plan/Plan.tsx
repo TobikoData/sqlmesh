@@ -13,7 +13,12 @@ import {
   EnumPlanApplyType,
 } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
-import { useApiPlanRun, useApiPlanApply, apiCancelPlanApply } from '~/api'
+import {
+  useApiPlanRun,
+  useApiPlanApply,
+  apiCancelPlanApply,
+  apiCancelPlanRun,
+} from '~/api'
 import {
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
@@ -231,7 +236,12 @@ function Plan({
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
-    apiCancelPlanApply(client)
+    const cancelAction =
+      planAction === EnumPlanAction.Applying
+        ? apiCancelPlanApply
+        : apiCancelPlanRun
+
+    cancelAction(client)
       .then(() => {
         setPlanAction(EnumPlanAction.Run)
         setPlanState(EnumPlanState.Cancelled)
