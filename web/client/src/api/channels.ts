@@ -2,12 +2,15 @@ import { isNil, isNotNil } from '../utils'
 
 type ChannelCallback<TData = any> = (data: TData) => void
 
+const WAIT_AND_RECONNECT = 20000
+const WAIT_AND_RETRY = 3000
+
 class EventSourceConnection {
   channels = new Map<string, Optional<(e: MessageEvent) => void>>()
   eventSource: Optional<EventSource>
   timerId: Optional<ReturnType<typeof setTimeout>>
   source: string
-  wait: number = 3000
+  wait: number = 10000
 
   constructor(source: string, wait?: number) {
     this.source = source
@@ -18,7 +21,7 @@ class EventSourceConnection {
 
   listen(eventSource: EventSource): void {
     eventSource.addEventListener('error', (e: MessageEvent) => {
-      this.reconnect('error', 3000)
+      this.reconnect('error', WAIT_AND_RETRY)
     })
 
     eventSource.addEventListener('ping', (e: MessageEvent) => {
@@ -47,8 +50,6 @@ class EventSourceConnection {
   }
 
   reconnect(topic: string, wait: number): void {
-    console.log('From: ', topic)
-
     clearTimeout(this.timerId)
 
     this.timerId = setTimeout(() => {
@@ -81,7 +82,7 @@ class EventSourceConnection {
   }
 
   removeChannel(topic: string): void {
-    const handler = this.channels.get(topic)
+    const handler = this.getChannel(topic)
 
     if (isNotNil(handler)) {
       this.eventSource?.removeEventListener(topic, handler)
@@ -90,7 +91,7 @@ class EventSourceConnection {
   }
 
   hasChannel(topic: string): boolean {
-    return isNotNil(this.channels.get(topic))
+    return isNotNil(this.getChannel(topic))
   }
 
   getChannel(topic: string): Optional<(e: MessageEvent) => void> {
@@ -115,7 +116,7 @@ class EventSourceConnection {
   }
 }
 
-const Connection = new EventSourceConnection('/api/events', 15000)
+const Connection = new EventSourceConnection('/api/events', WAIT_AND_RECONNECT)
 
 export function useChannelEvents(): <TData = any>(
   topic: string,

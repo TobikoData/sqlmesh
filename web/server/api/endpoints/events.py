@@ -25,7 +25,7 @@ async def events(request: Request) -> EventSourceResponse:
 
     return EventSourceResponse(
         generator(),
-        ping=10,
+        ping=15,
         ping_message_factory=lambda: ServerSentEvent(
             event="ping", data={"timestamp": now_timestamp()}
         ),

@@ -450,7 +450,6 @@ def ui(
         host=host,
         port=port,
         log_level="info",
-        timeout_graceful_shutdown=1,
         timeout_keep_alive=299,
     )
 
