@@ -1,5 +1,3 @@
-import typing as t
-
 from sqlglot.dialects.dialect import DialectType
 
 # https://dev.mysql.com/doc/refman/8.0/en/storage-requirements.html#data-types-storage-reqs-strings
