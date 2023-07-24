@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 merge_method_option = click.option(
     "--merge-method",
     type=click.Choice(MergeMethod),  # type: ignore
-    help="Enables merging PR after successfully deploying to production using the provided method. Defaults to `merge`",
+    help="Enables merging PR after successfully deploying to production using the provided method.",
 )
 
 delete_option = click.option(
