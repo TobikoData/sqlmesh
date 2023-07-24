@@ -385,6 +385,7 @@ class Context(BaseContext):
         end: t.Optional[TimeLike] = None,
         latest: t.Optional[TimeLike] = None,
         skip_janitor: bool = False,
+        ignore_cron: bool = False,
     ) -> None:
         """Run the entire dag through the scheduler.
 
@@ -394,13 +395,16 @@ class Context(BaseContext):
             end: The end of the interval to render.
             latest: The latest time used for non incremental datasets.
             skip_janitor: Whether to skip the janitor task.
+            ignore_cron: Whether to ignore the model's cron schedule and run all available missing intervals.
         """
         environment = environment or c.PROD
         self.notification_target_manager.notify(
             NotificationEvent.RUN_START, environment=environment
         )
         try:
-            self.scheduler(environment=environment).run(environment, start, end, latest)
+            self.scheduler(environment=environment).run(
+                environment, start, end, latest, ignore_cron=ignore_cron
+            )
         except Exception as e:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_FAILURE, traceback.format_exc()

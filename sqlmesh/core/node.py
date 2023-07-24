@@ -33,6 +33,59 @@ class IntervalUnit(str, Enum):
     def is_date_granularity(self) -> bool:
         return self in (IntervalUnit.YEAR, IntervalUnit.MONTH, IntervalUnit.DAY)
 
+    @property
+    def _cron_expr(self) -> str:
+        if self == IntervalUnit.MINUTE:
+            return "* * * * *"
+        if self == IntervalUnit.HOUR:
+            return "0 * * * *"
+        if self == IntervalUnit.DAY:
+            return "0 0 * * *"
+        if self == IntervalUnit.MONTH:
+            return "0 0 1 * *"
+        if self == IntervalUnit.YEAR:
+            return "0 0 1 1 *"
+        return ""
+
+    def croniter(self, value: TimeLike) -> CroniterCache:
+        return CroniterCache(self._cron_expr, value)
+
+    def cron_next(self, value: TimeLike) -> TimeLike:
+        """
+        Get the next timestamp given a time-like value for this interval unit.
+
+        Args:
+            value: A variety of date formats.
+
+        Returns:
+            The timestamp for the next run.
+        """
+        return self.croniter(value).get_next()
+
+    def cron_prev(self, value: TimeLike) -> TimeLike:
+        """
+        Get the previous timestamp given a time-like value for this interval unit.
+
+        Args:
+            value: A variety of date formats.
+
+        Returns:
+            The timestamp for the previous run.
+        """
+        return self.croniter(value).get_prev()
+
+    def cron_floor(self, value: TimeLike) -> TimeLike:
+        """
+        Get the floor timestamp given a time-like value for this interval unit.
+
+        Args:
+            value: A variety of date formats.
+
+        Returns:
+            The timestamp floor.
+        """
+        return self.croniter(self.cron_next(value)).get_prev()
+
 
 class Node(PydanticModel):
     """
@@ -143,31 +196,9 @@ class Node(PydanticModel):
                 self._interval_unit = IntervalUnit.MINUTE
         return self._interval_unit
 
-    def normalized_cron(self) -> str:
-        """Returns the UTC normalized cron based on sampling heuristics.
-
-        SQLMesh supports 5 interval units, yearly, monthly, daily, hourly, and minutes. If a
-        job is scheduled daily at 1PM, the actual intervals are shifted back to midnight UTC.
-
-        Returns:
-            The cron string representing either daily, hourly, or minutes.
-        """
-        unit = self.interval_unit()
-        if unit == IntervalUnit.MINUTE:
-            return "* * * * *"
-        if unit == IntervalUnit.HOUR:
-            return "0 * * * *"
-        if unit == IntervalUnit.DAY:
-            return "0 0 * * *"
-        if unit == IntervalUnit.MONTH:
-            return "0 0 1 * *"
-        if unit == IntervalUnit.YEAR:
-            return "0 0 1 1 *"
-        return ""
-
     def croniter(self, value: TimeLike) -> CroniterCache:
         if self._croniter is None:
-            self._croniter = CroniterCache(self.normalized_cron(), value)
+            self._croniter = CroniterCache(self.cron, value)
         else:
             self._croniter.curr = value
         return self._croniter
