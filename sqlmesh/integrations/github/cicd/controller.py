@@ -114,6 +114,12 @@ class GithubCheckConclusion(str, Enum):
         return self == GithubCheckConclusion.SKIPPED
 
 
+class MergeMethod(str, Enum):
+    MERGE = "merge"
+    SQUASH = "squash"
+    REBASE = "rebase"
+
+
 class BotCommand(Enum):
     INVALID = 1
     DEPLOY_PROD = 2
@@ -653,11 +659,11 @@ class GithubController:
             conclusion_handler=conclusion_handler,
         )
 
-    def merge_pr(self) -> None:
+    def merge_pr(self, merge_method: MergeMethod) -> None:
         """
-        Merges the PR
+        Merges the PR using the provided merge_method
         """
-        self._pull_request.merge()
+        self._pull_request.merge(merge_method=merge_method.value)
 
     def get_command_from_comment(self, namespace: t.Optional[str] = None) -> BotCommand:
         """
