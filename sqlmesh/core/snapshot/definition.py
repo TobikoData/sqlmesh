@@ -651,6 +651,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
         latest_ts = to_timestamp(latest)
 
+        interval_unit = self.model.interval_unit()
+
         upper_bound_ts = (
             to_timestamp(self.model.cron_floor(execution_time or now()))
             if not ignore_cron
@@ -658,11 +660,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
         if upper_bound_ts:
             latest_ts = min(latest_ts, upper_bound_ts)
-            end_ts = min(
-                end_ts, to_timestamp(self.model.interval_unit().cron_floor(upper_bound_ts))
-            )
+            end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
 
-        croniter = self.model.interval_unit().croniter(start_ts)
+        croniter = interval_unit.croniter(start_ts)
         dates = [start_ts]
 
         # get all individual dates with the addition of extra lookback dates up to the latest date
@@ -693,7 +693,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             next_ts = (
                 dates[i + 1]
                 if i + 1 < len(dates)
-                else to_timestamp(self.model.interval_unit().cron_next(current_ts))
+                else to_timestamp(interval_unit.cron_next(current_ts))
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
