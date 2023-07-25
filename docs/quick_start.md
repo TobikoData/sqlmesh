@@ -89,7 +89,7 @@ SQLMesh project-level configuration parameters are specified in the `config.yaml
 
 This example project uses the embedded DuckDB SQL engine, so its configuration specifies `duckdb` as the local gateway's connection and the `local` gateway as the default. 
 
-The command to run the scaffold generator **requires** a default SQL dialect for your models, which it places in the config `model_defaults` `dialect` key. In this example, we specified the `snowflake` SQL dialect as the default:
+The command to run the scaffold generator **requires** a default SQL dialect for your models, which it places in the config `model_defaults` `dialect` key. In this example, we specified the `duckdb` SQL dialect as the default:
 
 ```yaml linenums="1"
 gateways:
@@ -101,7 +101,7 @@ gateways:
 default_gateway: local
 
 model_defaults:
-    dialect: snowflake
+    dialect: duckdb
 ```
 
 Learn more about SQLMesh project configuration [here](./reference/configuration.md).
