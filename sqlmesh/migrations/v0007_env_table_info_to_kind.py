@@ -5,7 +5,7 @@ import zlib
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.utils.migration import primary_key_text_type
+from sqlmesh.utils.migration import index_text_type
 
 
 def _hash(data):  # type: ignore
@@ -79,7 +79,7 @@ def migrate(state_sync):  # type: ignore
     if new_environments:
         engine_adapter.delete_from(environments_table, "TRUE")
 
-        pk_text_type = primary_key_text_type(engine_adapter.dialect)
+        pk_text_type = index_text_type(engine_adapter.dialect)
 
         engine_adapter.insert_append(
             environments_table,

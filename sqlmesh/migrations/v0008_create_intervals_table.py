@@ -1,7 +1,7 @@
 """Create a dedicated table to store snapshot intervals."""
 from sqlglot import exp
 
-from sqlmesh.utils.migration import primary_key_text_type
+from sqlmesh.utils.migration import index_text_type
 
 
 def migrate(state_sync):  # type: ignore
@@ -10,12 +10,12 @@ def migrate(state_sync):  # type: ignore
     if state_sync.schema:
         intervals_table = f"{state_sync.schema}.{intervals_table}"
 
-    pk_text_type = primary_key_text_type(engine_adapter.dialect)
+    pk_text_type = index_text_type(engine_adapter.dialect)
 
     engine_adapter.create_state_table(
         intervals_table,
         {
-            "id": exp.DataType.build("text"),
+            "id": exp.DataType.build(pk_text_type),
             "created_ts": exp.DataType.build("bigint"),
             "name": exp.DataType.build(pk_text_type),
             "identifier": exp.DataType.build(pk_text_type),

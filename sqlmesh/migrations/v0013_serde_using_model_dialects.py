@@ -6,7 +6,7 @@ import pandas as pd
 from sqlglot import exp, parse_one
 
 from sqlmesh.utils.jinja import has_jinja
-from sqlmesh.utils.migration import primary_key_text_type
+from sqlmesh.utils.migration import index_text_type
 
 
 def migrate(state_sync):  # type: ignore
@@ -48,7 +48,7 @@ def migrate(state_sync):  # type: ignore
     if new_snapshots:
         engine_adapter.delete_from(snapshots_table, "TRUE")
 
-        pk_text_type = primary_key_text_type(engine_adapter.dialect)
+        pk_text_type = index_text_type(engine_adapter.dialect)
 
         engine_adapter.insert_append(
             snapshots_table,

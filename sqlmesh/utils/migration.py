@@ -5,7 +5,7 @@ from sqlglot.dialects.dialect import DialectType
 MAX_TEXT_LENGTH = 1024
 
 
-def primary_key_text_type(dialect: DialectType) -> str:
+def index_text_type(dialect: DialectType) -> str:
     """
     MySQL cannot create indexes or primary keys on TEXT fields; it requires that
     the fields have a VARCHAR type of fixed length. This helper simply abstracts
