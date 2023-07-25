@@ -180,6 +180,32 @@ model_defaults:
 | `batch_size`     | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. |      int       |    N     |
 | `storage_format` | The storage format that should be used to store physical tables; only applicable to engines such as Spark                                                                                                                                                                                                     |     string     |    N     |
 
+## Virtual Data Environment configuration
+
+### Physical Schema Override
+By default SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__<schema>`. This can be 
+overriden on a per-schema basis using the `physical_schema_override` option. This will remove the `sqlmesh__` prefix 
+and just use the name you provide.
+
+Config example:
+
+```yaml linenums="1"
+physical_schema_override:
+  db: my_db
+```
+
+If you had a model name of `db.table` then the physical table would be created as `my_db.table_<fingerprint>` instead
+of the default behavior of `sqlmesh__db.table_<fingerprint>`.
+
+Keep in mind this applies to just the physical tables that SQLMesh creates. The views are still created in `db` (prod) 
+or `db__<env>`. You may want to override this behavior if you have permissions/governance rules you are trying to 
+adhere to at your organization and therefore need more control over the schema names used.
+
+### View Schema Override
+
+Coming soon. Please message us on [slack](https://tobikodata.com/slack) if you are interested in this feature so we can better understand your 
+use case and make sure the new feature satisfies your needs.
+
 ## Additional details
 
 ### Auto categorize changes

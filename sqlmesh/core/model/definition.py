@@ -579,6 +579,10 @@ class _Model(ModelMeta, frozen=True):
     def disable_restatement(self) -> bool:
         return getattr(self.kind, "disable_restatement", False)
 
+    @property
+    def schema_name(self) -> str:
+        return exp.to_table(self.name).db
+
     def validate_definition(self) -> None:
         """Validates the model's definition.
 
@@ -645,15 +649,15 @@ class _Model(ModelMeta, frozen=True):
         """
         raise NotImplementedError
 
-    @property
-    def data_hash(self) -> str:
+    def data_hash(self, additional_fields: t.Optional[t.List[str]] = None) -> str:
         """
         Computes the data hash for the node.
 
         Returns:
             The data hash for the node.
         """
-        return hash_data(self._data_hash_fields)
+        hash_fields = self._data_hash_fields + (additional_fields or [])
+        return hash_data(hash_fields)
 
     @property
     def _data_hash_fields(self) -> t.List[str]:

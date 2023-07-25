@@ -336,3 +336,20 @@ model_defaults:
         assert snowflake_connection.account == "123"
         assert snowflake_connection.user == "ABC"
         assert snowflake_connection.password == "XYZ"
+
+
+def test_physical_schema_override() -> None:
+    def get_schemas(context: Context):
+        return {snapshot.physical_schema for snapshot in context.snapshots.values()}
+
+    def get_view_schemas(context: Context):
+        return {snapshot.qualified_view_name.schema_name for snapshot in context.snapshots.values()}
+
+    no_mapping_context = Context(paths="examples/sushi")
+    assert no_mapping_context.config.physical_schema_override == {}
+    assert get_schemas(no_mapping_context) == {"sqlmesh__sushi", "sqlmesh__raw"}
+    assert get_view_schemas(no_mapping_context) == {"sushi", "raw"}
+    context = Context(paths="examples/sushi", config="map_config")
+    assert context.config.physical_schema_override == {"sushi": "company_internal"}
+    assert get_schemas(context) == {"company_internal", "sqlmesh__raw"}
+    assert get_view_schemas(context) == {"sushi", "raw"}

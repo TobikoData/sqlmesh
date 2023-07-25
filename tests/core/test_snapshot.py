@@ -47,7 +47,7 @@ def parent_model():
 @pytest.fixture
 def model():
     return SqlModel(
-        name="name",
+        name="db.name",
         kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
         owner="owner",
         dialect="spark",
@@ -388,7 +388,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2864366485",
+        data_hash="1172953370",
         metadata_hash="1237394431",
     )
 
@@ -405,6 +405,13 @@ def test_fingerprint(model: Model, parent_model: Model):
             nodes={"parent.tbl": SqlModel(**{**model.dict(), "query": parse_one("select 2, ds")})},
         )
         != with_parent_fingerprint
+    )
+
+    assert original_fingerprint == fingerprint_from_node(
+        model, nodes={}, physical_schema_override={"ignore": "something"}
+    )
+    assert original_fingerprint != fingerprint_from_node(
+        model, nodes={}, physical_schema_override={"db": "not_db"}
     )
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds")})
@@ -574,6 +581,8 @@ def test_table_name(snapshot: Snapshot):
     )
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
+    snapshot.physical_schema_ = "private"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "private.name__3078928823"
 
 
 def test_categorize_change_sql(make_snapshot):

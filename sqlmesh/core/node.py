@@ -148,8 +148,7 @@ class Node(PydanticModel):
         """The maximal number of units in a single task for a backfill."""
         return None
 
-    @property
-    def data_hash(self) -> str:
+    def data_hash(self, additional_fields: t.Optional[t.List[str]] = None) -> str:
         """
         Computes the data hash for the node.
 
