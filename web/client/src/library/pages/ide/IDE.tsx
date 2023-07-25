@@ -8,7 +8,6 @@ import {
   useApiEnvironments,
   useApiPlanRun,
   apiCancelGetEnvironments,
-  apiCancelPlanRun,
 } from '../../../api'
 import {
   EnumPlanState,
@@ -153,7 +152,6 @@ export default function PageIDE(): JSX.Element {
       apiCancelFiles(client)
       apiCancelModels(client)
       apiCancelGetEnvironments(client)
-      apiCancelPlanRun(client)
 
       unsubscribeTasks?.()
       unsubscribeModels?.()

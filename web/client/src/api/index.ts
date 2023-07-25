@@ -39,7 +39,7 @@ import {
   type GetTableDiffApiTableDiffGetParams,
   type TableDiff,
   type FetchdfInput,
-  Meta,
+  type Meta,
   getApiMetaApiMetaGet,
 } from './client'
 import {
@@ -308,6 +308,12 @@ export async function apiCancelPlanApply(client: QueryClient): Promise<void> {
   return await cancelPlanApiPlanCancelPost()
 }
 
+export async function apiCancelPlanRun(client: QueryClient): Promise<void> {
+  void client.cancelQueries({ queryKey: ['/api/plan'] })
+
+  return await cancelPlanApiPlanCancelPost()
+}
+
 export function apiCancelFetchdf(client: QueryClient): void {
   void client.cancelQueries({ queryKey: ['/api/commands/fetchdf'] })
 }
@@ -322,10 +328,6 @@ export function apiCancelEvaluate(client: QueryClient): void {
 
 export function apiCancelLineage(client: QueryClient): void {
   void client.cancelQueries({ queryKey: ['/api/lineage'] })
-}
-
-export function apiCancelPlanRun(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/plan'] })
 }
 
 export function apiCancelGetEnvironments(client: QueryClient): void {
