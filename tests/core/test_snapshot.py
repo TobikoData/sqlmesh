@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -388,7 +389,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="2864366485",
-        metadata_hash="2802762491",
+        metadata_hash="1237394431",
     )
 
     assert fingerprint == original_fingerprint
@@ -436,7 +437,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="3834815287",
-        metadata_hash="3708753471",
+        metadata_hash="3585221762",
     )
 
     model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -478,7 +479,7 @@ def test_fingerprint_jinja_macros(model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="1459830598",
-        metadata_hash="2802762491",
+        metadata_hash="1237394431",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
@@ -989,8 +990,33 @@ def test_inclusive_exclusive_monthly(make_snapshot):
 
     assert snapshot.inclusive_exclusive("2023-01-01", "2023-07-31") == (
         to_timestamp("2023-01-01"),
-        to_timestamp("2023-07-01"),
+        to_timestamp("2023-08-01"),
     )
+
+
+def test_inclusive_exclusive_hourly(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds"), batch_size=1),
+            owner="owner",
+            dialect="",
+            cron="@hourly",
+            start="1 week ago",
+            query=parse_one("SELECT id, @end_ds as ds FROM name"),
+        )
+    )
+
+    target_date = "2023-01-29"
+    target_dt = to_datetime(target_date)
+
+    assert snapshot.missing_intervals(target_date, target_date) == [
+        (
+            to_timestamp(target_dt + timedelta(hours=h)),
+            to_timestamp(target_dt + timedelta(hours=h + 1)),
+        )
+        for h in range(24)
+    ]
 
 
 def test_model_custom_cron(make_snapshot):
@@ -1056,3 +1082,18 @@ def test_model_custom_cron(make_snapshot):
     ) == [
         (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
     ]
+
+
+def test_model_custom_interval_unit(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            cron="0 5 * * *",
+            interval_unit="hour",
+            start="2023-01-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    assert len(snapshot.missing_intervals("2023-01-29", "2023-01-29")) == 24

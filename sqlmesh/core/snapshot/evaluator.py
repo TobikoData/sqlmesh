@@ -705,7 +705,7 @@ class MaterializableStrategy(PromotableStrategy):
                 columns_to_types=model.columns_to_types_or_raise,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
-                partition_interval_unit=model.interval_unit(),
+                partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
             )
         else:
@@ -715,7 +715,7 @@ class MaterializableStrategy(PromotableStrategy):
                 model.columns_to_types,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,
-                partition_interval_unit=model.interval_unit(),
+                partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
             )
 
@@ -823,7 +823,7 @@ class FullRefreshStrategy(MaterializableStrategy):
             columns_to_types=model.columns_to_types,
             storage_format=model.storage_format,
             partitioned_by=model.partitioned_by,
-            partition_interval_unit=model.interval_unit(),
+            partition_interval_unit=model.interval_unit,
             clustered_by=model.clustered_by,
         )
 

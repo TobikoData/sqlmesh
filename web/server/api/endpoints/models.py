@@ -88,7 +88,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             lookback=lookback,
             cron_prev=to_datetime(model.cron_prev(value=now())),
             cron_next=to_datetime(model.cron_next(value=now())),
-            interval_unit=model.interval_unit(),
+            interval_unit=model.interval_unit,
             annotated=model.annotated,
         )
 

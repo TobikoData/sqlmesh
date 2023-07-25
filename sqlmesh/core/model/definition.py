@@ -704,6 +704,7 @@ class _Model(ModelMeta, frozen=True):
             *sorted(self.grain),
             str(self.forward_only),
             str(self.disable_restatement),
+            str(self.interval_unit_) if self.interval_unit_ is not None else None,
         ]
 
         for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
