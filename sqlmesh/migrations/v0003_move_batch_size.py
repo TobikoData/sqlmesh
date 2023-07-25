@@ -1,11 +1,10 @@
+"""Move batch_size from the model and into the kind."""
 import json
 
 from sqlglot import exp
 
 
 def migrate(state_sync):  # type: ignore
-    """Move batch_size from the model and into the kind."""
-
     snapshots_table = "_snapshots"
     if state_sync.schema:
         snapshots_table = f"{state_sync.schema}.{snapshots_table}"
