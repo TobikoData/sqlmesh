@@ -54,6 +54,7 @@ nav:
     - integrations/dbt.md
     - integrations/github.md
     - integrations/engines.md
+  - "FAQ": faq.md
   - Resources:
     - comparisons.md
     - development.md
@@ -94,4 +95,8 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
+  - admonition
+  - pymdownx.details
+extra_css:
+  - stylesheets/extra.css
 copyright: Tobiko Data Inc.
