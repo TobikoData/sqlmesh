@@ -54,11 +54,10 @@ nav:
     - integrations/dbt.md
     - integrations/github.md
     - integrations/engines.md
-  - "FAQ": faq.md
   - Resources:
     - comparisons.md
     - development.md
-    - release_notes.md
+  - "FAQ": faq.md
   - API: _readthedocs/html/sqlmesh.html
 theme:
   name: material
