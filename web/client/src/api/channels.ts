@@ -1,31 +1,31 @@
-import { isNil, isNotNil } from '../utils'
+import { isFalse, isNil, isNotNil } from '../utils'
 
 type ChannelCallback<TData = any> = (data: TData) => void
 
-const WAIT_AND_RECONNECT = 20000
-const WAIT_AND_RETRY = 3000
+const DELAY_AND_RECONNECT = 20000
+const DELAY_AND_RETRY = 3000
 
 class EventSourceConnection {
   channels = new Map<string, Optional<(e: MessageEvent) => void>>()
   eventSource: Optional<EventSource>
   timerId: Optional<ReturnType<typeof setTimeout>>
   source: string
-  wait: number = 10000
+  delay: number = DELAY_AND_RECONNECT
 
-  constructor(source: string, wait?: number) {
+  constructor(source: string, delay?: number) {
     this.source = source
-    this.wait = wait ?? this.wait
+    this.delay = delay ?? this.delay
 
     this.setEventSource()
   }
 
   listen(eventSource: EventSource): void {
     eventSource.addEventListener('error', (e: MessageEvent) => {
-      this.reconnect('error', WAIT_AND_RETRY)
+      this.reconnect(DELAY_AND_RETRY)
     })
 
     eventSource.addEventListener('ping', (e: MessageEvent) => {
-      this.reconnect('ping', this.wait)
+      this.reconnect(this.delay)
     })
   }
 
@@ -49,7 +49,7 @@ class EventSourceConnection {
     })
   }
 
-  reconnect(topic: string, wait: number): void {
+  reconnect(delay: number): void {
     clearTimeout(this.timerId)
 
     this.timerId = setTimeout(() => {
@@ -57,7 +57,7 @@ class EventSourceConnection {
       this.cleanup()
       this.resubscribe()
       this.setEventSource()
-    }, wait)
+    }, delay)
   }
 
   getEventSource(): EventSource {
@@ -103,7 +103,7 @@ class EventSourceConnection {
     callback: ChannelCallback<TData>,
   ): (e: MessageEvent) => void {
     return (event: MessageEvent<string>) => {
-      this.reconnect(topic, this.wait)
+      this.reconnect(this.delay)
 
       if (isNil(topic) || isNil(callback) || isNil(event.data)) return
 
@@ -116,20 +116,18 @@ class EventSourceConnection {
   }
 }
 
-const Connection = new EventSourceConnection('/api/events', WAIT_AND_RECONNECT)
+const Connection = new EventSourceConnection('/api/events', DELAY_AND_RECONNECT)
 
 export function useChannelEvents(): <TData = any>(
   topic: string,
   callback: ChannelCallback<TData>,
 ) => Optional<() => void> {
   return (topic, callback) => {
-    if (isNil(topic) || Connection.hasChannel(topic)) return cleanUpChannel
+    if (isNotNil(topic) && isFalse(Connection.hasChannel(topic))) {
+      Connection.addChannel(topic, callback)
+    }
 
-    Connection.addChannel(topic, callback)
-
-    return cleanUpChannel
-
-    function cleanUpChannel(): void {
+    return () => {
       Connection.removeChannel(topic)
     }
   }

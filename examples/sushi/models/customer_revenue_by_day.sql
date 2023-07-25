@@ -12,7 +12,7 @@ MODEL (
   grain [customer_id, ds],
 );
 
-WITH order_total AS ( 
+WITH order_total AS (
   SELECT
     oi.order_id AS order_id,
     SUM(oi.quantity * i.price) AS total,
