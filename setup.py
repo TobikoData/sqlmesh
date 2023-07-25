@@ -122,6 +122,7 @@ setup(
             "watchfiles>=0.19.0",
             "pyarrow>=10.0.1",
             "uvicorn[standard]==0.22.0",
+            "sse-starlette>=0.2.2",
         ],
     },
     classifiers=[

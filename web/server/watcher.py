@@ -2,13 +2,13 @@ import asyncio
 import json
 
 from fastapi.encoders import jsonable_encoder
+from sse_starlette.sse import ServerSentEvent
 from watchfiles import DefaultFilter, awatch
 
 from sqlmesh.core import constants as c
 from web.server.api.endpoints.models import get_all_models
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context, get_settings
-from web.server.sse import Event
 
 
 async def watch_project(queue: asyncio.Queue) -> None:
@@ -22,7 +22,7 @@ async def watch_project(queue: asyncio.Queue) -> None:
             context.load()
         except Exception:
             queue.put_nowait(
-                Event(
+                ServerSentEvent(
                     event="errors",
                     data=json.dumps(
                         ApiException(
@@ -34,5 +34,7 @@ async def watch_project(queue: asyncio.Queue) -> None:
             )
         else:
             queue.put_nowait(
-                Event(event="models", data=json.dumps(jsonable_encoder(get_all_models(context))))
+                ServerSentEvent(
+                    event="models", data=json.dumps(jsonable_encoder(get_all_models(context)))
+                )
             )
