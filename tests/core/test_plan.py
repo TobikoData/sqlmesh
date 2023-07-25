@@ -75,7 +75,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     yesterday_ds_mock.return_value = expected_start
 
     now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
-    now_ds_mock.return_value = expected_end
+    now_ds_mock.return_value = to_date("2022-01-03")
 
     plan = Plan(context_diff_mock, forward_only=True, is_dev=True)
 
@@ -407,8 +407,8 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
 
     start_mock = mocker.patch("sqlmesh.core.snapshot.definition.earliest_start_date")
     start_mock.return_value = to_ds("2022-01-01")
-    end_mock = mocker.patch("sqlmesh.core.plan.definition.now")
-    end_mock.return_value = to_ds("2022-01-29")
+    now_mock = mocker.patch("sqlmesh.core.plan.definition.now")
+    now_mock.return_value = to_ds("2022-01-30")
     snapshot_a.add_interval("2022-01-01", "2022-01-05")
 
     plan = Plan(context_diff_mock, is_dev=True)

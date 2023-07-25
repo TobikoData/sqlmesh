@@ -72,7 +72,6 @@ class Scheduler:
         self,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         is_dev: bool = False,
         restatements: t.Optional[t.Set[str]] = None,
@@ -91,7 +90,6 @@ class Scheduler:
         Args:
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
-            latest: The latest datetime to use for non-incremental queries.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
@@ -107,9 +105,8 @@ class Scheduler:
             snapshots,
             start=start or earliest_start_date(snapshots),
             end=end or now(),
-            latest=latest or now(),
-            execution_time=execution_time or now(),
             is_dev=is_dev,
+            execution_time=execution_time or now(),
             restatements=restatements,
             ignore_cron=ignore_cron,
         )
@@ -119,7 +116,7 @@ class Scheduler:
         snapshot: Snapshot,
         start: TimeLike,
         end: TimeLike,
-        latest: TimeLike,
+        execution_time: TimeLike,
         is_dev: bool = False,
         **kwargs: t.Any,
     ) -> None:
@@ -129,7 +126,7 @@ class Scheduler:
             snapshot: Snapshot to evaluate.
             start: The start datetime to render.
             end: The end datetime to render.
-            latest: The latest datetime to use for non-incremental queries.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
@@ -150,7 +147,7 @@ class Scheduler:
             snapshot,
             start,
             end,
-            latest,
+            execution_time,
             snapshots=snapshots,
             is_dev=is_dev,
             **kwargs,
@@ -160,7 +157,7 @@ class Scheduler:
                 snapshot=snapshot,
                 start=start,
                 end=end,
-                latest=latest,
+                execution_time=execution_time,
                 snapshots=snapshots,
                 is_dev=is_dev,
                 **kwargs,
@@ -179,7 +176,6 @@ class Scheduler:
         environment: str,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Set[str]] = None,
         ignore_cron: bool = False,
@@ -190,7 +186,6 @@ class Scheduler:
             environment: The environment the user is targeting when applying their change.
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
-            latest: The latest datetime to use for non-incremental queries.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A set of snapshots to restate.
             ignore_cron: Whether to ignore the model's cron schedule.
@@ -202,11 +197,10 @@ class Scheduler:
         validate_date_range(start, end)
 
         is_dev = environment != c.PROD
-        latest = latest or now()
+        execution_time = execution_time or now()
         batches = self.batches(
             start,
             end,
-            latest,
             execution_time,
             is_dev=is_dev,
             restatements=restatements,
@@ -226,11 +220,11 @@ class Scheduler:
         )
 
         def evaluate_node(node: SchedulingUnit) -> None:
-            assert latest
+            assert execution_time
             snapshot, (start, end) = node
             self.console.start_snapshot_evaluation_progress(snapshot)
             try:
-                self.evaluate(snapshot, start, end, latest, is_dev=is_dev)
+                self.evaluate(snapshot, start, end, execution_time, is_dev=is_dev)
             finally:
                 self.console.update_snapshot_evaluation_progress(snapshot, 1)
 
@@ -304,7 +298,6 @@ def compute_interval_params(
     *,
     start: TimeLike,
     end: TimeLike,
-    latest: TimeLike,
     is_dev: bool,
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Set[str]] = None,
@@ -325,7 +318,6 @@ def compute_interval_params(
         intervals: A list of all snapshot intervals that should be considered.
         start: Start of the interval.
         end: End of the interval.
-        latest: The latest datetime to use for non-incremental queries.
         is_dev: Whether or not these intervals are for development.
         execution_time: The date/time time reference to use for execution time.
         restatements: A set of snapshot names being restated.
@@ -340,7 +332,6 @@ def compute_interval_params(
         snapshots,
         start=start,
         end=end,
-        latest=latest,
         execution_time=execution_time,
         restatements=restatements,
         is_dev=is_dev,

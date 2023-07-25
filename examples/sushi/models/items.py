@@ -68,7 +68,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    latest: datetime,
+    execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     dfs = []

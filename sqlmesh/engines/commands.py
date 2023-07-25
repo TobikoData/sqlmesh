@@ -32,7 +32,7 @@ class EvaluateCommandPayload(PydanticModel):
     parent_snapshots: t.Dict[str, Snapshot]
     start: TimeLike
     end: TimeLike
-    latest: TimeLike
+    execution_time: TimeLike
     is_dev: bool
 
 
@@ -75,7 +75,7 @@ def evaluate(
         command_payload.snapshot,
         command_payload.start,
         command_payload.end,
-        command_payload.latest,
+        command_payload.execution_time,
         snapshots=parent_snapshots,
         is_dev=command_payload.is_dev,
     )
@@ -83,7 +83,7 @@ def evaluate(
         snapshot=command_payload.snapshot,
         start=command_payload.start,
         end=command_payload.end,
-        latest=command_payload.latest,
+        execution_time=command_payload.execution_time,
         snapshots=parent_snapshots,
         is_dev=command_payload.is_dev,
     )

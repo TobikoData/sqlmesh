@@ -84,7 +84,7 @@ class SnapshotEvaluator:
         snapshot: Snapshot,
         start: TimeLike,
         end: TimeLike,
-        latest: TimeLike,
+        execution_time: TimeLike,
         snapshots: t.Dict[str, Snapshot],
         limit: t.Optional[int] = None,
         is_dev: bool = False,
@@ -96,7 +96,7 @@ class SnapshotEvaluator:
             snapshot: Snapshot to evaluate.
             start: The start datetime to render.
             end: The end datetime to render.
-            latest: The latest datetime to use for non-incremental queries.
+            execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             limit: If limit is > 0, the query will not be persisted but evaluated and returned as a dataframe.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
@@ -129,7 +129,7 @@ class SnapshotEvaluator:
         common_render_kwargs = dict(
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             has_intervals=bool(snapshot.intervals),
             **kwargs,
         )
@@ -292,7 +292,7 @@ class SnapshotEvaluator:
         snapshots: t.Dict[str, Snapshot],
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         raise_exception: bool = True,
         is_dev: bool = False,
         **kwargs: t.Any,
@@ -304,7 +304,7 @@ class SnapshotEvaluator:
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
             raise_exception: Whether to raise an exception if the audit fails. Blocking rules determine if an
                 AuditError is thrown or if we just warn with logger
             is_dev: Indicates whether the auditing happens in the development mode and temporary
@@ -334,7 +334,7 @@ class SnapshotEvaluator:
                 snapshot,
                 start=start,
                 end=end,
-                latest=latest,
+                execution_time=execution_time,
                 snapshots=snapshots,
                 is_dev=is_dev,
                 engine_adapter=self.adapter,
@@ -891,7 +891,7 @@ class ViewStrategy(PromotableStrategy):
         self.adapter.create_view(
             target_table_name,
             model.render_query_or_raise(
-                latest=now(), snapshots=snapshots, engine_adapter=self.adapter
+                execution_time=now(), snapshots=snapshots, engine_adapter=self.adapter
             ),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),

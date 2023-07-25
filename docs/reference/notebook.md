@@ -78,7 +78,7 @@ options:
 
 ## plan
 ```
-%plan environment [--start START] [--end END] [--latest LATEST]
+%plan environment [--start START] [--end END] [--execution-time EXECUTION_TIME]
             [--create-from CREATE_FROM] [--skip-tests]
             [--restate-model [RESTATE_MODEL ...]] [--no-gaps]
             [--skip-backfill] [--forward-only]
@@ -95,8 +95,8 @@ options:
   --start START, -s START
                         Start date to backfill.
   --end END, -e END     End date to backfill.
-  --latest LATEST, -l LATEST
-                        Latest date to backfill.
+  --execution-time EXECUTION_TIME
+                        Execution time.
   --create-from CREATE_FROM
                         The environment to create the target environment from
                         if it doesn't exist. Default: prod.
@@ -126,7 +126,7 @@ options:
 
 ## evaluate
 ```
-%evaluate model [--start START] [--end END] [--latest LATEST] [--limit LIMIT]
+%evaluate model [--start START] [--end END] [--execution-time EXECUTION_TIME] [--limit LIMIT]
                 
 Evaluate a model query and fetches a dataframe.
 
@@ -137,15 +137,15 @@ options:
   --start START, -s START
                         Start date to render.
   --end END, -e END     End date to render.
-  --latest LATEST, -l LATEST
-                        Latest date to render.
+  --execution-time EXECUTION_TIME
+                        Execution time.
   --limit LIMIT         The number of rows which the query should be limited
                         to.
 ```
 
 ## render
 ```
-%render model [--start START] [--end END] [--latest LATEST] [--expand EXPAND]
+%render model [--start START] [--end END] [--execution-time EXECUTION_TIME] [--expand EXPAND]
               [--dialect DIALECT]
               
 
@@ -158,8 +158,8 @@ options:
   --start START, -s START
                         Start date to render.
   --end END, -e END     End date to render.
-  --latest LATEST, -l LATEST
-                        Latest date to render.
+  --execution-time EXECUTION_TIME
+                        Execution time.
   --expand EXPAND       Whether or not to use expand materialized models,
                         defaults to False. If True, all referenced models are
                         expanded as raw queries. If a list, only referenced

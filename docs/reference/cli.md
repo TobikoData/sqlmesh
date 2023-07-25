@@ -47,8 +47,7 @@ Options:
                      will be applied.
   -e, --end TEXT     The end datetime of the interval for which this command
                      will be applied.
-  -l, --latest TEXT  The latest time used for non incremental datasets
-                     (defaults to now).
+  --execution-time TEXT The execution time (defaults to now).
   --help             Show this message and exit.
 ```
 
@@ -94,8 +93,7 @@ Options:
                      command will be applied.
   -e, --end TEXT     The end datetime of the interval for which this
                      command will be applied.
-  -l, --latest TEXT  The latest time used for non-incremental datasets
-                     (defaults to now).
+  --execution-time TEXT The execution time (defaults to now).
   --limit INTEGER    The number of rows the query should be limited to.
   --help             Show this message and exit.
 ```
@@ -180,8 +178,7 @@ Options:
                             command will be applied.
   -e, --end TEXT            The end datetime of the interval for which this
                             command will be applied.
-  -l, --latest TEXT         The latest time used for non incremental datasets
-                            (defaults to now).
+  --execution-time TEXT     The execution time (defaults to now).
   --create-from TEXT        The environment to create the target environment
                             from if it doesn't exist. Default: prod.
   --skip-tests TEXT         Skip tests prior to generating the plan if they
@@ -236,8 +233,7 @@ Options:
                      will be applied.
   -e, --end TEXT     The end datetime of the interval for which this command
                      will be applied.
-  -l, --latest TEXT  The latest time used for non incremental datasets
-                     (defaults to now).
+  --execution-time TEXT The execution time used (defaults to now).
   --expand TEXT      Whether or not to expand materialized models (defaults to
                      False). If True, all referenced models are expanded as
                      raw queries. Multiple model names can also be specified,

@@ -164,7 +164,7 @@ class Audit(AuditMeta, frozen=True):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         is_dev: bool = False,
         **kwargs: t.Any,
@@ -175,7 +175,7 @@ class Audit(AuditMeta, frozen=True):
             snapshot_or_model: The snapshot or model which is being audited.
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
             snapshots: All snapshots (by model name) to use for mapping of physical locations.
             audit_name: The name of audit if the query to render is for an audit.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
@@ -215,7 +215,7 @@ class Audit(AuditMeta, frozen=True):
         rendered_query = query_renderer.render(
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             snapshots=snapshots,
             is_dev=is_dev,
             this_model=query,
@@ -246,7 +246,7 @@ class Audit(AuditMeta, frozen=True):
             path=self._path or Path(),
             jinja_macro_registry=self.jinja_macros,
             python_env=model.python_env,
-            only_latest=model.kind.only_latest,
+            only_execution_time=model.kind.only_execution_time,
         )
 
 

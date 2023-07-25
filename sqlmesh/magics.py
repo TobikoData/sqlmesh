@@ -121,7 +121,7 @@ class SQLMeshMagics(Magics):
     @argument("model", type=str, help="The model.")
     @argument("--start", "-s", type=str, help="Start date to render.")
     @argument("--end", "-e", type=str, help="End date to render.")
-    @argument("--latest", "-l", type=str, help="Latest date to render.")
+    @argument("--execution-time", type=str, help="Execution time.")
     @argument("--dialect", "-d", type=str, help="The rendered dialect.")
     @line_cell_magic
     def model(self, line: str, sql: t.Optional[str] = None) -> None:
@@ -170,7 +170,7 @@ class SQLMeshMagics(Magics):
                 model.name,
                 start=args.start,
                 end=args.end,
-                latest=args.latest,
+                execution_time=args.execution_time,
             ).sql(pretty=True, dialect=args.dialect or model.dialect)
         )
 
@@ -242,7 +242,7 @@ class SQLMeshMagics(Magics):
     )
     @argument("--start", "-s", type=str, help="Start date to backfill.")
     @argument("--end", "-e", type=str, help="End date to backfill.")
-    @argument("--latest", "-l", type=str, help="Latest date to backfill.")
+    @argument("--execution-time", type=str, help="Execution time.")
     @argument(
         "--create-from",
         type=str,
@@ -318,7 +318,7 @@ class SQLMeshMagics(Magics):
             args.environment,
             start=args.start,
             end=args.end,
-            latest=args.latest,
+            execution_time=args.execution_time,
             create_from=args.create_from,
             skip_tests=args.skip_tests,
             restate_models=args.restate_model,
@@ -370,7 +370,7 @@ class SQLMeshMagics(Magics):
     @argument("model", type=str, help="The model.")
     @argument("--start", "-s", type=str, help="Start date to render.")
     @argument("--end", "-e", type=str, help="End date to render.")
-    @argument("--latest", "-l", type=str, help="Latest date to render.")
+    @argument("--execution-time", type=str, help="Execution time.")
     @argument(
         "--limit",
         type=int,
@@ -386,7 +386,7 @@ class SQLMeshMagics(Magics):
             args.model,
             start=args.start,
             end=args.end,
-            latest=args.latest,
+            execution_time=args.execution_time,
             limit=args.limit,
         )
         self.display(df)
@@ -395,7 +395,7 @@ class SQLMeshMagics(Magics):
     @argument("model", type=str, help="The model.")
     @argument("--start", "-s", type=str, help="Start date to render.")
     @argument("--end", "-e", type=str, help="End date to render.")
-    @argument("--latest", "-l", type=str, help="Latest date to render.")
+    @argument("--execution-time", type=str, help="Execution time.")
     @argument(
         "--expand",
         type=t.Union[bool, t.Iterable[str]],
@@ -412,7 +412,7 @@ class SQLMeshMagics(Magics):
             args.model,
             start=args.start,
             end=args.end,
-            latest=args.latest,
+            execution_time=args.execution_time,
             expand=args.expand,
         )
 

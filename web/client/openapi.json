@@ -995,7 +995,7 @@
             ],
             "title": "End"
           },
-          "latest": {
+          "execution_time": {
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
@@ -1003,12 +1003,12 @@
               { "type": "integer" },
               { "type": "number" }
             ],
-            "title": "Latest"
+            "title": "ExecutionTime"
           },
           "limit": { "type": "integer", "title": "Limit", "default": 1000 }
         },
         "type": "object",
-        "required": ["model", "start", "end", "latest"],
+        "required": ["model", "start", "end", "execution_time"],
         "title": "EvaluateInput"
       },
       "FetchdfInput": {
@@ -1298,7 +1298,7 @@
             ],
             "title": "End"
           },
-          "latest": {
+          "execution_time": {
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
@@ -1306,7 +1306,7 @@
               { "type": "integer" },
               { "type": "number" }
             ],
-            "title": "Latest"
+            "title": "ExecutionTime"
           },
           "expand": {
             "anyOf": [

@@ -31,10 +31,9 @@ end_time = click.option(
     help="The end datetime of the interval for which this command will be applied.",
 )
 
-latest_time = click.option(
-    "-l",
-    "--latest",
-    help="The latest time used for non incremental datasets (defaults to now).",
+execution_time = click.option(
+    "--execution-time",
+    help="The execution time (defaults to now).",
 )
 
 expand = click.option(

@@ -759,25 +759,25 @@ Both predefined and user-defined macro variables can be accessed within a Python
 
 The first argument to every macro function, the macro evaluation context `evaluator`, contains macro variable values in its `locals` attribute. `evaluator.locals` is a dictionary whose key:value pairs are macro variables names and the associated values.
 
-For example, a function could access the predefined `latest_epoch` variable containing the epoch the model was last run like this:
+For example, a function could access the predefined `execution_epoch` variable containing the epoch timestamp of when the execution started.
 
 ```python linenums="1"
 from sqlmesh import macro
 
 @macro()
-def get_latest_epoch(evaluator):
-    return evaluator.locals['latest_epoch']
+def get_execution_epoch(evaluator):
+    return evaluator.locals['execution_epoch']
 ```
 
-The function would return the `latest_epoch` value when called in a model query:
+The function would return the `execution_epoch` value when called in a model query:
 
 ```sql linenums="1"
 SELECT
-  @get_latest_epoch() as latest_epoch
+  @get_execution_epoch() as execution_epoch
 FROM table
 ```
 
-The same approach works for user-defined macro variables, where the key `"latest_epoch"` would be replaced with the name of the user-defined variable to be accessed.
+The same approach works for user-defined macro variables, where the key `"execution_epoch"` would be replaced with the name of the user-defined variable to be accessed.
 
 One downside of that approach to accessing user-defined variables is that the name of the variable is hard-coded into the function. A more flexible approach is to pass the name of the macro variable as a function argument:
 

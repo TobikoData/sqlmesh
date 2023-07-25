@@ -24,7 +24,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    latest: datetime,
+    execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
 ```
@@ -69,7 +69,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    latest: datetime,
+    execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
 
@@ -103,7 +103,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    latest: datetime,
+    execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
 
@@ -133,7 +133,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    latest: datetime,
+    execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     # get the upstream model's name and register it as a dependency
@@ -172,7 +172,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime
-    latest: datetime,
+    execution_time: datetime,
     **kwargs: t.Any,
 ) -> DataFrame:
     # get the upstream model's name and register it as a dependency
@@ -203,7 +203,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    latest: datetime,
+    execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
     # get the upstream model's table name

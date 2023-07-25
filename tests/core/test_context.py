@@ -76,7 +76,6 @@ def test_render(sushi_context, assert_exp_eq):
             snapshot.model,
             start=date(2021, 1, 1),
             end=date(2021, 1, 1),
-            latest=date(2021, 1, 1),
             expand=True,
         ),
         f"""
@@ -178,7 +177,7 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     mock_console = mocker.Mock()
     sushi_context.console = mock_console
     yesterday = yesterday_ds()
-    sushi_context.run(start=yesterday, end=yesterday, latest=yesterday)
+    sushi_context.run(start=yesterday, end=yesterday)
 
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync, sushi_context.snapshot_evaluator

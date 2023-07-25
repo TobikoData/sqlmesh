@@ -63,7 +63,6 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-    latest: 2022-01-01
             """
     )
     result = _run_test(body, "test_foo", model, sushi_context)
@@ -111,7 +110,6 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-    latest: 2022-01-01
             """
     )
     result = _run_test(body, "test_foo", model, sushi_context)
@@ -156,7 +154,6 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-    latest: 2022-01-01
             """
     )
     result = _run_test(body, "test_foo", model, sushi_context)
@@ -204,7 +201,6 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-    latest: 2022-01-01
             """
     )
     result = _run_test(body, "test_foo", model, sushi_context)
@@ -249,7 +245,6 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-    latest: 2022-01-01
             """
     )
     result = _run_test(body, "test_foo", model, sushi_context)
@@ -292,7 +287,6 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-    latest: 2022-01-01
             """
     )
     result = _run_test(body, "test_foo", model, sushi_context)
@@ -335,7 +329,6 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-    latest: 2022-01-01
             """
     )
     result = _run_test(body, "test_foo", model, sushi_context)

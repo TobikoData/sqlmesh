@@ -82,7 +82,7 @@ from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, yesterday_ds
+from sqlmesh.utils.date import TimeLike, now_ds
 from sqlmesh.utils.errors import (
     ConfigError,
     MissingDependencyError,
@@ -383,7 +383,7 @@ class Context(BaseContext):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         skip_janitor: bool = False,
         ignore_cron: bool = False,
     ) -> None:
@@ -393,7 +393,7 @@ class Context(BaseContext):
             environment: The target environment to source model snapshots from and virtually update. Default: prod.
             start: The start of the interval to render.
             end: The end of the interval to render.
-            latest: The latest time used for non incremental datasets.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             skip_janitor: Whether to skip the janitor task.
             ignore_cron: Whether to ignore the model's cron schedule and run all available missing intervals.
         """
@@ -403,7 +403,7 @@ class Context(BaseContext):
         )
         try:
             self.scheduler(environment=environment).run(
-                environment, start, end, latest, ignore_cron=ignore_cron
+                environment, start, end, execution_time, ignore_cron=ignore_cron
             )
         except Exception as e:
             self.notification_target_manager.notify(
@@ -574,7 +574,7 @@ class Context(BaseContext):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         expand: t.Union[bool, t.Iterable[str]] = False,
         **kwargs: t.Any,
     ) -> exp.Expression:
@@ -584,7 +584,7 @@ class Context(BaseContext):
             model_or_snapshot: The model, model name, or snapshot to render.
             start: The start of the interval to render.
             end: The end of the interval to render.
-            latest: The latest time used for non incremental datasets.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             expand: Whether or not to use expand materialized models, defaults to False.
                 If True, all referenced models are expanded as raw queries.
                 If a list, only referenced models are expanded as raw queries.
@@ -592,7 +592,7 @@ class Context(BaseContext):
         Returns:
             The rendered expression.
         """
-        latest = latest or yesterday_ds()
+        execution_time = execution_time or now_ds()
 
         model = self.get_model(model_or_snapshot, raise_if_missing=True)
 
@@ -601,7 +601,11 @@ class Context(BaseContext):
         if model.is_seed:
             df = next(
                 model.render(
-                    context=self.execution_context(), start=start, end=end, latest=latest, **kwargs
+                    context=self.execution_context(),
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    **kwargs,
                 )
             )
             return next(pandas_to_sql(t.cast(pd.DataFrame, df), model.columns_to_types))
@@ -609,7 +613,7 @@ class Context(BaseContext):
         return model.render_query_or_raise(
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             snapshots=self.snapshots,
             expand=expand,
             engine_adapter=self.engine_adapter,
@@ -621,7 +625,7 @@ class Context(BaseContext):
         model_or_snapshot: ModelOrSnapshot,
         start: TimeLike,
         end: TimeLike,
-        latest: TimeLike,
+        execution_time: TimeLike,
         limit: t.Optional[int] = None,
         **kwargs: t.Any,
     ) -> DF:
@@ -633,7 +637,7 @@ class Context(BaseContext):
             model_or_snapshot: The model, model name, or snapshot to render.
             start: The start of the interval to evaluate.
             end: The end of the interval to evaluate.
-            latest: The latest time used for non incremental datasets.
+            execution_time: The date/time time reference to use for execution time.
             limit: A limit applied to the model.
         """
         snapshot = self.get_snapshot(model_or_snapshot, raise_if_missing=True)
@@ -642,7 +646,7 @@ class Context(BaseContext):
             snapshot,
             start,
             end,
-            latest,
+            execution_time,
             snapshots=self.snapshots,
             limit=limit or c.DEFAULT_MAX_LIMIT,
         )
@@ -682,7 +686,7 @@ class Context(BaseContext):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         create_from: t.Optional[str] = None,
         skip_tests: bool = False,
         restate_models: t.Optional[t.Iterable[str]] = None,
@@ -704,7 +708,7 @@ class Context(BaseContext):
             environment: The environment to diff and plan against.
             start: The start date of the backfill if there is one.
             end: The end date of the backfill if there is one.
-            latest: The latest time used for non incremental datasets.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             create_from: The environment to create the target environment from if it
                 doesn't exist. If not specified, the "prod" environment will be used.
             skip_tests: Unit tests are run by default so this will skip them if enabled
@@ -753,7 +757,7 @@ class Context(BaseContext):
             context_diff=self._context_diff(environment or c.PROD, create_from=create_from),
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             apply=self.apply,
             restate_models=restate_models,
             no_gaps=no_gaps,
@@ -993,7 +997,7 @@ class Context(BaseContext):
         end: TimeLike,
         *,
         models: t.Optional[t.Iterator[str]] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
     ) -> None:
         """Audit models.
 
@@ -1001,8 +1005,7 @@ class Context(BaseContext):
             start: The start of the interval to audit.
             end: The end of the interval to audit.
             models: The models to audit. All models will be audited if not specified.
-            latest: The latest time used for non incremental datasets.
-
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
         """
 
         snapshots = (
