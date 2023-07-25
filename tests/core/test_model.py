@@ -29,7 +29,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
-from sqlmesh.core.node import Node
+from sqlmesh.core.node import IntervalUnit, Node
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
@@ -814,7 +814,7 @@ def test_cron():
     assert to_datetime(daily.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
     assert to_timestamp(daily.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
     assert to_timestamp(daily.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
-    interval = daily.interval_unit()
+    interval = daily.interval_unit
     assert to_datetime(interval.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
     assert to_datetime(interval.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
     assert to_timestamp(interval.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
@@ -827,7 +827,7 @@ def test_cron():
         "2020-01-01 00:01"
     )
     assert to_timestamp(offset.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02 00:01")
-    interval = offset.interval_unit()
+    interval = offset.interval_unit
     assert to_datetime(interval.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
     assert to_datetime(interval.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
     assert to_timestamp(interval.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
@@ -843,7 +843,7 @@ def test_cron():
     assert to_timestamp(hourly.cron_floor("2020-01-01 10:01:00")) == to_timestamp(
         "2020-01-01 10:01:00"
     )
-    interval = hourly.interval_unit()
+    interval = hourly.interval_unit
     assert to_timestamp(interval.cron_prev("2020-01-01 10:00:00")) == to_timestamp(
         "2020-01-01 09:00:00"
     )
@@ -870,7 +870,7 @@ def test_cron():
     assert to_timestamp(monthly.cron_floor("2020-01-17 00:00:00")) == to_timestamp(
         "2020-01-02 00:00:00"
     )
-    interval = monthly.interval_unit()
+    interval = monthly.interval_unit
     assert to_timestamp(interval.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
         "2019-12-01 00:00:00"
     )
@@ -894,7 +894,7 @@ def test_cron():
     assert to_timestamp(yearly.cron_floor("2020-12-10 00:00:00")) == to_timestamp(
         "2020-02-01 00:00:00"
     )
-    interval = yearly.interval_unit()
+    interval = yearly.interval_unit
     assert to_timestamp(interval.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
         "2019-01-01 00:00:00"
     )
@@ -1628,3 +1628,49 @@ def test_incremental_unmanaged_validation():
 
     model = model.copy(update={"partitioned_by_": [exp.to_column("ds")]})
     model.validate_definition()
+
+
+def test_custom_interval_unit():
+    assert (
+        load_model(
+            d.parse("MODEL (name db.table, interval_unit minute); SELECT a FROM tbl;")
+        ).interval_unit
+        == IntervalUnit.MINUTE
+    )
+
+    assert (
+        load_model(
+            d.parse("MODEL (name db.table, interval_unit hour); SELECT a FROM tbl;")
+        ).interval_unit
+        == IntervalUnit.HOUR
+    )
+
+    assert (
+        load_model(
+            d.parse("MODEL (name db.table, interval_unit hour, cron '@daily'); SELECT a FROM tbl;")
+        ).interval_unit
+        == IntervalUnit.HOUR
+    )
+
+    assert (
+        load_model(
+            d.parse("MODEL (name db.table, cron '@daily'); SELECT a FROM tbl;")
+        ).interval_unit
+        == IntervalUnit.DAY
+    )
+
+    assert (
+        load_model(
+            d.parse("MODEL (name db.table, cron '0 5 * * *'); SELECT a FROM tbl;")
+        ).interval_unit
+        == IntervalUnit.DAY
+    )
+
+    assert (
+        load_model(
+            d.parse(
+                "MODEL (name db.table, cron '0 5 * * *', interval_unit 'minute'); SELECT a FROM tbl;"
+            )
+        ).interval_unit
+        == IntervalUnit.MINUTE
+    )

@@ -198,7 +198,7 @@ class Plan:
             if self._missing_intervals:
                 return self._get_end_date(
                     [
-                        (end, snapshot.model.interval_unit())
+                        (end, snapshot.model.interval_unit)
                         for snapshot in self.snapshots
                         if (snapshot.name, snapshot.version_get_or_generate())
                         in self._missing_intervals
@@ -209,7 +209,7 @@ class Plan:
                 )
             return self._get_end_date(
                 [
-                    (snapshot.intervals[-1][1], snapshot.model.interval_unit())
+                    (snapshot.intervals[-1][1], snapshot.model.interval_unit)
                     for snapshot in self.snapshots
                     if snapshot.intervals
                 ]
@@ -687,7 +687,7 @@ class LoadedSnapshotIntervals(SnapshotIntervals):
             intervals=snapshot.dev_intervals
             if snapshot.change_category.is_forward_only
             else snapshot.intervals,
-            interval_unit=snapshot.model.interval_unit(),
+            interval_unit=snapshot.model.interval_unit,
             model_name=snapshot.model.name,
             view_name=snapshot.model.view_name,
             change_category=snapshot.change_category,

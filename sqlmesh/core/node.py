@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from enum import Enum
 
-from pydantic import validator
+from pydantic import Field, validator
 from sqlglot import exp
 
 from sqlmesh.utils.cron import CroniterCache
@@ -110,9 +110,10 @@ class Node(PydanticModel):
     start: t.Optional[TimeLike]
     cron: str = "@daily"
     stamp: t.Optional[str]
+    interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
 
     _croniter: t.Optional[CroniterCache] = None
-    _interval_unit: t.Optional[IntervalUnit] = None
+    __inferred_interval_unit: t.Optional[IntervalUnit] = None
 
     @validator("name", pre=True)
     def _name_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> str:
@@ -138,7 +139,7 @@ class Node(PydanticModel):
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
 
-    @validator("owner", "description", "stamp", pre=True)
+    @validator("owner", "description", "stamp", "interval_unit_", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
 
@@ -157,6 +158,13 @@ class Node(PydanticModel):
         """
         raise NotImplementedError
 
+    @property
+    def interval_unit(self) -> IntervalUnit:
+        """Returns the interval unit using which data intervals are computed for this node."""
+        if self.interval_unit_ is not None:
+            return self.interval_unit_
+        return self._inferred_interval_unit()
+
     def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
         """
         Computes the metadata hash for the node.
@@ -168,33 +176,6 @@ class Node(PydanticModel):
             The metadata hash for the node.
         """
         raise NotImplementedError
-
-    def interval_unit(self, sample_size: int = 10) -> IntervalUnit:
-        """Returns the IntervalUnit of the model
-
-        The interval unit is used to determine the lag applied to start_date and end_date for model rendering and intervals.
-
-        Args:
-            sample_size: The number of samples to take from the cron to infer the unit.
-
-        Returns:
-            The IntervalUnit enum.
-        """
-        if not self._interval_unit:
-            croniter = CroniterCache(self.cron)
-            samples = [croniter.get_next() for _ in range(sample_size)]
-            min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-            if min_interval >= 31536000:
-                self._interval_unit = IntervalUnit.YEAR
-            elif min_interval >= 2419200:
-                self._interval_unit = IntervalUnit.MONTH
-            elif min_interval >= 86400:
-                self._interval_unit = IntervalUnit.DAY
-            elif min_interval >= 3600:
-                self._interval_unit = IntervalUnit.HOUR
-            else:
-                self._interval_unit = IntervalUnit.MINUTE
-        return self._interval_unit
 
     def croniter(self, value: TimeLike) -> CroniterCache:
         if self._croniter is None:
@@ -238,6 +219,33 @@ class Node(PydanticModel):
             The timestamp floor.
         """
         return self.croniter(self.cron_next(value)).get_prev()
+
+    def _inferred_interval_unit(self, sample_size: int = 10) -> IntervalUnit:
+        """Infers the interval unit from the cron expression.
+
+        The interval unit is used to determine the lag applied to start_date and end_date for model rendering and intervals.
+
+        Args:
+            sample_size: The number of samples to take from the cron to infer the unit.
+
+        Returns:
+            The IntervalUnit enum.
+        """
+        if not self.__inferred_interval_unit:
+            croniter = CroniterCache(self.cron)
+            samples = [croniter.get_next() for _ in range(sample_size)]
+            min_interval = min(b - a for a, b in zip(samples, samples[1:]))
+            if min_interval >= 31536000:
+                self.__inferred_interval_unit = IntervalUnit.YEAR
+            elif min_interval >= 2419200:
+                self.__inferred_interval_unit = IntervalUnit.MONTH
+            elif min_interval >= 86400:
+                self.__inferred_interval_unit = IntervalUnit.DAY
+            elif min_interval >= 3600:
+                self.__inferred_interval_unit = IntervalUnit.HOUR
+            else:
+                self.__inferred_interval_unit = IntervalUnit.MINUTE
+        return self.__inferred_interval_unit
 
 
 def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:
