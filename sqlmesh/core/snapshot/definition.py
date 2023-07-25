@@ -917,11 +917,9 @@ def fingerprint_from_node(
             sorted(h for p in parents for h in (p.metadata_hash, p.parent_metadata_hash))
         )
 
-        physical_schema_override_name = physical_schema_override.get(
-            node.schema_name, node.schema_name
-        )
+        physical_schema_name = physical_schema_override.get(node.schema_name, node.schema_name)
         cache[node.name] = SnapshotFingerprint(
-            data_hash=node.data_hash(additional_fields=[physical_schema_override_name]),
+            data_hash=node.data_hash(additional_fields=[physical_schema_name]),
             metadata_hash=node.metadata_hash(audits or {}),
             parent_data_hash=parent_data_hash,
             parent_metadata_hash=parent_metadata_hash,
