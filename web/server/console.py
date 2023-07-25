@@ -5,12 +5,13 @@ import json
 import typing as t
 import unittest
 
+from sse_starlette.sse import ServerSentEvent
+
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
 from web.server.exceptions import ApiException
-from web.server.sse import Event
 
 
 class ApiConsole(TerminalConsole):
@@ -21,7 +22,7 @@ class ApiConsole(TerminalConsole):
 
     def _make_event(
         self, data: str | dict[str, t.Any], event: str | None = None, ok: bool | None = None
-    ) -> Event:
+    ) -> ServerSentEvent:
         payload: dict[str, t.Any] = {
             "ok": True if ok is None else ok,
             "timestamp": now_timestamp(),
@@ -30,7 +31,7 @@ class ApiConsole(TerminalConsole):
             payload["message"] = data
         else:
             payload.update(data)
-        return Event(
+        return ServerSentEvent(
             event=event,
             data=json.dumps(payload),
         )
