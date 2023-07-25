@@ -24,7 +24,7 @@ from sqlmesh.core.model import (
     OptimizedQueryCache,
     SeedModel,
     create_external_model,
-    load_sql_file_model,
+    load_sql_based_model,
 )
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
@@ -258,7 +258,7 @@ class SqlMeshLoader(Loader):
                             raise ConfigError(
                                 f"Failed to parse a model definition at '{path}': {ex}."
                             )
-                    return load_sql_file_model(
+                    return load_sql_based_model(
                         expressions,
                         defaults=config.model_defaults.dict(),
                         macros=macros,

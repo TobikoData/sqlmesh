@@ -4,7 +4,7 @@ import typing as t
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import SqlModel, load_sql_file_model
+from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.test.definition import SqlModelTest
 from sqlmesh.utils.yaml import load as load_yaml
 
@@ -24,7 +24,7 @@ def test_ctes(sushi_context: Context) -> None:
     model = t.cast(
         SqlModel,
         sushi_context.upsert_model(
-            load_sql_file_model(
+            load_sql_based_model(
                 parse(
                     """
         MODEL (
@@ -73,7 +73,7 @@ def test_ctes_only(sushi_context: Context) -> None:
     model = t.cast(
         SqlModel,
         sushi_context.upsert_model(
-            load_sql_file_model(
+            load_sql_based_model(
                 parse(
                     """
         MODEL (
@@ -120,7 +120,7 @@ def test_query_only(sushi_context: Context) -> None:
     model = t.cast(
         SqlModel,
         sushi_context.upsert_model(
-            load_sql_file_model(
+            load_sql_based_model(
                 parse(
                     """
         MODEL (
@@ -164,7 +164,7 @@ def test_with_rows(sushi_context: Context) -> None:
     model = t.cast(
         SqlModel,
         sushi_context.upsert_model(
-            load_sql_file_model(
+            load_sql_based_model(
                 parse(
                     """
         MODEL (
@@ -211,7 +211,7 @@ def test_without_rows(sushi_context: Context) -> None:
     model = t.cast(
         SqlModel,
         sushi_context.upsert_model(
-            load_sql_file_model(
+            load_sql_based_model(
                 parse(
                     """
         MODEL (
@@ -255,7 +255,7 @@ def test_column_order(sushi_context: Context) -> None:
     model = t.cast(
         SqlModel,
         sushi_context.upsert_model(
-            load_sql_file_model(
+            load_sql_based_model(
                 parse(
                     """
         MODEL (
@@ -297,7 +297,7 @@ def test_nan(sushi_context: Context) -> None:
     model = t.cast(
         SqlModel,
         sushi_context.upsert_model(
-            load_sql_file_model(
+            load_sql_based_model(
                 parse(
                     """
         MODEL (

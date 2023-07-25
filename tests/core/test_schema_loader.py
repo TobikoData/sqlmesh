@@ -8,7 +8,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import SqlModel, load_sql_file_model
+from sqlmesh.core.model import SqlModel, load_sql_based_model
 from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.yaml import YAML
@@ -29,7 +29,7 @@ def test_create_external_models(tmpdir, assert_exp_eq):
     cursor.execute("CREATE SCHEMA sushi")
     cursor.execute("CREATE TABLE sushi.raw_fruits AS SELECT * FROM fruits")
 
-    model = load_sql_file_model(
+    model = load_sql_based_model(
         parse(
             """
         MODEL (
@@ -49,7 +49,7 @@ def test_create_external_models(tmpdir, assert_exp_eq):
     }
     context.load()
 
-    model = load_sql_file_model(
+    model = load_sql_based_model(
         parse(
             """
         MODEL (

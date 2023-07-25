@@ -1338,7 +1338,7 @@ class ExternalModel(_Model):
 Model = t.Union[SqlModel, SeedModel, PythonModel, ExternalModel]
 
 
-def load_sql_file_model(
+def load_sql_based_model(
     expressions: t.List[exp.Expression],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,

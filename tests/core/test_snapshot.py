@@ -18,7 +18,7 @@ from sqlmesh.core.model import (
     SeedModel,
     SqlModel,
     create_seed_model,
-    load_sql_file_model,
+    load_sql_based_model,
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.snapshot import (
@@ -439,7 +439,7 @@ def test_fingerprint_seed_model():
         metadata_hash="3585221762",
     )
 
-    model = load_sql_file_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     actual_fingerprint = fingerprint_from_node(model, nodes={})
     assert actual_fingerprint == expected_fingerprint
 

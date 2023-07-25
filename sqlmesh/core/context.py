@@ -541,12 +541,12 @@ class Context(BaseContext):
         snapshots = {}
 
         for model in models.values():
-            config = self.config_for_model(model)
             if model.name not in self._models and model.name in remote_snapshots:
                 snapshot = remote_snapshots[model.name]
                 ttl = snapshot.ttl
                 project = snapshot.project
             else:
+                config = self.config_for_model(model)
                 ttl = config.snapshot_ttl
                 project = config.project
 
