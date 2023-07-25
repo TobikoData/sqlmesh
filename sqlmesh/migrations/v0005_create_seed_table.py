@@ -10,13 +10,13 @@ def migrate(state_sync):  # type: ignore
     if state_sync.schema:
         seeds_table = f"{state_sync.schema}.{seeds_table}"
 
-    pk_text_type = index_text_type(engine_adapter.dialect)
+    text_type = index_text_type(engine_adapter.dialect)
 
     engine_adapter.create_state_table(
         seeds_table,
         {
-            "name": exp.DataType.build(pk_text_type),
-            "identifier": exp.DataType.build(pk_text_type),
+            "name": exp.DataType.build(text_type),
+            "identifier": exp.DataType.build(text_type),
             "content": exp.DataType.build("text"),
         },
         primary_key=("name", "identifier"),
