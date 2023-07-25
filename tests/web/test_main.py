@@ -421,7 +421,7 @@ def test_evaluate(web_sushi_context: Context) -> None:
             "model": "sushi.top_waiters",
             "start": "2022-01-01",
             "end": "now",
-            "latest": "now",
+            "execution_time": "now",
             "limit": 100,
         },
     )

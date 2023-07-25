@@ -171,27 +171,31 @@ def to_date(value: TimeLike, relative_base: t.Optional[datetime] = None) -> date
 
 
 def date_dict(
-    start: TimeLike, end: TimeLike, latest: TimeLike, only_latest: bool = False
+    execution_time: TimeLike, start: t.Optional[TimeLike], end: t.Optional[TimeLike]
 ) -> t.Dict[str, t.Union[str, datetime, date, float, int]]:
     """Creates a kwarg dictionary of datetime variables for use in SQL Contexts.
 
     Keys are like start_date, start_ds, end_date, end_ds...
 
     Args:
+        execution_time: Execution time.
         start: Start time.
         end: End time.
-        latest: Latest time.
-        only_latest: Only the latest timestamps will be returned.
 
     Returns:
         A dictionary with various keys pointing to datetime formats.
     """
     kwargs: t.Dict[str, t.Union[str, datetime, date, float, int]] = {}
 
-    prefixes = [("latest", to_datetime(latest))]
+    execution_dt = to_datetime(execution_time)
+    prefixes = [
+        ("latest", execution_dt),  # TODO: Preserved for backward compatibility. Remove in 1.0.0.
+        ("execution", execution_dt),
+    ]
 
-    if not only_latest:
+    if start is not None:
         prefixes.append(("start", to_datetime(start)))
+    if end is not None:
         prefixes.append(("end", to_datetime(end)))
 
     for prefix, time_like in prefixes:

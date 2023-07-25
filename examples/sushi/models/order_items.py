@@ -40,7 +40,7 @@ def execute(
     context: ExecutionContext,
     start: datetime,
     end: datetime,
-    latest: datetime,
+    execution_time: datetime,
     **kwargs: t.Any,
 ) -> t.Generator[pd.DataFrame, None, None]:
     orders_table = context.table("sushi.orders")

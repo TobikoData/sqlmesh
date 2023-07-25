@@ -70,4 +70,3 @@ test_order_items:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-    latest: 2022-01-01

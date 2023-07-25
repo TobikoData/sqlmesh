@@ -247,7 +247,7 @@ def test_lookback(snapshot: Snapshot, make_snapshot):
         SqlModel(
             name="name",
             kind=IncrementalByTimeRangeKind(time_column="ds", lookback=2),
-            cron="@daily",
+            cron="0 5 * * *",
             start="2023-01-01",
             query=parse_one("SELECT ds FROM parent.tbl"),
         )

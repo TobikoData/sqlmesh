@@ -101,7 +101,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
         parent_snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
         start: The start of the interval to evaluate.
         end: The end of the interval to evaluate.
-        latest: The latest time used for non incremental datasets.
+        execution_time: The date/time time reference to use for execution time. Defaults to now.
         is_dev: Indicates whether the evaluation happens in the development mode and temporary
             tables / table clones should be used where applicable.
     """
@@ -116,7 +116,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
     parent_snapshots: t.Dict[str, Snapshot]
     start: t.Optional[TimeLike]
     end: t.Optional[TimeLike]
-    latest: t.Optional[TimeLike]
+    execution_time: t.Optional[TimeLike]
     is_dev: bool
 
     def post_hook(
@@ -145,7 +145,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
             parent_snapshots=self.parent_snapshots,
             start=self._get_start(context),
             end=self._get_end(context),
-            latest=self._get_latest(context),
+            execution_time=self._get_execution_time(context),
             is_dev=self.is_dev,
         )
 
@@ -157,8 +157,8 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
     def _get_end(self, context: Context) -> TimeLike:
         return self.end or context["dag_run"].data_interval_end
 
-    def _get_latest(self, context: Context) -> TimeLike:
-        return self.latest or context["dag_run"].logical_date
+    def _get_execution_time(self, context: Context) -> TimeLike:
+        return self.execution_time or context["dag_run"].logical_date
 
 
 class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], PydanticModel):
