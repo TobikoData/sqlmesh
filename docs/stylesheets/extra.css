@@ -1,0 +1,17 @@
+.md-typeset .admonition.question,
+.md-typeset details.question{
+    border-color: rgb(68, 138, 255);
+}
+
+.md-typeset .question > .admonition-title, 
+.md-typeset .question > summary {
+    background-color: rgba(68, 138, 255, 0.1);
+
+    &::before {
+      background-color: rgb(68, 138, 255);
+    }
+
+    &::after {
+      color: rgb(68, 138, 255);
+    }
+  }
