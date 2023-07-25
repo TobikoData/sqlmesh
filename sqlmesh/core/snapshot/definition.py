@@ -772,10 +772,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def physical_schema(self) -> str:
         if self.physical_schema_ is not None:
             return self.physical_schema_
-        schema = exp.to_table(self.name).db
-        if not schema:
-            schema = c.DEFAULT_SCHEMA
-        return f"{c.SQLMESH}__{schema}"
+        return f"{c.SQLMESH}__{self.model.schema_name}"
 
     @property
     def table_info(self) -> SnapshotTableInfo:
