@@ -99,11 +99,9 @@
 
     - Configure your project and set up a project database (using DuckDB locally or a database connection)
     - Create, configure, and modify models, audits, tests, and other project components
-    - Execute `sqlmesh test` to run tests that ensure your code hasn’t broken
     - Execute `sqlmesh plan [environment name]` to: 
-        - Generate a summary of the differences between your project files and the environment and whether each change is `breaking`. The `plan` includes a list of the actions needed to implement the changes. 
-        - Optionally apply the plan and implement the actions.
-        - Automatically run all `audit`s when a plan is applied.
+        - Generate a summary of the differences between your project files and the environment and whether each change is `breaking`. The `plan` includes a list of the actions needed to implement the changes and automatically runs the project's unit `test`s. 
+        - Optionally apply the plan to implement the actions and run the project's `audit`s.
     - Execute `sqlmesh run` on a schedule to ingest and transform new data
 
 ??? question "Differences in running models?"
