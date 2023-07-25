@@ -62,7 +62,7 @@ else:
 logger = logging.getLogger(__name__)
 
 
-class _Model(ModelMeta):
+class _Model(ModelMeta, frozen=True):
     """Model is the core abstraction for user defined datasets.
 
     A model consists of logic that fetches the data (a SQL query, a Python script or a seed) and metadata
@@ -110,13 +110,15 @@ class _Model(ModelMeta):
         clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
-        physical_schema: The schema name where the physical table will be materialized.
+        physical_schema_override: The desired physical schema name override.
     """
 
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
-    physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
+    physical_schema_override_: t.Optional[str] = Field(
+        default=None, alias="physical_schema_override"
+    )
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
@@ -554,7 +556,7 @@ class _Model(ModelMeta):
 
     @property
     def physical_schema(self) -> str:
-        return self.physical_schema_ or f"{c.SQLMESH}__{self.schema_name}"
+        return self.physical_schema_override_ or f"{c.SQLMESH}__{self.schema_name}"
 
     @property
     def is_sql(self) -> bool:
@@ -1664,7 +1666,7 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
 
-    _validate_model_fields(klass, {"name", "physical_schema", *kwargs}, path)
+    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs}, path)
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
@@ -1681,7 +1683,7 @@ def _create_model(
                 "jinja_macros": jinja_macros,
                 "dialect": dialect,
                 "depends_on": depends_on,
-                "physical_schema": physical_schema_override.get(exp.to_table(name).db),
+                "physical_schema_override": physical_schema_override.get(exp.to_table(name).db),
                 **kwargs,
             },
         )

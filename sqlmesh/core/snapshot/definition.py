@@ -351,6 +351,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     name: str
     fingerprint: SnapshotFingerprint
+    physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
     node: SnapshotNode
     parents: t.Tuple[SnapshotId, ...]
     audits: t.Tuple[Audit, ...]
@@ -706,7 +707,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
         if is_forward_only and self.previous_version:
             self.version = self.previous_version.data_version.version
-            self.model.physical_schema_ = self.previous_version.physical_schema
+            self.physical_schema_ = self.previous_version.physical_schema
         else:
             self.version = self.fingerprint.to_version()
 
@@ -761,6 +762,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def physical_schema(self) -> str:
+        if self.physical_schema_ is not None:
+            return self.physical_schema_
         return self.model.physical_schema
 
     @property

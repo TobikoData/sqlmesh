@@ -406,10 +406,6 @@ def test_fingerprint(model: Model, parent_model: Model):
         )
         != with_parent_fingerprint
     )
-
-    model.physical_schema_ = "db"
-    assert original_fingerprint != fingerprint_from_node(model, nodes={})
-
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds")})
     new_fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
@@ -575,7 +571,7 @@ def test_table_name(snapshot: Snapshot):
     )
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
-    snapshot.model.physical_schema_ = "private"
+    snapshot.physical_schema_ = "private"
     assert snapshot.table_name_for_mapping(is_dev=True) == "private.name__3078928823"
 
 
@@ -941,7 +937,7 @@ def test_physical_schema(snapshot: Snapshot):
     assert snapshot.data_version.physical_schema == "sqlmesh__default"
     assert snapshot.table_info.physical_schema == "sqlmesh__default"
 
-    snapshot.model.physical_schema_ = "custom_schema"
+    snapshot.physical_schema_ = "custom_schema"
     assert snapshot.physical_schema == "custom_schema"
     assert snapshot.data_version.physical_schema == "custom_schema"
     assert snapshot.table_info.physical_schema == "custom_schema"
@@ -949,7 +945,7 @@ def test_physical_schema(snapshot: Snapshot):
     # Make sure the previous physical schema is preserved for forward-only snapshots.
     new_snapshot = deepcopy(snapshot)
     new_snapshot.previous_versions = (snapshot.data_version,)
-    new_snapshot.model.physical_schema_ = None
+    new_snapshot.physical_schema_ = None
     new_snapshot.version = None
     new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
