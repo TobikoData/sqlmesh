@@ -25,7 +25,7 @@ from sqlmesh.core.model import (
     create_external_model,
     create_seed_model,
     create_sql_model,
-    load_model,
+    load_sql_file_model,
     model,
 )
 from sqlmesh.core.model.common import parse_expression
@@ -76,7 +76,7 @@ def test_load(assert_exp_eq):
     """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.name == "db.table"
     assert model.owner == "owner_name"
     assert model.dialect == "spark"
@@ -138,7 +138,7 @@ def test_model_multiple_select_statements():
         """
     )
     with pytest.raises(ConfigError, match=r"^Only one SELECT.*"):
-        load_model(expressions)
+        load_sql_file_model(expressions)
 
 
 @pytest.mark.parametrize(
@@ -159,7 +159,7 @@ def test_model_validation(query, error):
         """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     with pytest.raises(ConfigError) as ex:
         model.validate_definition()
     assert error in str(ex.value)
@@ -177,7 +177,7 @@ def test_model_union_query():
         """
     )
 
-    load_model(expressions)
+    load_sql_file_model(expressions)
 
 
 def test_model_validation_union_query():
@@ -192,7 +192,7 @@ def test_model_validation_union_query():
         """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     with pytest.raises(ConfigError, match=r"Found duplicate outer select name 'a'"):
         model.validate_definition()
 
@@ -211,7 +211,7 @@ def test_model_qualification():
             """
         )
 
-        model = load_model(expressions)
+        model = load_sql_file_model(expressions)
         model.render_query(optimize=True)
         assert (
             mock_logger.call_args[0][0] == "%s for '%s', the column may not exist or is ambiguous"
@@ -247,7 +247,7 @@ def test_partitioned_by(partition_by_input, partition_by_output, expected_except
     """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.clustered_by == ["c", "d"]
     if expected_exception:
         with pytest.raises(expected_exception):
@@ -268,7 +268,7 @@ def test_no_model_statement():
         ConfigError,
         match="MODEL statement is required as the first statement in the definition at '.",
     ):
-        load_model(expressions)
+        load_sql_file_model(expressions)
 
 
 def test_unordered_model_statements():
@@ -285,7 +285,7 @@ def test_unordered_model_statements():
     )
 
     with pytest.raises(ConfigError) as ex:
-        load_model(expressions)
+        load_sql_file_model(expressions)
     assert "MODEL statement is required" in str(ex.value)
 
 
@@ -303,7 +303,7 @@ def test_no_query():
     )
 
     with pytest.raises(ConfigError) as ex:
-        load_model(expressions, path=Path("test_location"))
+        load_sql_file_model(expressions, path=Path("test_location"))
     assert "have a SELECT" in str(ex.value)
 
 
@@ -324,7 +324,7 @@ def test_partition_key_is_missing_in_query():
     """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     with pytest.raises(ConfigError) as ex:
         model.validate_definition()
     assert "['c', 'd'] are missing" in str(ex.value)
@@ -347,7 +347,7 @@ def test_cluster_key_is_missing_in_query():
     """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     with pytest.raises(ConfigError) as ex:
         model.validate_definition()
     assert "['c', 'd'] are missing" in str(ex.value)
@@ -370,7 +370,7 @@ def test_partition_key_and_select_star():
     """
     )
 
-    load_model(expressions)
+    load_sql_file_model(expressions)
 
 
 def test_json_serde():
@@ -394,7 +394,7 @@ def test_json_serde():
     """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     deserialized_model = SqlModel.parse_raw(model.json())
 
     assert deserialized_model == model
@@ -420,7 +420,7 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         FROM table
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
 
     assert_exp_eq(
         model.query,
@@ -453,7 +453,7 @@ def test_model_jinja_macro_reference_extraction():
         SELECT 1 AS x;
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert "test_macro" in model.python_env
 
 
@@ -483,7 +483,7 @@ def test_model_pre_post_statements():
         DROP TABLE x2;
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
 
     expected_pre = [
         *d.parse("@foo()"),
@@ -513,7 +513,7 @@ def test_seed_hydration():
     """
     )
 
-    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model = load_sql_file_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     assert model.is_hydrated
 
     column_hashes = model.column_hashes
@@ -543,7 +543,7 @@ def test_seed():
     """
     )
 
-    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model = load_sql_file_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
     assert isinstance(model.kind, SeedKind)
     assert model.kind.path == "../seeds/waiter_names.csv"
@@ -576,7 +576,7 @@ def test_seed_provided_columns():
     """
     )
 
-    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model = load_sql_file_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
     assert isinstance(model.kind, SeedKind)
     assert model.kind.path == "../seeds/waiter_names.csv"
@@ -644,7 +644,7 @@ def test_seed_pre_post_statements():
     """
     )
 
-    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model = load_sql_file_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
     expected_pre = [
         *d.parse("@bar()"),
@@ -678,7 +678,7 @@ def test_seed_pre_statements_only():
     """
     )
 
-    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model = load_sql_file_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
     expected_pre = [
         d.jinja_statement("CREATE TABLE x{{ 1 + 1 }};"),
@@ -746,7 +746,7 @@ def test_audits():
     """
     )
 
-    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model = load_sql_file_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     assert model.audits == [
         ("audit_a", {}),
         ("audit_b", {"key": exp.Literal.string("value")}),
@@ -792,7 +792,7 @@ def test_render_definition():
     """
     )
 
-    model = load_model(
+    model = load_sql_file_model(
         expressions,
         python_env={
             "test_macro": Executable(payload="def test_macro(evaluator, v):\n    return v"),
@@ -982,7 +982,7 @@ def test_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.time_column.column == "ds"
     assert model.time_column.format == "%Y-%m-%d"
     assert model.time_column.expression == parse_one("(ds, '%Y-%m-%d')")
@@ -999,7 +999,7 @@ def test_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.time_column.column == "ds"
     assert model.time_column.format == "%Y-%m-%d"
     assert model.time_column.expression == d.parse_one("(ds, '%Y-%m-%d')")
@@ -1017,7 +1017,7 @@ def test_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.time_column.column == "ds"
     assert model.time_column.format == "%Y-%m"
     assert model.time_column.expression == d.parse_one("(ds, '%Y-%m')")
@@ -1036,7 +1036,7 @@ def test_default_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = load_model(expressions, time_column_format="%Y")
+    model = load_sql_file_model(expressions, time_column_format="%Y")
     assert model.time_column.format == "%Y"
 
     expressions = d.parse(
@@ -1051,7 +1051,7 @@ def test_default_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = load_model(expressions, time_column_format="%m")
+    model = load_sql_file_model(expressions, time_column_format="%m")
     assert model.time_column.format == "%Y"
 
     expressions = d.parse(
@@ -1067,7 +1067,7 @@ def test_default_time_column():
         SELECT col::text, ds::text
     """
     )
-    model = load_model(expressions, dialect="duckdb", time_column_format="%Y")
+    model = load_sql_file_model(expressions, dialect="duckdb", time_column_format="%Y")
     assert model.time_column.format == "%d"
 
 
@@ -1084,7 +1084,7 @@ def test_convert_to_time_column():
         SELECT ds::text
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == d.parse_one("'2022-01-01'")
     assert model.convert_to_time_column(to_datetime("2022-01-01")) == d.parse_one("'2022-01-01'")
 
@@ -1100,7 +1100,7 @@ def test_convert_to_time_column():
         SELECT ds::text
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == d.parse_one("'01/01/2022'")
 
     expressions = d.parse(
@@ -1115,7 +1115,7 @@ def test_convert_to_time_column():
         SELECT di::int
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == d.parse_one("20220101")
 
     expressions = d.parse(
@@ -1130,7 +1130,7 @@ def test_convert_to_time_column():
         SELECT ds::date
     """
     )
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     assert model.convert_to_time_column("2022-01-01") == d.parse_one("CAST('20220101' AS date)")
 
 
@@ -1152,7 +1152,7 @@ def test_parse(assert_exp_eq):
         WHERE ds BETWEEN '{{ start_ds }}' AND @end_ds
     """
     )
-    model = load_model(expressions, dialect="hive")
+    model = load_sql_file_model(expressions, dialect="hive")
     assert model.columns_to_types == {
         "ds": exp.DataType.build("unknown"),
         "id": exp.DataType.build("int"),
@@ -1191,7 +1191,7 @@ def test_python_model_deps() -> None:
 def test_star_expansion(assert_exp_eq) -> None:
     context = Context(config=Config())
 
-    model1 = load_model(
+    model1 = load_sql_file_model(
         d.parse(
             """
         MODEL (name db.model1, kind full);
@@ -1215,7 +1215,7 @@ def test_star_expansion(assert_exp_eq) -> None:
         ),
     )
 
-    model2 = load_model(
+    model2 = load_sql_file_model(
         d.parse(
             """
         MODEL (name db.model2, kind full);
@@ -1225,7 +1225,7 @@ def test_star_expansion(assert_exp_eq) -> None:
         ),
     )
 
-    model3 = load_model(
+    model3 = load_sql_file_model(
         d.parse(
             """
             MODEL(name db.model3, kind full);
@@ -1326,7 +1326,7 @@ def test_case_sensitivity(assert_exp_eq):
     config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
     context = Context(config=config)
 
-    source = load_model(
+    source = load_sql_file_model(
         d.parse(
             """
             MODEL (name example.source, kind EMBEDDED);
@@ -1338,7 +1338,7 @@ def test_case_sensitivity(assert_exp_eq):
     )
 
     # Ensure that when manually specifying dependencies, they're normalized correctly
-    downstream = load_model(
+    downstream = load_sql_file_model(
         d.parse(
             """
             MODEL (name example.model, kind FULL, depends_on [ExAmPlE.SoUrCe]);
@@ -1389,7 +1389,7 @@ def test_batch_size_validation():
     )
 
     with pytest.raises(ConfigError):
-        load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+        load_sql_file_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
 
 
 def test_model_cache(tmp_path: Path, mocker: MockerFixture):
@@ -1404,7 +1404,7 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
     """
     )
 
-    model = load_model([e for e in expressions if e])
+    model = load_sql_file_model([e for e in expressions if e])
 
     loader = mocker.Mock(return_value=model)
 
@@ -1428,7 +1428,9 @@ def test_model_ctas_query():
     """
     )
 
-    assert load_model(expressions, dialect="bigquery").ctas_query().sql() == 'SELECT 1 AS "a"'
+    assert (
+        load_sql_file_model(expressions, dialect="bigquery").ctas_query().sql() == 'SELECT 1 AS "a"'
+    )
 
     expressions = d.parse(
         """
@@ -1438,7 +1440,8 @@ def test_model_ctas_query():
     )
 
     assert (
-        load_model(expressions).ctas_query().sql() == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
+        load_sql_file_model(expressions).ctas_query().sql()
+        == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
     )
 
 
@@ -1483,7 +1486,7 @@ def test_no_depends_on_runtime_jinja_query():
         """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
     with pytest.raises(
         ConfigError,
         match=r"Dependencies must be provided explicitly for models that can be rendered only at runtime at.*",
@@ -1500,7 +1503,7 @@ def test_update_schema():
         """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
 
     schema = MappingSchema(normalize=False)
     schema.add_table("table_a", {"a": exp.DataType.build("int")})
@@ -1527,7 +1530,7 @@ def test_user_provided_depends_on():
         """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
 
     assert model.depends_on == {"table_a", "table_b"}
 
@@ -1541,7 +1544,7 @@ def test_check_schema_mapping_when_rendering_at_runtime(assert_exp_eq):
         """
     )
 
-    model = load_model(expressions)
+    model = load_sql_file_model(expressions)
 
     # Simulate a query that cannot be rendered at parse time.
     with patch.object(SqlModel, "render_query", return_value=None) as render_query_mock:
@@ -1570,7 +1573,7 @@ def test_contains_star_projection():
         """
     )
 
-    model = load_model(expression_with_star)
+    model = load_sql_file_model(expression_with_star)
     assert model.contains_star_projection
     assert model.columns_to_types is None
 
@@ -1587,7 +1590,7 @@ def test_contains_star_projection():
         """
     )
 
-    model = load_model(expression_without_star)
+    model = load_sql_file_model(expression_without_star)
     assert model.contains_star_projection is False
     assert "a" in model.columns_to_types
 
@@ -1606,7 +1609,7 @@ def test_model_normalization():
         """
     )
 
-    model = SqlModel.parse_raw(load_model(expr, depends_on={"project-2.db.raw"}).json())
+    model = SqlModel.parse_raw(load_sql_file_model(expr, depends_on={"project-2.db.raw"}).json())
     assert model.columns_to_types["a"].sql(dialect="bigquery") == "STRUCT<`a` INT64>"
     assert model.partitioned_by[0].sql(dialect="bigquery") == "foo(`ds`)"
     assert model.name == '"project-1".db.tbl'

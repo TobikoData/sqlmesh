@@ -24,7 +24,7 @@ from sqlmesh.core.model import (
     OptimizedQueryCache,
     SeedModel,
     create_external_model,
-    load_model,
+    load_sql_file_model,
 )
 from sqlmesh.core.model import model as model_registry
 from sqlmesh.utils import UniqueKeyDict
@@ -258,7 +258,7 @@ class SqlMeshLoader(Loader):
                             raise ConfigError(
                                 f"Failed to parse a model definition at '{path}': {ex}."
                             )
-                    return load_model(
+                    return load_sql_file_model(
                         expressions,
                         defaults=config.model_defaults.dict(),
                         macros=macros,
@@ -267,6 +267,7 @@ class SqlMeshLoader(Loader):
                         module_path=context_path,
                         dialect=config.model_defaults.dialect,
                         time_column_format=config.time_column_format,
+                        physical_schema_override=config.physical_schema_override,
                     )
 
                 model = cache.get_or_load_model(path, _load)
@@ -300,6 +301,7 @@ class SqlMeshLoader(Loader):
                         module_path=context_path,
                         defaults=config.model_defaults.dict(),
                         time_column_format=config.time_column_format,
+                        physical_schema_override=config.physical_schema_override,
                     )
                     models[model.name] = model
 
@@ -379,4 +381,9 @@ class SqlMeshLoader(Loader):
                 self._loader._config_mtimes.get(self._context_path),
                 self._loader._config_mtimes.get(self._loader._context.sqlmesh_path),
             ]
-            return str(int(max(m for m in mtimes if m is not None)))
+            return "__".join(
+                [
+                    str(int(max(m for m in mtimes if m is not None))),
+                    self._loader._context.config.fingerprint,
+                ]
+            )

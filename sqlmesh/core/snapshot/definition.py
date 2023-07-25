@@ -327,9 +327,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     Args:
         name: The snapshot name which is the same as the model name and should be unique per model.
-
         fingerprint: A unique hash of the model definition so that models can be reused across environments.
-        physical_schema: The physical schema that the snapshot is stored in.
         node: Model object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
         audits: The list of audits used by the model.
@@ -353,7 +351,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     name: str
     fingerprint: SnapshotFingerprint
-    physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
     node: SnapshotNode
     parents: t.Tuple[SnapshotId, ...]
     audits: t.Tuple[Audit, ...]
@@ -451,13 +448,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         version: t.Optional[str] = None,
         audits: t.Optional[t.Dict[str, Audit]] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
-        physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a model.
 
         Args:
             model: Model to snapshot.
-            physical_schema_override: Mapping of physical schema names
             nodes: Dictionary of all nodes in the graph to make the fingerprint dependent on parent changes.
                 If no dictionary is passed in the fingerprint will not be dependent on a node's parents.
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
@@ -470,15 +465,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         created_ts = now_timestamp()
 
         audits = audits or {}
-        physical_schema_override = physical_schema_override or {}
         return cls(
             name=model.name,
-            physical_schema=physical_schema_override.get(model.schema_name),
             fingerprint=fingerprint_from_node(
                 model,
                 nodes=nodes,
                 audits=audits,
-                physical_schema_override=physical_schema_override,
                 cache=cache,
             ),
             node=model,
@@ -489,7 +481,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                         nodes[name],
                         nodes=nodes,
                         audits=audits,
-                        physical_schema_override=physical_schema_override,
                         cache=cache,
                     ).to_identifier(),
                 )
@@ -715,7 +706,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
         if is_forward_only and self.previous_version:
             self.version = self.previous_version.data_version.version
-            self.physical_schema_ = self.previous_version.physical_schema
+            self.model.physical_schema_ = self.previous_version.physical_schema
         else:
             self.version = self.fingerprint.to_version()
 
@@ -770,9 +761,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def physical_schema(self) -> str:
-        if self.physical_schema_ is not None:
-            return self.physical_schema_
-        return f"{c.SQLMESH}__{self.model.schema_name}"
+        return self.model.physical_schema
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -872,7 +861,6 @@ def fingerprint_from_node(
     *,
     nodes: t.Dict[str, SnapshotNode],
     audits: t.Optional[t.Dict[str, Audit]] = None,
-    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
     """Helper function to generate a fingerprint based on the data and metadata of the node and its parents.
@@ -886,14 +874,12 @@ def fingerprint_from_node(
         nodes: Dictionary of all nodes in the graph to make the fingerprint dependent on parent changes.
             If no dictionary is passed in the fingerprint will not be dependent on a node's parents.
         audits: Available audits by name.
-        physical_schema_override: Schema map to use for physical schema names.
         cache: Cache of model name to fingerprints.
 
     Returns:
         The fingerprint.
     """
     cache = {} if cache is None else cache
-    physical_schema_override = physical_schema_override or {}
 
     if node.name not in cache:
         parents = [
@@ -901,7 +887,6 @@ def fingerprint_from_node(
                 nodes[table],
                 nodes=nodes,
                 audits=audits,
-                physical_schema_override=physical_schema_override,
                 cache=cache,
             )
             for table in node.depends_on
@@ -914,9 +899,8 @@ def fingerprint_from_node(
             sorted(h for p in parents for h in (p.metadata_hash, p.parent_metadata_hash))
         )
 
-        physical_schema_name = physical_schema_override.get(node.schema_name, node.schema_name)
         cache[node.name] = SnapshotFingerprint(
-            data_hash=node.data_hash(additional_fields=[physical_schema_name]),
+            data_hash=node.data_hash,
             metadata_hash=node.metadata_hash(audits or {}),
             parent_data_hash=parent_data_hash,
             parent_metadata_hash=parent_metadata_hash,

@@ -19,7 +19,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.console import get_console
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
-from sqlmesh.core.model import load_model
+from sqlmesh.core.model import load_sql_file_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils import sqlglot_dialects, yaml
 from sqlmesh.utils.errors import MagicError, MissingContextException
@@ -131,13 +131,14 @@ class SQLMeshMagics(Magics):
 
         if sql:
             config = self._context.config_for_model(model)
-            loaded = load_model(
+            loaded = load_sql_file_model(
                 parse(sql, default_dialect=config.dialect),
                 macros=self._context._macros,
                 jinja_macros=self._context._jinja_macros,
                 path=model._path,
                 dialect=config.dialect,
                 time_column_format=config.time_column_format,
+                physical_schema_override=self._context.config.physical_schema_override,
             )
 
             if loaded.name == args.model:

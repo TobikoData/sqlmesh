@@ -557,7 +557,6 @@ class Context(BaseContext):
                 cache=fingerprint_cache,
                 ttl=ttl,
                 project=project,
-                physical_schema_override=config.physical_schema_override,
             )
             snapshots[model.name] = snapshot
 

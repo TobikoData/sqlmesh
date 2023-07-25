@@ -15,6 +15,7 @@ from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.hashing import crc32
 
 
 class Config(BaseConfig):
@@ -133,3 +134,7 @@ class Config(BaseConfig):
     @property
     def dialect(self) -> t.Optional[str]:
         return self.model_defaults.dialect
+
+    @property
+    def fingerprint(self) -> str:
+        return crc32(self.json(exclude={"loader"}))

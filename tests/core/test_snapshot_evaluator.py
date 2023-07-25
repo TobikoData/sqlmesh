@@ -18,7 +18,7 @@ from sqlmesh.core.model import (
     SqlModel,
     TimeColumn,
     ViewKind,
-    load_model,
+    load_sql_file_model,
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
@@ -103,7 +103,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         if y is not None:
             evaluator.locals["payload"]["y"] = y
 
-    model = load_model(
+    model = load_sql_file_model(
         parse(  # type: ignore
             """
             MODEL (
@@ -214,7 +214,7 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
 def test_evaluate_materialized_view(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    model = load_model(
+    model = load_sql_file_model(
         parse(  # type: ignore
             """
             MODEL (
@@ -250,7 +250,7 @@ def test_evaluate_materialized_view_with_execution_time_macro(
 ):
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    model = load_model(
+    model = load_sql_file_model(
         parse(  # type: ignore
             """
             MODEL (
@@ -324,7 +324,7 @@ def test_evaluate_incremental_unmanaged(
 def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    model = load_model(
+    model = load_sql_file_model(
         parse(  # type: ignore
             """
             MODEL (

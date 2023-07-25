@@ -10,7 +10,7 @@ import sqlmesh.core.constants
 from sqlmesh.core.config import Config, ModelDefaultsConfig, SnowflakeConnectionConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import load_model
+from sqlmesh.core.model import load_sql_file_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import ConfigError
@@ -197,7 +197,7 @@ def test_evaluate_limit():
     context = Context(config=Config())
 
     context.upsert_model(
-        load_model(
+        load_sql_file_model(
             parse(
                 """
         MODEL(name with_limit, kind FULL);
@@ -211,7 +211,7 @@ def test_evaluate_limit():
     assert context.evaluate("with_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
     context.upsert_model(
-        load_model(
+        load_sql_file_model(
             parse(
                 """
         MODEL(name without_limit, kind FULL);
