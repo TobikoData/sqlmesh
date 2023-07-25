@@ -47,7 +47,7 @@ def parent_model():
 @pytest.fixture
 def model():
     return SqlModel(
-        name="db.name",
+        name="name",
         kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
         owner="owner",
         dialect="spark",
@@ -411,7 +411,7 @@ def test_fingerprint(model: Model, parent_model: Model):
         model, nodes={}, physical_schema_override={"ignore": "something"}
     )
     assert original_fingerprint != fingerprint_from_node(
-        model, nodes={}, physical_schema_override={"db": "not_db"}
+        model, nodes={}, physical_schema_override={"default": "not_db"}
     )
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds")})
@@ -482,8 +482,6 @@ def test_fingerprint_jinja_macros(model: Model):
             ),
         }
     )
-    fingerprint = fingerprint_from_node(model, nodes={})
-
     original_fingerprint = SnapshotFingerprint(
         data_hash="1459830598",
         metadata_hash="1237394431",

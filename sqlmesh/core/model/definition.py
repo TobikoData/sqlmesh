@@ -581,7 +581,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def schema_name(self) -> str:
-        return exp.to_table(self.name).db
+        return exp.to_table(self.name).db or c.DEFAULT_SCHEMA
 
     def validate_definition(self) -> None:
         """Validates the model's definition.
