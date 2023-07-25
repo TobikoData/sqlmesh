@@ -1,6 +1,6 @@
 # SQLMesh
 
-[SQLMesh](https://sqlmesh.com) is an [open source](https://github.com/TobikoData/sqlmesh) DataOps framework that brings the best practices of DevOps to data teams. It enables data scientists, analysts, and engineers to efficiently run and deploy data transformations written in SQL or Python. It is created and maintained by [Tobiko Data](https://tobikodata.com/), a company founded by data leaders from Airbnb, Apple, and Netflix.
+[SQLMesh](https://sqlmesh.com) is an [open source](https://github.com/TobikoData/sqlmesh) data transformation framework that brings the best practices of DevOps to data teams. It enables data scientists, analysts, and engineers to efficiently run and deploy data transformations written in SQL or Python. It is created and maintained by [Tobiko Data](https://tobikodata.com/), a company founded by data leaders from Airbnb, Apple, and Netflix.
 
 ## Why SQLMesh?
 
@@ -71,5 +71,6 @@ SQLMesh was built on three core principles:
 
 ## Next steps
 * [Jump right in with the quickstart](quick_start.md)
+* [Check out the FAQ](faq.md)
 * [Learn more about SQLMesh concepts](concepts/overview.md)
 * [Join our Slack community](https://tobikodata.com/slack)
