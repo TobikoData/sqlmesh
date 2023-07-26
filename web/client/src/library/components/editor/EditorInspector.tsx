@@ -7,8 +7,8 @@ import {
   type RenderInputStart,
   type EvaluateInputEnd,
   type RenderInputEnd,
-  type EvaluateInputLatest,
-  type RenderInputLatest,
+  type EvaluateInputExecutionTime,
+  type RenderInputExecutionTime,
 } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { EnumSize, EnumVariant } from '~/types/enum'
@@ -35,7 +35,7 @@ interface FormModel {
   model?: string
   start: EvaluateInputStart | RenderInputStart
   end: EvaluateInputEnd | RenderInputEnd
-  execution_time: EvaluateInputLatest | RenderInputLatest
+  execution_time: EvaluateInputExecutionTime | RenderInputExecutionTime
   limit: number
 }
 

@@ -1003,7 +1003,7 @@
               { "type": "integer" },
               { "type": "number" }
             ],
-            "title": "Execution Time"
+            "title": "ExecutionTime"
           },
           "limit": { "type": "integer", "title": "Limit", "default": 1000 }
         },
@@ -1306,7 +1306,7 @@
               { "type": "integer" },
               { "type": "number" }
             ],
-            "title": "Execution Time"
+            "title": "ExecutionTime"
           },
           "expand": {
             "anyOf": [
