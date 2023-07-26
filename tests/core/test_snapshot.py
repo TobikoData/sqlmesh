@@ -18,7 +18,7 @@ from sqlmesh.core.model import (
     SeedModel,
     SqlModel,
     create_seed_model,
-    load_model,
+    load_sql_based_model,
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.snapshot import (
@@ -388,7 +388,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="2864366485",
+        data_hash="1116890341",
         metadata_hash="1237394431",
     )
 
@@ -406,7 +406,6 @@ def test_fingerprint(model: Model, parent_model: Model):
         )
         != with_parent_fingerprint
     )
-
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds")})
     new_fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
@@ -436,11 +435,11 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="3834815287",
+        data_hash="1421766360",
         metadata_hash="3585221762",
     )
 
-    model = load_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
     actual_fingerprint = fingerprint_from_node(model, nodes={})
     assert actual_fingerprint == expected_fingerprint
 
@@ -475,10 +474,8 @@ def test_fingerprint_jinja_macros(model: Model):
             ),
         }
     )
-    fingerprint = fingerprint_from_node(model, nodes={})
-
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1459830598",
+        data_hash="4053778362",
         metadata_hash="1237394431",
     )
 
@@ -574,6 +571,8 @@ def test_table_name(snapshot: Snapshot):
     )
     assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
+    snapshot.physical_schema_ = "private"
+    assert snapshot.table_name_for_mapping(is_dev=True) == "private.name__3078928823"
 
 
 def test_categorize_change_sql(make_snapshot):
