@@ -80,7 +80,7 @@ SQLMesh encourages explicitly assigning a data type for each model column. This 
 SQLMesh encourages explicit type casting. SQL's type coercion can be tricky to deal with, so it is best to ensure that the data in your model is exactly as you want it.
 
 ### Explicit SELECTs
-Although `SELECT *` is convenient, it is dangerous because a model's results can change due to external factors (e.g., an upstream source adding or removing a column). In general, we encourage listing out every column you need. 
+Although `SELECT *` is convenient, it is dangerous because a model's results can change due to external factors (e.g., an upstream source adding or removing a column). In general, we encourage listing out every column you need or using [`create_external_models`](../../reference/cli.md#create_external_models) to capture the schema of an external data source. 
 
 If you select from an external source, `SELECT *` will prevent SQLMesh from performing some optimization steps and from determining upstream column-level lineage. Use an [`external` model kind](./model_kinds.md#external) to enable optimizations and upstream column-level lineage for external sources.
 
