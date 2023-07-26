@@ -58,7 +58,7 @@ class BaseExpressionRenderer:
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
-        only_latest: bool = False,
+        only_execution_time: bool = False,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -66,7 +66,7 @@ class BaseExpressionRenderer:
         self._path = path
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
-        self._only_latest = only_latest
+        self._only_execution_time = only_execution_time
 
         self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.List[exp.Expression]] = {}
 
@@ -96,13 +96,17 @@ class BaseExpressionRenderer:
             The rendered expressions.
         """
 
-        dates = _dates(start, end, execution_time)
-        cache_key = dates
+        cache_key = _dates(start, end, execution_time)
+        start_dt, end_dt, execution_dt = cache_key
         if cache_key not in self._cache:
             expressions = [self._expression]
 
             render_kwargs = {
-                **date_dict(*dates, only_latest=self._only_latest),
+                **date_dict(
+                    execution_dt,
+                    start_dt if not self._only_execution_time else None,
+                    end_dt if not self._only_execution_time else None,
+                ),
                 **kwargs,
             }
 
@@ -251,7 +255,7 @@ class QueryRenderer(BaseExpressionRenderer):
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
-        only_latest: bool = False,
+        only_execution_time: bool = False,
     ):
         super().__init__(
             expression=query,
@@ -260,7 +264,7 @@ class QueryRenderer(BaseExpressionRenderer):
             path=path,
             jinja_macro_registry=jinja_macro_registry,
             python_env=python_env,
-            only_latest=only_latest,
+            only_execution_time=only_execution_time,
         )
 
         self._model_name = model_name

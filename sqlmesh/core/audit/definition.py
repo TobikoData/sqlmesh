@@ -246,7 +246,7 @@ class Audit(AuditMeta, frozen=True):
             path=self._path or Path(),
             jinja_macro_registry=self.jinja_macros,
             python_env=model.python_env,
-            only_latest=model.kind.only_latest,
+            only_execution_time=model.kind.only_execution_time,
         )
 
 

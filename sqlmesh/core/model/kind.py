@@ -68,8 +68,8 @@ class ModelKindMixin:
         return not (self.is_symbolic or self.is_view)
 
     @property
-    def only_latest(self) -> bool:
-        """Whether or not this model only cares about latest date to render."""
+    def only_execution_time(self) -> bool:
+        """Whether or not this model only cares about execution time to render."""
         return self.is_view or self.is_full or self.is_incremental_unmanaged
 
 

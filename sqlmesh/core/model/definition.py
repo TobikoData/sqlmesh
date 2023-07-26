@@ -838,7 +838,7 @@ class _SqlBasedModel(_Model):
                 path=self._path,
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
-                only_latest=self.kind.only_latest,
+                only_execution_time=self.kind.only_execution_time,
             )
         return self.__statement_renderers[expression_key]
 
@@ -1050,7 +1050,7 @@ class SqlModel(_SqlBasedModel):
                 path=self._path,
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
-                only_latest=self.kind.only_latest,
+                only_execution_time=self.kind.only_execution_time,
             )
         return self.__query_renderer
 
