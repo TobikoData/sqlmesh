@@ -120,7 +120,7 @@ def init(
 @click.argument("model")
 @opt.start_time
 @opt.end_time
-@opt.latest_time
+@opt.execution_time
 @opt.expand
 @click.option(
     "--dialect",
@@ -134,7 +134,7 @@ def render(
     model: str,
     start: TimeLike,
     end: TimeLike,
-    latest: t.Optional[TimeLike] = None,
+    execution_time: t.Optional[TimeLike] = None,
     expand: t.Optional[t.Union[bool, t.Iterable[str]]] = None,
     dialect: t.Optional[str] = None,
 ) -> None:
@@ -143,7 +143,7 @@ def render(
         model,
         start=start,
         end=end,
-        latest=latest,
+        execution_time=execution_time,
         expand=expand,
     )
 
@@ -155,7 +155,7 @@ def render(
 @click.argument("model")
 @opt.start_time
 @opt.end_time
-@opt.latest_time
+@opt.execution_time
 @click.option(
     "--limit",
     type=int,
@@ -168,7 +168,7 @@ def evaluate(
     model: str,
     start: TimeLike,
     end: TimeLike,
-    latest: t.Optional[TimeLike] = None,
+    execution_time: t.Optional[TimeLike] = None,
     limit: t.Optional[int] = None,
 ) -> None:
     """Evaluate a model and return a dataframe with a default limit of 1000."""
@@ -176,7 +176,7 @@ def evaluate(
         model,
         start=start,
         end=end,
-        latest=latest,
+        execution_time=execution_time,
         limit=limit,
     )
     ctx.obj.console.log_success(df)
@@ -214,7 +214,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
 @click.argument("environment", required=False)
 @opt.start_time
 @opt.end_time
-@opt.latest_time
+@opt.execution_time
 @click.option(
     "--create-from",
     type=str,
@@ -350,7 +350,7 @@ def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> Non
 )
 @opt.start_time
 @opt.end_time
-@opt.latest_time
+@opt.execution_time
 @click.pass_obj
 @error_handler
 def audit(
@@ -358,10 +358,10 @@ def audit(
     models: t.Iterator[str],
     start: TimeLike,
     end: TimeLike,
-    latest: t.Optional[TimeLike] = None,
+    execution_time: t.Optional[TimeLike] = None,
 ) -> None:
     """Run audits."""
-    obj.audit(models=models, start=start, end=end, latest=latest)
+    obj.audit(models=models, start=start, end=end, execution_time=execution_time)
 
 
 @cli.command("fetchdf")

@@ -103,7 +103,11 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             notification_target_manager=self.notification_target_manager,
         )
         is_run_successful = scheduler.run(
-            plan.environment_name, plan.start, plan.end, restatements=plan.restatements
+            plan.environment_name,
+            plan.start,
+            plan.end,
+            restatements=plan.restatements,
+            ignore_cron=True,
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")

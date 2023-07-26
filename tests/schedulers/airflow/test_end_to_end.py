@@ -22,7 +22,6 @@ def wait_for_airflow(airflow_client: AirflowClient):
 def test_sushi(mocker: MockerFixture, is_docker: bool):
     start = "1 week ago"
     end = now()
-    latest = end
 
     airflow_config = "airflow_config_docker" if is_docker else "airflow_config"
     context = Context(paths="./examples/sushi", config=airflow_config)
@@ -32,7 +31,6 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
         environment="test_dev",
         start=start,
         end=end,
-        latest=latest,
         skip_tests=True,
         no_prompts=True,
         auto_apply=True,
@@ -47,7 +45,6 @@ def test_sushi(mocker: MockerFixture, is_docker: bool):
         environment="test_dev_two",
         start=start,
         end=end,
-        latest=latest,
         skip_tests=True,
         no_prompts=True,
     )

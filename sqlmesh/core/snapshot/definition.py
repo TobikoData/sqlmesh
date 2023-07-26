@@ -19,7 +19,6 @@ from sqlmesh.utils.date import (
     TimeLike,
     is_date,
     make_inclusive,
-    make_inclusive_end,
     now,
     now_timestamp,
     to_datetime,
@@ -535,16 +534,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             self.intervals = merged_intervals
 
     def remove_interval(
-        self, start: TimeLike, end: TimeLike, latest: t.Optional[TimeLike] = None
+        self, start: TimeLike, end: TimeLike, execution_time: t.Optional[TimeLike] = None
     ) -> None:
         """Remove an interval from the snapshot.
 
         Args:
             start: Start interval to remove.
             end: End interval to remove.
-            latest: The latest time to use for the end of the interval.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
         """
-        interval = self.inclusive_exclusive(start, end, latest, for_removal=True)
+        interval = self.inclusive_exclusive(start, end, execution_time, for_removal=True)
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
@@ -552,7 +551,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         self,
         start: TimeLike,
         end: TimeLike,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         strict: bool = True,
         for_removal: bool = False,
     ) -> Interval:
@@ -561,13 +560,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
-            latest: The latest time to use for the end of the interval. Defaults to now if not provided.
+            execution_time: The date/time time reference to use for execution time. Defaults to now.
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
             for_removal: Whether the interval is being used for removal.
         Returns:
             A [start, end) pair.
         """
-        end = latest or now() if for_removal and self.depends_on_past else end
+        end = execution_time or now() if for_removal and self.depends_on_past else end
         interval_unit = self.model.interval_unit()
         start_ts = to_timestamp(interval_unit.cron_floor(start))
         end_ts = to_timestamp(
@@ -607,7 +606,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         self,
         start: TimeLike,
         end: TimeLike,
-        latest: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Set[str]] = None,
         is_dev: bool = False,
@@ -622,7 +620,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
-            latest: The date/time to use for latest (inclusive)
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A set of snapshot names being restated
             is_dev: Indicates whether missing intervals are computed for the development environment.
@@ -641,26 +638,20 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_symbolic or (self.is_seed and intervals):
             return []
 
-        latest = make_inclusive_end(latest or now())
-
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
-                start, end, latest, strict=False, for_removal=self.name in restatements
+                start, end, execution_time, strict=False, for_removal=self.name in restatements
             )
         )
-        latest_ts = to_timestamp(latest)
 
         interval_unit = self.model.interval_unit()
 
-        upper_bound_ts = (
-            to_timestamp(self.model.cron_floor(execution_time or now()))
-            if not ignore_cron
-            else None
+        execution_time = execution_time or now()
+        upper_bound_ts = to_timestamp(
+            self.model.cron_floor(execution_time) if not ignore_cron else execution_time
         )
-        if upper_bound_ts:
-            latest_ts = min(latest_ts, upper_bound_ts)
-            end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
+        end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
 
         croniter = interval_unit.croniter(start_ts)
         dates = [start_ts]
@@ -680,7 +671,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         for _ in range(lookback):
             ts = to_timestamp(croniter.get_next())
-            if ts < latest_ts:
+            if ts < upper_bound_ts:
                 dates.append(ts)
             else:
                 break
@@ -1039,7 +1030,6 @@ def missing_intervals(
     snapshots: t.Collection[Snapshot],
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
-    latest: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Iterable[str]] = None,
     is_dev: bool = False,
@@ -1056,7 +1046,7 @@ def missing_intervals(
         if snapshot.name in restatements:
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
-            snapshot.remove_interval(start_dt, end_date, latest)
+            snapshot.remove_interval(start_dt, end_date, execution_time)
 
         intervals = snapshot.missing_intervals(
             max(
@@ -1064,7 +1054,6 @@ def missing_intervals(
                 to_datetime(start_date(snapshot, snapshots, cache) or start_dt),
             ),
             end_date,
-            latest=latest,
             execution_time=execution_time,
             restatements=restatements,
             is_dev=is_dev,

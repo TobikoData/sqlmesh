@@ -208,13 +208,13 @@ def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
     capsys.readouterr()
 
     engine_adapter.execute(
-        waiters.render_pre_statements(engine_adapter=engine_adapter, latest="2023-01-01")
+        waiters.render_pre_statements(engine_adapter=engine_adapter, execution_time="2023-01-01")
     )
     assert "pre-hook" in capsys.readouterr().out
 
     engine_adapter.execute(
         waiters.render_post_statements(
-            engine_adapter=sushi_test_dbt_context.engine_adapter, latest="2023-01-01"
+            engine_adapter=sushi_test_dbt_context.engine_adapter, execution_time="2023-01-01"
         )
     )
     assert "post-hook" in capsys.readouterr().out

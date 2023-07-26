@@ -52,7 +52,7 @@ def date_kwargs() -> t.Dict[str, str]:
     return {
         "start": "2020-01-01",
         "end": "2020-01-01",
-        "latest": "2020-01-01",
+        "execution_time": "2020-01-01",
     }
 
 
@@ -230,7 +230,7 @@ def test_evaluate_materialized_view(mocker: MockerFixture, adapter_mock, make_sn
     assert not adapter_mock.create_view.called
 
 
-def test_evaluate_materialized_view_with_latest_macro(
+def test_evaluate_materialized_view_with_execution_time_macro(
     mocker: MockerFixture, adapter_mock, make_snapshot
 ):
     evaluator = SnapshotEvaluator(adapter_mock)
@@ -245,7 +245,7 @@ def test_evaluate_materialized_view_with_latest_macro(
                 )
             );
 
-            SELECT a::int FROM tbl WHERE ds < @latest_ds;
+            SELECT a::int FROM tbl WHERE ds < @execution_ds;
             """
         ),
     )
@@ -263,7 +263,7 @@ def test_evaluate_materialized_view_with_latest_macro(
 
     adapter_mock.create_view.assert_called_once_with(
         snapshot.table_name(),
-        model.render_query(latest="2020-01-02"),
+        model.render_query(execution_time="2020-01-02"),
         model.columns_to_types,
         materialized=True,
     )

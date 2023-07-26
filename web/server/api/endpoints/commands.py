@@ -96,7 +96,7 @@ async def evaluate(
             options.model,
             start=options.start,
             end=options.end,
-            latest=options.latest,
+            execution_time=options.execution_time,
             limit=options.limit,
         )
     except Exception:
@@ -145,7 +145,7 @@ async def render(
             snapshot,
             start=options.start,
             end=options.end,
-            latest=options.latest,
+            execution_time=options.execution_time,
             expand=options.expand,
         )
     except Exception:

@@ -129,7 +129,7 @@ class _Model(ModelMeta, frozen=True):
         context: ExecutionContext,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         """Renders the content of this model in a form of either a SELECT query, executing which the data for this model can
@@ -142,7 +142,7 @@ class _Model(ModelMeta, frozen=True):
             context: The execution context used for fetching data.
             start: The start date/time of the run.
             end: The end date/time of the run.
-            latest: The latest date/time to use for the run.
+            execution_time: The date/time time reference to use for execution time.
 
         Returns:
             A generator which yields eiether a query object or one of the supported dataframe objects.
@@ -150,7 +150,7 @@ class _Model(ModelMeta, frozen=True):
         yield self.render_query_or_raise(
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             snapshots=context.snapshots,
             is_dev=context.is_dev,
             engine_adapter=context.engine_adapter,
@@ -212,7 +212,7 @@ class _Model(ModelMeta, frozen=True):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
@@ -225,7 +225,7 @@ class _Model(ModelMeta, frozen=True):
         Args:
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
@@ -251,7 +251,7 @@ class _Model(ModelMeta, frozen=True):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
@@ -264,7 +264,7 @@ class _Model(ModelMeta, frozen=True):
         Args:
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
@@ -280,7 +280,7 @@ class _Model(ModelMeta, frozen=True):
         query = self.render_query(
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             snapshots=snapshots,
             table_mapping=table_mapping,
             expand=expand,
@@ -297,7 +297,7 @@ class _Model(ModelMeta, frozen=True):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
@@ -311,7 +311,7 @@ class _Model(ModelMeta, frozen=True):
         Args:
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
@@ -330,7 +330,7 @@ class _Model(ModelMeta, frozen=True):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
@@ -344,7 +344,7 @@ class _Model(ModelMeta, frozen=True):
         Args:
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
@@ -760,7 +760,7 @@ class _SqlBasedModel(_Model):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
@@ -771,7 +771,7 @@ class _SqlBasedModel(_Model):
             self.pre_statements,
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             snapshots=snapshots,
             expand=expand,
             is_dev=is_dev,
@@ -784,7 +784,7 @@ class _SqlBasedModel(_Model):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         is_dev: bool = False,
@@ -795,7 +795,7 @@ class _SqlBasedModel(_Model):
             self.post_statements,
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             snapshots=snapshots,
             expand=expand,
             is_dev=is_dev,
@@ -877,7 +877,7 @@ class SqlModel(_SqlBasedModel):
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
@@ -888,7 +888,7 @@ class SqlModel(_SqlBasedModel):
         query = self._query_renderer.render(
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             snapshots=snapshots,
             table_mapping=table_mapping,
             expand=expand,
@@ -1095,7 +1095,7 @@ class SeedModel(_SqlBasedModel):
         context: ExecutionContext,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         self._ensure_hydrated()
@@ -1261,15 +1261,20 @@ class PythonModel(_Model):
         context: ExecutionContext,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> t.Generator[QueryOrDF, None, None]:
         env = prepare_env(self.python_env)
         start, end = make_inclusive(start or c.EPOCH, end or c.EPOCH)
-        latest = to_datetime(latest or c.EPOCH)
+        execution_time = to_datetime(execution_time or c.EPOCH)
         try:
             df_or_iter = env[self.entrypoint](
-                context=context, start=start, end=end, latest=latest, **kwargs
+                context=context,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                latest=execution_time,  # TODO: Preserved for backward compatibility. Remove in 1.0.0.
+                **kwargs,
             )
 
             if not isinstance(df_or_iter, types.GeneratorType):

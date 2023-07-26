@@ -35,7 +35,7 @@ interface FormModel {
   model?: string
   start: EvaluateInputStart | RenderInputStart
   end: EvaluateInputEnd | RenderInputEnd
-  latest: EvaluateInputLatest | RenderInputLatest
+  execution_time: EvaluateInputLatest | RenderInputLatest
   limit: number
 }
 
@@ -331,7 +331,7 @@ function FormActionsModel({
   const [form, setForm] = useState<FormModel>({
     start: toDateFormat(toDate(Date.now() - DAY)),
     end: toDateFormat(new Date()),
-    latest: toDateFormat(toDate(Date.now() - DAY)),
+    execution_time: toDateFormat(toDate(Date.now() - DAY)),
     limit: 1000,
   })
 
@@ -444,19 +444,19 @@ function FormActionsModel({
             </Input>
             <Input
               className="w-full mx-0"
-              label="Latest Date"
+              label="Execution Time"
             >
               {({ className }) => (
                 <Input.Textfield
                   className={clsx(className, 'w-full')}
                   placeholder="02/13/2023"
-                  value={form.latest}
+                  value={form.execution_time}
                   onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
                     e.stopPropagation()
 
                     setForm({
                       ...form,
-                      latest: e.target.value ?? '',
+                      execution_time: e.target.value ?? '',
                     })
                   }}
                 />

@@ -237,7 +237,7 @@ def test_restatement(
     ]
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now",
-        side_effect=lambda: to_datetime("2022-01-10T00:00:00+00:00"),
+        side_effect=lambda: to_datetime("2022-01-09T23:59:59+00:00"),
     ):
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(

@@ -61,10 +61,10 @@ def create_plan_dag_spec(
             all_snapshots.values(),
             start=request.environment.start_at,
             end=end,
-            latest=now(),
             execution_time=now(),
             is_dev=request.is_dev,
             restatements=request.restatements,
+            ignore_cron=True,
         )
     else:
         backfill_batches = {}

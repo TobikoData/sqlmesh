@@ -12,17 +12,17 @@ FROM table
 WHERE my_date > '2023-01-01'
 ```
 
-To make this query's date dynamic you could use the predefined SQLMesh macro variable `@latest_ds`: 
+To make this query's date dynamic you could use the predefined SQLMesh macro variable `@execution_ds`: 
 
 ```sql linenums="1"
 SELECT *
 FROM table
-WHERE my_date > @latest_ds
+WHERE my_date > @execution_ds
 ```
 
-The `@` symbol tells SQLMesh that `@latest_ds` is a macro variable that requires substitution before the SQL is executed. 
+The `@` symbol tells SQLMesh that `@execution_ds` is a macro variable that requires substitution before the SQL is executed. 
 
-The macro variable `@latest_ds` is predefined, so its value will be automatically set by SQLMesh based on when the model was last executed. If the model was last run on February 1, 2023 the rendered query would be:
+The macro variable `@execution_ds` is predefined, so its value will be automatically set by SQLMesh based on when the model was last executed. If the model was last run on February 1, 2023 the rendered query would be:
 
 ```sql linenums="1"
 SELECT *
@@ -37,7 +37,7 @@ We describe SQLMesh's predefined variables below; user-defined macro variables a
 ## Predefined Variables
 SQLMesh comes with predefined variables that can be used in your queries. They are automatically set by the SQLMesh runtime. 
 
-These variables are related to time and comprise a combination of prefixes (start, end, latest) and postfixes (date, ds, ts, epoch, millis).
+These variables are related to time and comprise a combination of prefixes (start, end, execution) and postfixes (date, ds, ts, epoch, millis).
 
 SQLMesh uses the python [datetime module](https://docs.python.org/3/library/datetime.html) for handling dates and times. It uses the standard [Unix epoch](https://en.wikipedia.org/wiki/Unix_time) start of 1970-01-01. *All predefined variables with a time component use the [UTC time zone](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).*
 
@@ -45,7 +45,7 @@ Prefixes:
 
 * start - The inclusive starting interval of a model run.
 * end - The inclusive end interval of a model run.
-* latest - The most recent date SQLMesh ran the model, determined from its [snapshot](../architecture/snapshots.md).
+* execution - The timestamp of when the execution started.
 
 Postfixes:
 
@@ -60,29 +60,29 @@ All predefined macro variables:
 * date
     * @start_date
     * @end_date
-    * @latest_date
+    * @execution_date
 
 * datetime
     * @start_dt
     * @end_dt
-    * @latest_dt
+    * @execution_dt
 
 * ds
     * @start_ds
     * @end_ds
-    * @latest_ds
+    * @execution_ds
 
 * ts
     * @start_ts
     * @end_ts
-    * @latest_ts
+    * @execution_ts
 
 * epoch
     * @start_epoch
     * @end_epoch
-    * @latest_epoch
+    * @execution_epoch
 
 * millis
     * @start_millis
     * @end_millis
-    * @latest_millis
+    * @execution_millis

@@ -41,11 +41,11 @@ logger = logging.getLogger(__name__)
 def _dates(
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
-    latest: t.Optional[TimeLike] = None,
+    execution_time: t.Optional[TimeLike] = None,
 ) -> t.Tuple[datetime, datetime, datetime]:
     return (
         *make_inclusive(start or c.EPOCH, end or c.EPOCH),
-        to_datetime(latest or c.EPOCH),
+        to_datetime(execution_time or c.EPOCH),
     )
 
 
@@ -74,7 +74,7 @@ class BaseExpressionRenderer:
         self,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         is_dev: bool = False,
@@ -85,7 +85,7 @@ class BaseExpressionRenderer:
         Args:
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental models. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
             kwargs: Additional kwargs to pass to the renderer.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
@@ -96,7 +96,7 @@ class BaseExpressionRenderer:
             The rendered expressions.
         """
 
-        dates = _dates(start, end, latest)
+        dates = _dates(start, end, execution_time)
         cache_key = dates
         if cache_key not in self._cache:
             expressions = [self._expression]
@@ -167,10 +167,10 @@ class BaseExpressionRenderer:
         expression: exp.Expression,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
-        self._cache[_dates(start, end, latest)] = [expression]
+        self._cache[_dates(start, end, execution_time)] = [expression]
 
     def _resolve_tables(
         self,
@@ -178,7 +178,7 @@ class BaseExpressionRenderer:
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
@@ -198,7 +198,7 @@ class BaseExpressionRenderer:
                 is_dev=is_dev,
                 start=start,
                 end=end,
-                latest=latest,
+                execution_time=execution_time,
                 **kwargs,
             )
 
@@ -208,7 +208,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
         self,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         is_dev: bool = False,
@@ -218,7 +218,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
         expressions = super()._render(
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             snapshots=snapshots,
             is_dev=is_dev,
             **kwargs,
@@ -233,7 +233,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
                 is_dev=is_dev,
                 start=start,
                 end=end,
-                latest=latest,
+                execution_time=execution_time,
                 **kwargs,
             )
             for e in expressions
@@ -273,7 +273,7 @@ class QueryRenderer(BaseExpressionRenderer):
         self,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         is_dev: bool = False,
@@ -287,7 +287,7 @@ class QueryRenderer(BaseExpressionRenderer):
             query: The query to render.
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
-            latest: The latest datetime to use for non-incremental queries. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time. Defaults to epoch start.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
@@ -301,14 +301,14 @@ class QueryRenderer(BaseExpressionRenderer):
         Returns:
             The rendered expression.
         """
-        cache_key = _dates(start, end, latest)
+        cache_key = _dates(start, end, execution_time)
 
         if not optimize or cache_key not in self._optimized_cache:
             try:
                 expressions = super()._render(
                     start=start,
                     end=end,
-                    latest=latest,
+                    execution_time=execution_time,
                     snapshots=snapshots,
                     table_mapping=table_mapping,
                     is_dev=is_dev,
@@ -340,7 +340,7 @@ class QueryRenderer(BaseExpressionRenderer):
             is_dev=is_dev,
             start=start,
             end=end,
-            latest=latest,
+            execution_time=execution_time,
             **kwargs,
         )
 
@@ -354,14 +354,16 @@ class QueryRenderer(BaseExpressionRenderer):
         expression: exp.Expression,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        latest: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
         optimized: bool = False,
         **kwargs: t.Any,
     ) -> None:
         if not optimized:
-            super().update_cache(expression, start=start, end=end, latest=latest, **kwargs)
+            super().update_cache(
+                expression, start=start, end=end, execution_time=execution_time, **kwargs
+            )
         else:
-            self._optimized_cache[_dates(start, end, latest)] = expression
+            self._optimized_cache[_dates(start, end, execution_time)] = expression
 
     def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
