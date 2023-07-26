@@ -990,8 +990,33 @@ def test_inclusive_exclusive_monthly(make_snapshot):
 
     assert snapshot.inclusive_exclusive("2023-01-01", "2023-07-31") == (
         to_timestamp("2023-01-01"),
-        to_timestamp("2023-07-01"),
+        to_timestamp("2023-08-01"),
     )
+
+
+def test_inclusive_exclusive_hourly(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds"), batch_size=1),
+            owner="owner",
+            dialect="",
+            cron="@hourly",
+            start="1 week ago",
+            query=parse_one("SELECT id, @end_ds as ds FROM name"),
+        )
+    )
+
+    target_date = "2023-01-29"
+    target_dt = to_datetime(target_date)
+
+    assert snapshot.missing_intervals(target_date, target_date) == [
+        (
+            to_timestamp(target_dt + timedelta(hours=h)),
+            to_timestamp(target_dt + timedelta(hours=h + 1)),
+        )
+        for h in range(24)
+    ]
 
 
 def test_model_custom_cron(make_snapshot):
@@ -1071,13 +1096,4 @@ def test_model_custom_interval_unit(make_snapshot):
         )
     )
 
-    start = "2023-01-29"
-    start_dt = to_datetime(start)
-
-    assert snapshot.missing_intervals("2023-01-29", "2023-01-30") == [
-        (
-            to_timestamp(start_dt + timedelta(hours=h)),
-            to_timestamp(start_dt + timedelta(hours=h + 1)),
-        )
-        for h in range(24)
-    ]
+    assert len(snapshot.missing_intervals("2023-01-29", "2023-01-29")) == 24

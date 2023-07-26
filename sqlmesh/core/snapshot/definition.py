@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import typing as t
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import IntEnum
 
 from pydantic import Field, validator
@@ -569,11 +569,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         end = execution_time or now() if for_removal and self.depends_on_past else end
         interval_unit = self.model.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
-        end_ts = to_timestamp(
-            interval_unit.cron_next(end)
-            if is_date(end) and interval_unit == IntervalUnit.DAY
-            else interval_unit.cron_floor(end)
-        )
+
+        if is_date(end):
+            end = to_datetime(end) + timedelta(days=1)
+        end_ts = to_timestamp(interval_unit.cron_floor(end))
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
             raise ValueError(
