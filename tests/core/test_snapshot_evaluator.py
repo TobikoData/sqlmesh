@@ -147,6 +147,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         partitioned_by=[exp.to_column("a")],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
+        table_properties={},
     )
 
 

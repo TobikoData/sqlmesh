@@ -607,3 +607,40 @@ JINJA_STATEMENT_BEGIN;
 {% endif %}
 JINJA_END;""".strip()
     )
+
+
+def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFixture):
+    context = sushi_test_project.context
+    context.target = BigQueryConfig(
+        name="test_target", schema="test_schema", database="test-project"
+    )
+
+    base_config = ModelConfig(
+        name="model",
+        package_name="package",
+        schema="sushi",
+        partition_by={"field": "`ds`", "data_type": "datetime", "granularity": "month"},
+        materialized=Materialization.INCREMENTAL,
+        sql="SELECT 1 AS one FROM tbl_a",
+    )
+
+    assert base_config.to_sqlmesh(context).table_properties == {}
+
+    assert base_config.copy(
+        update={"require_partition_filter": True, "partition_expiration_days": 7}
+    ).to_sqlmesh(context).table_properties == {
+        "require_partition_filter": exp.convert(True),
+        "partition_expiration_days": exp.convert(7),
+    }
+
+    assert base_config.copy(update={"require_partition_filter": True}).to_sqlmesh(
+        context
+    ).table_properties == {
+        "require_partition_filter": exp.convert(True),
+    }
+
+    assert base_config.copy(update={"partition_expiration_days": 7}).to_sqlmesh(
+        context
+    ).table_properties == {
+        "partition_expiration_days": exp.convert(7),
+    }

@@ -707,6 +707,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
+                table_properties=model.table_properties,
             )
         else:
             self.adapter.ctas(
@@ -717,6 +718,7 @@ class MaterializableStrategy(PromotableStrategy):
                 partitioned_by=model.partitioned_by,
                 partition_interval_unit=model.interval_unit,
                 clustered_by=model.clustered_by,
+                table_properties=model.table_properties,
             )
 
     def migrate(

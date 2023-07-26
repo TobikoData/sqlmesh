@@ -334,14 +334,12 @@ class EngineAdapter:
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
-        properties: t.Optional[exp.Properties] = None,
         **kwargs: t.Any,
     ) -> None:
         exists = False if replace else exists
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
-        if not properties and kwargs:
-            properties = self._create_table_properties(**kwargs)
+        properties = self._create_table_properties(**kwargs) if kwargs else None
         create = exp.Create(
             this=table_name_or_schema,
             kind="TABLE",
@@ -936,6 +934,7 @@ class EngineAdapter:
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
         return None
