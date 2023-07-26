@@ -48,21 +48,6 @@ def snapshot(duck_conn, make_snapshot) -> Snapshot:
 
 
 @pytest.fixture
-def schemaless_snapshot(duck_conn, make_snapshot) -> Snapshot:
-    duck_conn.execute("CREATE VIEW tbl AS SELECT 1 AS a")
-
-    model = SqlModel(
-        name="model",
-        kind=ModelKind(name=ModelKindName.FULL),
-        query=parse_one("SELECT a::int FROM tbl"),
-    )
-
-    snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    return snapshot
-
-
-@pytest.fixture
 def date_kwargs() -> t.Dict[str, str]:
     return {
         "start": "2020-01-01",

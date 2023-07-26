@@ -328,7 +328,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     Args:
         name: The snapshot name which is the same as the model name and should be unique per model.
         fingerprint: A unique hash of the model definition so that models can be reused across environments.
-        node: Model object that the snapshot encapsulates.
+        node: Node object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
         audits: The list of audits used by the model.
         intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
@@ -460,6 +460,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             version: The version that a snapshot is associated with. Usually set during the planning phase.
             audits: Available audits by name.
             cache: Cache of model name to fingerprints.
+
         Returns:
             The newly created snapshot.
         """
