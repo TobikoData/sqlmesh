@@ -538,3 +538,60 @@ def test_table_diff(web_sushi_context: Context) -> None:
     assert response.status_code == 200
     assert "schema_diff" in response.json()
     assert "row_diff" in response.json()
+
+
+def test_test(web_sushi_context: Context) -> None:
+    response = client.get("/api/commands/test")
+    assert response.status_code == 200
+    response_json = response.json()
+    assert response_json["tests_run"] == 2
+    assert response_json["failures"] == []
+
+    # Single test
+    response = client.get("/api/commands/test", params={"test": "tests/test_order_items.yaml"})
+    assert response.status_code == 200
+    response_json = response.json()
+    assert response_json["tests_run"] == 1
+    assert response_json["failures"] == []
+
+
+def test_test_failure(project_context: Context) -> None:
+    models_dir = project_context.path / "models"
+    models_dir.mkdir()
+    sql_file = models_dir / "foo.sql"
+    sql_file.write_text("MODEL (name foo); SELECT 1 ds;")
+
+    tests_dir = project_context.path / "tests"
+    tests_dir.mkdir()
+    test_file = tests_dir / "test_foo.yaml"
+    test_file.write_text(
+        """test_foo:
+  model: foo
+  outputs:
+    query:
+      - ds: 2
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01
+    latest: 2022-01-01"""
+    )
+
+    project_context.load()
+    response = client.get("/api/commands/test")
+    assert response.status_code == 200
+    response_json = response.json()
+    assert response_json["tests_run"] == 1
+    assert response_json["failures"] == [
+        {
+            "name": "test_foo",
+            "path": "tests/test_foo.yaml",
+            "tb": """AssertionError: Data differs
+- {'ds': 2}
+?        ^
+
++ {'ds': 1}
+?        ^
+
+""",
+        }
+    ]
