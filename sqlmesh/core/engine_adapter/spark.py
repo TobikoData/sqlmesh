@@ -249,11 +249,13 @@ class SparkEngineAdapter(EngineAdapter):
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
         if storage_format:
             properties.append(exp.FileFormatProperty(this=exp.Var(this=storage_format)))
+
         if partitioned_by:
             for expr in partitioned_by:
                 if not isinstance(expr, exp.Column):
@@ -265,6 +267,10 @@ class SparkEngineAdapter(EngineAdapter):
                     this=exp.Schema(expressions=partitioned_by),
                 )
             )
+
+        for key, value in (table_properties or {}).items():
+            properties.append(exp.Property(this=key, value=value))
+
         if properties:
             return exp.Properties(expressions=properties)
         return None

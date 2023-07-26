@@ -39,6 +39,9 @@ class ModelMeta(Node):
     grain: t.List[str] = []
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
+    table_properties_: t.Optional[t.Dict[str, exp.Expression]] = Field(
+        default=None, alias="table_properties"
+    )
 
     _model_kind_validator = ModelKind.field_validator()
 
@@ -158,6 +161,44 @@ class ModelMeta(Node):
 
         return v
 
+    @validator("table_properties_", pre=True)
+    def _properties_validator(
+        cls, v: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.Optional[t.Dict[str, exp.Expression]]:
+        if v is None:
+            return v
+
+        dialect = values.get("dialect")
+
+        table_properties = {}
+        if isinstance(v, exp.Expression):
+            if isinstance(v, (exp.Tuple, exp.Array)):
+                eq_expressions: t.List[exp.Expression] = v.expressions
+            elif isinstance(v, exp.Paren):
+                eq_expressions = [v.unnest()]
+            else:
+                eq_expressions = [v]
+
+            for eq_expr in eq_expressions:
+                if not isinstance(eq_expr, exp.EQ):
+                    raise ConfigError(
+                        f"Invalid table property '{eq_expr.sql(dialect=dialect)}'. "
+                        "Table properties must be specified as key-value pairs <key> = <value>. "
+                    )
+
+                value_expr = eq_expr.expression.copy()
+                value_expr.meta["dialect"] = dialect
+                table_properties[eq_expr.this.name] = value_expr
+        elif isinstance(v, dict):
+            for key, value in v.items():
+                value_expr = exp.convert(value, copy=True)
+                value_expr.meta["dialect"] = dialect
+                table_properties[key] = value_expr
+        else:
+            raise ConfigError(f"Unexpected table properties '{v}'")
+
+        return table_properties
+
     @validator("depends_on_", pre=True)
     def _depends_on_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
         dialect = values.get("dialect")
@@ -247,6 +288,11 @@ class ModelMeta(Node):
     def batch_size(self) -> t.Optional[int]:
         """The maximal number of units in a single task for a backfill."""
         return getattr(self.kind, "batch_size", None)
+
+    @property
+    def table_properties(self) -> t.Dict[str, exp.Expression]:
+        """A dictionary of table properties."""
+        return self.table_properties_ or {}
 
     @property
     def _partition_by_columns(self) -> t.List[exp.Column]:

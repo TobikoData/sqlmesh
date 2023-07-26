@@ -83,6 +83,10 @@ class ModelConfig(BaseModelConfig):
     # redshift
     bind: t.Optional[bool] = None
 
+    # bigquery
+    require_partition_filter: t.Optional[bool] = None
+    partition_expiration_days: t.Optional[int] = None
+
     # Private fields
     _sql_embedded_config: t.Optional[SqlStr] = None
     _sql_no_config: t.Optional[SqlStr] = None
@@ -281,6 +285,15 @@ class ModelConfig(BaseModelConfig):
             dbt_max_partition_blob = self._dbt_max_partition_blob()
             if dbt_max_partition_blob:
                 model_kwargs["pre_statements"].append(d.jinja_statement(dbt_max_partition_blob))
+
+            table_properties = {}
+            if self.partition_expiration_days is not None:
+                table_properties["partition_expiration_days"] = self.partition_expiration_days
+            if self.require_partition_filter is not None:
+                table_properties["require_partition_filter"] = self.require_partition_filter
+
+            if table_properties:
+                model_kwargs["table_properties"] = table_properties
 
         return create_sql_model(
             self.sql_name,
