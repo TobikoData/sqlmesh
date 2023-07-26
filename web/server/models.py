@@ -73,6 +73,7 @@ class Directory(BaseModel):
 
 class Meta(BaseModel):
     version: str
+    has_running_task: bool
 
 
 class ChangeDirect(BaseModel):

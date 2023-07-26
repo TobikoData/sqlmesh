@@ -9,3 +9,5 @@ type Optional<T> = T | undefined
 type Maybe<T> = T | Nil
 type Callback = () => void
 type Primitive = string | number | boolean
+type Cancelable<T> = T & { cancel?: Callback }
+type AsyncCallback = () => Promise<void>

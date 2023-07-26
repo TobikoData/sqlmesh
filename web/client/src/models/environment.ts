@@ -9,6 +9,7 @@ export const EnumDefaultEnvironment = {
 
 export const EnumRelativeLocation = {
   Local: 'local',
+  Restored: 'restored',
   Synchronized: 'synchronized',
 } as const
 
@@ -72,11 +73,11 @@ export class ModelEnvironment {
   }
 
   get isLocal(): boolean {
-    return this._type === EnumRelativeLocation.Local
+    return this.type === EnumRelativeLocation.Local
   }
 
   get isSynchronized(): boolean {
-    return this._type === EnumRelativeLocation.Synchronized
+    return this.type === EnumRelativeLocation.Synchronized
   }
 
   setType(type: RelativeLocation): void {
@@ -153,7 +154,7 @@ export class ModelEnvironment {
       output.push(
         new ModelEnvironment(
           { name },
-          EnumRelativeLocation.Local,
+          EnumRelativeLocation.Restored,
           environment.createFrom,
         ),
       )

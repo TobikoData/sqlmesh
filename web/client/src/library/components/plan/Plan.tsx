@@ -23,6 +23,7 @@ import { useApplyPayload, usePlanPayload } from './hooks'
 import { useChannelEvents } from '@api/channels'
 import SplitPane from '../splitPane/SplitPane'
 import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
+import { EnumAction, useStoreActionManager } from '@context/manager'
 
 function Plan({
   environment,
@@ -50,6 +51,9 @@ function Plan({
     testsReportErrors,
   } = usePlan()
 
+  const enqueueAction = useStoreActionManager(s => s.enqueueAction)
+  const resetCurrentAction = useStoreActionManager(s => s.resetCurrentAction)
+
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
   const activePlan = useStorePlan(s => s.activePlan)
@@ -73,6 +77,10 @@ function Plan({
   const { refetch: planApply, cancel: cancelRequestPlanApply } =
     useApiPlanApply(environment.name, applyPayload)
   const { refetch: cancelPlan } = useApiCancelPlan()
+
+  const debouncedPlanApply = useCallback(debounceAsync(planApply, 1000, true), [
+    planApply,
+  ])
 
   useEffect(() => {
     const unsubscribeTests = subscribe('tests', testsReport)
@@ -166,13 +174,13 @@ function Plan({
     dispatch([
       isTrue(data.ok)
         ? {
-            type: EnumPlanActions.TestsReportMessages,
-            testsReportMessages: data,
-          }
+          type: EnumPlanActions.TestsReportMessages,
+          testsReportMessages: data,
+        }
         : {
-            type: EnumPlanActions.TestsReportErrors,
-            testsReportErrors: data,
-          },
+          type: EnumPlanActions.TestsReportErrors,
+          testsReportErrors: data,
+        },
     ])
   }
 
@@ -236,6 +244,9 @@ function Plan({
       .catch(() => {
         reset()
       })
+      .finally(() => {
+        resetCurrentAction()
+      })
   }
 
   function apply(): void {
@@ -248,10 +259,13 @@ function Plan({
       },
     ])
 
+    enqueueAction(EnumAction.PlanApply)
+
     planApply()
       .then(({ data }) => {
         if (data?.type === EnumPlanApplyType.Virtual) {
           setPlanState(EnumPlanState.Finished)
+          resetCurrentAction()
         }
       })
       .finally(() => {
@@ -271,7 +285,10 @@ function Plan({
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
-    void planRun().then(({ data }) => {
+
+    enqueueAction(EnumAction.Plan, async () => {
+      const { data } = await planRun()
+
       dispatch([
         {
           type: EnumPlanActions.Backfills,

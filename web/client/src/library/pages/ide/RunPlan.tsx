@@ -1,7 +1,13 @@
 import { Menu, Popover, Transition } from '@headlessui/react'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { useState, useEffect, Fragment, type MouseEvent } from 'react'
+import React, {
+  useState,
+  useEffect,
+  Fragment,
+  type MouseEvent,
+  useCallback,
+} from 'react'
 import { useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
@@ -25,6 +31,7 @@ import {
 } from '@components/plan/context'
 import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { useIDE } from './context'
+import { EnumAction, useStoreActionManager } from '@context/manager'
 
 export default function RunPlan(): JSX.Element {
   const { setIsPlanOpen } = useIDE()
@@ -43,6 +50,11 @@ export default function RunPlan(): JSX.Element {
   const hasSynchronizedEnvironments = useStoreContext(
     s => s.hasSynchronizedEnvironments,
   )
+
+  const enqueueAction = useStoreActionManager(s => s.enqueueAction)
+  const currentAction = useStoreActionManager(s => s.currentAction)
+  const shouldLock = useStoreActionManager(s => s.shouldLock)
+  const resetCurrentAction = useStoreActionManager(s => s.resetCurrentAction)
 
   const [hasChanges, setHasChanges] = useState(false)
   const [plan, setPlan] = useState<ContextEnvironment | undefined>()
@@ -65,7 +77,7 @@ export default function RunPlan(): JSX.Element {
 
     if (isFalse(environment.isSynchronized)) return
 
-    void planRun()
+    enqueueAction(EnumAction.Plan, planRun)
   }, [environment])
 
   useEffect(() => {
@@ -105,22 +117,40 @@ export default function RunPlan(): JSX.Element {
     planAction !== EnumPlanAction.None ||
     planState === EnumPlanState.Applying ||
     planState === EnumPlanState.Running ||
-    planState === EnumPlanState.Cancelling
+    planState === EnumPlanState.Cancelling ||
+    shouldLock(EnumAction.Plan)
 
   return (
     <div
       className={clsx(
         'flex items-center',
         environment == null &&
-          'opacity-50 pointer-events-none cursor-not-allowed',
+        'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
       <div className="flex items-center relative">
+        {shouldLock(EnumAction.Plan) && (
+          <span className="block mr-2 group whitespace-nowrap text-xs text-neutral-400">
+            Locked while running{' '}
+            <b className="text-neutral-600 group-hover:hidden">
+              {currentAction}
+            </b>
+            <b
+              className="cursor-pointer text-neutral-600 hidden group-hover:inline"
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation()
+                resetCurrentAction()
+              }}
+            >
+              Cancel
+            </b>
+          </span>
+        )}
         <Button
           className={clsx(
             'mx-0',
             isFalse(environment.isInitial && environment.isDefault) &&
-              'rounded-none rounded-l-lg border-r',
+            'rounded-none rounded-l-lg border-r',
           )}
           disabled={shouldDisableActions}
           variant={EnumVariant.Alternative}
@@ -139,9 +169,8 @@ export default function RunPlan(): JSX.Element {
                 },
                 children: (
                   <div className="mt-5 pt-4">
-                    <h4 className="mb-2">{`${
-                      environments.size > 1 ? 'Select or ' : ''
-                    }Add Environment`}</h4>
+                    <h4 className="mb-2">{`${environments.size > 1 ? 'Select or ' : ''
+                      }Add Environment`}</h4>
                     <div className="flex items-center relative">
                       {environments.size > 1 && (
                         <SelectEnvironemnt
@@ -213,6 +242,13 @@ function PlanChanges({
   isLoading: boolean
   hasChanges: boolean
 }): JSX.Element {
+  const isActiveAction = useStoreActionManager(s => s.isActiveAction)
+
+  const isActiveActionPlanApply = isActiveAction(EnumAction.PlanApply)
+  const shouldDisplayChanges =
+    isFalse(isActiveAction(EnumAction.PlanApply)) &&
+    isFalse(isActiveAction(EnumAction.Plan))
+
   return (
     <span className="flex align-center h-full w-full">
       <>
@@ -225,54 +261,69 @@ function PlanChanges({
           </span>
         ) : (
           <>
-            {environment.isInitial && environment.isLocal && (
-              <span
-                title="New"
-                className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
-              >
-                New
-              </span>
-            )}
-            {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
-              <span
-                title="Latest"
-                className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
-              >
-                <span>Latest</span>
-              </span>
-            )}
-            {isArrayNotEmpty(plan?.changes?.added) && (
+            {isFalse(isActiveActionPlanApply) &&
+              environment.isInitial &&
+              environment.isLocal && (
+                <span
+                  title="New"
+                  className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
+                >
+                  New
+                </span>
+              )}
+            {[hasChanges, isActiveActionPlanApply, environment.isLocal].every(
+              isFalse,
+            ) && (
+                <span
+                  title="Latest"
+                  className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
+                >
+                  <span>Latest</span>
+                </span>
+              )}
+            {shouldDisplayChanges && isArrayNotEmpty(plan?.changes?.added) && (
               <ChangesPreview
                 headline="Added Models"
                 type={EnumPlanChangeType.Add}
                 changes={plan!.changes!.added}
               />
             )}
-            {isArrayNotEmpty(plan?.changes?.modified.direct) && (
-              <ChangesPreview
-                headline="Direct Changes"
-                type={EnumPlanChangeType.Direct}
-                changes={plan!.changes!.modified.direct!.map(
-                  ({ model_name }) => model_name,
-                )}
-              />
-            )}
-            {isArrayNotEmpty(plan?.changes?.modified.indirect) && (
-              <ChangesPreview
-                headline="Indirectly Modified"
-                type={EnumPlanChangeType.Indirect}
-                changes={plan!.changes!.modified.indirect!.map(
-                  ci => ci.model_name,
-                )}
-              />
-            )}
-            {isArrayNotEmpty(plan?.changes?.removed) && (
-              <ChangesPreview
-                headline="Removed Models"
-                type={EnumPlanChangeType.Remove}
-                changes={plan!.changes!.removed}
-              />
-            )}
+            {shouldDisplayChanges &&
+              isArrayNotEmpty(plan?.changes?.modified.direct) && (
+                <ChangesPreview
+                  headline="Direct Changes"
+                  type={EnumPlanChangeType.Direct}
+                  changes={plan!.changes!.modified.direct!.map(
+                    ({ model_name }) => model_name,
+                  )}
+                />
+              )}
+            {shouldDisplayChanges &&
+              isArrayNotEmpty(plan?.changes?.modified.indirect) && (
+                <ChangesPreview
+                  headline="Indirectly Modified"
+                  type={EnumPlanChangeType.Indirect}
+                  changes={plan!.changes!.modified.indirect!.map(
+                    ({ model_name }) => model_name,
+                  )}
+                />
+              )}
+            {shouldDisplayChanges &&
+              isArrayNotEmpty(plan?.changes?.modified.metadata) && (
+                <ChangesPreview
+                  headline="Metadata Modified"
+                  type={EnumPlanChangeType.Metadata}
+                  changes={plan!.changes!.modified.metadata ?? []}
+                />
+              )}
+            {shouldDisplayChanges &&
+              isArrayNotEmpty(plan?.changes?.removed) && (
+                <ChangesPreview
+                  headline="Removed Models"
+                  type={EnumPlanChangeType.Remove}
+                  changes={plan!.changes!.removed}
+                />
+              )}
           </>
         )}
       </>
@@ -358,7 +409,7 @@ function SelectEnvironemnt({
                           'flex justify-between items-center px-4 py-1 cursor-pointer overflow-auto',
                           active && 'bg-primary-10',
                           env === environment &&
-                            'pointer-events-none cursor-default bg-secondary-10',
+                          'pointer-events-none cursor-default bg-secondary-10',
                         )}
                       >
                         <div className="flex items-start">
@@ -517,13 +568,13 @@ function ChangesPreview({
             className={clsx(
               'inline-block ml-1 px-2 rounded-full text-xs font-bold text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
-                'bg-success-500 border-success-500',
+              'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&
-                'bg-danger-500 border-danger-500',
+              'bg-danger-500 border-danger-500',
               type === EnumPlanChangeType.Direct &&
-                'bg-secondary-500 border-secondary-500',
+              'bg-secondary-500 border-secondary-500',
               type === EnumPlanChangeType.Indirect &&
-                'bg-warning-500 border-warning-500',
+              'bg-warning-500 border-warning-500',
               type === 'metadata' && 'bg-neutral-500 border-neutral-500',
             )}
           >
