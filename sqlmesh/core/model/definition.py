@@ -116,9 +116,6 @@ class _Model(ModelMeta, frozen=True):
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
-    physical_schema_override_: t.Optional[str] = Field(
-        default=None, alias="physical_schema_override"
-    )
 
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
@@ -556,7 +553,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def physical_schema(self) -> str:
-        return self.physical_schema_override_ or f"{c.SQLMESH}__{self.schema_name}"
+        return self.physical_schema_override or f"{c.SQLMESH}__{self.schema_name}"
 
     @property
     def is_sql(self) -> bool:
@@ -1683,7 +1680,7 @@ def _create_model(
                 "jinja_macros": jinja_macros,
                 "dialect": dialect,
                 "depends_on": depends_on,
-                "physical_schema_override": physical_schema_override.get(exp.to_table(name).db),
+                "physical_schema_override_map": physical_schema_override,
                 **kwargs,
             },
         )
