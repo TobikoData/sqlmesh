@@ -22,7 +22,7 @@ WHERE my_date > @execution_ds
 
 The `@` symbol tells SQLMesh that `@execution_ds` is a macro variable that requires substitution before the SQL is executed. 
 
-The macro variable `@execution_ds` is predefined, so its value will be automatically set by SQLMesh based on when the model was last executed. If the model was last run on February 1, 2023 the rendered query would be:
+The macro variable `@execution_ds` is predefined, so its value will be automatically set by SQLMesh based on when the execution started. If the model was executed on February 1, 2023 the rendered query would be:
 
 ```sql linenums="1"
 SELECT *
