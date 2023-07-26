@@ -6,6 +6,7 @@ import typing as t
 
 from pydantic import BaseModel, validator
 from sqlglot import exp
+from watchfiles import Change
 
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.node import IntervalUnit
@@ -329,8 +330,13 @@ class ArtifactType(str, enum.Enum):
 
 
 class ArtifactChange(BaseModel):
-    change: str
+    change: Change
     path: str
     type: t.Optional[ArtifactType] = None
     file: t.Optional[File] = None
-    directory: t.Optional[Directory] = None
+
+    @validator("change", always=True)
+    def default_change(cls, v: bool, values: t.Dict[str, t.Any]) -> bool:
+        if "change" in values:
+            return values["change"].name
+        return v

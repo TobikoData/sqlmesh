@@ -1,11 +1,10 @@
 import asyncio
-import functools as ft
 import json
-import os
 import typing as t
 from pathlib import Path
 
 from fastapi.encoders import jsonable_encoder
+from sse_starlette.sse import ServerSentEvent
 from watchfiles import Change, DefaultFilter, awatch
 
 from sqlmesh.core import constants as c
@@ -15,7 +14,6 @@ from web.server.api.endpoints.files import _get_directory, _get_file_with_conten
 from web.server.api.endpoints.models import get_all_models
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context, get_path_mapping, get_settings
-from web.server.sse import Event
 from web.server.utils import is_relative_to
 
 
@@ -40,48 +38,37 @@ async def watch_project(queue: asyncio.Queue) -> None:
         changes: t.List[models.ArtifactChange] = []
         directories: t.Dict[str, models.Directory] = {}
 
-        for (change, path) in list(entries):
-            relative_path = Path(path).relative_to(settings.project_path)
+        for change, path_str in entries:
+            path = Path(path_str)
+            relative_path = path.relative_to(settings.project_path)
 
-            should_load_context = should_load_context or ft.reduce(
-                lambda v, p: v or is_relative_to(Path(path), p), paths, False
-            )
+            should_load_context = should_load_context or any(is_relative_to(path, p) for p in paths)
 
-            if change == Change.modified and os.path.isdir(path):
+            if change == Change.modified and path.is_dir():
                 directory = _get_directory(path, settings, path_mapping, context)
                 directories[directory.path] = directory
-            elif change == Change.deleted or os.path.exists(path) == False:
+            elif change == Change.deleted or not path.exists():
                 changes.append(
                     models.ArtifactChange(
-                        change=Change.deleted.name,
+                        change=Change.deleted,
                         path=str(relative_path),
                     )
                 )
-            elif change == Change.modified and os.path.isfile(path):
-                type = (
-                    models.ArtifactType.directory
-                    if os.path.isdir(path)
-                    else models.ArtifactType.file
-                )
-                file = (
-                    _get_file_with_content(relative_path, settings, path_mapping)
-                    if os.path.isfile(path)
-                    else None
-                )
+            elif change == Change.modified and path.is_file():
                 changes.append(
                     models.ArtifactChange(
-                        type=type,
-                        change=change.name,
+                        type=models.ArtifactType.file,
+                        change=change,
                         path=str(relative_path),
-                        file=file,
+                        file=_get_file_with_content(relative_path, settings, path_mapping),
                     )
                 )
 
         if should_load_context:
-            _refresh_models(queue, context)
+            reload_context(queue, context)
 
         queue.put_nowait(
-            Event(
+            ServerSentEvent(
                 event="file",
                 data=json.dumps(
                     jsonable_encoder(
@@ -95,15 +82,17 @@ async def watch_project(queue: asyncio.Queue) -> None:
         )
 
 
-def _refresh_models(queue: asyncio.Queue, context: Context) -> None:
+def reload_context(queue: asyncio.Queue, context: Context) -> None:
     try:
         context.load()
         queue.put_nowait(
-            Event(event="models", data=json.dumps(jsonable_encoder(get_all_models(context))))
+            ServerSentEvent(
+                event="models", data=json.dumps(jsonable_encoder(get_all_models(context)))
+            )
         )
     except Exception:
         error = ApiException(
             message="Error refreshing the models while watching file changes",
             origin="API -> watcher -> _refresh_models",
         ).to_dict()
-        queue.put_nowait(Event(event="errors", data=json.dumps(error)))
+        queue.put_nowait(ServerSentEvent(event="errors", data=json.dumps(error)))
