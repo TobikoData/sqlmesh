@@ -52,8 +52,8 @@ Optional SQL statements can help you prepare the model's `SELECT` statement. For
 
 However, be careful not to run any command that could conflict with the execution of the model's query, such as creating a physical table.
 
-### Model `SELECT` statement
-The model's `SELECT` statement must be a standalone SQL Statement that explicitly lists out its columns (i.e., does not use the `*` operator to select all columns). The result of this query will be used to populate the model table.
+### Model `SELECT` query
+The model must contain a standalone `SELECT` query. The result of this query will be used to populate the model table or view.
 
 ## Automatic dependencies
 SQLMesh parses your SQL, so it understands what the code does and how it relates to other models. There is no need for you to manually specify dependencies to other models with special tags or commands. 
@@ -80,9 +80,9 @@ SQLMesh encourages explicitly assigning a data type for each model column. This 
 SQLMesh encourages explicit type casting. SQL's type coercion can be tricky to deal with, so it is best to ensure that the data in your model is exactly as you want it.
 
 ### Explicit SELECTs
-Although `SELECT *` is convenient, it is dangerous because a model's results can change due to external factors (e.g., an upstream source adding or removing a column). 
+Although `SELECT *` is convenient, it is dangerous because a model's results can change due to external factors (e.g., an upstream source adding or removing a column). In general, we encourage listing out every column you need or using [`create_external_models`](../../reference/cli.md#create_external_models) to capture the schema of an external data source. 
 
-In general, you should always list out every column you need. When selecting from external sources, `SELECT *` is prohibited and will raise an exception.
+If you select from an external source, `SELECT *` will prevent SQLMesh from performing some optimization steps and from determining upstream column-level lineage. Use an [`external` model kind](./model_kinds.md#external) to enable optimizations and upstream column-level lineage for external sources.
 
 ## Transpilation
 SQLMesh leverages [SQLGlot](https://github.com/tobymao/sqlglot) to parse and transpile SQL. Therefore, you can write your SQL in any supported dialect and transpile it into another supported dialect. 
