@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -1055,4 +1056,28 @@ def test_model_custom_cron(make_snapshot):
         ignore_cron=True,
     ) == [
         (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+
+
+def test_model_custom_interval_unit(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            cron="0 5 * * *",
+            interval_unit="hour",
+            start="2023-01-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    start = "2023-01-29"
+    start_dt = to_datetime(start)
+
+    assert snapshot.missing_intervals("2023-01-29", "2023-01-30") == [
+        (
+            to_timestamp(start_dt + timedelta(hours=h)),
+            to_timestamp(start_dt + timedelta(hours=h + 1)),
+        )
+        for h in range(24)
     ]

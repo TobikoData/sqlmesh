@@ -227,7 +227,7 @@ class ModelMeta(Node):
             return start
 
         for _ in range(self.lookback):
-            start = self.interval_unit().cron_prev(start)
+            start = self.interval_unit.cron_prev(start)
         return start
 
     @property

@@ -567,7 +567,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             A [start, end) pair.
         """
         end = execution_time or now() if for_removal and self.depends_on_past else end
-        interval_unit = self.model.interval_unit()
+        interval_unit = self.model.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
         end_ts = to_timestamp(
             interval_unit.cron_next(end)
@@ -638,6 +638,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.is_symbolic or (self.is_seed and intervals):
             return []
 
+        execution_time = execution_time or now()
+
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
@@ -645,9 +647,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
         )
 
-        interval_unit = self.model.interval_unit()
+        interval_unit = self.model.interval_unit
 
-        execution_time = execution_time or now()
         upper_bound_ts = to_timestamp(
             self.model.cron_floor(execution_time) if not ignore_cron else execution_time
         )
@@ -725,9 +726,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             unpaused_dt: The datetime object of when this snapshot was unpaused.
         """
         self.unpaused_ts = (
-            to_timestamp(self.model.interval_unit().cron_floor(unpaused_dt))
-            if unpaused_dt
-            else None
+            to_timestamp(self.model.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
     def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
@@ -832,7 +831,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def normalized_effective_from_ts(self) -> t.Optional[int]:
         return (
-            to_timestamp(self.model.interval_unit().cron_floor(self.effective_from))
+            to_timestamp(self.model.interval_unit.cron_floor(self.effective_from))
             if self.effective_from
             else None
         )
