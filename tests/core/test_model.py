@@ -1636,42 +1636,42 @@ def test_incremental_unmanaged_validation():
 
 def test_custom_interval_unit():
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit minute); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.MINUTE
     )
 
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit hour); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.HOUR
     )
 
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit hour, cron '@daily'); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.HOUR
     )
 
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse("MODEL (name db.table, cron '@daily'); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.DAY
     )
 
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse("MODEL (name db.table, cron '0 5 * * *'); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.DAY
     )
 
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse(
                 "MODEL (name db.table, cron '0 5 * * *', interval_unit 'minute'); SELECT a FROM tbl;"
             )
