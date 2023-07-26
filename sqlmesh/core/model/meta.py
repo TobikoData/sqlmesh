@@ -200,7 +200,7 @@ class ModelMeta(Node):
 
     @classmethod
     def _set_physical_schema_override(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        physical_schema_override_map = values.get("physical_schema_override_map", {})
+        physical_schema_override_map = values.get("physical_schema_override_map") or {}
         values["physical_schema_override"] = physical_schema_override_map.get(
             exp.to_table(values["name"]).db, values.get("physical_schema_override")
         )
