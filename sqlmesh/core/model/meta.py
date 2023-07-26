@@ -42,7 +42,7 @@ class ModelMeta(Node):
 
     _model_kind_validator = ModelKind.field_validator()
 
-    class Config:
+    class Config(Node.Config):
         extra = "allow"
 
     @validator("audits", pre=True)
