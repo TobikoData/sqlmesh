@@ -63,6 +63,13 @@ airflow_config_docker = Config(  # type: ignore
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 
+# A DuckDB config with a physical schema map.
+map_config = Config(
+    default_connection=DuckDBConnectionConfig(),
+    physical_schema_override={"sushi": "company_internal"},
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+)
+
 
 required_approvers_config = Config(
     default_connection=DuckDBConnectionConfig(),

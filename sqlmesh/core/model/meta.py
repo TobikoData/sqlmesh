@@ -38,8 +38,12 @@ class ModelMeta(Node):
     tags: t.List[str] = []
     grain: t.List[str] = []
     hash_raw_query: bool = False
+    physical_schema_override: t.Optional[str] = None
 
     _model_kind_validator = ModelKind.field_validator()
+
+    class Config(Node.Config):
+        extra = "allow"
 
     @validator("audits", pre=True)
     def _audits_validator(cls, v: t.Any) -> t.Any:
@@ -176,6 +180,7 @@ class ModelMeta(Node):
     def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values = cls._kind_validator(values)
         values = cls._normalize_name(values)
+        values = cls._set_physical_schema_override(values)
         return values
 
     @classmethod
@@ -191,6 +196,14 @@ class ModelMeta(Node):
     @classmethod
     def _normalize_name(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values["name"] = d.normalize_model_name(values["name"], dialect=values.get("dialect"))
+        return values
+
+    @classmethod
+    def _set_physical_schema_override(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        physical_schema_override_map = values.get("physical_schema_override_map") or {}
+        values["physical_schema_override"] = physical_schema_override_map.get(
+            exp.to_table(values["name"]).db, values.get("physical_schema_override")
+        )
         return values
 
     @property

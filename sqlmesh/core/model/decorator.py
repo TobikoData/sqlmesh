@@ -53,6 +53,7 @@ class model(registry_decorator):
         path: Path,
         defaults: t.Optional[t.Dict[str, t.Any]] = None,
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
+        physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
@@ -73,5 +74,6 @@ class model(registry_decorator):
             time_column_format=time_column_format,
             python_env=serialize_env(env, path=module_path),
             columns=self.columns,
+            physical_schema_override=physical_schema_override,
             **self.kwargs,
         )

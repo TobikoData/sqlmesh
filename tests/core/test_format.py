@@ -3,7 +3,7 @@ import pathlib
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import SqlModel, load_model
+from sqlmesh.core.model import SqlModel, load_sql_based_model
 from tests.utils.test_filesystem import create_temp_file
 
 
@@ -38,7 +38,7 @@ def test_format_files(tmp_path: pathlib.Path):
         upd1
         == "MODEL (\n  name some.model,\n  dialect 'bigquery'\n);\n\nSELECT\n  1 AS `CaseSensitive`"
     )
-    context.upsert_model(load_model(parse(upd1, "bigquery")))
+    context.upsert_model(load_sql_based_model(parse(upd1, "bigquery")))
     assert context.models["some.model"].dialect == "bigquery"
 
     # Ensure no dialect is added if it's not needed

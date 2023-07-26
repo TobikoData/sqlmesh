@@ -10,7 +10,7 @@ import sqlmesh.core.constants
 from sqlmesh.core.config import Config, ModelDefaultsConfig, SnowflakeConnectionConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import load_model
+from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.utils.date import yesterday_ds
 from sqlmesh.utils.errors import ConfigError
@@ -197,7 +197,7 @@ def test_evaluate_limit():
     context = Context(config=Config())
 
     context.upsert_model(
-        load_model(
+        load_sql_based_model(
             parse(
                 """
         MODEL(name with_limit, kind FULL);
@@ -211,7 +211,7 @@ def test_evaluate_limit():
     assert context.evaluate("with_limit", "2020-01-01", "2020-01-02", "2020-01-02", 2).size == 2
 
     context.upsert_model(
-        load_model(
+        load_sql_based_model(
             parse(
                 """
         MODEL(name without_limit, kind FULL);
@@ -336,3 +336,34 @@ model_defaults:
         assert snowflake_connection.account == "123"
         assert snowflake_connection.user == "ABC"
         assert snowflake_connection.password == "XYZ"
+
+
+def test_physical_schema_override() -> None:
+    def get_schemas(context: Context):
+        return {snapshot.physical_schema for snapshot in context.snapshots.values()}
+
+    def get_view_schemas(context: Context):
+        return {snapshot.qualified_view_name.schema_name for snapshot in context.snapshots.values()}
+
+    def get_sushi_fingerprints(context: Context):
+        return {
+            snapshot.fingerprint.to_identifier()
+            for snapshot in context.snapshots.values()
+            if snapshot.model.schema_name == "sushi"
+        }
+
+    no_mapping_context = Context(paths="examples/sushi")
+    assert no_mapping_context.config.physical_schema_override == {}
+    assert get_schemas(no_mapping_context) == {"sqlmesh__sushi", "sqlmesh__raw"}
+    assert get_view_schemas(no_mapping_context) == {"sushi", "raw"}
+    no_mapping_fingerprints = get_sushi_fingerprints(no_mapping_context)
+    context = Context(paths="examples/sushi", config="map_config")
+    assert context.config.physical_schema_override == {"sushi": "company_internal"}
+    assert get_schemas(context) == {"company_internal", "sqlmesh__raw"}
+    assert get_view_schemas(context) == {"sushi", "raw"}
+    sushi_fingerprints = get_sushi_fingerprints(context)
+    assert (
+        len(sushi_fingerprints)
+        == len(no_mapping_fingerprints)
+        == len(no_mapping_fingerprints - sushi_fingerprints)
+    )

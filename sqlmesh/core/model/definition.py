@@ -110,6 +110,7 @@ class _Model(ModelMeta, frozen=True):
         clustered_by: The cluster columns, only applicable in certain engines. (eg. (ds, hour))
         python_env: Dictionary containing all global variables needed to render the model's macros.
         mapping_schema: The schema of table names to column and types.
+        physical_schema_override: The desired physical schema name override.
     """
 
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
@@ -547,6 +548,14 @@ class _Model(ModelMeta, frozen=True):
         return self.python_env_ or {}
 
     @property
+    def schema_name(self) -> str:
+        return exp.to_table(self.name).db or c.DEFAULT_SCHEMA
+
+    @property
+    def physical_schema(self) -> str:
+        return self.physical_schema_override or f"{c.SQLMESH}__{self.schema_name}"
+
+    @property
     def is_sql(self) -> bool:
         return False
 
@@ -666,6 +675,7 @@ class _Model(ModelMeta, frozen=True):
             *(expr.sql() for expr in (self.partitioned_by or [])),
             *(self.clustered_by or []),
             self.stamp,
+            self.physical_schema,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -1325,7 +1335,7 @@ class ExternalModel(_Model):
 Model = t.Union[SqlModel, SeedModel, PythonModel, ExternalModel]
 
 
-def load_model(
+def load_sql_based_model(
     expressions: t.List[exp.Expression],
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
@@ -1336,6 +1346,7 @@ def load_model(
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
+    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -1401,6 +1412,7 @@ def load_model(
         python_env=python_env,
         jinja_macros=jinja_macros,
         jinja_macro_references=jinja_macro_references,
+        physical_schema_override=physical_schema_override,
         **meta_fields,
     )
 
@@ -1447,6 +1459,7 @@ def create_sql_model(
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
     dialect: t.Optional[str] = None,
+    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a SQL model.
@@ -1497,6 +1510,7 @@ def create_sql_model(
         query=query,
         pre_statements=pre_statements,
         post_statements=post_statements,
+        physical_schema_override=physical_schema_override,
         **kwargs,
     )
 
@@ -1514,6 +1528,7 @@ def create_seed_model(
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
+    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a Seed model.
@@ -1559,6 +1574,7 @@ def create_seed_model(
         jinja_macro_references=jinja_macro_references,
         pre_statements=pre_statements,
         post_statements=post_statements,
+        physical_schema_override=physical_schema_override,
         **kwargs,
     )
 
@@ -1572,6 +1588,7 @@ def create_python_model(
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
+    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a Python model.
@@ -1601,6 +1618,7 @@ def create_python_model(
         depends_on=depends_on,
         entrypoint=entrypoint,
         python_env=python_env,
+        physical_schema_override=physical_schema_override,
         **kwargs,
     )
 
@@ -1641,11 +1659,14 @@ def _create_model(
     jinja_macro_references: t.Optional[t.Set[MacroReference]] = None,
     depends_on: t.Optional[t.Set[str]] = None,
     dialect: t.Optional[str] = None,
+    physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     **kwargs: t.Any,
 ) -> Model:
-    _validate_model_fields(klass, {"name", *kwargs}, path)
+
+    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs}, path)
 
     dialect = dialect or ""
+    physical_schema_override = physical_schema_override or {}
 
     jinja_macros = jinja_macros or JinjaMacroRegistry()
     if jinja_macro_references is not None:
@@ -1659,6 +1680,7 @@ def _create_model(
                 "jinja_macros": jinja_macros,
                 "dialect": dialect,
                 "depends_on": depends_on,
+                "physical_schema_override_map": physical_schema_override,
                 **kwargs,
             },
         )

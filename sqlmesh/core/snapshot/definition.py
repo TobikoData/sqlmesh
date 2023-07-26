@@ -327,10 +327,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     Args:
         name: The snapshot name which is the same as the model name and should be unique per model.
-
         fingerprint: A unique hash of the model definition so that models can be reused across environments.
-        physical_schema: The physical schema that the snapshot is stored in.
-        model: Model object that the snapshot encapsulates.
+        node: Node object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
         audits: The list of audits used by the model.
         intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
@@ -456,9 +454,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         Args:
             model: Model to snapshot.
-            physical_schema: The schema of the snapshot which represents where it is stored.
-            models: Dictionary of all models in the graph to make the fingerprint dependent on parent changes.
-                If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
+            nodes: Dictionary of all nodes in the graph to make the fingerprint dependent on parent changes.
+                If no dictionary is passed in the fingerprint will not be dependent on a node's parents.
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
             version: The version that a snapshot is associated with. Usually set during the planning phase.
             audits: Available audits by name.
@@ -470,7 +467,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         created_ts = now_timestamp()
 
         audits = audits or {}
-
         return cls(
             name=model.name,
             fingerprint=fingerprint_from_node(
@@ -769,10 +765,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def physical_schema(self) -> str:
         if self.physical_schema_ is not None:
             return self.physical_schema_
-        schema = exp.to_table(self.name).db
-        if not schema:
-            schema = c.DEFAULT_SCHEMA
-        return f"{c.SQLMESH}__{schema}"
+        return self.model.physical_schema
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -876,14 +869,14 @@ def fingerprint_from_node(
 ) -> SnapshotFingerprint:
     """Helper function to generate a fingerprint based on the data and metadata of the node and its parents.
 
-    This method tries to remove non meaningful differences to avoid ever changing fingerprints.
+    This method tries to remove non-meaningful differences to avoid ever-changing fingerprints.
     The fingerprint is made up of two parts split by an underscore -- query_metadata. The query hash is
     determined purely by the rendered query and the metadata by everything else.
 
     Args:
-        model: Model to fingerprint.
-        models: Dictionary of all models in the graph to make the fingerprint dependent on parent changes.
-            If no dictionary is passed in the fingerprint will not be dependent on a model's parents.
+        node: Node to fingerprint.
+        nodes: Dictionary of all nodes in the graph to make the fingerprint dependent on parent changes.
+            If no dictionary is passed in the fingerprint will not be dependent on a node's parents.
         audits: Available audits by name.
         cache: Cache of model name to fingerprints.
 

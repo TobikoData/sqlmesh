@@ -15,6 +15,7 @@ from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.hashing import crc32
 
 
 class Config(BaseConfig):
@@ -61,6 +62,7 @@ class Config(BaseConfig):
     env_vars: t.Dict[str, str] = {}
     username: str = ""
     include_unmodified: bool = False
+    physical_schema_override: t.Dict[str, str] = {}
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
@@ -70,6 +72,7 @@ class Config(BaseConfig):
         "model_defaults": UpdateStrategy.NESTED_UPDATE,
         "auto_categorize_changes": UpdateStrategy.NESTED_UPDATE,
         "pinned_environments": UpdateStrategy.EXTEND,
+        "physical_schema_override": UpdateStrategy.KEY_UPDATE,
     }
 
     @validator("gateways", always=True)
@@ -131,3 +134,7 @@ class Config(BaseConfig):
     @property
     def dialect(self) -> t.Optional[str]:
         return self.model_defaults.dialect
+
+    @property
+    def fingerprint(self) -> str:
+        return crc32(self.json(exclude={"loader"}))

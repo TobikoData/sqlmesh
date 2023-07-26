@@ -37,6 +37,7 @@ setup(
         "croniter",
         "duckdb",
         "dateparser",
+        "fsspec",
         "hyperscript",
         "ipywidgets",
         "jinja2",
@@ -45,8 +46,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=17.6.0",
-        "fsspec",
+        "sqlglot~=17.8.0",
     ],
     extras_require={
         "bigquery": [
