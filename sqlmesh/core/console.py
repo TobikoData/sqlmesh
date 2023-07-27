@@ -194,7 +194,7 @@ class TerminalConsole(Console):
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
-        self.console.print(value)
+        self.console.print(value, **kwargs)
 
     def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
         return Prompt.ask(message, console=self.console, **kwargs)
@@ -587,7 +587,7 @@ class TerminalConsole(Console):
             self._print(output)
 
     def show_sql(self, sql: str) -> None:
-        self._print(Syntax(sql, "sql"))
+        self._print(Syntax(sql, "sql", word_wrap=True), crop=False)
 
     def log_status_update(self, message: str) -> None:
         self._print(message)
