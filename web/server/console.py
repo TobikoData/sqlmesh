@@ -14,9 +14,6 @@ from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
 from web.server.exceptions import ApiException
 
-if t.TYPE_CHECKING:
-    pass
-
 
 class ApiConsole(TerminalConsole):
     def __init__(self) -> None:
