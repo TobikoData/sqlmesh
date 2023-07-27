@@ -684,7 +684,7 @@ class _Model(ModelMeta, frozen=True):
 
         for key, value in (self.table_properties_ or {}).items():
             data.append(key)
-            data.append(str(value))
+            data.append(value.sql())
 
         if isinstance(self.kind, IncrementalByTimeRangeKind):
             data.append(self.kind.time_column.column)

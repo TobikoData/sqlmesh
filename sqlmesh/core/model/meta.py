@@ -19,7 +19,6 @@ from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import ConfigError
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
-TableProperty = t.Union[str, int, float, bool, exp.Expression]
 
 
 class ModelMeta(Node):
@@ -40,7 +39,7 @@ class ModelMeta(Node):
     grain: t.List[str] = []
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
-    table_properties_: t.Optional[t.Dict[str, TableProperty]] = Field(
+    table_properties_: t.Optional[t.Dict[str, exp.Expression]] = Field(
         default=None, alias="table_properties"
     )
 
@@ -165,40 +164,38 @@ class ModelMeta(Node):
     @validator("table_properties_", pre=True)
     def _properties_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
-    ) -> t.Optional[t.Dict[str, TableProperty]]:
-        if v is None or not isinstance(v, exp.Expression):
+    ) -> t.Optional[t.Dict[str, exp.Expression]]:
+        if v is None:
             return v
 
         dialect = values.get("dialect")
 
-        if isinstance(v, (exp.Tuple, exp.Array)):
-            eq_expressions: t.List[exp.Expression] = v.expressions
-        elif isinstance(v, exp.Paren):
-            eq_expressions = [v.this]
-        else:
-            eq_expressions = [v]
-
         table_properties = {}
-        for eq_expr in eq_expressions:
-            if not isinstance(eq_expr, exp.EQ):
-                raise ConfigError(
-                    f"Invalid table property '{eq_expr.sql(dialect=dialect)}'. "
-                    "Table properties must be specified as key-value pairs <key> = <value>. "
-                )
-
-            key = eq_expr.this.name
-            value_expr = eq_expr.expression
-            if isinstance(value_expr, exp.Boolean) or value_expr.is_string:
-                value = value_expr.this
-            elif value_expr.is_int:
-                value = int(value_expr.this)
-            elif value_expr.is_number:
-                value = float(value_expr.this)
+        if isinstance(v, exp.Expression):
+            if isinstance(v, (exp.Tuple, exp.Array)):
+                eq_expressions: t.List[exp.Expression] = v.expressions
+            elif isinstance(v, exp.Paren):
+                eq_expressions = [v.unnest()]
             else:
-                value = value_expr.copy()
-                value.meta["dialect"] = dialect
+                eq_expressions = [v]
 
-            table_properties[key] = value
+            for eq_expr in eq_expressions:
+                if not isinstance(eq_expr, exp.EQ):
+                    raise ConfigError(
+                        f"Invalid table property '{eq_expr.sql(dialect=dialect)}'. "
+                        "Table properties must be specified as key-value pairs <key> = <value>. "
+                    )
+
+                value_expr = eq_expr.expression.copy()
+                value_expr.meta["dialect"] = dialect
+                table_properties[eq_expr.this.name] = value_expr
+        elif isinstance(v, dict):
+            for key, value in v.items():
+                value_expr = exp.convert(value, copy=True)
+                value_expr.meta["dialect"] = dialect
+                table_properties[key] = value_expr
+        else:
+            raise ConfigError(f"Unexpected table properties '{v}'")
 
         return table_properties
 
@@ -293,7 +290,7 @@ class ModelMeta(Node):
         return getattr(self.kind, "batch_size", None)
 
     @property
-    def table_properties(self) -> t.Dict[str, TableProperty]:
+    def table_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of table properties."""
         return self.table_properties_ or {}
 

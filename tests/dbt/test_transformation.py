@@ -629,18 +629,18 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
     assert base_config.copy(
         update={"require_partition_filter": True, "partition_expiration_days": 7}
     ).to_sqlmesh(context).table_properties == {
-        "require_partition_filter": True,
-        "partition_expiration_days": 7,
+        "require_partition_filter": exp.convert(True),
+        "partition_expiration_days": exp.convert(7),
     }
 
     assert base_config.copy(update={"require_partition_filter": True}).to_sqlmesh(
         context
     ).table_properties == {
-        "require_partition_filter": True,
+        "require_partition_filter": exp.convert(True),
     }
 
     assert base_config.copy(update={"partition_expiration_days": 7}).to_sqlmesh(
         context
     ).table_properties == {
-        "partition_expiration_days": 7,
+        "partition_expiration_days": exp.convert(7),
     }

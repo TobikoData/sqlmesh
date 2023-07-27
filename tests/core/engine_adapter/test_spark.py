@@ -141,7 +141,7 @@ def test_create_table_table_options(mocker: MockerFixture):
         "test_table",
         {"a": "int", "b": "int"},
         table_properties={
-            "test.conf.key": "value",
+            "test.conf.key": exp.convert("value"),
         },
     )
 

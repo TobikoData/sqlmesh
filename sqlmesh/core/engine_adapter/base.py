@@ -934,7 +934,7 @@ class EngineAdapter:
         partitioned_by: t.Optional[t.List[exp.Expression]] = None,
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
-        table_properties: t.Optional[t.Dict[str, t.Any]] = None,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
         return None

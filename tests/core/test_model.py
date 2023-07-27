@@ -1700,10 +1700,10 @@ def test_model_table_properties():
             )
         ).table_properties
         == {
-            "key_a": "value_a",
-            "key_b": 1,
-            "key_c": True,
-            "key_d": 2.0,
+            "key_a": exp.convert("value_a"),
+            "key_b": exp.convert(1),
+            "key_c": exp.convert(True),
+            "key_d": exp.convert(2.0),
         }
     )
 
@@ -1720,7 +1720,7 @@ def test_model_table_properties():
             """
             )
         ).table_properties
-        == {"key_a": "value_a"}
+        == {"key_a": exp.convert("value_a")}
     )
 
     # Validate an array.
@@ -1740,12 +1740,12 @@ def test_model_table_properties():
             )
         ).table_properties
         == {
-            "key_a": "value_a",
-            "key_b": 1,
+            "key_a": exp.convert("value_a"),
+            "key_b": exp.convert(1),
         }
     )
 
-    # Validate empty
+    # Validate empty.
     assert (
         load_sql_based_model(
             d.parse(
@@ -1760,6 +1760,7 @@ def test_model_table_properties():
         == {}
     )
 
+    # Validate sql expression.
     assert (
         load_sql_based_model(
             d.parse(
@@ -1776,6 +1777,23 @@ def test_model_table_properties():
         ).table_properties
         == {"key": d.parse_one("['value']")}
     )
+
+    # Validate dict parsing.
+    assert create_sql_model(
+        name="test_schema.test_model",
+        query=d.parse_one("SELECT a FROM tbl"),
+        table_properties={
+            "key_a": "value_a",
+            "key_b": 1,
+            "key_c": True,
+            "key_d": 2.0,
+        },
+    ).table_properties == {
+        "key_a": exp.convert("value_a"),
+        "key_b": exp.convert(1),
+        "key_c": exp.convert(True),
+        "key_d": exp.convert(2.0),
+    }
 
     with pytest.raises(ConfigError, match=r"Invalid table property 'invalid'.*"):
         load_sql_based_model(

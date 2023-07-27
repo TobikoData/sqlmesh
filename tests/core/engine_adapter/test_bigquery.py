@@ -431,7 +431,7 @@ def test_create_table_table_options(mocker: MockerFixture):
         "test_table",
         {"a": "int", "b": "int"},
         table_properties={
-            "partition_expiration_days": 7,
+            "partition_expiration_days": exp.convert(7),
         },
     )
 
