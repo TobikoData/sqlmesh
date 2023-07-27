@@ -69,7 +69,7 @@ async def run_plan(
                 model_name=interval.snapshot_name,
                 view_name=plan.context_diff.snapshots[
                     interval.snapshot_name
-                ].qualified_view_name.for_environment(plan.environment.name)
+                ].qualified_view_name.for_environment(plan.environment.naming_info)
                 if interval.snapshot_name in plan.context_diff.snapshots
                 else interval.snapshot_name,
                 interval=[

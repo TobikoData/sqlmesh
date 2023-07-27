@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 import typing as t
 
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -177,7 +177,9 @@ class CachingStateSync(StateSync):
 
     def promote(
         self, environment: Environment, no_gaps: bool = False
-    ) -> t.Tuple[t.List[SnapshotTableInfo], t.List[SnapshotTableInfo]]:
+    ) -> t.Tuple[
+        t.List[SnapshotTableInfo], t.Tuple[t.List[SnapshotTableInfo], EnvironmentNamingInfo]
+    ]:
         return self.state_sync.promote(environment, no_gaps)
 
     def finalize(self, environment: Environment) -> None:

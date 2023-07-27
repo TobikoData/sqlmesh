@@ -23,7 +23,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.tree import Tree
 
-from sqlmesh.core import constants as c
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
@@ -54,7 +54,11 @@ class Console(abc.ABC):
     with them when their input is needed."""
 
     @abc.abstractmethod
-    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int], environment: str) -> None:
+    def start_evaluation_progress(
+        self,
+        batches: t.Dict[Snapshot, int],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
 
     @abc.abstractmethod
@@ -180,7 +184,7 @@ class TerminalConsole(Console):
         self.evaluation_model_progress: t.Optional[Progress] = None
         self.evaluation_model_tasks: t.Dict[str, TaskID] = {}
         self.evaluation_model_batches: t.Dict[Snapshot, int] = {}
-        self.evaluation_environment: str = c.PROD
+        self.evaluation_environment_naming_info = EnvironmentNamingInfo()
 
         self.creation_progress: t.Optional[Progress] = None
         self.creation_task: t.Optional[TaskID] = None
@@ -202,7 +206,11 @@ class TerminalConsole(Console):
     def _confirm(self, message: str, **kwargs: t.Any) -> bool:
         return Confirm.ask(message, console=self.console, **kwargs)
 
-    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int], enviornment: str) -> None:
+    def start_evaluation_progress(
+        self,
+        batches: t.Dict[Snapshot, int],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
         """Indicates that a new snapshot evaluation progress has begun."""
         if not self.evaluation_progress_live:
             self.evaluation_total_progress = Progress(
@@ -234,11 +242,13 @@ class TerminalConsole(Console):
             )
 
             self.evaluation_model_batches = batches
-            self.evaluation_environment = enviornment
+            self.evaluation_environment_naming_info = environment_naming_info
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if self.evaluation_model_progress and snapshot.name not in self.evaluation_model_tasks:
-            view_name = snapshot.qualified_view_name.for_environment(self.evaluation_environment)
+            view_name = snapshot.qualified_view_name.for_environment(
+                self.evaluation_environment_naming_info
+            )
             self.evaluation_model_tasks[snapshot.name] = self.evaluation_model_progress.add_task(
                 f"Evaluating {view_name}...",
                 view_name=view_name,
@@ -273,7 +283,7 @@ class TerminalConsole(Console):
         self.evaluation_model_progress = None
         self.evaluation_model_tasks = {}
         self.evaluation_model_batches = {}
-        self.evaluation_environment = c.PROD
+        self.evaluation_environment_naming_info = EnvironmentNamingInfo()
 
     def start_creation_progress(self, total_tasks: int) -> None:
         """Indicates that a new creation progress has begun."""
@@ -504,7 +514,7 @@ class TerminalConsole(Console):
         backfill = Tree("[bold]Models needing backfill (missing dates):")
         for missing in plan.missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_name]
-            view_name = snapshot.qualified_view_name.for_environment(plan.environment_name)
+            view_name = snapshot.qualified_view_name.for_environment(plan.environment_naming_info)
             backfill.add(f"{view_name}: {missing.format_intervals(snapshot.model.interval_unit)}")
         self._print(backfill)
 
@@ -1079,7 +1089,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print("**Models needing backfill (missing dates):**\n\n")
         for missing in plan.missing_intervals:
             snapshot = plan.context_diff.snapshots[missing.snapshot_name]
-            view_name = snapshot.qualified_view_name.for_environment(plan.environment_name)
+            view_name = snapshot.qualified_view_name.for_environment(plan.environment_naming_info)
             self._print(
                 f"* `{view_name}`: {missing.format_intervals(snapshot.model.interval_unit)}\n"
             )
@@ -1149,13 +1159,19 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self._print(message)
         return super()._confirm("", **kwargs)
 
-    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int], environment: str) -> None:
+    def start_evaluation_progress(
+        self,
+        batches: t.Dict[Snapshot, int],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
         self.evaluation_batches = batches
-        self.evaluation_environment = environment
+        self.evaluation_environment_naming_info = environment_naming_info
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if not self.evaluation_batch_progress.get(snapshot.name):
-            view_name = snapshot.qualified_view_name.for_environment(self.evaluation_environment)
+            view_name = snapshot.qualified_view_name.for_environment(
+                self.evaluation_environment_naming_info
+            )
             self.evaluation_batch_progress[snapshot.name] = (view_name, 0)
             print(f"Starting '{view_name}', Total batches: {self.evaluation_batches[snapshot]}")
 

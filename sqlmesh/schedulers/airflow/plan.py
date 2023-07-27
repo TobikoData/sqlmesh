@@ -79,7 +79,7 @@ def create_plan_dag_spec(
 
     return common.PlanDagSpec(
         request_id=request.request_id,
-        environment_name=request.environment.name,
+        environment_naming_info=request.environment.naming_info,
         new_snapshots=request.new_snapshots,
         backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
         promoted_snapshots=request.environment.snapshots,

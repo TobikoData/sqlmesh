@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import SeedModel
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -23,7 +24,7 @@ from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now, to_datetime, validate_date_range
-from sqlmesh.utils.errors import AuditError
+from sqlmesh.utils.errors import AuditError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 Interval = t.Tuple[datetime, datetime]
@@ -173,7 +174,7 @@ class Scheduler:
 
     def run(
         self,
-        environment: str,
+        environment: str | EnvironmentNamingInfo,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
@@ -183,7 +184,9 @@ class Scheduler:
         """Concurrently runs all snapshots in topological order.
 
         Args:
-            environment: The environment the user is targeting when applying their change.
+            environment: The environment naming info the user is targeting when applying their change.
+                Can just be the environment name if the user is targeting a remote environment and wants to get the remote
+                naming info
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
@@ -195,6 +198,16 @@ class Scheduler:
         """
         restatements = restatements or set()
         validate_date_range(start, end)
+        if isinstance(environment, str):
+            env = self.state_sync.get_environment(environment)
+            if not env:
+                raise SQLMeshError(
+                    "Was not provided an environment suffix target and the environment doesn't exist."
+                    "Are you running for the first time and need to run plan/apply first?"
+                )
+            environment_naming_info = env.naming_info
+        else:
+            environment_naming_info = environment
 
         is_dev = environment != c.PROD
         execution_time = execution_time or now()
@@ -216,7 +229,7 @@ class Scheduler:
 
         self.console.start_evaluation_progress(
             {snapshot: len(intervals) for snapshot, intervals in batches.items()},
-            environment,
+            environment_naming_info,
         )
 
         def evaluate_node(node: SchedulingUnit) -> None:

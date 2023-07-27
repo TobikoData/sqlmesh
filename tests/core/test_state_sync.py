@@ -11,7 +11,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKind,
@@ -67,7 +67,7 @@ def promote_snapshots(
     snapshots: t.List[Snapshot],
     environment: str,
     no_gaps: bool = False,
-) -> t.Tuple[t.List[SnapshotTableInfo], t.List[SnapshotTableInfo]]:
+) -> t.Tuple[t.List[SnapshotTableInfo], t.Tuple[t.List[SnapshotTableInfo], EnvironmentNamingInfo]]:
     env = Environment(
         name=environment,
         snapshots=[snapshot.table_info for snapshot in snapshots],
@@ -380,11 +380,14 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
 
     state_sync.push_snapshots([snapshot_a, snapshot_b, snapshot_c])
 
-    added, removed = promote_snapshots(state_sync, [snapshot_a, snapshot_b], "prod")
+    added, (removed, removed_environment_naming_info) = promote_snapshots(
+        state_sync, [snapshot_a, snapshot_b], "prod"
+    )
 
     assert set(added) == set([snapshot_a.table_info, snapshot_b.table_info])
     assert not removed
-    added, removed = promote_snapshots(
+    assert removed_environment_naming_info.suffix_target.is_schema
+    added, (removed, removed_environment_naming_info) = promote_snapshots(
         state_sync,
         [snapshot_a, snapshot_b, snapshot_c],
         "prod",
@@ -397,14 +400,16 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
         ]
     )
     assert not removed
+    assert removed_environment_naming_info.suffix_target.is_schema
 
-    added, removed = promote_snapshots(
+    added, (removed, removed_environment_naming_info) = promote_snapshots(
         state_sync,
         [snapshot_a, snapshot_b],
         "prod",
     )
     assert set(added) == {snapshot_a.table_info, snapshot_b.table_info}
     assert set(removed) == {snapshot_c.table_info}
+    assert removed_environment_naming_info.suffix_target.is_schema
 
     snapshot_d = make_snapshot(
         SqlModel(
@@ -415,9 +420,12 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
 
     state_sync.push_snapshots([snapshot_d])
-    added, removed = promote_snapshots(state_sync, [snapshot_d], "prod")
+    added, (removed, removed_environment_naming_info) = promote_snapshots(
+        state_sync, [snapshot_d], "prod"
+    )
     assert set(added) == {snapshot_d.table_info}
     assert set(removed) == {snapshot_b.table_info}
+    assert removed_environment_naming_info.suffix_target.is_schema
 
 
 def test_promote_snapshots_parent_plan_id_mismatch(

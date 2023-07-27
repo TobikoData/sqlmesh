@@ -57,7 +57,7 @@ from sqlmesh.core.dialect import (
     parse,
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.metric import Metric
@@ -406,7 +406,11 @@ class Context(BaseContext):
         )
         try:
             self.scheduler(environment=environment).run(
-                environment, start, end, execution_time, ignore_cron=ignore_cron
+                environment,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                ignore_cron=ignore_cron,
             )
         except Exception as e:
             self.notification_target_manager.notify(
@@ -1138,7 +1142,11 @@ class Context(BaseContext):
         return {
             name: snapshot.table_name()
             if snapshot.version
-            else snapshot.qualified_view_name.for_environment(c.PROD)
+            else snapshot.qualified_view_name.for_environment(
+                EnvironmentNamingInfo(
+                    name=c.PROD, suffix_target=self.config.environment_suffix_target
+                )
+            )
             for name, snapshot in self.snapshots.items()
         }
 
@@ -1186,7 +1194,7 @@ class Context(BaseContext):
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()
         expired_schemas = {
-            snapshot.qualified_view_name.schema_for_environment(expired_environment.name)
+            snapshot.qualified_view_name.schema_for_environment(expired_environment.naming_info)
             for expired_environment in expired_environments
             for snapshot in expired_environment.snapshots
         }

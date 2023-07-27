@@ -10,6 +10,7 @@ from sqlmesh.core.config import AutoCategorizationMode
 from sqlmesh.core.console import Console
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -873,7 +874,9 @@ def validate_environment_views(
     for snapshot in snapshots:
         if snapshot.is_symbolic:
             continue
-        view_name = snapshot.qualified_view_name.for_environment(environment=environment)
+        view_name = snapshot.qualified_view_name.for_environment(
+            EnvironmentNamingInfo(name=environment)
+        )
 
         assert adapter.table_exists(view_name)
         assert select_all(

@@ -103,7 +103,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             notification_target_manager=self.notification_target_manager,
         )
         is_run_successful = scheduler.run(
-            plan.environment_name,
+            plan.environment_naming_info,
             plan.start,
             plan.end,
             restatements=plan.restatements,
@@ -151,7 +151,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         """
         environment = plan.environment
 
-        added, removed = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
+        added, (removed, removed_environment_naming_info) = self.state_sync.promote(
+            environment, no_gaps=plan.no_gaps
+        )
 
         self.console.start_promotion_progress(environment.name, len(added) + len(removed))
 
@@ -169,13 +171,13 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         try:
             self.snapshot_evaluator.promote(
                 added,
-                environment=environment.name,
+                environment.naming_info,
                 is_dev=plan.is_dev,
                 on_complete=on_complete,
             )
             self.snapshot_evaluator.demote(
                 removed,
-                environment=environment.name,
+                removed_environment_naming_info,
                 on_complete=on_complete,
             )
             self.state_sync.finalize(environment)

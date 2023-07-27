@@ -132,6 +132,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "identifier": "3192766394",
                 }
             ],
+            "suffix_target": "schema",
         },
         "no_gaps": False,
         "skip_backfill": False,

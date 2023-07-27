@@ -8,7 +8,8 @@ from pytest_lazyfixture import lazy_fixture
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.config import EnvironmentSuffixTarget
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKindName,
@@ -125,7 +126,9 @@ def test_create_plan_dag_spec(
     plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
-        environment_name=environment_name,
+        environment_naming_info=EnvironmentNamingInfo(
+            name=environment_name, suffix_target=EnvironmentSuffixTarget.SCHEMA
+        ),
         new_snapshots=[the_snapshot],
         backfill_intervals_per_snapshot=[
             common.BackfillIntervalsPerSnapshot(
@@ -242,7 +245,9 @@ def test_restatement(
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
-        environment_name=environment_name,
+        environment_naming_info=EnvironmentNamingInfo(
+            name=environment_name, suffix_target=EnvironmentSuffixTarget.SCHEMA
+        ),
         new_snapshots=[],
         backfill_intervals_per_snapshot=[
             common.BackfillIntervalsPerSnapshot(

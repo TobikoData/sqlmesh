@@ -9,7 +9,7 @@ import typing as t
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -248,7 +248,9 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def promote(
         self, environment: Environment, no_gaps: bool = False
-    ) -> t.Tuple[t.List[SnapshotTableInfo], t.List[SnapshotTableInfo]]:
+    ) -> t.Tuple[
+        t.List[SnapshotTableInfo], t.Tuple[t.List[SnapshotTableInfo], EnvironmentNamingInfo]
+    ]:
         """Update the environment to reflect the current state.
 
         This method verifies that snapshots have been pushed.

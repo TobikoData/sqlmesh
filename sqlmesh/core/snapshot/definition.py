@@ -35,6 +35,9 @@ if sys.version_info >= (3, 9):
 else:
     from typing_extensions import Annotated
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.environment import EnvironmentNamingInfo
+
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
 SnapshotNode = Annotated[Model, Field(discriminator="source_type")]
@@ -156,22 +159,34 @@ class QualifiedViewName(PydanticModel, frozen=True):
     schema_name: t.Optional[str]
     table: str
 
-    def for_environment(self, environment: str) -> str:
+    def for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
         return ".".join(
             p
             for p in (
                 self.catalog,
-                self.schema_for_environment(environment),
-                self.table,
+                self.schema_for_environment(environment_naming_info),
+                self.table_for_environment(environment_naming_info),
             )
             if p is not None
         )
 
-    def schema_for_environment(self, environment: str) -> str:
+    def schema_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
         schema = self.schema_name or c.DEFAULT_SCHEMA
-        if environment.lower() != c.PROD:
-            schema = f"{schema}__{environment}"
+        if (
+            environment_naming_info.name.lower() != c.PROD
+            and environment_naming_info.suffix_target.is_schema
+        ):
+            schema = f"{schema}__{environment_naming_info.name}"
         return schema
+
+    def table_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
+        table = self.table
+        if (
+            environment_naming_info.name.lower() != c.PROD
+            and environment_naming_info.suffix_target.is_table
+        ):
+            table = f"{table}__{environment_naming_info.name}"
+        return table
 
 
 class SnapshotInfoMixin(ModelKindMixin):

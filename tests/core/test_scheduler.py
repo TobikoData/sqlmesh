@@ -2,8 +2,8 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model.definition import SqlModel
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
@@ -79,7 +79,7 @@ def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):
     adapter = sushi_context_fixed_date.engine_adapter
     snapshot = sushi_context_fixed_date.snapshots["sushi.items"]
     scheduler.run(
-        c.PROD,
+        EnvironmentNamingInfo(),
         "2022-01-01",
         "2022-01-03",
         "2022-01-30",

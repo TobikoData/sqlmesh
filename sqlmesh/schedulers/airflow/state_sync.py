@@ -4,7 +4,7 @@ import logging
 import typing as t
 
 from sqlmesh.core.console import Console
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -204,7 +204,9 @@ class HttpStateSync(StateSync):
 
     def promote(
         self, environment: Environment, no_gaps: bool = False
-    ) -> t.Tuple[t.List[SnapshotTableInfo], t.List[SnapshotTableInfo]]:
+    ) -> t.Tuple[
+        t.List[SnapshotTableInfo], t.Tuple[t.List[SnapshotTableInfo], EnvironmentNamingInfo]
+    ]:
         """Update the environment to reflect the current state.
 
         This method verifies that snapshots have been pushed.
