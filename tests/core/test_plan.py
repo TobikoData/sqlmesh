@@ -661,3 +661,23 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
     plan.set_choice(snapshot_a, SnapshotChangeCategory.BREAKING)
     # Make sure it does not get assigned INDIRECT_BREAKING
     assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+
+def test_serialization(sushi_context: Context, mocker: MockerFixture):
+    mock_prompt = mocker.Mock()
+    mock_prompt.ask.return_value = "2022-01-01"
+    mocker.patch("sqlmesh.core.console.Prompt", mock_prompt)
+
+    sushi_plan = Plan(
+        sushi_context._context_diff("dev"),
+        is_dev=True,
+        include_unmodified=True,
+    )
+
+    serialized_plan = sushi_plan.dict()
+    deserialized_plan = Plan.parse_obj(serialized_plan)
+    assert sushi_plan.snapshots == deserialized_plan.snapshots
+    assert sushi_plan.new_snapshots == deserialized_plan.new_snapshots
+    assert sushi_plan.directly_modified == deserialized_plan.directly_modified
+    assert sushi_plan.indirectly_modified == deserialized_plan.indirectly_modified
+    assert sushi_plan.loaded_snapshot_intervals == deserialized_plan.loaded_snapshot_intervals

@@ -193,33 +193,6 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     assert mock_console.show_model_difference_summary.called
 
 
-def test_serialization(sushi_context: Context, mocker: MockerFixture):
-    mock_console = mocker.Mock()
-    sushi_context.console = mock_console
-    yesterday = yesterday_ds()
-    sushi_context.run(start=yesterday, end=yesterday)
-
-    plan_evaluator = BuiltInPlanEvaluator(
-        sushi_context.state_sync, sushi_context.snapshot_evaluator
-    )
-    plan = Plan(
-        context_diff=sushi_context._context_diff("prod"),
-    )
-
-    serialized_plan = plan.dict()
-    deserialized_plan = Plan.parse_obj(serialized_plan)
-    assert plan.snapshots == deserialized_plan.snapshots
-    assert plan.new_snapshots == deserialized_plan.new_snapshots
-    assert plan.directly_modified == deserialized_plan.directly_modified
-    assert plan.indirectly_modified == deserialized_plan.indirectly_modified
-    assert plan.loaded_snapshot_intervals == deserialized_plan.loaded_snapshot_intervals
-    plan_evaluator._promote(deserialized_plan)
-
-    sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
-    sushi_context.diff("test")
-    assert mock_console.show_model_difference_summary.called
-
-
 def test_evaluate_limit():
     context = Context(config=Config())
 
