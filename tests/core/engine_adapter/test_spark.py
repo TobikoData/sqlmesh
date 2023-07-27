@@ -128,3 +128,23 @@ def test_replace_query_pandas(mocker: MockerFixture):
     cursor_mock.execute.assert_called_once_with(
         "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT * FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `test_table`(`a`, `b`)) AS `_subquery` WHERE 1 = 1"
     )
+
+
+def test_create_table_table_options(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = SparkEngineAdapter(lambda: connection_mock, "spark")
+
+    adapter.create_table(
+        "test_table",
+        {"a": "int", "b": "int"},
+        table_properties={
+            "test.conf.key": "value",
+        },
+    )
+
+    cursor_mock.execute.assert_called_once_with(
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) TBLPROPERTIES ('test.conf.key'='value')"
+    )

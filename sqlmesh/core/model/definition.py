@@ -682,6 +682,10 @@ class _Model(ModelMeta, frozen=True):
             data.append(column_name)
             data.append(column_type.sql())
 
+        for key, value in (self.table_properties_ or {}).items():
+            data.append(key)
+            data.append(str(value))
+
         if isinstance(self.kind, IncrementalByTimeRangeKind):
             data.append(self.kind.time_column.column)
             data.append(self.kind.time_column.format)

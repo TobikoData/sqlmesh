@@ -1678,3 +1678,116 @@ def test_custom_interval_unit():
         ).interval_unit
         == IntervalUnit.MINUTE
     )
+
+
+def test_model_table_properties():
+    # Validate a tuple.
+    assert (
+        load_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                table_properties (
+                    key_a = 'value_a',
+                    'key_b' = 1,
+                    key_c = true,
+                    "key_d" = 2.0,
+                )
+            );
+            SELECT a FROM tbl;
+            """
+            )
+        ).table_properties
+        == {
+            "key_a": "value_a",
+            "key_b": 1,
+            "key_c": True,
+            "key_d": 2.0,
+        }
+    )
+
+    # Validate a tuple with one item.
+    assert (
+        load_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                table_properties (key_a = 'value_a')
+            );
+            SELECT a FROM tbl;
+            """
+            )
+        ).table_properties
+        == {"key_a": "value_a"}
+    )
+
+    # Validate an array.
+    assert (
+        load_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                table_properties [
+                    key_a = 'value_a',
+                    'key_b' = 1,
+                ]
+            );
+            SELECT a FROM tbl;
+            """
+            )
+        ).table_properties
+        == {
+            "key_a": "value_a",
+            "key_b": 1,
+        }
+    )
+
+    # Validate empty
+    assert (
+        load_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model
+            );
+            SELECT a FROM tbl;
+            """
+            )
+        ).table_properties
+        == {}
+    )
+
+    assert (
+        load_model(
+            d.parse(
+                """
+            MODEL (
+                name test_schema.test_model,
+                table_properties [
+                    key = ['value']
+                ]
+            );
+            SELECT a FROM tbl;
+            """
+            )
+        ).table_properties
+        == {"key": d.parse_one("['value']")}
+    )
+
+    with pytest.raises(ConfigError, match=r"Invalid table property 'invalid'.*"):
+        load_model(
+            d.parse(
+                """
+                MODEL (
+                    name test_schema.test_model,
+                    table_properties [
+                        invalid
+                    ]
+                );
+                SELECT a FROM tbl;
+                """
+            )
+        )

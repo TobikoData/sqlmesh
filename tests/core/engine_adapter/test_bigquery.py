@@ -415,3 +415,27 @@ def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
         )
         output.append(sql)
     return output
+
+
+def test_create_table_table_options(mocker: MockerFixture):
+    connection_mock = mocker.NonCallableMock()
+    cursor_mock = mocker.Mock()
+    connection_mock.cursor.return_value = cursor_mock
+
+    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
+    adapter.create_table(
+        "test_table",
+        {"a": "int", "b": "int"},
+        table_properties={
+            "partition_expiration_days": 7,
+        },
+    )
+
+    sql_calls = _to_sql_calls(execute_mock)
+    assert sql_calls == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) OPTIONS (partition_expiration_days=7)"
+    ]

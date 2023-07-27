@@ -19,6 +19,7 @@ from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import ConfigError
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
+TableProperty = t.Union[str, int, float, bool, exp.Expression]
 
 
 class ModelMeta(Node):
@@ -39,6 +40,9 @@ class ModelMeta(Node):
     grain: t.List[str] = []
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
+    table_properties_: t.Optional[t.Dict[str, TableProperty]] = Field(
+        default=None, alias="table_properties"
+    )
 
     _model_kind_validator = ModelKind.field_validator()
 
@@ -158,6 +162,46 @@ class ModelMeta(Node):
 
         return v
 
+    @validator("table_properties_", pre=True)
+    def _properties_validator(
+        cls, v: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.Optional[t.Dict[str, TableProperty]]:
+        if v is None or not isinstance(v, exp.Expression):
+            return v
+
+        dialect = values.get("dialect")
+
+        if isinstance(v, (exp.Tuple, exp.Array)):
+            eq_expressions: t.List[exp.Expression] = v.expressions
+        elif isinstance(v, exp.Paren):
+            eq_expressions = [v.this]
+        else:
+            eq_expressions = [v]
+
+        table_properties = {}
+        for eq_expr in eq_expressions:
+            if not isinstance(eq_expr, exp.EQ):
+                raise ConfigError(
+                    f"Invalid table property '{eq_expr.sql(dialect=dialect)}'. "
+                    "Table properties must be specified as key-value pairs <key> = <value>. "
+                )
+
+            key = eq_expr.this.name
+            value_expr = eq_expr.expression
+            if isinstance(value_expr, exp.Boolean) or value_expr.is_string:
+                value = value_expr.this
+            elif value_expr.is_int:
+                value = int(value_expr.this)
+            elif value_expr.is_number:
+                value = float(value_expr.this)
+            else:
+                value = value_expr.copy()
+                value.meta["dialect"] = dialect
+
+            table_properties[key] = value
+
+        return table_properties
+
     @validator("depends_on_", pre=True)
     def _depends_on_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
         dialect = values.get("dialect")
@@ -247,6 +291,11 @@ class ModelMeta(Node):
     def batch_size(self) -> t.Optional[int]:
         """The maximal number of units in a single task for a backfill."""
         return getattr(self.kind, "batch_size", None)
+
+    @property
+    def table_properties(self) -> t.Dict[str, TableProperty]:
+        """A dictionary of table properties."""
+        return self.table_properties_ or {}
 
     @property
     def _partition_by_columns(self) -> t.List[exp.Column]:
