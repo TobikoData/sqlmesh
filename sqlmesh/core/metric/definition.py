@@ -8,6 +8,7 @@ from sqlglot import exp
 from sqlglot.helper import first
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.node import str_or_exp_to_str
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -49,15 +50,6 @@ def expand_metrics(metas: UniqueKeyDict[str, MetricMeta]) -> UniqueKeyDict[str, 
     return metrics
 
 
-def find_tables(expression: exp.Expression, dialect: str) -> t.Set[str]:
-    """Finds all the table references in a metric definition."""
-    return {
-        d.normalize_model_name(exp.table_(*reversed(column.parts[:-1])), dialect=dialect)  # type: ignore
-        for column in expression.find_all(exp.Column)
-        if column.table
-    }
-
-
 @t.overload
 def remove_namespace(expression: str) -> str:
     ...
@@ -73,7 +65,7 @@ def remove_namespace(expression: str | exp.Column, dialect: t.Optional[str] = No
 
     if not isinstance(expression, str):
         assert dialect is not None
-        expression = first(find_tables(expression, dialect=dialect))
+        expression = first(_find_tables(expression, dialect=dialect))
     return expression.replace(".", "__")
 
 
@@ -94,9 +86,7 @@ class MetricMeta(PydanticModel, frozen=True):
 
     @validator("dialect", "owner", "description", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
-        if isinstance(v, exp.Expression):
-            return v.name
-        return str(v) if v is not None else None
+        return str_or_exp_to_str(v)
 
     @validator("expression", pre=True)
     def _validate_expression(
@@ -114,9 +104,7 @@ class MetricMeta(PydanticModel, frozen=True):
         self, metas: t.Dict[str, MetricMeta], metrics: UniqueKeyDict[str, Metric]
     ) -> Metric:
         """Converts a metric meta into a fully expanded and standalone metric."""
-        payload = self.dict(exclude={"expression"})
         metric_refs = {}
-
         agg_or_ref = False
 
         for node, *_ in self.expression.walk():
@@ -169,7 +157,7 @@ class Metric(MetricMeta, frozen=True):
                 lambda node: exp.column(node.this, table=remove_namespace(node, self.dialect))
                 if isinstance(node, exp.Column) and node.table
                 else node
-            ): find_tables(agg, self.dialect)
+            ): _find_tables(agg, self.dialect)
             for agg in self.expanded.find_all(exp.AggFunc)
         }
 
@@ -191,3 +179,12 @@ class Metric(MetricMeta, frozen=True):
 
 def _raise_metric_config_error(msg: str, path: Path) -> None:
     raise ConfigError(f"{msg}. '{path}'")
+
+
+def _find_tables(expression: exp.Expression, dialect: str) -> t.Set[str]:
+    """Finds all the table references in a metric definition."""
+    return {
+        d.normalize_model_name(exp.table_(*reversed(column.parts[:-1])), dialect=dialect)  # type: ignore
+        for column in expression.find_all(exp.Column)
+        if column.table
+    }

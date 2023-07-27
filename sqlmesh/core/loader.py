@@ -39,7 +39,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
 
 
-# maybe move these two methods to context
+# TODO: consider moving this to context
 def update_model_schemas(
     dag: DAG[str], models: UniqueKeyDict[str, Model], context_path: Path
 ) -> None:
