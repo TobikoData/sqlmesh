@@ -32,7 +32,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
-import { type Model } from '@api/client'
+import { type Directory, type Model } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
@@ -133,13 +133,17 @@ export default function PageIDE(): JSX.Element {
       handlePromote,
     )
     const unsubscribeFile = subscribe<{
-      changes: any
-      directories: any
+      changes: Array<{
+        change: number
+        path: string
+        file: ModelFile
+      }>
+      directories: Record<string, Directory>
     }>('file', ({ changes, directories }) => {
-      changes.sort((a: any) => (a.change === 'deleted' ? -1 : 1))
+      changes.sort((a: any) => (a.change === 3 ? -1 : 1))
 
-      changes.forEach(({ change, path, file, directory, type }: any) => {
-        if (change === 'modified') {
+      changes.forEach(({ change, path, file }) => {
+        if (change === 2) {
           const currentFile = findAtrifactByPath(file.path) as
             | ModelFile
             | undefined
@@ -149,7 +153,7 @@ export default function PageIDE(): JSX.Element {
           currentFile.update(file)
         }
 
-        if (change === 'deleted') {
+        if (change === 3) {
           const artifact = findAtrifactByPath(path)
 
           if (isNil(artifact)) return
@@ -169,13 +173,15 @@ export default function PageIDE(): JSX.Element {
       })
 
       for (const path in directories) {
+        const directory = directories[path]!
+
         const currentDirectory = findAtrifactByPath(path) as
           | ModelDirectory
           | undefined
 
         if (isNil(currentDirectory)) continue
 
-        directories[path].directories.forEach((d: any) => {
+        directory.directories?.forEach((d: any) => {
           const directory = findAtrifactByPath(d.path) as
             | ModelDirectory
             | undefined
@@ -187,7 +193,7 @@ export default function PageIDE(): JSX.Element {
           }
         })
 
-        directories[path].files.forEach((f: any) => {
+        directory.files?.forEach((f: any) => {
           const file = findAtrifactByPath(f.path) as ModelFile | undefined
 
           if (isNil(file)) {
