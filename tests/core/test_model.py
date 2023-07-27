@@ -1683,7 +1683,7 @@ def test_custom_interval_unit():
 def test_model_table_properties():
     # Validate a tuple.
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse(
                 """
             MODEL (
@@ -1709,7 +1709,7 @@ def test_model_table_properties():
 
     # Validate a tuple with one item.
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse(
                 """
             MODEL (
@@ -1725,7 +1725,7 @@ def test_model_table_properties():
 
     # Validate an array.
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse(
                 """
             MODEL (
@@ -1747,7 +1747,7 @@ def test_model_table_properties():
 
     # Validate empty
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse(
                 """
             MODEL (
@@ -1761,7 +1761,7 @@ def test_model_table_properties():
     )
 
     assert (
-        load_model(
+        load_sql_based_model(
             d.parse(
                 """
             MODEL (
@@ -1778,7 +1778,7 @@ def test_model_table_properties():
     )
 
     with pytest.raises(ConfigError, match=r"Invalid table property 'invalid'.*"):
-        load_model(
+        load_sql_based_model(
             d.parse(
                 """
                 MODEL (
