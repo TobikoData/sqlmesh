@@ -79,24 +79,24 @@ class Plan(PydanticModel):
     auto_categorization_enabled: bool = True
     include_unmodified: bool = False
 
-    _directly_modified: t.List[Snapshot] = PrivateAttr(None)
-    _indirectly_modified: SnapshotMapping = PrivateAttr(None)
+    _directly_modified: t.List[Snapshot] = None
+    _indirectly_modified: SnapshotMapping = None
 
     _plan_id: str = PrivateAttr(default_factory=random_id)
 
-    _start: t.Optional[TimeLike] = PrivateAttr(None)
-    _end: t.Optional[TimeLike] = PrivateAttr(None)
+    _start: t.Optional[TimeLike] = None
+    _end: t.Optional[TimeLike] = None
     _execution_time: t.Optional[TimeLike] = PrivateAttr(default_factory=now)
-    _effective_from: t.Optional[TimeLike] = PrivateAttr(None)
+    _effective_from: t.Optional[TimeLike] = None
 
-    _apply: t.Optional[t.Callable[[Plan], None]] = PrivateAttr(None)
+    _apply: t.Optional[t.Callable[[Plan], None]] = None
     _dag: DAG[str] = PrivateAttr(default_factory=DAG)
 
     _restatements: t.Set[str] = PrivateAttr(default_factory=set)
-    _categorized: t.Optional[t.List[Snapshot]] = PrivateAttr(None)
-    _uncategorized: t.Optional[t.List[Snapshot]] = PrivateAttr(None)
+    _categorized: t.Optional[t.List[Snapshot]] = None
+    _uncategorized: t.Optional[t.List[Snapshot]] = None
 
-    __missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = PrivateAttr(None)
+    __missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
 
     def __init__(
         self,
@@ -110,8 +110,7 @@ class Plan(PydanticModel):
         restate_models: t.Optional[t.Iterable[str]] = None,
         **data: t.Any,
     ):
-        data["context_diff"] = context_diff
-        super().__init__(**data)
+        super().__init__(context_diff=context_diff, **data)
 
         self._start = start if start or not (self.is_dev and self.forward_only) else yesterday_ds()
         self._end = end if end or not self.is_dev else now()
