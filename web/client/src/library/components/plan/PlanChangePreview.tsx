@@ -333,7 +333,7 @@ function PlanChangePreviewRelations({
           key={model_name}
           className="flex"
         >
-          <span className="h-3 w-3 border-l-2 border-b-2 innline-block mr-2"></span>
+          <span className="h-3 w-3 border-l-2 border-b-2 inline-block mr-2"></span>
           {model_name}
         </li>
       ))}
