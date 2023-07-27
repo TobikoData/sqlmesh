@@ -271,9 +271,3 @@ class ContextDiff(PydanticModel):
 
         new, old = self.modified_snapshots[model]
         return old.model.text_diff(new.model)
-
-    def __getstate__(self) -> t.Dict[str, t.Any]:
-        return self.dict()
-
-    def __setstate__(self, state: t.Dict[str, t.Any]) -> None:
-        self.__init__(**state)  # type: ignore

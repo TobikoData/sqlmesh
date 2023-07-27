@@ -4,6 +4,7 @@ import logging
 import typing as t
 from collections import defaultdict
 from enum import Enum
+from pydantic import Field, PrivateAttr
 
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 SnapshotMapping = t.Dict[str, t.Set[str]]
 
 
-class Plan:
+class Plan(PydanticModel):
     """Plan is the main class to represent user choices on how they want to backfill and version their models.
 
     Args:
@@ -66,60 +67,68 @@ class Plan:
         include_unmodified: Indicates whether to include unmodified models in the target development environment.
     """
 
+    context_diff: ContextDiff
+    apply: t.Optional[t.Callable[[Plan], None]] = None
+    restate_models: t.Optional[t.Iterable[str]] = None
+    no_gaps: bool = False
+    skip_backfill: bool = False
+    is_dev: bool = False
+    forward_only: bool = False
+    environment_ttl: t.Optional[str] = None
+    categorizer_config: CategorizerConfig = Field(default_factory=CategorizerConfig)
+    auto_categorization_enabled: bool = True
+    include_unmodified: bool = False
+
+    directly_modified: t.Optional[t.List[Snapshot]] = None
+    indirectly_modified: t.Optional[SnapshotMapping] = None
+
+    _plan_id: str = PrivateAttr(default_factory=random_id)
+
+    _start: t.Optional[TimeLike] = PrivateAttr(None)
+    _end: t.Optional[TimeLike] = PrivateAttr(None)
+    _execution_time: t.Optional[TimeLike] = PrivateAttr(default_factory=now)
+    _effective_from: t.Optional[TimeLike] = PrivateAttr(None)
+
+    _apply: t.Optional[t.Callable[[Plan], None]] = PrivateAttr(None)
+    _dag: DAG[str] = PrivateAttr(default_factory=DAG)
+
+    _restatements: t.Set[str] = PrivateAttr(default_factory=set)
+    _categorized: t.Optional[t.List[Snapshot]] = PrivateAttr(None)
+    _uncategorized: t.Optional[t.List[Snapshot]] = PrivateAttr(None)
+
+    __missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = PrivateAttr(None)
+
     def __init__(
         self,
-        context_diff: ContextDiff,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
+        effective_from: t.Optional[TimeLike] = None,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_models: t.Optional[t.Iterable[str]] = None,
-        no_gaps: bool = False,
-        skip_backfill: bool = False,
-        is_dev: bool = False,
-        forward_only: bool = False,
-        environment_ttl: t.Optional[str] = None,
-        categorizer_config: t.Optional[CategorizerConfig] = None,
-        auto_categorization_enabled: bool = True,
-        effective_from: t.Optional[TimeLike] = None,
-        include_unmodified: bool = False,
+        **data
     ):
-        self.context_diff = context_diff
-        self.override_start = start is not None
-        self.override_end = end is not None
-        self.plan_id: str = random_id()
-        self.no_gaps = no_gaps
-        self.skip_backfill = skip_backfill
-        self.is_dev = is_dev
-        self.forward_only = forward_only
-        self.environment_ttl = environment_ttl
-        self.categorizer_config = categorizer_config or CategorizerConfig()
-        self.auto_categorization_enabled = auto_categorization_enabled
-        self.include_unmodified = include_unmodified
-        self._effective_from: t.Optional[TimeLike] = None
-        self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
-        self._end = end if end or not is_dev else now()
-        self._execution_time = execution_time or now()
-        self._apply = apply
-        self._dag: DAG[str] = DAG()
+        super().__init__(**data)
 
+        self._start = start if start or not (self.is_dev and self.forward_only) else yesterday_ds()
+        self._end = end if end or not self.is_dev else now()
+        self._execution_time = execution_time or now()
+
+        self._apply = apply
         for name, snapshot in self.context_diff.snapshots.items():
             self._dag.add(name, snapshot.model.depends_on)
 
-        self.__missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
-        self._restatements: t.Set[str] = set()
-
-        if restate_models and context_diff.new_snapshots:
+        if restate_models and self.context_diff.new_snapshots:
             raise PlanError(
                 "Model changes and restatements can't be a part of the same plan. "
                 "Revert or apply changes before proceeding with restatements."
             )
 
-        if not restate_models and is_dev and forward_only:
+        if not restate_models and self.is_dev and self.forward_only:
             # Add model names for new forward-only snapshots to the restatement list
             # in order to compute previews.
             restate_models = [
-                s.name for s in context_diff.new_snapshots.values() if s.is_materialized
+                s.name for s in self.context_diff.new_snapshots.values() if s.is_materialized
             ]
 
         self._add_restatements(restate_models or [])
@@ -137,11 +146,20 @@ class Plan:
 
         self._categorize_snapshots()
 
-        self._categorized: t.Optional[t.List[Snapshot]] = None
-        self._uncategorized: t.Optional[t.List[Snapshot]] = None
-
         if effective_from:
             self._set_effective_from(effective_from)
+
+    @property
+    def plan_id(self) -> str:
+        return self._plan_id
+
+    @property
+    def override_start(self) -> bool:
+        return self._start is not None
+
+    @property
+    def override_end(self) -> bool:
+        return self._end is not None
 
     @property
     def categorized(self) -> t.List[Snapshot]:
@@ -641,18 +659,6 @@ class Plan:
             raise NoChangesPlanError(
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
-
-    def __getstate__(self) -> t.Dict[str, t.Any]:
-        state = self.__dict__.copy()
-        state["_dag"] = None
-        state["_apply"] = None
-        return state
-
-    def __setstate__(self, state: t.Dict[str, t.Any]) -> None:
-        self.__dict__.update(state)
-        self._dag = DAG()
-        for name, snapshot in self.context_diff.snapshots.items():
-            self._dag.add(name, snapshot.model.depends_on)
 
 
 class PlanStatus(str, Enum):
