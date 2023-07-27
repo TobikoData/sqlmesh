@@ -381,7 +381,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 if self._model_name is not None:
                     logger.warning(
                         "Query cannot be optimized due to missing schema for model '%s'. "
-                        "Make sure that the model '%s' can be rendered at parse time",
+                        "Run `sqlmesh create_external_models` and / or make sure that the model '%s' can be rendered at parse time",
                         dependency,
                         self._model_name,
                     )
