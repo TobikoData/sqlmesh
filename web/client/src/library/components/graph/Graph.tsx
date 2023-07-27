@@ -122,7 +122,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                   'inline-block mr-3 w-4 h-4',
                   isShowing
                     ? 'text-brand-500'
-                    : 'text-neutral-400  dark:text-neutral-100',
+                    : 'text-neutral-400 dark:text-neutral-100',
                 )}
               />
               <Transition
