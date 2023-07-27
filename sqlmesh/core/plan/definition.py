@@ -79,8 +79,8 @@ class Plan(PydanticModel):
     auto_categorization_enabled: bool = True
     include_unmodified: bool = False
 
-    _directly_modified: t.List[Snapshot] = None
-    _indirectly_modified: SnapshotMapping = None
+    _directly_modified: t.Optional[t.List[Snapshot]] = None
+    _indirectly_modified: t.Optional[SnapshotMapping] = None
 
     _plan_id: str = PrivateAttr(default_factory=random_id)
 
@@ -110,7 +110,7 @@ class Plan(PydanticModel):
         restate_models: t.Optional[t.Iterable[str]] = None,
         **data: t.Any,
     ):
-        super().__init__(context_diff=context_diff, **data)
+        super().__init__(context_diff=context_diff, **data)  # type: ignore
 
         self._start = start if start or not (self.is_dev and self.forward_only) else yesterday_ds()
         self._end = end if end or not self.is_dev else now()
@@ -165,10 +165,14 @@ class Plan(PydanticModel):
 
     @property
     def directly_modified(self) -> t.List[Snapshot]:
+        if self._directly_modified is None:
+            raise SQLMeshError("Plan was not initialized.")
         return self._directly_modified
 
     @property
     def indirectly_modified(self) -> SnapshotMapping:
+        if self._indirectly_modified is None:
+            raise SQLMeshError("Plan was not initialized.")
         return self._indirectly_modified
 
     @property
