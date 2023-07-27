@@ -117,7 +117,7 @@ class Node(PydanticModel):
 
     @validator("name", pre=True)
     def _name_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> str:
-        return v.name if isinstance(v, exp.Expression) else str(v)
+        return v.meta.get("sql") or v.sql() if isinstance(v, exp.Expression) else str(v)
 
     @validator("start", pre=True)
     def _date_validator(cls, v: t.Any) -> t.Optional[TimeLike]:
