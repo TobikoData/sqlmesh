@@ -207,9 +207,9 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     const chain = path.split('/').reduce((acc: string[], path) => {
       if (acc.length === 0) return [path]
 
-      const last = acc[acc.length - 1] ?? ''
-
       if (isStringEmptyOrNil(path)) return acc
+
+      const last = acc[acc.length - 1] ?? ''
 
       acc.push(`${last}/${path}`)
 

@@ -23,6 +23,14 @@ import { type ResponseWithDetail } from '@api/instance'
 import { useStoreContext } from '@context/context'
 import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 
+export const EnumFileExplorerChange = {
+  Added: 1,
+  Modified: 2,
+  Deleted: 3,
+} as const
+
+export type FileExplorerChange = KeyOf<typeof EnumFileExplorerChange>
+
 interface FileExplorer {
   artifactRename?: ModelArtifact
   setArtifactRename: (artifact?: ModelArtifact) => void

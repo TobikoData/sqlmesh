@@ -131,7 +131,7 @@ function Tab({ tab, title }: { tab: EditorTab; title: string }): JSX.Element {
       addConfirmation({
         headline: 'Closing Tab',
         description:
-          'All unsaved changes will be lost. Do you want to close tab anyway?',
+          'All unsaved changes will be lost. Do you want to close the tab anyway?',
         yesText: 'Yes, Close Tab',
         noText: 'No, Cancel',
         action: () => {

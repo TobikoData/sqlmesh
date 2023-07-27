@@ -42,6 +42,10 @@ import ModalConfirmation, {
   type Confirmation,
 } from '@components/modal/ModalConfirmation'
 import { ModelDirectory } from '@models/directory'
+import {
+  EnumFileExplorerChange,
+  type FileExplorerChange,
+} from '@components/fileExplorer/context'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -81,7 +85,7 @@ export default function PageIDE(): JSX.Element {
   const setProject = useStoreProject(s => s.setProject)
   const setFiles = useStoreProject(s => s.setFiles)
   const refreshFiles = useStoreProject(s => s.refreshFiles)
-  const findAtrifactByPath = useStoreProject(s => s.findAtrifactByPath)
+  const findArtifactByPath = useStoreProject(s => s.findArtifactByPath)
   const setActiveRange = useStoreProject(s => s.setActiveRange)
 
   const storedTabs = useStoreEditor(s => s.storedTabs)
@@ -134,17 +138,19 @@ export default function PageIDE(): JSX.Element {
     )
     const unsubscribeFile = subscribe<{
       changes: Array<{
-        change: number
+        change: FileExplorerChange
         path: string
         file: ModelFile
       }>
       directories: Record<string, Directory>
     }>('file', ({ changes, directories }) => {
-      changes.sort((a: any) => (a.change === 3 ? -1 : 1))
+      changes.sort((a: any) =>
+        a.change === EnumFileExplorerChange.Deleted ? -1 : 1,
+      )
 
       changes.forEach(({ change, path, file }) => {
-        if (change === 2) {
-          const currentFile = findAtrifactByPath(file.path) as
+        if (change === EnumFileExplorerChange.Modified) {
+          const currentFile = findArtifactByPath(file.path) as
             | ModelFile
             | undefined
 
@@ -153,8 +159,8 @@ export default function PageIDE(): JSX.Element {
           currentFile.update(file)
         }
 
-        if (change === 3) {
-          const artifact = findAtrifactByPath(path)
+        if (change === EnumFileExplorerChange.Deleted) {
+          const artifact = findArtifactByPath(path)
 
           if (isNil(artifact)) return
 
@@ -175,14 +181,14 @@ export default function PageIDE(): JSX.Element {
       for (const path in directories) {
         const directory = directories[path]!
 
-        const currentDirectory = findAtrifactByPath(path) as
+        const currentDirectory = findArtifactByPath(path) as
           | ModelDirectory
           | undefined
 
         if (isNil(currentDirectory)) continue
 
         directory.directories?.forEach((d: any) => {
-          const directory = findAtrifactByPath(d.path) as
+          const directory = findArtifactByPath(d.path) as
             | ModelDirectory
             | undefined
 
@@ -194,7 +200,7 @@ export default function PageIDE(): JSX.Element {
         })
 
         directory.files?.forEach((f: any) => {
-          const file = findAtrifactByPath(f.path) as ModelFile | undefined
+          const file = findArtifactByPath(f.path) as ModelFile | undefined
 
           if (isNil(file)) {
             currentDirectory.addFile(new ModelFile(f, currentDirectory))
