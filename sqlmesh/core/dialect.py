@@ -26,6 +26,10 @@ class Audit(exp.Expression):
     arg_types = {"expressions": True}
 
 
+class Metric(exp.Expression):
+    arg_types = {"expressions": True}
+
+
 class Jinja(exp.Func):
     arg_types = {"this": True}
 
@@ -306,7 +310,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
             value: t.Optional[exp.Expression | str]
 
             if key in table_keys:
-                value = exp.table_name(self._parse_table_parts())
+                value = self._parse_table_parts()
             elif key == "columns":
                 value = self._parse_schema()
             elif key == "kind":
@@ -333,6 +337,8 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         this=kind.value,
                         expressions=props,
                     )
+            elif key == "expression":
+                value = self._parse_conjunction()
             else:
                 value = self._parse_bracket(self._parse_field(any_token=True))
 
@@ -349,16 +355,18 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
     return parse
 
 
-_parse_model = _create_parser(Model, ["name"])
-_parse_audit = _create_parser(Audit, ["model"])
-PARSERS = {"MODEL": _parse_model, "AUDIT": _parse_audit}
+PARSERS = {
+    "MODEL": _create_parser(Model, ["name"]),
+    "AUDIT": _create_parser(Audit, ["model"]),
+    "METRIC": _create_parser(Metric, ["name"]),
+}
 
 
-def _model_sql(self: Generator, expression: Model) -> str:
+def _sqlmesh_ddl_sql(self: Generator, expression: Model | Audit | Metric, name: str) -> str:
     props = ",\n".join(
         self.indent(f"{prop.name} {self.sql(prop, 'value')}") for prop in expression.expressions
     )
-    return "\n".join(["MODEL (", props, ")"])
+    return "\n".join([f"{name} (", props, ")"])
 
 
 def _model_kind_sql(self: Generator, expression: ModelKind) -> str:
@@ -602,13 +610,15 @@ def extend_sqlglot() -> None:
         if MacroFunc not in generator.TRANSFORMS:
             generator.TRANSFORMS.update(
                 {
+                    Audit: lambda self, e: _sqlmesh_ddl_sql(self, e, "Audit"),
                     DColonCast: lambda self, e: f"{self.sql(e, 'this')}::{self.sql(e, 'to')}",
                     MacroDef: lambda self, e: f"@DEF({self.sql(e.this)}, {self.sql(e.expression)})",
                     MacroFunc: _macro_func_sql,
                     MacroStrReplace: lambda self, e: f"@{self.sql(e.this)}",
                     MacroSQL: lambda self, e: f"@SQL({self.sql(e.this)})",
                     MacroVar: lambda self, e: f"@{e.name}",
-                    Model: _model_sql,
+                    Metric: lambda self, e: _sqlmesh_ddl_sql(self, e, "METRIC"),
+                    Model: lambda self, e: _sqlmesh_ddl_sql(self, e, "MODEL"),
                     Jinja: lambda self, e: e.name,
                     JinjaQuery: lambda self, e: f"{JINJA_QUERY_BEGIN};\n{e.name}\n{JINJA_END};",
                     JinjaStatement: lambda self, e: f"{JINJA_STATEMENT_BEGIN};\n{e.name.strip()}\n{JINJA_END};",
