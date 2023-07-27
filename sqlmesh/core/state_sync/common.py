@@ -8,21 +8,44 @@ from datetime import datetime
 from functools import wraps
 
 from sqlmesh.core.engine_adapter.shared import TransactionType
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
     SnapshotNameVersionLike,
-    SnapshotTableInfo,
     start_date,
 )
-from sqlmesh.core.state_sync.base import StateSync
+from sqlmesh.core.state_sync.base import PromotionResult, StateSync
 from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.engine_adapter.base import EngineAdapter
+
 logger = logging.getLogger(__name__)
+
+
+def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environment]) -> None:
+    expired_schema_environments = [
+        environment for environment in environments if environment.suffix_target.is_schema
+    ]
+    expired_table_environments = [
+        environment for environment in environments if environment.suffix_target.is_table
+    ]
+    for expired_schema in {
+        snapshot.qualified_view_name.schema_for_environment(environment.naming_info)
+        for environment in expired_schema_environments
+        for snapshot in environment.snapshots
+    }:
+        adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
+    for expired_view in {
+        snapshot.qualified_view_name.for_environment(environment.naming_info)
+        for environment in expired_table_environments
+        for snapshot in environment.snapshots
+    }:
+        adapter.drop_view(expired_view, ignore_if_not_exists=True)
 
 
 def transactional(
@@ -54,11 +77,7 @@ class CommonStateSyncMixin(StateSync):
         return self._get_environment(environment)
 
     @transactional()
-    def promote(
-        self, environment: Environment, no_gaps: bool = False
-    ) -> t.Tuple[
-        t.List[SnapshotTableInfo], t.Tuple[t.List[SnapshotTableInfo], EnvironmentNamingInfo]
-    ]:
+    def promote(self, environment: Environment, no_gaps: bool = False) -> PromotionResult:
         """Update the environment to reflect the current state.
 
         This method verifies that snapshots have been pushed.
@@ -129,7 +148,11 @@ class CommonStateSyncMixin(StateSync):
             if environment_suffix_target_changed
             else [existing_table_infos[name] for name in missing_models]
         )
-        return list(table_infos), (removed, removed_environment_naming_info)
+        return PromotionResult(
+            added=sorted(*table_infos),
+            removed=removed,
+            removed_environment_naming_info=removed_environment_naming_info,
+        )
 
     @transactional()
     def finalize(self, environment: Environment) -> None:

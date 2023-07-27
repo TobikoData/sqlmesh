@@ -8,6 +8,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotTableInfo,
 )
+from sqlmesh.core.state_sync import cleanup_expired_views
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -118,13 +119,7 @@ def cleanup(
     if isinstance(command_payload, str):
         command_payload = CleanupCommandPayload.parse_raw(command_payload)
 
-    expired_schemas = {
-        snapshot.qualified_view_name.schema_for_environment(environment.naming_info)
-        for environment in command_payload.environments
-        for snapshot in environment.snapshots
-    }
-    for expired_schema in expired_schemas:
-        evaluator.adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
+    cleanup_expired_views(evaluator.adapter, command_payload.environments)
     evaluator.cleanup(command_payload.snapshots)
 
 

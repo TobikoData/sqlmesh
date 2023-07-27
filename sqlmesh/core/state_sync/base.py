@@ -43,6 +43,12 @@ MIGRATIONS = [
 SCHEMA_VERSION: int = len(MIGRATIONS)
 
 
+class PromotionResult(PydanticModel):
+    added: t.List[SnapshotTableInfo]
+    removed: t.List[SnapshotTableInfo]
+    removed_environment_naming_info: EnvironmentNamingInfo
+
+
 class StateReader(abc.ABC):
     """Abstract base class for read-only operations on snapshot and environment state."""
 
@@ -246,11 +252,7 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def promote(
-        self, environment: Environment, no_gaps: bool = False
-    ) -> t.Tuple[
-        t.List[SnapshotTableInfo], t.Tuple[t.List[SnapshotTableInfo], EnvironmentNamingInfo]
-    ]:
+    def promote(self, environment: Environment, no_gaps: bool = False) -> PromotionResult:
         """Update the environment to reflect the current state.
 
         This method verifies that snapshots have been pushed.

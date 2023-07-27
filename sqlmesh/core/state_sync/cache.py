@@ -3,16 +3,10 @@ from __future__ import annotations
 import sys
 import typing as t
 
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import SeedModel
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotId,
-    SnapshotIdLike,
-    SnapshotInfoLike,
-    SnapshotTableInfo,
-)
-from sqlmesh.core.state_sync.base import StateSync, Versions
+from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
+from sqlmesh.core.state_sync.base import PromotionResult, StateSync, Versions
 from sqlmesh.utils.date import TimeLike, now_timestamp
 
 if sys.version_info >= (3, 8):
@@ -175,11 +169,7 @@ class CachingStateSync(StateSync):
             self.snapshot_cache.pop(s.snapshot_id, None)
         self.state_sync.remove_interval(snapshots, start, end, all_snapshots)
 
-    def promote(
-        self, environment: Environment, no_gaps: bool = False
-    ) -> t.Tuple[
-        t.List[SnapshotTableInfo], t.Tuple[t.List[SnapshotTableInfo], EnvironmentNamingInfo]
-    ]:
+    def promote(self, environment: Environment, no_gaps: bool = False) -> PromotionResult:
         return self.state_sync.promote(environment, no_gaps)
 
     def finalize(self, environment: Environment) -> None:

@@ -77,7 +77,12 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     to_table_mapping,
 )
-from sqlmesh.core.state_sync import CachingStateSync, StateReader, StateSync
+from sqlmesh.core.state_sync import (
+    CachingStateSync,
+    StateReader,
+    StateSync,
+    cleanup_expired_views,
+)
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
@@ -1193,14 +1198,7 @@ class Context(BaseContext):
 
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()
-        expired_schemas = {
-            snapshot.qualified_view_name.schema_for_environment(expired_environment.naming_info)
-            for expired_environment in expired_environments
-            for snapshot in expired_environment.snapshots
-        }
-        for expired_schema in expired_schemas:
-            self.engine_adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
-
+        cleanup_expired_views(self.engine_adapter, expired_environments)
         expired_snapshots = self.state_sync.delete_expired_snapshots()
         self.snapshot_evaluator.cleanup(expired_snapshots)
 
