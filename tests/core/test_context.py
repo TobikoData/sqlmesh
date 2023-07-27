@@ -1,4 +1,3 @@
-import inspect
 import pathlib
 from datetime import date
 from tempfile import TemporaryDirectory

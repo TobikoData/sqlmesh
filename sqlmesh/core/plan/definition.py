@@ -4,6 +4,7 @@ import logging
 import typing as t
 from collections import defaultdict
 from enum import Enum
+
 from pydantic import Field, PrivateAttr
 
 from sqlmesh.core.config import CategorizerConfig
@@ -68,7 +69,6 @@ class Plan(PydanticModel):
     """
 
     context_diff: ContextDiff
-    apply: t.Optional[t.Callable[[Plan], None]] = None
     restate_models: t.Optional[t.Iterable[str]] = None
     no_gaps: bool = False
     skip_backfill: bool = False
@@ -79,8 +79,8 @@ class Plan(PydanticModel):
     auto_categorization_enabled: bool = True
     include_unmodified: bool = False
 
-    directly_modified: t.Optional[t.List[Snapshot]] = None
-    indirectly_modified: t.Optional[SnapshotMapping] = None
+    _directly_modified: t.List[Snapshot] = PrivateAttr(None)
+    _indirectly_modified: SnapshotMapping = PrivateAttr(None)
 
     _plan_id: str = PrivateAttr(default_factory=random_id)
 
@@ -100,14 +100,17 @@ class Plan(PydanticModel):
 
     def __init__(
         self,
+        context_diff: ContextDiff,
+        *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         effective_from: t.Optional[TimeLike] = None,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_models: t.Optional[t.Iterable[str]] = None,
-        **data
+        **data: t.Any,
     ):
+        data["context_diff"] = context_diff
         super().__init__(**data)
 
         self._start = start if start or not (self.is_dev and self.forward_only) else yesterday_ds()
@@ -141,8 +144,8 @@ class Plan(PydanticModel):
         self._ensure_no_broken_references()
 
         directly_indirectly_modified = self._build_directly_and_indirectly_modified()
-        self.directly_modified = directly_indirectly_modified[0]
-        self.indirectly_modified = directly_indirectly_modified[1]
+        self._directly_modified = directly_indirectly_modified[0]
+        self._indirectly_modified = directly_indirectly_modified[1]
 
         self._categorize_snapshots()
 
@@ -160,6 +163,14 @@ class Plan(PydanticModel):
     @property
     def override_end(self) -> bool:
         return self._end is not None
+
+    @property
+    def directly_modified(self) -> t.List[Snapshot]:
+        return self._directly_modified
+
+    @property
+    def indirectly_modified(self) -> SnapshotMapping:
+        return self._indirectly_modified
 
     @property
     def categorized(self) -> t.List[Snapshot]:
@@ -194,7 +205,6 @@ class Plan(PydanticModel):
     def start(self, new_start: TimeLike) -> None:
         self._ensure_valid_date_range(new_start, self._end)
         self.set_start(new_start)
-        self.override_start = True
 
     def set_start(self, new_start: TimeLike) -> None:
         self._start = new_start
@@ -238,7 +248,6 @@ class Plan(PydanticModel):
     def end(self, new_end: TimeLike) -> None:
         self._ensure_valid_date_range(self._start, new_end)
         self._end = new_end
-        self.override_end = True
         self.__missing_intervals = None
 
     @property
