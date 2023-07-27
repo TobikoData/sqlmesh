@@ -3,6 +3,7 @@ import ThemeProvider from '@context/theme'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
+import IDEProvider from './library/pages/ide/context'
 
 import './index.css'
 
@@ -22,7 +23,9 @@ ReactDOM.createRoot(getRootNode()).render(
   <React.StrictMode>
     <QueryClientProvider client={client}>
       <ThemeProvider>
-        <App />
+        <IDEProvider>
+          <App />
+        </IDEProvider>
       </ThemeProvider>
     </QueryClientProvider>
   </React.StrictMode>,

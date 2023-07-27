@@ -3,6 +3,7 @@ import { createContext, type ReactNode, useState, useContext } from 'react'
 
 export const EnumErrorKey = {
   Internal: 'internal',
+  API: 'api',
   General: 'general',
   RunPlan: 'run-plan',
   Environments: 'environments',
@@ -20,6 +21,8 @@ export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]
 
 export interface ErrorIDE extends ApiExceptionPayload {
   key: ErrorKey
+  solution?: string
+  tip?: string
 }
 
 interface IDE {
@@ -33,9 +36,9 @@ interface IDE {
 export const IDEContext = createContext<IDE>({
   isPlanOpen: false,
   errors: new Map(),
-  setIsPlanOpen: () => {},
-  addError: () => {},
-  removeError: () => {},
+  setIsPlanOpen: () => { },
+  addError: () => { },
+  removeError: () => { },
 })
 
 export default function IDEProvider({

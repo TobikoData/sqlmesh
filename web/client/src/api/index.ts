@@ -5,6 +5,7 @@ import {
   useQuery,
   useMutation,
   isCancelledError,
+  useQueryClient,
 } from '@tanstack/react-query'
 import {
   type ContextEnvironment,
@@ -46,27 +47,28 @@ import {
   useIDE,
   type ErrorIDE,
   EnumErrorKey,
+  type ErrorKey,
 } from '~/library/pages/ide/context'
 
 export function useApiMeta(): UseQueryResult<Meta> {
-  const { addError, removeError } = useIDE()
+  const queryKey = [`/api/meta`]
+  const { onError, onSuccess, timeout } = useQueryTimeout({
+    queryKey,
+    errorKey: EnumErrorKey.API,
+    trigger: 'API -> useApiMeta',
+  })
 
   return useQuery<Meta, ErrorIDE>({
-    queryKey: [`/api/meta`],
+    queryKey,
     queryFn: async ({ signal }) => {
-      removeError(EnumErrorKey.Meta)
+      timeout()
 
       return await getApiMetaApiMetaGet({ signal })
     },
     cacheTime: 0,
     enabled: false,
-    onError(error) {
-      if (isCancelledError(error)) {
-        console.log('getApiMetaApiMetaGet', 'Request aborted by React Query')
-      } else {
-        addError(EnumErrorKey.Meta, error)
-      }
-    },
+    onError,
+    onSuccess,
   })
 }
 
@@ -289,6 +291,75 @@ export function useMutationApiSaveFile(
   })
 }
 
+const DELAY = 10000
+
+function useQueryTimeout({
+  queryKey,
+  errorKey,
+  cancel,
+  trigger,
+  removeTimeoutErrorAfter = DELAY,
+}: {
+  queryKey: string[]
+  errorKey: ErrorKey
+  trigger?: string
+  removeTimeoutErrorAfter?: number
+  cancel?: () => Promise<void> | void
+}): {
+  onError: (error: ErrorIDE) => void
+  timeout: (delay?: number) => void
+  onSuccess: () => void
+} {
+  const queryClient = useQueryClient()
+  const { addError, removeError } = useIDE()
+
+  let timeoutId: ReturnType<typeof setTimeout>
+
+  function timeout(delay: number = DELAY): void {
+    timeoutId = setTimeout(() => {
+      addError(errorKey, {
+        key: errorKey,
+        message: `Request timed out`,
+        description: `Request ${queryKey.join(
+          '->',
+        )} timed out after ${delay}ms`,
+        status: 408,
+        timestamp: Date.now(),
+        origin: 'useQueryTimeout',
+        trigger,
+      })
+
+      void queryClient.cancelQueries({ queryKey })
+
+      void cancel?.()
+
+      setTimeout(() => {
+        removeError(errorKey)
+      }, removeTimeoutErrorAfter)
+    }, delay)
+  }
+
+  function onError(error: ErrorIDE): void {
+    clearTimeout(timeoutId)
+
+    if (isCancelledError(error)) {
+      console.log('Request aborted by React Query')
+    } else {
+      addError(errorKey, error)
+    }
+  }
+
+  function onSuccess(): void {
+    clearTimeout(timeoutId)
+  }
+
+  return {
+    timeout,
+    onError,
+    onSuccess,
+  }
+}
+
 export async function apiCancelPlanApply(client: QueryClient): Promise<void> {
   void client.cancelQueries({ queryKey: ['/api/commands/apply'] })
 
@@ -299,6 +370,10 @@ export async function apiCancelPlanRun(client: QueryClient): Promise<void> {
   void client.cancelQueries({ queryKey: ['/api/plan'] })
 
   return await cancelPlanApiPlanCancelPost()
+}
+
+export function apiCancelMeta(client: QueryClient): void {
+  void client.cancelQueries({ queryKey: ['/api/meta'] })
 }
 
 export function apiCancelFetchdf(client: QueryClient): void {
