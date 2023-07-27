@@ -21,6 +21,7 @@ import ReactFlow, {
   type Edge,
   type Node,
   useUpdateNodeInternals,
+  useReactFlow,
 } from 'reactflow'
 import { Button } from '../button/Button'
 import 'reactflow/dist/base.css'
@@ -40,11 +41,14 @@ import {
   isArrayNotEmpty,
   isFalse,
   isNil,
+  isNotNil,
   isTrue,
 } from '../../../utils'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
 import {
   ArrowRightCircleIcon,
+  CheckIcon,
+  ChevronDownIcon,
   InformationCircleIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
@@ -66,7 +70,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
 import { type ErrorIDE } from '~/library/pages/ide/context'
-import { Popover, Transition } from '@headlessui/react'
+import { Listbox, Popover, Transition } from '@headlessui/react'
 import CodeEditor from '@components/editor/EditorCode'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
@@ -76,7 +80,6 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnType,
   columnDescription,
   className,
-  expression,
   source,
   disabled = false,
 }: {
@@ -84,7 +87,6 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnType: string
   columnDescription?: string
   source?: string
-  expression?: string
   disabled?: boolean
   className?: string
 }): JSX.Element {
@@ -100,9 +102,6 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
     <div className={clsx('flex w-full items-center relative', className)}>
       {source != null && (
         <Popover
-          onMouseEnter={() => {
-            setIsShowing(true)
-          }}
           onMouseLeave={() => {
             setIsShowing(false)
           }}
@@ -113,7 +112,19 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
         >
           {() => (
             <>
-              <InformationCircleIcon className="text-secondary-500 dark:text-primary-500 inline-block mr-3 w-4 h-4" />
+              <InformationCircleIcon
+                onClick={(e: React.MouseEvent<SVGSVGElement>) => {
+                  e.stopPropagation()
+
+                  setIsShowing(true)
+                }}
+                className={clsx(
+                  'inline-block mr-3 w-4 h-4',
+                  isShowing
+                    ? 'text-brand-500'
+                    : 'text-neutral-400  dark:text-neutral-100',
+                )}
+              />
               <Transition
                 show={isShowing}
                 as={Fragment}
@@ -151,7 +162,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
         )}
       >
         <span>{columnName}</span>
-        <span className="inline-block text-neutral-500 dark:text-neutral-300 ml-4">
+        <span className="inline-block text-neutral-500 dark:text-neutral-300 ml-2">
           {columnType}
         </span>
       </div>
@@ -256,12 +267,12 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           id={toNodeOrEdgeId(EnumSide.Left, id)}
           position={Position.Left}
           isConnectable={false}
-          className={clsx('!bg-transparent -ml-2 dark:text-primary-500')}
+          className="!bg-transparent -ml-2 dark:text-primary-500"
         >
           <ArrowRightCircleIcon className="w-5 bg-theme rounded-full" />
         </Handle>
       )}
-      <span className="inline-block w-full">
+      <span className="flex w-full overflow-hidden">
         {type != null && (
           <span
             title={
@@ -271,7 +282,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
                 ? 'CTE'
                 : 'SQL Query'
             }
-            className="inline-block mr-2 bg-primary-30 px-2 rounded-[0.25rem] text-[0.5rem]"
+            className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
           >
             {type === 'python' && 'Python'}
             {type === 'sql' && 'SQL'}
@@ -282,8 +293,8 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
         )}
         <span
           className={clsx(
-            'inline-block',
-            handleClick != null && 'cursor-pointer hover:underline',
+            'inline-block whitespace-nowrap overflow-hidden overflow-ellipsis',
+            isNotNil(handleClick) && 'cursor-pointer hover:underline',
           )}
           onClick={handleClick}
         >
@@ -296,10 +307,10 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           id={toNodeOrEdgeId(EnumSide.Right, id)}
           position={Position.Right}
           isConnectable={false}
-          className={clsx(
-            'w-2 h-2 rounded-full !bg-secondary-500 dark:!bg-primary-500',
-          )}
-        />
+          className="!bg-transparent -mr-2 dark:text-primary-500"
+        >
+          <ArrowRightCircleIcon className="w-5 bg-theme rounded-full" />
+        </Handle>
       )}
     </div>
   )
@@ -321,7 +332,6 @@ const ModelColumn = memo(function ModelColumn({
   selectManually,
   withHandles = false,
   source,
-  expression,
 }: {
   id: string
   nodeId: string
@@ -332,7 +342,6 @@ const ModelColumn = memo(function ModelColumn({
   hasRight?: boolean
   withHandles?: boolean
   source?: string
-  expression?: string
   getColumnLineage: (
     columnName: string,
   ) => Promise<
@@ -426,7 +435,6 @@ const ModelColumn = memo(function ModelColumn({
               columnName={column.name}
               columnType={column.type}
               disabled={disabled}
-              expression={expression}
               source={source}
               className={clsx(
                 isError && 'text-danger-500',
@@ -440,7 +448,6 @@ const ModelColumn = memo(function ModelColumn({
             columnType={column.type}
             disabled={disabled}
             source={source}
-            expression={expression}
             className={clsx(
               isError && 'text-danger-500',
               isEmpty && 'text-neutral-400 dark:text-neutral-600',
@@ -631,11 +638,6 @@ const ModelColumns = memo(function ModelColumns({
                   ? lineage?.[nodeId]?.columns?.[column.name]?.source
                   : undefined
               }
-              expression={
-                withSource
-                  ? lineage?.[nodeId]?.columns?.[column.name]?.expression
-                  : undefined
-              }
             />
           ))}
         </div>
@@ -697,11 +699,6 @@ const ModelColumns = memo(function ModelColumns({
                 ? lineage?.[nodeId]?.columns?.[column.name]?.source
                 : undefined
             }
-            expression={
-              withSource
-                ? lineage?.[nodeId]?.columns?.[column.name]?.expression
-                : undefined
-            }
           />
         ))}
       </div>
@@ -739,17 +736,20 @@ function ModelColumnLineage({
 }): JSX.Element {
   const {
     withColumns,
+    setWithColumns,
     hasActiveEdge,
     models,
     lineage,
     shouldRecalculate,
     handleError,
   } = useLineageFlow()
+  const { setCenter } = useReactFlow()
 
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [isBuildingLayout, setIsBuildingLayout] = useState(true)
   const [isEmpty, setIsEmpty] = useState(true)
+  const [hasBackground, setHasBackground] = useState(true)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
 
@@ -770,7 +770,6 @@ function ModelColumnLineage({
   }, [lineage, models, model, withColumns, shouldRecalculate])
 
   useEffect(() => {
-    setIsBuildingLayout(isArrayEmpty(nodes) || isArrayEmpty(edges))
     setIsEmpty(isArrayEmpty(nodesAndEdges.nodes))
 
     if (isArrayEmpty(nodesAndEdges.nodes)) return
@@ -784,6 +783,15 @@ function ModelColumnLineage({
         handleError?.(error)
       })
       .finally(() => {
+        const node = nodesAndEdges.nodesMap[model.name]
+
+        if (isNotNil(node)) {
+          setCenter(node.position.x, node.position.y, {
+            zoom: 1,
+            duration: 1000,
+          })
+        }
+
         setIsBuildingLayout(false)
       })
   }, [nodesAndEdges])
@@ -855,39 +863,59 @@ function ModelColumnLineage({
   }
 
   return (
-    <div className={clsx('px-2 py-1 w-full h-full', className)}>
-      {isBuildingLayout ? (
-        <div className="flex justify-center items-center w-full h-full">
-          <Loading className="inline-block">
-            <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-            <h3 className="text-md">Building Lineage...</h3>
-          </Loading>
-        </div>
-      ) : isEmpty ? (
+    <div className={clsx('px-1 w-full h-full relative', className)}>
+      {isEmpty && isFalse(isBuildingLayout) ? (
         <div className="flex justify-center items-center w-full h-full">
           <Loading className="inline-block">
             <h3 className="text-md">Empty</h3>
           </Loading>
         </div>
       ) : (
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          nodeOrigin={[0.5, 0.5]}
-          minZoom={0.1}
-          maxZoom={1.5}
-          fitView
-        >
-          <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={16}
-            size={2}
-          />
-        </ReactFlow>
+        <>
+          {isBuildingLayout && (
+            <div className="absolute top-0 left-0 z-[1000] bg-theme flex justify-center items-center w-full h-full">
+              <Loading className="inline-block">
+                <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                <h3 className="text-md">Building Lineage...</h3>
+              </Loading>
+            </div>
+          )}
+          <div className="flex justify-end">
+            <GraphOptions
+              options={{
+                Background: setHasBackground,
+                Columns: setWithColumns,
+              }}
+              value={
+                [
+                  withColumns && 'Columns',
+                  hasBackground && 'Background',
+                ].filter(Boolean) as string[]
+              }
+            />
+          </div>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            nodeOrigin={[0.5, 0.5]}
+            minZoom={0.1}
+            maxZoom={1.5}
+            snapGrid={[16, 16]}
+            snapToGrid
+          >
+            <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
+            {hasBackground && (
+              <Background
+                variant={BackgroundVariant.Dots}
+                gap={32}
+                size={4}
+              />
+            )}
+          </ReactFlow>
+        </>
       )}
     </div>
   )
@@ -918,6 +946,14 @@ function ModelNode({
       }
     })
 
+    columns.forEach(column => {
+      column.type = isNil(column.type)
+        ? 'UNKNOWN'
+        : column.type.startsWith('STRUCT')
+        ? 'STRUCT'
+        : column.type
+    })
+
     return {
       model,
       columns,
@@ -939,16 +975,22 @@ function ModelNode({
   const splat = data.highlightedNodes?.['*']
   const isInteractive = isTrue(data.isInteractive) && handleClickModel != null
   const isCTE = data.type === 'cte'
+  const isModelExternal = model?.type === 'external'
+  const isModelSeed = model?.type === 'seed'
   const showColumns = withColumns && isArrayNotEmpty(columns)
   const type = isCTE ? 'cte' : model?.type
 
   return (
     <div
       className={clsx(
-        'text-xs font-semibold rounded-xl shadow-lg relative z-1',
-        highlighted == null ? splat : highlighted,
+        'text-xs font-semibold rounded-lg shadow-lg relative z-1',
         isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
+        (isModelExternal || isModelSeed) && 'ring-4 ring-accent-500',
+        isNil(highlighted) ? splat : highlighted,
       )}
+      style={{
+        maxWidth: isNil(data.width) ? 'auto' : `${data.width as number}px`,
+      }}
     >
       <div className="drag-handle">
         <ModelNodeHeaderHandles
@@ -957,7 +999,7 @@ function ModelNode({
           label={data.label}
           className={clsx(
             'py-2',
-            showColumns ? 'rounded-t-lg' : 'rounded-lg',
+            showColumns ? 'rounded-t-md' : 'rounded-lg',
             isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
           )}
           hasLeft={targetPosition === Position.Left}
@@ -977,7 +1019,7 @@ function ModelNode({
           />
           <div
             className={clsx(
-              'rounded-b-lg py-1',
+              'rounded-b-md py-1',
               isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
             )}
           ></div>
@@ -988,3 +1030,76 @@ function ModelNode({
 }
 
 export { ModelColumnLineage, ModelColumns }
+
+function GraphOptions({
+  options,
+  value = [],
+}: {
+  options: Record<string, React.Dispatch<React.SetStateAction<boolean>>>
+  value: string[]
+}): JSX.Element {
+  const [selected, setSelected] = useState(value)
+
+  return (
+    <Listbox
+      value={selected}
+      onChange={value => {
+        setSelected(value)
+
+        for (const key in options) {
+          options[key]?.(value.includes(key))
+        }
+      }}
+      multiple
+    >
+      <div className="relative m-1 flex">
+        <Listbox.Button className="flex items-center relative w-full cursor-default bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-2 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300">
+          <span className="block truncate">Show</span>
+          <ChevronDownIcon
+            className="ml-2 h-4 w-4"
+            aria-hidden="true"
+          />
+        </Listbox.Button>
+        <Transition
+          as={Fragment}
+          leave="transition ease-in duration-100"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <Listbox.Options className="absolute top-8 right-0 z-50 max-h-60 min-w-16 overflow-auto rounded-md bg-theme py-2 shadow-lg ring-2 ring-primary-10 ring-opacity-5 focus:outline-none sm:text-sm">
+            {Object.keys(options).map(key => (
+              <Listbox.Option
+                key={key}
+                className={({ active }) =>
+                  `relative cursor-default select-none py-1 pl-10 pr-4 ${
+                    active
+                      ? 'bg-primary-10 text-primary-500'
+                      : 'text-neutral-700 dark:text-neutral-300'
+                  }`
+                }
+                value={key}
+              >
+                {({ selected }) => (
+                  <>
+                    <span>{key}</span>
+                    <span
+                      className={clsx(
+                        'absolute inset-y-0 left-0 flex items-center pl-3 text-primary-500',
+                        selected ? 'block' : 'hidden',
+                      )}
+                    >
+                      <CheckIcon
+                        className="h-4 w-4"
+                        aria-hidden="true"
+                      />
+                    </span>
+                  </>
+                )}
+              </Listbox.Option>
+            ))}
+          </Listbox.Options>
+        </Transition>
+      </div>
+    </Listbox>
+  )
+}

@@ -561,7 +561,7 @@ function ChangesPreview({
               <PlanChangePreview
                 headline={headline}
                 type={type}
-                className="w-full h-full max-h-[40vh] overflow-hidden overflow-y-auto "
+                className="w-full h-full max-w-[50vw] max-h-[40vh] overflow-hidden overflow-y-auto "
               >
                 <PlanChangePreview.Default
                   type={type}
