@@ -108,6 +108,20 @@ Name is ***required*** and must be ***unique***.
 ### clustered_by
 - Clustered by is an optional property for engines such as Bigquery that support clustering.
 
+### table_properties
+- A key-value of arbitrary table properties specific to the target engine. For example:
+
+```sql linenums="1"
+MODEL (
+  ...,
+  table_properties (
+    partition_expiration_days = 7,
+    require_partition_filter = true
+  )
+);
+
+```
+
 ## Incremental Model Properties
 
 For models that are incremental, the following parameters can be specified in the `kind`'s definition.
