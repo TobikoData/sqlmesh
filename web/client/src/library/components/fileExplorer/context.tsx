@@ -13,6 +13,7 @@ import { getAllFilesInDirectory } from './help'
 import {
   isArrayNotEmpty,
   isFalse,
+  isNil,
   isNotNil,
   isStringEmptyOrNil,
   toUniqueName,
@@ -150,14 +151,14 @@ export default function FileExplorerProvider({
   }
 
   function renameArtifact(artifact: ModelArtifact, newName?: string): void {
-    if (isLoading || isStringEmptyOrNil(newName)) return
+    if (isLoading || isStringEmptyOrNil(newName) || isNil(newName)) return
 
     setIsLoading(true)
 
     const currentName = artifact.name
     const currentPath = artifact.path
 
-    artifact.rename(newName!.trim())
+    artifact.rename(newName.trim())
 
     if (artifact instanceof ModelDirectory) {
       writeDirectoryApiDirectoriesPathPost(currentPath, {

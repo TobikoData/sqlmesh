@@ -214,7 +214,8 @@ def test_model_qualification():
         model = load_sql_based_model(expressions)
         model.render_query(optimize=True)
         assert (
-            mock_logger.call_args[0][0] == "%s for '%s', the column may not exist or is ambiguous"
+            mock_logger.call_args[0][0]
+            == "%s for model '%s', the column may not exist or is ambiguous"
         )
 
 

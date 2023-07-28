@@ -1,5 +1,11 @@
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
-import { isArrayNotEmpty, isFalse, isNil, isObjectEmpty } from '../../../utils'
+import {
+  isArrayNotEmpty,
+  isFalse,
+  isNil,
+  isNotNil,
+  isObjectEmpty,
+} from '../../../utils'
 import { type LineageColumn, type Column, type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
@@ -77,11 +83,6 @@ function getNodesAndEdges({
   edges: Edge[]
   nodes: Node[]
 } {
-  const currentEdges = edges.reduce(
-    (acc: Record<string, Edge>, edge) =>
-      Object.assign(acc, { [edge.id]: edge }),
-    {},
-  )
   const sources = new Set(
     Object.values(lineage)
       .map(l => l.models)
@@ -94,7 +95,6 @@ function getNodesAndEdges({
     highlightedNodes,
     models,
     sources,
-    nodes,
     model,
     withColumns,
   })
@@ -130,9 +130,8 @@ function getNodesAndEdges({
             targetModelName,
             targetColumnName,
           )
-          const edgeId = toNodeOrEdgeId(sourceHandler, targetHandler)
-          const edge =
-            currentEdges[edgeId] ??
+
+          outputEdges.push(
             createGraphEdge(
               sourceModelName,
               targetModelName,
@@ -143,9 +142,8 @@ function getNodesAndEdges({
                 columnSource: sourceColumnName,
                 columnTarget: targetColumnName,
               },
-            )
-
-          outputEdges.push(edge)
+            ),
+          )
         }
       }
     }
@@ -164,7 +162,6 @@ function getNodeMap({
   highlightedNodes,
   models,
   sources,
-  nodes,
   model,
   withColumns,
 }: {
@@ -173,7 +170,6 @@ function getNodeMap({
   highlightedNodes: Record<string, string[]>
   models: Map<string, Model>
   sources: Set<string>
-  nodes: Node[]
   model: ModelSQLMeshModel
   withColumns: boolean
 }): Record<string, Node> {
@@ -182,31 +178,24 @@ function getNodeMap({
   const CHAR_WIDTH = 8
   const MAX_VISIBLE_COLUMNS = 5
 
-  const current = nodes.reduce((acc: Record<string, Node>, node) => {
-    // Checking if any nodes have been removed from the graph
-    if (models.has(node.id)) {
-      acc[node.id] = node
-    }
-
-    return acc
-  }, {})
-
   return modelNames.reduce((acc: Record<string, Node>, label: string) => {
-    const node =
-      current[label] ??
-      createGraphNode({
-        label,
-        type: models.has(label) ? 'model' : 'cte',
-      })
+    const node = createGraphNode({
+      label,
+      type: models.has(label) ? 'model' : 'cte',
+    })
     const columnsCount = withColumns
       ? models.get(label)?.columns?.length ?? 0
       : 0
 
-    const maxWidth = getNodeMaxWidth(label, columnsCount === 0)
+    if (isFalse(withColumns) && node.data.type === 'cte') return acc
+
+    const maxWidth = Math.min(getNodeMaxWidth(label, columnsCount === 0), 320)
     const maxHeight = getNodeMaxHeight(columnsCount)
 
-    node.data.width = NODE_BALANCE_SPACE + maxWidth + NODE_BALANCE_SPACE
-    node.data.height = NODE_BALANCE_SPACE + maxHeight + NODE_BALANCE_SPACE
+    node.data.width = maxWidth + NODE_BALANCE_SPACE * 2
+    node.data.height = withColumns
+      ? maxHeight + NODE_BALANCE_SPACE * 2
+      : NODE_BALANCE_SPACE
     node.data.highlightedNodes = highlightedNodes
     node.data.isInteractive = model.name !== label && models.has(label)
 
@@ -258,11 +247,11 @@ function repositionNodes(
 
     if (output == null) return
 
-    if (output.position.x === 0 && node.x != null) {
+    if (isNotNil(node.x) && output.position.x === 0) {
       output.position.x = node.x
     }
 
-    if (output.position.y === 0 && node.y != null) {
+    if (isNotNil(node.y) && output.position.y === 0) {
       output.position.y = node.y
     }
 
@@ -306,6 +295,7 @@ function createGraphEdge<TData = any>(
     target,
     hidden,
     data,
+    type: 'smoothstep',
     style: {
       strokeWidth: isNil(sourceHandle) || isNil(sourceHandle) ? 1 : 3,
       stroke:

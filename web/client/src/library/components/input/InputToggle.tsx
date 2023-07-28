@@ -1,13 +1,6 @@
 import { EnumSize } from '~/types/enum'
 import Toggle from '../toggle/Toggle'
-
-interface PropsInputToggle {
-  label: string
-  info: string
-  enabled: boolean
-  disabled?: boolean
-  setEnabled: (enabled: boolean) => void
-}
+import clsx from 'clsx'
 
 export default function InputToggle({
   label,
@@ -15,9 +8,17 @@ export default function InputToggle({
   enabled,
   disabled = false,
   setEnabled,
-}: PropsInputToggle): JSX.Element {
+  className,
+}: {
+  label: string
+  enabled: boolean
+  setEnabled: (enabled: boolean) => void
+  info?: string
+  disabled?: boolean
+  className?: string
+}): JSX.Element {
   return (
-    <div className="flex justify-between">
+    <div className={clsx('flex justify-between', className)}>
       <label className="block mb-1 px-3 text-sm font-bold">
         {label}
         <small className="block text-xs text-neutral-500">{info}</small>
