@@ -101,6 +101,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
+  const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
   const setDialects = useStoreEditor(s => s.setDialects)
 
   const { models, setManuallySelectedColumn } = useLineageFlow()
@@ -198,6 +199,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     setPreviewQuery(undefined)
     setPreviewTable(undefined)
     setPreviewConsole(undefined)
+    setPreviewDiff(undefined)
   }, [tab.id, tab.file.fingerprint])
 
   return (
