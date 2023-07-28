@@ -371,6 +371,7 @@ def _relation_info_to_relation(
     relation_type: t.Type[BaseRelation],
     target_quote_policy: Policy,
 ) -> BaseRelation:
+    relation_info = relation_info.copy()
     quote_policy = Policy(
         **{
             **asdict(target_quote_policy),
