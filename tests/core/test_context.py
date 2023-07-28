@@ -1,15 +1,22 @@
 import pathlib
 from datetime import date
 from tempfile import TemporaryDirectory
+from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 import sqlmesh.core.constants
-from sqlmesh.core.config import Config, ModelDefaultsConfig, SnowflakeConnectionConfig
+from sqlmesh.core.config import (
+    Config,
+    EnvironmentSuffixTarget,
+    ModelDefaultsConfig,
+    SnowflakeConnectionConfig,
+)
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.utils.date import yesterday_ds
@@ -366,4 +373,47 @@ def test_physical_schema_override() -> None:
         len(sushi_fingerprints)
         == len(no_mapping_fingerprints)
         == len(no_mapping_fingerprints - sushi_fingerprints)
+    )
+
+
+def test_janitor(sushi_context, mocker: MockerFixture) -> None:
+    adapter_mock = mocker.MagicMock()
+    state_sync_mock = mocker.MagicMock()
+    state_sync_mock.delete_expired_environments.return_value = [
+        Environment(
+            name="test_environment",
+            suffix_target=EnvironmentSuffixTarget.TABLE,
+            snapshots=[x.table_info for x in sushi_context.snapshots.values()],
+            start_at="2022-01-01",
+            end_at="2022-01-01",
+            plan_id="test_plan_id",
+            previous_plan_id="test_plan_id",
+        ),
+        Environment(
+            name="test_environment",
+            suffix_target=EnvironmentSuffixTarget.SCHEMA,
+            snapshots=[x.table_info for x in sushi_context.snapshots.values()],
+            start_at="2022-01-01",
+            end_at="2022-01-01",
+            plan_id="test_plan_id",
+            previous_plan_id="test_plan_id",
+        ),
+    ]
+    sushi_context._engine_adapter = adapter_mock
+    sushi_context._state_sync = state_sync_mock
+    sushi_context._run_janitor()
+    # Assert that the schemas are dropped just twice for the schema based environment
+    assert sorted(adapter_mock.drop_schema.call_args_list) == [
+        call("raw__test_environment", ignore_if_not_exists=True, cascade=True),
+        call("sushi__test_environment", ignore_if_not_exists=True, cascade=True),
+    ]
+    # Assert that the views are dropped for each snapshot just once and make sure that the name used is the
+    # view name with the environment as a suffix
+    assert adapter_mock.drop_view.call_count == 13
+    adapter_mock.drop_view.assert_has_calls(
+        [
+            call("raw.demographics__test_environment", ignore_if_not_exists=True),
+            call("sushi.waiter_as_customer_by_day__test_environment", ignore_if_not_exists=True),
+        ],
+        any_order=True,
     )
