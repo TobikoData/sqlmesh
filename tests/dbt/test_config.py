@@ -5,6 +5,7 @@ import pytest
 from dbt.adapters.base import BaseRelation
 
 from sqlmesh.core.model import SqlModel
+from sqlmesh.dbt.common import QuotingConfig
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
@@ -458,3 +459,17 @@ def test_bigquery_config():
             "outputs",
             "dev",
         )
+
+
+def test_quoting_config():
+    assert QuotingConfig.parse_obj(
+        {"database": None, "identifier": None, "schema": None}
+    ) == QuotingConfig(database=None, identifier=None, schema=None)
+
+    assert QuotingConfig.parse_obj(
+        {"database": False, "identifier": False, "schema": False}
+    ) == QuotingConfig(database=False, identifier=False, schema=False)
+
+    assert QuotingConfig.parse_obj(
+        {"database": True, "identifier": True, "schema": True}
+    ) == QuotingConfig(database=True, identifier=True, schema=True)
