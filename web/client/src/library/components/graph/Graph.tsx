@@ -70,7 +70,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
 import { type ErrorIDE } from '~/library/pages/ide/context'
-import { Popover, Transition } from '@headlessui/react'
+import { Listbox, Popover, Transition } from '@headlessui/react'
 import { CodeEditorDefault } from '@components/editor/EditorCode'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
@@ -272,8 +272,8 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
               type === 'python'
                 ? 'Column lineage disabled for Python models'
                 : type === 'cte'
-                  ? 'CTE'
-                  : 'SQL Query'
+                ? 'CTE'
+                : 'SQL Query'
             }
             className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
           >
@@ -708,8 +708,9 @@ const ModelColumns = memo(function ModelColumns({
           >
             {showColumns
               ? 'Hide'
-              : `Show ${columns.length - columnsSelected.length - columnsRest.length
-              } More`}
+              : `Show ${
+                  columns.length - columnsSelected.length - columnsRest.length
+                } More`}
           </Button>
         </div>
       )}
@@ -941,8 +942,8 @@ function ModelNode({
       column.type = isNil(column.type)
         ? 'UNKNOWN'
         : column.type.startsWith('STRUCT')
-          ? 'STRUCT'
-          : column.type
+        ? 'STRUCT'
+        : column.type
     })
 
     return {
@@ -1062,9 +1063,10 @@ function GraphOptions({
               <Listbox.Option
                 key={key}
                 className={({ active }) =>
-                  `relative cursor-default select-none py-1 pl-10 pr-4 ${active
-                    ? 'bg-primary-10 text-primary-500'
-                    : 'text-neutral-700 dark:text-neutral-300'
+                  `relative cursor-default select-none py-1 pl-10 pr-4 ${
+                    active
+                      ? 'bg-primary-10 text-primary-500'
+                      : 'text-neutral-700 dark:text-neutral-300'
                   }`
                 }
                 value={key}
