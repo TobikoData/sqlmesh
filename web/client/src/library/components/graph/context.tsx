@@ -21,6 +21,7 @@ interface LineageFlow {
   activeEdges: ActiveEdges
   connections: Map<string, Connections>
   shouldRecalculate: boolean
+  setWithColumns: React.Dispatch<React.SetStateAction<boolean>>
   setShouldRecalculate: React.Dispatch<React.SetStateAction<boolean>>
   setConnections: React.Dispatch<React.SetStateAction<Map<string, Connections>>>
   hasActiveEdge: (edge?: string | null) => boolean
@@ -42,6 +43,7 @@ interface LineageFlow {
 export const LineageFlowContext = createContext<LineageFlow>({
   lineage: {},
   withColumns: true,
+  setWithColumns: () => {},
   activeEdges: new Map(),
   hasActiveEdge: () => false,
   addActiveEdges: () => {},
@@ -81,6 +83,7 @@ export default function LineageFlowProvider({
     new Map(),
   )
   const [shouldRecalculate, setShouldRecalculate] = useState(false)
+  const [hasColumns, setWithColumns] = useState(withColumns)
 
   const hasActiveEdge = useCallback(
     function hasActiveEdge(edge?: string | null): boolean {
@@ -140,7 +143,8 @@ export default function LineageFlowProvider({
         setConnections,
         setLineage,
         lineage,
-        withColumns,
+        withColumns: hasColumns,
+        setWithColumns,
         activeEdges,
         setActiveEdges,
         addActiveEdges,

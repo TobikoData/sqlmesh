@@ -5,6 +5,7 @@ import { ModelColumnLineage } from './Graph'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from './context'
 import { mergeLineageWithModels } from './help'
+import { ReactFlowProvider } from 'reactflow'
 
 export default function ModelLineage({
   model,
@@ -48,10 +49,12 @@ export default function ModelLineage({
   }, [model.name])
 
   return (
-    <ModelColumnLineage
-      model={model}
-      highlightedNodes={highlightedNodes}
-      className={className}
-    />
+    <ReactFlowProvider>
+      <ModelColumnLineage
+        model={model}
+        highlightedNodes={highlightedNodes}
+        className={className}
+      />
+    </ReactFlowProvider>
   )
 }
