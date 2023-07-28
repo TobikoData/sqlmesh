@@ -48,14 +48,14 @@ interface FileExplorer {
 
 export const FileExplorerContext = createContext<FileExplorer>({
   artifactRename: undefined,
-  setArtifactRename: () => { },
+  setArtifactRename: () => {},
   selectArtifactsInRange: () => new Set(),
-  createDirectory: () => { },
-  createFile: () => { },
-  renameArtifact: () => { },
-  removeArtifacts: () => { },
-  removeArtifactWithConfirmation: () => { },
-  moveArtifacts: () => { },
+  createDirectory: () => {},
+  createFile: () => {},
+  renameArtifact: () => {},
+  removeArtifacts: () => {},
+  removeArtifactWithConfirmation: () => {},
+  moveArtifacts: () => {},
   isTopGroupInActiveRange: () => false,
   isBottomGroupInActiveRange: () => false,
   isMiddleGroupInActiveRange: () => false,
@@ -240,10 +240,12 @@ export default function FileExplorerProvider({
       })
     } else {
       addConfirmation({
-        headline: `Removing ${artifact instanceof ModelDirectory ? 'Directory' : 'File'
-          }`,
-        description: `Are you sure you want to remove the ${artifact instanceof ModelDirectory ? 'directory' : 'file'
-          } "${artifact.name}"?`,
+        headline: `Removing ${
+          artifact instanceof ModelDirectory ? 'Directory' : 'File'
+        }`,
+        description: `Are you sure you want to remove the ${
+          artifact instanceof ModelDirectory ? 'directory' : 'file'
+        } "${artifact.name}"?`,
         yesText: 'Yes, Remove',
         noText: 'No, Cancel',
         action: () => {
