@@ -106,7 +106,7 @@
 ??? question "What is the model `cron` parameter?"
     SQLMesh does not fully refresh models when a project is run. Instead, you specify how frequently each model should run with its `cron` parameter (defaults to daily).
 
-    When you execute `sqlmesh run`, SQLMesh determines compares each model's `cron` value to its record of when the model was last run. If enough time has elapsed it will run the model, otherwise it does nothing.
+    When you execute `sqlmesh run`, SQLMesh compares each model's `cron` value to its record of when the model was last run. If enough time has elapsed it will run the model, otherwise it does nothing.
 
     For example, consider a model whose `cron` is daily. The first time you execute `sqlmesh run` today the model will run. If you execute `sqlmesh run` again, SQLMesh will detect that the model has already run today and will not re-run the model.
 
@@ -115,15 +115,14 @@
 
     SQLMesh’s `plan` command is the primary tool for understanding the effects of changes you make to your project. If your project files have changed or are different from the state of an environment, you execute `sqlmesh plan [environment name]` to synchronize the environment's state with your project files. `sqlmesh plan` will generate a summary of the actions needed to implement the changes, automatically run unit tests, and prompt you to `apply` the plan and implement the changes.
 
-    If your project files have not changed, you execute `sqlmesh run` to run your project's models and audits. You can execute `sqlmesh run` yourself or with the native [Airflow integration](https://sqlmesh.readthedocs.io/en/latest/integrations/airflow/). If running it yourself, a sensible approach is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your briefest model’s `cron` is hour, your `cron` tool should execute `sqlmesh run` at least every hour.
+    If your project files have not changed, you execute `sqlmesh run` to run your project's models and audits. You can execute `sqlmesh run` yourself or with the native [Airflow integration](https://sqlmesh.readthedocs.io/en/latest/integrations/airflow/). If running it yourself, a sensible approach is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your most frequent model’s `cron` is hour, your `cron` tool should execute `sqlmesh run` at least every hour.
 
 ??? question "What are start date and end date for?"
     SQLMesh uses the "intervals" approach to determine the date ranges that should be included in an incremental by time model query. It divides time into disjoint intervals and tracks which intervals have ever been processed.
 
     Start date plays two separate roles in SQLMesh. In an incremental model configuration, the `start` parameter tells SQLMesh the first date that should be included in the model's set of time intervals.
 
-    Start date and end date also play a role as parameters for SQLMesh commands like [`plan`](../reference/cli.md#plan) and [`run`](../reference/cli.md#run). In this context, start and end tell SQLMesh that only certain time intervals should be included when executing the command. For example, you might process only a few intervals to move quickly during development before processing all of time when deploying to production.
-
+    Start date and end date also play a role as parameters for SQLMesh commands like [`plan`](../reference/cli.md#plan) and [`run`](../reference/cli.md#run). In this context, start and end tell SQLMesh that only certain time intervals should be included when executing the command. For example, you might process only a few intervals to iterate quickly during development before processing all of time when deploying to production.
 
 ## Databases/Engines
 
@@ -131,7 +130,7 @@
     SQLMesh works with BigQuery, Databricks, DuckDB, PostgreSQL, GCP PostgreSQL, Redshift, Snowflake, and Spark. See [this page](../integrations/engines.md) for more information.
 
 ??? question "When would you use different databases for executing data transformations and storing state information?"
-    SQLMesh requires storing information about projects and when their transformations were run. By default, it stores this information in the same database where the models run. 
+    SQLMesh requires storing state information about projects and when their transformations were run. By default, it stores this information in the same database where the models run. 
     
     Unlike data transformations, storing state information requires database transactions. Some databases, like BigQuery, aren’t optimized for executing transactions, so storing state information in them can slow down your project. If this occurs, you can store state information in a different database, such as PostgreSQL, that executes transactions more efficiently.
 
@@ -140,12 +139,12 @@
 ??? question "Why did I get the warning 'Query cannot be optimized due to missing schema for model [...]'?"
     SQLMesh uses its knowledge of table schema (column names and data types) to optimize model queries and create column-level lineage. SQLMesh does not have schema knowledge for data sources outside the project and will generate this warning when a model selects from one.
 
-    You can resolve this by creating an [`external` model](../concepts/models/external_models.md) for each data source. The `sqlmesh create_external_models` command captures schema information for external data sources and stores them in the project's `schema.yml` file. You can create the file manually instead, if desired.
+    You can resolve this by creating an [`external` model](../concepts/models/external_models.md) for each external data source. The `sqlmesh create_external_models` command captures schema information for external data sources and stores them in the project's `schema.yml` file. You can create the file manually instead, if desired.
 
 ## How is this different from dbt?
 
 ??? question "Terminology differences?"
-    - dbt “materializations” are analogous to [`model kinds` in SQLMesh](../concepts/models/model_kinds.md)
+    - dbt “materializations” are analogous to [model `kinds` in SQLMesh](../concepts/models/model_kinds.md)
     - dbt seeds are a [model kind in SQLMesh](../concepts/models/model_kinds.md#seed)
     - dbt’s “tests” are called [`audits` in SQLMesh](../concepts/audits.md) because they are auditing the contents of *data* that already exists. [SQLMesh `tests`](../concepts/tests.md) are equivalent to “unit tests” in software engineering - they evaluate the correctness of *code* based on known inputs and outputs.
     - `dbt build` is analogous to [`sqlmesh run`](../reference/cli.md#run)
@@ -212,6 +211,9 @@
     dbt uses the "most recent record" approach to determine which dates should be included in an incremental load. It works by querying the existing data for the most recent date it contains, then ingesting all records after that date from the source system in a single query.
 
     SQLMesh uses the "intervals" approach instead. It divides time into disjoint intervals based on a model's `cron` parameter then records which intervals have ever been processed. It ingests source records from only unprocessed intervals. The intervals approach enables features like loading in batches.
+
+??? question "How do I run an append only model in SQLMesh?"
+    SQLMesh does not support append-only models as implemented in dbt. You can achieve a similar outcome by defining a time column and using an [incremental by time range](../concepts/models/model_kinds.md#incremental_by_time_range) model or specifying a unique key and using an [incremental by unique key](../concepts/models/model_kinds.md#incremental_by_unique_key) model.
 
 ## Company
 
