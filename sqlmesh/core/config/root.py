@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import root_validator, validator
+from pydantic import Field, root_validator, validator
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
@@ -65,7 +65,9 @@ class Config(BaseConfig):
     username: str = ""
     include_unmodified: bool = False
     physical_schema_override: t.Dict[str, str] = {}
-    environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.default
+    environment_suffix_target: EnvironmentSuffixTarget = Field(
+        default=EnvironmentSuffixTarget.default
+    )
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,

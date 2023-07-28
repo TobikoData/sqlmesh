@@ -782,6 +782,7 @@ class Context(BaseContext):
             is_dev=environment != c.PROD,
             forward_only=forward_only,
             environment_ttl=environment_ttl,
+            environment_suffix_target=self.config.environment_suffix_target,
             categorizer_config=self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
