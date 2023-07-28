@@ -223,8 +223,21 @@ adhere to at your organization and therefore need more control over the schema n
 
 ### View Schema Override
 
-Coming soon. Please message us on [slack](https://tobikodata.com/slack) if you are interested in this feature so we can better understand your 
-use case and make sure the new feature satisfies your needs.
+By default SQLMesh appends the environment name to the schema name when creating new environments. This can be changed
+to instead append a suffix at the end of table instead. This means that new environment views will be created in the 
+same schema as production but be differentiated having their names end with `__<env>`.
+
+Config example:
+    
+```yaml linenums="1"
+environment_suffix_target: table
+```
+
+If you had a model name of `db.users`, and you were creating a `dev` environment, then the view would be created as `db.users__dev` instead of the default behavior of `db__dev.users`.
+
+The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean
+interface for accessing the views. However if you are deploying SQLMesh in an environment with tight restrictions on 
+schema creation then this can be a useful way of reducing the number of schemas that need to be created.
 
 ## Additional details
 
