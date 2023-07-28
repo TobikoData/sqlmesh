@@ -907,13 +907,12 @@ function ModelColumnLineage({
             snapToGrid
           >
             <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
-            {hasBackground && (
-              <Background
-                variant={BackgroundVariant.Dots}
-                gap={32}
-                size={4}
-              />
-            )}
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={32}
+              size={4}
+              className={clsx(hasBackground ? 'opacity-100' : 'opacity-0')}
+            />
           </ReactFlow>
         </>
       )}

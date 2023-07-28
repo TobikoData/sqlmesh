@@ -97,11 +97,14 @@ export default function EditorPreview({
         </div>
       ) : (
         <Tab.Group
-          key={tabs.join('-')}
+          key={tab.id}
           onChange={setActiveTabIndex}
           selectedIndex={activeTabIndex}
         >
-          <TabList list={tabs}>
+          <TabList
+            key={tabs.join('-')}
+            list={tabs}
+          >
             <div className="ml-2">
               <Button
                 className="!m-0 !py-0.5 px-[0.25rem] border-none"
