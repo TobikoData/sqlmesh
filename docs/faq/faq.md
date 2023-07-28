@@ -118,11 +118,23 @@
     If your project files have not changed, you execute `sqlmesh run` to run your project's models and audits. You can execute `sqlmesh run` yourself or with the native [Airflow integration](https://sqlmesh.readthedocs.io/en/latest/integrations/airflow/). If running it yourself, a sensible approach is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your most frequent model’s `cron` is hour, your `cron` tool should execute `sqlmesh run` at least every hour.
 
 ??? question "What are start date and end date for?"
-    SQLMesh uses the "intervals" approach to determine the date ranges that should be included in an incremental by time model query. It divides time into disjoint intervals and tracks which intervals have ever been processed.
+    SQLMesh uses the ["intervals" approach](https://tobikodata.com/data_load_patterns_101.html) to determine the date ranges that should be included in an incremental by time model query. It divides time into disjoint intervals and tracks which intervals have ever been processed.
 
     Start date plays two separate roles in SQLMesh. In an incremental model configuration, the `start` parameter tells SQLMesh the first date that should be included in the model's set of time intervals.
 
     Start date and end date also play a role as parameters for SQLMesh commands like [`plan`](../reference/cli.md#plan) and [`run`](../reference/cli.md#run). In this context, start and end tell SQLMesh that only certain time intervals should be included when executing the command. For example, you might process only a few intervals to iterate quickly during development before processing all of time when deploying to production.
+
+??? question "How do I reprocess data I already transformed?"
+    Sometimes you need to reprocess data that has already been loaded and transformed. In SQLMesh, you do that with [restatement plans](../concepts/plans.md#restatement-plans).
+
+    Specify the [`plan` command's](../reference/cli.md#plan) `--restate-model` option and the model name(s) you want to reprocess. Applying the plan will reprocess those models and all models downstream from them. You can use the `--start` and `--end` options to limit the reprocessing to a specific date range.
+
+??? question "How do I reuse an existing table instead of creating a new one?"
+    Sometimes a table is too large to completely rebuild for a breaking change, so you need to reuse the existing table. This is done with [forward-only plans](../concepts/plans.md#forward-only-plans). Create one by adding the `--forward-only` option to the [`plan` command]((../reference/cli.md#plan)): `sqlmesh plan [environment name] --forward-only`.
+
+    When a forward-only plan is applied to the `prod` environment, none of the plan's changed models will have new physical tables created for them. Instead, physical tables from previous model versions are reused. All changes made as part of a forward-only plan automatically get a forward-only category assigned to them - they can't be mixed together with regular breaking/non-breaking changes.
+
+    You can retroactively apply the forward-only plan's changes to existing data in the production environment with [`plan`'s `--effective-from` option](../reference/cli.md#plan).
 
 ## Databases/Engines
 
