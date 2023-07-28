@@ -74,6 +74,26 @@ gateways:
             database: <database>
 ```
 
+#### Configure State Schema Name
+
+By default the schema name used to store state tables is `sqlmesh`. This can be configured by providing `state_schema` config property as
+part of the gateway configuration. 
+
+```yaml linenums="1"
+gateways:
+    my_gateway:
+        state_connection:
+            type: postgres
+            host: <host>
+            port: <port>
+            user: <username>
+            password: <password>
+            database: <database>
+        state_schema: custom_name
+```
+
+This would create all state tables in the schema name `custom_name`.
+
 ### Test connection
 
 Configuration for a connection used when running unit tests. Default: a DuckDB connection that creates an in-memory database.

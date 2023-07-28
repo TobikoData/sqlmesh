@@ -112,7 +112,11 @@ class _TransactionManagementMixin(ConnectionPool):
 
 
 class ThreadLocalConnectionPool(_TransactionManagementMixin):
-    def __init__(self, connection_factory: t.Callable[[], t.Any]):
+    def __init__(
+        self,
+        connection_factory: t.Callable[[], t.Any],
+        cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+    ):
         self._connection_factory = connection_factory
         self._thread_connections: t.Dict[t.Hashable, t.Any] = {}
         self._thread_cursors: t.Dict[t.Hashable, t.Any] = {}
@@ -121,12 +125,13 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
         self._thread_connections_lock = Lock()
         self._thread_cursors_lock = Lock()
         self._thread_transactions_lock = Lock()
+        self._cursor_kwargs = cursor_kwargs or {}
 
     def get_cursor(self) -> t.Any:
         thread_id = get_ident()
         with self._thread_cursors_lock:
             if thread_id not in self._thread_cursors:
-                self._thread_cursors[thread_id] = self.get().cursor()
+                self._thread_cursors[thread_id] = self.get().cursor(**self._cursor_kwargs)
             return self._thread_cursors[thread_id]
 
     def get(self) -> t.Any:
@@ -197,16 +202,21 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
 
 
 class SingletonConnectionPool(_TransactionManagementMixin):
-    def __init__(self, connection_factory: t.Callable[[], t.Any]):
+    def __init__(
+        self,
+        connection_factory: t.Callable[[], t.Any],
+        cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+    ):
         self._connection_factory = connection_factory
         self._connection: t.Optional[t.Any] = None
         self._cursor: t.Optional[t.Any] = None
+        self._cursor_kwargs = cursor_kwargs or {}
         self._attributes: t.Dict[str, t.Any] = {}
         self._is_transaction_active: bool = False
 
     def get_cursor(self) -> t.Any:
         if not self._cursor:
-            self._cursor = self.get().cursor()
+            self._cursor = self.get().cursor(**self._cursor_kwargs)
         return self._cursor
 
     def get(self) -> t.Any:
@@ -253,12 +263,14 @@ class SingletonConnectionPool(_TransactionManagementMixin):
 
 
 def create_connection_pool(
-    connection_factory: t.Callable[[], t.Any], multithreaded: bool
+    connection_factory: t.Callable[[], t.Any],
+    multithreaded: bool,
+    cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
 ) -> ConnectionPool:
     return (
-        ThreadLocalConnectionPool(connection_factory)
+        ThreadLocalConnectionPool(connection_factory, cursor_kwargs=cursor_kwargs)
         if multithreaded
-        else SingletonConnectionPool(connection_factory)
+        else SingletonConnectionPool(connection_factory, cursor_kwargs=cursor_kwargs)
     )
 
 

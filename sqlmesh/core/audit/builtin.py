@@ -29,7 +29,7 @@ FROM (
   SELECT
     @EACH(
       @columns,
-      c -> row_number() OVER (PARTITION BY c ORDER BY 1) AS rank_@c
+      c -> row_number() OVER (PARTITION BY c ORDER BY c) AS rank_@c
     )
   FROM @this_model
 )

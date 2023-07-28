@@ -33,6 +33,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
+        cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         **kwargs: t.Any,
     ):
         super().__init__(
@@ -40,6 +41,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             dialect,
             sql_gen_kwargs,
             multithreaded,
+            cursor_kwargs,
             **kwargs,
         )
         self._spark: t.Optional[PySparkSession] = None
