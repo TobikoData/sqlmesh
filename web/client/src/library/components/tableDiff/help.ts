@@ -1,7 +1,14 @@
 import { isFalse, isNotNil, isNil } from '@utils/index'
 import { type Filters } from './TableDiff'
 
+const SOURCE_PREFIX = 's__'
+const TARGET_PREFIX = 't__'
+const EMPTY_TABLE_CELL = 'NULL'
+
 export {
+  SOURCE_PREFIX,
+  TARGET_PREFIX,
+  EMPTY_TABLE_CELL,
   getHeaders,
   getRows,
   hasModified,
@@ -12,10 +19,6 @@ export {
   getCellContentSource,
   getCellContentTarget,
 }
-
-const SOURCE_PREFIX = 's__'
-const TARGET_PREFIX = 't__'
-const EMPTY_TABLE_CELL = 'NULL'
 
 function getHeaders(
   {

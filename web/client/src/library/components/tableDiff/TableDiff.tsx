@@ -1,6 +1,8 @@
 import clsx from 'clsx'
 import { Fragment, useState } from 'react'
 import {
+  EMPTY_TABLE_CELL,
+  TARGET_PREFIX,
   getCellContent,
   getCellContentSource,
   getCellContentTarget,
@@ -168,7 +170,8 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                         grain.includes(header) && 'bg-brand-10',
                       )}
                     >
-                      {getCellContent(diff, header, rowKey, diff.on)}
+                      {getCellContent(diff, TARGET_PREFIX, header, rowKey) ??
+                        EMPTY_TABLE_CELL}
                     </td>
                   ),
                 )}
