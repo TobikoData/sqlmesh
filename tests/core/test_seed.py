@@ -15,8 +15,8 @@ def test_read():
 
     assert seed.columns_to_types == {
         "key": exp.DataType.build("bigint"),
-        "value": exp.DataType.build("varchar"),
-        "ds": exp.DataType.build("varchar"),
+        "value": exp.DataType.build("text"),
+        "ds": exp.DataType.build("text"),
     }
 
     expected_df = pd.DataFrame(

@@ -4,6 +4,11 @@
 ### BigQuery - Local/Built-in Scheduler
 **Engine Adapter Type**: `bigquery`
 
+**Installation**:
+```
+pip install "sqlmesh[bigquery]"
+```
+
 | Option                          | Description                                                                                                    |  Type  | Required |
 |---------------------------------|----------------------------------------------------------------------------------------------------------------|:------:|:--------:|
 | `method`                        | Connection methods. Can be `oath`, `oauth-secrets`, `service-account`, `service-account-json`. Default: `oath` | string |    N     |
@@ -70,6 +75,11 @@ sqlmesh_airflow = SQLMeshAirflow(
 ## Databricks
 ### Databricks - Local/Built-in Scheduler
 **Engine Adapter Type**: `databricks`
+
+**Installation**:
+```
+pip install "sqlmesh[databricks]"
+```
 
 If you are always running SQLMesh commands directly on a Databricks Cluster (like in a Databricks Notebook) then the only relevant configuration is `catalog` and it is optional.
 The SparkSession provided by Databricks will be used to execute all SQLMesh commands.
@@ -170,21 +180,44 @@ sqlmesh_airflow = SQLMeshAirflow(
 ### DuckDB - Airflow
 DuckDB only works when running locally; therefore it does not support Airflow.
 
+## MySQL
+### MySQL - Local/Built-in Scheduler
+**Engine Adapter Type**: `mysql`
+
+**Installation**:
+```
+pip install "sqlmesh[mysql]"
+```
+
+| Option         | Description                                                  | Type   | Required |
+|----------------|--------------------------------------------------------------|:------:|:--------:|
+| `host`         | The hostname of the MysQL server                             | string | Y        |
+| `user`         | The username to use for authentication with the MySQL server | string | Y        |
+| `password`     | The password to use for authentication with the MySQL server | string | Y        |
+| `port`         | The port number of the MySQL server                          | int    | Y        |
+| `charset`      | The character set used for the connection                    | string | N        |
+| `ssl_disabled` | Is SSL disabled                                              | bool   | N        |
+
 ## Postgres
 ### Postgres - Local/Built-in Scheduler
 **Engine Adapter Type**: `postgres`
 
-| Option            | Description                                                                     |  Type  | Required |
+**Installation**:
+```
+pip install "sqlmesh[postgres]"
+```
+
+| Option            | Description                                                                     | Type   | Required |
 |-------------------|---------------------------------------------------------------------------------|:------:|:--------:|
-| `host`            | The hostname of the Postgres server                                             | string |    Y     |
-| `user`            | The username to use for authentication with the Postgres server                 | string |    Y     |
-| `password`        | The password to use for authentication with the Postgres server                 | string |    Y     |
-| `port`            | The port number of the Postgres server                                          |  int   |    Y     |
-| `database`        | The name of the database instance to connect to                                 | string |    Y     |
-| `keepalives_idle` | The number of seconds between each keepalive packet sent to the server.         |  int   |    N     |
-| `connect_timeout` | The number of seconds to wait for the connection to the server. (Default: `10`) |  int   |    N     |
-| `role`            | The role to use for authentication with the Postgres server                     | string |    N     |
-| `sslmode`         | The security of the connection to the Postgres server.                          | string |    N     |
+| `host`            | The hostname of the Postgres server                                             | string | Y        |
+| `user`            | The username to use for authentication with the Postgres server                 | string | Y        |
+| `password`        | The password to use for authentication with the Postgres server                 | string | Y        |
+| `port`            | The port number of the Postgres server                                          | int    | Y        |
+| `database`        | The name of the database instance to connect to                                 | string | Y        |
+| `keepalives_idle` | The number of seconds between each keepalive packet sent to the server.         | int    | N        |
+| `connect_timeout` | The number of seconds to wait for the connection to the server. (Default: `10`) | int    | N        |
+| `role`            | The role to use for authentication with the Postgres server                     | string | N        |
+| `sslmode`         | The security of the connection to the Postgres server                           | string | N        |
 
 ### Postgres - Airflow
 **Engine Name:** `postgres`
@@ -212,6 +245,11 @@ sqlmesh_airflow = SQLMeshAirflow(
 ## Redshift
 ### Redshift - Local/Built-in Scheduler
 **Engine Adapter Type**: `Redshift`
+
+**Installation**:
+```
+pip install "sqlmesh[redshift]"
+```
 
 | Option                  | Description                                                                                                 |  Type  | Required |
 |-------------------------|-------------------------------------------------------------------------------------------------------------|:------:|:--------:|
@@ -262,6 +300,11 @@ sqlmesh_airflow = SQLMeshAirflow(
 ### GCP Postgres - Local/Built-in Scheduler
 **Engine Adapter Type**: `postgres`
 
+**Installation**:
+```
+pip install "sqlmesh[gcppostgres]"
+```
+
 | Option                    | Description                                                                         |  Type   | Required |
 |---------------------------|-------------------------------------------------------------------------------------|:-------:|:--------:|
 | `instance_connection_str` | Connection name for the postgres instance                                           | string  |    Y     |
@@ -273,6 +316,11 @@ sqlmesh_airflow = SQLMeshAirflow(
 ## Snowflake
 ### Snowflake - Local/Built-in Scheduler
 **Engine Adapter Type**: `snowflake`
+
+**Installation**:
+```
+pip install "sqlmesh[snowflake]"
+```
 
 | Option          | Description                        |  Type  | Required |
 |-----------------|------------------------------------|:------:|:--------:|

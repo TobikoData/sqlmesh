@@ -95,10 +95,13 @@ class EngineAdapter:
         dialect: str = "",
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
+        cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
-        self._connection_pool = create_connection_pool(connection_factory, multithreaded)
+        self._connection_pool = create_connection_pool(
+            connection_factory, multithreaded, cursor_kwargs=cursor_kwargs
+        )
         self.sql_gen_kwargs = sql_gen_kwargs or {}
         self._extra_config = kwargs
 
@@ -489,7 +492,8 @@ class EngineAdapter:
         self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
         describe_output = self.cursor.fetchall()
         return {
-            column_name: exp.DataType.build(column_type, dialect=self.dialect)
+            # Note: MySQL  returns the column type as bytes.
+            column_name: exp.DataType.build(_decoded_str(column_type), dialect=self.dialect)
             for column_name, column_type, *_ in itertools.takewhile(
                 lambda t: not t[0].startswith("#"),
                 describe_output,
@@ -1005,3 +1009,9 @@ class EngineAdapter:
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
     SUPPORTS_INDEXES = True
+
+
+def _decoded_str(value: t.Union[str, bytes]) -> str:
+    if isinstance(value, bytes):
+        return value.decode("utf-8")
+    return value

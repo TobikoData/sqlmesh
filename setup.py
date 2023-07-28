@@ -46,7 +46,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=17.8.0",
+        "sqlglot~=17.8.4",
     ],
     extras_require={
         "bigquery": [
@@ -103,6 +103,9 @@ setup(
         "llm": [
             "langchain",
             "openai",
+        ],
+        "mysql": [
+            "mysql-connector-python",
         ],
         "postgres": [
             "psycopg2",
