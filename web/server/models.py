@@ -334,9 +334,3 @@ class ArtifactChange(BaseModel):
     path: str
     type: t.Optional[ArtifactType] = None
     file: t.Optional[File] = None
-
-    @validator("change", always=True)
-    def default_change(cls, v: bool, values: t.Dict[str, t.Any]) -> bool:
-        if "change" in values:
-            return values["change"].name
-        return v
