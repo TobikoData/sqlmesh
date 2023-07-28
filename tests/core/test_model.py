@@ -553,7 +553,7 @@ def test_seed():
 
     assert model.columns_to_types == {
         "id": exp.DataType.build("bigint"),
-        "name": exp.DataType.build("varchar"),
+        "name": exp.DataType.build("text"),
     }
 
     assert model.batch_size is None

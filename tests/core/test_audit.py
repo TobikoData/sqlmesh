@@ -220,7 +220,7 @@ def test_unique_values_audit(model: Model):
     rendered_query_a = builtin.unique_values_audit.render_query(model, columns=[exp.to_column("a")])
     assert (
         rendered_query_a.sql()
-        == 'SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "rank_a" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0") AS "_q_1" WHERE "rank_a" > 1'
+        == 'SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY "a") AS "rank_a" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0") AS "_q_1" WHERE "rank_a" > 1'
     )
 
     rendered_query_a_and_b = builtin.unique_values_audit.render_query(
@@ -228,7 +228,7 @@ def test_unique_values_audit(model: Model):
     )
     assert (
         rendered_query_a_and_b.sql()
-        == 'SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY 1) AS "rank_a", ROW_NUMBER() OVER (PARTITION BY "b" ORDER BY 1) AS "rank_b" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0") AS "_q_1" WHERE "rank_a" > 1 OR "rank_b" > 1'
+        == 'SELECT * FROM (SELECT ROW_NUMBER() OVER (PARTITION BY "a" ORDER BY "a") AS "rank_a", ROW_NUMBER() OVER (PARTITION BY "b" ORDER BY "b") AS "rank_b" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0") AS "_q_1" WHERE "rank_a" > 1 OR "rank_b" > 1'
     )
 
 
