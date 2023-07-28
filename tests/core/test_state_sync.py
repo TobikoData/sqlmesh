@@ -1,6 +1,6 @@
 import json
 import typing as t
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import duckdb
 import pandas as pd
@@ -23,7 +23,11 @@ from sqlmesh.core.model import (
     SqlModel,
 )
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, missing_intervals
-from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync
+from sqlmesh.core.state_sync import (
+    CachingStateSync,
+    EngineAdapterStateSync,
+    cleanup_expired_views,
+)
 from sqlmesh.core.state_sync.base import (
     SCHEMA_VERSION,
     SQLGLOT_VERSION,
@@ -1141,3 +1145,51 @@ def test_cache(state_sync, make_snapshot, mocker):
     with patch.object(state_sync, "get_snapshots") as mock:
         assert not cache.get_snapshots([snapshot.snapshot_id])
         mock.assert_called()
+
+
+def test_cleanup_expired_views(
+    mocker: MockerFixture, state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    adapter = mocker.MagicMock()
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 1, ds")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    schema_environment = Environment(
+        name="test_environment",
+        suffix_target=EnvironmentSuffixTarget.SCHEMA,
+        snapshots=[
+            snapshot_a.table_info,
+            snapshot_b.table_info,
+        ],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+    )
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("select 1, ds")))
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_d = make_snapshot(SqlModel(name="d", query=parse_one("select 1, ds")))
+    snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
+    table_environment = Environment(
+        name="test_environment",
+        suffix_target=EnvironmentSuffixTarget.TABLE,
+        snapshots=[
+            snapshot_c.table_info,
+            snapshot_d.table_info,
+        ],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+    )
+    cleanup_expired_views(adapter, [schema_environment, table_environment])
+    assert adapter.drop_schema.called
+    assert adapter.drop_view.called
+    assert adapter.drop_schema.call_args_list == [
+        call("default__test_environment", ignore_if_not_exists=True, cascade=True)
+    ]
+    assert sorted(adapter.drop_view.call_args_list) == [
+        call("default.c__test_environment", ignore_if_not_exists=True),
+        call("default.d__test_environment", ignore_if_not_exists=True),
+    ]
