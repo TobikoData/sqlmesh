@@ -175,11 +175,12 @@ class BuiltInPlanEvaluator(PlanEvaluator):
                 is_dev=plan.is_dev,
                 on_complete=on_complete,
             )
-            self.snapshot_evaluator.demote(
-                promotion_result.removed,
-                promotion_result.removed_environment_naming_info,
-                on_complete=on_complete,
-            )
+            if promotion_result.removed_environment_naming_info:
+                self.snapshot_evaluator.demote(
+                    promotion_result.removed,
+                    promotion_result.removed_environment_naming_info,
+                    on_complete=on_complete,
+                )
             self.state_sync.finalize(environment)
             completed = True
         finally:
