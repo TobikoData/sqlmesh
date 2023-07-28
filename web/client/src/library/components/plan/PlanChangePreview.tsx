@@ -37,7 +37,7 @@ function PlanChangePreview({
   return (
     <div
       className={clsx(
-        'flex flex-col rounded-md p-4 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
+        'flex flex-col rounded-md p-4 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
         type === EnumPlanChangeType.Add && 'bg-success-10',
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
@@ -83,7 +83,7 @@ function PlanChangePreviewDefault({
         <li
           key={change}
           className={clsx(
-            'flex items-center px-1 leading-5',
+            'flex items-center px-1 leading-5 mb-1',
             type === EnumPlanChangeType.Add &&
               'text-success-600 dark:text-success-300',
             type === EnumPlanChangeType.Remove &&
@@ -103,7 +103,9 @@ function PlanChangePreviewDefault({
           ) : (
             <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
           )}
-          <small>{change}</small>
+          <small className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden">
+            {change}
+          </small>
         </li>
       ))}
     </ul>
@@ -299,7 +301,9 @@ function PlanChangePreviewTitle({
   return (
     <div className="flex items-center font-bold">
       <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
-      <small className="inline-block text-sm ">{model_name}</small>
+      <small className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden">
+        {model_name}
+      </small>
       {category != null && (
         <span className="ml-2 text-xs px-1 bg-neutral-400 text-neutral-100  dark:bg-neutral-400 dark:text-neutral-800 rounded whitespace-nowrap mr-2">
           {category.name}
@@ -329,9 +333,7 @@ function PlanChangePreviewRelations({
           key={model_name}
           className="flex"
         >
-          <span
-            className={clsx('h-3 w-3 border-l-2 border-b-2 innline-block mr-2')}
-          ></span>
+          <span className="h-3 w-3 border-l-2 border-b-2 inline-block mr-2"></span>
           {model_name}
         </li>
       ))}

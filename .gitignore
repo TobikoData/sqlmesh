@@ -150,6 +150,7 @@ examples/airflow/warehouse
 **/node_modules
 /web/client/src/api/client.ts
 web/client/dist
+.local/
 
 # Version file
 sqlmesh/_version.py
