@@ -209,7 +209,7 @@ class HttpStateSync(StateSync):
                 snapshots for same models.
 
         Returns:
-           A tuple of (added snapshot table infos, removed snapshot table infos)
+           A promotion result object containing added, removed, and removed environment naming info
         """
         raise NotImplementedError(
             "Promoting environments is not supported by the Airflow state sync."

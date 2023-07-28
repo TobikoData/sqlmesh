@@ -9,9 +9,10 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.engine_adapter import create_engine_adapter
-from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     ModelKind,
@@ -21,14 +22,14 @@ from sqlmesh.core.model import (
     SeedModel,
     SqlModel,
 )
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotChangeCategory,
-    SnapshotTableInfo,
-    missing_intervals,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, missing_intervals
 from sqlmesh.core.state_sync import CachingStateSync, EngineAdapterStateSync
-from sqlmesh.core.state_sync.base import SCHEMA_VERSION, SQLGLOT_VERSION, Versions
+from sqlmesh.core.state_sync.base import (
+    SCHEMA_VERSION,
+    SQLGLOT_VERSION,
+    PromotionResult,
+    Versions,
+)
 from sqlmesh.utils.date import now_timestamp, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -67,9 +68,11 @@ def promote_snapshots(
     snapshots: t.List[Snapshot],
     environment: str,
     no_gaps: bool = False,
-) -> t.Tuple[t.List[SnapshotTableInfo], t.Tuple[t.List[SnapshotTableInfo], EnvironmentNamingInfo]]:
+    environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.SCHEMA,
+) -> PromotionResult:
     env = Environment(
         name=environment,
+        suffix_target=environment_suffix_target,
         snapshots=[snapshot.table_info for snapshot in snapshots],
         start_at="2022-01-01",
         end_at="2022-01-01",
@@ -380,36 +383,35 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
 
     state_sync.push_snapshots([snapshot_a, snapshot_b, snapshot_c])
 
-    added, (removed, removed_environment_naming_info) = promote_snapshots(
-        state_sync, [snapshot_a, snapshot_b], "prod"
-    )
+    promotion_result = promote_snapshots(state_sync, [snapshot_a, snapshot_b], "prod")
 
-    assert set(added) == set([snapshot_a.table_info, snapshot_b.table_info])
-    assert not removed
-    assert removed_environment_naming_info.suffix_target.is_schema
-    added, (removed, removed_environment_naming_info) = promote_snapshots(
+    assert set(promotion_result.added) == set([snapshot_a.table_info, snapshot_b.table_info])
+    assert not promotion_result.removed
+    assert not promotion_result.removed_environment_naming_info
+    promotion_result = promote_snapshots(
         state_sync,
         [snapshot_a, snapshot_b, snapshot_c],
         "prod",
     )
-    assert set(added) == set(
+    assert set(promotion_result.added) == set(
         [
             snapshot_a.table_info,
             snapshot_b.table_info,
             snapshot_c.table_info,
         ]
     )
-    assert not removed
-    assert removed_environment_naming_info.suffix_target.is_schema
+    assert not promotion_result.removed
+    assert not promotion_result.removed_environment_naming_info
 
-    added, (removed, removed_environment_naming_info) = promote_snapshots(
+    promotion_result = promote_snapshots(
         state_sync,
         [snapshot_a, snapshot_b],
         "prod",
     )
-    assert set(added) == {snapshot_a.table_info, snapshot_b.table_info}
-    assert set(removed) == {snapshot_c.table_info}
-    assert removed_environment_naming_info.suffix_target.is_schema
+    assert set(promotion_result.added) == {snapshot_a.table_info, snapshot_b.table_info}
+    assert set(promotion_result.removed) == {snapshot_c.table_info}
+    assert promotion_result.removed_environment_naming_info
+    assert promotion_result.removed_environment_naming_info.suffix_target.is_schema
 
     snapshot_d = make_snapshot(
         SqlModel(
@@ -420,12 +422,71 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     snapshot_d.categorize_as(SnapshotChangeCategory.BREAKING)
 
     state_sync.push_snapshots([snapshot_d])
-    added, (removed, removed_environment_naming_info) = promote_snapshots(
-        state_sync, [snapshot_d], "prod"
+    promotion_result = promote_snapshots(state_sync, [snapshot_d], "prod")
+    assert set(promotion_result.added) == {snapshot_d.table_info}
+    assert set(promotion_result.removed) == {snapshot_b.table_info}
+    assert promotion_result.removed_environment_naming_info
+    assert promotion_result.removed_environment_naming_info.suffix_target.is_schema
+
+
+def test_promote_snapshots_suffix_change(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1, ds"),
+        ),
     )
-    assert set(added) == {snapshot_d.table_info}
-    assert set(removed) == {snapshot_b.table_info}
-    assert removed_environment_naming_info.suffix_target.is_schema
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            kind=ModelKind(name=ModelKindName.FULL),
+            query=parse_one("select * from a"),
+        ),
+        nodes={"a": snapshot_a.model},
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot_a, snapshot_b])
+
+    promotion_result = promote_snapshots(
+        state_sync,
+        [snapshot_a, snapshot_b],
+        "prod",
+        environment_suffix_target=EnvironmentSuffixTarget.TABLE,
+    )
+
+    assert set(promotion_result.added) == set([snapshot_a.table_info, snapshot_b.table_info])
+    assert not promotion_result.removed
+    assert not promotion_result.removed_environment_naming_info
+
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="c",
+            query=parse_one("select 3, ds"),
+        ),
+    )
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot_c])
+
+    promotion_result = promote_snapshots(
+        state_sync,
+        [snapshot_b, snapshot_c],
+        "prod",
+        environment_suffix_target=EnvironmentSuffixTarget.SCHEMA,
+    )
+
+    # We still only add the snapshots that are included in the promotion
+    assert set(promotion_result.added) == set([snapshot_b.table_info, snapshot_c.table_info])
+    # We also remove b because of the suffix target change. The new one will be created in the new suffix target
+    assert set(promotion_result.removed) == set([snapshot_a.table_info, snapshot_b.table_info])
+    # Make sure the removed suffix target is correctly seen as table
+    assert promotion_result.removed_environment_naming_info
+    assert promotion_result.removed_environment_naming_info.suffix_target.is_table
 
 
 def test_promote_snapshots_parent_plan_id_mismatch(

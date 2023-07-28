@@ -149,9 +149,9 @@ class CommonStateSyncMixin(StateSync):
             else [existing_table_infos[name] for name in missing_models]
         )
         return PromotionResult(
-            added=sorted(*table_infos),
+            added=sorted(table_infos),
             removed=removed,
-            removed_environment_naming_info=removed_environment_naming_info,
+            removed_environment_naming_info=removed_environment_naming_info if removed else None,
         )
 
     @transactional()

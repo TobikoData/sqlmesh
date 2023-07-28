@@ -289,6 +289,9 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     change_category: t.Optional[SnapshotChangeCategory]
     kind_name: ModelKindName
 
+    def __lt__(self, other: SnapshotTableInfo) -> bool:
+        return self.name < other.name
+
     def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
