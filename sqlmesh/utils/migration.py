@@ -1,8 +1,8 @@
 from sqlglot.dialects.dialect import DialectType
 
-# This is an ad-hoc upper bound which doesn't necessarily match MySQL's
-# TEXT storage specification, but it should be good for most use cases.
-MAX_TEXT_LENGTH = 1024
+# This limit accommodates a composite key which consists of two text fields
+# with 4 bytes per characters and a 3070 bytes limit on the key size.
+MYSQL_MAX_TEXT_INDEX_LENGTH = 380
 
 
 def index_text_type(dialect: DialectType) -> str:
@@ -11,4 +11,4 @@ def index_text_type(dialect: DialectType) -> str:
     the fields have a VARCHAR type of fixed length. This helper simply abstracts
     away the type of such fields.
     """
-    return f"VARCHAR({MAX_TEXT_LENGTH})" if dialect == "mysql" else "TEXT"
+    return f"VARCHAR({MYSQL_MAX_TEXT_INDEX_LENGTH})" if dialect == "mysql" else "TEXT"

@@ -51,6 +51,11 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
         """kwargs that are for execution config only"""
         return {}
 
+    @property
+    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
+        """Key-value arguments that will be passed during cursor construction."""
+        return None
+
     def create_engine_adapter(self) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
         return self._engine_adapter(
@@ -61,6 +66,7 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
                 }
             ),
             multithreaded=self.concurrent_tasks > 1,
+            cursor_kwargs=self._cursor_kwargs,
             **self._extra_engine_config,
         )
 
@@ -621,6 +627,48 @@ class PostgresConnectionConfig(_ConnectionConfig):
         return connect
 
 
+class MySQLConnectionConfig(_ConnectionConfig):
+    host: str
+    user: str
+    password: str
+    port: t.Optional[int] = None
+    charset: t.Optional[str] = None
+    ssl_disabled: t.Optional[bool] = None
+
+    concurrent_tasks: int = 4
+
+    type_: Literal["mysql"] = Field(alias="type", default="mysql")
+
+    _cursor_kwargs = {"buffered": True}
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        connection_keys = {
+            "host",
+            "user",
+            "password",
+            "port",
+            "database",
+        }
+        if self.port is not None:
+            connection_keys.add("port")
+        if self.charset is not None:
+            connection_keys.add("charset")
+        if self.ssl_disabled is not None:
+            connection_keys.add("ssl_disabled")
+        return connection_keys
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.MySQLEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from mysql.connector import connect
+
+        return connect
+
+
 class SparkConnectionConfig(_ConnectionConfig):
     """
     Vanilla Spark Connection Configuration. Use `DatabricksConnectionConfig` for Databricks.
@@ -675,6 +723,7 @@ ConnectionConfig = Annotated[
         GCPPostgresConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
+        MySQLConnectionConfig,
         PostgresConnectionConfig,
         RedshiftConnectionConfig,
         SnowflakeConnectionConfig,
