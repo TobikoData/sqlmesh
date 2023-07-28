@@ -78,8 +78,6 @@ export default function Table({
       ? totalSize - (virtualRows?.[virtualRows.length - 1]?.end ?? 0)
       : 0
 
-  console.log('rows', rows, filter)
-
   return (
     <div className="w-full h-full flex flex-col">
       <Header
