@@ -84,6 +84,7 @@ def test_create_plan_dag_spec(
         start_at="2022-01-01",
         end_at="2022-01-04",
         plan_id="test_plan_id",
+        suffix_target=EnvironmentSuffixTarget.TABLE,
     )
 
     plan_request = common.PlanApplicationRequest(
@@ -116,6 +117,7 @@ def test_create_plan_dag_spec(
         start_at="2022-01-01",
         end_at="2022-01-01",
         plan_id="test_plan_id",
+        suffix_target=EnvironmentSuffixTarget.SCHEMA,
     )
 
     state_sync_mock = mocker.Mock()
@@ -127,7 +129,7 @@ def test_create_plan_dag_spec(
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
         environment_naming_info=EnvironmentNamingInfo(
-            name=environment_name, suffix_target=EnvironmentSuffixTarget.SCHEMA
+            name=environment_name, suffix_target=EnvironmentSuffixTarget.TABLE
         ),
         new_snapshots=[the_snapshot],
         backfill_intervals_per_snapshot=[

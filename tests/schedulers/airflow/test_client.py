@@ -6,6 +6,7 @@ import requests
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
+from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
@@ -218,6 +219,7 @@ def test_get_environment(mocker: MockerFixture, snapshot: Snapshot):
         end_at="2022-01-01",
         plan_id="test_plan_id",
         previous_plan_id=None,
+        suffix_target=EnvironmentSuffixTarget.TABLE,
     )
 
     get_environment_response_mock = mocker.Mock()
