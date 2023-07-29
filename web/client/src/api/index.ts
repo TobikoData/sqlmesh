@@ -319,7 +319,7 @@ function useQueryTimeout({
     timeoutId = setTimeout(() => {
       addError(errorKey, {
         key: errorKey,
-        message: `Request timed out`,
+        message: 'Request timed out',
         description: `Request ${queryKey.join(
           '->',
         )} timed out after ${delay}ms`,
