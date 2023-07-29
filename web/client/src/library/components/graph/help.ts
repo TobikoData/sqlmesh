@@ -66,22 +66,19 @@ function getNodesAndEdges({
   models,
   highlightedNodes = {},
   lineage = {},
-  nodes = [],
-  edges = [],
   model,
   withColumns = true,
 }: {
   models: Map<string, Model>
   highlightedNodes?: Record<string, string[]>
   lineage?: Record<string, Lineage>
-  nodes?: Node[]
-  edges?: Edge[]
   model: ModelSQLMeshModel
   withColumns?: boolean
 }): {
   nodesMap: Record<string, Node>
   edges: Edge[]
   nodes: Node[]
+  highlightedNodes?: Record<string, string[]>
 } {
   const sources = new Set(
     Object.values(lineage)
@@ -153,6 +150,7 @@ function getNodesAndEdges({
     edges: outputEdges,
     nodes: Object.values(nodesMap),
     nodesMap,
+    highlightedNodes,
   }
 }
 
@@ -297,11 +295,7 @@ function createGraphEdge<TData = any>(
     data,
     type: 'smoothstep',
     style: {
-      strokeWidth: isNil(sourceHandle) || isNil(sourceHandle) ? 1 : 3,
-      stroke:
-        isNil(sourceHandle) || isNil(sourceHandle)
-          ? 'var(--color-graph-edge-main)'
-          : 'var(--color-graph-edge-secondary)',
+      strokeWidth: isNil(sourceHandle) || isNil(targetHandle) ? 2 : 4,
     },
   }
 
@@ -504,4 +498,18 @@ function mergeConnections(
   }
 
   return new Map(connections)
+}
+
+export function getAllModelsForNode(
+  node: string,
+  lineage?: Record<string, Lineage>,
+): string[] {
+  const models = lineage?.[node]?.models ?? []
+  const columns = Object.values(lineage?.[node]?.columns ?? {})
+
+  return Array.from(
+    new Set(
+      models.concat(columns.map(c => Object.keys(c.models ?? {})).flat()),
+    ),
+  )
 }

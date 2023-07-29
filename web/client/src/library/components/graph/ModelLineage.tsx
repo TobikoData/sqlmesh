@@ -17,14 +17,21 @@ export default function ModelLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { setActiveEdges, setConnections, setLineage, handleError } =
-    useLineageFlow()
+  const {
+    setActiveEdges,
+    setConnections,
+    setLineage,
+    models,
+    handleError,
+    setActiveNodes,
+  } = useLineageFlow()
 
   const { refetch: getModelLineage } = useApiModelLineage(model.name)
 
   useEffect(() => {
     setActiveEdges(new Map())
     setConnections(new Map())
+    setActiveNodes(new Set())
 
     void getModelLineage()
       .then(({ data }) => {
@@ -40,6 +47,7 @@ export default function ModelLineage({
   useEffect(() => {
     setActiveEdges(new Map())
     setConnections(new Map())
+    setActiveNodes(new Set())
   }, [model.name])
 
   return (

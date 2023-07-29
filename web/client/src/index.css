@@ -217,8 +217,10 @@ html[mode='dark'] {
   --color-editor-text: var(--color-neutral-300);
   --color-editor-active-line-text: var(--color-neutral-100);
 
-  --color-graph-edge-secondary: var(--color-brand-500);
-  --color-graph-edge-main: var(--color-secondary-80);
+  --color-graph-edge-secondary: var(--color-primary-500);
+  --color-graph-edge-main: var(--color-neutral-80);
+  --color-graph-edge-selected: var(--color-brand-500);
+  --color-graph-edge-direct: var(--color-brand-20);
 }
 
 html[mode='light'] {
@@ -241,8 +243,10 @@ html[mode='light'] {
   --color-editor-text: var(--color-neutral-600);
   --color-editor-active-line-text: var(--color-neutral-800);
 
-  --color-graph-edge-secondary: var(--color-brand-500);
-  --color-graph-edge-main: var(--color-secondary-80);
+  --color-graph-edge-secondary: var(--color-secondary-500);
+  --color-graph-edge-main: var(--color-neutral-200);
+  --color-graph-edge-selected: var(--color-brand-500);
+  --color-graph-edge-direct: var(--color-brand-20);
 }
 
 html {

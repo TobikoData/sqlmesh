@@ -3,9 +3,10 @@ import { useStoreContext } from '@context/context'
 import { type Lineage } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { createContext, useState, useContext, useCallback } from 'react'
-import { toNodeOrEdgeId } from './help'
+import { getAllModelsForNode, toNodeOrEdgeId } from './help'
 import { type ErrorIDE } from '~/library/pages/ide/context'
 import { EnumSide } from '~/types/enum'
+import { isArrayNotEmpty } from '@utils/index'
 
 export interface Connections {
   left: string[]
@@ -13,16 +14,17 @@ export interface Connections {
 }
 export type ActiveColumns = Map<string, { ins: string[]; outs: string[] }>
 export type ActiveEdges = Map<string, number>
+export type ActiveNodes = Set<string>
 
 interface LineageFlow {
   lineage?: Record<string, Lineage>
   withColumns: boolean
   models: Map<string, ModelSQLMeshModel>
   activeEdges: ActiveEdges
+  activeNodes: ActiveNodes
   connections: Map<string, Connections>
-  shouldRecalculate: boolean
+  setActiveNodes: React.Dispatch<React.SetStateAction<ActiveNodes>>
   setWithColumns: React.Dispatch<React.SetStateAction<boolean>>
-  setShouldRecalculate: React.Dispatch<React.SetStateAction<boolean>>
   setConnections: React.Dispatch<React.SetStateAction<Map<string, Connections>>>
   hasActiveEdge: (edge?: string | null) => boolean
   addActiveEdges: (edges: string[]) => void
@@ -38,6 +40,7 @@ interface LineageFlow {
     React.SetStateAction<[ModelSQLMeshModel, Column] | undefined>
   >
   isActiveColumn: (modelName: string, columnName: string) => boolean
+  getNodesBetween: (source: string, target: string) => string[]
 }
 
 export const LineageFlowContext = createContext<LineageFlow>({
@@ -45,6 +48,7 @@ export const LineageFlowContext = createContext<LineageFlow>({
   withColumns: true,
   setWithColumns: () => {},
   activeEdges: new Map(),
+  activeNodes: new Set(),
   hasActiveEdge: () => false,
   addActiveEdges: () => {},
   removeActiveEdges: () => {},
@@ -58,8 +62,8 @@ export const LineageFlowContext = createContext<LineageFlow>({
   isActiveColumn: () => false,
   setConnections: () => {},
   connections: new Map(),
-  shouldRecalculate: false,
-  setShouldRecalculate: () => {},
+  setActiveNodes: () => {},
+  getNodesBetween: () => [],
 })
 
 export default function LineageFlowProvider({
@@ -78,11 +82,11 @@ export default function LineageFlowProvider({
   const [manuallySelectedColumn, setManuallySelectedColumn] =
     useState<[ModelSQLMeshModel, Column]>()
   const [activeEdges, setActiveEdges] = useState<ActiveEdges>(new Map())
+  const [activeNodes, setActiveNodes] = useState<ActiveNodes>(new Set())
   const [lineage, setLineage] = useState<Record<string, Lineage> | undefined>()
   const [connections, setConnections] = useState<Map<string, Connections>>(
     new Map(),
   )
-  const [shouldRecalculate, setShouldRecalculate] = useState(false)
   const [hasColumns, setWithColumns] = useState(withColumns)
 
   const hasActiveEdge = useCallback(
@@ -136,9 +140,67 @@ export default function LineageFlowProvider({
     [hasActiveEdge],
   )
 
+  const map = Object.keys(lineage ?? {}).reduce(
+    (acc: Record<string, string[]>, it) => {
+      acc[it] = getAllModelsForNode(it, lineage)
+
+      return acc
+    },
+    {},
+  )
+
+  // TODO: this is a mess, refactor
+  const getNodesBetween = useCallback(
+    function getNodesBetween(
+      source: string,
+      target: string,
+      visited: Set<string> = new Set(),
+    ): string[] {
+      const upstream = map[source]?.concat() ?? []
+      const downstream = Object.keys(map ?? {}).filter(
+        key => map[key]?.includes(source),
+      )
+      const output: string[] = []
+
+      visited.add(source)
+
+      if (upstream.includes(target)) {
+        output.push(toNodeOrEdgeId(target, source))
+      } else {
+        upstream.forEach(node => {
+          if (visited.has(node)) return
+
+          const found = getNodesBetween(node, target, visited)
+
+          if (isArrayNotEmpty(found)) {
+            output.push(toNodeOrEdgeId(node, source), ...found)
+          }
+        })
+      }
+
+      if (downstream.includes(target)) {
+        output.push(toNodeOrEdgeId(source, target))
+      } else {
+        downstream.forEach(node => {
+          if (visited.has(node)) return
+
+          const found = getNodesBetween(node, target, visited)
+
+          if (isArrayNotEmpty(found)) {
+            output.push(toNodeOrEdgeId(node, source), ...found)
+          }
+        })
+      }
+
+      return output
+    },
+    [lineage, map],
+  )
+
   return (
     <LineageFlowContext.Provider
       value={{
+        getNodesBetween,
         connections,
         setConnections,
         setLineage,
@@ -156,8 +218,8 @@ export default function LineageFlowProvider({
         setManuallySelectedColumn,
         handleError,
         isActiveColumn,
-        shouldRecalculate,
-        setShouldRecalculate,
+        activeNodes,
+        setActiveNodes,
       }}
     >
       {children}
