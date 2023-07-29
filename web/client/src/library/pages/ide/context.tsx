@@ -36,9 +36,9 @@ interface IDE {
 export const IDEContext = createContext<IDE>({
   isPlanOpen: false,
   errors: new Map(),
-  setIsPlanOpen: () => { },
-  addError: () => { },
-  removeError: () => { },
+  setIsPlanOpen: () => {},
+  addError: () => {},
+  removeError: () => {},
 })
 
 export default function IDEProvider({
