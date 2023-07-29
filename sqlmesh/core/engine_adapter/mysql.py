@@ -19,6 +19,7 @@ class MySQLEngineAdapter(
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 ):
+    DEFAULT_BATCH_SIZE = 200
     DIALECT = "mysql"
     ESCAPE_JSON = True
     SUPPORTS_INDEXES = True
