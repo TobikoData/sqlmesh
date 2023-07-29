@@ -75,6 +75,8 @@ class SparkSessionConnection:
             # Note: Spark 3.4+ Only API
             self.spark.catalog.setCurrentCatalog(self.catalog)
         self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+        self.spark.conf.set("spark.hadoop.hive.exec.dynamic.partition", "true")
+        self.spark.conf.set("spark.hadoop.hive.exec.dynamic.partition.mode", "nonstrict")
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:
