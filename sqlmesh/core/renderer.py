@@ -404,7 +404,9 @@ class QueryRenderer(BaseExpressionRenderer):
                 )
         except SqlglotError as ex:
             failure = True
-            logger.error("%s for '%s', the column may not exist or is ambiguous", ex, self._path)
+            logger.error(
+                "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_name
+            )
         finally:
             if failure or not should_optimize:
                 query = original.copy()
