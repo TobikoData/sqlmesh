@@ -51,7 +51,7 @@ import {
 } from '~/library/pages/ide/context'
 
 export function useApiMeta(): UseQueryResult<Meta> {
-  const queryKey = [`/api/meta`]
+  const queryKey = ['/api/meta']
   const { onError, onSuccess, timeout } = useQueryTimeout({
     queryKey,
     errorKey: EnumErrorKey.API,
