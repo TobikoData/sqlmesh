@@ -131,7 +131,7 @@ def _get_directory(
                             files=_files,
                         )
                     )
-                if entry.is_file(follow_symlinks=False):
+                elif entry.is_file(follow_symlinks=False):
                     file_type = None
                     if is_relative_to(relative_path, macro_directory_path):
                         file_type = models.FileType.macros
@@ -166,13 +166,11 @@ def _get_file_with_content(
     """Get a file, including its contents."""
     file_path = settings.project_path / path
 
-    try:
-        with open(file_path) as f:
-            content = f.read()
-    except FileNotFoundError as e:
-        raise e
+    with open(file_path) as f:
+        content = f.read()
+
     return models.File(
-        name=os.path.basename(path),
+        name=path.name,
         path=str(path),
         content=content,
         type=path_mapping.get(path),

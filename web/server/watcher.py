@@ -93,6 +93,6 @@ def reload_context(queue: asyncio.Queue, context: Context) -> None:
     except Exception:
         error = ApiException(
             message="Error refreshing the models while watching file changes",
-            origin="API -> watcher -> _refresh_models",
+            origin="API -> watcher -> reload_context",
         ).to_dict()
         queue.put_nowait(ServerSentEvent(event="errors", data=json.dumps(error)))
