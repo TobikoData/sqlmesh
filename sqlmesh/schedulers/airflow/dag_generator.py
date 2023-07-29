@@ -4,6 +4,7 @@ import logging
 import os
 import typing as t
 
+import pendulum
 from airflow import DAG
 from airflow.models import BaseOperator, baseoperator
 from airflow.operators.empty import EmptyOperator
@@ -24,7 +25,7 @@ from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
-from sqlmesh.utils.date import TimeLike, now, to_datetime
+from sqlmesh.utils.date import TimeLike, to_datetime
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ class SnapshotDagGenerator:
         with DAG(
             dag_id=dag_id,
             schedule_interval=snapshot.model.cron,
-            start_date=to_datetime(snapshot.unpaused_ts),
+            start_date=pendulum.instance(to_datetime(snapshot.unpaused_ts)),
             max_active_runs=1,
             catchup=True,
             is_paused_upon_creation=False,
@@ -135,7 +136,7 @@ class SnapshotDagGenerator:
         with DAG(
             dag_id=dag_id,
             schedule_interval="@once",
-            start_date=now(),
+            start_date=pendulum.now(tz="UTC"),
             max_active_tasks=plan_dag_spec.backfill_concurrent_tasks,
             catchup=False,
             is_paused_upon_creation=False,
