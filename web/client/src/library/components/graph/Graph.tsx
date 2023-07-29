@@ -71,7 +71,7 @@ import Input from '@components/input/Input'
 import { type ResponseWithDetail } from '@api/instance'
 import { type ErrorIDE } from '~/library/pages/ide/context'
 import { Listbox, Popover, Transition } from '@headlessui/react'
-import CodeEditor from '@components/editor/EditorCode'
+import { CodeEditorDefault } from '@components/editor/EditorCode'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
 
@@ -136,19 +136,12 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                 leaveTo="opacity-0 translate-y-1"
               >
                 <Popover.Panel className="fixed bottom-0 left-10 z-10 transform cursor-pointer rounded-lg bg-theme border-4 border-primary-20">
-                  <CodeEditor.Default
+                  <CodeEditorDefault
                     content={source}
                     type={EnumFileExtensions.SQL}
-                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !h-[25vh] !max-w-[30rem]"
-                  >
-                    {({ extensions, content }) => (
-                      <CodeEditor
-                        extensions={extensions.concat(modelExtensions)}
-                        content={content}
-                        className="text-xs pr-2"
-                      />
-                    )}
-                  </CodeEditor.Default>
+                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !h-[25vh] !max-w-[30rem] text-xs pr-2"
+                    extensions={modelExtensions}
+                  />
                 </Popover.Panel>
               </Transition>
             </>

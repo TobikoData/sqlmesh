@@ -1,4 +1,4 @@
-import { isFalse } from '@utils/index'
+import { isFalse, isNotNil, isStringEmptyOrNil } from '@utils/index'
 import type { Directory, File } from '../api/client'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { ModelFile } from './file'
@@ -12,9 +12,8 @@ interface InitialDirectory extends InitialArtifact, Directory {
 export class ModelDirectory extends ModelArtifact<InitialDirectory> {
   private _isOpen = false
 
-  directories: ModelDirectory[]
-  files: ModelFile[]
-  level = 0
+  directories: ModelDirectory[] = []
+  files: ModelFile[] = []
 
   syncStateOpen?: (state: boolean) => void
 
@@ -34,16 +33,15 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
       this.directories = (initial as ModelDirectory).directories
       this.files = (initial as ModelDirectory).files
     } else {
-      this.directories = []
-      this.files = []
-
-      this.initial.directories.forEach(d => {
-        this.addDirectory(new ModelDirectory(d))
-      })
-      this.initial.files.forEach(f => {
-        this.addFile(new ModelFile(f))
+      this.update({
+        files: this.initial.files,
+        directories: this.initial.directories,
       })
     }
+  }
+
+  get level(): number {
+    return (this.parent?.level ?? -1) + 1
   }
 
   get isChanged(): boolean {
@@ -86,11 +84,18 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     )
   }
 
+  get allVisibleArtifacts(): ModelArtifact[] {
+    return this.directories
+      .map(d => (d.isOpened ? [d, d.allVisibleArtifacts] : [d]))
+      .flat(100)
+      .concat(this.isOpened ? this.files : [])
+  }
+
   get allArtifacts(): ModelArtifact[] {
     return this.directories
       .map(d => [d, d.allArtifacts])
       .flat(100)
-      .concat(this.isOpened ? this.files : [])
+      .concat(this.files)
   }
 
   get isOpened(): boolean {
@@ -157,18 +162,67 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     this.directories.push(directory)
 
     directory.parent = this
-    directory.level = this.level + 1
   }
 
   removeFile(file: ModelFile): void {
     this.files = this.files.filter(f => f !== file)
-
-    file.parent = undefined
   }
 
   removeDirectory(directory: ModelDirectory): void {
     this.directories = this.directories.filter(d => d !== directory)
+  }
 
-    directory.parent = undefined
+  update({
+    files = [],
+    directories = [],
+  }: {
+    files: File[] | ModelFile[]
+    directories: Directory[] | ModelDirectory[]
+  }): void {
+    this.files = []
+    this.directories = []
+
+    directories.forEach(d => {
+      this.addDirectory(new ModelDirectory(d, this))
+    })
+    files.forEach(f => {
+      this.addFile(new ModelFile(f, this))
+    })
+  }
+
+  static findArtifactByPath(
+    directory: ModelDirectory,
+    path: string,
+  ): ModelArtifact | undefined {
+    return directory.path === path
+      ? directory
+      : directory.allArtifacts.find(artifact => artifact.path === path)
+  }
+
+  static findParentByPath(
+    directory: ModelDirectory,
+    path: string,
+  ): ModelDirectory {
+    const directories = directory.allDirectories
+    const chain = path.split('/').reduce((acc: string[], path) => {
+      if (acc.length === 0) return [path]
+
+      if (isStringEmptyOrNil(path)) return acc
+
+      const last = acc[acc.length - 1] ?? ''
+
+      acc.push(`${last}/${path}`)
+
+      return acc
+    }, [])
+
+    while (chain.length > 0) {
+      const path = chain.pop()
+      const parent = directories.find(directory => directory.path === path)
+
+      if (isNotNil(parent)) return parent
+    }
+
+    return directory
   }
 }

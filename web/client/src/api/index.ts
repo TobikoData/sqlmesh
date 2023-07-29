@@ -272,10 +272,6 @@ export function useApiEvaluate(
 
 export function useMutationApiSaveFile(
   client: QueryClient,
-  callbacks: {
-    onSuccess?: (file: File) => void
-    onMutate?: () => void
-  },
 ): UseMutationResult<
   File,
   unknown,
@@ -289,15 +285,6 @@ export function useMutationApiSaveFile(
       await client.cancelQueries({
         queryKey: [`/api/files`, path],
       })
-
-      if (callbacks.onMutate != null) {
-        callbacks.onMutate()
-      }
-    },
-    async onSuccess({ path, ...args }) {
-      if (callbacks.onSuccess != null) {
-        callbacks.onSuccess({ path, ...args })
-      }
     },
   })
 }

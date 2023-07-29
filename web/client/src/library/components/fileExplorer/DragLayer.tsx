@@ -3,9 +3,9 @@ import { useMemo, type CSSProperties } from 'react'
 import Directory from './Directory'
 import File from './File'
 import { ModelDirectory } from '@models/directory'
-import { useFileExplorer } from './context'
 import FileExplorer from './FileExplorer'
 import { ModelFile } from '@models/file'
+import { useStoreProject } from '@context/project'
 
 const layerStyles: CSSProperties = {
   position: 'fixed',
@@ -18,7 +18,8 @@ const layerStyles: CSSProperties = {
 }
 
 export default function DragLayer(): JSX.Element {
-  const { activeRange } = useFileExplorer()
+  const activeRange = useStoreProject(s => s.activeRange)
+  const inActiveRange = useStoreProject(s => s.inActiveRange)
 
   const { isDragging, currentOffset, artifact } = useDragLayer(monitor => ({
     artifact: monitor.getItem(),
@@ -28,7 +29,7 @@ export default function DragLayer(): JSX.Element {
   const artifacts = useMemo(
     () =>
       Array.from(
-        activeRange.has(artifact) ? activeRange : new Set([artifact]),
+        inActiveRange(artifact) ? activeRange : new Set([artifact]),
       ).filter(Boolean),
     [activeRange, artifact],
   )

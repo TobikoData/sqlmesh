@@ -1,7 +1,6 @@
-import { useState, type MouseEvent, useEffect } from 'react'
+import React, { useState, type MouseEvent, useEffect } from 'react'
 import { DocumentIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { isFalse, isStringEmptyOrNil } from '~/utils'
 import { useStoreProject } from '@context/project'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import FileExplorer from './FileExplorer'
@@ -10,6 +9,7 @@ import { type ModelFile } from '@models/file'
 import { useDrag } from 'react-dnd'
 import { getEmptyImage } from 'react-dnd-html5-backend'
 import { useLongPress } from '@uidotdev/usehooks'
+import { type ModelArtifact } from '@models/artifact'
 
 function File({
   file,
@@ -22,6 +22,9 @@ function File({
 }): JSX.Element {
   const selectedFile = useStoreProject(s => s.selectedFile)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
+  const activeRange = useStoreProject(s => s.activeRange)
+  const setActiveRange = useStoreProject(s => s.setActiveRange)
+  const inActiveRange = useStoreProject(s => s.inActiveRange)
 
   const [isDraggable, setIsDraggable] = useState(false)
 
@@ -36,13 +39,13 @@ function File({
   })
 
   const {
-    activeRange,
-    setActiveRange,
+    setArtifactRename,
+    renameArtifact,
+    artifactRename,
     selectArtifactsInRange,
     removeArtifactWithConfirmation,
   } = useFileExplorer()
 
-  const [newName, setNewName] = useState<string>()
   const [isOpenContextMenu, setIsOpenContextMenu] = useState(false)
 
   const [{ isDragging }, drag, preview] = useDrag(
@@ -53,7 +56,7 @@ function File({
         setIsDraggable(false)
       },
       canDrag() {
-        return isStringEmptyOrNil(newName) && isDraggable
+        return artifactRename !== file && isDraggable
       },
       collect(monitor) {
         return {
@@ -61,43 +64,44 @@ function File({
         }
       },
     }),
-    [file, newName, isDraggable],
+    [file, artifactRename, isDraggable],
   )
 
   useEffect(() => {
     preview(getEmptyImage(), { captureDraggingState: true })
   }, [preview])
 
-  function handleSelect(e: MouseEvent): void {
+  function handleSelect(e: React.MouseEvent | React.KeyboardEvent): void {
     e.stopPropagation()
 
     if (e.shiftKey) {
       e.preventDefault()
     }
 
-    if (e.metaKey) {
-      if (activeRange.has(file)) {
-        activeRange.delete(file)
-      } else {
-        activeRange.add(file)
-      }
+    let ar: ModelArtifact[] = activeRange
 
-      setActiveRange(activeRange)
-    } else if (e.shiftKey && activeRange.size > 0) {
+    if (e.metaKey) {
+      if (inActiveRange(file)) {
+        ar = ar.filter(a => a !== file)
+      } else {
+        ar.push(file)
+      }
+      setActiveRange(ar)
+    } else if (e.shiftKey && ar.length > 0) {
       selectArtifactsInRange(file)
     } else {
-      if (activeRange.size > 0) {
-        activeRange.clear()
+      if (ar.length > 0) {
+        ar = []
       }
 
-      activeRange.add(file)
+      ar.push(file)
 
-      setActiveRange(activeRange)
+      setActiveRange(ar)
       setSelectedFile(file)
     }
   }
 
-  const disabled = activeRange.size > 1 && activeRange.has(file)
+  const disabled = activeRange.length > 1 && inActiveRange(file)
 
   return (
     <div
@@ -108,7 +112,7 @@ function File({
         artifact={file}
         isSelected={selectedFile === file}
         className={clsx(
-          isFalse(isStringEmptyOrNil(newName)) && 'bg-primary-800',
+          artifactRename === file && 'bg-primary-10',
           isOpenContextMenu && 'bg-primary-10',
           isDraggable &&
             'bg-primary-10 !cursor-grabbing outline-2 !outline-primary-500',
@@ -119,7 +123,13 @@ function File({
         handleSelect={handleSelect}
       >
         <File.Icons />
-        {isStringEmptyOrNil(newName) ? (
+        {artifactRename === file ? (
+          <FileExplorer.Rename
+            artifact={artifactRename}
+            rename={renameArtifact}
+            close={() => setArtifactRename(undefined)}
+          />
+        ) : (
           <FileExplorer.ContextMenu
             trigger={
               <FileExplorer.ContextMenuTrigger>
@@ -142,7 +152,7 @@ function File({
               onSelect={(e: Event) => {
                 e.stopPropagation()
 
-                setNewName(file.name)
+                setArtifactRename(file)
               }}
             >
               Rename
@@ -156,16 +166,10 @@ function File({
                 removeArtifactWithConfirmation(file)
               }}
             >
-              Remove {activeRange.has(file) ? activeRange.size : ''}
+              Remove {inActiveRange(file) ? activeRange.length : ''}
               <div className="ml-auto pl-5"></div>
             </ContextMenu.Item>
           </FileExplorer.ContextMenu>
-        ) : (
-          <FileExplorer.Rename
-            artifact={file}
-            newName={newName}
-            setNewName={setNewName}
-          />
         )}
       </FileExplorer.Container>
     </div>

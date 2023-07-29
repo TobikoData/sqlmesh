@@ -38,6 +38,7 @@ interface EditorStore {
   selectTab: (tab?: EditorTab) => void
   replaceTab: (from: EditorTab, to: EditorTab) => void
   updateStoredTabsIds: () => void
+  inTabs: (file: ModelFile) => boolean
   addTab: (tab: EditorTab) => void
   addTabs: (tabs: EditorTab[]) => void
   closeTab: (file: ModelFile) => void
@@ -97,6 +98,9 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   previewConsole: undefined,
   previewDiff: undefined,
   direction: 'vertical',
+  inTabs(file) {
+    return get().tabs.has(file)
+  },
   replaceTab(from, to) {
     const s = get()
 
@@ -155,7 +159,7 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   refreshTab() {
     const tab = get().tab
 
-    if (tab == null) return
+    if (isNil(tab)) return
 
     get().selectTab({ ...tab })
   },

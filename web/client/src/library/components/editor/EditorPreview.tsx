@@ -9,7 +9,7 @@ import { EnumSize, EnumVariant } from '~/types/enum'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from '@components/graph/context'
 import { EnumFileExtensions } from '@models/file'
-import CodeEditor from './EditorCode'
+import { CodeEditorDefault } from './EditorCode'
 import { EnumRoutes } from '~/routes'
 import { useNavigate } from 'react-router-dom'
 import { DisplayError } from '@components/report/ReportErrors'
@@ -153,18 +153,12 @@ export default function EditorPreview({
                 className="w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
               >
                 <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
-                  <CodeEditor.Default
+                  <CodeEditorDefault
                     type={EnumFileExtensions.SQL}
                     content={previewQuery ?? ''}
-                  >
-                    {({ extensions, content }) => (
-                      <CodeEditor
-                        extensions={extensions.concat(modelExtensions)}
-                        content={content}
-                        className="text-xs"
-                      />
-                    )}
-                  </CodeEditor.Default>
+                    extensions={modelExtensions}
+                    className="text-xs"
+                  />
                 </div>
               </Tab.Panel>
             )}
