@@ -19,7 +19,7 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { EnumFileExtensions } from '@models/file'
 import { useLineageFlow } from '@components/graph/context'
-import CodeEditor from './EditorCode'
+import { CodeEditorRemoteFile, CodeEditorDefault } from './EditorCode'
 import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
 
 function Editor(): JSX.Element {
@@ -230,41 +230,28 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
           >
             <div className="flex flex-col h-full">
               {tab.file.isLocal && (
-                <CodeEditor.Default
+                <CodeEditorDefault
                   key={tab.id}
                   type={EnumFileExtensions.SQL}
                   dialect={tab.dialect}
                   content={tab.file.content}
-                >
-                  {({ extensions, content }) => (
-                    <CodeEditor
-                      extensions={extensions}
-                      keymaps={defaultKeymapsEditorTab}
-                      content={content}
-                      onChange={updateFileContent}
-                    />
-                  )}
-                </CodeEditor.Default>
+                  keymaps={defaultKeymapsEditorTab}
+                  onChange={updateFileContent}
+                />
               )}
               {tab.file.isRemote && (
-                <CodeEditor.RemoteFile path={tab.file.path}>
+                <CodeEditorRemoteFile path={tab.file.path}>
                   {({ file, keymaps }) => (
-                    <CodeEditor.Default
+                    <CodeEditorDefault
                       type={file.extension}
                       dialect={tab.dialect}
                       content={file.content}
-                    >
-                      {({ extensions, content }) => (
-                        <CodeEditor
-                          content={content}
-                          extensions={extensions.concat(modelExtensions)}
-                          keymaps={keymaps.concat(defaultKeymapsEditorTab)}
-                          onChange={updateFileContent}
-                        />
-                      )}
-                    </CodeEditor.Default>
+                      extensions={modelExtensions}
+                      keymaps={keymaps.concat(defaultKeymapsEditorTab)}
+                      onChange={updateFileContent}
+                    />
                   )}
-                </CodeEditor.RemoteFile>
+                </CodeEditorRemoteFile>
               )}
             </div>
             <div className="flex flex-col h-full">

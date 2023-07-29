@@ -6,6 +6,7 @@ import typing as t
 
 from pydantic import BaseModel, validator
 from sqlglot import exp
+from watchfiles import Change
 
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.node import IntervalUnit
@@ -37,7 +38,7 @@ class File(BaseModel):
     extension: str = ""
     is_supported: bool = False
     content: t.Optional[str] = None
-    type: t.Optional[FileType]
+    type: t.Optional[FileType] = None
 
     @validator("extension", always=True)
     def default_extension(cls, v: str, values: t.Dict[str, t.Any]) -> str:
@@ -321,3 +322,15 @@ class TestResult(BaseModel):
     failures: t.List[TestErrorOrFailure]
     errors: t.List[TestErrorOrFailure]
     skipped: t.List[TestSkipped]
+
+
+class ArtifactType(str, enum.Enum):
+    file = "file"
+    directory = "directory"
+
+
+class ArtifactChange(BaseModel):
+    change: Change
+    path: str
+    type: t.Optional[ArtifactType] = None
+    file: t.Optional[File] = None

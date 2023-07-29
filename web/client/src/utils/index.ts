@@ -14,7 +14,9 @@ export function isString(value: unknown): boolean {
   return typeof value === 'string'
 }
 
-export function isStringEmptyOrNil(value: unknown): boolean {
+export function isStringEmptyOrNil(
+  value: unknown,
+): value is undefined | null | '' {
   return isNil(value) || value === ''
 }
 

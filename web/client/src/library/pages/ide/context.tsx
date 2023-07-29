@@ -2,6 +2,7 @@ import { type ApiExceptionPayload } from '@api/client'
 import { createContext, type ReactNode, useState, useContext } from 'react'
 
 export const EnumErrorKey = {
+  Internal: 'internal',
   General: 'general',
   RunPlan: 'run-plan',
   Environments: 'environments',
@@ -12,6 +13,7 @@ export const EnumErrorKey = {
   RenderModel: 'render-model',
   ColumnLineage: 'column-lineage',
   Meta: 'meta',
+  FileExplorer: 'file-explorer',
 } as const
 
 export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]

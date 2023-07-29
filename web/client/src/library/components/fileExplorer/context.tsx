@@ -9,7 +9,6 @@ import {
 import { useStoreProject } from '@context/project'
 import { ModelArtifact } from '@models/artifact'
 import { ModelDirectory } from '@models/directory'
-import { getAllFilesInDirectory } from './help'
 import {
   isArrayNotEmpty,
   isFalse,
@@ -22,29 +21,44 @@ import { ModelFile } from '@models/file'
 import { useStoreEditor } from '@context/editor'
 import { type ResponseWithDetail } from '@api/instance'
 import { useStoreContext } from '@context/context'
+import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
+
+export const EnumFileExplorerChange = {
+  Added: 1,
+  Modified: 2,
+  Deleted: 3,
+} as const
+
+export type FileExplorerChange = KeyOf<typeof EnumFileExplorerChange>
 
 interface FileExplorer {
-  activeRange: Set<ModelArtifact>
-  setActiveRange: (activeRange: Set<ModelArtifact>) => void
+  artifactRename?: ModelArtifact
+  setArtifactRename: (artifact?: ModelArtifact) => void
   selectArtifactsInRange: (to: ModelArtifact) => void
   createDirectory: (parent: ModelDirectory) => void
   createFile: (parent: ModelDirectory) => void
   renameArtifact: (artifact: ModelArtifact, newName?: string) => void
-  removeArtifacts: (artifacts: Set<ModelArtifact>) => void
+  removeArtifacts: (artifacts: ModelArtifact[]) => void
   removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
-  moveArtifacts: (artifacts: Set<ModelArtifact>, target: ModelDirectory) => void
+  moveArtifacts: (artifacts: ModelArtifact[], target: ModelDirectory) => void
+  isTopGroupInActiveRange: (artifact: ModelArtifact) => boolean
+  isBottomGroupInActiveRange: (artifact: ModelArtifact) => boolean
+  isMiddleGroupInActiveRange: (artifact: ModelArtifact) => boolean
 }
 
 export const FileExplorerContext = createContext<FileExplorer>({
-  activeRange: new Set(),
-  setActiveRange: () => {},
-  selectArtifactsInRange: () => {},
+  artifactRename: undefined,
+  setArtifactRename: () => {},
+  selectArtifactsInRange: () => new Set(),
   createDirectory: () => {},
   createFile: () => {},
   renameArtifact: () => {},
   removeArtifacts: () => {},
   removeArtifactWithConfirmation: () => {},
   moveArtifacts: () => {},
+  isTopGroupInActiveRange: () => false,
+  isBottomGroupInActiveRange: () => false,
+  isMiddleGroupInActiveRange: () => false,
 })
 
 export default function FileExplorerProvider({
@@ -52,67 +66,61 @@ export default function FileExplorerProvider({
 }: {
   children: React.ReactNode
 }): JSX.Element {
+  const { addError, removeError } = useIDE()
+
+  const activeRange = useStoreProject(s => s.activeRange)
   const project = useStoreProject(s => s.project)
   const files = useStoreProject(s => s.files)
+  const setActiveRange = useStoreProject(s => s.setActiveRange)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
   const setFiles = useStoreProject(s => s.setFiles)
+  const inActiveRange = useStoreProject(s => s.inActiveRange)
 
   const addConfirmation = useStoreContext(s => s.addConfirmation)
 
   const tab = useStoreEditor(s => s.tab)
-  const closeTab = useStoreEditor(s => s.closeTab)
 
   const [isLoading, setIsLoading] = useState(false)
-  const [activeRange, setActiveRange] = useState(new Set<ModelArtifact>())
+  const [artifactRename, setArtifactRename] = useState<ModelArtifact>()
 
   useEffect(() => {
     setSelectedFile(tab?.file)
-  }, [tab])
+  }, [tab?.id])
 
   function selectArtifactsInRange(to: ModelArtifact): void {
-    setActiveRange(activeRange => {
-      const IDX_FIRST = 0
-      const IDX_LAST = activeRange.size - 1
-      const artifacts = project.allArtifacts
-      const acitveAtrifacts = Array.from(activeRange)
-      const first = acitveAtrifacts[IDX_FIRST]
-      const last = acitveAtrifacts[IDX_LAST]
-      const indexTo = artifacts.indexOf(to)
-      const indexFirst = first == null ? IDX_FIRST : artifacts.indexOf(first)
-      const indexLast = last == null ? IDX_LAST : artifacts.indexOf(last)
+    const IDX_FIRST = 0
+    const IDX_LAST = activeRange.length - 1
+    const artifacts = project.allVisibleArtifacts
+    const first = activeRange[IDX_FIRST]
+    const last = activeRange[IDX_LAST]
+    const indexTo = artifacts.indexOf(to)
+    const indexFirst = first == null ? IDX_FIRST : artifacts.indexOf(first)
+    const indexLast = last == null ? IDX_LAST : artifacts.indexOf(last)
 
-      const indexStart = indexTo > indexFirst ? indexFirst : indexTo
-      const indexEnd =
-        indexTo > indexLast || (indexTo > indexFirst && indexTo < indexLast)
-          ? indexTo
-          : indexLast
+    const indexStart = indexTo > indexFirst ? indexFirst : indexTo
+    const indexEnd =
+      indexTo > indexLast || (indexTo > indexFirst && indexTo < indexLast)
+        ? indexTo
+        : indexLast
 
-      return new Set(artifacts.slice(indexStart, indexEnd + 1))
-    })
+    setActiveRange(artifacts.slice(indexStart, indexEnd + 1))
   }
 
   function createDirectory(parent: ModelDirectory): void {
     if (isLoading) return
 
+    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const name = toUniqueName('new_directory')
 
     writeDirectoryApiDirectoriesPathPost(`${parent.path}/${name}`, {})
       .then(created => {
-        if (isFalse((created as any).ok)) {
-          console.warn([`Directory: ${parent.path}`, (created as any).detail])
+        if (isNil(created)) return
 
-          return
-        }
-
-        parent.addDirectory(new ModelDirectory(created, parent))
         parent.open()
       })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log(error)
-      })
+      .catch(error => addError(EnumErrorKey.FileExplorer, error))
       .finally(() => {
         setIsLoading(false)
       })
@@ -121,52 +129,42 @@ export default function FileExplorerProvider({
   function createFile(parent: ModelDirectory, extension = '.py'): void {
     if (isLoading) return
 
+    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const name = toUniqueName('new_file', extension)
 
     writeFileApiFilesPathPost(`${parent.path}/${name}`, { content: '' })
       .then(created => {
-        if (isFalse((created as any).ok)) {
-          console.warn([`File: ${parent.path}`, (created as any).detail])
+        if (isNil(created)) return
 
-          return
-        }
-
-        const file = new ModelFile(created, parent)
-
-        parent.addFile(file)
         parent.open()
-
-        setSelectedFile(file)
-        setFiles(project?.allFiles ?? [])
       })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log(error)
-      })
+      .catch(error => addError(EnumErrorKey.FileExplorer, error))
       .finally(() => {
         setIsLoading(false)
       })
   }
 
   function renameArtifact(artifact: ModelArtifact, newName?: string): void {
-    if (isLoading || isStringEmptyOrNil(newName) || isNil(newName)) return
+    newName = newName?.trim()
 
+    if (isLoading || isStringEmptyOrNil(newName)) return
+
+    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const currentName = artifact.name
     const currentPath = artifact.path
 
-    artifact.rename(newName.trim())
+    artifact.rename(newName)
 
     if (artifact instanceof ModelDirectory) {
       writeDirectoryApiDirectoriesPathPost(currentPath, {
         new_path: artifact.path,
       })
         .catch(error => {
-          // TODO: Show error notification
-          console.log(error)
+          addError(EnumErrorKey.FileExplorer, error)
 
           artifact.rename(currentName)
         })
@@ -177,7 +175,7 @@ export default function FileExplorerProvider({
             setSelectedFile(tab.file)
           }
 
-          setFiles(project?.allFiles ?? [])
+          setFiles(project.allFiles)
         })
     }
 
@@ -192,25 +190,23 @@ export default function FileExplorerProvider({
           files.delete(currentPath)
         })
         .catch(error => {
-          // TODO: Show error notification
-          console.log(error)
+          addError(EnumErrorKey.FileExplorer, error)
 
           artifact.rename(currentName)
         })
         .finally(() => {
           setIsLoading(false)
-          setFiles(project?.allFiles ?? [])
+          setFiles(project.allFiles)
         })
     }
   }
 
-  function removeArtifacts(artifacts: Set<ModelArtifact>): void {
+  function removeArtifacts(artifacts: ModelArtifact[]): void {
     if (isLoading) return
 
     setIsLoading(true)
 
-    const list = Array.from(artifacts)
-    const promises = list.map(artifact => {
+    const promises = artifacts.map(artifact => {
       if (artifact instanceof ModelFile) {
         return deleteFileApiFilesPathDelete(artifact.path)
       }
@@ -219,51 +215,25 @@ export default function FileExplorerProvider({
     })
 
     Promise.all(promises)
-      .then(resolvedList => {
-        resolvedList.forEach((_, index) => {
-          const artifact = list[index]
-
-          if (artifact instanceof ModelFile) {
-            closeTab(artifact)
-
-            artifact.parent?.removeFile(artifact)
-          }
-
-          if (artifact instanceof ModelDirectory) {
-            if (artifact.isNotEmpty) {
-              const files = getAllFilesInDirectory(artifact)
-
-              files.forEach(file => {
-                closeTab(file)
-              })
-            }
-
-            artifact.parent?.removeDirectory(artifact)
-          }
-        })
-
-        setActiveRange(new Set())
-        setFiles(project?.allFiles ?? [])
+      .then(() => {
+        setActiveRange([])
       })
-      .catch(error => {
-        // TODO: Show error notification
-        console.log(error)
-      })
+      .catch(error => addError(EnumErrorKey.FileExplorer, error))
       .finally(() => {
         setIsLoading(false)
       })
   }
 
   function removeArtifactWithConfirmation(artifact: ModelArtifact): void {
-    if (activeRange.has(artifact)) {
+    if (inActiveRange(artifact)) {
       // User selected multiple including current directory
       // so here we should prompt to delete all selected
       addConfirmation({
         headline: 'Removing Selected Files/Directories',
-        description: `Are you sure you want to remove ${activeRange.size} items?`,
+        description: `Are you sure you want to remove ${activeRange.length} items?`,
         yesText: 'Yes, Remove',
         noText: 'No, Cancel',
-        details: Array.from(activeRange).map(artifact => artifact.path),
+        details: activeRange.map(artifact => artifact.path),
         action: () => {
           removeArtifacts(activeRange)
         },
@@ -280,7 +250,7 @@ export default function FileExplorerProvider({
         noText: 'No, Cancel',
         action: () => {
           if (isNotNil(artifact.parent)) {
-            removeArtifacts(new Set([artifact]))
+            removeArtifacts([artifact])
           }
         },
       })
@@ -288,7 +258,7 @@ export default function FileExplorerProvider({
   }
 
   function moveArtifacts(
-    artifacts: Set<ModelArtifact>,
+    artifacts: ModelArtifact[],
     target: ModelDirectory,
     shouldRenameDuplicates = false,
   ): void {
@@ -328,7 +298,9 @@ export default function FileExplorerProvider({
           writeDirectoryApiDirectoriesPathPost(artifactPath, { new_path }),
         )
 
-        artifact.allArtifacts.forEach(a => artifacts.delete(a))
+        artifact.allVisibleArtifacts.forEach(a =>
+          artifacts.splice(artifacts.indexOf(a), 1),
+        )
       }
 
       if (artifact instanceof ModelFile) {
@@ -365,15 +337,56 @@ export default function FileExplorerProvider({
       })
       .finally(() => {
         setIsLoading(false)
-        setActiveRange(new Set())
-        setFiles(project?.allFiles ?? [])
+        setActiveRange([])
+        setFiles(project.allFiles)
       })
+  }
+
+  function isTopGroupInActiveRange(artifact: ModelArtifact): boolean {
+    const index = project.allVisibleArtifacts.indexOf(artifact)
+    const prev = project.allVisibleArtifacts[index - 1]
+    const next = project.allVisibleArtifacts[index + 1]
+
+    return (
+      inActiveRange(artifact) &&
+      (isNil(prev) || isFalse(inActiveRange(prev))) &&
+      isNotNil(next) &&
+      inActiveRange(next)
+    )
+  }
+
+  function isBottomGroupInActiveRange(artifact: ModelArtifact): boolean {
+    const index = project.allVisibleArtifacts.indexOf(artifact)
+    const prev = project.allVisibleArtifacts[index - 1]
+    const next = project.allVisibleArtifacts[index + 1]
+
+    return (
+      inActiveRange(artifact) &&
+      (isNil(next) || isFalse(inActiveRange(next))) &&
+      isNotNil(prev) &&
+      inActiveRange(prev)
+    )
+  }
+
+  function isMiddleGroupInActiveRange(artifact: ModelArtifact): boolean {
+    const index = project.allVisibleArtifacts.indexOf(artifact)
+    const prev = project.allVisibleArtifacts[index - 1]
+    const next = project.allVisibleArtifacts[index + 1]
+
+    return (
+      inActiveRange(artifact) &&
+      isNotNil(next) &&
+      inActiveRange(next) &&
+      isNotNil(prev) &&
+      inActiveRange(prev)
+    )
   }
 
   return (
     <FileExplorerContext.Provider
       value={{
-        activeRange,
+        artifactRename,
+        setArtifactRename,
         createDirectory,
         createFile,
         renameArtifact,
@@ -381,16 +394,9 @@ export default function FileExplorerProvider({
         removeArtifactWithConfirmation,
         moveArtifacts,
         selectArtifactsInRange,
-        setActiveRange(activeRange) {
-          setActiveRange(
-            () =>
-              new Set(
-                project.allArtifacts.filter(artifact =>
-                  activeRange.has(artifact),
-                ),
-              ),
-          )
-        },
+        isTopGroupInActiveRange,
+        isBottomGroupInActiveRange,
+        isMiddleGroupInActiveRange,
       }}
     >
       {children}

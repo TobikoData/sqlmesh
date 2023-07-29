@@ -101,7 +101,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     // it is likely because we restored the file content from localStorage.
     // After updating "_content", we still want to retain the content
     // because it is unsaved changes.
-    if (this.isSynced) {
+    if (this.isSynced || isFalse(this.isChanged)) {
       this.content = newContent
     }
 

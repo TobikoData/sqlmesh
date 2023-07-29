@@ -1,4 +1,4 @@
-import React, { type MouseEvent } from 'react'
+import React, { type MouseEvent, useEffect, useState } from 'react'
 import clsx from 'clsx'
 import Directory from './Directory'
 import { useStoreProject } from '@context/project'
@@ -8,7 +8,6 @@ import { HTML5Backend } from 'react-dnd-html5-backend'
 import DragLayer from './DragLayer'
 import { useFileExplorer } from './context'
 import { type ModelArtifact } from '@models/artifact'
-import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import SearchList from '@components/search/SearchList'
 import { type ModelFile } from '@models/file'
 import { EnumSize } from '~/types/enum'
@@ -27,26 +26,22 @@ const FileExplorer = function FileExplorer({
 }): JSX.Element {
   const project = useStoreProject(s => s.project)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
+  const activeRange = useStoreProject(s => s.activeRange)
+  const setActiveRange = useStoreProject(s => s.setActiveRange)
 
   const addConfirmation = useStoreContext(s => s.addConfirmation)
 
-  const {
-    activeRange,
-    removeArtifacts,
-    setActiveRange,
-    createDirectory,
-    createFile,
-  } = useFileExplorer()
+  const { removeArtifacts, createDirectory, createFile } = useFileExplorer()
 
   function handleKeyDown(e: React.KeyboardEvent): void {
     if (e.key === 'Escape') {
-      setActiveRange(new Set([]))
+      setActiveRange([])
     }
 
-    if (e.metaKey && e.key === 'Backspace' && activeRange.size > 0) {
+    if (e.metaKey && e.key === 'Backspace' && activeRange.length > 0) {
       addConfirmation({
         headline: 'Removing Selected Files/Directories',
-        description: `Are you sure you want to remove ${activeRange.size} items?`,
+        description: `Are you sure you want to remove ${activeRange.length} items?`,
         yesText: 'Yes, Remove',
         noText: 'No, Cancel',
         details: Array.from(activeRange).map(artifact => artifact.path),
@@ -59,10 +54,12 @@ const FileExplorer = function FileExplorer({
 
   return (
     <div
+      tabIndex={0}
       className={clsx(
         'flex flex-col h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
         className,
       )}
+      onKeyDown={handleKeyDown}
     >
       <SearchList<ModelFile>
         list={project.allFiles}
@@ -76,13 +73,10 @@ const FileExplorer = function FileExplorer({
         trigger={
           <FileExplorer.ContextMenuTrigger className="h-full pb-2">
             <DndProvider backend={HTML5Backend}>
-              <div
-                className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
-                tabIndex={1}
-                onKeyDown={handleKeyDown}
-              >
+              <div className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
                 <DragLayer />
                 <Directory
+                  key={project.id}
                   className="z-20 relative"
                   directory={project}
                 />
@@ -165,49 +159,59 @@ function FileExplorerContextMenuTrigger({
 
 function FileExplorerArtifactRename({
   artifact,
-  newName,
-  setNewName,
+  rename,
+  close,
 }: {
   artifact: ModelArtifact
-  newName?: string
-  setNewName: (name?: string) => void
+  rename: (artifact: ModelArtifact, newName: string) => void
+  close: () => void
 }): JSX.Element {
-  const { renameArtifact } = useFileExplorer()
+  const elInput = React.useRef<HTMLInputElement>(null)
+  const [newName, setNewName] = useState<string>('')
+
+  useEffect(() => {
+    setNewName(artifact.name)
+
+    setTimeout(() => {
+      elInput.current?.focus()
+    }, 100)
+  }, [artifact])
 
   return (
     <div className="w-full flex items-center py-[0.125rem] pr-2">
       <input
+        ref={elInput}
         type="text"
         className="w-full overflow-hidden overflow-ellipsis bg-primary-900 text-primary-100"
         value={newName}
-        onInput={(e: any) => {
+        onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
           e.stopPropagation()
 
           setNewName(e.target.value)
         }}
+        onBlur={(e: React.ChangeEvent<HTMLInputElement>) => {
+          e.stopPropagation()
+
+          close()
+        }}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === 'Enter') {
+            e.stopPropagation()
+
+            if (newName.trim() !== '' && newName !== artifact.name) {
+              rename(artifact, newName)
+            }
+
+            close()
+          }
+
+          if (e.key === 'Escape') {
+            e.stopPropagation()
+
+            close()
+          }
+        }}
       />
-      <div className="flex">
-        {artifact.name === newName?.trim() || newName === '' ? (
-          <XCircleIcon
-            className="inline-block w-4 h-4 ml-2 text-neutral-100 cursor-pointer"
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              setNewName(undefined)
-            }}
-          />
-        ) : (
-          <CheckCircleIcon
-            className={`inline-block w-4 h-4 ml-2 text-success-500 cursor-pointer`}
-            onClick={(e: MouseEvent) => {
-              e.stopPropagation()
-
-              renameArtifact(artifact, newName)
-              setNewName(undefined)
-            }}
-          />
-        )}
-      </div>
     </div>
   )
 }
@@ -225,22 +229,58 @@ function FileExplorerArtifactContainer({
   isSelected?: boolean
   className?: string
   style?: React.CSSProperties
-  handleSelect?: (e: MouseEvent) => void
+  handleSelect?: (e: React.MouseEvent | React.KeyboardEvent) => void
 }): JSX.Element {
-  const { activeRange } = useFileExplorer()
+  const {
+    setArtifactRename,
+    isBottomGroupInActiveRange,
+    isTopGroupInActiveRange,
+    isMiddleGroupInActiveRange,
+  } = useFileExplorer()
+
+  const activeRange = useStoreProject(s => s.activeRange)
+  const inActiveRange = useStoreProject(s => s.inActiveRange)
 
   return (
     <span
+      tabIndex={0}
       className={clsx(
-        'w-full flex items-center group/file rounded-md px-2',
+        'w-full flex items-center group/file px-2',
         className,
-        activeRange.has(artifact)
+        isTopGroupInActiveRange(artifact)
+          ? 'rounded-t-md'
+          : isBottomGroupInActiveRange(artifact)
+          ? 'rounded-b-md'
+          : isMiddleGroupInActiveRange(artifact)
+          ? ''
+          : inActiveRange(artifact) && 'rounded-md',
+        inActiveRange(artifact) &&
+          activeRange.length > 1 &&
+          activeRange.indexOf(artifact) < activeRange.length - 1
+          ? 'border-b border-brand-400'
+          : 'border-b border-transparent',
+        inActiveRange(artifact)
           ? 'text-brand-100 !bg-brand-500 dark:bg-brand-700 dark:text-brand-100'
           : isSelected &&
-              'bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
+              'rounded-md bg-neutral-200 text-neutral-600 dark:bg-dark-lighter dark:text-primary-500',
       )}
       style={style}
       onClick={handleSelect}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          e.stopPropagation()
+
+          setArtifactRename(artifact)
+
+          handleSelect?.(e)
+        }
+
+        if (e.key === ' ') {
+          e.stopPropagation()
+
+          handleSelect?.(e)
+        }
+      }}
     >
       {children}
     </span>

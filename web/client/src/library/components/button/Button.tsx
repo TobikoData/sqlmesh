@@ -93,10 +93,10 @@ const SHAPE = new Map<ButtonShape, string>([
 ])
 
 const SIZE = new Map<ButtonSize, string>([
-  [EnumSize.xs, `px-2 py-0 text-xs leading-2 border`],
-  [EnumSize.sm, `px-2 py-[0.125rem] text-xs leading-2 border-2`],
-  [EnumSize.md, `px-3 py-2 text-base leading-4 border-2`],
-  [EnumSize.lg, `px-4 py-3 text-lg leading-6 border-4`],
+  [EnumSize.xs, `text-xs leading-2 border`],
+  [EnumSize.sm, `px-2 py-[0.125rem] text-xs leading-4 border-2`],
+  [EnumSize.md, `px-3 py-2 text-base leading-6 border-2`],
+  [EnumSize.lg, `px-4 py-3 text-lg border-4`],
 ])
 
 const Button = makeButton(
