@@ -25,7 +25,7 @@ FROM
 The following sections demonstrate how to create an external model containing metadata about `external_db.external_table`, which contains columns `column_a` and `column_b`.
 
 ### Using CLI
-Instead of creating the `schema.yaml` file manually, SQLMesh can generate it for you. The [create_external_models](../../../reference/cli#create_external_models) CLI command does exactly this.
+Instead of creating the `schema.yaml` file manually, SQLMesh can generate it for you. The [create_external_models](../../reference/cli.md#create_external_models) CLI command does exactly this.
 
 The command locates all external tables referenced in your SQLMesh project, fetches their schemas (column names and types), and then stores them in the `schema.yaml` file.
 
