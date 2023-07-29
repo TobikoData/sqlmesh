@@ -139,7 +139,7 @@
 ## Databases/Engines
 
 ??? question "What databases/engines does SQLMesh work with?"
-    SQLMesh works with BigQuery, Databricks, DuckDB, PostgreSQL, GCP PostgreSQL, Redshift, Snowflake, and Spark. See [this page](../integrations/engines.md) for more information.
+    SQLMesh works with BigQuery, Databricks, DuckDB, MySQL, PostgreSQL, GCP PostgreSQL, Redshift, Snowflake, and Spark. See [this page](../integrations/engines.md) for more information.
 
 ??? question "When would you use different databases for executing data transformations and storing state information?"
     SQLMesh requires storing state information about projects and when their transformations were run. By default, it stores this information in the same database where the models run. 
@@ -232,5 +232,6 @@
 ??? question "How does Tobiko Data make money?"
 
     - Model execution observability and monitoring tools (in development)
-    - Github Actions CI/CD bot (in development)
+    - Enterprise Github Actions CI/CD App (in development)
+        - Advanced version of [open source CI/CD bot](../integrations/github.md)
     - Providing hands-on support for companies' SQLMesh projects
