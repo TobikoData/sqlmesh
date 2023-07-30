@@ -13,16 +13,12 @@ from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 
 
-def test_create_view(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+def test_create_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"))
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), replace=False)
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
             call('CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
@@ -30,19 +26,15 @@ def test_create_view(mocker: MockerFixture):
     )
 
 
-def test_create_materialized_view(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_MATERIALIZED_VIEWS = True
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), materialized=True)
     adapter.create_view(
         "test_view", parse_one("SELECT a FROM tbl"), replace=False, materialized=True
     )
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE OR REPLACE MATERIALIZED VIEW "test_view" AS SELECT "a" FROM "tbl"'),
             call('CREATE MATERIALIZED VIEW "test_view" AS SELECT "a" FROM "tbl"'),
@@ -50,16 +42,12 @@ def test_create_materialized_view(mocker: MockerFixture):
     )
 
 
-def test_create_schema(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+def test_create_schema(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.create_schema("test_schema")
     adapter.create_schema("test_schema", ignore_if_exists=False)
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE SCHEMA IF NOT EXISTS "test_schema"'),
             call('CREATE SCHEMA "test_schema"'),
@@ -67,12 +55,9 @@ def test_create_schema(mocker: MockerFixture):
     )
 
 
-def test_columns(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-
-    connection_mock.cursor.return_value = cursor_mock
-    cursor_mock.fetchall.return_value = [
+def test_columns(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.cursor.fetchall.return_value = [
         ("id", "int"),
         ("name", "string"),
         ("price", "double"),
@@ -81,8 +66,6 @@ def test_columns(mocker: MockerFixture):
         ("# col_name", "data_type"),
         ("ds", "string"),
     ]
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     assert adapter.columns("test_table") == {
         "id": exp.DataType.build("int"),
         "name": exp.DataType.build("string"),
@@ -90,33 +73,23 @@ def test_columns(mocker: MockerFixture):
         "ds": exp.DataType.build("string"),
     }
 
-    cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
+    adapter.cursor.execute.assert_called_once_with('DESCRIBE "test_table"')
 
 
-def test_table_exists(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+def test_table_exists(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     assert adapter.table_exists("test_table")
-    cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
+    adapter.cursor.execute.assert_called_once_with('DESCRIBE "test_table"')
 
-    cursor_mock = mocker.Mock()
-    cursor_mock.execute.side_effect = RuntimeError("error")
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+    adapter.cursor.reset_mock()
+    adapter.cursor.execute.side_effect = RuntimeError("error")
     assert not adapter.table_exists("test_table")
-    cursor_mock.execute.assert_called_once_with('DESCRIBE "test_table"')
+    adapter.cursor.execute.assert_called_once_with('DESCRIBE "test_table"')
 
 
-def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_insert_overwrite_by_time_partition(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter._insert_overwrite_by_condition(
         "test_table",
         parse_one("SELECT a FROM tbl"),
@@ -124,10 +97,10 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
-    cursor_mock.begin.assert_called_once()
-    cursor_mock.commit.assert_called_once()
+    adapter.cursor.begin.assert_called_once()
+    adapter.cursor.commit.assert_called_once()
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call("""DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""),
             call('INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'),
@@ -135,12 +108,11 @@ def test_insert_overwrite_by_time_partition(mocker: MockerFixture):
     )
 
 
-def test_insert_overwrite_by_time_partition_supports_insert_overwrite(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_insert_overwrite_by_time_partition_supports_insert_overwrite(
+    make_mocked_engine_adapter: t.Callable,
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     adapter._insert_overwrite_by_condition(
         "test_table",
@@ -149,17 +121,15 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite(mocker: Mo
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         """INSERT OVERWRITE TABLE "test_table" ("a", "b") SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
-def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
+    make_mocked_engine_adapter: t.Callable,
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter._insert_overwrite_by_condition(
@@ -169,17 +139,13 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(moc
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
-def test_insert_overwrite_by_time_partition_replace_where(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+def test_insert_overwrite_by_time_partition_replace_where(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     adapter._insert_overwrite_by_condition(
         "test_table",
@@ -188,17 +154,16 @@ def test_insert_overwrite_by_time_partition_replace_where(mocker: MockerFixture)
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         """INSERT INTO "test_table" ("a", "b") REPLACE WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
-def test_insert_overwrite_by_time_partition_replace_where_pandas(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_insert_overwrite_by_time_partition_replace_where_pandas(
+    make_mocked_engine_adapter: t.Callable,
+):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter._insert_overwrite_by_condition(
@@ -208,34 +173,28 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(mocker: MockerF
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         """INSERT INTO "test_table" ("a", "ds") REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
-def test_insert_append_query(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.insert_append(
         "test_table",
         parse_one("SELECT a FROM tbl"),
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'
     )
 
 
-def test_insert_append_pandas(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.insert_append(
         "test_table",
@@ -246,10 +205,10 @@ def test_insert_append_pandas(mocker: MockerFixture):
         },
     )
 
-    cursor_mock.begin.assert_called_once()
-    cursor_mock.commit.assert_called_once()
+    adapter.cursor.begin.assert_called_once()
+    adapter.cursor.commit.assert_called_once()
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call(
                 'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")',
@@ -258,35 +217,27 @@ def test_insert_append_pandas(mocker: MockerFixture):
     )
 
 
-def test_create_table(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_create_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
     }
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.create_table("test_table", columns_to_types)
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT)'
     )
 
 
-def test_create_table_properties(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
     }
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.create_table(
         "test_table",
         columns_to_types,
@@ -294,7 +245,7 @@ def test_create_table_properties(mocker: MockerFixture):
         storage_format="ICEBERG",
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT)'
     )
 
@@ -622,6 +573,7 @@ def test_create_table_properties(mocker: MockerFixture):
     ],
 )
 def test_alter_table(
+    make_mocked_engine_adapter: t.Callable,
     mocker: MockerFixture,
     schema_differ_config: t.Dict[str, t.Any],
     current_table: t.Dict[str, str],
@@ -629,11 +581,8 @@ def test_alter_table(
     expected_final_structure: t.Dict[str, str],
     expected: t.List[str],
 ):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")
     adapter.SCHEMA_DIFFER = SchemaDiffer(**schema_differ_config)
     original_from_structs = adapter.SCHEMA_DIFFER._from_structs
 
@@ -665,17 +614,14 @@ def test_alter_table(
         target_table_name,
     )
 
-    cursor_mock.begin.assert_called_once()
-    cursor_mock.commit.assert_called_once()
-    cursor_mock.execute.assert_has_calls([call(x) for x in expected])
+    adapter.cursor.begin.assert_called_once()
+    adapter.cursor.commit.assert_called_once()
+    adapter.cursor.execute.assert_has_calls([call(x) for x in expected])
 
 
-def test_merge(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_merge(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.merge(
         target_table="target",
         source_table=t.cast(exp.Select, parse_one("SELECT id, ts, val FROM source")),
@@ -686,13 +632,13 @@ def test_merge(mocker: MockerFixture):
         },
         unique_key=["id"],
     )
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
-    cursor_mock.reset_mock()
+    adapter.cursor.reset_mock()
     adapter.merge(
         target_table="target",
         source_table=parse_one("SELECT id, ts, val FROM source"),
@@ -703,19 +649,16 @@ def test_merge(mocker: MockerFixture):
         },
         unique_key=["id", "ts"],
     )
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
 
-def test_merge_pandas(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_merge_pandas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.merge(
         target_table="target",
@@ -727,13 +670,13 @@ def test_merge_pandas(mocker: MockerFixture):
         },
         unique_key=["id"],
     )
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
-    cursor_mock.reset_mock()
+    adapter.cursor.reset_mock()
     adapter.merge(
         target_table="target",
         source_table=df,
@@ -744,36 +687,29 @@ def test_merge_pandas(mocker: MockerFixture):
         },
         unique_key=["id", "ts"],
     )
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
     )
 
 
-def test_replace_query(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
+def test_replace_query(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"'
     )
 
 
-def test_replace_query_pandas(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('DROP TABLE IF EXISTS "test_table"'),
             call('CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)'),
@@ -784,56 +720,41 @@ def test_replace_query_pandas(mocker: MockerFixture):
     )
 
 
-def test_create_table_like(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_create_table_like(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.create_table_like("target_table", "source_table")
-
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE IF NOT EXISTS "target_table" LIKE "source_table"'
     )
 
 
-def test_create_table_primary_key(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_create_table_primary_key(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapterWithIndexSupport)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
     }
-
-    adapter = EngineAdapterWithIndexSupport(lambda: connection_mock, "")  # type: ignore
     adapter.create_table("test_table", columns_to_types, primary_key=("cola", "colb"))
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INT, "colb" TEXT, PRIMARY KEY ("cola", "colb"))'
     )
 
 
-def test_create_index(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_create_index(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapterWithIndexSupport)
+    adapter.SUPPORTS_INDEXES = True
 
-    adapter = EngineAdapterWithIndexSupport(lambda: connection_mock, "")  # type: ignore
     adapter.create_index("test_table", "test_index", ("cola", "colb"))
-
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE INDEX IF NOT EXISTS "test_index" ON "test_table" ("cola", "colb")'
     )
 
 
-def test_rename_table(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_rename_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter = EngineAdapter(lambda: connection_mock, "")  # type: ignore
     adapter.rename_table("old_table", "new_table")
-
-    cursor_mock.execute.assert_called_once_with('ALTER TABLE "old_table" RENAME TO "new_table"')
+    adapter.cursor.execute.assert_called_once_with('ALTER TABLE "old_table" RENAME TO "new_table"')

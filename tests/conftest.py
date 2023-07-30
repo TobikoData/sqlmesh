@@ -23,6 +23,8 @@ from sqlmesh.utils.date import TimeLike, to_date, to_ds
 
 pytest_plugins = ["tests.common_fixtures"]
 
+T = t.TypeVar("T", bound=EngineAdapter)
+
 
 class SushiDataValidator:
     def __init__(self, engine_adapter: EngineAdapter):
@@ -182,6 +184,17 @@ def sushi_data_validator(sushi_context: Context) -> SushiDataValidator:
 @pytest.fixture
 def sushi_fixed_date_data_validator(sushi_context_fixed_date: Context) -> SushiDataValidator:
     return SushiDataValidator.from_context(sushi_context_fixed_date)
+
+
+@pytest.fixture
+def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
+    def _make_function(klass: t.Type[T], dialect: t.Optional[str] = None) -> T:
+        connection_mock = mocker.NonCallableMock()
+        cursor_mock = mocker.Mock()
+        connection_mock.cursor.return_value = cursor_mock
+        return klass(lambda: connection_mock, dialect=dialect or klass.DIALECT)
+
+    return _make_function
 
 
 def delete_cache(project_paths: str | t.List[str]) -> None:
