@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.scheduler import Interval
 from sqlmesh.core.snapshot import (
@@ -60,7 +60,7 @@ class BackfillIntervalsPerSnapshot(PydanticModel):
 
 class PlanDagSpec(PydanticModel):
     request_id: str
-    environment_name: str
+    environment_naming_info: EnvironmentNamingInfo
     new_snapshots: t.List[Snapshot]
     backfill_intervals_per_snapshot: t.List[BackfillIntervalsPerSnapshot]
     promoted_snapshots: t.List[SnapshotTableInfo]

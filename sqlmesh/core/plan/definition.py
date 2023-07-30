@@ -5,10 +5,10 @@ import typing as t
 from collections import defaultdict
 from enum import Enum
 
-from sqlmesh.core.config import CategorizerConfig
+from sqlmesh.core.config import CategorizerConfig, EnvironmentSuffixTarget
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
     Intervals,
@@ -64,6 +64,7 @@ class Plan:
         auto_categorization_enabled: Whether to apply auto categorization.
         effective_from: The effective date from which to apply forward-only changes on production.
         include_unmodified: Indicates whether to include unmodified models in the target development environment.
+        environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
     """
 
     def __init__(
@@ -79,6 +80,7 @@ class Plan:
         is_dev: bool = False,
         forward_only: bool = False,
         environment_ttl: t.Optional[str] = None,
+        environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.default,
         categorizer_config: t.Optional[CategorizerConfig] = None,
         auto_categorization_enabled: bool = True,
         effective_from: t.Optional[TimeLike] = None,
@@ -93,6 +95,7 @@ class Plan:
         self.is_dev = is_dev
         self.forward_only = forward_only
         self.environment_ttl = environment_ttl
+        self.environment_suffix_target = environment_suffix_target
         self.categorizer_config = categorizer_config or CategorizerConfig()
         self.auto_categorization_enabled = auto_categorization_enabled
         self.include_unmodified = include_unmodified
@@ -283,11 +286,14 @@ class Plan:
             previous_plan_id=self.context_diff.previous_plan_id,
             expiration_ts=expiration_ts,
             promoted_snapshot_ids=promoted_snapshot_ids,
+            suffix_target=self.environment_suffix_target,
         )
 
     @property
-    def environment_name(self) -> str:
-        return self.context_diff.environment
+    def environment_naming_info(self) -> EnvironmentNamingInfo:
+        return EnvironmentNamingInfo(
+            name=self.context_diff.environment, suffix_target=self.environment_suffix_target
+        )
 
     @property
     def restatements(self) -> t.Set[str]:

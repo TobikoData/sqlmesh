@@ -5,14 +5,9 @@ import typing as t
 
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotId,
-    SnapshotIdLike,
-    SnapshotInfoLike,
-    SnapshotTableInfo,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
 from sqlmesh.core.state_sync import StateSync, Versions
+from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.schedulers.airflow.client import AirflowClient
 
 if t.TYPE_CHECKING:
@@ -202,9 +197,7 @@ class HttpStateSync(StateSync):
         """
         raise NotImplementedError("Removing intervals is not supported by the Airflow state sync.")
 
-    def promote(
-        self, environment: Environment, no_gaps: bool = False
-    ) -> t.Tuple[t.List[SnapshotTableInfo], t.List[SnapshotTableInfo]]:
+    def promote(self, environment: Environment, no_gaps: bool = False) -> PromotionResult:
         """Update the environment to reflect the current state.
 
         This method verifies that snapshots have been pushed.
@@ -216,7 +209,7 @@ class HttpStateSync(StateSync):
                 snapshots for same models.
 
         Returns:
-           A tuple of (added snapshot table infos, removed snapshot table infos)
+           A promotion result object containing added, removed, and removed environment naming info
         """
         raise NotImplementedError(
             "Promoting environments is not supported by the Airflow state sync."

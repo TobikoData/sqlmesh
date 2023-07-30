@@ -8,6 +8,7 @@ from sqlglot import parse, parse_one
 
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -186,7 +187,7 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    evaluator.promote([snapshot], "test_env")
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
     adapter_mock.create_schema.assert_called_once_with("test_schema__test_env")
     adapter_mock.create_view.assert_called_once_with(
@@ -355,7 +356,7 @@ def test_promote_model_info(mocker: MockerFixture):
                 kind_name=ModelKindName.FULL,
             )
         ],
-        "test_env",
+        EnvironmentNamingInfo(name="test_env"),
     )
 
     adapter_mock.create_schema.assert_called_once_with("test_schema__test_env")

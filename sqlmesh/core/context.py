@@ -57,7 +57,7 @@ from sqlmesh.core.dialect import (
     parse,
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.metric import Metric
@@ -77,7 +77,12 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     to_table_mapping,
 )
-from sqlmesh.core.state_sync import CachingStateSync, StateReader, StateSync
+from sqlmesh.core.state_sync import (
+    CachingStateSync,
+    StateReader,
+    StateSync,
+    cleanup_expired_views,
+)
 from sqlmesh.core.table_diff import TableDiff
 from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
@@ -406,7 +411,11 @@ class Context(BaseContext):
         )
         try:
             self.scheduler(environment=environment).run(
-                environment, start, end, execution_time, ignore_cron=ignore_cron
+                environment,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                ignore_cron=ignore_cron,
             )
         except Exception as e:
             self.notification_target_manager.notify(
@@ -773,6 +782,7 @@ class Context(BaseContext):
             is_dev=environment != c.PROD,
             forward_only=forward_only,
             environment_ttl=environment_ttl,
+            environment_suffix_target=self.config.environment_suffix_target,
             categorizer_config=self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
@@ -1138,7 +1148,11 @@ class Context(BaseContext):
         return {
             name: snapshot.table_name()
             if snapshot.version
-            else snapshot.qualified_view_name.for_environment(c.PROD)
+            else snapshot.qualified_view_name.for_environment(
+                EnvironmentNamingInfo(
+                    name=c.PROD, suffix_target=self.config.environment_suffix_target
+                )
+            )
             for name, snapshot in self.snapshots.items()
         }
 
@@ -1185,14 +1199,7 @@ class Context(BaseContext):
 
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()
-        expired_schemas = {
-            snapshot.qualified_view_name.schema_for_environment(expired_environment.name)
-            for expired_environment in expired_environments
-            for snapshot in expired_environment.snapshots
-        }
-        for expired_schema in expired_schemas:
-            self.engine_adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
-
+        cleanup_expired_views(self.engine_adapter, expired_environments)
         expired_snapshots = self.state_sync.delete_expired_snapshots()
         self.snapshot_evaluator.cleanup(expired_snapshots)
 

@@ -24,6 +24,63 @@ from sqlmesh.utils.date import TimeLike, to_date, to_ds
 pytest_plugins = ["tests.common_fixtures"]
 
 
+class DuckDBMetadata:
+    def __init__(self, engine_adapter: EngineAdapter):
+        assert engine_adapter.dialect == "duckdb"
+        self.engine_adapter = engine_adapter
+
+    @classmethod
+    def from_context(cls, context: Context):
+        return cls(engine_adapter=context.engine_adapter)
+
+    @property
+    def tables(self) -> t.List[exp.Table]:
+        qualified_tables = self.qualified_tables
+        for table in qualified_tables:
+            table.set("db", None)
+        return qualified_tables
+
+    @property
+    def qualified_tables(self) -> t.List[exp.Table]:
+        return [
+            exp.to_table(x, dialect="duckdb")
+            for x in self._get_single_col(
+                f"SELECT table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND {self._system_schema_filter('table_schema')}",
+                "qualified_name",
+            )
+        ]
+
+    @property
+    def views(self) -> t.List[exp.Table]:
+        qualified_views = self.qualified_views
+        for view in qualified_views:
+            view.set("db", None)
+        return qualified_views
+
+    @property
+    def qualified_views(self) -> t.List[exp.Table]:
+        return [
+            exp.to_table(x, dialect="duckdb")
+            for x in self._get_single_col(
+                f"SELECT table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'VIEW' AND {self._system_schema_filter('table_schema')}",
+                "qualified_name",
+            )
+        ]
+
+    @property
+    def schemas(self) -> t.List[str]:
+        return self._get_single_col(
+            f"SELECT schema_name FROM information_schema.schemata WHERE catalog_name = 'memory' and {self._system_schema_filter('schema_name')}",
+            "schema_name",
+        )
+
+    def _system_schema_filter(self, col: str) -> str:
+        return f"{col} not in ('information_schema', 'pg_catalog', 'main')"
+
+    def _get_single_col(self, query: str, col: str) -> t.List[t.Any]:
+        return list(self.engine_adapter.fetchdf(query)[col].to_dict().values())
+
+
 class SushiDataValidator:
     def __init__(self, engine_adapter: EngineAdapter):
         self.engine_adapter = engine_adapter
@@ -122,10 +179,13 @@ def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
 
 
 def init_and_plan_context(
-    paths: str | t.List[str], mocker: MockerFixture, start: TimeLike = "1 week ago"
+    paths: str | t.List[str],
+    mocker: MockerFixture,
+    start: TimeLike = "1 week ago",
+    config="test_config",
 ) -> t.Tuple[Context, Plan]:
     delete_cache(paths)
-    sushi_context = Context(paths=paths, config="test_config")
+    sushi_context = Context(paths=paths, config=config)
     confirm = mocker.patch("sqlmesh.core.console.Confirm")
     confirm.ask.return_value = False
 

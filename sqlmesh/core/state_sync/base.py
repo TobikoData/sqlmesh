@@ -6,10 +6,11 @@ import logging
 import pkgutil
 import typing as t
 
+from pydantic import validator
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotId,
@@ -41,6 +42,20 @@ MIGRATIONS = [
     for migration in sorted(info.name for info in pkgutil.iter_modules(migrations.__path__))
 ]
 SCHEMA_VERSION: int = len(MIGRATIONS)
+
+
+class PromotionResult(PydanticModel):
+    added: t.List[SnapshotTableInfo]
+    removed: t.List[SnapshotTableInfo]
+    removed_environment_naming_info: t.Optional[EnvironmentNamingInfo]
+
+    @validator("removed_environment_naming_info")
+    def _validate_removed_environment_naming_info(
+        cls, v: t.Optional[EnvironmentNamingInfo], values: t.Dict
+    ) -> t.Optional[EnvironmentNamingInfo]:
+        if v and not values["removed"]:
+            raise ValueError("removed_environment_naming_info must be None if removed is empty")
+        return v
 
 
 class StateReader(abc.ABC):
@@ -246,9 +261,7 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def promote(
-        self, environment: Environment, no_gaps: bool = False
-    ) -> t.Tuple[t.List[SnapshotTableInfo], t.List[SnapshotTableInfo]]:
+    def promote(self, environment: Environment, no_gaps: bool = False) -> PromotionResult:
         """Update the environment to reflect the current state.
 
         This method verifies that snapshots have been pushed.

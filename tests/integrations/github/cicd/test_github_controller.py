@@ -32,7 +32,7 @@ def test_github_controller_pr_plan(
     mocked_apply = mocker.MagicMock()
     mocker.patch("sqlmesh.core.context.Context.apply", mocked_apply)
     pr_plan = controller.pr_plan
-    assert pr_plan.environment_name == "hello_world_2"
+    assert pr_plan.environment_naming_info.name == "hello_world_2"
     assert pr_plan.skip_backfill
     assert not pr_plan.auto_categorization_enabled
     assert not pr_plan.no_gaps
@@ -48,7 +48,7 @@ def test_github_controller_prod_plan(
     mocked_apply = mocker.MagicMock()
     mocker.patch("sqlmesh.core.context.Context.apply", mocked_apply)
     prod_plan = controller.prod_plan
-    assert prod_plan.environment_name == c.PROD
+    assert prod_plan.environment_naming_info.name == c.PROD
     assert not prod_plan.skip_backfill
     assert not prod_plan.auto_categorization_enabled
     assert prod_plan.no_gaps
@@ -64,7 +64,7 @@ def test_github_controller_prod_plan_with_gaps(
     mocked_apply = mocker.MagicMock()
     mocker.patch("sqlmesh.core.context.Context.apply", mocked_apply)
     prod_plan_with_gaps = controller.prod_plan_with_gaps
-    assert prod_plan_with_gaps.environment_name == c.PROD
+    assert prod_plan_with_gaps.environment_naming_info.name == c.PROD
     assert not prod_plan_with_gaps.skip_backfill
     assert not prod_plan_with_gaps.auto_categorization_enabled
     assert not prod_plan_with_gaps.no_gaps

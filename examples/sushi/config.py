@@ -6,6 +6,7 @@ from sqlmesh.core.config import (
     CategorizerConfig,
     Config,
     DuckDBConnectionConfig,
+    EnvironmentSuffixTarget,
     GatewayConfig,
     ModelDefaultsConfig,
     SparkConnectionConfig,
@@ -103,4 +104,11 @@ required_approvers_config = Config(
         ),
     ],
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+)
+
+
+environment_suffix_config = Config(
+    default_connection=DuckDBConnectionConfig(),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    environment_suffix_target=EnvironmentSuffixTarget.TABLE,
 )

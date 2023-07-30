@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import root_validator, validator
+from pydantic import Field, root_validator, validator
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.categorizer import CategorizerConfig
 from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
@@ -41,6 +42,7 @@ class Config(BaseConfig):
         pinned_environments: A list of development environment names that should not be deleted by the janitor task.
         model_defaults: Default values for model definitions.
         include_unmodified: Indicates whether to include unmodified models in the target development environment.
+        environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
     """
 
     gateways: t.Union[t.Dict[str, GatewayConfig], GatewayConfig] = GatewayConfig()
@@ -63,6 +65,9 @@ class Config(BaseConfig):
     username: str = ""
     include_unmodified: bool = False
     physical_schema_override: t.Dict[str, str] = {}
+    environment_suffix_target: EnvironmentSuffixTarget = Field(
+        default=EnvironmentSuffixTarget.default
+    )
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
