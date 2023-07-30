@@ -212,7 +212,7 @@ class SparkEngineAdapter(EngineAdapter):
         self.create_table(
             table_name,
             columns_to_types,
-            partitioned_by=primary_key,
+            partitioned_by=[exp.column(x) for x in primary_key] if primary_key else None,
         )
 
     def create_view(
