@@ -12,18 +12,14 @@ from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
 
 
-def test_create_table_properties(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
         "colb": exp.DataType.build("TEXT"),
         "colc": exp.DataType.build("TEXT"),
     }
-
-    adapter = SparkEngineAdapter(lambda: connection_mock)
     adapter.create_table(
         "test_table",
         columns_to_types,
@@ -32,11 +28,11 @@ def test_create_table_properties(mocker: MockerFixture):
         storage_format="ICEBERG",
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`)"
     )
 
-    cursor_mock.reset_mock()
+    adapter.cursor.reset_mock()
     adapter.create_table(
         "test_table",
         columns_to_types,
@@ -44,7 +40,7 @@ def test_create_table_properties(mocker: MockerFixture):
         storage_format="ICEBERG",
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`cola`, `colb`)"
     )
 
@@ -57,12 +53,8 @@ def test_create_table_properties(mocker: MockerFixture):
         )
 
 
-def test_alter_table(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = SparkEngineAdapter(lambda: connection_mock)
+def test_alter_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     current_table_name = "test_table"
     target_table_name = "test_table__1"
 
@@ -87,7 +79,7 @@ def test_alter_table(mocker: MockerFixture):
 
     adapter.alter_table(current_table_name, target_table_name)
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call("""ALTER TABLE `test_table` DROP COLUMN `b`"""),
             call("""ALTER TABLE `test_table` DROP COLUMN `id`"""),
@@ -102,40 +94,28 @@ def test_alter_table(mocker: MockerFixture):
     )
 
 
-def test_replace_query(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = SparkEngineAdapter(lambda: connection_mock, "spark")
+def test_replace_query(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT * FROM (SELECT `a` FROM `tbl`) AS `_subquery` WHERE 1 = 1"
     )
 
 
-def test_replace_query_pandas(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = SparkEngineAdapter(lambda: connection_mock, "spark")
+def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     mocker.patch("sqlmesh.core.engine_adapter.spark.SparkEngineAdapter._use_spark_session", False)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT * FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `test_table`(`a`, `b`)) AS `_subquery` WHERE 1 = 1"
     )
 
 
-def test_create_table_table_options(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = SparkEngineAdapter(lambda: connection_mock, "spark")
+def test_create_table_table_options(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 
     adapter.create_table(
         "test_table",
@@ -145,6 +125,16 @@ def test_create_table_table_options(mocker: MockerFixture):
         },
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) TBLPROPERTIES ('test.conf.key'='value')"
+    )
+
+
+def test_create_state_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    adapter.create_state_table("test_table", {"a": "int", "b": "int"}, primary_key=["a"])
+
+    adapter.cursor.execute.assert_called_once_with(
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITIONED BY (`a`)"
     )
