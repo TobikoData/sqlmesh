@@ -16,12 +16,10 @@ from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils import AttributeDict
 
 
-def test_insert_overwrite_by_time_partition_query(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+def test_insert_overwrite_by_time_partition_query(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
@@ -43,12 +41,10 @@ def test_insert_overwrite_by_time_partition_query(mocker: MockerFixture):
     ]
 
 
-def test_insert_overwrite_by_partition_query(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+def test_insert_overwrite_by_partition_query(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
@@ -79,11 +75,11 @@ def test_insert_overwrite_by_partition_query(mocker: MockerFixture):
     ]
 
 
-def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+def test_insert_overwrite_by_time_partition_pandas(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
     get_temp_bq_table = mocker.Mock()
     get_temp_bq_table.return_value = AttributeDict(
         {"project": "project", "dataset_id": "dataset", "table_id": "temp_table"}
@@ -151,12 +147,9 @@ def test_insert_overwrite_by_time_partition_pandas(mocker: MockerFixture):
     )
 
 
-def test_replace_query(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_replace_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
@@ -166,11 +159,9 @@ def test_replace_query(mocker: MockerFixture):
     assert sql_calls == ["CREATE OR REPLACE TABLE `test_table` AS SELECT `a` FROM `tbl`"]
 
 
-def test_replace_query_pandas(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
+def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
     get_bq_table = mocker.Mock()
     get_bq_table.return_value = AttributeDict(
         {"project": "project", "dataset_id": "dataset", "table_id": "test_table"}
@@ -229,13 +220,13 @@ def test_replace_query_pandas(mocker: MockerFixture):
     ],
 )
 def test_create_table_date_partition(
-    partition_by_cols, partition_by_statement, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable,
+    partition_by_cols,
+    partition_by_statement,
+    mocker: MockerFixture,
 ):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
@@ -264,13 +255,13 @@ def test_create_table_date_partition(
     ],
 )
 def test_create_table_time_partition(
-    partition_by_cols, partition_by_statement, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable,
+    partition_by_cols,
+    partition_by_statement,
+    mocker: MockerFixture,
 ):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
@@ -287,12 +278,9 @@ def test_create_table_time_partition(
     ]
 
 
-def test_merge(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
@@ -417,12 +405,9 @@ def _to_sql_calls(execute_mock: t.Any, identify: bool = True) -> t.List[str]:
     return output
 
 
-def test_create_table_table_options(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
+def test_create_table_table_options(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
-    adapter = BigQueryEngineAdapter(lambda: connection_mock)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )

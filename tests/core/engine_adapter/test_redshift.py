@@ -1,4 +1,5 @@
 # type: ignore
+import typing as t
 from unittest.mock import call
 
 import pandas as pd
@@ -10,27 +11,18 @@ from sqlglot import parse_one
 from sqlmesh.core.engine_adapter import RedshiftEngineAdapter
 
 
-def test_columns(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-    cursor_mock.fetchall.return_value = [("col", "INT")]
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
-
+def test_columns(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    adapter.cursor.fetchall.return_value = [("col", "INT")]
     resp = adapter.columns("db.table")
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         """SELECT "column_name", "data_type" FROM "SVV_COLUMNS" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
     )
     assert resp == {"col": exp.DataType.build("INT")}
 
 
-def test_create_view_from_dataframe(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_create_view_from_dataframe(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     pytest.raises(
         NotImplementedError,
@@ -41,12 +33,10 @@ def test_create_view_from_dataframe(mocker: MockerFixture):
     )
 
 
-def test_create_table_from_query_exists_no_if_not_exists(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_create_table_from_query_exists_no_if_not_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     mocker.patch(
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=True,
@@ -58,17 +48,15 @@ def test_create_table_from_query_exists_no_if_not_exists(mocker: MockerFixture):
         exists=False,
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE "test_table" AS SELECT "cola" FROM "table"'
     )
 
 
-def test_create_table_from_query_exists_and_if_not_exists(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_create_table_from_query_exists_and_if_not_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     mocker.patch(
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=True,
@@ -79,15 +67,13 @@ def test_create_table_from_query_exists_and_if_not_exists(mocker: MockerFixture)
         exists=True,
     )
 
-    cursor_mock.execute.assert_not_called()
+    adapter.cursor.execute.assert_not_called()
 
 
-def test_create_table_from_query_not_exists_if_not_exists(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_create_table_from_query_not_exists_if_not_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     mocker.patch(
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=False,
@@ -98,17 +84,15 @@ def test_create_table_from_query_not_exists_if_not_exists(mocker: MockerFixture)
         exists=True,
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE "test_table" AS SELECT "cola" FROM "table"'
     )
 
 
-def test_create_table_from_query_not_exists_no_if_not_exists(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_create_table_from_query_not_exists_no_if_not_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     mocker.patch(
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=False,
@@ -119,36 +103,28 @@ def test_create_table_from_query_not_exists_no_if_not_exists(mocker: MockerFixtu
         exists=False,
     )
 
-    cursor_mock.execute.assert_called_once_with(
+    adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE "test_table" AS SELECT "cola" FROM "table"'
     )
 
 
-def test_pandas_to_sql(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_pandas_to_sql(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     results = list(adapter._pandas_to_sql(df=df, columns_to_types={"a": "int", "b": "int"}))
     assert len(results) == 1
     assert results[0].sql(dialect="redshift") == "VALUES (1, 4), (2, 5), (3, 6)"
 
 
-def test_replace_query_with_query(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_replace_query_with_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     mocker.patch(
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=False,
     )
     adapter.replace_query(table_name="test_table", query_or_df=parse_one("SELECT cola FROM table"))
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             mocker.call('DROP TABLE IF EXISTS "test_table"'),
             mocker.call('CREATE TABLE "test_table" AS SELECT "cola" FROM "table"'),
@@ -156,12 +132,10 @@ def test_replace_query_with_query(mocker: MockerFixture):
     )
 
 
-def test_replace_query_with_df_table_exists(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_replace_query_with_df_table_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     mocker.patch(
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
@@ -180,10 +154,10 @@ def test_replace_query_with_df_table_exists(mocker: MockerFixture):
         },
     )
 
-    cursor_mock.begin.assert_called_once()
-    cursor_mock.commit.assert_called_once()
+    adapter.cursor.begin.assert_called_once()
+    adapter.cursor.commit.assert_called_once()
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE TABLE "test_table_temp_1234" ("a" INTEGER, "b" INTEGER)'),
             call('INSERT INTO "test_table_temp_1234" ("a", "b") VALUES (1, 4), (2, 5), (3, 6)'),
@@ -194,12 +168,10 @@ def test_replace_query_with_df_table_exists(mocker: MockerFixture):
     )
 
 
-def test_replace_query_with_df_table_not_exists(mocker: MockerFixture):
-    connection_mock = mocker.NonCallableMock()
-    cursor_mock = mocker.Mock()
-    connection_mock.cursor.return_value = cursor_mock
-
-    adapter = RedshiftEngineAdapter(lambda: connection_mock)
+def test_replace_query_with_df_table_not_exists(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     mocker.patch(
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
@@ -214,7 +186,7 @@ def test_replace_query_with_df_table_not_exists(mocker: MockerFixture):
         },
     )
 
-    cursor_mock.execute.assert_has_calls(
+    adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE TABLE "test_table" ("a" INTEGER, "b" INTEGER)'),
             call('INSERT INTO "test_table" ("a", "b") VALUES (1, 4), (2, 5), (3, 6)'),
