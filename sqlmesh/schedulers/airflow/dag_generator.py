@@ -10,7 +10,7 @@ from airflow.models import BaseOperator, baseoperator
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.plan import PlanStatus
 from sqlmesh.core.snapshot import (
@@ -120,12 +120,12 @@ class SnapshotDagGenerator:
 
     def _create_plan_application_dag(self, plan_dag_spec: common.PlanDagSpec) -> DAG:
         dag_id = common.plan_application_dag_id(
-            plan_dag_spec.environment_name, plan_dag_spec.request_id
+            plan_dag_spec.environment_naming_info.name, plan_dag_spec.request_id
         )
         logger.info(
             "Generating the plan application DAG '%s' for environment '%s'",
             dag_id,
-            plan_dag_spec.environment_name,
+            plan_dag_spec.environment_naming_info.name,
         )
 
         all_snapshots = {
@@ -144,7 +144,7 @@ class SnapshotDagGenerator:
             tags=[
                 common.SQLMESH_AIRFLOW_TAG,
                 common.PLAN_AIRFLOW_TAG,
-                plan_dag_spec.environment_name,
+                plan_dag_spec.environment_naming_info.name,
             ],
         ) as dag:
             start_task = EmptyOperator(task_id="plan_application_start")
@@ -252,13 +252,14 @@ class SnapshotDagGenerator:
         end_task = EmptyOperator(task_id="snapshot_promotion_end")
 
         environment = Environment(
-            name=request.environment_name,
+            name=request.environment_naming_info.name,
             snapshots=request.promoted_snapshots,
             start_at=request.start,
             end_at=request.end,
             plan_id=request.plan_id,
             previous_plan_id=request.previous_plan_id,
             expiration_ts=request.environment_expiration_ts,
+            suffix_target=request.environment_naming_info.suffix_target,
         )
 
         update_state_task = PythonOperator(
@@ -282,7 +283,7 @@ class SnapshotDagGenerator:
         if request.promoted_snapshots:
             create_views_task = self._create_snapshot_promotion_operator(
                 request.promoted_snapshots,
-                request.environment_name,
+                request.environment_naming_info,
                 request.ddl_concurrent_tasks,
                 request.is_dev,
                 "snapshot_promotion__create_views",
@@ -318,7 +319,7 @@ class SnapshotDagGenerator:
         if request.demoted_snapshots:
             delete_views_task = self._create_snapshot_demotion_operator(
                 request.demoted_snapshots,
-                request.environment_name,
+                request.environment_naming_info,
                 request.ddl_concurrent_tasks,
                 "snapshot_promotion__delete_views",
             )
@@ -408,7 +409,7 @@ class SnapshotDagGenerator:
     def _create_snapshot_promotion_operator(
         self,
         snapshots: t.List[SnapshotTableInfo],
-        environment: str,
+        environment_naming_info: EnvironmentNamingInfo,
         ddl_concurrent_tasks: int,
         is_dev: bool,
         task_id: str,
@@ -417,7 +418,7 @@ class SnapshotDagGenerator:
             **self._ddl_engine_operator_args,
             target=targets.SnapshotPromotionTarget(
                 snapshots=snapshots,
-                environment=environment,
+                environment_naming_info=environment_naming_info,
                 ddl_concurrent_tasks=ddl_concurrent_tasks,
                 is_dev=is_dev,
             ),
@@ -427,7 +428,7 @@ class SnapshotDagGenerator:
     def _create_snapshot_demotion_operator(
         self,
         snapshots: t.List[SnapshotTableInfo],
-        environment: str,
+        environment_naming_info: EnvironmentNamingInfo,
         ddl_concurrent_tasks: int,
         task_id: str,
     ) -> BaseOperator:
@@ -435,7 +436,7 @@ class SnapshotDagGenerator:
             **self._ddl_engine_operator_args,
             target=targets.SnapshotDemotionTarget(
                 snapshots=snapshots,
-                environment=environment,
+                environment_naming_info=environment_naming_info,
                 ddl_concurrent_tasks=ddl_concurrent_tasks,
             ),
             task_id=task_id,

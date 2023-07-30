@@ -8,6 +8,7 @@ from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
 from sqlmesh.core.engine_adapter import create_engine_adapter
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
 from sqlmesh.engines import commands
@@ -169,7 +170,7 @@ class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], Pydant
 
     Args:
         snapshots: The list of snapshots that should be promoted in the target environment.
-        environment: The target environment.
+        environment_naming_info: Naming information for the target environment.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
         is_dev: Indicates whether the promotion happens in the development mode and temporary
@@ -182,14 +183,14 @@ class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], Pydant
     ] = commands.promote
 
     snapshots: t.List[SnapshotTableInfo]
-    environment: str
+    environment_naming_info: EnvironmentNamingInfo
     ddl_concurrent_tasks: int
     is_dev: bool
 
     def _get_command_payload(self, context: Context) -> t.Optional[commands.PromoteCommandPayload]:
         return commands.PromoteCommandPayload(
             snapshots=self.snapshots,
-            environment=self.environment,
+            environment_naming_info=self.environment_naming_info,
             is_dev=self.is_dev,
         )
 
@@ -201,7 +202,7 @@ class SnapshotDemotionTarget(BaseTarget[commands.DemoteCommandPayload], Pydantic
 
     Args:
         snapshots: The list of snapshots that should be demoted in the target environment.
-        environment: The target environment.
+        environment_naming_info: Naming information for the target environment.
     """
 
     command_type: commands.CommandType = commands.CommandType.DEMOTE
@@ -210,13 +211,13 @@ class SnapshotDemotionTarget(BaseTarget[commands.DemoteCommandPayload], Pydantic
     ] = commands.demote
 
     snapshots: t.List[SnapshotTableInfo]
-    environment: str
+    environment_naming_info: EnvironmentNamingInfo
     ddl_concurrent_tasks: int
 
     def _get_command_payload(self, context: Context) -> t.Optional[commands.DemoteCommandPayload]:
         return commands.DemoteCommandPayload(
             snapshots=self.snapshots,
-            environment=self.environment,
+            environment_naming_info=self.environment_naming_info,
         )
 
 

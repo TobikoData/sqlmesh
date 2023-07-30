@@ -1,13 +1,14 @@
 import typing as t
 from enum import Enum
 
-from sqlmesh.core.environment import Environment
+from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
     SnapshotId,
     SnapshotTableInfo,
 )
+from sqlmesh.core.state_sync import cleanup_expired_views
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -38,13 +39,13 @@ class EvaluateCommandPayload(PydanticModel):
 
 class PromoteCommandPayload(PydanticModel):
     snapshots: t.List[SnapshotTableInfo]
-    environment: str
+    environment_naming_info: EnvironmentNamingInfo
     is_dev: bool
 
 
 class DemoteCommandPayload(PydanticModel):
     snapshots: t.List[SnapshotTableInfo]
-    environment: str
+    environment_naming_info: EnvironmentNamingInfo
 
 
 class CleanupCommandPayload(PydanticModel):
@@ -96,7 +97,7 @@ def promote(
         command_payload = PromoteCommandPayload.parse_raw(command_payload)
     evaluator.promote(
         command_payload.snapshots,
-        command_payload.environment,
+        command_payload.environment_naming_info,
         is_dev=command_payload.is_dev,
     )
 
@@ -106,7 +107,10 @@ def demote(
 ) -> None:
     if isinstance(command_payload, str):
         command_payload = DemoteCommandPayload.parse_raw(command_payload)
-    evaluator.demote(command_payload.snapshots, command_payload.environment)
+    evaluator.demote(
+        command_payload.snapshots,
+        command_payload.environment_naming_info,
+    )
 
 
 def cleanup(
@@ -115,13 +119,7 @@ def cleanup(
     if isinstance(command_payload, str):
         command_payload = CleanupCommandPayload.parse_raw(command_payload)
 
-    expired_schemas = {
-        snapshot.qualified_view_name.schema_for_environment(environment.name)
-        for environment in command_payload.environments
-        for snapshot in environment.snapshots
-    }
-    for expired_schema in expired_schemas:
-        evaluator.adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
+    cleanup_expired_views(evaluator.adapter, command_payload.environments)
     evaluator.cleanup(command_payload.snapshots)
 
 

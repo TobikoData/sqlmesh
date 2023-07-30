@@ -49,6 +49,7 @@ from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
 if t.TYPE_CHECKING:
     from sqlmesh.core.console import Console
     from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.environment import EnvironmentNamingInfo
 
 logger = logging.getLogger(__name__)
 
@@ -194,7 +195,7 @@ class SnapshotEvaluator:
     def promote(
         self,
         target_snapshots: t.Iterable[SnapshotInfoLike],
-        environment: str,
+        environment_naming_info: EnvironmentNamingInfo,
         is_dev: bool = False,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
@@ -203,7 +204,7 @@ class SnapshotEvaluator:
 
         Args:
             target_snapshots: Snapshots to promote.
-            environment: The target environment.
+            environment_naming_info: Naming information for the target environment.
             is_dev: Indicates whether the promotion happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             on_complete: A callback to call on each successfully promoted snapshot.
@@ -211,27 +212,27 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._promote_snapshot(s, environment, is_dev, on_complete),
+                lambda s: self._promote_snapshot(s, environment_naming_info, is_dev, on_complete),
                 self.ddl_concurrent_tasks,
             )
 
     def demote(
         self,
         target_snapshots: t.Iterable[SnapshotInfoLike],
-        environment: str,
+        environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         """Demotes the given collection of snapshots in the target environment by removing its view.
 
         Args:
             target_snapshots: Snapshots to demote.
-            environment: The target environment.
+            environment_naming_info: Naming info for the target environment.
             on_complete: A callback to call on each successfully demoted snapshot.
         """
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._demote_snapshot(s, environment, on_complete),
+                lambda s: self._demote_snapshot(s, environment_naming_info, on_complete),
                 self.ddl_concurrent_tasks,
             )
 
@@ -427,13 +428,13 @@ class SnapshotEvaluator:
     def _promote_snapshot(
         self,
         snapshot: SnapshotInfoLike,
-        environment: str,
+        environment_naming_info: EnvironmentNamingInfo,
         is_dev: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
         table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
         _evaluation_strategy(snapshot, self.adapter).promote(
-            snapshot.qualified_view_name, environment, table_name
+            snapshot.qualified_view_name, environment_naming_info, table_name
         )
 
         if on_complete is not None:
@@ -442,11 +443,11 @@ class SnapshotEvaluator:
     def _demote_snapshot(
         self,
         snapshot: SnapshotInfoLike,
-        environment: str,
+        environment_naming_info: EnvironmentNamingInfo,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
         _evaluation_strategy(snapshot, self.adapter).demote(
-            snapshot.qualified_view_name, environment
+            snapshot.qualified_view_name, environment_naming_info
         )
 
         if on_complete is not None:
@@ -584,22 +585,31 @@ class EvaluationStrategy(abc.ABC):
         """
 
     @abc.abstractmethod
-    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
+    def promote(
+        self,
+        view_name: QualifiedViewName,
+        environment_naming_info: EnvironmentNamingInfo,
+        table_name: str,
+    ) -> None:
         """Updates the target view to point to the target table.
 
         Args:
             view_name: The name of the target view.
-            environment: The target environment.
+            environment_naming_info: The naming information for the target environment
             table_name: The name of the target table.
         """
 
     @abc.abstractmethod
-    def demote(self, view_name: QualifiedViewName, environment: str) -> None:
+    def demote(
+        self,
+        view_name: QualifiedViewName,
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
         """Deletes the target view.
 
         Args:
             view_name: The name of the target view.
-            environment: The target environment.
+            environment_naming_info: Naming information for the target environment.
         """
 
 
@@ -646,34 +656,57 @@ class SymbolicStrategy(EvaluationStrategy):
     def delete(self, name: str) -> None:
         pass
 
-    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
+    def promote(
+        self,
+        view_name: QualifiedViewName,
+        environment_naming_info: EnvironmentNamingInfo,
+        table_name: str,
+    ) -> None:
         pass
 
-    def demote(self, view_name: QualifiedViewName, environment: str) -> None:
+    def demote(
+        self,
+        view_name: QualifiedViewName,
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
         pass
 
 
 class EmbeddedStrategy(SymbolicStrategy):
-    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
-        target_name = view_name.for_environment(environment)
+    def promote(
+        self,
+        view_name: QualifiedViewName,
+        environment_naming_info: EnvironmentNamingInfo,
+        table_name: str,
+    ) -> None:
+        target_name = view_name.for_environment(environment_naming_info)
         logger.info("Dropping view '%s' for non-materialized table", target_name)
         self.adapter.drop_view(target_name)
 
 
 class PromotableStrategy(EvaluationStrategy):
-    def promote(self, view_name: QualifiedViewName, environment: str, table_name: str) -> None:
-        schema = view_name.schema_for_environment(environment=environment)
+    def promote(
+        self,
+        view_name: QualifiedViewName,
+        environment_naming_info: EnvironmentNamingInfo,
+        table_name: str,
+    ) -> None:
+        schema = view_name.schema_for_environment(environment_naming_info=environment_naming_info)
         if schema is not None:
             self.adapter.create_schema(schema)
 
-        target_name = view_name.for_environment(environment)
+        target_name = view_name.for_environment(environment_naming_info)
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
         self.adapter.create_view(
             target_name, exp.select("*").from_(table_name, dialect=self.adapter.dialect)
         )
 
-    def demote(self, view_name: QualifiedViewName, environment: str) -> None:
-        target_name = view_name.for_environment(environment)
+    def demote(
+        self,
+        view_name: QualifiedViewName,
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
+        target_name = view_name.for_environment(environment_naming_info)
         logger.info("Dropping view '%s'", target_name)
         self.adapter.drop_view(target_name)
 

@@ -10,6 +10,7 @@ from sqlmesh.core.config import AutoCategorizationMode
 from sqlmesh.core.console import Console
 from sqlmesh.core.context import Context
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
@@ -26,7 +27,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.utils.date import TimeLike, to_date, to_ds, to_timestamp
-from tests.conftest import SushiDataValidator
+from tests.conftest import DuckDBMetadata, SushiDataValidator, init_and_plan_context
 
 
 @pytest.fixture(autouse=True)
@@ -714,29 +715,63 @@ def test_incremental_time_self_reference(
 @pytest.mark.integration
 @pytest.mark.core_integration
 def test_invalidating_environment(sushi_context: Context):
-    def get_schemas() -> t.Set[str]:
-        return set(
-            sushi_context.state_sync.state_sync.engine_adapter.fetchdf("SELECT * FROM information_schema.schemata")["schema_name"]  # type: ignore
-            .to_dict()
-            .values()
-        )
-
-    environment = "dev"
-    apply_to_environment(sushi_context, environment)
+    apply_to_environment(sushi_context, "dev")
     start_environment = sushi_context.state_sync.get_environment("dev")
     assert start_environment is not None
-    start_schemas = get_schemas()
+    metadata = DuckDBMetadata.from_context(sushi_context)
+    start_schemas = set(metadata.schemas)
     assert "sushi__dev" in start_schemas
     sushi_context.invalidate_environment("dev")
     invalidate_environment = sushi_context.state_sync.get_environment("dev")
     assert invalidate_environment is not None
-    schemas_prior_to_janitor = get_schemas()
+    schemas_prior_to_janitor = set(metadata.schemas)
     assert invalidate_environment.expiration_ts < start_environment.expiration_ts  # type: ignore
     assert start_schemas == schemas_prior_to_janitor
     sushi_context._run_janitor()
-    schemas_after_janitor = get_schemas()
+    schemas_after_janitor = set(metadata.schemas)
     assert sushi_context.state_sync.get_environment("dev") is None
     assert start_schemas - schemas_after_janitor == {"sushi__dev"}
+
+
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_environment_suffix_target_table(mocker: MockerFixture):
+    context, plan = init_and_plan_context(
+        "examples/sushi", mocker, config="environment_suffix_config"
+    )
+    context.apply(plan)
+    metadata = DuckDBMetadata.from_context(context)
+    environments_schemas = {"raw", "sushi"}
+    internal_schemas = {"sqlmesh", "sqlmesh__sushi"}
+    starting_schemas = environments_schemas | internal_schemas
+    # Make sure no new schemas are created
+    assert set(metadata.schemas) - starting_schemas == set()
+    prod_views = {x for x in metadata.qualified_views if x.db in environments_schemas}
+    # Make sure that all models are present
+    assert len(prod_views) == 10
+    apply_to_environment(context, "dev")
+    # Make sure no new schemas are created
+    assert set(metadata.schemas) - starting_schemas == set()
+    dev_views = {
+        x for x in metadata.qualified_views if x.db in environments_schemas and "__dev" in x.name
+    }
+    # Make sure that there is a view with `__dev` for each view that exists in prod
+    assert len(dev_views) == len(prod_views)
+    assert {x.name.replace("__dev", "") for x in dev_views} - {x.name for x in prod_views} == set()
+    context.invalidate_environment("dev")
+    context._run_janitor()
+    views_after_janitor = metadata.qualified_views
+    # Make sure that the number of views after the janitor is the same as when you subtract away dev views
+    assert len(views_after_janitor) == len(
+        {x.sql(dialect="duckdb") for x in views_after_janitor}
+        - {x.sql(dialect="duckdb") for x in dev_views}
+    )
+    # Double check there are no dev views
+    assert len({x for x in views_after_janitor if "__dev" in x.name}) == 0
+    # Make sure prod views were not removed
+    assert {x.sql(dialect="duckdb") for x in prod_views} - {
+        x.sql(dialect="duckdb") for x in views_after_janitor
+    } == set()
 
 
 def initial_add(context: Context, environment: str):
@@ -873,7 +908,11 @@ def validate_environment_views(
     for snapshot in snapshots:
         if snapshot.is_symbolic:
             continue
-        view_name = snapshot.qualified_view_name.for_environment(environment=environment)
+        view_name = snapshot.qualified_view_name.for_environment(
+            EnvironmentNamingInfo(
+                name=environment, suffix_target=context.config.environment_suffix_target
+            )
+        )
 
         assert adapter.table_exists(view_name)
         assert select_all(

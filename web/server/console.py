@@ -8,6 +8,7 @@ import unittest
 from sse_starlette.sse import ServerSentEvent
 
 from sqlmesh.core.console import TerminalConsole
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
@@ -36,13 +37,17 @@ class ApiConsole(TerminalConsole):
             data=json.dumps(payload),
         )
 
-    def start_evaluation_progress(self, batches: t.Dict[Snapshot, int], environment: str) -> None:
+    def start_evaluation_progress(
+        self,
+        batches: t.Dict[Snapshot, int],
+        environment_naming_info: EnvironmentNamingInfo,
+    ) -> None:
         self.current_task_status = {
             snapshot.name: {
                 "completed": 0,
                 "total": total_tasks,
                 "start": now_timestamp(),
-                "view_name": snapshot.qualified_view_name.for_environment(environment),
+                "view_name": snapshot.qualified_view_name.for_environment(environment_naming_info),
             }
             for snapshot, total_tasks in batches.items()
         }

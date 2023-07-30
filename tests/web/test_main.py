@@ -479,6 +479,7 @@ def test_get_environments(project_context: Context) -> None:
             "expiration_ts": None,
             "finalized_ts": None,
             "promoted_snapshot_ids": None,
+            "suffix_target": "schema",
         }
     }
 

@@ -1,10 +1,29 @@
 from __future__ import annotations
 
 import typing as t
+from enum import Enum
 
 from pydantic import validator
 
+from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import ConfigError
+
+
+class EnvironmentSuffixTarget(str, Enum):
+    SCHEMA = "schema"
+    TABLE = "table"
+
+    @property
+    def is_schema(self) -> bool:
+        return self == EnvironmentSuffixTarget.SCHEMA
+
+    @property
+    def is_table(self) -> bool:
+        return self == EnvironmentSuffixTarget.TABLE
+
+    @classproperty
+    def default(cls) -> EnvironmentSuffixTarget:
+        return EnvironmentSuffixTarget.SCHEMA
 
 
 def _concurrent_tasks_validator(v: t.Any) -> int:

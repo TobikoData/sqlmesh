@@ -103,7 +103,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             notification_target_manager=self.notification_target_manager,
         )
         is_run_successful = scheduler.run(
-            plan.environment_name,
+            plan.environment_naming_info,
             plan.start,
             plan.end,
             restatements=plan.restatements,
@@ -151,16 +151,18 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         """
         environment = plan.environment
 
-        added, removed = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
+        promotion_result = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
 
-        self.console.start_promotion_progress(environment.name, len(added) + len(removed))
+        self.console.start_promotion_progress(
+            environment.name, len(promotion_result.added) + len(promotion_result.removed)
+        )
 
         if not plan.is_dev:
             self.snapshot_evaluator.migrate(
                 [s for s in plan.snapshots if s.is_paused],
                 {s.snapshot_id: s for s in plan.snapshots},
             )
-            self.state_sync.unpause_snapshots(added, now())
+            self.state_sync.unpause_snapshots(promotion_result.added, now())
 
         def on_complete(snapshot: SnapshotInfoLike) -> None:
             self.console.update_promotion_progress(1)
@@ -168,16 +170,17 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         completed = False
         try:
             self.snapshot_evaluator.promote(
-                added,
-                environment=environment.name,
+                promotion_result.added,
+                environment.naming_info,
                 is_dev=plan.is_dev,
                 on_complete=on_complete,
             )
-            self.snapshot_evaluator.demote(
-                removed,
-                environment=environment.name,
-                on_complete=on_complete,
-            )
+            if promotion_result.removed_environment_naming_info:
+                self.snapshot_evaluator.demote(
+                    promotion_result.removed,
+                    promotion_result.removed_environment_naming_info,
+                    on_complete=on_complete,
+                )
             self.state_sync.finalize(environment)
             completed = True
         finally:
