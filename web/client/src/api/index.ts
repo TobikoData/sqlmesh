@@ -470,7 +470,7 @@ function useQueryWithTimeout<
 
   return {
     ...useQuery<TQueryFnData, TError, TData, TQueryKey>({
-      cacheTime: 10,
+      cacheTime: 0,
       enabled: false,
       queryKey: options.queryKey,
       queryFn: withDebounce ? debounced : queryFn,

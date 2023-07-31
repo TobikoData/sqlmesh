@@ -18,7 +18,6 @@ import PlanActions from './PlanActions'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 import PlanBackfillDates from './PlanBackfillDates'
-import { isCancelledError } from '@tanstack/react-query'
 import { type ModelEnvironment } from '~/models/environment'
 import { useApplyPayload, usePlanPayload } from './hooks'
 import { useChannelEvents } from '@api/channels'
@@ -41,7 +40,7 @@ function Plan({
   onClose: () => void
 }): JSX.Element {
   const dispatch = usePlanDispatch()
-  const { errors, removeError, addError } = useIDE()
+  const { errors, removeError } = useIDE()
 
   const {
     auto_apply,
@@ -249,19 +248,10 @@ function Plan({
       },
     ])
 
-    planApply({
-      throwOnError: true,
-    })
+    planApply()
       .then(({ data }) => {
         if (data?.type === EnumPlanApplyType.Virtual) {
           setPlanState(EnumPlanState.Finished)
-        }
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log('planApply', 'Request aborted by React Query')
-        } else {
-          addError(EnumErrorKey.ApplyPlan, error)
         }
       })
       .finally(() => {
