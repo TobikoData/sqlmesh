@@ -138,3 +138,23 @@ def test_create_state_table(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITIONED BY (`a`)"
     )
+
+
+def test_col_to_types_to_spark_schema():
+    from pyspark.sql import types
+
+    assert SparkEngineAdapter.convert_columns_to_types_to_pyspark_schema(
+        {
+            "cola": exp.DataType.build("text"),
+            "colb": exp.DataType.build("boolean"),
+            "colc": exp.DataType.build("int"),
+            "cold": exp.DataType.build("bigint"),
+        }
+    ) == types.StructType(
+        [
+            types.StructField("cola", types.StringType()),
+            types.StructField("colb", types.BooleanType()),
+            types.StructField("colc", types.IntegerType()),
+            types.StructField("cold", types.LongType()),
+        ]
+    )
