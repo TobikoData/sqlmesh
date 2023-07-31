@@ -25,7 +25,7 @@ from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
-from sqlmesh.utils.date import TimeLike, to_datetime
+from sqlmesh.utils.date import TimeLike, to_datetime, yesterday_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
@@ -136,7 +136,9 @@ class SnapshotDagGenerator:
         with DAG(
             dag_id=dag_id,
             schedule_interval="@once",
-            start_date=pendulum.now(tz="UTC"),
+            start_date=pendulum.instance(
+                to_datetime(plan_dag_spec.dag_start_ts or yesterday_timestamp())
+            ),
             max_active_tasks=plan_dag_spec.backfill_concurrent_tasks,
             catchup=False,
             is_paused_upon_creation=False,

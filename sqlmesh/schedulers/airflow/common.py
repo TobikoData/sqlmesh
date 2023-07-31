@@ -78,6 +78,7 @@ class PlanDagSpec(PydanticModel):
     is_dev: bool
     forward_only: t.Optional[bool]
     environment_expiration_ts: t.Optional[int]
+    dag_start_ts: t.Optional[int]
 
 
 class EnvironmentsResponse(PydanticModel):
