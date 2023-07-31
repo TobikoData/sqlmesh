@@ -239,11 +239,14 @@ from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsCon
 custom_config = Config(default_connection=DuckDBConnectionConfig(), model_defaults=ModelDefaultsConfig(dialect="duckdb"))
 """,
     )
-    load_config_from_paths(
+    config = load_config_from_paths(
         project_paths=[tmp_path / "config.py"],
         personal_paths=[tmp_path / "personal" / "config.yaml"],
         config_name="custom_config",
     )
+    assert config.gateways["local"].connection.database == "db.db"
+    assert config.default_connection.database is None
+    assert config.model_defaults.dialect == "duckdb"
 
 
 def test_load_config_from_env():
