@@ -80,8 +80,8 @@ class SparkSessionConnection:
             except Py4JError:
                 self.spark.sql(f"USE CATALOG {self.catalog}")
         self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
-        self.spark.conf.set("hive.exec.dynamic.partition", "true")
-        self.spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
+        # self.spark.conf.set("hive.exec.dynamic.partition", "true")
+        # self.spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
         return SparkSessionCursor(self.spark)
 
     def commit(self) -> None:

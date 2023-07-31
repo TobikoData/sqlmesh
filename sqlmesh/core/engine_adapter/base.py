@@ -681,7 +681,10 @@ class EngineAdapter:
             insert_exp = exp.insert(
                 query,
                 table,
-                columns=list(columns_to_types or []),
+                # temp patch for client (remove columns from replace where)
+                columns=list(columns_to_types or [])
+                if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where
+                else None,
                 overwrite=self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite,
             )
             if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
@@ -905,6 +908,7 @@ class EngineAdapter:
                 else e
             )
             logger.debug(f"Executing SQL:\n{sql}")
+            print(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager
