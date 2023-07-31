@@ -1,4 +1,5 @@
 import json
+import typing as t
 from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
@@ -509,7 +510,7 @@ def test_stamp(model: Model):
     assert original_fingerprint != stamped_fingerprint
 
 
-def test_table_name(snapshot: Snapshot):
+def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     # Mimic a direct breaking change.
     snapshot.fingerprint = SnapshotFingerprint(
         data_hash="1", metadata_hash="1", parent_data_hash="1"
@@ -573,6 +574,15 @@ def test_table_name(snapshot: Snapshot):
     assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
     snapshot.physical_schema_ = "private"
     assert snapshot.table_name_for_mapping(is_dev=True) == "private.name__3078928823"
+
+    fully_qualified_snapshot = make_snapshot(
+        SqlModel(name="catalog.db.table", query=parse_one("select 1, ds"))
+    )
+    fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert (
+        fully_qualified_snapshot.table_name(is_dev=False, for_read=False)
+        == "catalog.sqlmesh__db.catalog__db__table__2528031000"
+    )
 
 
 def test_categorize_change_sql(make_snapshot):

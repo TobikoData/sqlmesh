@@ -875,7 +875,14 @@ SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapsh
 
 def table_name(physical_schema: str, name: str, version: str, is_temp: bool = False) -> str:
     temp_suffx = "__temp" if is_temp else ""
-    return f"{physical_schema}.{name.replace('.', '__')}__{version}{temp_suffx}"
+    parts = [
+        physical_schema,
+        f"{name.replace('.', '__')}__{version}{temp_suffx}",
+    ]
+    catalog = exp.to_table(name).catalog
+    if catalog:
+        parts.insert(0, catalog)
+    return ".".join(parts)
 
 
 def fingerprint_from_node(
