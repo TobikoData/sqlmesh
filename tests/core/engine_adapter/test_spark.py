@@ -168,3 +168,13 @@ def test_col_to_types_to_spark_schema():
             types.StructField("col_timestamp", types.TimestampType()),
         ]
     )
+
+    assert (
+        SparkEngineAdapter.convert_columns_to_types_to_pyspark_schema(
+            {
+                "col_text": exp.DataType.build("text"),
+                "col_array": exp.DataType.build("array<int>"),
+            }
+        )
+        is None
+    )

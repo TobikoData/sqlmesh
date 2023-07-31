@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 
 import pandas as pd
@@ -27,6 +28,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.node import IntervalUnit
 
 
+logger = logging.getLogger(__name__)
+
+
 class SparkEngineAdapter(EngineAdapter):
     DIALECT = "spark"
     ESCAPE_JSON = True
@@ -43,7 +47,7 @@ class SparkEngineAdapter(EngineAdapter):
     @classmethod
     def convert_columns_to_types_to_pyspark_schema(
         cls, columns_to_types: t.Dict[str, exp.DataType]
-    ) -> spark_types.StructType:
+    ) -> t.Optional[spark_types.StructType]:
         from pyspark.sql import types as spark_types
 
         mapping = {
@@ -57,12 +61,20 @@ class SparkEngineAdapter(EngineAdapter):
             exp.DataType.Type.DATE: spark_types.DateType,
             exp.DataType.Type.TIMESTAMP: spark_types.TimestampType,
         }
-        return spark_types.StructType(
-            [
-                spark_types.StructField(col_name, mapping[col_type.this]())
-                for col_name, col_type in columns_to_types.items()
-            ]
-        )
+        try:
+            return spark_types.StructType(
+                [
+                    spark_types.StructField(col_name, mapping[col_type.this]())
+                    for col_name, col_type in columns_to_types.items()
+                ]
+            )
+        except KeyError as e:
+            logger.warning(
+                "Tried to convert column data types to Spark data types but got a type that was not supported."
+                "Currently nested or complex data types are not supported. Therefore Spark will attempt to infer the"
+                f"types from the data itself. Error: {str(e)}"
+            )
+            return None
 
     def _ensure_pyspark_df(
         self, generic_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
