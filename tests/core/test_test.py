@@ -33,7 +33,7 @@ def test_ctes(sushi_context: Context) -> None:
         );
 
         WITH source AS (
-            SELECT id FROM raw
+            SELECT id FROM sushi.raw
         ),
         renamed AS (
             SELECT id as fid FROM source
@@ -50,7 +50,7 @@ def test_ctes(sushi_context: Context) -> None:
 test_foo:
   model: sushi.foo
   inputs:
-    raw:
+    sushi.raw:
       - id: 1
   outputs:
     ctes:
@@ -82,7 +82,7 @@ def test_ctes_only(sushi_context: Context) -> None:
         );
 
         WITH source AS (
-            SELECT id FROM raw
+            SELECT id FROM sushi.raw
         ),
         renamed AS (
             SELECT id as fid FROM source
@@ -99,7 +99,7 @@ def test_ctes_only(sushi_context: Context) -> None:
 test_foo:
   model: sushi.foo
   inputs:
-    raw:
+    sushi.raw:
       - id: 1
   outputs:
     ctes:
@@ -129,7 +129,7 @@ def test_query_only(sushi_context: Context) -> None:
         );
 
         WITH source AS (
-            SELECT id FROM raw
+            SELECT id FROM sushi.raw
         ),
         renamed AS (
             SELECT id as fid FROM source
@@ -146,7 +146,7 @@ def test_query_only(sushi_context: Context) -> None:
 test_foo:
   model: sushi.foo
   inputs:
-    raw:
+    sushi.raw:
       - id: 1
   outputs:
     query:
@@ -173,7 +173,7 @@ def test_with_rows(sushi_context: Context) -> None:
         );
 
         WITH source AS (
-            SELECT id FROM raw
+            SELECT id FROM sushi.raw
         )
         SELECT id FROM source;
         """
@@ -187,7 +187,7 @@ def test_with_rows(sushi_context: Context) -> None:
 test_foo:
   model: sushi.foo
   inputs:
-    raw:
+    sushi.raw:
       rows:
         - id: 1
   outputs:
@@ -220,7 +220,7 @@ def test_without_rows(sushi_context: Context) -> None:
         );
 
         WITH source AS (
-            SELECT id FROM raw
+            SELECT id FROM sushi.raw
         )
         SELECT id FROM source;
         """
@@ -234,7 +234,7 @@ def test_without_rows(sushi_context: Context) -> None:
 test_foo:
   model: sushi.foo
   inputs:
-    raw:
+    sushi.raw:
       - id: 1
   outputs:
     ctes:
@@ -263,7 +263,7 @@ def test_column_order(sushi_context: Context) -> None:
             kind FULL,
         );
 
-        SELECT id, value, ds FROM raw;
+        SELECT id, value, ds FROM sushi.raw;
         """
                 )
             )
@@ -275,7 +275,7 @@ def test_column_order(sushi_context: Context) -> None:
 test_foo:
   model: sushi.foo
   inputs:
-    raw:
+    sushi.raw:
       - id: 1
         value: 2
         ds: 3
@@ -305,7 +305,7 @@ def test_nan(sushi_context: Context) -> None:
             kind FULL,
         );
 
-        SELECT id, value, ds FROM raw;
+        SELECT id, value, ds FROM sushi.raw;
         """
                 )
             )
@@ -317,7 +317,7 @@ def test_nan(sushi_context: Context) -> None:
 test_foo:
   model: sushi.foo
   inputs:
-    raw:
+    sushi.raw:
       - id: 1
         value: nan
         ds: 3

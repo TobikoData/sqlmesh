@@ -1810,3 +1810,63 @@ def test_model_table_properties():
                 """
             )
         )
+
+
+def test_same_number_of_qualifiers():
+    context = Context(config=Config())
+
+    model1 = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (name cat.db.model1, kind full);
+        SELECT id::INT AS id FROM (VALUES (1)) AS t (id)
+        """
+        ),
+    )
+
+    model2 = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (name db.model2, kind full);
+        SELECT id::INT AS id FROM cat.db.model1
+        """
+        ),
+    )
+
+    context.upsert_model(model1)
+
+    with pytest.raises(
+        ConfigError,
+        match="All table references must have the same number of qualifiers in their path.",
+    ):
+        context.upsert_model(model2)
+
+    model3 = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (name cat.db.model3, kind full);
+        SELECT id::INT AS id FROM model1
+        """
+        ),
+    )
+
+    with pytest.raises(
+        ConfigError,
+        match="All table references must have the same number of qualifiers in their path.",
+    ):
+        context.upsert_model(model3)
+
+    context = Context(config=Config())
+
+    # This should not raise since all table names are fully qualified as catalog.schema.table
+    context.upsert_model(model1)
+    context.upsert_model(
+        load_sql_based_model(
+            d.parse(
+                """
+            MODEL (name cat.db.model4, kind full);
+            SELECT id::INT AS id FROM cat.db.model1
+            """
+            ),
+        )
+    )

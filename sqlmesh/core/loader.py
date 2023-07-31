@@ -11,6 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlglot import exp
 from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
@@ -46,8 +47,14 @@ def update_model_schemas(
     schema = MappingSchema(normalize=False)
     optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
 
+    schema_depth = None
     for name in dag.sorted:
         model = models.get(name)
+
+        if schema_depth and len(exp.to_table(name).parts) != schema_depth:
+            raise ConfigError(
+                "All table references must have the same number of qualifiers in their path."
+            )
 
         # External models don't exist in the context, so we need to skip them
         if not model:
@@ -59,6 +66,9 @@ def update_model_schemas(
         columns_to_types = model.columns_to_types
         if columns_to_types is not None:
             schema.add_table(name, columns_to_types, dialect=model.dialect)
+
+        if not schema_depth:
+            schema_depth = schema.depth()
 
 
 @dataclass
