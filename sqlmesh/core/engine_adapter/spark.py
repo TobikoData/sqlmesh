@@ -15,6 +15,8 @@ from sqlmesh.utils import nullsafe_join
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    from pyspark.sql import types as spark_types
+
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import (
         DF,
@@ -38,14 +40,45 @@ class SparkEngineAdapter(EngineAdapter):
     def _use_spark_session(self) -> bool:
         return True
 
-    def _ensure_pyspark_df(self, generic_df: DF) -> PySparkDataFrame:
+    @classmethod
+    def convert_columns_to_types_to_pyspark_schema(
+        cls, columns_to_types: t.Dict[str, exp.DataType]
+    ) -> spark_types.StructType:
+        from pyspark.sql import types as spark_types
+
+        mapping = {
+            exp.DataType.Type.BOOLEAN: spark_types.BooleanType,
+            exp.DataType.Type.TEXT: spark_types.StringType,
+            exp.DataType.Type.INT: spark_types.IntegerType,
+            exp.DataType.Type.BIGINT: spark_types.LongType,
+            exp.DataType.Type.FLOAT: spark_types.FloatType,
+            exp.DataType.Type.DOUBLE: spark_types.DoubleType,
+            exp.DataType.Type.DECIMAL: spark_types.DecimalType,
+            exp.DataType.Type.DATE: spark_types.DateType,
+            exp.DataType.Type.TIMESTAMP: spark_types.TimestampType,
+        }
+        return spark_types.StructType(
+            [
+                spark_types.StructField(col_name, mapping[col_type.this]())
+                for col_name, col_type in columns_to_types.items()
+            ]
+        )
+
+    def _ensure_pyspark_df(
+        self, generic_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> PySparkDataFrame:
         pyspark_df = self.try_get_pyspark_df(generic_df)
         if pyspark_df:
             return pyspark_df
         df = self.try_get_pandas_df(generic_df)
         if df is None:
             raise SQLMeshError("Ensure PySpark DF can only be run on a PySpark or Pandas DataFrame")
-        return self.spark.createDataFrame(df)
+        return self.spark.createDataFrame(  # type: ignore
+            df,
+            schema=self.convert_columns_to_types_to_pyspark_schema(columns_to_types)  # type: ignore
+            if columns_to_types
+            else None,
+        )
 
     def fetchdf(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -69,7 +102,10 @@ class SparkEngineAdapter(EngineAdapter):
         df = self.try_get_df(query_or_df)
         if self._use_spark_session and df is not None:
             self._insert_pyspark_df(
-                table_name, self._ensure_pyspark_df(df), overwrite=True, where=where
+                table_name,
+                self._ensure_pyspark_df(df, columns_to_types),
+                overwrite=True,
+                where=where,
             )
         else:
             super()._insert_overwrite_by_condition(table_name, query_or_df, where, columns_to_types)
@@ -83,7 +119,9 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> None:
         df = self.try_get_df(query_or_df)
         if self._use_spark_session and df is not None:
-            self._insert_append_pyspark_df(table_name, self._ensure_pyspark_df(df))
+            self._insert_append_pyspark_df(
+                table_name, self._ensure_pyspark_df(df, columns_to_types)
+            )
         else:
             super().insert_append(table_name, query_or_df, columns_to_types, contains_json)
 
@@ -100,7 +138,7 @@ class SparkEngineAdapter(EngineAdapter):
         column_names = columns_to_types.keys()
         df = self.try_get_df(source_table)
         if self._use_spark_session and df is not None:
-            pyspark_df = self._ensure_pyspark_df(df)
+            pyspark_df = self._ensure_pyspark_df(df, columns_to_types)
             temp_view = self._get_temp_table(target_table, table_only=True)
             pyspark_df.createOrReplaceGlobalTempView(temp_view.sql(dialect=self.dialect))
             temp_view.set("db", "global_temp")
@@ -117,7 +155,9 @@ class SparkEngineAdapter(EngineAdapter):
         contains_json: bool = False,
     ) -> None:
         if self._use_spark_session:
-            self._insert_pyspark_df(table_name, self._ensure_pyspark_df(df), overwrite=False)
+            self._insert_pyspark_df(
+                table_name, self._ensure_pyspark_df(df, columns_to_types), overwrite=False
+            )
         else:
             super()._insert_append_pandas_df(table_name, df, columns_to_types, contains_json)
 
@@ -161,7 +201,7 @@ class SparkEngineAdapter(EngineAdapter):
         **kwargs: t.Any,
     ) -> None:
         if self._use_spark_session:
-            df = self._ensure_pyspark_df(df)
+            df = self._ensure_pyspark_df(df, columns_to_types)
             if isinstance(table_name, exp.Table):
                 table_name = table_name.sql(dialect=self.dialect)
             df.write.saveAsTable(table_name, mode="overwrite")

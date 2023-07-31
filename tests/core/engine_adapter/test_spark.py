@@ -138,3 +138,33 @@ def test_create_state_table(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITIONED BY (`a`)"
     )
+
+
+def test_col_to_types_to_spark_schema():
+    from pyspark.sql import types
+
+    assert SparkEngineAdapter.convert_columns_to_types_to_pyspark_schema(
+        {
+            "col_text": exp.DataType.build("text"),
+            "col_boolean": exp.DataType.build("boolean"),
+            "col_int": exp.DataType.build("int"),
+            "col_bigint": exp.DataType.build("bigint"),
+            "col_float": exp.DataType.build("float"),
+            "col_double": exp.DataType.build("double"),
+            "col_decimal": exp.DataType.build("decimal"),
+            "col_date": exp.DataType.build("date"),
+            "col_timestamp": exp.DataType.build("timestamp"),
+        }
+    ) == types.StructType(
+        [
+            types.StructField("col_text", types.StringType()),
+            types.StructField("col_boolean", types.BooleanType()),
+            types.StructField("col_int", types.IntegerType()),
+            types.StructField("col_bigint", types.LongType()),
+            types.StructField("col_float", types.FloatType()),
+            types.StructField("col_double", types.DoubleType()),
+            types.StructField("col_decimal", types.DecimalType()),
+            types.StructField("col_date", types.DateType()),
+            types.StructField("col_timestamp", types.TimestampType()),
+        ]
+    )
