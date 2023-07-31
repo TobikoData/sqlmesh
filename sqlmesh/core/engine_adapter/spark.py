@@ -35,6 +35,17 @@ class SparkEngineAdapter(EngineAdapter):
     DIALECT = "spark"
     ESCAPE_JSON = True
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
+    SQLGLOT_TO_SPARK_TYPE_MAPPING = {
+        exp.DataType.Type.BOOLEAN: spark_types.BooleanType,
+        exp.DataType.Type.TEXT: spark_types.StringType,
+        exp.DataType.Type.INT: spark_types.IntegerType,
+        exp.DataType.Type.BIGINT: spark_types.LongType,
+        exp.DataType.Type.FLOAT: spark_types.FloatType,
+        exp.DataType.Type.DOUBLE: spark_types.DoubleType,
+        exp.DataType.Type.DECIMAL: spark_types.DecimalType,
+        exp.DataType.Type.DATE: spark_types.DateType,
+        exp.DataType.Type.TIMESTAMP: spark_types.TimestampType,
+    }
 
     @property
     def spark(self) -> PySparkSession:
@@ -50,21 +61,12 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> t.Optional[spark_types.StructType]:
         from pyspark.sql import types as spark_types
 
-        mapping = {
-            exp.DataType.Type.BOOLEAN: spark_types.BooleanType,
-            exp.DataType.Type.TEXT: spark_types.StringType,
-            exp.DataType.Type.INT: spark_types.IntegerType,
-            exp.DataType.Type.BIGINT: spark_types.LongType,
-            exp.DataType.Type.FLOAT: spark_types.FloatType,
-            exp.DataType.Type.DOUBLE: spark_types.DoubleType,
-            exp.DataType.Type.DECIMAL: spark_types.DecimalType,
-            exp.DataType.Type.DATE: spark_types.DateType,
-            exp.DataType.Type.TIMESTAMP: spark_types.TimestampType,
-        }
         try:
             return spark_types.StructType(
                 [
-                    spark_types.StructField(col_name, mapping[col_type.this]())
+                    spark_types.StructField(
+                        col_name, cls.SQLGLOT_TO_SPARK_TYPE_MAPPING[col_type.this]()
+                    )
                     for col_name, col_type in columns_to_types.items()
                 ]
             )
