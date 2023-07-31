@@ -500,16 +500,25 @@ function mergeConnections(
   return new Map(connections)
 }
 
-export function getAllModelsForNode(
-  node: string,
-  lineage?: Record<string, Lineage>,
+export function getNodesBetween(
+  source: string,
+  target: string,
+  lineage: Record<string, Lineage> = {},
 ): string[] {
-  const models = lineage?.[node]?.models ?? []
-  const columns = Object.values(lineage?.[node]?.columns ?? {})
+  const models = lineage[source]?.models ?? []
+  const output: string[] = []
 
-  return Array.from(
-    new Set(
-      models.concat(columns.map(c => Object.keys(c.models ?? {})).flat()),
-    ),
-  )
+  if (models.includes(target)) {
+    output.push(toNodeOrEdgeId(target, source))
+  } else {
+    models.forEach(node => {
+      const found = getNodesBetween(node, target, lineage)
+
+      if (isArrayNotEmpty(found)) {
+        output.push(toNodeOrEdgeId(node, source), ...found)
+      }
+    })
+  }
+
+  return output
 }

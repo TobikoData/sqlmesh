@@ -3,10 +3,9 @@ import { useStoreContext } from '@context/context'
 import { type Lineage } from '@context/editor'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { createContext, useState, useContext, useCallback } from 'react'
-import { getAllModelsForNode, toNodeOrEdgeId } from './help'
+import { toNodeOrEdgeId } from './help'
 import { type ErrorIDE } from '~/library/pages/ide/context'
 import { EnumSide } from '~/types/enum'
-import { isArrayNotEmpty } from '@utils/index'
 
 export interface Connections {
   left: string[]
@@ -40,7 +39,6 @@ interface LineageFlow {
     React.SetStateAction<[ModelSQLMeshModel, Column] | undefined>
   >
   isActiveColumn: (modelName: string, columnName: string) => boolean
-  getNodesBetween: (source: string, target: string) => string[]
 }
 
 export const LineageFlowContext = createContext<LineageFlow>({
@@ -63,7 +61,6 @@ export const LineageFlowContext = createContext<LineageFlow>({
   setConnections: () => {},
   connections: new Map(),
   setActiveNodes: () => {},
-  getNodesBetween: () => [],
 })
 
 export default function LineageFlowProvider({
@@ -140,67 +137,9 @@ export default function LineageFlowProvider({
     [hasActiveEdge],
   )
 
-  const map = Object.keys(lineage ?? {}).reduce(
-    (acc: Record<string, string[]>, it) => {
-      acc[it] = getAllModelsForNode(it, lineage)
-
-      return acc
-    },
-    {},
-  )
-
-  // TODO: this is a mess, refactor
-  const getNodesBetween = useCallback(
-    function getNodesBetween(
-      source: string,
-      target: string,
-      visited: Set<string> = new Set(),
-    ): string[] {
-      const upstream = map[source]?.concat() ?? []
-      const downstream = Object.keys(map ?? {}).filter(
-        key => map[key]?.includes(source),
-      )
-      const output: string[] = []
-
-      visited.add(source)
-
-      if (upstream.includes(target)) {
-        output.push(toNodeOrEdgeId(target, source))
-      } else {
-        upstream.forEach(node => {
-          if (visited.has(node)) return
-
-          const found = getNodesBetween(node, target, visited)
-
-          if (isArrayNotEmpty(found)) {
-            output.push(toNodeOrEdgeId(node, source), ...found)
-          }
-        })
-      }
-
-      if (downstream.includes(target)) {
-        output.push(toNodeOrEdgeId(source, target))
-      } else {
-        downstream.forEach(node => {
-          if (visited.has(node)) return
-
-          const found = getNodesBetween(node, target, visited)
-
-          if (isArrayNotEmpty(found)) {
-            output.push(toNodeOrEdgeId(node, source), ...found)
-          }
-        })
-      }
-
-      return output
-    },
-    [lineage, map],
-  )
-
   return (
     <LineageFlowContext.Provider
       value={{
-        getNodesBetween,
         connections,
         setConnections,
         setLineage,
