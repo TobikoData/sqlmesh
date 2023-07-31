@@ -93,7 +93,7 @@ export function useApiMeta(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.Meta,
       trigger: 'API -> useApiMeta',
     },
   )
@@ -109,7 +109,7 @@ export function useApiModels(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.Models,
       trigger: 'API -> useApiModels',
     },
   )
@@ -125,7 +125,7 @@ export function useApiFiles(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.FileExplorer,
       trigger: 'API -> useApiFiles',
     },
   )
@@ -143,7 +143,7 @@ export function useApiFileByPath(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.FileExplorer,
       trigger: 'API -> useApiFileByPath',
     },
   )
@@ -161,7 +161,7 @@ export function useApiModelLineage(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.ModelLineage,
       trigger: 'API -> useApiModelLineage',
     },
   )
@@ -182,7 +182,7 @@ export function useApiColumnLineage(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.ColumnLineage,
       trigger: 'API -> useApiColumnLineage',
     },
   )
@@ -198,7 +198,7 @@ export function useApiEnvironments(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.Environments,
       trigger: 'API -> useApiEnvironments',
     },
   )
@@ -214,7 +214,7 @@ export function useApiCancelPlan(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.CancelPlan,
       trigger: 'API -> useApiCancelPlan',
     },
   )
@@ -243,7 +243,7 @@ export function useApiPlanRun(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.RunPlan,
       trigger: 'API -> useApiPlanRun',
     },
   )
@@ -274,7 +274,7 @@ export function useApiPlanApply(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.ApplyPlan,
       trigger: 'API -> useApiPlanApply',
     },
   )
@@ -292,7 +292,7 @@ export function useApiFetchdf(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.Fetchdf,
       trigger: 'API -> useApiFetchdf',
     },
   )
@@ -310,7 +310,7 @@ export function useApiRender(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.RenderQuery,
       trigger: 'API -> useApiRender',
     },
   )
@@ -328,7 +328,7 @@ export function useApiTableDiff(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.TableDiff,
       trigger: 'API -> useApiTableDiff',
     },
   )
@@ -346,7 +346,7 @@ export function useApiEvaluate(
     },
     {
       ...options,
-      errorKey: EnumErrorKey.API,
+      errorKey: EnumErrorKey.EvaluateModel,
       trigger: 'API -> useApiEvaluate',
     },
   )
@@ -384,7 +384,7 @@ function useQueryWithTimeout<
   {
     delay = DELAY,
     removeTimeoutErrorAfter,
-    errorKey,
+    errorKey = EnumErrorKey.API,
     trigger,
     withDebounce = true,
     debounceDelay = 1000,

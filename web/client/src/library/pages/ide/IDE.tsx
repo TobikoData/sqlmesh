@@ -261,8 +261,10 @@ export default function PageIDE(): JSX.Element {
   }, [confirmations])
 
   function updateModels(models?: Model[]): void {
-    removeError(EnumErrorKey.Models)
-    setModels(models)
+    if (isNotNil(models)) {
+      removeError(EnumErrorKey.Models)
+      setModels(models)
+    }
   }
 
   function updateTasks(data?: PlanProgress): void {

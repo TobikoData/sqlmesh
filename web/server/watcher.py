@@ -13,13 +13,13 @@ from web.server import models
 from web.server.api.endpoints.files import _get_directory, _get_file_with_content
 from web.server.api.endpoints.models import get_all_models
 from web.server.exceptions import ApiException
-from web.server.settings import get_loaded_context, get_path_mapping, get_settings
+from web.server.settings import get_context, get_path_mapping, get_settings
 from web.server.utils import is_relative_to
 
 
 async def watch_project(queue: asyncio.Queue) -> None:
     settings = get_settings()
-    context = await get_loaded_context(settings)
+    context = await get_context(settings)
     path_mapping = await get_path_mapping(settings)
 
     paths = [
