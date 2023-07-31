@@ -125,7 +125,11 @@ def test_create_plan_dag_spec(
     state_sync_mock.get_environment.return_value = old_environment
     state_sync_mock.get_snapshot_intervals.return_value = []
 
-    plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
+    with mock.patch(
+        "sqlmesh.schedulers.airflow.plan.now_timestamp",
+        side_effect=lambda: to_timestamp("2023-01-01"),
+    ):
+        plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
         environment_naming_info=EnvironmentNamingInfo(
@@ -152,6 +156,7 @@ def test_create_plan_dag_spec(
         users=[],
         is_dev=False,
         forward_only=True,
+        dag_start_ts=to_timestamp("2023-01-01"),
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -240,9 +245,11 @@ def test_restatement(
             dev_intervals=[],
         )
     ]
+    now_value = "2022-01-09T23:59:59+00:00"
     with mock.patch(
-        "sqlmesh.schedulers.airflow.plan.now",
-        side_effect=lambda: to_datetime("2022-01-09T23:59:59+00:00"),
+        "sqlmesh.schedulers.airflow.plan.now", side_effect=lambda: to_datetime(now_value)
+    ), mock.patch(
+        "sqlmesh.schedulers.airflow.plan.now_timestamp", side_effect=lambda: to_timestamp(now_value)
     ):
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
     assert plan_spec == common.PlanDagSpec(
@@ -271,6 +278,7 @@ def test_restatement(
         users=[],
         is_dev=False,
         forward_only=True,
+        dag_start_ts=to_timestamp(now_value),
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
