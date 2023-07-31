@@ -1143,6 +1143,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         super().__init__(*args, **kwargs)
         self.evaluation_batch_progress: t.Dict[str, t.Tuple[str, int]] = {}
         self.promotion_status: t.Tuple[int, int] = (0, 0)
+        self.model_creation_status: t.Tuple[int, int] = (0, 0)
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         super()._print(value, **kwargs)
@@ -1201,6 +1202,24 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         super().stop_evaluation_progress(success)
         print(f"Loading {'succeeded' if success else 'failed'}")
 
+    def start_creation_progress(self, total_tasks: int) -> None:
+        """Indicates that a new creation progress has begun."""
+        self.model_creation_status = (0, total_tasks)
+        print(f"Starting Creating New Model Versions")
+
+    def update_creation_progress(self, num_tasks: int) -> None:
+        """Update the snapshot creation progress."""
+        num_creations, total_creations = self.model_creation_status
+        num_creations += num_tasks
+        self.model_creation_status = (num_creations, total_creations)
+        if num_creations % 5 == 0:
+            print(f"Created New Model Versions: {num_creations}/{total_creations}")
+
+    def stop_creation_progress(self, success: bool = True) -> None:
+        """Stop the snapshot creation progress."""
+        self.model_creation_status = (0, 0)
+        print(f"New Model Creation {'succeeded' if success else 'failed'}")
+
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
         self.promotion_status = (0, total_tasks)
@@ -1216,6 +1235,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def stop_promotion_progress(self, success: bool = True) -> None:
         """Stop the snapshot promotion progress."""
+        self.promotion_status = (0, 0)
         print(f"Virtual Update {'succeeded' if success else 'failed'}")
 
 
