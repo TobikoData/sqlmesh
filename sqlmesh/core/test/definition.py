@@ -74,7 +74,8 @@ class ModelTest(unittest.TestCase):
                 v = v.real if hasattr(v, "real") else v
                 columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
             table = exp.to_table(table_name)
-            self.engine_adapter.create_schema(table.db, catalog_name=table.catalog)
+            if table.db:
+                self.engine_adapter.create_schema(table.db, catalog_name=table.catalog)
             self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
 
     def tearDown(self) -> None:
