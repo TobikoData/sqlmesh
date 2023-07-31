@@ -141,7 +141,7 @@ def test_create_state_table(make_mocked_engine_adapter: t.Callable):
 
 
 def test_col_to_types_to_spark_schema():
-    from pyspark.sql import types
+    from pyspark.sql import types as spark_types
 
     assert SparkEngineAdapter.convert_columns_to_types_to_pyspark_schema(
         {
@@ -155,17 +155,17 @@ def test_col_to_types_to_spark_schema():
             "col_date": exp.DataType.build("date"),
             "col_timestamp": exp.DataType.build("timestamp"),
         }
-    ) == types.StructType(
+    ) == spark_types.StructType(
         [
-            types.StructField("col_text", types.StringType()),
-            types.StructField("col_boolean", types.BooleanType()),
-            types.StructField("col_int", types.IntegerType()),
-            types.StructField("col_bigint", types.LongType()),
-            types.StructField("col_float", types.FloatType()),
-            types.StructField("col_double", types.DoubleType()),
-            types.StructField("col_decimal", types.DecimalType()),
-            types.StructField("col_date", types.DateType()),
-            types.StructField("col_timestamp", types.TimestampType()),
+            spark_types.StructField("col_text", spark_types.StringType()),
+            spark_types.StructField("col_boolean", spark_types.BooleanType()),
+            spark_types.StructField("col_int", spark_types.IntegerType()),
+            spark_types.StructField("col_bigint", spark_types.LongType()),
+            spark_types.StructField("col_float", spark_types.FloatType()),
+            spark_types.StructField("col_double", spark_types.DoubleType()),
+            spark_types.StructField("col_decimal", spark_types.DecimalType()),
+            spark_types.StructField("col_date", spark_types.DateType()),
+            spark_types.StructField("col_timestamp", spark_types.TimestampType()),
         ]
     )
 
