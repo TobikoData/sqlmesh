@@ -13,12 +13,13 @@ from sqlmesh.utils.yaml import load as yaml_load
 
 
 def load_config_from_paths(
-    project_paths: t.List[Path] = [],
-    personal_paths: t.List[Path] = [],
+    project_paths: t.Optional[t.List[Path]] = None,
+    personal_paths: t.Optional[t.List[Path]] = None,
     config_name: str = "config",
     load_from_env: bool = True,
 ) -> Config:
-
+    project_paths = project_paths or []
+    personal_paths = personal_paths or []
     visited_folders: t.Set[Path] = set()
     python_config: t.Optional[Config] = None
     non_python_configs = []
@@ -42,7 +43,7 @@ def load_config_from_paths(
 
         extension = path.name.split(".")[-1].lower()
         if extension in ("yml", "yaml"):
-            if config_name != "config":
+            if config_name != "config" and not python_config:
                 raise ConfigError(
                     "YAML configs do not support multiple configs. Use Python instead."
                 )
