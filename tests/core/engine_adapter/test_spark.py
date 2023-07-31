@@ -138,3 +138,43 @@ def test_create_state_table(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITIONED BY (`a`)"
     )
+
+
+def test_col_to_types_to_spark_schema():
+    from pyspark.sql import types as spark_types
+
+    assert SparkEngineAdapter.convert_columns_to_types_to_pyspark_schema(
+        {
+            "col_text": exp.DataType.build("text"),
+            "col_boolean": exp.DataType.build("boolean"),
+            "col_int": exp.DataType.build("int"),
+            "col_bigint": exp.DataType.build("bigint"),
+            "col_float": exp.DataType.build("float"),
+            "col_double": exp.DataType.build("double"),
+            "col_decimal": exp.DataType.build("decimal"),
+            "col_date": exp.DataType.build("date"),
+            "col_timestamp": exp.DataType.build("timestamp"),
+        }
+    ) == spark_types.StructType(
+        [
+            spark_types.StructField("col_text", spark_types.StringType()),
+            spark_types.StructField("col_boolean", spark_types.BooleanType()),
+            spark_types.StructField("col_int", spark_types.IntegerType()),
+            spark_types.StructField("col_bigint", spark_types.LongType()),
+            spark_types.StructField("col_float", spark_types.FloatType()),
+            spark_types.StructField("col_double", spark_types.DoubleType()),
+            spark_types.StructField("col_decimal", spark_types.DecimalType()),
+            spark_types.StructField("col_date", spark_types.DateType()),
+            spark_types.StructField("col_timestamp", spark_types.TimestampType()),
+        ]
+    )
+
+    assert (
+        SparkEngineAdapter.convert_columns_to_types_to_pyspark_schema(
+            {
+                "col_text": exp.DataType.build("text"),
+                "col_array": exp.DataType.build("array<int>"),
+            }
+        )
+        is None
+    )
