@@ -1190,7 +1190,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
                 [
                     s
                     for s, total in self.evaluation_batches.items()
-                    if self.evaluation_batch_progress[s.name][1] == total
+                    if self.evaluation_batch_progress.get(s.name, (None, -1))[1] == total
                 ]
             )
             total = len(self.evaluation_batch_progress)
