@@ -1,4 +1,4 @@
-import { useEffect, useCallback, Suspense } from 'react'
+import { useEffect, Suspense } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { Divider } from '@components/divider/Divider'
 import Header from './library/pages/root/Header'
@@ -6,26 +6,21 @@ import Footer from './library/pages/root/Footer'
 import { router } from './routes'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
-import { debounceAsync } from './utils'
 import { useApiMeta } from './api'
 import { useStoreContext } from '@context/context'
 
 export default function App(): JSX.Element {
   const setVersion = useStoreContext(s => s.setVersion)
 
-  const { refetch: getMeta } = useApiMeta()
-
-  const debouncedGetMeta = useCallback(debounceAsync(getMeta, 1000, true), [
-    getMeta,
-  ])
+  const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta({
+    debounceImmidiate: true,
+  })
 
   useEffect(() => {
-    void debouncedGetMeta().then(({ data }) => {
-      setVersion(data?.version)
-    })
+    void getMeta().then(({ data }) => setVersion(data?.version))
 
     return () => {
-      debouncedGetMeta.cancel()
+      void cancelRequestMeta()
     }
   }, [])
 

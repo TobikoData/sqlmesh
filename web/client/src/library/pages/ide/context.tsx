@@ -1,4 +1,5 @@
 import { type ApiExceptionPayload } from '@api/client'
+import { isString, uid } from '@utils/index'
 import { createContext, type ReactNode, useState, useContext } from 'react'
 
 export const EnumErrorKey = {
@@ -15,29 +16,38 @@ export const EnumErrorKey = {
   ColumnLineage: 'column-lineage',
   Meta: 'meta',
   FileExplorer: 'file-explorer',
+  Table: 'table',
+  TableDiff: 'table-diff',
 } as const
 
 export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]
 
 export interface ErrorIDE extends ApiExceptionPayload {
   key: ErrorKey
+  id: ID
   solution?: string
   tip?: string
 }
 
 interface IDE {
+  errors: Set<ErrorIDE>
   isPlanOpen: boolean
   setIsPlanOpen: (isPlanOpen: boolean) => void
-  errors: Map<ErrorKey, ErrorIDE>
-  addError: (key: ErrorKey, error: ErrorIDE) => void
-  removeError: (key: ErrorKey) => void
+  addError: (
+    key: ErrorKey,
+    error: ApiExceptionPayload,
+  ) => {
+    removeError: () => void
+    error: ErrorIDE
+  }
+  removeError: (error: ErrorIDE | ErrorKey) => void
 }
 
 export const IDEContext = createContext<IDE>({
+  errors: new Set(),
   isPlanOpen: false,
-  errors: new Map(),
   setIsPlanOpen: () => {},
-  addError: () => {},
+  addError: () => ({ removeError: () => {}, error: {} as unknown as ErrorIDE }),
   removeError: () => {},
 })
 
@@ -47,37 +57,46 @@ export default function IDEProvider({
   children: ReactNode
 }): JSX.Element {
   const [isPlanOpen, setIsPlanOpen] = useState(false)
-  const [errors, setErrors] = useState<Map<ErrorKey, ErrorIDE>>(new Map())
+  const [errors, setErrors] = useState<Set<ErrorIDE>>(new Set())
 
-  function addError(key: ErrorKey, error: ErrorIDE): void {
-    setErrors(errors => {
-      if (errors.has(EnumErrorKey.General)) {
-        errors.delete(EnumErrorKey.General)
-      }
+  function addError(
+    key: ErrorKey,
+    error: ApiExceptionPayload,
+  ): {
+    removeError: () => void
+    error: ErrorIDE
+  } {
+    const err = {
+      id: uid(),
+      key,
+      status: error.status ?? 500,
+      timestamp: error.timestamp ?? Date.now(),
+      message: error.message,
+      description: error.description,
+      type: error.type,
+      origin: error.origin,
+      trigger: error.trigger,
+      stack: error.stack,
+      traceback: error.traceback,
+    }
 
-      return new Map(
-        errors.set(key, {
-          key,
-          status: error.status,
-          timestamp: error.timestamp ?? Date.now(),
-          message: error.message,
-          description: error.description,
-          type: error.type,
-          origin: error.origin,
-          trigger: error.trigger,
-          stack: error.stack,
-          traceback: error.traceback,
-        }),
-      )
-    })
+    setErrors(errors => new Set(errors.add(err)))
+
+    return {
+      removeError: () => removeError(err),
+      error: err,
+    }
   }
 
-  function removeError(key: ErrorKey): void {
-    setErrors(errors => {
-      errors.delete(key)
-
-      return new Map(errors)
-    })
+  function removeError(error: ErrorIDE | ErrorKey): void {
+    setErrors(
+      errors =>
+        new Set(
+          Array.from(errors).filter(e =>
+            isString(error) ? e.key !== error : e !== error,
+          ),
+        ),
+    )
   }
 
   return (

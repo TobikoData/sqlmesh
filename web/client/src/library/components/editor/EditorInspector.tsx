@@ -1,4 +1,3 @@
-import { isCancelledError } from '@tanstack/react-query'
 import { type Table } from 'apache-arrow'
 import clsx from 'clsx'
 import React, { useEffect, useMemo, useState } from 'react'
@@ -12,7 +11,7 @@ import {
 } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { debounceAsync, isFalse, toDate, toDateFormat } from '~/utils'
+import { isFalse, toDate, toDateFormat } from '~/utils'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
@@ -213,12 +212,17 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
     limit: LIMIT,
   })
 
-  const { refetch: getFetchdf, isFetching } = useApiFetchdf({
-    sql: tab.file.content,
-    limit: form.limit,
-  })
-  const debouncedGetFetchdf = debounceAsync(getFetchdf, 1000, true)
-
+  const { refetch: getFetchdf, isFetching } = useApiFetchdf(
+    {
+      sql: tab.file.content,
+      limit: form.limit,
+    },
+    {
+      callbackError(error) {
+        setPreviewConsole([EnumErrorKey.Fetchdf, error])
+      },
+    },
+  )
   const shouldSendQuery = Object.values(form).every(Boolean)
 
   function sendQuery(): void {
@@ -226,22 +230,9 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
     setPreviewConsole(undefined)
     setPreviewTable(undefined)
 
-    debouncedGetFetchdf({
-      throwOnError: true,
+    void getFetchdf().then(({ data }) => {
+      setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
     })
-      .then(({ data }) => {
-        setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log(
-            'fetchdfApiCommandsFetchdfPost',
-            'Request aborted by React Query',
-          )
-        } else {
-          setPreviewConsole([EnumErrorKey.Fetchdf, error])
-        }
-      })
   }
 
   return (
@@ -337,13 +328,20 @@ function FormActionsModel({
 
   const { refetch: getRender } = useApiRender(
     Object.assign(form, { model: model.name }),
+    {
+      callbackError(error) {
+        setPreviewConsole([EnumErrorKey.RenderModel, error])
+      },
+    },
   )
-  const debouncedGetRender = debounceAsync(getRender, 1000, true)
-
   const { refetch: getEvaluate } = useApiEvaluate(
     Object.assign(form, { model: model.name }),
+    {
+      callbackError(error) {
+        setPreviewConsole([EnumErrorKey.EvaluateModel, error])
+      },
+    },
   )
-  const debouncedGetEvaluate = debounceAsync(getEvaluate, 1000, true)
 
   const shouldEvaluate =
     tab.file.isSQLMeshModel && Object.values(form).every(Boolean)
@@ -353,39 +351,13 @@ function FormActionsModel({
     setPreviewConsole(undefined)
     setPreviewTable(undefined)
 
-    debouncedGetRender({
-      throwOnError: true,
+    void getRender().then(({ data }) => {
+      setPreviewQuery(data?.sql)
     })
-      .then(({ data }) => {
-        setPreviewQuery(data?.sql)
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log(
-            'renderApiCommandsRenderPost',
-            'Request aborted by React Query',
-          )
-        } else {
-          setPreviewConsole([EnumErrorKey.RenderModel, error])
-        }
-      })
 
-    debouncedGetEvaluate({
-      throwOnError: true,
+    void getEvaluate().then(({ data }) => {
+      setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
     })
-      .then(({ data }) => {
-        setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log(
-            'fetchdfApiCommandsFetchdfPost',
-            'Request aborted by React Query',
-          )
-        } else {
-          setPreviewConsole([EnumErrorKey.EvaluateModel, error])
-        }
-      })
   }
 
   return (
@@ -528,16 +500,21 @@ function FormDiffModel({
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff({
-    source: selectedSource,
-    target: target.value,
-    model_or_snapshot: model.name,
-    limit,
-    on,
-    where,
-  })
-  const debouncedGetDiff = debounceAsync(getDiff, 1000, true)
-
+  const { refetch: getDiff } = useApiTableDiff(
+    {
+      source: selectedSource,
+      target: target.value,
+      model_or_snapshot: model.name,
+      limit,
+      on,
+      where,
+    },
+    {
+      callbackError(error) {
+        setPreviewConsole([EnumErrorKey.TableDiff, error])
+      },
+    },
+  )
   useEffect(() => {
     setSelectedSource(list[0]!.value)
   }, [list])
@@ -546,22 +523,9 @@ function FormDiffModel({
     setPreviewConsole(undefined)
     setPreviewDiff(undefined)
 
-    debouncedGetDiff({
-      throwOnError: true,
+    void getDiff().then(({ data }) => {
+      setPreviewDiff(data)
     })
-      .then(({ data }) => {
-        setPreviewDiff(data)
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log(
-            'renderApiCommandsRenderPost',
-            'Request aborted by React Query',
-          )
-        } else {
-          setPreviewConsole([EnumErrorKey.RenderModel, error])
-        }
-      })
   }
 
   const shouldEnableAction =
@@ -687,35 +651,27 @@ function FormDiff(): JSX.Element {
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff({
-    source,
-    target,
-    limit,
-    on,
-    where,
-  })
-  const debouncedGetDiff = debounceAsync(getDiff, 1000, true)
-
+  const { refetch: getDiff } = useApiTableDiff(
+    {
+      source,
+      target,
+      limit,
+      on,
+      where,
+    },
+    {
+      callbackError(error) {
+        setPreviewConsole([EnumErrorKey.TableDiff, error])
+      },
+    },
+  )
   function getTableDiff(): void {
     setPreviewConsole(undefined)
     setPreviewDiff(undefined)
 
-    debouncedGetDiff({
-      throwOnError: true,
+    void getDiff().then(({ data }) => {
+      setPreviewDiff(data)
     })
-      .then(({ data }) => {
-        setPreviewDiff(data)
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log(
-            'renderApiCommandsRenderPost',
-            'Request aborted by React Query',
-          )
-        } else {
-          setPreviewConsole([EnumErrorKey.RenderModel, error])
-        }
-      })
   }
 
   const shouldEnableAction = [source, target, limit, on].every(Boolean)

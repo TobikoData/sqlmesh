@@ -1,13 +1,9 @@
-import React, { useEffect, useCallback, lazy, Suspense } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import React, { useEffect, lazy, Suspense } from 'react'
 import {
   useApiModels,
-  apiCancelModels,
   useApiFiles,
-  apiCancelFiles,
   useApiEnvironments,
   useApiPlanRun,
-  apiCancelGetEnvironments,
 } from '../../../api'
 import {
   EnumPlanState,
@@ -17,7 +13,6 @@ import {
 } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import {
-  debounceAsync,
   isArrayEmpty,
   isFalse,
   isNil,
@@ -57,8 +52,6 @@ const PlanSidebar = lazy(async () => await import('./PlanSidebar'))
 export default function PageIDE(): JSX.Element {
   const location = useLocation()
   const navigate = useNavigate()
-
-  const client = useQueryClient()
 
   const { removeError, addError } = useIDE()
 
@@ -100,32 +93,23 @@ export default function PageIDE(): JSX.Element {
 
   // We need to fetch from IDE level to make sure
   // all pages have access to models and files
-  const { refetch: getModels } = useApiModels()
-  const { refetch: getFiles } = useApiFiles()
-  const { data: dataEnvironments, refetch: getEnvironments } =
-    useApiEnvironments()
-  const { refetch: planRun } = useApiPlanRun(environment.name, {
-    planOptions: {
-      skip_tests: true,
-      include_unmodified: true,
-    },
+  const { refetch: getModels, cancel: cancelRequestModels } = useApiModels({
+    debounceImmidiate: true,
   })
-
-  const debouncedGetModels = useCallback(debounceAsync(getModels, 1000, true), [
-    getModels,
-  ])
-
-  const debouncedGetFiles = useCallback(debounceAsync(getFiles, 1000, true), [
-    getFiles,
-  ])
-
-  const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
-    planRun,
-  ])
-
-  const debouncedGetEnvironemnts = useCallback(
-    debounceAsync(getEnvironments, 1000, true),
-    [getEnvironments],
+  const { refetch: getFiles, cancel: cancelRequestFiles } = useApiFiles()
+  const {
+    data: dataEnvironments,
+    refetch: getEnvironments,
+    cancel: cancelRequestEnvironments,
+  } = useApiEnvironments()
+  const { refetch: planRun, cancel: cancelRequestPlan } = useApiPlanRun(
+    environment.name,
+    {
+      planOptions: {
+        skip_tests: true,
+        include_unmodified: true,
+      },
+    },
   )
 
   useEffect(() => {
@@ -215,11 +199,11 @@ export default function PageIDE(): JSX.Element {
       setActiveRange()
     })
 
-    void debouncedGetModels().then(({ data }) => {
-      updateModels(data)
+    void getModels().then(({ data }) => {
+      updateModels(data as Model[])
     })
 
-    void debouncedGetFiles().then(({ data }) => {
+    void getFiles().then(({ data }) => {
       if (isNil(data)) return
 
       const project = new ModelDirectory(data)
@@ -231,14 +215,10 @@ export default function PageIDE(): JSX.Element {
     })
 
     return () => {
-      debouncedGetEnvironemnts.cancel()
-      debouncedGetModels.cancel()
-      debouncedGetFiles.cancel()
-      debouncedRunPlan.cancel()
-
-      apiCancelFiles(client)
-      apiCancelModels(client)
-      apiCancelGetEnvironments(client)
+      void cancelRequestModels()
+      void cancelRequestFiles()
+      void cancelRequestEnvironments()
+      void cancelRequestPlan()
 
       unsubscribeTasks?.()
       unsubscribeModels?.()
@@ -262,17 +242,17 @@ export default function PageIDE(): JSX.Element {
     // This use case is happening when user refreshes the page
     // while plan is still applying
     if (planState !== EnumPlanState.Applying) {
-      void debouncedRunPlan()
+      void planRun()
     }
   }, [dataEnvironments])
 
   useEffect(() => {
     if (models.size > 0 && isFalse(hasSynchronizedEnvironments())) {
-      void debouncedGetEnvironemnts()
+      void getEnvironments()
     }
 
     if (hasSynchronizedEnvironments()) {
-      void debouncedRunPlan()
+      void planRun()
     }
   }, [models])
 
@@ -281,7 +261,6 @@ export default function PageIDE(): JSX.Element {
   }, [confirmations])
 
   function updateModels(models?: Model[]): void {
-    removeError(EnumErrorKey.General)
     removeError(EnumErrorKey.Models)
     setModels(models)
   }
@@ -319,7 +298,7 @@ export default function PageIDE(): JSX.Element {
   function handlePromote(): void {
     setActivePlan(undefined)
 
-    void debouncedGetEnvironemnts()
+    void getEnvironments()
   }
 
   function restoreEditorTabsFromSaved(files: ModelFile[]): void {
