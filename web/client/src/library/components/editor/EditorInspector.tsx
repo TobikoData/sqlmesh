@@ -26,7 +26,6 @@ import {
   useApiRender,
   useApiTableDiff,
 } from '@api/index'
-import { EnumErrorKey } from '~/library/pages/ide/context'
 import TabList from '@components/tab/Tab'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 
@@ -204,7 +203,6 @@ function InspectorActions({
 
 function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
   const engine = useStoreEditor(s => s.engine)
 
@@ -212,23 +210,15 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
     limit: LIMIT,
   })
 
-  const { refetch: getFetchdf, isFetching } = useApiFetchdf(
-    {
-      sql: tab.file.content,
-      limit: form.limit,
-    },
-    {
-      callbackError(error) {
-        setPreviewConsole([EnumErrorKey.Fetchdf, error])
-      },
-    },
-  )
+  const { refetch: getFetchdf, isFetching } = useApiFetchdf({
+    sql: tab.file.content,
+    limit: form.limit,
+  })
   const shouldSendQuery = Object.values(form).every(Boolean)
 
   function sendQuery(): void {
-    setPreviewQuery(tab.file.content)
-    setPreviewConsole(undefined)
     setPreviewTable(undefined)
+    setPreviewQuery(tab.file.content)
 
     void getFetchdf().then(({ data }) => {
       setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
@@ -316,7 +306,6 @@ function FormActionsModel({
   model: ModelSQLMeshModel
 }): JSX.Element {
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
   const [form, setForm] = useState<FormModel>({
@@ -328,19 +317,9 @@ function FormActionsModel({
 
   const { refetch: getRender } = useApiRender(
     Object.assign(form, { model: model.name }),
-    {
-      callbackError(error) {
-        setPreviewConsole([EnumErrorKey.RenderModel, error])
-      },
-    },
   )
   const { refetch: getEvaluate } = useApiEvaluate(
     Object.assign(form, { model: model.name }),
-    {
-      callbackError(error) {
-        setPreviewConsole([EnumErrorKey.EvaluateModel, error])
-      },
-    },
   )
 
   const shouldEvaluate =
@@ -348,7 +327,6 @@ function FormActionsModel({
 
   function evaluateModel(): void {
     setPreviewQuery(undefined)
-    setPreviewConsole(undefined)
     setPreviewTable(undefined)
 
     void getRender().then(({ data }) => {
@@ -492,7 +470,6 @@ function FormDiffModel({
   list: Array<{ text: string; value: string }>
   target: { text: string; value: string }
 }): JSX.Element {
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
 
   const [selectedSource, setSelectedSource] = useState(list[0]!.value)
@@ -500,27 +477,19 @@ function FormDiffModel({
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff(
-    {
-      source: selectedSource,
-      target: target.value,
-      model_or_snapshot: model.name,
-      limit,
-      on,
-      where,
-    },
-    {
-      callbackError(error) {
-        setPreviewConsole([EnumErrorKey.TableDiff, error])
-      },
-    },
-  )
+  const { refetch: getDiff } = useApiTableDiff({
+    source: selectedSource,
+    target: target.value,
+    model_or_snapshot: model.name,
+    limit,
+    on,
+    where,
+  })
   useEffect(() => {
     setSelectedSource(list[0]!.value)
   }, [list])
 
   function getTableDiff(): void {
-    setPreviewConsole(undefined)
     setPreviewDiff(undefined)
 
     void getDiff().then(({ data }) => {
@@ -642,7 +611,6 @@ function FormDiffModel({
 }
 
 function FormDiff(): JSX.Element {
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
 
   const [source, setSource] = useState('')
@@ -651,22 +619,14 @@ function FormDiff(): JSX.Element {
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff(
-    {
-      source,
-      target,
-      limit,
-      on,
-      where,
-    },
-    {
-      callbackError(error) {
-        setPreviewConsole([EnumErrorKey.TableDiff, error])
-      },
-    },
-  )
+  const { refetch: getDiff } = useApiTableDiff({
+    source,
+    target,
+    limit,
+    on,
+    where,
+  })
   function getTableDiff(): void {
-    setPreviewConsole(undefined)
     setPreviewDiff(undefined)
 
     void getDiff().then(({ data }) => {
