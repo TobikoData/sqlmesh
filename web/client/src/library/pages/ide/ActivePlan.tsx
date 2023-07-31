@@ -1,10 +1,9 @@
+import { useApiCancelPlan } from '@api/index'
 import { Button } from '@components/button/Button'
 import TasksOverview from '@components/tasksOverview/TasksOverview'
 import { Popover, Transition } from '@headlessui/react'
-import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
 import { Fragment, useState, type MouseEvent } from 'react'
-import { apiCancelPlanApply } from '~/api'
 import { useStoreContext } from '~/context/context'
 import {
   type PlanProgress,
@@ -21,13 +20,13 @@ export default function ActivePlan({
 }: {
   plan: PlanProgress
 }): JSX.Element {
-  const client = useQueryClient()
-
   const environment = useStoreContext(s => s.environment)
 
   const planState = useStorePlan(s => s.state)
   const setPlanState = useStorePlan(s => s.setState)
   const setPlanAction = useStorePlan(s => s.setAction)
+
+  const { refetch: cancelPlan } = useApiCancelPlan()
 
   const [isShowing, setIsShowing] = useState(false)
 
@@ -35,12 +34,10 @@ export default function ActivePlan({
     setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
-    apiCancelPlanApply(client)
-      .catch(console.error)
-      .finally(() => {
-        setPlanAction(EnumPlanAction.None)
-        setPlanState(EnumPlanState.Cancelled)
-      })
+    void cancelPlan().finally(() => {
+      setPlanAction(EnumPlanAction.None)
+      setPlanState(EnumPlanState.Cancelled)
+    })
   }
 
   return (

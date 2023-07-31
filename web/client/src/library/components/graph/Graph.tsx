@@ -35,7 +35,6 @@ import {
   mergeConnections,
 } from './help'
 import {
-  debounceAsync,
   debounceSync,
   isArrayEmpty,
   isArrayNotEmpty,
@@ -49,12 +48,15 @@ import {
   ArrowRightCircleIcon,
   CheckIcon,
   ChevronDownIcon,
-  InformationCircleIcon,
 } from '@heroicons/react/24/solid'
+import {
+  InformationCircleIcon,
+  ClockIcon,
+  ExclamationCircleIcon,
+} from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import {
   type Column,
-  columnLineageApiLineageModelNameColumnNameGet,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
   type LineageColumn,
 } from '@api/client'
@@ -66,14 +68,12 @@ import {
   type ModelSQLMeshModel,
 } from '@models/sqlmesh-model'
 import { useLineageFlow } from './context'
-import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
-import { type ResponseWithDetail } from '@api/instance'
-import { type ErrorIDE } from '~/library/pages/ide/context'
 import { Listbox, Popover, Transition } from '@headlessui/react'
 import { CodeEditorDefault } from '@components/editor/EditorCode'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
+import { useApiColumnLineage } from '@api/index'
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
@@ -318,8 +318,6 @@ const ModelColumn = memo(function ModelColumn({
   isActive = false,
   hasLeft = false,
   hasRight = false,
-  getColumnLineage,
-  handleError,
   updateColumnLineage,
   removeEdges,
   selectManually,
@@ -335,16 +333,10 @@ const ModelColumn = memo(function ModelColumn({
   hasRight?: boolean
   withHandles?: boolean
   source?: string
-  getColumnLineage: (
-    columnName: string,
-  ) => Promise<
-    ColumnLineageApiLineageModelNameColumnNameGet200 & ResponseWithDetail
-  >
   updateColumnLineage: (
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
   removeEdges: (columnId: string) => void
-  handleError?: (error: ErrorIDE) => void
   selectManually?: React.Dispatch<
     React.SetStateAction<
       [ModelSQLMeshModel<InitialSQLMeshModel>, Column] | undefined
@@ -352,14 +344,14 @@ const ModelColumn = memo(function ModelColumn({
   >
   className?: string
 }): JSX.Element {
-  const debouncedGetColumnLineage = useCallback(
-    debounceAsync(getColumnLineage, 1000, true),
-    [getColumnLineage],
-  )
-
-  const [isFetching, setIsFetching] = useState(false)
-  const [isError, setIsError] = useState(false)
   const [isEmpty, setIsEmpty] = useState(false)
+
+  const {
+    refetch: getColumnLineage,
+    isFetching,
+    isError,
+    isTimeout,
+  } = useApiColumnLineage(nodeId, column.name)
 
   useEffect(() => {
     if (selectManually == null) return
@@ -374,22 +366,14 @@ const ModelColumn = memo(function ModelColumn({
     if (isActive) {
       removeEdges(id)
     } else {
-      setIsFetching(true)
-      setIsError(false)
       setIsEmpty(false)
 
-      debouncedGetColumnLineage(column.name)
-        .then(data => {
-          setIsEmpty(hasNoModels(data))
-          updateColumnLineage(data)
-        })
-        .catch(error => {
-          setIsError(true)
-          handleError?.(error)
-        })
-        .finally(() => {
-          setIsFetching(false)
-        })
+      void getColumnLineage().then(({ data }) => {
+        if (isNil(data)) return
+
+        setIsEmpty(hasNoModels(data))
+        updateColumnLineage(data)
+      })
     }
   }
 
@@ -411,11 +395,6 @@ const ModelColumn = memo(function ModelColumn({
           className,
         )}
       >
-        {isFetching && (
-          <Loading className="inline-block mr-2">
-            <Spinner className="w-3 h-3 border border-neutral-10" />
-          </Loading>
-        )}
         {withHandles ? (
           <ModelNodeHandles
             id={id}
@@ -424,6 +403,11 @@ const ModelColumn = memo(function ModelColumn({
             hasRight={hasRight}
             disabled={disabled}
           >
+            <ColumnLoading
+              isFetching={isFetching}
+              isError={isError}
+              isTimeout={isTimeout}
+            />
             <ModelColumnDisplay
               columnName={column.name}
               columnType={column.type}
@@ -431,26 +415,61 @@ const ModelColumn = memo(function ModelColumn({
               source={source}
               className={clsx(
                 isError && 'text-danger-500',
+                isTimeout && 'text-warning-500',
                 isEmpty && 'text-neutral-400 dark:text-neutral-600',
               )}
             />
           </ModelNodeHandles>
         ) : (
-          <ModelColumnDisplay
-            columnName={column.name}
-            columnType={column.type}
-            disabled={disabled}
-            source={source}
-            className={clsx(
-              isError && 'text-danger-500',
-              isEmpty && 'text-neutral-400 dark:text-neutral-600',
-            )}
-          />
+          <>
+            <ColumnLoading
+              isFetching={isFetching}
+              isError={isError}
+              isTimeout={isTimeout}
+            />
+            <ModelColumnDisplay
+              columnName={column.name}
+              columnType={column.type}
+              disabled={disabled}
+              source={source}
+              className={clsx(
+                isError && 'text-danger-500',
+                isTimeout && 'text-warning-500',
+                isEmpty && 'text-neutral-400 dark:text-neutral-600',
+              )}
+            />
+          </>
         )}
       </div>
     </div>
   )
 })
+
+function ColumnLoading({
+  isFetching = false,
+  isError = false,
+  isTimeout = false,
+}: {
+  isFetching: boolean
+  isError: boolean
+  isTimeout: boolean
+}): JSX.Element {
+  return (
+    <>
+      {isFetching && (
+        <Loading className="inline-block mr-1">
+          <Spinner className="w-3 h-3 border border-neutral-10" />
+        </Loading>
+      )}
+      {isTimeout && isFalse(isFetching) && (
+        <ClockIcon className="w-4 h-4 text-warning-500 mr-1" />
+      )}
+      {isError && isFalse(isFetching) && (
+        <ExclamationCircleIcon className="w-4 h-4 text-danger-500 mr-1" />
+      )}
+    </>
+  )
+}
 
 const ModelColumns = memo(function ModelColumns({
   nodeId,
@@ -469,8 +488,6 @@ const ModelColumns = memo(function ModelColumns({
   withHandles?: boolean
   withSource?: boolean
 }): JSX.Element {
-  const queryClient = useQueryClient()
-
   const {
     models,
     connections,
@@ -478,7 +495,6 @@ const ModelColumns = memo(function ModelColumns({
     setConnections,
     manuallySelectedColumn,
     setManuallySelectedColumn,
-    handleError,
     setLineage,
     removeActiveEdges,
     hasActiveEdge,
@@ -508,28 +524,6 @@ const ModelColumns = memo(function ModelColumns({
 
     return [active, rest]
   }, [nodeId, columns, showColumns, isActiveColumn, hasActiveEdge])
-
-  const getColumnLineage = useCallback(
-    async function getColumnLineage(
-      columnName: string,
-    ): Promise<
-      ColumnLineageApiLineageModelNameColumnNameGet200 & ResponseWithDetail
-    > {
-      return await queryClient.fetchQuery({
-        queryKey: [`/api/lineage`, nodeId, columnName],
-        queryFn: async ({ signal }) =>
-          await columnLineageApiLineageModelNameColumnNameGet(
-            nodeId,
-            columnName,
-            {
-              signal,
-            },
-          ),
-        cacheTime: 0,
-      })
-    },
-    [nodeId],
-  )
 
   const updateColumnLineage = useCallback(
     function updateColumnLineage(
@@ -609,8 +603,6 @@ const ModelColumns = memo(function ModelColumns({
               nodeId={nodeId}
               column={column}
               disabled={disabled}
-              handleError={handleError}
-              getColumnLineage={getColumnLineage}
               updateColumnLineage={updateColumnLineage}
               removeEdges={removeEdges}
               isActive={true}
@@ -668,8 +660,6 @@ const ModelColumns = memo(function ModelColumns({
             nodeId={nodeId}
             column={column}
             disabled={disabled}
-            handleError={handleError}
-            getColumnLineage={getColumnLineage}
             updateColumnLineage={updateColumnLineage}
             removeEdges={removeEdges}
             isActive={false}

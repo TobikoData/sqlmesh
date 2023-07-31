@@ -54,6 +54,7 @@ import {
   type ErrorKey,
 } from '~/library/pages/ide/context'
 import { debounceAsync, isNotNil } from '@utils/index'
+import { useState } from 'react'
 
 export interface ApiOptions {
   delay?: number
@@ -73,11 +74,12 @@ export interface ApiQueryMeta extends QueryMeta {
 
 const DELAY = 2000
 
-type UseQueryWithTimeoutOptions<
+export type UseQueryWithTimeoutOptions<
   TData = any,
   TError extends ApiExceptionPayload = ApiExceptionPayload,
 > = UseQueryResult<TData, TError> & {
   cancel: <TData = any>() => Promise<TData | undefined>
+  isTimeout: boolean
 }
 
 export function useApiMeta(
@@ -135,7 +137,7 @@ export function useApiFileByPath(
 ): UseQueryWithTimeoutOptions<File> {
   return useQueryWithTimeout(
     {
-      queryKey: [`/api/files`, path],
+      queryKey: ['/api/files', path],
       queryFn: async ({ signal }) =>
         await getFileApiFilesPathGet(path, { signal }),
     },
@@ -153,7 +155,7 @@ export function useApiModelLineage(
 ): UseQueryWithTimeoutOptions<ModelLineageApiLineageModelNameGet200> {
   return useQueryWithTimeout(
     {
-      queryKey: [`/api/lineage`, modelName],
+      queryKey: ['/api/lineage', modelName],
       queryFn: async ({ signal }) =>
         await modelLineageApiLineageModelNameGet(modelName, { signal }),
     },
@@ -172,7 +174,7 @@ export function useApiColumnLineage(
 ): UseQueryWithTimeoutOptions<ColumnLineageApiLineageModelNameColumnNameGet200> {
   return useQueryWithTimeout(
     {
-      queryKey: [`/api/lineage`, model, column],
+      queryKey: ['/api/lineage', model, column],
       queryFn: async ({ signal }) =>
         await columnLineageApiLineageModelNameColumnNameGet(model, column, {
           signal,
@@ -363,7 +365,7 @@ export function useMutationApiSaveFile(
       await writeFileApiFilesPathPost(path, body),
     async onMutate({ path }) {
       await client.cancelQueries({
-        queryKey: [`/api/files`, path],
+        queryKey: ['/api/files', path],
       })
     },
   })
@@ -391,9 +393,11 @@ function useQueryWithTimeout<
     callbackError,
   }: ApiOptions & { errorKey: ErrorKey },
 ): UseQueryWithTimeoutOptions<TData, TError> {
-  const key = options.queryKey.join('->')
+  const key = options.queryKey.join(' -> ')
   const queryClient = useQueryClient()
   const { addError } = useIDE()
+
+  const [isTimeout, setIsTimeout] = useState(false)
 
   let timeoutId: ReturnType<typeof setTimeout>
 
@@ -426,6 +430,8 @@ function useQueryWithTimeout<
         origin: 'useQueryTimeout',
         trigger,
       })
+
+      setIsTimeout(true)
 
       void cancel(false)
 
@@ -475,5 +481,6 @@ function useQueryWithTimeout<
       },
     }),
     cancel,
+    isTimeout,
   }
 }
