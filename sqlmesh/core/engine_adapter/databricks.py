@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
-    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
+    INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
