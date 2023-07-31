@@ -104,7 +104,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             catalog = self._extra_config.get("catalog")
             if catalog:
                 # Note: Spark 3.4+ Only API
-                self._spark.catalog.setCurrentCatalog(catalog)
+                self.spark.sql(f"USE CATALOG {catalog}")
             self._spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         return self._spark
 

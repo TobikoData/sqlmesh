@@ -73,7 +73,14 @@ class SparkSessionConnection:
             pass
         if self.catalog:
             # Note: Spark 3.4+ Only API
-            self.spark.catalog.setCurrentCatalog(self.catalog)
+            from py4j.protocol import Py4JError
+
+            try:
+                self.spark.catalog.setCurrentCatalog(self.catalog)
+            # Databricks does not support `setCurrentCatalog` with Unity catalog
+            # and shared clusters so we use the Databricks only SQL command instead
+            except Py4JError:
+                self.spark.sql(f"USE CATALOG {self.catalog}")
         self.spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         self.spark.conf.set("hive.exec.dynamic.partition", "true")
         self.spark.conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
