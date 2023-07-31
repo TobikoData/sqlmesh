@@ -142,13 +142,14 @@ class SparkEngineAdapter(EngineAdapter):
 
         df_writer = df.select(*self.spark.table(table_name).columns).write
         if overwrite:
-            df_writer = df_writer.mode("overwrite")
             if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
                 if where is None:
                     raise SQLMeshError(
                         "Cannot use Replace Where Insert/Overwrite without a where clause"
                     )
                 df_writer = df_writer.option("replaceWhere", where.sql(dialect=self.dialect))
+            else:
+                df_writer = df_writer.mode("overwrite")
         df_writer.insertInto(table_name)
 
     def _create_table_from_df(
