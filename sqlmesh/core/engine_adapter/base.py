@@ -457,13 +457,15 @@ class EngineAdapter:
         )
 
     def create_schema(
-        self, schema_name: str, ignore_if_exists: bool = True, warn_on_error: bool = True
+        self, schema_name: str, catalog_name: t.Optional[str] = None, ignore_if_exists: bool = True, warn_on_error: bool = True
     ) -> None:
         """Create a schema from a name or qualified table name."""
+        if catalog_name:
+            schema_name = f"{catalog_name}.{schema_name}"
         try:
             self.execute(
                 exp.Create(
-                    this=exp.to_identifier(schema_name.split(".")[0]),
+                    this=exp.to_table(schema_name),
                     kind="SCHEMA",
                     exists=ignore_if_exists,
                 )

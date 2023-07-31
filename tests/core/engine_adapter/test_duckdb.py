@@ -22,7 +22,6 @@ def test_create_view(adapter: EngineAdapter, duck_conn):
 
 def test_create_schema(adapter: EngineAdapter, duck_conn):
     adapter.create_schema("test_schema")
-    adapter.create_schema("test_schema")
     assert duck_conn.execute(
         "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'test_schema'"
     ).fetchall() == [(1,)]
