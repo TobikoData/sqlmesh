@@ -217,6 +217,38 @@ def test_load_config_unsupported_extension(tmp_path):
         load_config_from_paths(project_paths=[config_path])
 
 
+def test_load_python_config_with_personal_config(tmp_path):
+    create_temp_file(
+        tmp_path / "personal",
+        pathlib.Path("config.yaml"),
+        """
+gateways:
+    local:
+        connection:
+            type: duckdb
+            database: db.db
+""",
+    )
+
+    create_temp_file(
+        tmp_path,
+        pathlib.Path("config.py"),
+        """
+from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsConfig
+
+custom_config = Config(default_connection=DuckDBConnectionConfig(), model_defaults=ModelDefaultsConfig(dialect="duckdb"))
+""",
+    )
+    config = load_config_from_paths(
+        project_paths=[tmp_path / "config.py"],
+        personal_paths=[tmp_path / "personal" / "config.yaml"],
+        config_name="custom_config",
+    )
+    assert config.gateways["local"].connection.database == "db.db"
+    assert config.default_connection.database is None
+    assert config.model_defaults.dialect == "duckdb"
+
+
 def test_load_config_from_env():
     with mock.patch.dict(
         os.environ,
