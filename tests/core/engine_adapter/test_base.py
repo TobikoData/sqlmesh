@@ -154,6 +154,7 @@ def test_insert_overwrite_by_time_partition_replace_where(make_mocked_engine_ada
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
+    # temp replace where fix
     adapter.cursor.execute.assert_called_once_with(
         """INSERT INTO "test_table" REPLACE WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
