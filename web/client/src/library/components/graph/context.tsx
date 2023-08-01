@@ -29,6 +29,7 @@ interface LineageFlow {
   edges: Edge[]
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>
+  withAdjacent: boolean
   lineage?: Record<string, Lineage>
   withColumns: boolean
   models: Map<string, ModelSQLMeshModel>
@@ -39,6 +40,7 @@ interface LineageFlow {
   selectedNodes: SelectedNodes
   selectedEdges: Set<string>
   connections: Map<string, Connections>
+  setWithAdjacent: React.Dispatch<React.SetStateAction<boolean>>
   setMainNode: React.Dispatch<React.SetStateAction<string | undefined>>
   setSelectedNodes: React.Dispatch<React.SetStateAction<SelectedNodes>>
   setActiveNodes: React.Dispatch<React.SetStateAction<ActiveNodes>>
@@ -68,6 +70,8 @@ export const LineageFlowContext = createContext<LineageFlow>({
   mainNode: undefined,
   activeEdges: new Map(),
   activeNodes: new Set(),
+  withAdjacent: false,
+  setWithAdjacent: () => false,
   hasActiveEdge: () => false,
   addActiveEdges: () => {},
   removeActiveEdges: () => {},
@@ -120,6 +124,7 @@ export default function LineageFlowProvider({
   const [selectedNodes, setSelectedNodes] = useState<SelectedNodes>(new Set())
   const [adjacentNodes, setAdjacentNodes] = useState(new Set<string>())
   const [selectedEdges, setSelectedEdges] = useState(new Set<string>())
+  const [withAdjacent, setWithAdjacent] = useState(false)
 
   const hasActiveEdge = useCallback(
     function hasActiveEdge(edge?: string | null): boolean {
@@ -233,6 +238,8 @@ export default function LineageFlowProvider({
         models,
         manuallySelectedColumn,
         withColumns: hasColumns,
+        withAdjacent,
+        setWithAdjacent,
         setNodes,
         setEdges,
         setSelectedNodes,

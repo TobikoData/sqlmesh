@@ -748,13 +748,14 @@ function ModelColumnLineage({
     setNodes,
     edges,
     setEdges,
+    withAdjacent,
+    setWithAdjacent,
   } = useLineageFlow()
   const { setCenter } = useReactFlow()
 
   const [isEmpty, setIsEmpty] = useState(true)
   const [isBuildingLayout, setIsBuildingLayout] = useState(true)
   const [hasBackground, setHasBackground] = useState(true)
-  const [withAdjacent, setWithAdjacent] = useState(false)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
 

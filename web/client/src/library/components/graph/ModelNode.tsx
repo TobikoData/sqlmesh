@@ -22,6 +22,7 @@ export default function ModelNode({
     adjacentNodes,
     mainNode,
     activeNodes,
+    withAdjacent,
   } = useLineageFlow()
 
   const { model, columns } = useMemo(() => {
@@ -93,12 +94,13 @@ export default function ModelNode({
   const isModelSeed = model?.type === 'seed'
   const showColumns = withColumns && isArrayNotEmpty(columns)
   const type = isCTE ? 'cte' : model?.type
+  const isMainNode = mainNode === id || highlightedNodes.includes(id)
   const isActiveNode =
-    mainNode === id ||
-    highlightedNodes.includes(id) ||
-    selectedNodes.has(id) ||
-    activeNodes.has(id) ||
-    adjacentNodes.has(id)
+    selectedNodes.size > 0 || activeNodes.size > 0 || withAdjacent
+      ? selectedNodes.has(id) ||
+        activeNodes.has(id) ||
+        (withAdjacent && adjacentNodes.has(id))
+      : adjacentNodes.has(id)
 
   return (
     <div
@@ -109,7 +111,9 @@ export default function ModelNode({
         mainNode === id && 'border-4 border-brand-500',
         selectedNodes.has(id) && 'ring-8 ring-success-300',
         isNil(highlighted) ? splat : highlighted,
-        isActiveNode ? 'opacity-100' : 'opacity-40 hover:opacity-100',
+        isActiveNode || isMainNode
+          ? 'opacity-100'
+          : 'opacity-40 hover:opacity-100',
       )}
       style={{
         maxWidth: isNil(data.width) ? 'auto' : `${data.width as number}px`,
