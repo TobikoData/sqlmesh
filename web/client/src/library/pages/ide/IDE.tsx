@@ -94,7 +94,7 @@ export default function PageIDE(): JSX.Element {
   // We need to fetch from IDE level to make sure
   // all pages have access to models and files
   const { refetch: getModels, cancel: cancelRequestModels } = useApiModels({
-    debounceImmidiate: true,
+    debounceImmediate: true,
   })
   const { refetch: getFiles, cancel: cancelRequestFiles } = useApiFiles()
   const {

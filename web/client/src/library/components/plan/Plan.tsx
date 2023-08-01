@@ -59,7 +59,7 @@ function Plan({
 
   const elTaskProgress = useRef<HTMLDivElement>(null)
 
-  const [isPlanRan, seIsPlanRan] = useState(false)
+  const [isPlanRan, setIsPlanRan] = useState(false)
 
   const subscribe = useChannelEvents()
 
@@ -177,7 +177,7 @@ function Plan({
   }
 
   function cleanUp(): void {
-    seIsPlanRan(false)
+    setIsPlanRan(false)
 
     dispatch([
       {
@@ -288,7 +288,7 @@ function Plan({
         },
       ])
 
-      seIsPlanRan(true)
+      setIsPlanRan(true)
       setPlanState(EnumPlanState.Init)
 
       if (auto_apply) {

@@ -62,7 +62,7 @@ export interface ApiOptions {
   removeTimeoutErrorAfter?: number
   withDebounce?: boolean
   debounceDelay?: number
-  debounceImmidiate?: boolean
+  debounceImmediate?: boolean
   callbackCancel?: <TData = any>() => Promise<TData | undefined>
   callbackError?: (error: ErrorIDE) => void
 }
@@ -388,7 +388,7 @@ function useQueryWithTimeout<
     trigger,
     withDebounce = true,
     debounceDelay = 1000,
-    debounceImmidiate = false,
+    debounceImmediate = false,
     callbackCancel,
     callbackError,
   }: ApiOptions & { errorKey: ErrorKey },
@@ -404,7 +404,7 @@ function useQueryWithTimeout<
   const debounced = debounceAsync<TQueryFnData>(
     queryFn,
     debounceDelay,
-    debounceImmidiate,
+    debounceImmediate,
   )
 
   async function cancel<TData = any>(
