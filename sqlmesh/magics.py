@@ -22,7 +22,7 @@ from sqlmesh.core.dialect import format_model_expressions, parse
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.test import ModelTestMetadata, get_all_model_tests
 from sqlmesh.utils import sqlglot_dialects, yaml
-from sqlmesh.utils.errors import MagicError, MissingContextException
+from sqlmesh.utils.errors import MagicError, MissingContextException, SQLMeshError
 
 CONTEXT_VARIABLE_NAMES = [
     "context",
@@ -358,7 +358,7 @@ class SQLMeshMagics(Magics):
         console = self._context.console
         self._context.console = get_console(display=self.display)
 
-        self._context.run(
+        success = self._context.run(
             args.environment,
             start=args.start,
             end=args.end,
@@ -366,6 +366,8 @@ class SQLMeshMagics(Magics):
             ignore_cron=args.ignore_cron,
         )
         self._context.console = console
+        if not success:
+            raise SQLMeshError("Error Running DAG. Check logs for details.")
 
     @magic_arguments()
     @argument("model", type=str, help="The model.")
