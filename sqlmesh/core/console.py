@@ -1144,6 +1144,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self.evaluation_batch_progress: t.Dict[str, t.Tuple[str, int]] = {}
         self.promotion_status: t.Tuple[int, int] = (0, 0)
         self.model_creation_status: t.Tuple[int, int] = (0, 0)
+        self.migration_status: t.Tuple[int, int] = (0, 0)
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         super()._print(value, **kwargs)
@@ -1237,6 +1238,24 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         """Stop the snapshot promotion progress."""
         self.promotion_status = (0, 0)
         print(f"Virtual Update {'succeeded' if success else 'failed'}")
+
+    def start_migration_progress(self, total_tasks: int) -> None:
+        """Indicates that a new migration progress has begun."""
+        self.migration_status = (0, total_tasks)
+        print(f"Starting Migration")
+
+    def update_migration_progress(self, num_tasks: int) -> None:
+        """Update the migration progress."""
+        num_migrations, total_migrations = self.migration_status
+        num_migrations += num_tasks
+        self.migration_status = (num_migrations, total_migrations)
+        if num_migrations % 5 == 0:
+            print(f"Migration Updated {num_migrations}/{total_migrations}")
+
+    def stop_migration_progress(self, success: bool = True) -> None:
+        """Stop the migration progress."""
+        self.migration_status = (0, 0)
+        print(f"Migration {'succeeded' if success else 'failed'}")
 
 
 def get_console(**kwargs: t.Any) -> TerminalConsole | DatabricksMagicConsole | NotebookMagicConsole:
