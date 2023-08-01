@@ -7,7 +7,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import SnapshotTableInfo
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common
-from sqlmesh.utils.date import now
+from sqlmesh.utils.date import now, now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -97,6 +97,7 @@ def create_plan_dag_spec(
         is_dev=request.is_dev,
         forward_only=request.forward_only,
         environment_expiration_ts=request.environment.expiration_ts,
+        dag_start_ts=now_timestamp(),
     )
 
 
