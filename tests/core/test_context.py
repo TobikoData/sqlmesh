@@ -184,7 +184,7 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     mock_console = mocker.Mock()
     sushi_context.console = mock_console
     yesterday = yesterday_ds()
-    sushi_context.run(start=yesterday, end=yesterday)
+    success = sushi_context.run(start=yesterday, end=yesterday)
 
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync, sushi_context.snapshot_evaluator
@@ -198,6 +198,7 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")
     assert mock_console.show_model_difference_summary.called
+    assert success
 
 
 def test_evaluate_limit():
