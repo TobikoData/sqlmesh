@@ -299,7 +299,9 @@ def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.An
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
     """Evaluates the DAG of models using the built-in scheduler."""
     context = ctx.obj
-    context.run(environment, **kwargs)
+    success = context.run(environment, **kwargs)
+    if not success:
+        raise click.ClickException("Run DAG Failed. See output for details.")
 
 
 @cli.command("invalidate")

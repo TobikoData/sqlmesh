@@ -394,7 +394,7 @@ class Context(BaseContext):
         execution_time: t.Optional[TimeLike] = None,
         skip_janitor: bool = False,
         ignore_cron: bool = False,
-    ) -> None:
+    ) -> bool:
         """Run the entire dag through the scheduler.
 
         Args:
@@ -404,13 +404,16 @@ class Context(BaseContext):
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             skip_janitor: Whether to skip the janitor task.
             ignore_cron: Whether to ignore the model's cron schedule and run all available missing intervals.
+
+        Returns:
+            True if the run was successful, False otherwise.
         """
         environment = environment or c.PROD
         self.notification_target_manager.notify(
             NotificationEvent.RUN_START, environment=environment
         )
         try:
-            self.scheduler(environment=environment).run(
+            success = self.scheduler(environment=environment).run(
                 environment,
                 start=start,
                 end=end,
@@ -422,10 +425,20 @@ class Context(BaseContext):
                 NotificationEvent.RUN_FAILURE, traceback.format_exc()
             )
             raise e
-        self.notification_target_manager.notify(NotificationEvent.RUN_END, environment=environment)
+        if success:
+            self.notification_target_manager.notify(
+                NotificationEvent.RUN_END, environment=environment
+            )
+        else:
+            self.notification_target_manager.notify(
+                NotificationEvent.RUN_FAILURE, environment=environment
+            )
+            return success
 
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
+
+        return success
 
     @t.overload
     def get_model(
