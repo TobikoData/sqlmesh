@@ -748,8 +748,9 @@ function ModelColumnLineage({
     setNodes,
     edges,
     setEdges,
-    withAdjacent,
-    setWithAdjacent,
+    withConnected,
+    connectedNodes,
+    setWithConnected,
   } = useLineageFlow()
   const { setCenter } = useReactFlow()
 
@@ -799,23 +800,25 @@ function ModelColumnLineage({
           let stroke = 'var(--color-graph-edge-main)'
           let strokeWidth = 3
 
+          const isConnectedSource = connectedNodes.has(edge.source)
+          const isConnectedTarget = connectedNodes.has(edge.target)
+
           if (
             selectedEdges.has(edge.id) ||
-            (withAdjacent &&
-              (mainNode === edge.source || mainNode === edge.target))
+            (withConnected && isConnectedSource && isConnectedTarget)
           ) {
             strokeWidth = 5
             stroke = 'var(--color-graph-edge-selected)'
-            edge.zIndex = 100
+            edge.zIndex = 10
           } else {
             if (hasActiveEdge(edge.sourceHandle)) {
               stroke = 'var(--color-graph-edge-secondary)'
             } else if (hasActiveEdge(edge.targetHandle)) {
               stroke = 'var(--color-graph-edge-secondary)'
-            } else if (mainNode === edge.source || mainNode === edge.target) {
+            } else if (isConnectedSource && isConnectedTarget) {
               strokeWidth = 5
               stroke = 'var(--color-graph-edge-direct)'
-              edge.zIndex = 100
+              edge.zIndex = 10
             }
           }
 
@@ -861,7 +864,7 @@ function ModelColumnLineage({
         }),
       }
     },
-    [nodesAndEdges, selectedEdges, mainNode, withAdjacent],
+    [nodesAndEdges, selectedEdges, mainNode, withConnected],
   )
 
   useEffect(() => {
@@ -955,13 +958,13 @@ function ModelColumnLineage({
                 options={{
                   Background: setHasBackground,
                   Columns: setWithColumns,
-                  Adjacent: setWithAdjacent,
+                  Adjacent: setWithConnected,
                 }}
                 value={
                   [
                     withColumns && 'Columns',
                     hasBackground && 'Background',
-                    withAdjacent && 'Adjacent',
+                    withConnected && 'Connected Models',
                   ].filter(Boolean) as string[]
                 }
               />

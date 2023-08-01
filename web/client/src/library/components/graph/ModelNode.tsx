@@ -19,10 +19,10 @@ export default function ModelNode({
     lineage = {},
     selectedNodes,
     setSelectedNodes,
-    adjacentNodes,
     mainNode,
     activeNodes,
-    withAdjacent,
+    withConnected,
+    connectedNodes,
   } = useLineageFlow()
 
   const { model, columns } = useMemo(() => {
@@ -96,11 +96,11 @@ export default function ModelNode({
   const type = isCTE ? 'cte' : model?.type
   const isMainNode = mainNode === id || highlightedNodes.includes(id)
   const isActiveNode =
-    selectedNodes.size > 0 || activeNodes.size > 0 || withAdjacent
+    selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
       ? selectedNodes.has(id) ||
         activeNodes.has(id) ||
-        (withAdjacent && adjacentNodes.has(id))
-      : adjacentNodes.has(id)
+        (withConnected && connectedNodes.has(id))
+      : connectedNodes.has(id)
 
   return (
     <div
@@ -108,7 +108,7 @@ export default function ModelNode({
         'text-xs font-semibold rounded-lg shadow-lg relative z-1',
         isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
         (isModelExternal || isModelSeed) && 'border-4 border-accent-500',
-        mainNode === id && 'border-4 border-brand-500',
+        mainNode === id && 'border-4 border-brand-500 ring-8 ring-brand-200',
         selectedNodes.has(id) && 'ring-8 ring-success-300',
         isNil(highlighted) ? splat : highlighted,
         isActiveNode || isMainNode
