@@ -510,15 +510,15 @@ export function getNodesBetween(
 
   if (models.includes(target)) {
     output.push({ source: target, target: source })
-  } else {
-    models.forEach(node => {
-      const found = getNodesBetween(node, target, lineage)
-
-      if (isArrayNotEmpty(found)) {
-        output.push({ source: node, target: source }, ...found)
-      }
-    })
   }
+
+  models.forEach(node => {
+    const found = getNodesBetween(node, target, lineage)
+
+    if (isArrayNotEmpty(found)) {
+      output.push({ source: node, target: source }, ...found)
+    }
+  })
 
   return output
 }

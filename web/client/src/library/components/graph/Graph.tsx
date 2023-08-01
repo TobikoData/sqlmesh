@@ -798,7 +798,7 @@ function ModelColumnLineage({
           }
 
           let stroke = 'var(--color-graph-edge-main)'
-          let strokeWidth = 3
+          let strokeWidth = 2
 
           const isConnectedSource = connectedNodes.has(edge.source)
           const isConnectedTarget = connectedNodes.has(edge.target)
@@ -816,7 +816,7 @@ function ModelColumnLineage({
             } else if (hasActiveEdge(edge.targetHandle)) {
               stroke = 'var(--color-graph-edge-secondary)'
             } else if (isConnectedSource && isConnectedTarget) {
-              strokeWidth = 5
+              strokeWidth = 2
               stroke = 'var(--color-graph-edge-direct)'
               edge.zIndex = 10
             }
@@ -958,13 +958,13 @@ function ModelColumnLineage({
                 options={{
                   Background: setHasBackground,
                   Columns: setWithColumns,
-                  Adjacent: setWithConnected,
+                  Connected: setWithConnected,
                 }}
                 value={
                   [
                     withColumns && 'Columns',
                     hasBackground && 'Background',
-                    withConnected && 'Connected Models',
+                    withConnected && 'Connected',
                   ].filter(Boolean) as string[]
                 }
               />
