@@ -90,11 +90,14 @@ class ModelMeta(Node):
         return v
 
     @validator("clustered_by", "tags", "grain", pre=True)
-    def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
+    def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        dialect = values.get("dialect")
+
         if isinstance(v, (exp.Tuple, exp.Array)):
-            return [e.name for e in v.expressions]
-        if isinstance(v, exp.Expression):
-            return [v.name]
+            return [d.normalize_identifiers(e, dialect=dialect).name for e in v.expressions]
+        if isinstance(v, (exp.Expression, str)):
+            return [d.normalize_identifiers(v, dialect=dialect).name]
+
         return v
 
     @validator("dialect", "storage_format", pre=True)
@@ -118,7 +121,9 @@ class ModelMeta(Node):
             ]
 
         partitions = [
-            exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
+            d.normalize_identifiers(
+                exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
+            )
             for expr in partitions
         ]
 
@@ -141,13 +146,14 @@ class ModelMeta(Node):
     def _columns_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
-        dialect = values.get("dialect")
         columns_to_types = {}
+        dialect = values.get("dialect")
+
         if isinstance(v, exp.Schema):
             for column in v.expressions:
                 expr = column.args["kind"]
                 expr.meta["dialect"] = dialect
-                columns_to_types[column.name] = expr
+                columns_to_types[d.normalize_identifiers(column, dialect=dialect).name] = expr
 
             return columns_to_types
 
@@ -155,7 +161,7 @@ class ModelMeta(Node):
             for k, data_type in v.items():
                 expr = exp.DataType.build(data_type, dialect=dialect)
                 expr.meta["dialect"] = dialect
-                columns_to_types[k] = expr
+                columns_to_types[d.normalize_identifiers(k, dialect=dialect).name] = expr
 
             return columns_to_types
 
@@ -231,6 +237,13 @@ class ModelMeta(Node):
             for field in ("partitioned_by_", "clustered_by"):
                 if values.get(field) and not kind.is_materialized:
                     raise ValueError(f"{field} field cannot be set for {kind} models")
+
+            if hasattr(kind, "time_column"):
+                # The time column is an actual column in the model, so we need to normalize it
+                # in order to ensure parity with e.g. columns_to_types for the given dialect
+                kind.time_column.column = d.normalize_identifiers(
+                    kind.time_column.column, dialect=values.get("dialect")
+                ).name
 
         return values
 

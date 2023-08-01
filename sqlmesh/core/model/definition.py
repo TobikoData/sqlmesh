@@ -617,8 +617,7 @@ class _Model(ModelMeta, frozen=True):
 
                 columns_to_types = self.columns_to_types
                 if columns_to_types is not None:
-                    column_names = {c.lower() for c in columns_to_types}
-                    missing_keys = unique_keys - column_names
+                    missing_keys = unique_keys - set(columns_to_types)
                     if missing_keys:
                         missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
                         raise_config_error(
@@ -1208,9 +1207,10 @@ class SeedModel(_SqlBasedModel):
         """
         if not self.is_hydrated:
             return self
+
         return self.copy(
             update={
-                "seed": Seed(content=""),
+                "seed": Seed(content="", dialect=self.dialect),
                 "is_hydrated": False,
                 "column_hashes_": self.column_hashes,
             }
@@ -1224,8 +1224,13 @@ class SeedModel(_SqlBasedModel):
         """
         if self.is_hydrated:
             return self
+
         return self.copy(
-            update={"seed": Seed(content=content), "is_hydrated": True, "column_hashes_": None}
+            update={
+                "seed": Seed(content=content, dialect=self.dialect),
+                "is_hydrated": True,
+                "column_hashes_": None,
+            },
         )
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
@@ -1552,7 +1557,9 @@ def create_seed_model(
     seed_path = Path(seed_kind.path)
     if not seed_path.is_absolute():
         seed_path = path / seed_path if path.is_dir() else path.parents[0] / seed_path
-    seed = create_seed(seed_path)
+
+    dialect = kwargs.get("dialect") or ""
+    seed = create_seed(seed_path, dialect=dialect)
 
     pre_statements = pre_statements or []
     post_statements = post_statements or []

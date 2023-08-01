@@ -161,10 +161,7 @@ class TimeColumn(PydanticModel):
                 }
                 return TimeColumn(**kwargs)
 
-            if isinstance(v, exp.Identifier):
-                return TimeColumn(column=v.name)
-
-            if isinstance(v, exp.Expression):
+            if isinstance(v, (exp.Identifier, exp.Expression)):
                 return TimeColumn(column=v.name)
 
             if isinstance(v, str):

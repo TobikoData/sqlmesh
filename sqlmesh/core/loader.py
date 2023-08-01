@@ -23,7 +23,6 @@ from sqlmesh.core.model import (
     Model,
     ModelCache,
     OptimizedQueryCache,
-    PythonModel,
     SeedModel,
     create_external_model,
     load_sql_based_model,
@@ -59,12 +58,7 @@ def update_model_schemas(
 
         columns_to_types = model.columns_to_types
         if columns_to_types is not None:
-            schema.add_table(
-                name,
-                columns_to_types,
-                dialect=model.dialect,
-                normalize=isinstance(model, (SeedModel, PythonModel)),
-            )
+            schema.add_table(name, columns_to_types, dialect=model.dialect)
 
 
 @dataclass
