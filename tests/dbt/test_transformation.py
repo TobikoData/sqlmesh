@@ -494,12 +494,12 @@ def test_partition_by(sushi_test_project: Project):
 
     model_config.partition_by = {"field": "`ds`", "data_type": "datetime", "granularity": "day"}
     datetime_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
-    assert datetime_trunc_expr.sql(dialect="bigquery") == "DATETIME_TRUNC(`ds`, DAY)"
+    assert datetime_trunc_expr.sql(dialect="bigquery") == "datetime_trunc(`ds`, DAY)"
     assert datetime_trunc_expr.sql() == 'DATETIME_TRUNC("ds", DAY)'
 
     model_config.partition_by = {"field": "ds", "data_type": "timestamp", "granularity": "day"}
     timestamp_trunc_expr = model_config.to_sqlmesh(context).partitioned_by[0]
-    assert timestamp_trunc_expr.sql(dialect="bigquery") == "TIMESTAMP_TRUNC(ds, DAY)"
+    assert timestamp_trunc_expr.sql(dialect="bigquery") == "timestamp_trunc(ds, DAY)"
     assert timestamp_trunc_expr.sql() == "TIMESTAMP_TRUNC(ds, DAY)"
 
     model_config.partition_by = {
