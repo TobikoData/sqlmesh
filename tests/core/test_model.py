@@ -55,6 +55,7 @@ def test_load(assert_exp_eq):
         );
 
         @DEF(x, 1);
+        @DEF(y, @x + 1);
         CACHE TABLE x AS SELECT 1;
         ADD JAR 's3://my_jar.jar';
 
@@ -65,6 +66,7 @@ def test_load(assert_exp_eq):
             1::int AS d, -- d
             CAST(2 AS double) AS e, --e
             f::bool, --f
+            @y::int AS g,
         FROM
             db.other_table t1
             LEFT JOIN
@@ -90,13 +92,13 @@ def test_load(assert_exp_eq):
         "d": exp.DataType.build("int"),
         "e": exp.DataType.build("double"),
         "f": exp.DataType.build("boolean"),
+        "g": exp.DataType.build("int"),
     }
     assert model.view_name == "table"
-    assert model.macro_definitions == [
-        d.parse_one("@DEF(x, 1)"),
-    ]
+    assert model.macro_definitions == [d.parse_one("@DEF(x, 1)"), d.parse_one("@DEF(y, @x + 1)")]
     assert list(model.pre_statements) == [
         d.parse_one("@DEF(x, 1)"),
+        d.parse_one("@DEF(y, @x + 1)"),
         d.parse_one("CACHE TABLE x AS SELECT 1"),
         d.parse_one("ADD JAR 's3://my_jar.jar'", dialect="spark"),
     ]
@@ -113,7 +115,8 @@ def test_load(assert_exp_eq):
       TRY_CAST("c" AS BOOLEAN) AS "c",
       TRY_CAST(1 AS INT) AS "d", /* d */
       TRY_CAST(2 AS DOUBLE) AS "e", /* e */
-      TRY_CAST("f" AS BOOLEAN) /* f */ AS "f"
+      TRY_CAST("f" AS BOOLEAN) AS "f", /* f */
+      TRY_CAST(1 + 1 AS INT) AS "g",
     FROM "db"."other_table" AS "t1"
     LEFT JOIN "db"."table" AS "t2"
       ON "t1"."a" = "t2"."a"
