@@ -504,18 +504,18 @@ export function getNodesBetween(
   source: string,
   target: string,
   lineage: Record<string, Lineage> = {},
-): string[] {
+): Array<{ source: string; target: string }> {
   const models = lineage[source]?.models ?? []
-  const output: string[] = []
+  const output: Array<{ source: string; target: string }> = []
 
   if (models.includes(target)) {
-    output.push(toNodeOrEdgeId(target, source))
+    output.push({ source: target, target: source })
   } else {
     models.forEach(node => {
       const found = getNodesBetween(node, target, lineage)
 
       if (isArrayNotEmpty(found)) {
-        output.push(toNodeOrEdgeId(node, source), ...found)
+        output.push({ source: node, target: source }, ...found)
       }
     })
   }

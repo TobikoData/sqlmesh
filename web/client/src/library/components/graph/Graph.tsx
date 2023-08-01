@@ -32,7 +32,6 @@ import {
   mergeLineageWithColumns,
   hasNoModels,
   mergeConnections,
-  getNodesBetween,
 } from './help'
 import {
   debounceSync,
@@ -742,15 +741,20 @@ function ModelColumnLineage({
     models,
     lineage,
     handleError,
-    activeNodes,
+    setMainNode,
+    mainNode,
+    selectedEdges,
+    nodes,
+    setNodes,
+    edges,
+    setEdges,
   } = useLineageFlow()
   const { setCenter } = useReactFlow()
 
-  const [nodes, setNodes] = useState<Node[]>([])
-  const [edges, setEdges] = useState<Edge[]>([])
-  const [isBuildingLayout, setIsBuildingLayout] = useState(true)
   const [isEmpty, setIsEmpty] = useState(true)
+  const [isBuildingLayout, setIsBuildingLayout] = useState(true)
   const [hasBackground, setHasBackground] = useState(true)
+  const [withAdjacent, setWithAdjacent] = useState(false)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
 
@@ -768,7 +772,6 @@ function ModelColumnLineage({
     })
   }, [lineage, models, model, withColumns, highlightedNodes])
 
-  // TODO: this is a mess, refactor
   const toggleEdgeAndNodes = useCallback(
     function toggleEdgeAndNodes(
       edges: Edge[] = [],
@@ -777,55 +780,38 @@ function ModelColumnLineage({
       edges: Edge[]
       nodes: Node[]
     } {
-      const hns = Object.values(nodesAndEdges.highlightedNodes ?? {}).flat()
-
       const visibility = new Map<string, boolean>()
-      const selectedEdges: Edge[] = []
-      const selectedEdgesIds = Array.from(activeNodes)
-        .map(id =>
-          hns.map(hn => [
-            getNodesBetween(id, hn, lineage),
-            getNodesBetween(hn, id, lineage),
-          ]),
-        )
-        .flat(10)
 
       return {
         edges: edges.map(edge => {
           if (isNil(edge.sourceHandle) && isNil(edge.targetHandle)) {
+            // Edge between models
             edge.hidden = false
           } else {
+            // Edge between columns
             edge.hidden = isFalse(
               hasActiveEdge(edge.sourceHandle) &&
               hasActiveEdge(edge.targetHandle),
             )
           }
 
-          if (
-            hasActiveEdge(edge.sourceHandle) ||
-            hasActiveEdge(edge.targetHandle) ||
-            selectedEdgesIds.includes(edge.id)
-          ) {
-            selectedEdges.push(edge)
-          }
-
           let stroke = 'var(--color-graph-edge-main)'
           let strokeWidth = 3
 
-          if (selectedEdgesIds.includes(edge.id)) {
+          if (
+            selectedEdges.has(edge.id) ||
+            (withAdjacent &&
+              (mainNode === edge.source || mainNode === edge.target))
+          ) {
             strokeWidth = 5
             stroke = 'var(--color-graph-edge-selected)'
             edge.zIndex = 100
           } else {
-            if (isNotNil(edge.sourceHandle)) {
+            if (hasActiveEdge(edge.sourceHandle)) {
               stroke = 'var(--color-graph-edge-secondary)'
-            }
-
-            if (isNotNil(edge.targetHandle)) {
+            } else if (hasActiveEdge(edge.targetHandle)) {
               stroke = 'var(--color-graph-edge-secondary)'
-            }
-
-            if (hns.includes(edge.source) || hns.includes(edge.target)) {
+            } else if (mainNode === edge.source || mainNode === edge.target) {
               strokeWidth = 5
               stroke = 'var(--color-graph-edge-direct)'
               edge.zIndex = 100
@@ -868,25 +854,18 @@ function ModelColumnLineage({
           return edge
         }),
         nodes: nodes.map(node => {
-          const data = {
-            ...node.data,
-            active: selectedEdges.some(
-              edge => edge.source === node.id || edge.target === node.id,
-            ),
-          }
-
-          if (data.type === 'cte') {
-            node.hidden = visibility.get(node.id)
-          }
-
-          node.data = data
+          node.hidden = node.data.type === 'cte' && visibility.get(node.id)
 
           return node
         }),
       }
     },
-    [nodesAndEdges, activeNodes, lineage],
+    [nodesAndEdges, selectedEdges, mainNode, withAdjacent],
   )
+
+  useEffect(() => {
+    setMainNode(model.name)
+  }, [model.name])
 
   useEffect(() => {
     setIsEmpty(isArrayEmpty(nodesAndEdges.nodes))
@@ -975,11 +954,13 @@ function ModelColumnLineage({
                 options={{
                   Background: setHasBackground,
                   Columns: setWithColumns,
+                  Adjacent: setWithAdjacent,
                 }}
                 value={
                   [
                     withColumns && 'Columns',
                     hasBackground && 'Background',
+                    withAdjacent && 'Adjacent',
                   ].filter(Boolean) as string[]
                 }
               />
@@ -997,6 +978,7 @@ function ModelColumnLineage({
     </div>
   )
 }
+
 export { ModelColumnLineage, ModelColumns, ModelNodeHeaderHandles }
 
 function GraphOptions({

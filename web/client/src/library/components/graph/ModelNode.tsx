@@ -17,9 +17,11 @@ export default function ModelNode({
     withColumns,
     handleClickModel,
     lineage = {},
+    selectedNodes,
+    setSelectedNodes,
+    adjacentNodes,
+    mainNode,
     activeNodes,
-    setActiveNodes,
-    connections,
   } = useLineageFlow()
 
   const { model, columns } = useMemo(() => {
@@ -48,8 +50,13 @@ export default function ModelNode({
     }
   }, [id, models, lineage])
 
+  const highlightedNodes = useMemo(
+    () => Object.values(data.highlightedNodes ?? {}).flat(),
+    [data.highlightedNodes],
+  )
+
   const handleClick = useCallback(
-    (e: MouseEvent) => {
+    (e: React.MouseEvent) => {
       e.stopPropagation()
 
       handleClickModel?.(id)
@@ -57,10 +64,28 @@ export default function ModelNode({
     [handleClickModel, id, data.isInteractive],
   )
 
+  const handleSelect = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+
+      if (highlightedNodes.includes(id) || mainNode === id) return
+
+      setSelectedNodes(current => {
+        if (current.has(id)) {
+          current.delete(id)
+        } else {
+          current.add(id)
+        }
+
+        return new Set(current)
+      })
+    },
+    [setSelectedNodes, highlightedNodes],
+  )
+
   const highlighted = Object.keys(data.highlightedNodes ?? {}).find(key =>
     data.highlightedNodes[key].includes(id),
   )
-  const highlightedNodes = Object.values(data.highlightedNodes ?? {}).flat()
   const splat = data.highlightedNodes?.['*']
   const isInteractive = isTrue(data.isInteractive) && handleClickModel != null
   const isCTE = data.type === 'cte'
@@ -68,28 +93,21 @@ export default function ModelNode({
   const isModelSeed = model?.type === 'seed'
   const showColumns = withColumns && isArrayNotEmpty(columns)
   const type = isCTE ? 'cte' : model?.type
-  const isHighlighted = highlightedNodes.includes(id)
   const isActiveNode =
-    Boolean(data.active) ||
-    isHighlighted ||
-    (activeNodes.size > 0
-      ? activeNodes.has(id)
-      : Boolean(
-          lineage[id]?.models.some(mode_name =>
-            highlightedNodes.includes(mode_name),
-          ),
-        ) ||
-        highlightedNodes.some(
-          mode_name => lineage[mode_name]?.models.includes(id),
-        ))
+    mainNode === id ||
+    highlightedNodes.includes(id) ||
+    selectedNodes.has(id) ||
+    activeNodes.has(id) ||
+    adjacentNodes.has(id)
 
   return (
     <div
       className={clsx(
         'text-xs font-semibold rounded-lg shadow-lg relative z-1',
         isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
-        (isModelExternal || isModelSeed) && 'ring-4 ring-accent-500',
-        activeNodes.has(id) && 'ring-4 ring-success-500',
+        (isModelExternal || isModelSeed) && 'border-4 border-accent-500',
+        mainNode === id && 'border-4 border-brand-500',
+        selectedNodes.has(id) && 'ring-8 ring-success-300',
         isNil(highlighted) ? splat : highlighted,
         isActiveNode ? 'opacity-100' : 'opacity-40 hover:opacity-100',
       )}
@@ -101,7 +119,7 @@ export default function ModelNode({
         id={id}
         type={type}
         label={data.label}
-        isSelected={activeNodes.has(id)}
+        isSelected={selectedNodes.has(id)}
         isDraggable={true}
         className={clsx(
           showColumns ? 'rounded-t-md' : 'rounded-lg',
@@ -111,23 +129,9 @@ export default function ModelNode({
         hasRight={sourcePosition === Position.Right}
         handleClick={isInteractive ? handleClick : undefined}
         handleSelect={
-          isHighlighted || isCTE
+          mainNode === id || isCTE || highlightedNodes.includes(id)
             ? undefined
-            : (e: React.MouseEvent) => {
-                e.stopPropagation()
-
-                if (isHighlighted) return
-
-                setActiveNodes(current => {
-                  if (current.has(id)) {
-                    current.delete(id)
-                  } else {
-                    current.add(id)
-                  }
-
-                  return new Set(current)
-                })
-              }
+            : handleSelect
         }
       />
       {showColumns && isArrayNotEmpty(columns) && (
