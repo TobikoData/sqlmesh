@@ -1,6 +1,5 @@
 import { useApiModelLineage } from '@api/index'
-import { debounceAsync } from '@utils/index'
-import { useCallback, useEffect } from 'react'
+import { useEffect } from 'react'
 import { ModelColumnLineage } from './Graph'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from './context'
@@ -18,21 +17,16 @@ export default function ModelLineage({
   highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
-  const { setActiveEdges, setConnections, setLineage, models, handleError } =
+  const { setActiveEdges, setConnections, setLineage, handleError } =
     useLineageFlow()
 
   const { refetch: getModelLineage } = useApiModelLineage(model.name)
-
-  const debouncedGetModelLineage = useCallback(
-    debounceAsync(getModelLineage, 500),
-    [model.name, models],
-  )
 
   useEffect(() => {
     setActiveEdges(new Map())
     setConnections(new Map())
 
-    void debouncedGetModelLineage()
+    void getModelLineage()
       .then(({ data }) => {
         setLineage(() =>
           data == null ? undefined : mergeLineageWithModels({}, data),

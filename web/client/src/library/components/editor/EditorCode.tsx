@@ -3,7 +3,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { type KeyBinding, keymap } from '@codemirror/view'
 import { type Extension } from '@codemirror/state'
 import { useApiFileByPath, useMutationApiSaveFile } from '~/api'
-import { debounceAsync, debounceSync, isNil, isNotNil } from '~/utils'
+import { debounceSync, isNil, isNotNil } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { useStoreEditor } from '~/context/editor'
 import {
@@ -157,11 +157,11 @@ function CodeEditorRemoteFile({
 
   const files = useStoreProject(s => s.files)
 
-  const { refetch: getFileContent, isFetching } = useApiFileByPath(path)
-  const debouncedGetFileContent = useCallback(
-    debounceAsync(getFileContent, 1000, true),
-    [getFileContent],
-  )
+  const {
+    refetch: getFileContent,
+    isFetching,
+    cancel: cancelRequestFileByPath,
+  } = useApiFileByPath(path)
 
   const [file, setFile] = useState<ModelFile | undefined>(files.get(path))
 
@@ -200,7 +200,7 @@ function CodeEditorRemoteFile({
   useEffect(() => {
     if (isNotNil(file) && file.isSynced) return
 
-    void debouncedGetFileContent().then(({ data }) => {
+    void getFileContent().then(({ data }) => {
       if (isNil(data)) return
 
       if (isNil(file)) {
@@ -211,7 +211,7 @@ function CodeEditorRemoteFile({
     })
 
     return () => {
-      debouncedGetFileContent.cancel()
+      void cancelRequestFileByPath()
     }
   }, [])
 
