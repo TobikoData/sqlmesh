@@ -664,9 +664,59 @@ class MySQLConnectionConfig(_ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        from mysql.connector import connect
+        import pymssql
 
-        return connect
+        return pymssql.connect
+
+
+class MsSqlConnectionConfig(_ConnectionConfig):
+    host: str
+    user: str
+    password: str
+    database: t.Optional[str] = ''
+    timeout: t.Optional[int] = 0
+    login_timeout: t.Optional[int] = 60
+    charset: t.Optional[str] = 'utf-8'
+    as_dict: t.Optional[bool] = False
+    appname: t.Optional[str] = None
+    port: t.Optional[int] = '1433'
+    conn_properties: t.Optional[t.Union[t.Iterable[str], str]] = None
+    autocommit: t.Optional[bool] = False
+    tds_version: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+
+    type_: Literal["mssql"] = Field(alias="type", default="mssql")
+
+    _cursor_kwargs = {"buffered": True}
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "host",
+            "user",
+            "password",
+            "database",
+            "timeout",
+            "login_timeout",
+            "charset",
+            "as_dict",
+            "appname",
+            "port",
+            "conn_properties",
+            "autocommit",
+            "tds_version",
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.MsSqlEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        import pymssql
+
+        return pymssql.connect
 
 
 class SparkConnectionConfig(_ConnectionConfig):
@@ -723,6 +773,7 @@ ConnectionConfig = Annotated[
         GCPPostgresConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
+        MsSqlConnectionConfig,
         MySQLConnectionConfig,
         PostgresConnectionConfig,
         RedshiftConnectionConfig,
