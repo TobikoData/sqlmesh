@@ -7,7 +7,7 @@ import typing as t
 
 import pandas as pd
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
@@ -18,8 +18,8 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
-class MsSqlEngineAdapter(EngineAdapter):
-    """Implementation of EngineAdapter for MsSql compatibility.
+class MsSqlEngineAdapter(EngineAdapterWithIndexSupport):
+    """Implementation of EngineAdapterWithIndexSupport for MsSql compatibility.
 
     Args:
         connection_factory: a callable which produces a new Database API-compliant
@@ -28,7 +28,6 @@ class MsSqlEngineAdapter(EngineAdapter):
         multithreaded: Indicates whether this adapter will be used by more than one thread.
     """
     DIALECT: str = "tsql"
-    SUPPORTS_INDEXES: bool = True
     SUPPORTS_MATERIALIZED_VIEWS: bool = False
 
     def _get_data_objects(

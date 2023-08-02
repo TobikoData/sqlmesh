@@ -26,7 +26,7 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "redshift": RedshiftEngineAdapter,
     "postgres": PostgresEngineAdapter,
     "mysql": MySQLEngineAdapter,
-    "mssql": EngineAdapterWithIndexSupport,
+    "mssql": MsSqlEngineAdapter,
 }
 
 DIALECT_ALIASES = {
