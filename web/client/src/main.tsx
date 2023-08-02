@@ -33,15 +33,15 @@ const client = new QueryClient({
 })
 
 ReactDOM.createRoot(getRootNode()).render(
-  <React.StrictMode>
-    <QueryClientProvider client={client}>
-      <ThemeProvider>
-        <IDEProvider>
-          <App />
-        </IDEProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
-  </React.StrictMode>,
+  // <React.StrictMode>
+  <QueryClientProvider client={client}>
+    <ThemeProvider>
+      <IDEProvider>
+        <App />
+      </IDEProvider>
+    </ThemeProvider>
+  </QueryClientProvider>,
+  // </React.StrictMode>,
 )
 
 function getRootNode(): HTMLElement {

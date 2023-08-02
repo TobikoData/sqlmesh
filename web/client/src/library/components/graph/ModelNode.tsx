@@ -1,4 +1,4 @@
-import { isNil, isTrue, isArrayNotEmpty } from '@utils/index'
+import { isNil, isArrayNotEmpty, isNotNil } from '@utils/index'
 import clsx from 'clsx'
 import { useMemo, useCallback } from 'react'
 import { ModelColumns, ModelNodeHeaderHandles } from './Graph'
@@ -23,6 +23,7 @@ export default function ModelNode({
     activeNodes,
     withConnected,
     connectedNodes,
+    highlightedNodes,
   } = useLineageFlow()
 
   const { model, columns } = useMemo(() => {
@@ -51,9 +52,9 @@ export default function ModelNode({
     }
   }, [id, models, lineage])
 
-  const highlightedNodes = useMemo(
-    () => Object.values(data.highlightedNodes ?? {}).flat(),
-    [data.highlightedNodes],
+  const highlightedNodeModels = useMemo(
+    () => Object.values(highlightedNodes ?? {}).flat(),
+    [highlightedNodes],
   )
 
   const handleClick = useCallback(
@@ -69,7 +70,7 @@ export default function ModelNode({
     (e: React.MouseEvent) => {
       e.stopPropagation()
 
-      if (highlightedNodes.includes(id) || mainNode === id) return
+      if (highlightedNodeModels.includes(id) || mainNode === id) return
 
       setSelectedNodes(current => {
         if (current.has(id)) {
@@ -81,20 +82,20 @@ export default function ModelNode({
         return new Set(current)
       })
     },
-    [setSelectedNodes, highlightedNodes],
+    [setSelectedNodes, highlightedNodeModels],
   )
 
-  const highlighted = Object.keys(data.highlightedNodes ?? {}).find(key =>
-    data.highlightedNodes[key].includes(id),
+  const highlighted = Object.keys(highlightedNodes ?? {}).find(key =>
+    highlightedNodes[key]!.includes(id),
   )
-  const splat = data.highlightedNodes?.['*']
-  const isInteractive = isTrue(data.isInteractive) && handleClickModel != null
+  const splat = highlightedNodes?.['*']
+  const isInteractive = mainNode !== id && isNotNil(handleClickModel)
   const isCTE = data.type === 'cte'
   const isModelExternal = model?.type === 'external'
   const isModelSeed = model?.type === 'seed'
   const showColumns = withColumns && isArrayNotEmpty(columns)
   const type = isCTE ? 'cte' : model?.type
-  const isMainNode = mainNode === id || highlightedNodes.includes(id)
+  const isMainNode = mainNode === id || highlightedNodeModels.includes(id)
   const isActiveNode =
     selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
       ? selectedNodes.has(id) ||
@@ -139,7 +140,7 @@ export default function ModelNode({
         hasRight={sourcePosition === Position.Right}
         handleClick={isInteractive ? handleClick : undefined}
         handleSelect={
-          mainNode === id || isCTE || highlightedNodes.includes(id)
+          mainNode === id || isCTE || highlightedNodeModels.includes(id)
             ? undefined
             : handleSelect
         }

@@ -23,6 +23,7 @@ export type ActiveColumns = Map<string, { ins: string[]; outs: string[] }>
 export type ActiveEdges = Map<string, number>
 export type ActiveNodes = Set<string>
 export type SelectedNodes = Set<string>
+export type HighlightedNodes = Record<string, string[]>
 
 interface LineageFlow {
   lineage?: Record<string, Lineage>
@@ -39,6 +40,8 @@ interface LineageFlow {
   withConnected: boolean
   withColumns: boolean
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
+  highlightedNodes: HighlightedNodes
+  setHighlightedNodes: React.Dispatch<React.SetStateAction<HighlightedNodes>>
   setActiveNodes: React.Dispatch<React.SetStateAction<ActiveNodes>>
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>
@@ -77,6 +80,8 @@ export const LineageFlowContext = createContext<LineageFlow>({
   connectedNodes: new Set(),
   nodes: [],
   edges: [],
+  highlightedNodes: {},
+  setHighlightedNodes: () => {},
   setWithColumns: () => {},
   setWithConnected: () => false,
   hasActiveEdge: () => false,
@@ -123,6 +128,7 @@ export default function LineageFlowProvider({
   const [withConnected, setWithConnected] = useState(false)
   const [selectedNodes, setSelectedNodes] = useState<SelectedNodes>(new Set())
   const [activeNodes, setActiveNodes] = useState<ActiveNodes>(new Set())
+  const [highlightedNodes, setHighlightedNodes] = useState<HighlightedNodes>({})
 
   const hasActiveEdge = useCallback(
     function hasActiveEdge(edge?: string | null): boolean {
@@ -228,6 +234,8 @@ export default function LineageFlowProvider({
   return (
     <LineageFlowContext.Provider
       value={{
+        highlightedNodes,
+        setHighlightedNodes,
         nodes,
         edges,
         connectedNodes,

@@ -1,17 +1,20 @@
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
-import { isArrayNotEmpty, isNil, isNotNil, isObjectEmpty } from '../../../utils'
+import {
+  isArrayNotEmpty,
+  isFalse,
+  isNil,
+  isNotNil,
+  isObjectEmpty,
+} from '../../../utils'
 import { type LineageColumn, type Column, type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
-import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { type Connections } from './context'
+import { type ActiveEdges, type Connections } from './context'
 import { EnumSide } from '~/types/enum'
 
 export interface GraphNodeData {
   type: string
   label: string
-  isInteractive?: boolean
-  highlightedNodes?: Record<string, string[]>
   [key: string]: any
 }
 
@@ -26,16 +29,20 @@ export {
   mergeConnections,
   getNodesBetween,
   getLineageIndex,
+  getActiveNodes,
+  getUpdatedNodes,
+  getUpdatedEdges,
 }
 
 async function createGraphLayout({
-  edges = [],
   nodesMap,
+  nodes = [],
+  edges = [],
 }: {
-  edges: Edge[]
   nodesMap: Record<string, Node>
+  nodes: Node[]
+  edges: Edge[]
 }): Promise<{ nodes: Node[]; edges: Edge[] }> {
-  const nodes = Object.values(nodesMap)
   const elk = new ELK()
   const layout = await elk.layout({
     id: 'root',
@@ -114,16 +121,12 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
 
 function getNodeMap({
   lineage,
-  highlightedNodes = {},
   models,
-  model,
   withColumns,
 }: {
   models: Map<string, Model>
-  model: ModelSQLMeshModel
   withColumns: boolean
   lineage?: Record<string, Lineage>
-  highlightedNodes?: Record<string, string[]>
 }): Record<string, Node> {
   if (isNil(lineage)) return {}
 
@@ -155,8 +158,6 @@ function getNodeMap({
     node.data.height = withColumns
       ? maxHeight + NODE_BALANCE_SPACE * 2
       : NODE_BALANCE_SPACE
-    node.data.highlightedNodes = highlightedNodes
-    node.data.isInteractive = model.name !== label && models.has(label)
     node.data.withColumns = withColumns
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
@@ -205,7 +206,7 @@ function repositionNodes(
   elkNodes.forEach(node => {
     const output = nodesMap[node.id]
 
-    if (output == null) return
+    if (isNil(output)) return
 
     if (isNotNil(node.x) && output.position.x === 0) {
       output.position.x = node.x
@@ -514,4 +515,168 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
     }, [])
     .sort()
     .join('')
+}
+
+function getActiveNodes(
+  edges: Edge[] = [],
+  activeEdges: ActiveEdges,
+  selectedEdges: Set<string>,
+): Set<string> {
+  return new Set<string>(
+    edges.reduce((acc: string[], edge) => {
+      const hasActiveEdgeSource = hasActiveEdge(activeEdges, edge.sourceHandle)
+      const hasActiveEdgeTarget = hasActiveEdge(activeEdges, edge.targetHandle)
+      const isActiveEdge = hasActiveEdgeSource || hasActiveEdgeTarget
+
+      if (isActiveEdge || selectedEdges.has(edge.id)) {
+        if (isNotNil(edge.source)) {
+          acc.push(edge.source)
+        }
+
+        if (isNotNil(edge.target)) {
+          acc.push(edge.target)
+        }
+      }
+
+      return acc
+    }, []),
+  )
+}
+
+function getUpdatedEdges(
+  edges: Edge[] = [],
+  connections: Map<string, Connections>,
+  activeEdges: ActiveEdges,
+  activeNodes: Set<string>,
+  selectedEdges: Set<string>,
+  selectedNodes: Set<string>,
+  connectedNodes: Set<string>,
+  withConnected: boolean = false,
+  withImpact: boolean = false,
+  withSecondary: boolean = false,
+): Edge[] {
+  const tempEdges = edges.map(edge => {
+    const isActiveEdge =
+      hasActiveEdge(activeEdges, edge.sourceHandle) ||
+      hasActiveEdge(activeEdges, edge.targetHandle)
+
+    edge.hidden = true
+
+    if (isNil(edge.sourceHandle) && isNil(edge.targetHandle)) {
+      // Edge between models
+      const hasSelections =
+        selectedNodes.size > 0 || connections.size > 0 || activeNodes.size > 0
+      const isImpactEdge =
+        connectedNodes.has(edge.source) || connectedNodes.has(edge.target)
+      const isSecondaryEdge =
+        isFalse(connectedNodes.has(edge.source)) ||
+        isFalse(connectedNodes.has(edge.target))
+      const withoutImactNodes =
+        isFalse(withImpact) && isFalse(withConnected) && isFalse(hasSelections)
+      const withoutSecondaryNodes =
+        isFalse(withSecondary) && isFalse(hasSelections)
+      const shouldHideSecondary = isSecondaryEdge && withoutSecondaryNodes
+      const shouldHideImpact = isImpactEdge && withoutImactNodes
+      const isVisibleEdge =
+        selectedNodes.size > 0 &&
+        selectedEdges.has(edge.id) &&
+        activeNodes.has(edge.source) &&
+        activeNodes.has(edge.target)
+
+      if (
+        isFalse(shouldHideImpact) &&
+        isFalse(shouldHideSecondary) &&
+        (isFalse(hasSelections) || isVisibleEdge)
+      ) {
+        edge.hidden = false
+      }
+    } else {
+      // Edge between columns
+      if (connections.size > 0 && isActiveEdge) {
+        edge.hidden = false
+      }
+    }
+
+    let stroke = 'var(--color-graph-edge-main)'
+    let strokeWidth = 2
+
+    const isConnectedSource = connectedNodes.has(edge.source)
+    const isConnectedTarget = connectedNodes.has(edge.target)
+
+    if (
+      selectedEdges.has(edge.id) ||
+      (withConnected && isConnectedSource && isConnectedTarget)
+    ) {
+      strokeWidth = 4
+      stroke = 'var(--color-graph-edge-selected)'
+      edge.zIndex = 10
+    } else {
+      if (isActiveEdge) {
+        stroke = 'var(--color-graph-edge-secondary)'
+      } else if (isConnectedSource && isConnectedTarget) {
+        strokeWidth = 4
+        stroke = 'var(--color-graph-edge-direct)'
+        edge.zIndex = 10
+      }
+    }
+
+    edge.style = {
+      ...edge.style,
+      stroke,
+      strokeWidth,
+    }
+
+    return edge
+  })
+
+  return tempEdges
+}
+
+function getUpdatedNodes(
+  nodes: Node[] = [],
+  activeNodes: Set<string>,
+  mainNode: string,
+  connectedNodes: Set<string>,
+  selectedNodes: Set<string>,
+  connections: Map<string, Connections>,
+  withConnected: boolean = true,
+  withImpact: boolean = true,
+  withSecondary: boolean = true,
+  withColumns: boolean = true,
+): Node[] {
+  return nodes.map(node => {
+    node.hidden = true
+
+    const hasSelections = selectedNodes.size > 0 || connections.size > 0
+    const isActiveNode = activeNodes.size === 0 || activeNodes.has(node.id)
+    const isImpactNode = connectedNodes.has(node.id)
+    const isSecondaryNode = isFalse(connectedNodes.has(node.id))
+    const withoutImactNodes =
+      isFalse(withImpact) && isFalse(withConnected) && isFalse(hasSelections)
+    const withoutSecondaryNodes =
+      isFalse(withSecondary) && isFalse(hasSelections)
+    const shouldHideSecondary = isSecondaryNode && withoutSecondaryNodes
+    const shouldHideImpact = isImpactNode && withoutImactNodes
+
+    if (isFalse(shouldHideImpact) && isFalse(shouldHideSecondary)) {
+      node.hidden = isFalse(isActiveNode)
+    }
+
+    if (node.data.type === 'cte' && withColumns) {
+      node.hidden = isFalse(activeNodes.has(node.id))
+    }
+
+    if (mainNode === node.id) {
+      node.hidden = false
+    }
+
+    return node
+  })
+}
+
+function hasActiveEdge(
+  activeEdges: ActiveEdges = new Map(),
+  edge?: string | null,
+): boolean {
+  return isNil(edge) ? false : (activeEdges.get(edge) ?? 0) > 0
 }

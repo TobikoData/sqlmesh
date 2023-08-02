@@ -17,10 +17,9 @@ import ReactFlow, {
   applyEdgeChanges,
   applyNodeChanges,
   type NodeChange,
-  type Edge,
-  type Node,
   useUpdateNodeInternals,
   useReactFlow,
+  Panel,
 } from 'reactflow'
 import { Button } from '../button/Button'
 import 'reactflow/dist/base.css'
@@ -32,6 +31,9 @@ import {
   mergeConnections,
   getNodeMap,
   getLineageIndex,
+  getActiveNodes,
+  getUpdatedEdges,
+  getUpdatedNodes,
 } from './help'
 import {
   debounceSync,
@@ -66,7 +68,7 @@ import {
   type InitialSQLMeshModel,
   type ModelSQLMeshModel,
 } from '@models/sqlmesh-model'
-import { type ActiveEdges, useLineageFlow, type Connections } from './context'
+import { useLineageFlow } from './context'
 import Input from '@components/input/Input'
 import { Listbox, Popover, Transition } from '@headlessui/react'
 import { CodeEditorDefault } from '@components/editor/EditorCode'
@@ -468,32 +470,6 @@ const ModelColumn = memo(function ModelColumn({
   )
 })
 
-function ColumnLoading({
-  isFetching = false,
-  isError = false,
-  isTimeout = false,
-}: {
-  isFetching: boolean
-  isError: boolean
-  isTimeout: boolean
-}): JSX.Element {
-  return (
-    <>
-      {isFetching && (
-        <Loading className="inline-block mr-1">
-          <Spinner className="w-3 h-3 border border-neutral-10" />
-        </Loading>
-      )}
-      {isTimeout && isFalse(isFetching) && (
-        <ClockIcon className="w-4 h-4 text-warning-500 mr-1" />
-      )}
-      {isError && isFalse(isFetching) && (
-        <ExclamationCircleIcon className="w-4 h-4 text-danger-500 mr-1" />
-      )}
-    </>
-  )
-}
-
 const ModelColumns = memo(function ModelColumns({
   nodeId,
   columns,
@@ -558,6 +534,12 @@ const ModelColumns = memo(function ModelColumns({
         structuredClone(lineage),
         columnLineage,
       )
+
+      console.log({
+        mergedLineage,
+        newConnections,
+        activeEdges,
+      })
 
       setLineage(mergedLineage)
       setConnections(newConnections)
@@ -729,13 +711,11 @@ const ModelColumns = memo(function ModelColumns({
   )
 })
 
+export { ModelColumnLineage, ModelColumns, ModelNodeHeaderHandles }
+
 function ModelColumnLineage({
-  model,
-  highlightedNodes,
   className,
 }: {
-  model: ModelSQLMeshModel
-  highlightedNodes?: Record<string, string[]>
   className?: string
 }): JSX.Element {
   const {
@@ -752,10 +732,9 @@ function ModelColumnLineage({
     activeEdges,
     connectedNodes,
     connections,
+    highlightedNodes,
     setWithColumns,
-    // hasActiveEdge,
     handleError,
-    setMainNode,
     setNodes,
     setEdges,
     setWithConnected,
@@ -763,7 +742,6 @@ function ModelColumnLineage({
   } = useLineageFlow()
   const { setCenter } = useReactFlow()
 
-  const [isEmpty, setIsEmpty] = useState(true)
   const [isBuildingLayout, setIsBuildingLayout] = useState(true)
   const [hasBackground, setHasBackground] = useState(true)
   const [withImpact, setWithImpact] = useState(true)
@@ -775,93 +753,110 @@ function ModelColumnLineage({
     () =>
       getNodeMap({
         lineage,
-        highlightedNodes,
         models,
-        model,
         withColumns,
       }),
-    [lineage, models, model, withColumns, highlightedNodes],
+    [lineage, models, withColumns],
   )
   const allEdges = useMemo(() => getEdges(lineage), [lineage])
   const lineageIndex = useMemo(() => getLineageIndex(lineage), [lineage])
 
   useEffect(() => {
-    setMainNode(model.name)
-  }, [model.name])
-
-  useEffect(() => {
-    setIsEmpty(isArrayEmpty(allEdges))
+    const WITH_COLUMNS_LIMIT = 40
 
     if (isArrayEmpty(allEdges) || isNil(mainNode)) return
 
-    void createGraphLayout({
-      nodesMap,
-      edges: allEdges,
-    })
-      .then(layout => {
-        const [newEdges, newActiveNodes] = getEdgesActiveNodes(
-          layout.edges,
-          connections,
-          activeEdges,
-          selectedEdges,
-          selectedNodes,
-          connectedNodes,
-          withConnected,
-        )
-        const newNodes = getNodes(
-          layout.nodes,
-          newActiveNodes,
-          mainNode,
-          connectedNodes,
-          withConnected,
-          withImpact,
-          withSecondary,
-          withColumns,
-        )
-
-        setIsEmpty(isArrayEmpty(layout.nodes))
-        setEdges(newEdges)
-        setNodes(newNodes)
-        setActiveNodes(newActiveNodes)
-      })
-      .catch(error => {
-        handleError?.(error)
-      })
-      .finally(() => {
-        const node = nodesMap[model.name]
-
-        setIsBuildingLayout(false)
-
-        if (isNotNil(node)) {
-          setCenter(node.position.x, node.position.y, {
-            zoom: 0.5,
-            duration: 1000,
-          })
-        }
-      })
-  }, [lineageIndex, withColumns, withImpact, withSecondary])
-
-  useEffect(() => {
-    if (isNil(mainNode)) return
-
-    const [newEdges, newActiveNodes] = getEdgesActiveNodes(
-      allEdges,
-      connections,
-      activeEdges,
-      selectedEdges,
-      selectedNodes,
-      connectedNodes,
-      withConnected,
-    )
-    const newNodes = getNodes(
-      nodes,
+    const newActiveNodes = getActiveNodes(allEdges, activeEdges, selectedEdges)
+    console.log('newActiveNodes', newActiveNodes, activeEdges)
+    const newNodes = getUpdatedNodes(
+      Object.values(nodesMap),
       newActiveNodes,
       mainNode,
       connectedNodes,
+      selectedNodes,
+      connections,
       withConnected,
       withImpact,
       withSecondary,
       withColumns,
+    )
+    const newEdges = getUpdatedEdges(
+      allEdges,
+      connections,
+      activeEdges,
+      newActiveNodes,
+      selectedEdges,
+      selectedNodes,
+      connectedNodes,
+      withConnected,
+      withImpact,
+      withSecondary,
+    )
+
+    if (
+      nodes.length !== newNodes.length &&
+      newEdges.length > WITH_COLUMNS_LIMIT
+    ) {
+      setWithColumns(false)
+    }
+
+    setTimeout(() => {
+      void createGraphLayout({
+        nodesMap,
+        nodes: newNodes,
+        edges: newEdges,
+      })
+        .then(layout => {
+          setEdges(layout.edges)
+          setNodes(layout.nodes)
+        })
+        .catch(error => {
+          handleError?.(error)
+        })
+        .finally(() => {
+          const node = nodesMap[mainNode]
+
+          setActiveNodes(newActiveNodes)
+
+          if (isNotNil(node)) {
+            setIsBuildingLayout(false)
+            setCenter(node.position.x, node.position.y, {
+              zoom: 0.5,
+              duration: 1000,
+            })
+          }
+        })
+    }, 100)
+  }, [lineageIndex, withColumns, activeEdges, selectedEdges])
+
+  useEffect(() => {
+    if (isNil(mainNode) || isArrayEmpty(nodes)) return
+
+    const newActiveNodes = getActiveNodes(allEdges, activeEdges, selectedEdges)
+    const newNodes = getUpdatedNodes(
+      nodes,
+      newActiveNodes,
+      mainNode,
+      connectedNodes,
+      selectedNodes,
+      connections,
+      withConnected,
+      withImpact,
+      withSecondary,
+      withColumns,
+    )
+
+    const newEdges = getUpdatedEdges(
+      allEdges,
+      connections,
+      activeEdges,
+      newActiveNodes,
+      selectedEdges,
+      selectedNodes,
+      connectedNodes,
+      withConnected,
+      withImpact,
+      withSecondary,
     )
 
     setEdges(newEdges)
@@ -908,27 +903,33 @@ function ModelColumnLineage({
     n => isFalse(n.hidden) && models.get(n.id)?.type === 'cte',
   ).length
 
-  console.log(connections)
-
   return (
     <div className={clsx('px-1 w-full h-full relative', className)}>
-      {isEmpty && isFalse(isBuildingLayout) ? (
-        <div className="flex justify-center items-center w-full h-full">
+      {isBuildingLayout && (
+        <div className="absolute top-0 left-0 z-[1000] bg-theme flex justify-center items-center w-full h-full">
           <Loading className="inline-block">
-            <h3 className="text-md">Empty</h3>
+            <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+            <h3 className="text-md">Building Lineage...</h3>
           </Loading>
         </div>
-      ) : (
-        <>
-          {isBuildingLayout && (
-            <div className="absolute top-0 left-0 z-[1000] bg-theme flex justify-center items-center w-full h-full">
-              <Loading className="inline-block">
-                <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-                <h3 className="text-md">Building Lineage...</h3>
-              </Loading>
-            </div>
-          )}
-          <div className="pl-2 flex items-center text-xs text-neutral-400 pb-2 border-b-2 border-neutral-200">
+      )}
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        nodeOrigin={[0.5, 0.5]}
+        minZoom={0.1}
+        maxZoom={1.5}
+        snapGrid={[16, 16]}
+        snapToGrid
+      >
+        <Panel
+          position="top-right"
+          className="bg-theme !m-0 w-full opacity-90"
+        >
+          <div className="pl-2 flex items-center text-xs text-neutral-400 pb-2">
             <div className="flex w-full whitespace-nowrap overflow-auto hover:scrollbar scrollbar--horizontal">
               <span className="mr-2">
                 <b>Model:</b> {mainNode}
@@ -1000,33 +1001,18 @@ function ModelColumnLineage({
               }
             />
           </div>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            nodeOrigin={[0.5, 0.5]}
-            minZoom={0.1}
-            maxZoom={1.5}
-            snapGrid={[16, 16]}
-            snapToGrid
-          >
-            <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={32}
-              size={4}
-              className={clsx(hasBackground ? 'opacity-100' : 'opacity-0')}
-            />
-          </ReactFlow>
-        </>
-      )}
+        </Panel>
+        <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={32}
+          size={4}
+          className={clsx(hasBackground ? 'opacity-100' : 'opacity-0')}
+        />
+      </ReactFlow>
     </div>
   )
 }
-
-export { ModelColumnLineage, ModelColumns, ModelNodeHeaderHandles }
 
 function GraphOptions({
   options,
@@ -1038,7 +1024,11 @@ function GraphOptions({
   >
   value: string[]
 }): JSX.Element {
-  const [selected, setSelected] = useState(value)
+  const [selected, setSelected] = useState<string[]>([])
+
+  useEffect(() => {
+    setSelected(value)
+  }, [value])
 
   return (
     <Listbox
@@ -1109,124 +1099,28 @@ function GraphOptions({
   )
 }
 
-function getEdgesActiveNodes(
-  edges: Edge[] = [],
-  connections: Map<string, Connections>,
-  activeEdges: ActiveEdges,
-  selectedEdges: Set<string>,
-  selectedNodes: Set<string>,
-  connectedNodes: Set<string>,
-  withConnected: boolean = false,
-): [Edge[], Set<string>] {
-  const activeNodes = new Set<string>()
-
-  const tempEdges = edges.map(edge => {
-    if (
-      hasActiveEdge(edge.sourceHandle) ||
-      hasActiveEdge(edge.targetHandle) ||
-      selectedEdges.has(edge.id)
-    ) {
-      isNotNil(edge.source) && activeNodes.add(edge.source)
-      isNotNil(edge.target) && activeNodes.add(edge.target)
-    }
-
-    // const shouldShow  = isFalse(hasSelections) || (activeNodes.has(edge.source) && activeNodes.has(edge.target))
-    // ((selectedEdges.has(edge.source) && selectedEdges.has(edge.target)) ||
-    if (isNil(edge.sourceHandle) && isNil(edge.targetHandle)) {
-      // Edge between models
-      edge.hidden = true
-
-      if (
-        connections.size === 0 ||
-        (selectedNodes.size > 0 && selectedEdges.has(edge.id)) ||
-        hasActiveEdge(edge.sourceHandle) ||
-        hasActiveEdge(edge.targetHandle)
-      ) {
-        edge.hidden = false
-      }
-    } else {
-      // Edge between columns
-      edge.hidden = isFalse(
-        hasActiveEdge(edge.sourceHandle) && hasActiveEdge(edge.targetHandle),
-      )
-    }
-
-    let stroke = 'var(--color-graph-edge-main)'
-    let strokeWidth = 2
-
-    const isConnectedSource = connectedNodes.has(edge.source)
-    const isConnectedTarget = connectedNodes.has(edge.target)
-
-    if (
-      selectedEdges.has(edge.id) ||
-      (withConnected && isConnectedSource && isConnectedTarget)
-    ) {
-      strokeWidth = 4
-      stroke = 'var(--color-graph-edge-selected)'
-      edge.zIndex = 10
-    } else {
-      if (hasActiveEdge(edge.sourceHandle)) {
-        stroke = 'var(--color-graph-edge-secondary)'
-      } else if (hasActiveEdge(edge.targetHandle)) {
-        stroke = 'var(--color-graph-edge-secondary)'
-      } else if (isConnectedSource && isConnectedTarget) {
-        strokeWidth = 4
-        stroke = 'var(--color-graph-edge-direct)'
-        edge.zIndex = 10
-      }
-    }
-
-    edge.style = {
-      ...edge.style,
-      stroke,
-      strokeWidth,
-    }
-
-    return edge
-  })
-
-  return [tempEdges, activeNodes]
-
-  function hasActiveEdge(edge?: string | null): boolean {
-    return isNil(edge) ? false : (activeEdges.get(edge) ?? 0) > 0
-  }
-}
-
-function getNodes(
-  nodes: Node[] = [],
-  activeNodes: Set<string>,
-  mainNode: string,
-  connectedNodes: Set<string>,
-  withImpact: boolean = true,
-  withConnected: boolean = true,
-  withSecondary: boolean = true,
-  withColumns: boolean = true,
-): Node[] {
-  return nodes.map(node => {
-    node.hidden = true
-
-    const isActiveNode = activeNodes.size === 0 || activeNodes.has(node.id)
-    const shouldHideImpact =
-      isFalse(withImpact) &&
-      isFalse(withConnected) &&
-      connectedNodes.has(node.id)
-    const shouldHideSecondary =
-      isFalse(withSecondary) && isFalse(connectedNodes.has(node.id))
-
-    node.hidden = shouldHideImpact || shouldHideSecondary
-
-    if (isFalse(shouldHideImpact) && isFalse(shouldHideSecondary)) {
-      node.hidden = isFalse(isActiveNode)
-    }
-
-    if (node.data.type === 'cte') {
-      node.hidden = isFalse(activeNodes.has(node.id)) || isFalse(withColumns)
-    }
-
-    if (mainNode === node.id) {
-      node.hidden = false
-    }
-
-    return node
-  })
+function ColumnLoading({
+  isFetching = false,
+  isError = false,
+  isTimeout = false,
+}: {
+  isFetching: boolean
+  isError: boolean
+  isTimeout: boolean
+}): JSX.Element {
+  return (
+    <>
+      {isFetching && (
+        <Loading className="inline-block mr-1">
+          <Spinner className="w-3 h-3 border border-neutral-10" />
+        </Loading>
+      )}
+      {isTimeout && isFalse(isFetching) && (
+        <ClockIcon className="w-4 h-4 text-warning-500 mr-1" />
+      )}
+      {isError && isFalse(isFetching) && (
+        <ExclamationCircleIcon className="w-4 h-4 text-danger-500 mr-1" />
+      )}
+    </>
+  )
 }
