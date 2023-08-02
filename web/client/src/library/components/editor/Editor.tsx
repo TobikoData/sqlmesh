@@ -95,11 +95,9 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const direction = useStoreEditor(s => s.direction)
   const engine = useStoreEditor(s => s.engine)
   const previewTable = useStoreEditor(s => s.previewTable)
-  const previewConsole = useStoreEditor(s => s.previewConsole)
   const previewDiff = useStoreEditor(s => s.previewDiff)
   const refreshTab = useStoreEditor(s => s.refreshTab)
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
   const setDialects = useStoreEditor(s => s.setDialects)
@@ -163,12 +161,11 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   const sizesCodeEditorAndPreview = useMemo(() => {
     const model = models.get(tab.file.path)
     const showPreview =
-      (tab.file.isLocal &&
-        [previewTable, previewConsole, previewDiff].some(Boolean)) ||
+      (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
       (tab.file.isSQLMeshModel && model != null)
 
     return showPreview ? [70, 30] : [100, 0]
-  }, [tab, models, previewConsole, previewTable, previewDiff])
+  }, [tab, models, previewTable, previewDiff])
 
   useEffect(() => {
     engine.addEventListener('message', handleEngineWorkerMessage)
@@ -198,7 +195,6 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   useEffect(() => {
     setPreviewQuery(undefined)
     setPreviewTable(undefined)
-    setPreviewConsole(undefined)
     setPreviewDiff(undefined)
   }, [tab.id, tab.file.fingerprint])
 

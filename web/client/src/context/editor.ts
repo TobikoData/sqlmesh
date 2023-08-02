@@ -3,7 +3,6 @@ import { type TableColumn, type TableRow } from '@components/table/help'
 import { isFalse, isNil, isNotNil, uid } from '@utils/index'
 import { create } from 'zustand'
 import useLocalStorage from '~/hooks/useLocalStorage'
-import { type ErrorKey, type ErrorIDE } from '~/library/pages/ide/context'
 import { ModelFile } from '~/models'
 import { sqlglotWorker } from '~/workers'
 
@@ -31,7 +30,6 @@ interface EditorStore {
   dialects: Dialect[]
   previewQuery?: string
   previewTable?: [TableColumn[], TableRow[]]
-  previewConsole?: [ErrorKey, ErrorIDE]
   previewDiff?: any
   direction: 'vertical' | 'horizontal'
   setDirection: (direction: 'vertical' | 'horizontal') => void
@@ -47,7 +45,6 @@ interface EditorStore {
   refreshTab: () => void
   setPreviewQuery: (previewQuery?: string) => void
   setPreviewTable: (previewTable?: [TableColumn[], TableRow[]]) => void
-  setPreviewConsole: (previewConsole?: [ErrorKey, ErrorIDE]) => void
   setPreviewDiff: (previewDiff?: any) => void
 }
 
@@ -95,7 +92,6 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   dialects: [],
   previewQuery: undefined,
   previewTable: undefined,
-  previewConsole: undefined,
   previewDiff: undefined,
   direction: 'vertical',
   inTabs(file) {
@@ -238,9 +234,6 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   },
   setPreviewTable(previewTable) {
     set(() => ({ previewTable }))
-  },
-  setPreviewConsole(previewConsole) {
-    set(() => ({ previewConsole }))
   },
   setPreviewDiff(previewDiff) {
     set(() => ({ previewDiff }))
