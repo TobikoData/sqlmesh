@@ -294,7 +294,7 @@ function Plan({
       if (auto_apply) {
         apply()
       } else {
-        setPlanAction(EnumPlanAction.Run)
+        setPlanAction(EnumPlanAction.Apply)
       }
     })
   }

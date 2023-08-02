@@ -425,7 +425,6 @@ function useQueryWithTimeout<
       const { removeError } = addError(errorKey, {
         message: 'Request timed out',
         description: `Request ${key} timed out after ${delay}ms`,
-        status: 408,
         timestamp: Date.now(),
         origin: 'useQueryTimeout',
         trigger,
@@ -436,7 +435,7 @@ function useQueryWithTimeout<
       void cancel(false)
 
       if (isNotNil(removeTimeoutErrorAfter)) {
-        setTimeout(removeError, removeTimeoutErrorAfter)
+        setTimeout(() => removeError(), removeTimeoutErrorAfter)
       }
     }, delay)
   }

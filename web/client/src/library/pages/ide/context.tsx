@@ -23,7 +23,6 @@ export const EnumErrorKey = {
 } as const
 
 export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]
-
 export interface ErrorIDE extends ApiExceptionPayload {
   key: ErrorKey
   id: ID
@@ -71,7 +70,7 @@ export default function IDEProvider({
     const err = {
       id: uid(),
       key,
-      status: error.status ?? 500,
+      status: error.status,
       timestamp: error.timestamp ?? Date.now(),
       message: error.message,
       description: error.description,
