@@ -66,7 +66,7 @@ export default function FileExplorerProvider({
 }: {
   children: React.ReactNode
 }): JSX.Element {
-  const { addError, removeError } = useIDE()
+  const { addError } = useIDE()
 
   const activeRange = useStoreProject(s => s.activeRange)
   const project = useStoreProject(s => s.project)
@@ -109,7 +109,6 @@ export default function FileExplorerProvider({
   function createDirectory(parent: ModelDirectory): void {
     if (isLoading) return
 
-    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const name = toUniqueName('new_directory')
@@ -129,7 +128,6 @@ export default function FileExplorerProvider({
   function createFile(parent: ModelDirectory, extension = '.py'): void {
     if (isLoading) return
 
-    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const name = toUniqueName('new_file', extension)
@@ -151,7 +149,6 @@ export default function FileExplorerProvider({
 
     if (isLoading || isStringEmptyOrNil(newName)) return
 
-    removeError(EnumErrorKey.FileExplorer)
     setIsLoading(true)
 
     const currentName = artifact.name

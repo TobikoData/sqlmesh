@@ -161,47 +161,56 @@ export function debounceSync(
   }
 }
 
-export function debounceAsync<T = any>(
-  fn: (...args: any) => Promise<T>,
+export type CallbackDebounce<TData = any, TArgs = any> = (
+  ...args: TArgs[]
+) => Promise<TData>
+
+export function debounceAsync<
+  TData = any,
+  TArgs = any,
+  Fn extends CallbackDebounce<TData, TArgs> = CallbackDebounce<TData, TArgs>,
+>(
+  fn: Fn,
   delay: number = 0,
   immediate: boolean = false,
-): ((...args: any) => Promise<T>) & { cancel: () => void } {
+): CallbackDebounce<TData, TArgs> & { cancel: () => void } {
   let timeoutIdLeading: ReturnType<typeof setTimeout> | undefined
   let timeoutIdTrailing: ReturnType<typeof setTimeout> | undefined
 
   clearTimeout(timeoutIdLeading)
 
-  async function callback(...args: any): Promise<T> {
-    const callNow = immediate && timeoutIdLeading == null
+  const callback: CallbackDebounce<TData, TArgs> & { cancel: () => void } =
+    async function callback(...args) {
+      const callNow = immediate && timeoutIdLeading == null
 
-    clearTimeout(timeoutIdTrailing)
+      clearTimeout(timeoutIdTrailing)
 
-    const promise = new Promise<T>((resolve, reject) => {
-      if (callNow) {
-        timeoutIdLeading = setTimeout(() => {
-          fn(...args)
-            .then(resolve)
-            .catch(reject)
-        })
-      }
-
-      timeoutIdTrailing = setTimeout(() => {
-        if (isFalse(immediate)) {
-          fn(...args)
-            .then(resolve)
-            .catch(reject)
-            .finally(() => {
-              timeoutIdTrailing = undefined
-            })
-        } else {
-          timeoutIdLeading = undefined
-          timeoutIdTrailing = undefined
+      const promise = new Promise<TData>((resolve, reject) => {
+        if (callNow) {
+          timeoutIdLeading = setTimeout(() => {
+            fn(...args)
+              .then(resolve)
+              .catch(reject)
+          })
         }
-      }, delay)
-    })
 
-    return await promise
-  }
+        timeoutIdTrailing = setTimeout(() => {
+          if (isFalse(immediate)) {
+            fn(...args)
+              .then(resolve)
+              .catch(reject)
+              .finally(() => {
+                timeoutIdTrailing = undefined
+              })
+          } else {
+            timeoutIdLeading = undefined
+            timeoutIdTrailing = undefined
+          }
+        }, delay)
+      })
+
+      return await promise
+    }
 
   callback.cancel = () => {
     clearTimeout(timeoutIdLeading)

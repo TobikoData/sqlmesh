@@ -100,13 +100,7 @@ export async function fetchAPI<T = any, B extends object = any>(
         }
       })
       .then(resolve)
-      .catch(error => {
-        if (error.name === 'AbortError') {
-          console.log(['Request aborted', 'fetchAPI', method, url])
-        } else {
-          reject(error)
-        }
-      })
+      .catch(reject)
   })
 }
 
