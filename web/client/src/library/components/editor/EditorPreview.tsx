@@ -12,7 +12,6 @@ import { EnumFileExtensions } from '@models/file'
 import { CodeEditorDefault } from './EditorCode'
 import { EnumRoutes } from '~/routes'
 import { useNavigate } from 'react-router-dom'
-import { DisplayError } from '@components/report/ReportErrors'
 import TableDiff from '@components/tableDiff/TableDiff'
 import TabList from '@components/tab/Tab'
 import { useSQLMeshModelExtensions } from './hooks'
@@ -45,7 +44,6 @@ export default function EditorPreview({
 
   const direction = useStoreEditor(s => s.direction)
   const previewQuery = useStoreEditor(s => s.previewQuery)
-  const previewConsole = useStoreEditor(s => s.previewConsole)
   const previewTable = useStoreEditor(s => s.previewTable)
   const previewDiff = useStoreEditor(s => s.previewDiff)
   const setDirection = useStoreEditor(s => s.setDirection)
@@ -62,18 +60,15 @@ export default function EditorPreview({
     () =>
       [
         isNotNil(previewTable) && EnumEditorPreviewTabs.Table,
-        isNotNil(previewConsole) && EnumEditorPreviewTabs.Console,
         isNotNil(previewQuery) && EnumEditorPreviewTabs.Query,
         tab.file.isSQLMeshModel && EnumEditorPreviewTabs.Lineage,
         isNotNil(previewDiff) && EnumEditorPreviewTabs.Diff,
       ].filter(Boolean) as string[],
-    [tab.id, previewTable, previewConsole, previewQuery, previewDiff],
+    [tab.id, previewTable, previewQuery, previewDiff],
   )
 
   useEffect(() => {
-    if (isNotNil(previewConsole)) {
-      setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Console))
-    } else if (isNotNil(previewDiff)) {
+    if (isNotNil(previewDiff)) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Diff))
     } else if (isNotNil(previewTable)) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Table))
@@ -130,21 +125,6 @@ export default function EditorPreview({
                 )}
               >
                 <Table data={previewTable} />
-              </Tab.Panel>
-            )}
-            {isNotNil(previewConsole) && (
-              <Tab.Panel
-                unmount={false}
-                className={clsx(
-                  'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
-                )}
-              >
-                <div className="w-full h-full p-2 bg-primary-10 rounded-lg overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
-                  <DisplayError
-                    scope={previewConsole[0]}
-                    error={previewConsole[1]}
-                  />
-                </div>
               </Tab.Panel>
             )}
             {isNotNil(previewQuery) && (

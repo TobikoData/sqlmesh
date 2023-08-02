@@ -86,7 +86,7 @@ export default function Table({
       />
       <div
         ref={elTableContainer}
-        className="w-full h-full rounded-lg overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
+        className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
       >
         <table
           cellPadding={0}
@@ -96,92 +96,96 @@ export default function Table({
             'text-neutral-700 dark:text-neutral-300 text-xs font-medium whitespace-nowrap text-left',
           )}
         >
-          <thead className="sticky top-0">
-            {table.getHeaderGroups().map(headerGroup => (
-              <tr
-                key={headerGroup.id}
-                className="bg-primary-10 dark:bg-secondary-10 backdrop-blur-lg"
-                style={{ height: `${MIN_HEIGHT_ROW}px` }}
-              >
-                {headerGroup.headers.map(header => (
-                  <th
-                    key={header.id}
-                    className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark"
-                  >
-                    {header.isPlaceholder ? (
-                      <></>
-                    ) : (
-                      <div
-                        className={clsx(
-                          header.column.getCanSort()
-                            ? 'flex cursor-pointer select-none'
-                            : '',
-                          ['int', 'float'].includes(
-                            header.column.columnDef.meta!.type,
-                          ) && 'justify-end',
-                        )}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {header.column.getCanSort() && (
-                          <ChevronUpDownIcon className="mr-1 w-4" />
-                        )}
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                        {{
-                          asc: <ChevronDownIcon className="ml-1 w-4" />,
-                          desc: <ChevronUpIcon className="ml-1 w-4" />,
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </div>
-                    )}
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
+          {isArrayNotEmpty(virtualRows) && (
+            <thead className="sticky top-0">
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr
+                  key={headerGroup.id}
+                  className="bg-primary-10 dark:bg-secondary-10 backdrop-blur-lg"
+                  style={{ height: `${MIN_HEIGHT_ROW}px` }}
+                >
+                  {headerGroup.headers.map(header => (
+                    <th
+                      key={header.id}
+                      className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark"
+                    >
+                      {header.isPlaceholder ? (
+                        <></>
+                      ) : (
+                        <div
+                          className={clsx(
+                            header.column.getCanSort()
+                              ? 'flex cursor-pointer select-none'
+                              : '',
+                            ['int', 'float'].includes(
+                              header.column.columnDef.meta!.type,
+                            ) && 'justify-end',
+                          )}
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {header.column.getCanSort() && (
+                            <ChevronUpDownIcon className="mr-1 w-4" />
+                          )}
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                          {{
+                            asc: <ChevronDownIcon className="ml-1 w-4" />,
+                            desc: <ChevronUpIcon className="ml-1 w-4" />,
+                          }[header.column.getIsSorted() as string] ?? null}
+                        </div>
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+          )}
           <tbody>
-            {paddingTop > 0 && (
-              <tr style={{ height: `${MIN_HEIGHT_ROW}px` }}>
-                <td style={{ minHeight: `${paddingTop}px` }} />
-              </tr>
-            )}
             {isArrayNotEmpty(virtualRows) ? (
-              virtualRows.map(({ index }) => {
-                const row = rows[index]!
-
-                return (
-                  <tr
-                    key={row.id}
-                    className="even:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
-                    style={{ height: `${MIN_HEIGHT_ROW}px` }}
-                  >
-                    {row.getVisibleCells().map(cell => (
-                      <td
-                        key={cell.id}
-                        className={clsx(
-                          'p-4 py-1 border-r-2 last:border-r-0 border-light dark:border-dark',
-                          ['int', 'float'].includes(
-                            cell.column.columnDef.meta!.type,
-                          ) && 'text-right',
-                        )}
-                      >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
-                      </td>
-                    ))}
+              <>
+                {paddingTop > 0 && (
+                  <tr style={{ height: `${MIN_HEIGHT_ROW}px` }}>
+                    <td style={{ minHeight: `${paddingTop}px` }} />
                   </tr>
-                )
-              })
+                )}
+                {virtualRows.map(({ index }) => {
+                  const row = rows[index]!
+
+                  return (
+                    <tr
+                      key={row.id}
+                      className="even:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
+                      style={{ height: `${MIN_HEIGHT_ROW}px` }}
+                    >
+                      {row.getVisibleCells().map(cell => (
+                        <td
+                          key={cell.id}
+                          className={clsx(
+                            'p-4 py-1 border-r-2 last:border-r-0 border-light dark:border-dark',
+                            ['int', 'float'].includes(
+                              cell.column.columnDef.meta!.type,
+                            ) && 'text-right',
+                          )}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
+                {paddingBottom > 0 && (
+                  <tr style={{ height: `${MIN_HEIGHT_ROW}px` }}>
+                    <td style={{ minHeight: `${paddingBottom}px` }} />
+                  </tr>
+                )}
+              </>
             ) : (
               <GhostRows columns={columns.length} />
-            )}
-            {paddingBottom > 0 && (
-              <tr style={{ height: `${MIN_HEIGHT_ROW}px` }}>
-                <td style={{ minHeight: `${paddingBottom}px` }} />
-              </tr>
             )}
           </tbody>
         </table>
@@ -199,7 +203,7 @@ function Header({
   setFilter: (search: string) => void
 }): JSX.Element {
   return (
-    <div className="text-neutral-700 dark:text-neutral-300 text-xs font-medium py-2">
+    <tr className="text-neutral-700 dark:text-neutral-300 text-xs font-medium py-2">
       <div className="flex justify-end items-center">
         <Input
           className="!m-0 mb-2"
@@ -217,7 +221,7 @@ function Header({
           )}
         </Input>
       </div>
-    </div>
+    </tr>
   )
 }
 
@@ -230,7 +234,7 @@ function Footer({ count }: { count: number }): JSX.Element {
 }
 
 function GhostRows({
-  rows = 6,
+  rows = 7,
   columns = 5,
 }: {
   rows?: number
@@ -243,7 +247,7 @@ function GhostRows({
         .map((_, row) => (
           <tr
             key={row}
-            className="even:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
+            className="odd:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
             style={{ height: `${MIN_HEIGHT_ROW}px` }}
           >
             {Array(columns)
