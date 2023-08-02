@@ -239,8 +239,6 @@ class ModelMeta(Node):
                     raise ValueError(f"{field} field cannot be set for {kind} models")
 
             if hasattr(kind, "time_column"):
-                # The time column is an actual column in the model, so we need to normalize it
-                # in order to ensure parity with e.g. columns_to_types for the given dialect
                 kind.time_column.column = d.normalize_identifiers(
                     kind.time_column.column, dialect=values.get("dialect")
                 ).name
