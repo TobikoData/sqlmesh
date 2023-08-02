@@ -107,9 +107,11 @@ export default function ModelNode({
       className={clsx(
         'text-xs font-semibold rounded-lg shadow-lg relative z-1',
         isCTE ? 'text-neutral-100' : 'text-secondary-500 dark:text-primary-100',
-        (isModelExternal || isModelSeed) && 'border-4 border-accent-500',
-        mainNode === id && 'border-4 border-brand-500 ring-8 ring-brand-200',
-        selectedNodes.has(id) && 'ring-8 ring-success-300',
+        (isModelExternal || isModelSeed) &&
+          'border-4 border-accent-500 ring-8 ring-accent-200',
+        selectedNodes.has(id) &&
+          'border-4 border-secondary-500 ring-8 ring-secondary-200',
+        isMainNode && 'ring-8 ring-brand-200',
         isNil(highlighted) ? splat : highlighted,
         isActiveNode || isMainNode
           ? 'opacity-100'
@@ -127,7 +129,11 @@ export default function ModelNode({
         isDraggable={true}
         className={clsx(
           showColumns ? 'rounded-t-md' : 'rounded-lg',
-          isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
+          isCTE
+            ? 'bg-accent-500'
+            : isMainNode
+            ? 'bg-brand-500 text-brand-100 font-black'
+            : 'bg-secondary-100 dark:bg-primary-900',
         )}
         hasLeft={targetPosition === Position.Left}
         hasRight={sourcePosition === Position.Right}
@@ -151,7 +157,11 @@ export default function ModelNode({
           <div
             className={clsx(
               'rounded-b-md py-1',
-              isCTE ? 'bg-accent-500' : 'bg-secondary-100 dark:bg-primary-900',
+              isCTE
+                ? 'bg-accent-500'
+                : isMainNode
+                ? 'bg-brand-500'
+                : 'bg-secondary-100 dark:bg-primary-900',
             )}
           ></div>
         </>

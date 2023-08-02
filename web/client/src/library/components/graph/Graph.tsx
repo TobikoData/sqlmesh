@@ -21,17 +21,17 @@ import ReactFlow, {
   type Node,
   useUpdateNodeInternals,
   useReactFlow,
-  Panel,
 } from 'reactflow'
 import { Button } from '../button/Button'
 import 'reactflow/dist/base.css'
 import {
-  getNodesAndEdges,
+  getEdges,
   createGraphLayout,
   toNodeOrEdgeId,
   mergeLineageWithColumns,
-  hasNoModels,
   mergeConnections,
+  getNodeMap,
+  getLineageIndex,
 } from './help'
 import {
   debounceSync,
@@ -43,9 +43,11 @@ import {
 } from '../../../utils'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
 import {
-  ArrowRightCircleIcon,
   CheckIcon,
   ChevronDownIcon,
+  LockClosedIcon,
+  InformationCircleIcon,
+  ArrowRightCircleIcon,
 } from '@heroicons/react/24/solid'
 import {
   InformationCircleIcon,
@@ -65,7 +67,8 @@ import {
   type InitialSQLMeshModel,
   type ModelSQLMeshModel,
 } from '@models/sqlmesh-model'
-import { useLineageFlow } from './context'
+import { type ActiveEdges, useLineageFlow, type Connections } from './context'
+import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { Listbox, Popover, Transition } from '@headlessui/react'
 import { CodeEditorDefault } from '@components/editor/EditorCode'
@@ -138,7 +141,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                   <CodeEditorDefault
                     content={source}
                     type={EnumFileExtensions.SQL}
-                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !h-[25vh] !max-w-[30rem] text-xs pr-2"
+                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !max-w-[30rem] !h-[25vh] text-xs"
                     extensions={modelExtensions}
                   />
                 </Popover.Panel>
@@ -147,19 +150,17 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
           )}
         </Popover>
       )}
-      <div
-        className={clsx(
-          'w-full flex justify-between items-center',
-          disabled && 'opacity-50',
-        )}
-      >
-        <span>{columnName}</span>
-        <span className="inline-block text-neutral-500 dark:text-neutral-300 ml-2">
+      <div className={clsx('w-full flex justify-between items-center')}>
+        <span className={clsx('flex items-center', disabled && 'opacity-50')}>
+          {disabled && <LockClosedIcon className="w-3 h-3 mr-2" />}
+          <span>{columnName}</span>
+        </span>
+        <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-2">
           {columnType}
         </span>
       </div>
       {columnDescription != null && (
-        <p className="text-neutral-600 dark:text-neutral-400 mt-1">
+        <p className="text-neutral-600 dark:text-neutral-300 mt-1">
           {columnDescription}
         </p>
       )}
@@ -260,32 +261,34 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           id={toNodeOrEdgeId(EnumSide.Left, id)}
           position={Position.Left}
           isConnectable={false}
-          className="!bg-transparent -ml-2 dark:text-primary-500"
+          className="!bg-transparent -ml-2 text-neutral-100 border border-secondary-500 rounded-full overflow-hidden "
         >
-          <ArrowRightCircleIcon className="w-5 bg-theme rounded-full" />
+          <ArrowRightCircleIcon className="w-5 bg-secondary-500 dark:bg-primary-900 text-secondary-100" />
         </Handle>
       )}
       {isNotNil(handleSelect) && (
         <span
           onClick={handleSelect}
           className={clsx(
-            'mr-3 ml-4 flex justify-center items-center min-w-[1rem] h-4 rounded-full cursor-pointer',
+            'ml-5 flex justify-center items-center min-w-[1rem] h-4 rounded-full cursor-pointer',
             isSelected
-              ? 'border-2 border-success-500'
-              : 'border-2 border-neutral-400',
+              ? 'border-2 border-secondary-500 dark:border-primary-500'
+              : 'border-2 border-neutral-500 dark:border-neutral-200',
           )}
         >
           <span
             className={clsx(
               'flex w-2 h-2 rounded-full',
-              isSelected ? 'bg-success-500' : 'bg-neutral-30',
+              isSelected
+                ? 'bg-secondary-500 dark:bg-primary-500'
+                : 'bg-neutral-30',
             )}
           ></span>
         </span>
       )}
       <span
         className={clsx(
-          'flex w-full overflow-hidden px-3 py-2 bg-neutral-10',
+          'flex w-full overflow-hidden px-3 py-2',
           isDraggable && 'drag-handle',
         )}
       >
@@ -295,8 +298,8 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
               type === 'python'
                 ? 'Column lineage disabled for Python models'
                 : type === 'cte'
-                  ? 'CTE'
-                  : 'SQL Query'
+                ? 'CTE'
+                : 'SQL Query'
             }
             className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
           >
@@ -309,7 +312,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
         )}
         <span
           className={clsx(
-            'inline-block whitespace-nowrap overflow-hidden overflow-ellipsis',
+            'inline-block whitespace-nowrap overflow-hidden overflow-ellipsis pr-2',
             isNotNil(handleClick) && 'cursor-pointer hover:underline',
           )}
           onClick={handleClick}
@@ -323,9 +326,9 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           id={toNodeOrEdgeId(EnumSide.Right, id)}
           position={Position.Right}
           isConnectable={false}
-          className="!bg-transparent -mr-2 dark:text-primary-500"
+          className="!bg-transparent -mr-2 text-neutral-100 border border-secondary-500 rounded-full overflow-hidden "
         >
-          <ArrowRightCircleIcon className="w-5 bg-theme rounded-full" />
+          <ArrowRightCircleIcon className="w-5 bg-secondary-500 dark:bg-primary-900 text-secondary-100" />
         </Handle>
       )}
     </div>
@@ -394,7 +397,6 @@ const ModelColumn = memo(function ModelColumn({
       void getColumnLineage().then(({ data }) => {
         if (isNil(data)) return
 
-        setIsEmpty(hasNoModels(data))
         updateColumnLineage(data)
       })
     }
@@ -405,7 +407,7 @@ const ModelColumn = memo(function ModelColumn({
       className={clsx(
         isActive
           ? 'bg-secondary-10 dark:bg-primary-900 text-secondary-500 dark:text-neutral-100'
-          : 'text-neutral-500 dark:text-neutral-100',
+          : 'text-neutral-600 dark:text-neutral-100',
         withHandles ? 'p-0' : 'py-1 px-2 rounded-md mb-1',
         className,
       )}
@@ -550,18 +552,20 @@ const ModelColumns = memo(function ModelColumns({
     function updateColumnLineage(
       columnLineage: Record<string, Record<string, LineageColumn>> = {},
     ): void {
-      setLineage(lineage =>
-        mergeLineageWithColumns(structuredClone(lineage), columnLineage),
+      const { connections: newConnections, activeEdges } = mergeConnections(
+        structuredClone(connections),
+        columnLineage,
       )
-      setConnections(connections =>
-        mergeConnections(
-          structuredClone(connections),
-          columnLineage,
-          addActiveEdges,
-        ),
+      const mergedLineage = mergeLineageWithColumns(
+        structuredClone(lineage),
+        columnLineage,
       )
+
+      setLineage(mergedLineage)
+      setConnections(newConnections)
+      addActiveEdges(activeEdges)
     },
-    [addActiveEdges, setConnections],
+    [connections, lineage, addActiveEdges],
   )
 
   const isSelectManually = useCallback(
@@ -713,11 +717,13 @@ const ModelColumns = memo(function ModelColumns({
 
               setShowColumns(prev => !prev)
             }}
+            className="px-1"
           >
             {showColumns
               ? 'Hide'
-              : `Show ${columns.length - columnsSelected.length - columnsRest.length
-              } More`}
+              : `Show ${
+                  columns.length - columnsSelected.length - columnsRest.length
+                } More`}
           </Button>
         </div>
       )}
@@ -736,159 +742,95 @@ function ModelColumnLineage({
 }): JSX.Element {
   const {
     withColumns,
-    setWithColumns,
-    hasActiveEdge,
     models,
     lineage,
-    handleError,
-    setMainNode,
     mainNode,
     selectedEdges,
+    selectedNodes,
     nodes,
-    setNodes,
     edges,
-    setEdges,
     withConnected,
+    activeNodes,
+    activeEdges,
     connectedNodes,
+    connections,
+    setWithColumns,
+    // hasActiveEdge,
+    handleError,
+    setMainNode,
+    setNodes,
+    setEdges,
     setWithConnected,
+    setActiveNodes,
   } = useLineageFlow()
   const { setCenter } = useReactFlow()
 
   const [isEmpty, setIsEmpty] = useState(true)
   const [isBuildingLayout, setIsBuildingLayout] = useState(true)
   const [hasBackground, setHasBackground] = useState(true)
+  const [withImpact, setWithImpact] = useState(true)
+  const [withSecondary, setWithSecondary] = useState(true)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
 
-  const nodesAndEdges = useMemo(() => {
-    const highlightedNodesDefault = {
-      'border-4 border-brand-500': [model.name],
-    }
-
-    return getNodesAndEdges({
-      lineage,
-      highlightedNodes: highlightedNodes ?? highlightedNodesDefault,
-      models,
-      model,
-      withColumns,
-    })
-  }, [lineage, models, model, withColumns, highlightedNodes])
-
-  const toggleEdgeAndNodes = useCallback(
-    function toggleEdgeAndNodes(
-      edges: Edge[] = [],
-      nodes: Node[] = [],
-    ): {
-      edges: Edge[]
-      nodes: Node[]
-    } {
-      const visibility = new Map<string, boolean>()
-
-      return {
-        edges: edges.map(edge => {
-          if (isNil(edge.sourceHandle) && isNil(edge.targetHandle)) {
-            // Edge between models
-            edge.hidden = false
-          } else {
-            // Edge between columns
-            edge.hidden = isFalse(
-              hasActiveEdge(edge.sourceHandle) &&
-              hasActiveEdge(edge.targetHandle),
-            )
-          }
-
-          let stroke = 'var(--color-graph-edge-main)'
-          let strokeWidth = 2
-
-          const isConnectedSource = connectedNodes.has(edge.source)
-          const isConnectedTarget = connectedNodes.has(edge.target)
-
-          if (
-            selectedEdges.has(edge.id) ||
-            (withConnected && isConnectedSource && isConnectedTarget)
-          ) {
-            strokeWidth = 5
-            stroke = 'var(--color-graph-edge-selected)'
-            edge.zIndex = 10
-          } else {
-            if (hasActiveEdge(edge.sourceHandle)) {
-              stroke = 'var(--color-graph-edge-secondary)'
-            } else if (hasActiveEdge(edge.targetHandle)) {
-              stroke = 'var(--color-graph-edge-secondary)'
-            } else if (isConnectedSource && isConnectedTarget) {
-              strokeWidth = 2
-              stroke = 'var(--color-graph-edge-direct)'
-              edge.zIndex = 10
-            }
-          }
-
-          edge.style = {
-            ...edge.style,
-            stroke,
-            strokeWidth,
-          }
-
-          const isSourceTypeCTE =
-            nodesAndEdges.nodesMap[edge.source]?.data.type === 'cte'
-          const isTargetTypeCTE =
-            nodesAndEdges.nodesMap[edge.target]?.data.type === 'cte'
-
-          if (isSourceTypeCTE) {
-            if (isFalse(visibility.has(edge.source))) {
-              visibility.set(edge.source, true)
-            }
-
-            visibility.set(
-              edge.source,
-              isFalse(visibility.has(edge.source)) ? false : edge.hidden,
-            )
-          }
-
-          if (isTargetTypeCTE) {
-            if (isFalse(visibility.has(edge.target))) {
-              visibility.set(edge.target, true)
-            }
-
-            visibility.set(
-              edge.target,
-              isFalse(visibility.get(edge.target)) ? false : edge.hidden,
-            )
-          }
-
-          return edge
-        }),
-        nodes: nodes.map(node => {
-          node.hidden = node.data.type === 'cte' && visibility.get(node.id)
-
-          return node
-        }),
-      }
-    },
-    [nodesAndEdges, selectedEdges, mainNode, withConnected],
+  const nodesMap = useMemo(
+    () =>
+      getNodeMap({
+        lineage,
+        highlightedNodes,
+        models,
+        model,
+        withColumns,
+      }),
+    [lineage, models, model, withColumns, highlightedNodes],
   )
+  const allEdges = useMemo(() => getEdges(lineage), [lineage])
+  const lineageIndex = useMemo(() => getLineageIndex(lineage), [lineage])
 
   useEffect(() => {
     setMainNode(model.name)
   }, [model.name])
 
   useEffect(() => {
-    setIsEmpty(isArrayEmpty(nodesAndEdges.nodes))
+    setIsEmpty(isArrayEmpty(allEdges))
 
-    if (isArrayEmpty(nodesAndEdges.nodes)) return
+    if (isArrayEmpty(allEdges) || isNil(mainNode)) return
 
-    void createGraphLayout(nodesAndEdges)
+    void createGraphLayout({
+      nodesMap,
+      edges: allEdges,
+    })
       .then(layout => {
-        const { edges, nodes } = toggleEdgeAndNodes(layout.edges, layout.nodes)
+        const [newEdges, newActiveNodes] = getEdgesActiveNodes(
+          layout.edges,
+          connections,
+          activeEdges,
+          selectedEdges,
+          selectedNodes,
+          connectedNodes,
+          withConnected,
+        )
+        const newNodes = getNodes(
+          layout.nodes,
+          newActiveNodes,
+          mainNode,
+          connectedNodes,
+          withConnected,
+          withImpact,
+          withSecondary,
+          withColumns,
+        )
 
         setIsEmpty(isArrayEmpty(layout.nodes))
-        setEdges(edges)
-        setNodes(nodes)
+        setEdges(newEdges)
+        setNodes(newNodes)
+        setActiveNodes(newActiveNodes)
       })
       .catch(error => {
         handleError?.(error)
       })
       .finally(() => {
-        const node = nodesAndEdges.nodesMap[model.name]
+        const node = nodesMap[model.name]
 
         setIsBuildingLayout(false)
 
@@ -899,17 +841,47 @@ function ModelColumnLineage({
           })
         }
       })
-  }, [nodesAndEdges])
+  }, [lineageIndex, withColumns, withImpact, withSecondary])
 
   useEffect(() => {
-    const { edges: newEdges, nodes: newNodes } = toggleEdgeAndNodes(
-      edges,
+    if (isNil(mainNode)) return
+
+    const [newEdges, newActiveNodes] = getEdgesActiveNodes(
+      allEdges,
+      connections,
+      activeEdges,
+      selectedEdges,
+      selectedNodes,
+      connectedNodes,
+      withConnected,
+    )
+    const newNodes = getNodes(
       nodes,
+      newActiveNodes,
+      mainNode,
+      connectedNodes,
+      withConnected,
+      withImpact,
+      withSecondary,
+      withColumns,
     )
 
     setEdges(newEdges)
     setNodes(newNodes)
-  }, [hasActiveEdge, toggleEdgeAndNodes])
+    setActiveNodes(newActiveNodes)
+  }, [
+    connections,
+    allEdges,
+    activeEdges,
+    selectedNodes,
+    selectedEdges,
+    connectedNodes,
+    withConnected,
+    withImpact,
+    withSecondary,
+    withColumns,
+    mainNode,
+  ])
 
   function onNodesChange(changes: NodeChange[]): void {
     setNodes(applyNodeChanges(changes, nodes))
@@ -918,6 +890,27 @@ function ModelColumnLineage({
   function onEdgesChange(changes: EdgeChange[]): void {
     setEdges(applyEdgeChanges(changes, edges))
   }
+
+  const countSelected = selectedNodes.size
+  const countImpact = connectedNodes.size - 1
+  const countSecondary = nodes.filter(n =>
+    isFalse(connectedNodes.has(n.id)),
+  ).length
+  const countActive =
+    activeNodes.size > 0 ? activeNodes.size : connectedNodes.size
+  const countHidden = nodes.filter(n => n.hidden).length
+  const countVisible = nodes.filter(n => isFalse(n.hidden)).length
+  const countDataSources = nodes.filter(
+    n =>
+      isFalse(n.hidden) &&
+      (models.get(n.id)?.type === 'external' ||
+        models.get(n.id)?.type === 'seed'),
+  ).length
+  const countCTEs = nodes.filter(
+    n => isFalse(n.hidden) && models.get(n.id)?.type === 'cte',
+  ).length
+
+  console.log(connections)
 
   return (
     <div className={clsx('px-1 w-full h-full relative', className)}>
@@ -937,7 +930,78 @@ function ModelColumnLineage({
               </Loading>
             </div>
           )}
-          <div className="flex justify-end"></div>
+          <div className="pl-2 flex items-center text-xs text-neutral-400 pb-2 border-b-2 border-neutral-200">
+            <div className="flex w-full whitespace-nowrap overflow-auto hover:scrollbar scrollbar--horizontal">
+              <span className="mr-2">
+                <b>Model:</b> {mainNode}
+              </span>
+              {isNotNil(highlightedNodes) ?? (
+                <span className="mr-2">
+                  <b>Highlighted:</b>{' '}
+                  {Object.keys(highlightedNodes ?? {}).length}
+                </span>
+              )}
+              {countSelected > 0 && (
+                <span className="mr-2">
+                  <b>Selected:</b> {countSelected}
+                </span>
+              )}
+              {withImpact && countSelected === 0 && countImpact > 0 && (
+                <span className="mr-2">
+                  <b>Impact:</b> {countImpact}
+                </span>
+              )}
+              {withSecondary && countSelected === 0 && countSecondary > 0 && (
+                <span className="mr-2">
+                  <b>Secondary:</b> {countSecondary}
+                </span>
+              )}
+              <span className="mr-2">
+                <b>Active:</b> {countActive}
+              </span>
+              {countVisible > 0 && countVisible !== countActive && (
+                <span className="mr-2">
+                  <b>Visible:</b> {countVisible}
+                </span>
+              )}
+              {countHidden > 0 && (
+                <span className="mr-2">
+                  <b>Hidden:</b> {countHidden}
+                </span>
+              )}
+              {countDataSources > 0 && (
+                <span className="mr-2">
+                  <b>Data Sources</b>: {countDataSources}
+                </span>
+              )}
+              {countCTEs > 0 && (
+                <span className="mr-2">
+                  <b>CTEs:</b> {countCTEs}
+                </span>
+              )}
+            </div>
+            <GraphOptions
+              options={{
+                Background: setHasBackground,
+                Columns:
+                  activeNodes.size > 0 && selectedNodes.size === 0
+                    ? undefined
+                    : setWithColumns,
+                Connected: activeNodes.size > 0 ? undefined : setWithConnected,
+                Impact: activeNodes.size > 0 ? undefined : setWithImpact,
+                Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
+              }}
+              value={
+                [
+                  withColumns && 'Columns',
+                  hasBackground && 'Background',
+                  withConnected && 'Connected',
+                  withImpact && 'Impact',
+                  withSecondary && 'Secondary',
+                ].filter(Boolean) as string[]
+              }
+            />
+          </div>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -950,25 +1014,6 @@ function ModelColumnLineage({
             snapGrid={[16, 16]}
             snapToGrid
           >
-            <Panel
-              position="top-right"
-              className="!mx-0 !my-1"
-            >
-              <GraphOptions
-                options={{
-                  Background: setHasBackground,
-                  Columns: setWithColumns,
-                  Connected: setWithConnected,
-                }}
-                value={
-                  [
-                    withColumns && 'Columns',
-                    hasBackground && 'Background',
-                    withConnected && 'Connected',
-                  ].filter(Boolean) as string[]
-                }
-              />
-            </Panel>
             <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
             <Background
               variant={BackgroundVariant.Dots}
@@ -989,7 +1034,10 @@ function GraphOptions({
   options,
   value = [],
 }: {
-  options: Record<string, React.Dispatch<React.SetStateAction<boolean>>>
+  options: Record<
+    string,
+    Optional<React.Dispatch<React.SetStateAction<boolean>>>
+  >
   value: string[]
 }): JSX.Element {
   const [selected, setSelected] = useState(value)
@@ -1006,7 +1054,7 @@ function GraphOptions({
       }}
       multiple
     >
-      <div className="relative m-1 flex">
+      <div className="relative flex">
         <Listbox.Button className="flex items-center relative w-full cursor-default bg-primary-10 text-xs rounded-full text-primary-500 py-1 px-2 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300">
           <span className="block truncate">Show</span>
           <ChevronDownIcon
@@ -1021,38 +1069,166 @@ function GraphOptions({
           leaveTo="opacity-0"
         >
           <Listbox.Options className="absolute top-8 right-0 z-50 max-h-60 min-w-16 overflow-auto rounded-md bg-theme py-2 shadow-lg ring-2 ring-primary-10 ring-opacity-5 focus:outline-none sm:text-sm">
-            {Object.keys(options).map(key => (
-              <Listbox.Option
-                key={key}
-                className={({ active }) =>
-                  `relative cursor-default select-none py-1 pl-10 pr-4 ${active
-                    ? 'bg-primary-10 text-primary-500'
-                    : 'text-neutral-700 dark:text-neutral-300'
-                  }`
-                }
-                value={key}
-              >
-                {({ selected }) => (
-                  <>
-                    <span>{key}</span>
-                    <span
-                      className={clsx(
-                        'absolute inset-y-0 left-0 flex items-center pl-3 text-primary-500',
-                        selected ? 'block' : 'hidden',
-                      )}
-                    >
-                      <CheckIcon
-                        className="h-4 w-4"
-                        aria-hidden="true"
-                      />
-                    </span>
-                  </>
-                )}
-              </Listbox.Option>
-            ))}
+            {Object.keys(options)
+              .filter(key => options[key])
+              .map(key => (
+                <Listbox.Option
+                  key={key}
+                  className={({ active, disabled }) =>
+                    clsx(
+                      'relative cursor-default select-none py-1 pl-10 pr-4',
+                      disabled ? 'opacity-50 cursor-not-allowed' : '',
+                      active
+                        ? 'bg-primary-10 text-primary-500'
+                        : 'text-neutral-700 dark:text-neutral-300',
+                    )
+                  }
+                  value={key}
+                  disabled={isFalse(Boolean(options[key]))}
+                >
+                  {({ selected }) => (
+                    <>
+                      <span>{key}</span>
+                      <span
+                        className={clsx(
+                          'absolute inset-y-0 left-0 flex items-center pl-3 text-primary-500',
+                          selected ? 'block' : 'hidden',
+                        )}
+                      >
+                        <CheckIcon
+                          className="h-4 w-4"
+                          aria-hidden="true"
+                        />
+                      </span>
+                    </>
+                  )}
+                </Listbox.Option>
+              ))}
           </Listbox.Options>
         </Transition>
       </div>
     </Listbox>
   )
+}
+
+function getEdgesActiveNodes(
+  edges: Edge[] = [],
+  connections: Map<string, Connections>,
+  activeEdges: ActiveEdges,
+  selectedEdges: Set<string>,
+  selectedNodes: Set<string>,
+  connectedNodes: Set<string>,
+  withConnected: boolean = false,
+): [Edge[], Set<string>] {
+  const activeNodes = new Set<string>()
+
+  const tempEdges = edges.map(edge => {
+    if (
+      hasActiveEdge(edge.sourceHandle) ||
+      hasActiveEdge(edge.targetHandle) ||
+      selectedEdges.has(edge.id)
+    ) {
+      isNotNil(edge.source) && activeNodes.add(edge.source)
+      isNotNil(edge.target) && activeNodes.add(edge.target)
+    }
+
+    // const shouldShow  = isFalse(hasSelections) || (activeNodes.has(edge.source) && activeNodes.has(edge.target))
+    // ((selectedEdges.has(edge.source) && selectedEdges.has(edge.target)) ||
+    if (isNil(edge.sourceHandle) && isNil(edge.targetHandle)) {
+      // Edge between models
+      edge.hidden = true
+
+      if (
+        connections.size === 0 ||
+        (selectedNodes.size > 0 && selectedEdges.has(edge.id)) ||
+        hasActiveEdge(edge.sourceHandle) ||
+        hasActiveEdge(edge.targetHandle)
+      ) {
+        edge.hidden = false
+      }
+    } else {
+      // Edge between columns
+      edge.hidden = isFalse(
+        hasActiveEdge(edge.sourceHandle) && hasActiveEdge(edge.targetHandle),
+      )
+    }
+
+    let stroke = 'var(--color-graph-edge-main)'
+    let strokeWidth = 2
+
+    const isConnectedSource = connectedNodes.has(edge.source)
+    const isConnectedTarget = connectedNodes.has(edge.target)
+
+    if (
+      selectedEdges.has(edge.id) ||
+      (withConnected && isConnectedSource && isConnectedTarget)
+    ) {
+      strokeWidth = 4
+      stroke = 'var(--color-graph-edge-selected)'
+      edge.zIndex = 10
+    } else {
+      if (hasActiveEdge(edge.sourceHandle)) {
+        stroke = 'var(--color-graph-edge-secondary)'
+      } else if (hasActiveEdge(edge.targetHandle)) {
+        stroke = 'var(--color-graph-edge-secondary)'
+      } else if (isConnectedSource && isConnectedTarget) {
+        strokeWidth = 4
+        stroke = 'var(--color-graph-edge-direct)'
+        edge.zIndex = 10
+      }
+    }
+
+    edge.style = {
+      ...edge.style,
+      stroke,
+      strokeWidth,
+    }
+
+    return edge
+  })
+
+  return [tempEdges, activeNodes]
+
+  function hasActiveEdge(edge?: string | null): boolean {
+    return isNil(edge) ? false : (activeEdges.get(edge) ?? 0) > 0
+  }
+}
+
+function getNodes(
+  nodes: Node[] = [],
+  activeNodes: Set<string>,
+  mainNode: string,
+  connectedNodes: Set<string>,
+  withImpact: boolean = true,
+  withConnected: boolean = true,
+  withSecondary: boolean = true,
+  withColumns: boolean = true,
+): Node[] {
+  return nodes.map(node => {
+    node.hidden = true
+
+    const isActiveNode = activeNodes.size === 0 || activeNodes.has(node.id)
+    const shouldHideImpact =
+      isFalse(withImpact) &&
+      isFalse(withConnected) &&
+      connectedNodes.has(node.id)
+    const shouldHideSecondary =
+      isFalse(withSecondary) && isFalse(connectedNodes.has(node.id))
+
+    node.hidden = shouldHideImpact || shouldHideSecondary
+
+    if (isFalse(shouldHideImpact) && isFalse(shouldHideSecondary)) {
+      node.hidden = isFalse(isActiveNode)
+    }
+
+    if (node.data.type === 'cte') {
+      node.hidden = isFalse(activeNodes.has(node.id)) || isFalse(withColumns)
+    }
+
+    if (mainNode === node.id) {
+      node.hidden = false
+    }
+
+    return node
+  })
 }

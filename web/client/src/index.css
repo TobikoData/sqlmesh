@@ -219,8 +219,8 @@ html[mode='dark'] {
 
   --color-graph-edge-secondary: var(--color-primary-500);
   --color-graph-edge-main: var(--color-neutral-80);
-  --color-graph-edge-selected: var(--color-brand-500);
-  --color-graph-edge-direct: var(--color-brand-20);
+  --color-graph-edge-selected: var(--color-secondary-500);
+  --color-graph-edge-direct: var(--color-secondary-20);
 }
 
 html[mode='light'] {
@@ -245,8 +245,8 @@ html[mode='light'] {
 
   --color-graph-edge-secondary: var(--color-secondary-500);
   --color-graph-edge-main: var(--color-neutral-200);
-  --color-graph-edge-selected: var(--color-brand-500);
-  --color-graph-edge-direct: var(--color-brand-20);
+  --color-graph-edge-selected: var(--color-secondary-500);
+  --color-graph-edge-direct: var(--color-secondary-20);
 }
 
 html {

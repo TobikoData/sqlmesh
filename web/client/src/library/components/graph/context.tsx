@@ -39,6 +39,7 @@ interface LineageFlow {
   withConnected: boolean
   withColumns: boolean
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
+  setActiveNodes: React.Dispatch<React.SetStateAction<ActiveNodes>>
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>
   setWithConnected: React.Dispatch<React.SetStateAction<boolean>>
@@ -92,6 +93,7 @@ export const LineageFlowContext = createContext<LineageFlow>({
   setMainNode: () => {},
   setNodes: () => {},
   setEdges: () => {},
+  setActiveNodes: () => {},
 })
 
 export default function LineageFlowProvider({
@@ -120,6 +122,7 @@ export default function LineageFlowProvider({
   )
   const [withConnected, setWithConnected] = useState(false)
   const [selectedNodes, setSelectedNodes] = useState<SelectedNodes>(new Set())
+  const [activeNodes, setActiveNodes] = useState<ActiveNodes>(new Set())
 
   const hasActiveEdge = useCallback(
     function hasActiveEdge(edge?: string | null): boolean {
@@ -128,17 +131,16 @@ export default function LineageFlowProvider({
     [activeEdges],
   )
 
-  const addActiveEdges = useCallback(function addActiveEdges(
-    edges: string[],
-  ): void {
-    setActiveEdges(activeEdges => {
-      edges.forEach(edge => {
-        activeEdges.set(edge, 1)
-      })
+  const addActiveEdges = useCallback(
+    function addActiveEdges(edges: string[]): void {
+      setActiveEdges(activeEdges => {
+        edges.forEach(edge => activeEdges.set(edge, 1))
 
-      return new Map(activeEdges)
-    })
-  }, [])
+        return new Map(activeEdges)
+      })
+    },
+    [setActiveEdges],
+  )
 
   const removeActiveEdges = useCallback(
     function removeActiveEdges(edges: string[]): void {
@@ -223,23 +225,6 @@ export default function LineageFlowProvider({
     [nodesConnections, selectedNodes],
   )
 
-  const activeNodes = useMemo(
-    () =>
-      new Set(
-        edges
-          .filter(edge => {
-            return (
-              hasActiveEdge(edge.sourceHandle) ||
-              hasActiveEdge(edge.targetHandle) ||
-              selectedEdges.has(edge.id)
-            )
-          })
-          .map(edge => [edge.source, edge.target].filter(Boolean))
-          .flat(),
-      ),
-    [edges, hasActiveEdge, selectedEdges],
-  )
-
   return (
     <LineageFlowContext.Provider
       value={{
@@ -249,6 +234,7 @@ export default function LineageFlowProvider({
         activeEdges,
         selectedEdges,
         activeNodes,
+        setActiveNodes,
         selectedNodes,
         mainNode,
         connections,

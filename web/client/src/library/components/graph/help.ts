@@ -1,11 +1,5 @@
 import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js'
-import {
-  isArrayNotEmpty,
-  isFalse,
-  isNil,
-  isNotNil,
-  isObjectEmpty,
-} from '../../../utils'
+import { isArrayNotEmpty, isNil, isNotNil, isObjectEmpty } from '../../../utils'
 import { type LineageColumn, type Column, type Model } from '@api/client'
 import { Position, type Edge, type Node, type XYPosition } from 'reactflow'
 import { type Lineage } from '@context/editor'
@@ -22,24 +16,26 @@ export interface GraphNodeData {
 }
 
 export {
-  getNodesAndEdges,
+  getNodeMap,
+  getEdges,
   createGraphLayout,
   toNodeOrEdgeId,
   mergeLineageWithModels,
   mergeLineageWithColumns,
   hasNoModels,
   mergeConnections,
+  getNodesBetween,
+  getLineageIndex,
 }
 
 async function createGraphLayout({
-  nodes = [],
   edges = [],
   nodesMap,
 }: {
-  nodes: Node[]
   edges: Edge[]
   nodesMap: Record<string, Node>
 }): Promise<{ nodes: Node[]; edges: Edge[] }> {
+  const nodes = Object.values(nodesMap)
   const elk = new ELK()
   const layout = await elk.layout({
     id: 'root',
@@ -62,39 +58,8 @@ async function createGraphLayout({
   }
 }
 
-function getNodesAndEdges({
-  models,
-  highlightedNodes = {},
-  lineage = {},
-  model,
-  withColumns = true,
-}: {
-  models: Map<string, Model>
-  highlightedNodes?: Record<string, string[]>
-  lineage?: Record<string, Lineage>
-  model: ModelSQLMeshModel
-  withColumns?: boolean
-}): {
-  nodesMap: Record<string, Node>
-  edges: Edge[]
-  nodes: Node[]
-  highlightedNodes?: Record<string, string[]>
-} {
-  const sources = new Set(
-    Object.values(lineage)
-      .map(l => l.models)
-      .flat(),
-  )
+function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
   const modelNames = Object.keys(lineage)
-  const nodesMap = getNodeMap({
-    modelNames,
-    lineage,
-    highlightedNodes,
-    models,
-    sources,
-    model,
-    withColumns,
-  })
   const outputEdges: Edge[] = []
 
   for (const targetModelName of modelNames) {
@@ -103,8 +68,6 @@ function getNodesAndEdges({
     targetModel.models.forEach(sourceModelName => {
       outputEdges.push(createGraphEdge(sourceModelName, targetModelName))
     })
-
-    if (isObjectEmpty(targetModel?.columns) || isFalse(withColumns)) continue
 
     for (const targetColumnName in targetModel.columns) {
       const sourceModel = targetModel.columns[targetColumnName]
@@ -146,35 +109,35 @@ function getNodesAndEdges({
     }
   }
 
-  return {
-    edges: outputEdges,
-    nodes: Object.values(nodesMap),
-    nodesMap,
-    highlightedNodes,
-  }
+  return outputEdges
 }
 
 function getNodeMap({
-  modelNames,
   lineage,
-  highlightedNodes,
+  highlightedNodes = {},
   models,
-  sources,
   model,
   withColumns,
 }: {
-  modelNames: string[]
-  lineage: Record<string, Lineage>
-  highlightedNodes: Record<string, string[]>
   models: Map<string, Model>
-  sources: Set<string>
   model: ModelSQLMeshModel
   withColumns: boolean
+  lineage?: Record<string, Lineage>
+  highlightedNodes?: Record<string, string[]>
 }): Record<string, Node> {
+  if (isNil(lineage)) return {}
+
   const NODE_BALANCE_SPACE = 64
   const COLUMN_LINE_HEIGHT = 24
   const CHAR_WIDTH = 8
   const MAX_VISIBLE_COLUMNS = 5
+
+  const modelNames = Object.keys(lineage)
+  const sources = new Set(
+    Object.values(lineage)
+      .map(l => l.models)
+      .flat(),
+  )
 
   return modelNames.reduce((acc: Record<string, Node>, label: string) => {
     const node = createGraphNode({
@@ -185,8 +148,6 @@ function getNodeMap({
       ? models.get(label)?.columns?.length ?? 0
       : 0
 
-    if (isFalse(withColumns) && node.data.type === 'cte') return acc
-
     const maxWidth = Math.min(getNodeMaxWidth(label, columnsCount === 0), 320)
     const maxHeight = getNodeMaxHeight(columnsCount)
 
@@ -196,6 +157,7 @@ function getNodeMap({
       : NODE_BALANCE_SPACE
     node.data.highlightedNodes = highlightedNodes
     node.data.isInteractive = model.name !== label && models.has(label)
+    node.data.withColumns = withColumns
 
     if (isArrayNotEmpty(lineage[node.id]?.models)) {
       node.targetPosition = Position.Left
@@ -393,12 +355,12 @@ function hasNoModels(
   for (const targetModelName in lineage) {
     const model = lineage[targetModelName]
 
-    if (model == null) continue
+    if (isNil(model)) continue
 
     for (const targetColumnName in model) {
       const column = model[targetColumnName]
 
-      if (column == null) continue
+      if (isNil(column)) continue
 
       return Object.keys(column.models ?? {}).length === 0
     }
@@ -410,8 +372,12 @@ function hasNoModels(
 function mergeConnections(
   connections: Map<string, Connections>,
   lineage: Record<string, Record<string, LineageColumn>> = {},
-  addActiveEdges: (edges: string[]) => void,
-): Map<string, Connections> {
+): {
+  connections: Map<string, Connections>
+  activeEdges: string[]
+} {
+  const activeEdges = []
+
   // We are getting lineage in format of target -> source
   for (const targetModelName in lineage) {
     const model = lineage[targetModelName]!
@@ -468,8 +434,8 @@ function mergeConnections(
           // Now we need to update active edges from connections
           // Left bucket contains references to all sources (right handlers)
           // And right bucket contains references to all targets (left handlers)
-          addActiveEdges(
-            [
+          activeEdges.push(
+            ...[
               connectionsModelSource.left.map(id =>
                 toNodeOrEdgeId(EnumSide.Right, id),
               ),
@@ -484,8 +450,8 @@ function mergeConnections(
       // Now we need to update active edges from connections
       // Left bucket contains references to all sources (right handlers)
       // And right bucket contains references to all targets (left handlers)
-      addActiveEdges(
-        [
+      activeEdges.push(
+        ...[
           connectionsModelTarget.left.map(id =>
             toNodeOrEdgeId(EnumSide.Right, id),
           ),
@@ -497,10 +463,13 @@ function mergeConnections(
     }
   }
 
-  return new Map(connections)
+  return {
+    connections,
+    activeEdges,
+  }
 }
 
-export function getNodesBetween(
+function getNodesBetween(
   source: string,
   target: string,
   lineage: Record<string, Lineage> = {},
@@ -521,4 +490,28 @@ export function getNodesBetween(
   })
 
   return output
+}
+
+function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
+  return Object.keys(lineage)
+    .reduce((acc: string[], key) => {
+      const { models = [], columns = {} } = lineage[key]!
+      const allModels = new Set<string>()
+
+      models.forEach(m => allModels.add(m))
+
+      if (isNotNil(columns)) {
+        Object.keys(columns).forEach(columnName => {
+          const column = columns[columnName]
+
+          if (isNotNil(column) && isNotNil(column.models)) {
+            Object.keys(column.models).forEach(m => allModels.add(m))
+          }
+        })
+      }
+
+      return acc.concat(Array.from(allModels))
+    }, [])
+    .sort()
+    .join('')
 }
