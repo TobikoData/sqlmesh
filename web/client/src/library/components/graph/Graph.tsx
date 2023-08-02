@@ -46,7 +46,6 @@ import {
   CheckIcon,
   ChevronDownIcon,
   LockClosedIcon,
-  InformationCircleIcon,
   ArrowRightCircleIcon,
 } from '@heroicons/react/24/solid'
 import {
@@ -68,7 +67,6 @@ import {
   type ModelSQLMeshModel,
 } from '@models/sqlmesh-model'
 import { type ActiveEdges, useLineageFlow, type Connections } from './context'
-import { useQueryClient } from '@tanstack/react-query'
 import Input from '@components/input/Input'
 import { Listbox, Popover, Transition } from '@headlessui/react'
 import { CodeEditorDefault } from '@components/editor/EditorCode'
