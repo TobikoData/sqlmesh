@@ -54,7 +54,7 @@ class Seed(PydanticModel):
             self._df = self._df.rename(
                 columns={
                     col: normalize_identifiers(col, dialect=self.dialect).name
-                    for col in list(self._df.columns)
+                    for col in self._df.columns
                 },
             )
 
