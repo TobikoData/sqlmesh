@@ -456,15 +456,22 @@ class EngineAdapter:
             )
         )
 
-    def create_schema(self, schema_name: str, ignore_if_exists: bool = True) -> None:
+    def create_schema(
+        self, schema_name: str, ignore_if_exists: bool = True, warn_on_error: bool = True
+    ) -> None:
         """Create a schema from a name or qualified table name."""
-        self.execute(
-            exp.Create(
-                this=exp.to_identifier(schema_name.split(".")[0]),
-                kind="SCHEMA",
-                exists=ignore_if_exists,
+        try:
+            self.execute(
+                exp.Create(
+                    this=exp.to_identifier(schema_name.split(".")[0]),
+                    kind="SCHEMA",
+                    exists=ignore_if_exists,
+                )
             )
-        )
+        except Exception as e:
+            if not warn_on_error:
+                raise
+            logger.warning("Failed to create schema '%s': %s", schema_name, e)
 
     def drop_schema(
         self, schema_name: str, ignore_if_not_exists: bool = True, cascade: bool = False
