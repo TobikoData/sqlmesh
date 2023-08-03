@@ -122,11 +122,8 @@ class DbtLoader(Loader):
             return self._project
 
         self._project = Project.load(
-            DbtContext(
-                project_root=self._context.path,
-                target_name=self._context.gateway,
-                schema_override=self._schema_override,
-            )
+            DbtContext(project_root=self._context.path, target_name=self._context.gateway),
+            schema_override=self._schema_override,
         )
         for path in self._project.project_files:
             self._track_file(path)

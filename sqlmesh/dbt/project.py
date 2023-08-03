@@ -35,12 +35,13 @@ class Project:
         self.packages = packages
 
     @classmethod
-    def load(cls, context: DbtContext) -> Project:
+    def load(cls, context: DbtContext, schema_override: t.Optional[str] = None) -> Project:
         """
         Loads the configuration for the specified DBT project
 
         Args:
             context: DBT context for this project
+            schema_override: If provided, this value overrides schema for loaded models and seeds.
 
         Returns:
             Project instance for the specified DBT project
@@ -74,7 +75,7 @@ class Project:
             profile.path.parent,
             profile_name,
             target=profile.target,
-            schema_override=context.schema_override,
+            schema_override=schema_override,
         )
 
         extra_fields = profile.target.extra
