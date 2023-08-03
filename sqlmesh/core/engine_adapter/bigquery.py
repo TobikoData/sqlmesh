@@ -315,8 +315,9 @@ class BigQueryEngineAdapter(EngineAdapter):
 
         return retry.Retry(
             predicate=_ErrorCounter(self._extra_config["job_retries"]).should_retry,
-            sleep_generator=retry.exponential_sleep_generator(initial=1.0, maximum=3.0),
             deadline=self._extra_config.get("job_retry_deadline_seconds"),
+            initial=1.0,
+            maximum=3.0,
         )
 
     @contextlib.contextmanager
