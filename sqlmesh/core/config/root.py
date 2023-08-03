@@ -43,6 +43,7 @@ class Config(BaseConfig):
         model_defaults: Default values for model definitions.
         include_unmodified: Indicates whether to include unmodified models in the target development environment.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
+        default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
     """
 
     gateways: t.Union[t.Dict[str, GatewayConfig], GatewayConfig] = GatewayConfig()
@@ -68,6 +69,7 @@ class Config(BaseConfig):
     environment_suffix_target: EnvironmentSuffixTarget = Field(
         default=EnvironmentSuffixTarget.default
     )
+    default_target_environment: str = c.PROD
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,

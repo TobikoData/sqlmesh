@@ -408,7 +408,7 @@ class Context(BaseContext):
         Returns:
             True if the run was successful, False otherwise.
         """
-        environment = environment or c.PROD
+        environment = environment or self.config.default_target_environment
         self.notification_target_manager.notify(
             NotificationEvent.RUN_START, environment=environment
         )
@@ -766,7 +766,7 @@ class Context(BaseContext):
         Returns:
             The populated Plan object.
         """
-        environment = environment or c.PROD
+        environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
 
         if skip_backfill and not no_gaps and environment == c.PROD:
@@ -852,11 +852,9 @@ class Context(BaseContext):
             environment: The environment to diff against.
             detailed: Show the actual SQL differences if True.
         """
-        environment = environment or c.PROD
+        environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
-        self.console.show_model_difference_summary(
-            self._context_diff(environment or c.PROD), detailed
-        )
+        self.console.show_model_difference_summary(self._context_diff(environment), detailed)
 
     def table_diff(
         self,
