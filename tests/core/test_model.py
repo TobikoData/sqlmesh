@@ -1609,16 +1609,47 @@ def test_model_normalization():
             columns ( a STRUCT <`a` INT64> ),
             partitioned_by foo(`ds`),
             dialect bigquery,
+            grain [id, ds]
         );
         SELECT * FROM project-1.db.raw
         """
     )
 
     model = SqlModel.parse_raw(load_sql_based_model(expr, depends_on={"project-2.db.raw"}).json())
+    assert model.name == '"project-1".db.tbl'
     assert model.columns_to_types["a"].sql(dialect="bigquery") == "STRUCT<`a` INT64>"
     assert model.partitioned_by[0].sql(dialect="bigquery") == "foo(`ds`)"
-    assert model.name == '"project-1".db.tbl'
+    assert model.grain == ["id", "ds"]
     assert model.depends_on == {'"project-1".db.raw', '"project-2".db.raw'}
+
+    expr = d.parse(
+        """
+        MODEL (
+            name foo,
+            kind INCREMENTAL_BY_TIME_RANGE (
+              time_column a
+            ),
+            columns (a int),
+            partitioned_by foo("ds"),
+            dialect snowflake,
+            grain [id, ds],
+            tags (pii, fact),
+            clustered_by a
+        );
+        SELECT * FROM bla
+        """
+    )
+
+    model = SqlModel.parse_raw(load_sql_based_model(expr).json())
+    assert model.name == "FOO"
+    assert model.time_column.column == "A"
+    assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
+    assert model.partitioned_by[0].sql(dialect="snowflake") == "A"
+    assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
+    assert model.grain == ["ID", "DS"]
+    assert model.tags == ["pii", "fact"]
+    assert model.clustered_by == ["A"]
+    assert model.depends_on == {"BLA"}
 
 
 def test_incremental_unmanaged_validation():

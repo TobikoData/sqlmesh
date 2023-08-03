@@ -994,6 +994,7 @@ class Context(BaseContext):
                     tests=tests,
                     models=self._models,
                     engine_adapter=self._test_engine_adapter,
+                    dialect=self.config.dialect,
                     verbosity=verbosity,
                     patterns=match_patterns,
                 )
@@ -1013,11 +1014,13 @@ class Context(BaseContext):
                     test_meta,
                     models=self._models,
                     engine_adapter=self._test_engine_adapter,
+                    dialect=self.config.dialect,
                     verbosity=verbosity,
                     stream=stream,
                 )
         finally:
             self._test_engine_adapter.close()
+
         return result
 
     def audit(

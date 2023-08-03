@@ -11,19 +11,21 @@ def test_read():
 2,two,2022-01-02
 3,three,2022-01-03
 """
-    seed = Seed(content=content)
+    # Since we provide "snowflake" as the dialect, all identifiers are expected to
+    # be normalized according to its resolution rules, hence the uppercase names
+    seed = Seed(content=content, dialect="snowflake")
 
     assert seed.columns_to_types == {
-        "key": exp.DataType.build("bigint"),
-        "value": exp.DataType.build("text"),
-        "ds": exp.DataType.build("text"),
+        "KEY": exp.DataType.build("bigint"),
+        "VALUE": exp.DataType.build("text"),
+        "DS": exp.DataType.build("text"),
     }
 
     expected_df = pd.DataFrame(
         data={
-            "key": [1, 2, 3],
-            "value": ["one", "two", "three"],
-            "ds": ["2022-01-01", "2022-01-02", "2022-01-03"],
+            "KEY": [1, 2, 3],
+            "VALUE": ["one", "two", "three"],
+            "DS": ["2022-01-01", "2022-01-02", "2022-01-03"],
         }
     )
 

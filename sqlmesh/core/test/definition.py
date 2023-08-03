@@ -8,7 +8,9 @@ import unittest
 import numpy as np
 import pandas as pd
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils.errors import SQLMeshError
@@ -31,6 +33,7 @@ class ModelTest(unittest.TestCase):
         model: Model,
         models: dict[str, Model],
         engine_adapter: EngineAdapter,
+        dialect: str | None,
         path: pathlib.Path | None,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
@@ -41,7 +44,8 @@ class ModelTest(unittest.TestCase):
             model: The model that is being tested.
             models: All models to use for expansion and mapping of physical locations.
             engine_adapter: The engine adapter to use.
-            path: An optional path to the test definition yaml file
+            dialect: The models' dialect, used for normalization purposes.
+            path: An optional path to the test definition yaml file.
         """
         self.body = body
         self.test_name = test_name
@@ -49,6 +53,8 @@ class ModelTest(unittest.TestCase):
         self.models = models
         self.engine_adapter = engine_adapter
         self.path = path
+
+        self._normalize_test(dialect)
 
         inputs = self.body.get("inputs", {})
         for depends_on in self.model.depends_on:
@@ -59,17 +65,15 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
-        inputs = {
-            name: self._get_rows(table) for name, table in self.body.get("inputs", {}).items()
-        }
-
-        for table, rows in inputs.items():
+        for table, rows in self.body.get("inputs", {}).items():
             df = pd.DataFrame.from_records(rows)  # noqa
             columns_to_types: dict[str, exp.DataType] = {}
+
             for i, v in rows[0].items():
                 # convert ruamel into python
                 v = v.real if hasattr(v, "real") else v
                 columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
+
             self.engine_adapter.create_schema(table)
             self.engine_adapter.create_view(_test_fixture_name(table), df, columns_to_types)
 
@@ -82,6 +86,7 @@ class ModelTest(unittest.TestCase):
         """Compare two DataFrames"""
         df1 = df1.replace({np.nan: None, "nan": None})
         df2 = df2.replace({np.nan: None, "nan": None})
+
         try:
             pd.testing.assert_frame_equal(
                 df1.sort_index(axis=1),
@@ -112,6 +117,7 @@ class ModelTest(unittest.TestCase):
         test_name: str,
         models: dict[str, Model],
         engine_adapter: EngineAdapter,
+        dialect: str | None,
         path: pathlib.Path | None,
     ) -> ModelTest:
         """Create a SqlModelTest or a PythonModelTest.
@@ -121,7 +127,8 @@ class ModelTest(unittest.TestCase):
             test_name: The name of the test.
             models: All models to use for expansion and mapping of physical locations.
             engine_adapter: The engine adapter to use.
-            path: An optional path to the test definition yaml file
+            dialect: The models' dialect, used for normalization purposes.
+            path: An optional path to the test definition yaml file.
         """
         if "model" not in body:
             _raise_error("Incomplete test, missing model name", path)
@@ -129,31 +136,57 @@ class ModelTest(unittest.TestCase):
         if "outputs" not in body:
             _raise_error("Incomplete test, missing outputs", path)
 
-        model_name = body["model"]
+        model_name = normalize_model_name(body["model"], dialect=dialect)
         if model_name not in models:
             _raise_error(f"Model '{model_name}' was not found", path)
 
         model = models[model_name]
         if isinstance(model, SqlModel):
-            return SqlModelTest(body, test_name, model, models, engine_adapter, path)
+            return SqlModelTest(body, test_name, model, models, engine_adapter, dialect, path)
         if isinstance(model, PythonModel):
-            return PythonModelTest(body, test_name, model, models, engine_adapter, path)
+            return PythonModelTest(body, test_name, model, models, engine_adapter, dialect, path)
+
         raise TestError(f"Model '{model_name}' is an unsupported model type for testing at {path}")
 
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path})"
 
-    def _get_rows(self, table: list[Row] | dict[str, list[Row]]) -> list[Row]:
-        """Get a list of rows for input and output table data.
+    def _normalize_test(self, dialect: str | None) -> None:
+        """Normalizes all identifiers in this test according to the given dialect."""
 
-        Input and output table data might be a list of rows or it might be a dictionary
-        with a "rows" key.
-        """
-        if isinstance(table, dict):
-            if "rows" not in table:
-                _raise_error("Incomplete test, missing row data for table", self.path)
-            return table["rows"]
-        return table
+        def _normalize_rows(rows: list[Row] | dict[str, list[Row]]) -> t.List[Row]:
+            if isinstance(rows, dict):
+                if "rows" not in rows:
+                    _raise_error("Incomplete test, missing row data for table", self.path)
+                rows = rows["rows"]
+
+            return [
+                {
+                    normalize_identifiers(column, dialect=dialect).name: value
+                    for column, value in row.items()
+                }
+                for row in rows
+            ]
+
+        def _normalize_sources(sources: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+            return {
+                normalize_model_name(name, dialect=dialect): _normalize_rows(rows)
+                for name, rows in sources.items()
+            }
+
+        inputs = self.body.get("inputs", {})
+        outputs = self.body["outputs"]
+        ctes = outputs.get("ctes", {})
+        query = outputs.get("query", [])
+
+        if inputs:
+            self.body["inputs"] = _normalize_sources(inputs)
+        if ctes:
+            outputs["ctes"] = _normalize_sources(ctes)
+        if query:
+            outputs["query"] = _normalize_rows(query)
+
+        self.body["model"] = normalize_model_name(self.body["model"], dialect=dialect)
 
 
 class SqlModelTest(ModelTest):
@@ -169,10 +202,12 @@ class SqlModelTest(ModelTest):
                     _raise_error(
                         f"No CTE named {cte_name} found in model {self.model.name}", self.path
                     )
+
                 cte_query = ctes[cte_name].this
                 for alias, cte in ctes.items():
                     cte_query = cte_query.with_(alias, cte.this)
-                expected_df = pd.DataFrame.from_records(self._get_rows(value))
+
+                expected_df = pd.DataFrame.from_records(value)
                 actual_df = self.execute(cte_query)
                 self.assert_equal(expected_df, actual_df)
 
@@ -192,7 +227,7 @@ class SqlModelTest(ModelTest):
 
         # Test model query
         if "query" in self.body["outputs"]:
-            expected_df = pd.DataFrame.from_records(self._get_rows(self.body["outputs"]["query"]))
+            expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
             actual_df = self.execute(query)
             self.assert_equal(expected_df, actual_df)
 
@@ -205,6 +240,7 @@ class PythonModelTest(ModelTest):
         model: PythonModel,
         models: dict[str, Model],
         engine_adapter: EngineAdapter,
+        dialect: str | None,
         path: pathlib.Path | None,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
@@ -215,11 +251,12 @@ class PythonModelTest(ModelTest):
             model: The Python model that is being tested.
             models: All models to use for expansion and mapping of physical locations.
             engine_adapter: The engine adapter to use.
-            path: An optional path to the test definition yaml file
+            dialect: The models' dialect, used for normalization purposes.
+            path: An optional path to the test definition yaml file.
         """
         from sqlmesh.core.test.context import TestExecutionContext
 
-        super().__init__(body, test_name, model, models, engine_adapter, path)
+        super().__init__(body, test_name, model, models, engine_adapter, dialect, path)
 
         self.context = TestExecutionContext(
             engine_adapter=engine_adapter,
@@ -228,7 +265,7 @@ class PythonModelTest(ModelTest):
 
     def runTest(self) -> None:
         if "query" in self.body["outputs"]:
-            expected_df = pd.DataFrame.from_records(self._get_rows(self.body["outputs"]["query"]))
+            expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
             actual_df = next(
                 self.model.render(
                     context=self.context,
