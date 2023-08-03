@@ -4,6 +4,7 @@ import typing as t
 from enum import auto
 from pathlib import Path
 
+from sqlglot import exp
 from sqlglot.helper import AutoName
 
 
@@ -54,7 +55,16 @@ class AuditConfigError(ConfigError):
 
 
 class AuditError(SQLMeshError):
-    pass
+    def __init__(
+        self, audit_name: str, model_name: str, count: int, query: exp.Subqueryable
+    ) -> None:
+        self.audit_name = audit_name
+        self.model_name = model_name
+        self.count = count
+        self.query = query
+
+    def __str__(self) -> str:
+        return f"Audit '{self.audit_name}' for model '{self.model_name}' failed.\nGot {self.count} results, expected 0.\n{self.query}"
 
 
 class NotificationTargetError(SQLMeshError):
