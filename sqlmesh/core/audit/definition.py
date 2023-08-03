@@ -253,6 +253,8 @@ class Audit(AuditMeta, frozen=True):
 class AuditResult(PydanticModel):
     audit: Audit
     """The audit this result is for."""
+    model: _Model
+    """The model this audit is for."""
     count: t.Optional[int]
     """The number of records returned by the audit query. This could be None if the audit was skipped."""
     query: t.Optional[exp.Expression]
