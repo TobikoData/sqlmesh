@@ -679,7 +679,7 @@ class MsSqlConnectionConfig(_ConnectionConfig):
     charset: t.Optional[str] = 'utf-8'
     as_dict: t.Optional[bool] = False
     appname: t.Optional[str] = None
-    port: t.Optional[int] = '1433'
+    port: t.Optional[int] = 1433
     conn_properties: t.Optional[t.Union[t.Iterable[str], str]] = None
     autocommit: t.Optional[bool] = False
     tds_version: t.Optional[str] = None
