@@ -153,20 +153,18 @@ class ModelTest(unittest.TestCase):
     def _normalize_test(self, dialect: str | None) -> None:
         """Normalizes all identifiers in this test according to the given dialect."""
 
-        def _get_rows(values: list[Row] | dict[str, list[Row]]) -> list[Row]:
-            if isinstance(values, dict):
-                if "rows" not in values:
-                    _raise_error("Incomplete test, missing row data for table", self.path)
-                return values["rows"]
-            return values
-
         def _normalize_rows(rows: list[Row] | dict[str, list[Row]]) -> t.List[Row]:
+            if isinstance(rows, dict):
+                if "rows" not in rows:
+                    _raise_error("Incomplete test, missing row data for table", self.path)
+                rows = rows["rows"]
+
             return [
                 {
                     normalize_identifiers(column, dialect=dialect).name: value
                     for column, value in row.items()
                 }
-                for row in _get_rows(rows)
+                for row in rows
             ]
 
         def _normalize_sources(sources: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
@@ -176,13 +174,12 @@ class ModelTest(unittest.TestCase):
             }
 
         inputs = self.body.get("inputs", {})
-        if inputs:
-            self.body["inputs"] = _normalize_sources(inputs)
-
         outputs = self.body["outputs"]
         ctes = outputs.get("ctes", {})
         query = outputs.get("query", [])
 
+        if inputs:
+            self.body["inputs"] = _normalize_sources(inputs)
         if ctes:
             outputs["ctes"] = _normalize_sources(ctes)
         if query:
