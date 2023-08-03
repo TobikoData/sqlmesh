@@ -90,14 +90,28 @@ class ModelMeta(Node):
             ]
         return v
 
-    @validator("clustered_by", "tags", "grain", pre=True)
+    @validator("tags", pre=True)
     def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        return cls._validate_value_or_tuple(v, values)
+
+    @validator("clustered_by", "grain", pre=True)
+    def _normalized_value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        return cls._validate_value_or_tuple(v, values, normalize=True)
+
+    @classmethod
+    def _validate_value_or_tuple(
+        cls, v: t.Any, values: t.Dict[str, t.Any], normalize: bool = False
+    ) -> t.Any:
         dialect = values.get("dialect")
+        _normalize = lambda v: normalize_identifiers(v, dialect=dialect) if normalize else v
 
         if isinstance(v, (exp.Tuple, exp.Array)):
-            return [normalize_identifiers(e, dialect=dialect).name for e in v.expressions]
-        if isinstance(v, (exp.Expression, str)):
-            return [normalize_identifiers(v, dialect=dialect).name]
+            return [_normalize(e).name for e in v.expressions]
+        if isinstance(v, exp.Expression):
+            return [_normalize(v).name]
+        if isinstance(v, str):
+            value = _normalize(v)
+            return value.name if isinstance(value, exp.Expression) else value
 
         return v
 
