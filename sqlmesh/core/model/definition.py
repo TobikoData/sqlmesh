@@ -83,7 +83,7 @@ class _Model(ModelMeta, frozen=True):
 
         SELECT
           1 AS column_a # my first column,
-          @var AS my_column #my second column,
+          @var AS my_column # my second column,
         ;
 
     Args:

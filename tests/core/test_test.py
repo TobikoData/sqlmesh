@@ -16,6 +16,7 @@ def _run_test(body, test_name, model, sushi_context):
         model=model,
         models=sushi_context._models,
         engine_adapter=sushi_context._test_engine_adapter,
+        dialect="",
         path=None,
     ).run()
 
