@@ -58,7 +58,7 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
-from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
+from sqlmesh.core.loader import Loader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.metric import Metric
 from sqlmesh.core.model import Model
@@ -271,7 +271,7 @@ class Context(BaseContext):
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
 
-        self._loader = (loader or self.config.loader or SqlMeshLoader)()
+        self._loader = (loader or self.config.loader)()
 
         # Should we dedupe notification_targets? If so how?
         self.notification_targets = (notification_targets or []) + self.config.notification_targets
