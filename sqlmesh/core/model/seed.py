@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.dialect import normalize_identifiers
 from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.pydantic import PydanticModel
 

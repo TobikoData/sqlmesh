@@ -9,9 +9,7 @@ from enum import Enum, auto
 import pandas as pd
 from sqlglot import Dialect, Generator, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
-from sqlglot.optimizer.normalize_identifiers import (
-    normalize_identifiers as normalize_identifiers_func,
-)
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.tokens import Token
 
@@ -703,16 +701,7 @@ def pandas_to_sql(
 
 def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) -> str:
     return exp.table_name(
-        normalize_identifiers_func(exp.to_table(table, dialect=dialect), dialect=dialect),
-    )
-
-
-def normalize_identifiers(
-    value: str | exp.Expression, dialect: DialectType = None
-) -> exp.Expression:
-    return normalize_identifiers_func(
-        value if isinstance(value, exp.Expression) else exp.to_identifier(value),
-        dialect=dialect,
+        normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect),
     )
 
 

@@ -8,8 +8,9 @@ import unittest
 import numpy as np
 import pandas as pd
 from sqlglot import exp, parse_one
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.dialect import normalize_identifiers, normalize_model_name
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils.errors import SQLMeshError
