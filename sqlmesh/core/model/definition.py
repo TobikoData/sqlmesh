@@ -768,20 +768,16 @@ class _Model(ModelMeta, frozen=True):
                 d.PythonCode(
                     expressions=[
                         f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
-                        for k, v in sorted(
-                            self.jinja_macros.global_objs.items(), key=lambda x: x[0]
-                        )
+                        for k, v in sorted(self.jinja_macros.global_objs.items())
                     ]
                 )
             )
 
-        for macro_name, macro_info in sorted(
-            self.jinja_macros.root_macros.items(), key=lambda x: x[0]
-        ):
+        for macro_name, macro_info in sorted(self.jinja_macros.root_macros.items()):
             output.append(d.jinja_statement(macro_info.definition))
 
-        for _, package in sorted(self.jinja_macros.packages.items(), key=lambda x: x[0]):
-            for macro_name, macro_info in sorted(package.items(), key=lambda x: x[0]):
+        for _, package in sorted(self.jinja_macros.packages.items()):
+            for macro_name, macro_info in sorted(package.items()):
                 output.append(d.jinja_statement(macro_info.definition))
 
         return output
