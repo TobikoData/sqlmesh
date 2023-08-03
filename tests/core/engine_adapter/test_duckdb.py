@@ -27,7 +27,7 @@ def test_create_schema(adapter: EngineAdapter, duck_conn):
         "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'test_schema'"
     ).fetchall() == [(1,)]
     with pytest.raises(Exception):
-        adapter.create_schema("test_schema", ignore_if_exists=False)
+        adapter.create_schema("test_schema", ignore_if_exists=False, warn_on_error=False)
 
 
 def test_table_exists(adapter: EngineAdapter, duck_conn):

@@ -102,16 +102,23 @@ class BigQueryEngineAdapter(EngineAdapter):
     def _is_session_active(self) -> bool:
         return self._session_id is not None
 
-    def create_schema(self, schema_name: str, ignore_if_exists: bool = True) -> None:
+    def create_schema(
+        self, schema_name: str, ignore_if_exists: bool = True, warn_on_error: bool = True
+    ) -> None:
         """Create a schema from a name or qualified table name."""
         from google.api_core.exceptions import Conflict
 
         try:
-            super().create_schema(schema_name, ignore_if_exists=ignore_if_exists)
-        except Conflict as e:
-            if "Already Exists:" in str(e):
+            super().create_schema(
+                schema_name, ignore_if_exists=ignore_if_exists, warn_on_error=False
+            )
+        except Exception as e:
+            is_already_exists_error = isinstance(e, Conflict) and "Already Exists:" in str(e)
+            if is_already_exists_error and ignore_if_exists:
                 return
-            raise e
+            if not warn_on_error:
+                raise
+            logger.warning("Failed to create schema '%s': %s", schema_name, e)
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
