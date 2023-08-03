@@ -105,7 +105,7 @@ setup(
             "openai",
         ],
         "mssql": [
-            "pymssql==2.2.7",
+            "pymssql<2.2.8",
         ],
         "mysql": [
             "mysql-connector-python",

@@ -673,10 +673,10 @@ class MsSqlConnectionConfig(_ConnectionConfig):
     host: str
     user: str
     password: str
-    database: t.Optional[str] = ''
+    database: t.Optional[str] = ""
     timeout: t.Optional[int] = 0
     login_timeout: t.Optional[int] = 60
-    charset: t.Optional[str] = 'utf-8'
+    charset: t.Optional[str] = "utf-8"
     as_dict: t.Optional[bool] = False
     appname: t.Optional[str] = None
     port: t.Optional[int] = 1433

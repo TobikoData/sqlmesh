@@ -9,8 +9,8 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
-from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.core.engine_adapter.mssql import MsSqlEngineAdapter
+from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 
 
 def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(

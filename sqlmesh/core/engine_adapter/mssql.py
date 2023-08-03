@@ -8,14 +8,7 @@ import typing as t
 import pandas as pd
 
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
-from sqlmesh.core.engine_adapter.shared import (
-    DataObject,
-    DataObjectType,
-)
-
-if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import QueryOrDF
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 
 
 class MsSqlEngineAdapter(EngineAdapterWithIndexSupport):
@@ -27,6 +20,7 @@ class MsSqlEngineAdapter(EngineAdapterWithIndexSupport):
         dialect: The dialect with which this adapter is associated.
         multithreaded: Indicates whether this adapter will be used by more than one thread.
     """
+
     DIALECT: str = "tsql"
     SUPPORTS_MATERIALIZED_VIEWS: bool = False
 
@@ -62,7 +56,7 @@ class MsSqlEngineAdapter(EngineAdapterWithIndexSupport):
                 catalog=row.catalog_name,
                 schema=row.schema_name,
                 name=row.name,
-                type=DataObjectType.from_str(row.type)  # type: ignore
+                type=DataObjectType.from_str(row.type),  # type: ignore
             )
             for row in dataframe.itertuples()
         ]
