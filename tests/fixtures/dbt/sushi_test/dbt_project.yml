@@ -36,6 +36,7 @@ seeds:
       - '{{ log("post-hook") }}'
 
 vars:
+  sqlmesh_target_schema_override: sushi
   top_waiters:limit: 10
   'top_waiters:revenue': "revenue"
 

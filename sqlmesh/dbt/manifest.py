@@ -46,13 +46,13 @@ class ManifestHelper:
         profiles_path: Path,
         profile_name: str,
         target: TargetConfig,
-        schema_override: t.Optional[str] = None,
+        target_schema_override: t.Optional[str] = None,
     ):
         self.project_path = project_path
         self.profiles_path = profiles_path
         self.profile_name = profile_name
         self.target = target
-        self.schema_override = schema_override
+        self.target_schema_override = target_schema_override
 
         self.__manifest: t.Optional[Manifest] = None
         self._project_name: str = ""
@@ -224,13 +224,13 @@ class ManifestHelper:
                         sources=_sources(node),
                     ),
                     tests=tests,
-                    **_node_base_config(node, schema_override=self.schema_override),
+                    **_node_base_config(node),
                 )
             else:
                 self._seeds_per_package[node.package_name][node.name] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
                     tests=tests,
-                    **_node_base_config(node, schema_override=self.schema_override),
+                    **_node_base_config(node),
                 )
 
     @property
@@ -256,7 +256,7 @@ class ManifestHelper:
 
         if not any(k in project.models for k in ("start", "+start")):
             raise ConfigError(
-                f"SQLMesh's requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
+                "SQLMesh's requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
             )
 
         runtime_config = RuntimeConfig.from_parts(project, profile, args)
@@ -275,12 +275,15 @@ class ManifestHelper:
     def _load_profile(self) -> Profile:
         profile_renderer = ProfileRenderer({})
         raw_profiles = read_profile(str(self.profiles_path))
-        return Profile.from_raw_profiles(
+        profile = Profile.from_raw_profiles(
             raw_profiles=raw_profiles,
             profile_name=self.profile_name,
             renderer=profile_renderer,
             target_override=self.target.name,
         )
+        if self.target_schema_override:
+            profile.credentials.schema = self.target_schema_override
+        return profile
 
 
 def _config(node: t.Union[ManifestNode, SourceDefinition]) -> t.Dict[str, t.Any]:
@@ -338,16 +341,13 @@ def _test_owner(node: ManifestNode) -> t.Optional[str]:
     )
 
 
-def _node_base_config(
-    node: ManifestNode, schema_override: t.Optional[str] = None
-) -> t.Dict[str, t.Any]:
+def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
     node_dict = node.to_dict()
     node_dict.pop("database", None)  # picked up from the `config` attribute
     return {
         **_config(node),
         **node_dict,
         "path": Path(node.original_file_path),
-        **({"schema": schema_override} if schema_override is not None else {}),
     }
 
 

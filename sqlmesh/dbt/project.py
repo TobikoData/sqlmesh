@@ -35,13 +35,12 @@ class Project:
         self.packages = packages
 
     @classmethod
-    def load(cls, context: DbtContext, schema_override: t.Optional[str] = None) -> Project:
+    def load(cls, context: DbtContext) -> Project:
         """
         Loads the configuration for the specified DBT project
 
         Args:
             context: DBT context for this project
-            schema_override: If provided, this value overrides schema for loaded models and seeds.
 
         Returns:
             Project instance for the specified DBT project
@@ -68,14 +67,17 @@ class Project:
         context.profile_name = profile_name
 
         profile = Profile.load(context, context.target_name)
-        context.target = profile.target
+        target_schema_override = global_variables.get(TARGET_SCHEMA_OVERRIDE_KEY)
+        if target_schema_override:
+            profile.target.schema_ = target_schema_override
 
+        context.target = profile.target
         context.manifest = ManifestHelper(
             project_file_path.parent,
             profile.path.parent,
             profile_name,
             target=profile.target,
-            schema_override=schema_override,
+            target_schema_override=target_schema_override,
         )
 
         extra_fields = profile.target.extra
@@ -117,3 +119,6 @@ class Project:
             paths.update(package.files)
 
         return paths
+
+
+TARGET_SCHEMA_OVERRIDE_KEY = "sqlmesh_target_schema_override"

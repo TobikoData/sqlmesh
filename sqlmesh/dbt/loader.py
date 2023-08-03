@@ -32,7 +32,6 @@ if t.TYPE_CHECKING:
 def sqlmesh_config(
     project_root: t.Optional[Path] = None,
     state_connection: t.Optional[ConnectionConfig] = None,
-    schema_override: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Config:
     project_root = project_root or Path()
@@ -45,17 +44,15 @@ def sqlmesh_config(
         default_gateway=profile.target_name,
         gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
-        loader_kwargs={"schema_override": schema_override},
         model_defaults=model_defaults,
         **kwargs,
     )
 
 
 class DbtLoader(Loader):
-    def __init__(self, schema_override: t.Optional[str] = None) -> None:
+    def __init__(self) -> None:
         self._project: t.Optional[Project] = None
         self._macros_max_mtime: t.Optional[float] = None
-        self._schema_override = schema_override
         super().__init__()
 
     def load(self, context: Context, update_schemas: bool = True) -> LoadedProject:
@@ -122,8 +119,7 @@ class DbtLoader(Loader):
             return self._project
 
         self._project = Project.load(
-            DbtContext(project_root=self._context.path, target_name=self._context.gateway),
-            schema_override=self._schema_override,
+            DbtContext(project_root=self._context.path, target_name=self._context.gateway)
         )
         for path in self._project.project_files:
             self._track_file(path)

@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
+
+import pytest
 
 from sqlmesh.dbt.basemodel import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.profile import Profile
 from sqlmesh.utils.jinja import MacroReference
+
+
+@pytest.fixture
+def clear_dbt_target():
+    target_path = "tests/fixtures/dbt/sushi_test/target"
+    shutil.rmtree(target_path, ignore_errors=True)
+    yield
+    shutil.rmtree(target_path, ignore_errors=True)
 
 
 def test_manifest_helper():
@@ -74,11 +85,12 @@ def test_tests_referencing_disabled_models():
     assert "not_null_disabled_model_one" not in helper.tests()
 
 
-def test_schema_override():
+def test_schema_override(clear_dbt_target):
     project_path = Path("tests/fixtures/dbt/sushi_test")
+
     profile = Profile.load(DbtContext(project_path))
     helper = ManifestHelper(
-        project_path, project_path, "sushi", profile.target, schema_override="my_test_schema"
+        project_path, project_path, "sushi", profile.target, target_schema_override="my_test_schema"
     )
 
     assert helper.seeds()["waiter_names"].sql_name == "my_test_schema.waiter_names"

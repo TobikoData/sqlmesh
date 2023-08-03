@@ -271,7 +271,7 @@ class Context(BaseContext):
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
 
-        self._loader = (loader or self.config.loader)(**self.config.loader_kwargs)
+        self._loader = (loader or self.config.loader)()
 
         # Should we dedupe notification_targets? If so how?
         self.notification_targets = (notification_targets or []) + self.config.notification_targets

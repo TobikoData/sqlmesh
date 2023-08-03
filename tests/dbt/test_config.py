@@ -229,6 +229,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
         "top_waiters:limit": 10,
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
+        "sqlmesh_target_schema_override": "sushi",
     }
     expected_customer_variables = {
         "some_var": ["foo", "bar"],
@@ -239,6 +240,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
         "top_waiters:limit": 10,
         "top_waiters:revenue": "revenue",
         "customers:boo": ["a", "b"],
+        "sqlmesh_target_schema_override": "sushi",
     }
 
     assert sushi_test_project.packages["sushi"].variables == expected_sushi_variables

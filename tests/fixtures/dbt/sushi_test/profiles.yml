@@ -2,17 +2,17 @@ sushi:
   outputs:
     in_memory:
       type: duckdb
-      schema: sushi
+      schema: sushi_dev
     duckdb:
       type: duckdb
       path: 'local.duckdb'
-      schema: sushi
+      schema: sushi_dev
     snowflake:
       account: "{{ env_var('SNOWFLAKE_ACCOUNT', '') }}"
       database: sushi
       password: "{{ env_var('SNOWFLAKE_PASSWORD', '') }}"
       role: "{{ env_var('SNOWFLAKE_ROLE', '') }}"
-      schema: sushi
+      schema: sushi_dev
       threads: 1
       type: snowflake
       user: "{{ env_var('SNOWFLAKE_USER', '') }}"
