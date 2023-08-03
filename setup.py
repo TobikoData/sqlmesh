@@ -104,6 +104,9 @@ setup(
             "langchain",
             "openai",
         ],
+        "mssql": [
+            "pymssql==2.2.7",
+        ],
         "mysql": [
             "mysql-connector-python",
         ],
