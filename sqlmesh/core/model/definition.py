@@ -1873,4 +1873,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "tags": _single_value_or_tuple,
     "grain": _single_value_or_tuple,
     "hash_raw_query": exp.convert,
+    "table_properties_": lambda value: exp.Tuple(
+        expressions=[exp.Literal.string(k).eq(v) for k, v in (value or {}).items()]
+    ),
 }
