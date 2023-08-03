@@ -52,11 +52,11 @@ class MsSqlEngineAdapter(EngineAdapterWithIndexSupport):
         """
         dataframe: pd.DataFrame = self.fetchdf(query)
         return [
-            DataObject(  # type: ignore
-                catalog=row.catalog_name,
-                schema=row.schema_name,
-                name=row.name,
-                type=DataObjectType.from_str(row.type),
+            DataObject(
+                catalog=row.catalog_name,  # type: ignore
+                schema=row.schema_name,  # type: ignore
+                name=row.name,  # type: ignore
+                type=DataObjectType.from_str(row.type),  # type: ignore
             )
             for row in dataframe.itertuples()
         ]
