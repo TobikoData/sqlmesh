@@ -72,3 +72,14 @@ def test_tests_referencing_disabled_models():
 
     assert "disabled_model" not in helper.models()
     assert "not_null_disabled_model_one" not in helper.tests()
+
+
+def test_schema_override():
+    project_path = Path("tests/fixtures/dbt/sushi_test")
+    profile = Profile.load(DbtContext(project_path))
+    helper = ManifestHelper(
+        project_path, project_path, "sushi", profile.target, schema_override="my_test_schema"
+    )
+
+    assert helper.seeds()["waiter_names"].sql_name == "my_test_schema.waiter_names"
+    assert helper.models()["waiters"].sql_name == "my_test_schema.waiters"

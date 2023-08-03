@@ -61,6 +61,7 @@ class Config(BaseConfig):
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
     pinned_environments: t.Set[str] = set()
     loader: t.Type[Loader] = SqlMeshLoader
+    loader_kwargs: t.Dict[str, t.Any] = {}
     env_vars: t.Dict[str, str] = {}
     username: str = ""
     include_unmodified: bool = False

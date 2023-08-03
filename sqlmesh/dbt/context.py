@@ -27,6 +27,7 @@ class DbtContext:
     target_name: t.Optional[str] = None
     profile_name: t.Optional[str] = None
     project_schema: t.Optional[str] = None
+    schema_override: t.Optional[str] = None
     jinja_macros: JinjaMacroRegistry = field(
         default_factory=lambda: JinjaMacroRegistry(
             create_builtins_module=SQLMESH_DBT_PACKAGE, top_level_packages=["dbt"]

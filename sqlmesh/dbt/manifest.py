@@ -46,11 +46,13 @@ class ManifestHelper:
         profiles_path: Path,
         profile_name: str,
         target: TargetConfig,
+        schema_override: t.Optional[str] = None,
     ):
         self.project_path = project_path
         self.profiles_path = profiles_path
         self.profile_name = profile_name
         self.target = target
+        self.schema_override = schema_override
 
         self.__manifest: t.Optional[Manifest] = None
         self._project_name: str = ""
@@ -222,13 +224,13 @@ class ManifestHelper:
                         sources=_sources(node),
                     ),
                     tests=tests,
-                    **_node_base_config(node),
+                    **_node_base_config(node, schema_override=self.schema_override),
                 )
             else:
                 self._seeds_per_package[node.package_name][node.name] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
                     tests=tests,
-                    **_node_base_config(node),
+                    **_node_base_config(node, schema_override=self.schema_override),
                 )
 
     @property
@@ -336,13 +338,16 @@ def _test_owner(node: ManifestNode) -> t.Optional[str]:
     )
 
 
-def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
+def _node_base_config(
+    node: ManifestNode, schema_override: t.Optional[str] = None
+) -> t.Dict[str, t.Any]:
     node_dict = node.to_dict()
     node_dict.pop("database", None)  # picked up from the `config` attribute
     return {
         **_config(node),
         **node_dict,
         "path": Path(node.original_file_path),
+        **({"schema": schema_override} if schema_override is not None else {}),
     }
 
 
