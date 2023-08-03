@@ -20,6 +20,7 @@ def run_tests(
     model_test_metadata: list[ModelTestMetadata],
     models: dict[str, Model],
     engine_adapter: EngineAdapter,
+    dialect: str | None = None,
     verbosity: int = 1,
     stream: t.TextIO | None = None,
 ) -> unittest.result.TestResult:
@@ -37,10 +38,12 @@ def run_tests(
             test_name=metadata.test_name,
             models=models,
             engine_adapter=engine_adapter,
+            dialect=dialect,
             path=metadata.path,
         )
         for metadata in model_test_metadata
     )
+
     return unittest.TextTestRunner(
         stream=stream, verbosity=verbosity, resultclass=ModelTextTestResult
     ).run(suite)
@@ -50,6 +53,7 @@ def run_model_tests(
     tests: list[str],
     models: dict[str, Model],
     engine_adapter: EngineAdapter,
+    dialect: str | None = None,
     verbosity: int = 1,
     patterns: list[str] | None = None,
     stream: t.TextIO | None = None,
@@ -67,10 +71,13 @@ def run_model_tests(
     for test in tests:
         filename, test_name = test.split("::", maxsplit=1) if "::" in test else (test, "")
         path = pathlib.Path(filename)
+
         if test_name:
             loaded_tests.append(load_model_test_file(path)[test_name])
         else:
             loaded_tests.extend(load_model_test_file(path).values())
+
     if patterns:
         loaded_tests = filter_tests_by_patterns(loaded_tests, patterns)
-    return run_tests(loaded_tests, models, engine_adapter, verbosity, stream)
+
+    return run_tests(loaded_tests, models, engine_adapter, dialect, verbosity, stream)

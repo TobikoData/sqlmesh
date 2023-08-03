@@ -5,6 +5,7 @@ import typing as t
 from pydantic import Field, root_validator, validator
 from sqlglot import exp
 from sqlglot.helper import ensure_list
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
@@ -89,12 +90,29 @@ class ModelMeta(Node):
             ]
         return v
 
-    @validator("clustered_by", "tags", "grain", pre=True)
-    def _value_or_tuple_validator(cls, v: t.Any) -> t.Any:
+    @validator("tags", pre=True)
+    def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        return cls._validate_value_or_tuple(v, values)
+
+    @validator("clustered_by", "grain", pre=True)
+    def _normalized_value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        return cls._validate_value_or_tuple(v, values, normalize=True)
+
+    @classmethod
+    def _validate_value_or_tuple(
+        cls, v: t.Any, values: t.Dict[str, t.Any], normalize: bool = False
+    ) -> t.Any:
+        dialect = values.get("dialect")
+        _normalize = lambda v: normalize_identifiers(v, dialect=dialect) if normalize else v
+
         if isinstance(v, (exp.Tuple, exp.Array)):
-            return [e.name for e in v.expressions]
+            return [_normalize(e).name for e in v.expressions]
         if isinstance(v, exp.Expression):
-            return [v.name]
+            return [_normalize(v).name]
+        if isinstance(v, str):
+            value = _normalize(v)
+            return value.name if isinstance(value, exp.Expression) else value
+
         return v
 
     @validator("dialect", "storage_format", pre=True)
@@ -118,7 +136,9 @@ class ModelMeta(Node):
             ]
 
         partitions = [
-            exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
+            normalize_identifiers(
+                exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
+            )
             for expr in partitions
         ]
 
@@ -141,13 +161,14 @@ class ModelMeta(Node):
     def _columns_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
-        dialect = values.get("dialect")
         columns_to_types = {}
+        dialect = values.get("dialect")
+
         if isinstance(v, exp.Schema):
             for column in v.expressions:
                 expr = column.args["kind"]
                 expr.meta["dialect"] = dialect
-                columns_to_types[column.name] = expr
+                columns_to_types[normalize_identifiers(column, dialect=dialect).name] = expr
 
             return columns_to_types
 
@@ -155,7 +176,7 @@ class ModelMeta(Node):
             for k, data_type in v.items():
                 expr = exp.DataType.build(data_type, dialect=dialect)
                 expr.meta["dialect"] = dialect
-                columns_to_types[k] = expr
+                columns_to_types[normalize_identifiers(k, dialect=dialect).name] = expr
 
             return columns_to_types
 
@@ -231,6 +252,11 @@ class ModelMeta(Node):
             for field in ("partitioned_by_", "clustered_by"):
                 if values.get(field) and not kind.is_materialized:
                     raise ValueError(f"{field} field cannot be set for {kind} models")
+
+            if hasattr(kind, "time_column"):
+                kind.time_column.column = normalize_identifiers(
+                    kind.time_column.column, dialect=values.get("dialect")
+                ).name
 
         return values
 
