@@ -45,16 +45,13 @@ def sqlmesh_config(
         default_gateway=profile.target_name,
         gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
-        loader_kwargs={"target_name": dbt_target_name},
         model_defaults=model_defaults,
         **kwargs,
     )
 
 
 class DbtLoader(Loader):
-    def __init__(self, target_name: t.Optional[str] = None) -> None:
-        self.target_name = target_name
-
+    def __init__(self) -> None:
         self._project: t.Optional[Project] = None
         self._macros_max_mtime: t.Optional[float] = None
         super().__init__()
@@ -122,7 +119,7 @@ class DbtLoader(Loader):
         if self._project:
             return self._project
 
-        target_name = self.target_name or self._context.gateway
+        target_name = self._context.gateway or self._context.config.default_gateway
 
         self._project = Project.load(
             DbtContext(project_root=self._context.path, target_name=target_name)
