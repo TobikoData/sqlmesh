@@ -1686,29 +1686,31 @@ def test_custom_interval_unit():
 
 def test_model_table_properties():
     # Validate a tuple.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
-            MODEL (
-                name test_schema.test_model,
-                table_properties (
-                    key_a = 'value_a',
-                    'key_b' = 1,
-                    key_c = true,
-                    "key_d" = 2.0,
-                )
-            );
-            SELECT a FROM tbl;
+    model = load_sql_based_model(
+        d.parse(
             """
+        MODEL (
+            name test_schema.test_model,
+            table_properties (
+                key_a = 'value_a',
+                'key_b' = 1,
+                key_c = true,
+                "key_d" = 2.0,
             )
-        ).table_properties
-        == {
-            "key_a": exp.convert("value_a"),
-            "key_b": exp.convert(1),
-            "key_c": exp.convert(True),
-            "key_d": exp.convert(2.0),
-        }
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+    assert model.table_properties == {
+        "key_a": exp.convert("value_a"),
+        "key_b": exp.convert(1),
+        "key_c": exp.convert(True),
+        "key_d": exp.convert(2.0),
+    }
+    assert (
+        "table_properties ('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"
+        in model.render_definition()[0].sql()
     )
 
     # Validate a tuple with one item.
