@@ -124,7 +124,9 @@ class MacroEvaluator:
             print_exception(e, self.python_env)
             raise MacroEvalError(f"Error trying to eval macro.") from e
 
-    def transform(self, query: exp.Expression) -> exp.Expression | t.List[exp.Expression] | None:
+    def transform(
+        self, expression: exp.Expression
+    ) -> exp.Expression | t.List[exp.Expression] | None:
         changed = False
 
         def _transform_node(node: exp.Expression) -> exp.Expression:
@@ -141,7 +143,7 @@ class MacroEvaluator:
                 return node
             return node
 
-        query = query.transform(_transform_node)
+        expression = expression.transform(_transform_node)
 
         def evaluate_macros(
             node: exp.Expression,
@@ -156,7 +158,7 @@ class MacroEvaluator:
                 return self.evaluate(node)
             return node
 
-        transformed = evaluate_macros(query)
+        transformed = evaluate_macros(expression)
 
         if changed:
             # the transformations could have corrupted the ast, turning this into sql and reparsing ensures
@@ -182,7 +184,7 @@ class MacroEvaluator:
 
     def evaluate(self, node: MacroFunc) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, MacroDef):
-            self.locals[node.name] = node.expression
+            self.locals[node.name] = self.transform(node.expression)
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):

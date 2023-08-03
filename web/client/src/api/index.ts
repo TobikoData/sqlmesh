@@ -5,6 +5,10 @@ import {
   useQuery,
   useMutation,
   isCancelledError,
+  useQueryClient,
+  type QueryKey,
+  type UseQueryOptions,
+  type QueryMeta,
 } from '@tanstack/react-query'
 import {
   type ContextEnvironment,
@@ -34,240 +38,318 @@ import {
   type Query,
   evaluateApiCommandsEvaluatePost,
   type EvaluateInput,
-  type Model,
   getTableDiffApiTableDiffGet,
   type GetTableDiffApiTableDiffGetParams,
   type TableDiff,
   type FetchdfInput,
   type Meta,
   getApiMetaApiMetaGet,
+  type GetModelsApiModelsGet200,
+  type ApiExceptionPayload,
 } from './client'
 import {
   useIDE,
   type ErrorIDE,
   EnumErrorKey,
+  type ErrorKey,
 } from '~/library/pages/ide/context'
+import { debounceAsync, isNotNil } from '@utils/index'
+import { useState } from 'react'
 
-export function useApiMeta(): UseQueryResult<Meta> {
-  const { addError, removeError } = useIDE()
+export interface ApiOptions {
+  delay?: number
+  trigger?: string
+  removeTimeoutErrorAfter?: number
+  withDebounce?: boolean
+  debounceDelay?: number
+  debounceImmediate?: boolean
+  callbackCancel?: <TData = any>() => Promise<TData | undefined>
+  callbackError?: (error: ErrorIDE) => void
+}
 
-  return useQuery<Meta, ErrorIDE>({
-    queryKey: [`/api/meta`],
-    queryFn: async ({ signal }) => {
-      removeError(EnumErrorKey.Meta)
+export interface ApiQueryMeta extends QueryMeta {
+  onError: (error: ApiExceptionPayload) => void
+  onSuccess: () => void
+}
 
-      return await getApiMetaApiMetaGet({ signal })
+const DELAY = 2000
+
+export type UseQueryWithTimeoutOptions<
+  TData = any,
+  TError extends ApiExceptionPayload = ApiExceptionPayload,
+> = UseQueryResult<TData, TError> & {
+  cancel: <TData = any>() => Promise<TData | undefined>
+  isTimeout: boolean
+}
+
+export function useApiMeta(
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<Meta> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/meta'],
+      queryFn: getApiMetaApiMetaGet,
+      enabled: true,
     },
-    cacheTime: 0,
-    enabled: false,
-    onError(error) {
-      if (isCancelledError(error)) {
-        console.log('getApiMetaApiMetaGet', 'Request aborted by React Query')
-      } else {
-        addError(EnumErrorKey.Meta, error)
-      }
+    {
+      ...options,
+      errorKey: EnumErrorKey.Meta,
+      trigger: 'API -> useApiMeta',
     },
-  })
+  )
+}
+
+export function useApiModels(
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<GetModelsApiModelsGet200> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/models'],
+      queryFn: getModelsApiModelsGet,
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.Models,
+      trigger: 'API -> useApiModels',
+    },
+  )
+}
+
+export function useApiFiles(
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<Directory> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/files'],
+      queryFn: getFilesApiFilesGet,
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.FileExplorer,
+      trigger: 'API -> useApiFiles',
+    },
+  )
+}
+
+export function useApiFileByPath(
+  path: string,
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<File> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/files', path],
+      queryFn: async ({ signal }) =>
+        await getFileApiFilesPathGet(path, { signal }),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.FileExplorer,
+      trigger: 'API -> useApiFileByPath',
+    },
+  )
 }
 
 export function useApiModelLineage(
   modelName: string,
-): UseQueryResult<ModelLineageApiLineageModelNameGet200> {
-  return useQuery({
-    queryKey: [`/api/lineage`, modelName],
-    queryFn: async ({ signal }) =>
-      await modelLineageApiLineageModelNameGet(modelName, { signal }),
-    cacheTime: 0,
-    enabled: false,
-  })
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<ModelLineageApiLineageModelNameGet200> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/lineage', modelName],
+      queryFn: async ({ signal }) =>
+        await modelLineageApiLineageModelNameGet(modelName, { signal }),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.ModelLineage,
+      trigger: 'API -> useApiModelLineage',
+    },
+  )
 }
 
 export function useApiColumnLineage(
   model: string,
   column: string,
-): UseQueryResult<ColumnLineageApiLineageModelNameColumnNameGet200> {
-  return useQuery({
-    queryKey: [`/api/lineage`, model, column],
-    queryFn: async ({ signal }) =>
-      await columnLineageApiLineageModelNameColumnNameGet(model, column, {
-        signal,
-      }),
-    cacheTime: 0,
-    enabled: false,
-  })
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<ColumnLineageApiLineageModelNameColumnNameGet200> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/lineage', model, column],
+      queryFn: async ({ signal }) =>
+        await columnLineageApiLineageModelNameColumnNameGet(model, column, {
+          signal,
+        }),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.ColumnLineage,
+      trigger: 'API -> useApiColumnLineage',
+    },
+  )
 }
 
-export function useApiFileByPath(path: string): UseQueryResult<File> {
-  return useQuery({
-    queryKey: [`/api/files`, path],
-    queryFn: async ({ signal }) =>
-      await getFileApiFilesPathGet(path, { signal }),
-    cacheTime: 0,
-    enabled: false,
-  })
+export function useApiEnvironments(
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<GetEnvironmentsApiEnvironmentsGet200> {
+  return useQueryWithTimeout<GetEnvironmentsApiEnvironmentsGet200, ErrorIDE>(
+    {
+      queryKey: ['/api/environments'],
+      queryFn: getEnvironmentsApiEnvironmentsGet,
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.Environments,
+      trigger: 'API -> useApiEnvironments',
+    },
+  )
 }
 
-export function useApiModels(): UseQueryResult<Model[]> {
-  const { addError, removeError } = useIDE()
-
-  return useQuery<Model[], ErrorIDE>({
-    queryKey: ['/api/models'],
-    queryFn: async ({ signal }) => {
-      removeError(EnumErrorKey.Models)
-
-      return (await getModelsApiModelsGet({ signal })) as Model[]
+export function useApiCancelPlan(
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/commands/evaluate'],
+      queryFn: cancelPlanApiPlanCancelPost,
     },
-    cacheTime: 0,
-    enabled: false,
-    onError(error) {
-      if (isCancelledError(error)) {
-        console.log(
-          'getEnvironmentsApiEnvironmentsGet',
-          'Request aborted by React Query',
-        )
-      } else {
-        addError(EnumErrorKey.Models, error)
-      }
+    {
+      ...options,
+      errorKey: EnumErrorKey.CancelPlan,
+      trigger: 'API -> useApiCancelPlan',
     },
-  })
-}
-
-export function useApiFiles(): UseQueryResult<Directory> {
-  return useQuery<Directory, ErrorIDE>({
-    queryKey: ['/api/files'],
-    queryFn: async ({ signal }) => await getFilesApiFilesGet({ signal }),
-    cacheTime: 0,
-    enabled: false,
-  })
-}
-
-export function useApiEnvironments(): UseQueryResult<GetEnvironmentsApiEnvironmentsGet200> {
-  const { addError, removeError } = useIDE()
-
-  return useQuery<GetEnvironmentsApiEnvironmentsGet200, ErrorIDE>({
-    queryKey: ['/api/environments'],
-    queryFn: async ({ signal }) => {
-      removeError(EnumErrorKey.Environments)
-
-      return await getEnvironmentsApiEnvironmentsGet({ signal })
-    },
-    cacheTime: 0,
-    enabled: false,
-    onError(error) {
-      if (isCancelledError(error)) {
-        console.log(
-          'getEnvironmentsApiEnvironmentsGet',
-          'Request aborted by React Query',
-        )
-      } else {
-        addError(EnumErrorKey.Environments, error)
-      }
-    },
-  })
+  )
 }
 
 export function useApiPlanRun(
   environment: string,
-  options?: {
+  inputs?: {
     planDates?: PlanDates
     planOptions?: PlanOptions
   },
-): UseQueryResult<ContextEnvironment> {
-  const { addError, removeError } = useIDE()
-
-  return useQuery<ContextEnvironment, ErrorIDE>({
-    queryKey: ['/api/plan', environment],
-    queryFn: async ({ signal }) => {
-      removeError(EnumErrorKey.RunPlan)
-
-      return await runPlanApiPlanPost(
-        {
-          environment,
-          plan_dates: options?.planDates,
-          plan_options: options?.planOptions,
-        },
-        { signal },
-      )
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<ContextEnvironment> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/plan', environment],
+      queryFn: async ({ signal }) =>
+        await runPlanApiPlanPost(
+          {
+            environment,
+            plan_dates: inputs?.planDates,
+            plan_options: inputs?.planOptions,
+          },
+          { signal },
+        ),
     },
-    enabled: false,
-    cacheTime: 0,
-    onError(error) {
-      if (isCancelledError(error)) {
-        console.log('runPlanApiPlanPost', 'Request aborted by React Query')
-      } else {
-        addError(EnumErrorKey.RunPlan, error)
-      }
+    {
+      ...options,
+      errorKey: EnumErrorKey.RunPlan,
+      trigger: 'API -> useApiPlanRun',
     },
-  })
+  )
 }
 
 export function useApiPlanApply(
   environment: string,
-  options?: {
+  inputs?: {
     planDates?: PlanDates
     planOptions?: PlanOptions
     categories?: BodyApplyApiCommandsApplyPostCategories
   },
-): UseQueryResult<ApplyResponse> {
-  return useQuery({
-    queryKey: ['/api/commands/apply', environment],
-    queryFn: async ({ signal }) =>
-      await applyApiCommandsApplyPost(
-        {
-          environment,
-          plan_dates: options?.planDates,
-          plan_options: options?.planOptions,
-          categories: options?.categories,
-        },
-        { signal },
-      ),
-    enabled: false,
-    cacheTime: 0,
-  })
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<ApplyResponse> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/commands/apply', environment],
+      queryFn: async ({ signal }) =>
+        await applyApiCommandsApplyPost(
+          {
+            environment,
+            plan_dates: inputs?.planDates,
+            plan_options: inputs?.planOptions,
+            categories: inputs?.categories,
+          },
+          { signal },
+        ),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.ApplyPlan,
+      trigger: 'API -> useApiPlanApply',
+    },
+  )
 }
 
-export function useApiFetchdf(options: FetchdfInput): UseQueryResult<unknown> {
-  return useQuery<unknown, ErrorIDE>({
-    queryKey: ['/api/commands/fetchd'],
-    queryFn: async ({ signal }) =>
-      await fetchdfApiCommandsFetchdfPost(options, { signal }),
-    enabled: false,
-    cacheTime: 0,
-  })
+export function useApiFetchdf(
+  inputs: FetchdfInput,
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<unknown> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/commands/fetchd'],
+      queryFn: async ({ signal }) =>
+        await fetchdfApiCommandsFetchdfPost(inputs, { signal }),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.Fetchdf,
+      trigger: 'API -> useApiFetchdf',
+    },
+  )
 }
 
-export function useApiRender(options: RenderInput): UseQueryResult<Query> {
-  return useQuery<Query, ErrorIDE>({
-    queryKey: ['/api/commands/render'],
-    queryFn: async ({ signal }) =>
-      await renderApiCommandsRenderPost(options, { signal }),
-    enabled: false,
-    cacheTime: 0,
-  })
+export function useApiRender(
+  inputs: RenderInput,
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<Query> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/commands/render'],
+      queryFn: async ({ signal }) =>
+        await renderApiCommandsRenderPost(inputs, { signal }),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.RenderQuery,
+      trigger: 'API -> useApiRender',
+    },
+  )
 }
 
 export function useApiTableDiff(
-  options: GetTableDiffApiTableDiffGetParams,
-): UseQueryResult<TableDiff> {
-  return useQuery<TableDiff, ErrorIDE>({
-    queryKey: ['/api/commands/table_diff'],
-    queryFn: async ({ signal }) =>
-      await getTableDiffApiTableDiffGet(options, { signal }),
-    enabled: false,
-    cacheTime: 0,
-  })
+  inputs: GetTableDiffApiTableDiffGetParams,
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<TableDiff> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/commands/table_diff'],
+      queryFn: async ({ signal }) =>
+        await getTableDiffApiTableDiffGet(inputs, { signal }),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.TableDiff,
+      trigger: 'API -> useApiTableDiff',
+    },
+  )
 }
 
 export function useApiEvaluate(
-  options: EvaluateInput,
-): UseQueryResult<unknown> {
-  return useQuery<unknown, ErrorIDE>({
-    queryKey: ['/api/commands/evaluate'],
-    queryFn: async ({ signal }) =>
-      await evaluateApiCommandsEvaluatePost(options, { signal }),
-    enabled: false,
-    cacheTime: 0,
-  })
+  inputs: EvaluateInput,
+  options?: ApiOptions,
+): UseQueryWithTimeoutOptions<unknown> {
+  return useQueryWithTimeout(
+    {
+      queryKey: ['/api/commands/evaluate'],
+      queryFn: async ({ signal }) =>
+        await evaluateApiCommandsEvaluatePost(inputs, { signal }),
+    },
+    {
+      ...options,
+      errorKey: EnumErrorKey.EvaluateModel,
+      trigger: 'API -> useApiEvaluate',
+    },
+  )
 }
 
 export function useMutationApiSaveFile(
@@ -283,48 +365,121 @@ export function useMutationApiSaveFile(
       await writeFileApiFilesPathPost(path, body),
     async onMutate({ path }) {
       await client.cancelQueries({
-        queryKey: [`/api/files`, path],
+        queryKey: ['/api/files', path],
       })
     },
   })
 }
 
-export async function apiCancelPlanApply(client: QueryClient): Promise<void> {
-  void client.cancelQueries({ queryKey: ['/api/commands/apply'] })
+function useQueryWithTimeout<
+  TQueryFnData = unknown,
+  TError extends ApiExceptionPayload = ApiExceptionPayload,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  options: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey> & {
+    meta?: ApiQueryMeta
+    queryKey: TQueryKey
+  },
+  {
+    delay = DELAY,
+    removeTimeoutErrorAfter,
+    errorKey = EnumErrorKey.API,
+    trigger,
+    withDebounce = true,
+    debounceDelay = 1000,
+    debounceImmediate = false,
+    callbackCancel,
+    callbackError,
+  }: ApiOptions & { errorKey: ErrorKey },
+): UseQueryWithTimeoutOptions<TData, TError> {
+  const key = options.queryKey.join(' -> ')
+  const queryClient = useQueryClient()
+  const { addError } = useIDE()
 
-  return await cancelPlanApiPlanCancelPost()
-}
+  const [isTimeout, setIsTimeout] = useState(false)
 
-export async function apiCancelPlanRun(client: QueryClient): Promise<void> {
-  void client.cancelQueries({ queryKey: ['/api/plan'] })
+  let timeoutId: ReturnType<typeof setTimeout>
 
-  return await cancelPlanApiPlanCancelPost()
-}
+  const debounced = debounceAsync<TQueryFnData>(
+    queryFn,
+    debounceDelay,
+    debounceImmediate,
+  )
 
-export function apiCancelFetchdf(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/commands/fetchdf'] })
-}
+  async function cancel<TData = any>(
+    withCallback: boolean = true,
+  ): Promise<TData | undefined> {
+    console.log(`[REQUEST CANCELED] ${key} at ${Date.now()}`)
 
-export function apiCancelRender(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/commands/render'] })
-}
+    debounced?.cancel()
+    void callbackCancel?.()
+    void queryClient.cancelQueries({ queryKey: options.queryKey })
 
-export function apiCancelEvaluate(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/commands/evaluate'] })
-}
+    return withCallback ? callbackCancel?.() : undefined
+  }
 
-export function apiCancelLineage(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/lineage'] })
-}
+  function timeout(): void {
+    timeoutId = setTimeout(() => {
+      console.log(`[REQUEST TIMEOUT] ${key} timed out after ${delay}ms`)
+      const { removeError } = addError(errorKey, {
+        message: 'Request timed out',
+        description: `Request ${key} timed out after ${delay}ms`,
+        timestamp: Date.now(),
+        origin: 'useQueryTimeout',
+        trigger,
+      })
 
-export function apiCancelGetEnvironments(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/environments'] })
-}
+      setIsTimeout(true)
 
-export function apiCancelFiles(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/files'] })
-}
+      void cancel(false)
 
-export function apiCancelModels(client: QueryClient): void {
-  void client.cancelQueries({ queryKey: ['/api/models'] })
+      if (isNotNil(removeTimeoutErrorAfter)) {
+        setTimeout(() => removeError(), removeTimeoutErrorAfter)
+      }
+    }, delay)
+  }
+
+  function onError(err: TError): void {
+    clearTimeout(timeoutId)
+
+    if (isCancelledError(err)) {
+      console.log(
+        `[REQUEST ABORTED] ${key} aborted by React Query at ${Date.now()}`,
+      )
+    } else {
+      console.log(`[REQUEST FAILED] ${key} failed at ${Date.now()}`)
+      const { error } = addError(errorKey, err)
+
+      callbackError?.(error)
+    }
+  }
+
+  function onSuccess(): void {
+    clearTimeout(timeoutId)
+  }
+
+  async function queryFn(...args: any[]): Promise<TQueryFnData> {
+    timeout()
+
+    return (options.queryFn as (...args: any[]) => Promise<TQueryFnData>)!(
+      ...args,
+    )
+  }
+
+  return {
+    ...useQuery<TQueryFnData, TError, TData, TQueryKey>({
+      cacheTime: 0,
+      enabled: false,
+      queryKey: options.queryKey,
+      queryFn: withDebounce ? debounced : queryFn,
+      meta: {
+        ...options.meta,
+        onError,
+        onSuccess,
+      },
+    }),
+    cancel,
+    isTimeout,
+  }
 }

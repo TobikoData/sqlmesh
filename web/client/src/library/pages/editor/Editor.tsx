@@ -1,8 +1,7 @@
 import { Suspense, lazy, useCallback } from 'react'
 import { useStoreContext } from '@context/context'
 import { useStoreProject } from '@context/project'
-import { useStoreEditor } from '@context/editor'
-import { EnumErrorKey, type ErrorIDE } from '../ide/context'
+import { EnumErrorKey, useIDE, type ErrorIDE } from '../ide/context'
 import SplitPane from '@components/splitPane/SplitPane'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
@@ -15,12 +14,11 @@ const Editor = lazy(() => import('@components/editor/Editor'))
 const LineageFlowProvider = lazy(() => import('@components/graph/context'))
 
 export default function PageEditor(): JSX.Element {
+  const { addError } = useIDE()
   const models = useStoreContext(s => s.models)
 
   const files = useStoreProject(s => s.files)
   const setSelectedFile = useStoreProject(s => s.setSelectedFile)
-
-  const setPreviewConsole = useStoreEditor(s => s.setPreviewConsole)
 
   const handleClickModel = useCallback(
     function handleClickModel(modelName: string): void {
@@ -34,7 +32,7 @@ export default function PageEditor(): JSX.Element {
   )
 
   const handleError = useCallback(function handleError(error: ErrorIDE): void {
-    setPreviewConsole([EnumErrorKey.ColumnLineage, error])
+    addError(EnumErrorKey.ColumnLineage, error)
   }, [])
 
   return (

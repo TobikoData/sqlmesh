@@ -257,9 +257,9 @@ class ApplyResponse(BaseModel):
 
 class ApiExceptionPayload(BaseModel):
     timestamp: int
-    status: int
     message: str
     origin: str
+    status: t.Optional[int] = None
     trigger: t.Optional[str] = None
     type: t.Optional[str] = None
     description: t.Optional[str] = None

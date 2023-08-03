@@ -1,12 +1,14 @@
 import { Disclosure, Popover, Transition } from '@headlessui/react'
 import pluralize from 'pluralize'
 import clsx from 'clsx'
-import { useState, Fragment } from 'react'
+import React, { useState, Fragment } from 'react'
 import { useIDE, type ErrorIDE, type ErrorKey } from '../../pages/ide/context'
 import { isNotNil, toDate, toDateFormat } from '@utils/index'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { Divider } from '@components/divider/Divider'
 import { useStoreContext } from '@context/context'
+import { Button } from '@components/button/Button'
+import { EnumSize, EnumVariant } from '~/types/enum'
 
 export default function ReportErrors(): JSX.Element {
   const { errors } = useIDE()
@@ -55,25 +57,25 @@ export default function ReportErrors(): JSX.Element {
           >
             <Popover.Panel
               className={clsx(
-                'absolute rounded-md top-20 right-2 z-[1000] bg-light p-2 transform overflow-hidden text-danger-700 shadow-2xl',
+                'absolute top-20 right-2 z-[1000] rounded-md bg-light transform overflow-hidden text-danger-700 shadow-2xl',
                 'w-[90vw] max-h-[80vh]',
               )}
             >
               <ul
                 className={clsx(
-                  'w-full bg-danger-10 py-4 pl-3 pr-1 rounded-md overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
+                  'w-full p-2 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
                   'max-w-[90vw] max-h-[80vh]',
                 )}
               >
-                {Array.from(errors.entries())
+                {Array.from(errors)
                   .reverse()
-                  .map(([scope, error]) => (
+                  .map(error => (
                     <li
-                      key={`${scope}-${error.message}`}
-                      className="mb-10"
+                      key={error.id}
+                      className="bg-danger-10 mb-4 last:m-0 p-2 rounded-md"
                     >
                       <DisplayError
-                        scope={scope}
+                        scope={error.key}
                         error={error}
                       />
                     </li>
@@ -94,11 +96,13 @@ export function DisplayError({
   scope: ErrorKey
   error: ErrorIDE
 }): JSX.Element {
+  const { removeError } = useIDE()
+
   const version = useStoreContext(s => s.version)
 
   return (
-    <div>
-      <div className="flex w-full">
+    <div className="flex flex-col w-full h-full">
+      <div className="flex w-full h-full">
         <div className="w-[20rem]">
           <div className="flex aline-center mb-2">
             <small className="block mr-3">
@@ -178,6 +182,19 @@ export function DisplayError({
           <Divider className="!border-danger-10" />
         </>
       )}
+      <div className="flex justify-end">
+        <Button
+          variant={EnumVariant.Neutral}
+          size={EnumSize.sm}
+          onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+            e.stopPropagation()
+
+            removeError(error)
+          }}
+        >
+          Dismiss
+        </Button>
+      </div>
     </div>
   )
 }

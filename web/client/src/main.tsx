@@ -1,14 +1,28 @@
 import React, { type HTMLAttributes } from 'react'
 import ThemeProvider from '@context/theme'
 import ReactDOM from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { type ApiQueryMeta } from './api'
+import {
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query'
 import App from './App'
+import IDEProvider, { type ErrorIDE } from './library/pages/ide/context'
 
 import './index.css'
 
 export interface PropsComponent extends HTMLAttributes<HTMLElement> {}
 
 const client = new QueryClient({
+  queryCache: new QueryCache({
+    onError(error, query) {
+      ;(query.meta as ApiQueryMeta).onError(error as ErrorIDE)
+    },
+    onSuccess(_, query) {
+      ;(query.meta as ApiQueryMeta).onSuccess()
+    },
+  }),
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
@@ -22,7 +36,9 @@ ReactDOM.createRoot(getRootNode()).render(
   <React.StrictMode>
     <QueryClientProvider client={client}>
       <ThemeProvider>
-        <App />
+        <IDEProvider>
+          <App />
+        </IDEProvider>
       </ThemeProvider>
     </QueryClientProvider>
   </React.StrictMode>,

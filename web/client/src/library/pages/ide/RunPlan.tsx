@@ -1,13 +1,7 @@
 import { Menu, Popover, Transition } from '@headlessui/react'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import {
-  useState,
-  useEffect,
-  Fragment,
-  type MouseEvent,
-  useCallback,
-} from 'react'
+import { useState, useEffect, Fragment, type MouseEvent } from 'react'
 import { useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
@@ -20,13 +14,7 @@ import {
 } from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
-import {
-  isArrayNotEmpty,
-  includes,
-  isFalse,
-  isStringEmptyOrNil,
-  debounceAsync,
-} from '~/utils'
+import { isArrayNotEmpty, includes, isFalse, isStringEmptyOrNil } from '~/utils'
 import { Button, makeButton, type ButtonSize } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Input from '@components/input/Input'
@@ -39,7 +27,7 @@ import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { useIDE } from './context'
 
 export default function RunPlan(): JSX.Element {
-  const { errors, setIsPlanOpen } = useIDE()
+  const { setIsPlanOpen } = useIDE()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -69,10 +57,6 @@ export default function RunPlan(): JSX.Element {
     planOptions: { skip_tests: true, include_unmodified: true },
   })
 
-  const debouncedRunPlan = useCallback(debounceAsync(planRun, 1000, true), [
-    planRun,
-  ])
-
   useEffect(() => {
     if (shouldStartPlanAutomatically) {
       startPlan()
@@ -81,7 +65,7 @@ export default function RunPlan(): JSX.Element {
 
     if (isFalse(environment.isSynchronized)) return
 
-    void debouncedRunPlan()
+    void planRun()
   }, [environment])
 
   useEffect(() => {
@@ -107,7 +91,6 @@ export default function RunPlan(): JSX.Element {
     setIsPlanOpen(true)
   }
 
-  const hasErrors = errors.size > 0
   const showRunButton =
     isFalse(environment.isDefault) || hasSynchronizedEnvironments()
   const showSelectEnvironmentButton =
@@ -118,7 +101,6 @@ export default function RunPlan(): JSX.Element {
     planState,
   )
   const shouldDisableActions =
-    hasErrors ||
     isFetching ||
     planAction !== EnumPlanAction.None ||
     planState === EnumPlanState.Applying ||

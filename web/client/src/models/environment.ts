@@ -17,7 +17,7 @@ export type DefaultEnvironment = KeyOf<typeof EnumDefaultEnvironment>
 export type RelativeLocation = KeyOf<typeof EnumRelativeLocation>
 
 interface InitialEnvironmemt extends Partial<Environment> {
-  name: EnvironmentName
+  name?: EnvironmentName
 }
 
 interface ProfileEnvironment {
@@ -52,7 +52,7 @@ export class ModelEnvironment {
   }
 
   get name(): string {
-    return this._initial.name
+    return this._initial.name ?? EnumDefaultEnvironment.Empty
   }
 
   get type(): string {

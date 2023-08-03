@@ -1,11 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  debounceAsync,
-  includes,
-  isFalse,
-  isObjectNotEmpty,
-  isTrue,
-} from '~/utils'
+import { useEffect, useRef, useState } from 'react'
+import { includes, isFalse, isObjectNotEmpty, isTrue } from '~/utils'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -13,12 +7,7 @@ import {
   EnumPlanApplyType,
 } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
-import {
-  useApiPlanRun,
-  useApiPlanApply,
-  apiCancelPlanApply,
-  apiCancelPlanRun,
-} from '~/api'
+import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
 import {
   type ContextEnvironmentEnd,
   type ContextEnvironmentStart,
@@ -29,7 +18,6 @@ import PlanActions from './PlanActions'
 import PlanWizardStepOptions from './PlanWizardStepOptions'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
 import PlanBackfillDates from './PlanBackfillDates'
-import { isCancelledError, useQueryClient } from '@tanstack/react-query'
 import { type ModelEnvironment } from '~/models/environment'
 import { useApplyPayload, usePlanPayload } from './hooks'
 import { useChannelEvents } from '@api/channels'
@@ -51,10 +39,8 @@ function Plan({
   disabled: boolean
   onClose: () => void
 }): JSX.Element {
-  const client = useQueryClient()
-
   const dispatch = usePlanDispatch()
-  const { errors, removeError, addError } = useIDE()
+  const { errors, removeError } = useIDE()
 
   const {
     auto_apply,
@@ -73,19 +59,20 @@ function Plan({
 
   const elTaskProgress = useRef<HTMLDivElement>(null)
 
-  const [isPlanRan, seIsPlanRan] = useState(false)
+  const [isPlanRan, setIsPlanRan] = useState(false)
 
   const subscribe = useChannelEvents()
 
   const planPayload = usePlanPayload({ environment, isInitialPlanRun })
   const applyPayload = useApplyPayload({ isInitialPlanRun })
 
-  const { refetch: planRun } = useApiPlanRun(environment.name, planPayload)
-  const { refetch: planApply } = useApiPlanApply(environment.name, applyPayload)
-
-  const debouncedPlanRun = useCallback(debounceAsync(planRun, 1000, true), [
-    planRun,
-  ])
+  const { refetch: planRun, cancel: cancelRequestPlanRun } = useApiPlanRun(
+    environment.name,
+    planPayload,
+  )
+  const { refetch: planApply, cancel: cancelRequestPlanApply } =
+    useApiPlanApply(environment.name, applyPayload)
+  const { refetch: cancelPlan } = useApiCancelPlan()
 
   useEffect(() => {
     const unsubscribeTests = subscribe('tests', testsReport)
@@ -103,7 +90,7 @@ function Plan({
     ])
 
     return () => {
-      debouncedPlanRun.cancel()
+      void cancelRequestPlanRun()
 
       unsubscribeTests?.()
     }
@@ -190,7 +177,7 @@ function Plan({
   }
 
   function cleanUp(): void {
-    seIsPlanRan(false)
+    setIsPlanRan(false)
 
     dispatch([
       {
@@ -213,7 +200,6 @@ function Plan({
   function reset(): void {
     setPlanAction(EnumPlanAction.Resetting)
 
-    removeError(EnumErrorKey.General)
     cleanUp()
     setPlanState(EnumPlanState.Init)
 
@@ -221,7 +207,6 @@ function Plan({
   }
 
   function close(): void {
-    removeError(EnumErrorKey.General)
     removeError(EnumErrorKey.RunPlan)
     removeError(EnumErrorKey.ApplyPlan)
     onClose()
@@ -238,21 +223,18 @@ function Plan({
 
     const cancelAction =
       planAction === EnumPlanAction.Applying
-        ? apiCancelPlanApply
-        : apiCancelPlanRun
+        ? cancelRequestPlanRun
+        : cancelRequestPlanApply
 
-    cancelAction(client)
+    void cancelAction()
+
+    cancelPlan()
       .then(() => {
         setPlanAction(EnumPlanAction.Run)
         setPlanState(EnumPlanState.Cancelled)
       })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log('apiCancelPlanApply', 'Request aborted by React Query')
-        } else {
-          console.log('apiCancelPlanApply', error)
-          reset()
-        }
+      .catch(() => {
+        reset()
       })
   }
 
@@ -266,19 +248,10 @@ function Plan({
       },
     ])
 
-    planApply({
-      throwOnError: true,
-    })
+    planApply()
       .then(({ data }) => {
         if (data?.type === EnumPlanApplyType.Virtual) {
           setPlanState(EnumPlanState.Finished)
-        }
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log('planApply', 'Request aborted by React Query')
-        } else {
-          addError(EnumErrorKey.ApplyPlan, error)
         }
       })
       .finally(() => {
@@ -298,42 +271,32 @@ function Plan({
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
-    debouncedPlanRun({
-      throwOnError: true,
+    void planRun().then(({ data }) => {
+      dispatch([
+        {
+          type: EnumPlanActions.Backfills,
+          backfills: data?.backfills,
+        },
+        {
+          type: EnumPlanActions.Changes,
+          ...data?.changes,
+        },
+        {
+          type: EnumPlanActions.Dates,
+          start: data?.start,
+          end: data?.end,
+        },
+      ])
+
+      setIsPlanRan(true)
+      setPlanState(EnumPlanState.Init)
+
+      if (auto_apply) {
+        apply()
+      } else {
+        setPlanAction(EnumPlanAction.Apply)
+      }
     })
-      .then(({ data }) => {
-        dispatch([
-          {
-            type: EnumPlanActions.Backfills,
-            backfills: data?.backfills,
-          },
-          {
-            type: EnumPlanActions.Changes,
-            ...data?.changes,
-          },
-          {
-            type: EnumPlanActions.Dates,
-            start: data?.start,
-            end: data?.end,
-          },
-        ])
-
-        seIsPlanRan(true)
-        setPlanState(EnumPlanState.Init)
-
-        if (auto_apply) {
-          apply()
-        } else {
-          setPlanAction(EnumPlanAction.Run)
-        }
-      })
-      .catch(error => {
-        if (isCancelledError(error)) {
-          console.log('planRun', 'Request aborted by React Query')
-        } else {
-          addError(EnumErrorKey.RunPlan, error)
-        }
-      })
   }
 
   const shouldSplitPane = isObjectNotEmpty(testsReportErrors)

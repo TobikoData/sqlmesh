@@ -701,9 +701,9 @@
       "ApiExceptionPayload": {
         "properties": {
           "timestamp": { "type": "integer", "title": "Timestamp" },
-          "status": { "type": "integer", "title": "Status" },
           "message": { "type": "string", "title": "Message" },
           "origin": { "type": "string", "title": "Origin" },
+          "status": { "type": "integer", "title": "Status" },
           "trigger": { "type": "string", "title": "Trigger" },
           "type": { "type": "string", "title": "Type" },
           "description": { "type": "string", "title": "Description" },
@@ -715,7 +715,7 @@
           }
         },
         "type": "object",
-        "required": ["timestamp", "status", "message", "origin"],
+        "required": ["timestamp", "message", "origin"],
         "title": "ApiExceptionPayload"
       },
       "ApplyResponse": {
@@ -930,7 +930,13 @@
       },
       "Environment": {
         "properties": {
-          "name": { "type": "string", "title": "Name" },
+          "name": { "type": "string", "title": "Name", "default": "prod" },
+          "suffix_target": {
+            "allOf": [
+              { "$ref": "#/components/schemas/EnvironmentSuffixTarget" }
+            ],
+            "default": "schema"
+          },
           "snapshots": {
             "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
             "type": "array",
@@ -968,9 +974,15 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": ["name", "snapshots", "start_at", "plan_id"],
+        "required": ["snapshots", "start_at", "plan_id"],
         "title": "Environment",
-        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    name: The name of the environment.\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this enviornment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promotion_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted."
+        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted."
+      },
+      "EnvironmentSuffixTarget": {
+        "type": "string",
+        "enum": ["schema", "table"],
+        "title": "EnvironmentSuffixTarget",
+        "description": "An enumeration."
       },
       "EvaluateInput": {
         "properties": {
