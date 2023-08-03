@@ -34,6 +34,7 @@ from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable
 
 
@@ -1846,3 +1847,37 @@ def test_model_table_properties():
                 """
             )
         )
+
+
+def test_model_jinja_macro_rendering():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+        );
+
+        JINJA_STATEMENT_BEGIN;
+        {{ test_package.macro_a() }}
+        {{ macro_b() }}
+        JINJA_END;
+
+        SELECT 1 AS x;
+    """
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        packages={
+            "test_package": {"macro_a": MacroInfo(definition="macro_a_body", depends_on=[])},
+        },
+        root_macros={"macro_b": MacroInfo(definition="macro_b_body", depends_on=[])},
+        global_objs={"test_int": 1, "test_str": "value"},
+    )
+
+    model = load_sql_based_model(expressions, jinja_macros=jinja_macros)
+    definition = model.render_definition()
+
+    assert definition[1].sql() == "test_int = 1\ntest_str = 'value'"
+    assert definition[2].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_b_body\nJINJA_END;"
+    assert definition[3].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_a_body\nJINJA_END;"
