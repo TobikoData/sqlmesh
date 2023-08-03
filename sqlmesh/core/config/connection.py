@@ -664,9 +664,9 @@ class MySQLConnectionConfig(_ConnectionConfig):
 
     @property
     def _connection_factory(self) -> t.Callable:
-        import pymssql
+        from mysql.connector import connect
 
-        return pymssql.connect
+        return connect
 
 
 class MsSqlConnectionConfig(_ConnectionConfig):
