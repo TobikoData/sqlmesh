@@ -192,6 +192,7 @@ class _Model(ModelMeta, frozen=True):
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
 
+        jinja_expressions = []
         python_expressions = []
         if include_python:
             python_env = d.PythonCode(
@@ -203,9 +204,12 @@ class _Model(ModelMeta, frozen=True):
             if python_env.expressions:
                 python_expressions.append(python_env)
 
+            jinja_expressions = self._jinja_macros_to_exprs()
+
         return [
             model,
             *python_expressions,
+            *jinja_expressions,
         ]
 
     def render_query(
@@ -755,6 +759,28 @@ class _Model(ModelMeta, frozen=True):
                         metadata.extend(e.comments)
 
         return hash_data(metadata)
+
+    def _jinja_macros_to_exprs(self) -> t.List[exp.Expression]:
+        output: t.List[exp.Expression] = []
+
+        if self.jinja_macros.global_objs:
+            output.append(
+                d.PythonCode(
+                    expressions=[
+                        f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
+                        for k, v in sorted(self.jinja_macros.global_objs.items())
+                    ]
+                )
+            )
+
+        for macro_name, macro_info in sorted(self.jinja_macros.root_macros.items()):
+            output.append(d.jinja_statement(macro_info.definition))
+
+        for _, package in sorted(self.jinja_macros.packages.items()):
+            for macro_name, macro_info in sorted(package.items()):
+                output.append(d.jinja_statement(macro_info.definition))
+
+        return output
 
 
 class _SqlBasedModel(_Model):
