@@ -865,6 +865,7 @@ class Context(BaseContext):
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
         show: bool = True,
+        show_sample: bool = True,
     ) -> TableDiff:
         """Show a diff between two tables.
 
@@ -876,7 +877,8 @@ class Context(BaseContext):
             model_or_snapshot: The model or snapshot to use when environments are passed in.
             where: An optional where statement to filter results.
             limit: The limit of the sample dataframe.
-            show: Show the table diff in the console.
+            show: Show the table diff output in the console.
+            show_sample: Show the sample dataframe in the console. Requires show=True.
 
         Returns:
             The TableDiff object containing schema and summary differences.
@@ -920,7 +922,7 @@ class Context(BaseContext):
         )
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
-            self.console.show_row_diff(table_diff.row_diff())
+            self.console.show_row_diff(table_diff.row_diff(), show_sample=show_sample)
         return table_diff
 
     def get_dag(self, format: str = "svg") -> graphviz.Digraph:
