@@ -73,7 +73,7 @@
 ??? question "How do I install SQLMesh?"
     SQLMesh is a Python library. After ensuring you have [an appropriate Python runtime](../prerequisites.md), install it [with `pip`](../installation.md).  
 
-??? question "How do I use SQLmesh?"
+??? question "How do I use SQLMesh?"
     SQLMesh has three interfaces: [command line](../reference/cli.md), [Jupyter or Databricks notebook](../reference/notebook.md), and graphical user interface. 
     
     The [quickstart guide](../quick_start.md) demonstrates an example project in each of the interfaces.
