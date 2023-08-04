@@ -159,10 +159,16 @@ class TableDiff:
 
             comparisons = [
                 exp.Case()
-                .when(exp.column(c, "s").eq(exp.column(c, "t")), 1)
-                .when(exp.column(c, "s").is_(exp.Null()) & exp.column(c, "t").is_(exp.Null()), 1)
-                .when(exp.column(c, "s").is_(exp.Null()) | exp.column(c, "t").is_(exp.Null()), 0)
-                .else_(0)
+                .when(exp.column(c, "s").eq(exp.column(c, "t")), exp.Literal.number(1))
+                .when(
+                    exp.column(c, "s").is_(exp.Null()) & exp.column(c, "t").is_(exp.Null()),
+                    exp.Literal.number(1),
+                )
+                .when(
+                    exp.column(c, "s").is_(exp.Null()) | exp.column(c, "t").is_(exp.Null()),
+                    exp.Literal.number(0),
+                )
+                .else_(exp.Literal.number(0))
                 .as_(f"{c}_matches")
                 for c, t in self.source_schema.items()
                 if t == self.target_schema.get(c)
