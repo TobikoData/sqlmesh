@@ -1,4 +1,4 @@
-"""Contains MsSqlEngineAdapter."""
+"""Contains MSSQLEngineAdapter."""
 
 
 from __future__ import annotations
@@ -6,12 +6,24 @@ from __future__ import annotations
 import typing as t
 
 import pandas as pd
+from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
+from sqlmesh.core.engine_adapter.mixins import (
+    LogicalReplaceQueryMixin,
+    PandasNativeFetchDFSupportMixin,
+)
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
 
-class MsSqlEngineAdapter(EngineAdapterWithIndexSupport):
+
+class MSSQLEngineAdapter(
+    EngineAdapterWithIndexSupport,
+    LogicalReplaceQueryMixin,
+    PandasNativeFetchDFSupportMixin,
+):
     """Implementation of EngineAdapterWithIndexSupport for MsSql compatibility.
 
     Args:
@@ -22,7 +34,33 @@ class MsSqlEngineAdapter(EngineAdapterWithIndexSupport):
     """
 
     DIALECT: str = "tsql"
-    SUPPORTS_MATERIALIZED_VIEWS: bool = False
+
+    def table_exists(self, table_name: TableName) -> bool:
+        """
+        Similar to Postgres, MsSql doesn't support describe so I'm using what
+        is used there and what the redshift cursor does to check if a table
+        exists. We don't use this directly in order for this to work as a base
+        class for other postgres.
+
+        Reference: https://github.com/aws/amazon-redshift-python-driver/blob/master/redshift_connector/cursor.py#L528-L553
+        """
+        table = exp.to_table(table_name)
+
+        catalog_name = table.args.get("catalog") or "master"
+        sql = (
+            exp.select("1")
+            .from_(f"{catalog_name}.information_schema.tables")
+            .where(f"table_name = '{table.alias_or_name}'")
+        )
+        database_name = table.args.get("db")
+        if database_name:
+            sql = sql.where(f"table_schema = '{database_name}'")
+
+        self.execute(sql)
+
+        result = self.cursor.fetchone()
+
+        return result[0] == 1 if result is not None else False
 
     def _get_data_objects(
         self,

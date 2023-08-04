@@ -669,14 +669,14 @@ class MySQLConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class MsSqlConnectionConfig(_ConnectionConfig):
+class MSSQLConnectionConfig(_ConnectionConfig):
     host: str
     user: str
     password: str
     database: t.Optional[str] = ""
     timeout: t.Optional[int] = 0
     login_timeout: t.Optional[int] = 60
-    charset: t.Optional[str] = "utf-8"
+    charset: t.Optional[str] = "UTF-8"
     as_dict: t.Optional[bool] = False
     appname: t.Optional[str] = None
     port: t.Optional[int] = 1433
@@ -687,8 +687,6 @@ class MsSqlConnectionConfig(_ConnectionConfig):
     concurrent_tasks: int = 4
 
     type_: Literal["mssql"] = Field(alias="type", default="mssql")
-
-    _cursor_kwargs = {"buffered": True}
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -710,7 +708,7 @@ class MsSqlConnectionConfig(_ConnectionConfig):
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
-        return engine_adapter.MsSqlEngineAdapter
+        return engine_adapter.MSSQLEngineAdapter
 
     @property
     def _connection_factory(self) -> t.Callable:
@@ -773,7 +771,7 @@ ConnectionConfig = Annotated[
         GCPPostgresConnectionConfig,
         DatabricksConnectionConfig,
         DuckDBConnectionConfig,
-        MsSqlConnectionConfig,
+        MSSQLConnectionConfig,
         MySQLConnectionConfig,
         PostgresConnectionConfig,
         RedshiftConnectionConfig,

@@ -9,14 +9,30 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
-from sqlmesh.core.engine_adapter.mssql import MsSqlEngineAdapter
+from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
+
+
+def test_table_exists(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    adapter.cursor.fetchone.return_value = (1,)
+
+    resp = adapter.table_exists("db.table")
+    adapter.cursor.execute.assert_called_once_with(
+        """SELECT 1 """
+        """FROM "master"."information_schema"."tables" """
+        """WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
+    )
+    assert resp
+    adapter.cursor.fetchone.return_value = None
+    resp = adapter.table_exists("db.table")
+    assert not resp
 
 
 def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     make_mocked_engine_adapter: t.Callable,
 ):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter._insert_overwrite_by_condition(
@@ -34,7 +50,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
 def test_insert_overwrite_by_time_partition_replace_where_pandas(
     make_mocked_engine_adapter: t.Callable,
 ):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
@@ -51,7 +67,7 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
 
 
 def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.insert_append(
@@ -76,7 +92,7 @@ def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):
 
 
 def test_create_table(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -90,7 +106,7 @@ def test_create_table(make_mocked_engine_adapter: t.Callable):
 
 
 def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -439,7 +455,7 @@ def test_alter_table(
     expected_final_structure: t.Dict[str, str],
     expected: t.List[str],
 ):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     adapter.SCHEMA_DIFFER = SchemaDiffer(**schema_differ_config)
     original_from_structs = adapter.SCHEMA_DIFFER._from_structs
@@ -478,7 +494,7 @@ def test_alter_table(
 
 
 def test_merge_pandas(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.merge(
@@ -515,8 +531,26 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable):
     )
 
 
+def test_replace_query(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    adapter.cursor.fetchone.return_value = (1,)
+    adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
+
+    adapter.cursor.execute.assert_has_calls(
+        [
+            call(
+                """SELECT 1 """
+                """FROM "master"."information_schema"."tables" """
+                """WHERE "table_name" = 'test_table'"""
+            ),
+            call('TRUNCATE "test_table"'),
+            call('INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'),
+        ]
+    )
+
+
 def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
@@ -533,7 +567,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
 
 
 def test_create_table_primary_key(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(MsSqlEngineAdapter)
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
     columns_to_types = {
         "cola": exp.DataType.build("INT"),
@@ -543,4 +577,14 @@ def test_create_table_primary_key(make_mocked_engine_adapter: t.Callable):
 
     adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" TEXT, PRIMARY KEY ("cola", "colb"))'
+    )
+
+
+def test_create_index(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    adapter.SUPPORTS_INDEXES = True
+
+    adapter.create_index("test_table", "test_index", ("cola", "colb"))
+    adapter.cursor.execute.assert_called_once_with(
+        'CREATE INDEX IF NOT EXISTS "test_index" ON "test_table" ("cola", "colb")'
     )
