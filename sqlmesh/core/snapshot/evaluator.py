@@ -885,6 +885,7 @@ class ViewStrategy(PromotableStrategy):
             isinstance(query_or_df, exp.Expression)
             and model.render_query(snapshots=snapshots, is_dev=is_dev, engine_adapter=self.adapter)
             == query_or_df
+            and self.adapter.table_exists(name)
         ):
             logger.info("Skipping creation of the view '%s'", name)
             return
