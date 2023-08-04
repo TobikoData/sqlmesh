@@ -699,10 +699,13 @@ def pandas_to_sql(
     )
 
 
-def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) -> str:
-    return exp.table_name(
-        normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect),
-    )
+def normalize_model_name(table: str | exp.Table | exp.Column, dialect: DialectType = None) -> str:
+    if isinstance(table, exp.Column):
+        table = exp.table_(*reversed(table.parts[:-1]))  # type: ignore
+    else:
+        table = exp.to_table(table, dialect=dialect)
+
+    return exp.table_name(normalize_identifiers(table, dialect=dialect))
 
 
 def extract_columns_to_types(query: exp.Subqueryable) -> t.Dict[str, exp.DataType]:

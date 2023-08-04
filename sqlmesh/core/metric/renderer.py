@@ -7,11 +7,22 @@ from sqlglot.helper import ensure_collection
 
 from sqlmesh.core.metric.definition import Metric, remove_namespace
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.reference import Graph
+
 
 class Renderer:
-    def __init__(self, metrics: t.Collection[Metric], sources: t.Dict[str, exp.Expression]):
+    def __init__(
+        self,
+        metrics: t.Collection[Metric],
+        graph: Graph,
+        dialect: str = "",
+        sources: t.Optional[t.Dict[str, exp.Expression]] = None,
+    ):
         self.metrics = metrics
-        self.sources = sources
+        self.graph = graph
+        self.dialect = dialect
+        self.sources = sources or {}
 
     def agg(
         self,
@@ -19,7 +30,6 @@ class Renderer:
         where: t.Optional[exp.ExpOrStr | t.Dict[str, exp.ExpOrStr]] = None,
         having: t.Optional[exp.ExpOrStr] = None,
         join_type: str = "FULL",
-        dialect: str = "",
     ) -> exp.Expression:
         """Returns an aggregate expression to compute metrics.
 
@@ -28,48 +38,52 @@ class Renderer:
             where: An expression to filter sources by or a dictionary of source -> filter.
             having: An expression to filter the aggregation by.
             join_type: The method of joining derived metrics, by default this is a full join.
-            dialect: The sql dialect that where and having are if they are strings.
 
         Returns:
             A SQLGlot expression containing the aggregate query.
         """
-        group_by = ensure_collection(group_by)
-        sources: t.Dict[str, t.Set[exp.AggFunc]] = {name: set() for name in self.sources}
-        formulas = []
         where = where or {}
-
-        if not isinstance(where, dict):
-            where = exp.maybe_parse(where, dialect=dialect)
-            where = {name: where for name in sources}
+        group_by = ensure_collection(group_by)
+        formulas = []
+        # ensure that relative order of sources stays the same if passed in
+        sources: t.Dict[str, t.Tuple[t.Set[exp.AggFunc], t.Set[str]]] = {
+            name: (set(), set()) for name in self.sources
+        }
 
         for metric in self.metrics:
             formulas.append(metric.formula)
             for agg, tables in metric.aggs.items():
-                # TODO: sort these tables depending on relationships
-                for table_name in tables:
-                    sources[table_name].add(agg)
+                aggs, joins = sources.setdefault(tables[0], (set(), set()))
+                aggs.add(agg)
+                joins.update(tables[1:])
+
+        if not isinstance(where, dict):
+            where = exp.maybe_parse(where, dialect=self.dialect)
+            where = {name: where for name in sources}
 
         queries = {}
 
-        for name, aggs in sources.items():
-            source = self.sources[name].copy()
+        for name, (aggs, joins) in sources.items():
+            source = self.sources[name].copy() if name in self.sources else exp.to_table(name)
             table_name = remove_namespace(name)
 
-            if isinstance(source, exp.Subqueryable):
-                source = source.subquery(table_name, copy=False)
-            else:
-                source = exp.alias_(source, table_name, table=True, copy=False)
-
-            queries[table_name] = (
-                exp.select(
-                    *group_by,
-                    *sorted(aggs, key=str),
-                    copy=False,
+            if not isinstance(source, exp.Subqueryable):
+                source = exp.Select().from_(
+                    exp.alias_(source, table_name, table=True, copy=False), copy=False
                 )
-                .from_(source, copy=False)
-                .where(where.get(name))
-                .group_by(*group_by, copy=False)
-            )
+
+            source.where(where.get(name), copy=False)
+
+            self._add_joins(source, name, joins)
+
+            if source.selects:
+                source = exp.Select().from_(source.subquery(table_name, copy=False), copy=False)
+
+            queries[table_name] = source.select(
+                *group_by,
+                *sorted(aggs, key=str),
+                copy=False,
+            ).group_by(*group_by, copy=False)
 
         (name, head), *tail = queries.items()
 
@@ -98,3 +112,26 @@ class Renderer:
             )
 
         return query.where(having, copy=False)
+
+    def _add_joins(self, source: exp.Select, name: str, joins: t.Collection[str]) -> None:
+        for join in joins:
+            path = self.graph.find_path(name, join)
+            for i in range(len(path) - 1):
+                a_model, a_ref = path[i]
+                b_model, b_ref = path[i + 1]
+                a_model_alias = remove_namespace(a_model)
+                b_model_alias = remove_namespace(b_model)
+
+                a = a_ref.expression.copy()
+                a.set("table", exp.to_identifier(a_model_alias))
+                b = b_ref.expression.copy()
+                b.set("table", exp.to_identifier(b_model_alias))
+
+                source.join(
+                    b_model,
+                    on=a.eq(b),
+                    join_type="LEFT",
+                    join_alias=b_model_alias,
+                    dialect=self.dialect,
+                    copy=False,
+                )

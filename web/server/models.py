@@ -177,6 +177,12 @@ class Column(BaseModel):
     description: t.Optional[str]
 
 
+class Reference(BaseModel):
+    name: str
+    expression: str
+    unique: bool
+
+
 class ModelDetails(BaseModel):
     owner: t.Optional[str] = None
     kind: t.Optional[str] = None
@@ -188,7 +194,7 @@ class ModelDetails(BaseModel):
     storage_format: t.Optional[str] = None
     time_column: t.Optional[str] = None
     tags: t.Optional[str] = None
-    grain: t.Optional[str] = None
+    references: t.List[Reference] = []
     partitioned_by: t.Optional[str] = None
     clustered_by: t.Optional[str] = None
     lookback: t.Optional[int] = None

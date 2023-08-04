@@ -16,7 +16,7 @@ from astor import to_source
 from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
-from sqlglot.helper import ensure_list
+from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
@@ -718,7 +718,7 @@ class _Model(ModelMeta, frozen=True):
             str(self.batch_size) if self.batch_size is not None else None,
             json.dumps(self.mapping_schema, sort_keys=True),
             *sorted(self.tags),
-            *sorted(self.grain),
+            *sorted(ref.json(sort_keys=True) for ref in self.all_references),
             str(self.forward_only),
             str(self.disable_restatement),
             str(self.interval_unit_) if self.interval_unit_ is not None else None,
@@ -1889,6 +1889,14 @@ def _single_expr_or_tuple(values: t.Sequence[exp.Expression]) -> exp.Expression 
     return values[0] if len(values) == 1 else exp.Tuple(expressions=values)
 
 
+def _refs_to_sql(values: t.Any) -> exp.Expression:
+    from sqlmesh.core.reference import Reference
+
+    if isinstance(values, Reference):
+        return values.expression
+    return exp.Tuple(expressions=[_refs_to_sql(ref) for ref in ensure_collection(values)])
+
+
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),
     "start": lambda value: exp.Literal.string(value),
@@ -1904,7 +1912,9 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
     "tags": _single_value_or_tuple,
-    "grain": _single_value_or_tuple,
+    "grain": _refs_to_sql,
+    "grains": _refs_to_sql,
+    "references": _refs_to_sql,
     "hash_raw_query": exp.convert,
     "table_properties_": lambda value: exp.Tuple(
         expressions=[exp.Literal.string(k).eq(v) for k, v in (value or {}).items()]

@@ -65,7 +65,11 @@ def remove_namespace(expression: str | exp.Column, dialect: t.Optional[str] = No
 
     if not isinstance(expression, str):
         assert dialect is not None
-        expression = first(_find_tables(expression, dialect=dialect))
+        expression = first(
+            d.normalize_model_name(column, dialect=dialect)
+            for column in expression.find_all(exp.Column)
+            if column.table
+        )
     return expression.replace(".", "__")
 
 
@@ -147,7 +151,7 @@ class Metric(MetricMeta, frozen=True):
     expanded: exp.Expression
 
     @property
-    def aggs(self) -> t.Dict[exp.AggFunc, t.Set[str]]:
+    def aggs(self) -> t.Dict[exp.AggFunc, t.List[str]]:
         """Returns a dictionary of aggregation to referenced tables.
 
         This method removes catalog and schema information from columns.
@@ -157,7 +161,7 @@ class Metric(MetricMeta, frozen=True):
                 lambda node: exp.column(node.this, table=remove_namespace(node, self.dialect))
                 if isinstance(node, exp.Column) and node.table
                 else node
-            ): _find_tables(agg, self.dialect)
+            ): _get_ordered_tables(agg, self.dialect)
             for agg in self.expanded.find_all(exp.AggFunc)
         }
 
@@ -181,10 +185,40 @@ def _raise_metric_config_error(msg: str, path: Path) -> None:
     raise ConfigError(f"{msg}. '{path}'")
 
 
-def _find_tables(expression: exp.Expression, dialect: str) -> t.Set[str]:
-    """Finds all the table references in a metric definition."""
-    return {
-        d.normalize_model_name(exp.table_(*reversed(column.parts[:-1])), dialect=dialect)  # type: ignore
-        for column in expression.find_all(exp.Column)
-        if column.table
-    }
+def _get_ordered_tables(expression: exp.Expression, dialect: str) -> t.List[str]:
+    """Finds all the table references in a metric definition.
+
+    Additionally ensure than the first table returned is the 'measure' or numeric value being aggregated.
+    """
+
+    tables = {}
+    measure_table = None
+
+    def is_measure(node: exp.Expression) -> bool:
+        parent = node.parent
+
+        if isinstance(parent, exp.AggFunc) and node.arg_key == "this":
+            return True
+        if isinstance(parent, (exp.If, exp.Case)) and node.arg_key != "this":
+            return is_measure(parent)
+        if isinstance(parent, (exp.Binary, exp.Paren)):
+            return is_measure(parent)
+        return False
+
+    for node, _, key in expression.walk():
+        if isinstance(node, exp.Column) and node.table:
+            table = d.normalize_model_name(node, dialect=dialect)
+            tables[table] = True
+
+            if not measure_table and is_measure(node):
+                measure_table = table
+
+    ordered = []
+
+    if measure_table:
+        tables.pop(measure_table)
+        ordered.append(measure_table)
+
+    ordered.extend(tables)
+
+    return ordered

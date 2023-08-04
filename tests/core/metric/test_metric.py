@@ -2,6 +2,7 @@ import pytest
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.metric import expand_metrics, load_metric_ddl
+from sqlmesh.core.metric.definition import _get_ordered_tables
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -117,8 +118,8 @@ def test_expand_metrics():
     assert metric_d.formula.sql() == "a / b + 1 AS d"
 
     assert metric_d.aggs == {
-        d.parse_one("SUM(model.x) AS a"): {"model"},
-        d.parse_one("COUNT(DISTINCT model.y) AS b"): {"model"},
+        d.parse_one("SUM(model.x) AS a"): ["model"],
+        d.parse_one("COUNT(DISTINCT model.y) AS b"): ["model"],
     }
 
     metas = {}
@@ -135,3 +136,18 @@ def test_expand_metrics():
     assert metric_c.expression.sql() == "a / b"
     assert metric_c.expanded.sql() == "SUM(model.x) AS a / COUNT(DISTINCT model.y) AS b"
     assert metric_c.formula.sql() == "a / b AS c"
+
+
+def test_get_ordered_tables():
+    assert _get_ordered_tables(d.parse_one("SUM(a.x)"), "") == ["a"]
+    assert _get_ordered_tables(d.parse_one("SUM(a.x + a.y)"), "") == ["a"]
+    assert _get_ordered_tables(d.parse_one("SUM(a.x + b.y)"), "") == ["a", "b"]
+    assert _get_ordered_tables(d.parse_one("c.z + SUM(a.x)"), "") == ["a", "c"]
+    assert _get_ordered_tables(d.parse_one("SUM(IF(c.z = 'dim', a.x, 0)"), "") == ["a", "c"]
+    assert _get_ordered_tables(
+        d.parse_one("SUM(IF(c.z = 'dim' AND b.y > 0, (a.x + a.x) + 3, 0)"), ""
+    ) == ["a", "c", "b"]
+    assert _get_ordered_tables(d.parse_one("SUM(CASE b.y WHEN 1 THEN a.x ELSE 0 END)"), "") == [
+        "a",
+        "b",
+    ]

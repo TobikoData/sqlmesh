@@ -904,7 +904,7 @@ class Context(BaseContext):
             target_alias = target_env.name
 
             if not on and model.grain:
-                on = model.grain
+                on = model.grain.columns
 
         if not on:
             raise SQLMeshError("Missing join condition 'on'")

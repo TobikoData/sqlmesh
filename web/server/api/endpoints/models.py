@@ -56,7 +56,6 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             else None
         )
         tags = ", ".join(model.tags) if model.tags else None
-        grain = ", ".join(model.grain) if model.grain else None
         partitioned_by = (
             ", ".join(expr.sql(pretty=True, dialect=model.dialect) for expr in model.partitioned_by)
             if model.partitioned_by
@@ -82,7 +81,10 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             storage_format=model.storage_format,
             time_column=time_column,
             tags=tags,
-            grain=grain,
+            references=[
+                models.Reference(name=ref.name, expression=ref.expression.sql(), unique=ref.unique)
+                for ref in model.all_references
+            ],
             partitioned_by=partitioned_by,
             clustered_by=clustered_by,
             lookback=lookback,

@@ -3,8 +3,9 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import Field, root_validator, validator
+from pydantic.fields import ModelField
 from sqlglot import exp
-from sqlglot.helper import ensure_list
+from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
@@ -16,6 +17,7 @@ from sqlmesh.core.model.kind import (
     _Incremental,
 )
 from sqlmesh.core.node import Node, str_or_exp_to_str
+from sqlmesh.core.reference import Reference
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import ConfigError
 
@@ -37,7 +39,9 @@ class ModelMeta(Node):
     column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
     tags: t.List[str] = []
-    grain: t.List[str] = []
+    grain: t.Optional[Reference] = None
+    grains: t.List[Reference] = []
+    references: t.List[Reference] = []
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
     table_properties_: t.Optional[t.Dict[str, exp.Expression]] = Field(
@@ -94,7 +98,7 @@ class ModelMeta(Node):
     def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
         return cls._validate_value_or_tuple(v, values)
 
-    @validator("clustered_by", "grain", pre=True)
+    @validator("clustered_by", pre=True)
     def _normalized_value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
         return cls._validate_value_or_tuple(v, values, normalize=True)
 
@@ -238,6 +242,29 @@ class ModelMeta(Node):
 
         return v
 
+    @validator("grain", pre=True)
+    def _grain_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[Reference]:
+        if isinstance(v, (exp.Expression, str)):
+            return Reference(expression=v, unique=True, dialect=values.get("dialect"))
+        return Reference(**v)
+
+    @validator("grains", "references", pre=True)
+    def _refs_validator(
+        cls, vs: t.Any, values: t.Dict[str, t.Any], field: ModelField
+    ) -> t.List[Reference]:
+        if isinstance(vs, exp.Paren):
+            vs = vs.unnest()
+
+        if isinstance(vs, (exp.Tuple, exp.Array)):
+            vs = vs.expressions
+
+        return [
+            Reference(expression=v, unique=field.name == "grains", dialect=values.get("dialect"))
+            if isinstance(v, (exp.Expression, str))
+            else Reference(**v)
+            for v in ensure_collection(vs)
+        ]
+
     @root_validator
     def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values = cls._kind_validator(values)
@@ -319,6 +346,11 @@ class ModelMeta(Node):
     def table_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of table properties."""
         return self.table_properties_ or {}
+
+    @property
+    def all_references(self) -> t.List[Reference]:
+        """All references including grains."""
+        return ([self.grain] if self.grain else []) + self.grains + self.references
 
     @property
     def _partition_by_columns(self) -> t.List[exp.Column]:

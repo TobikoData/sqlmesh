@@ -19,6 +19,10 @@ WAITERS = list(range(0, 10))
     kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
     start="3 months ago",
     cron="@daily",
+    references=[
+        "customer_id",
+        "waiter_id",
+    ],
     columns={
         "id": "int",
         "customer_id": "int",
