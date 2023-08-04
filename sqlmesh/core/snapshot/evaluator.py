@@ -700,7 +700,7 @@ class PromotableStrategy(EvaluationStrategy):
     ) -> None:
         schema = view_name.schema_for_environment(environment_naming_info=environment_naming_info)
         if schema is not None:
-            self.adapter.create_schema(schema)
+            self.adapter.create_schema(schema, catalog_name=view_name.catalog)
 
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
@@ -736,7 +736,8 @@ class MaterializableStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
-        self.adapter.create_schema(exp.to_table(name).db)
+        table = exp.to_table(name)
+        self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
         logger.info("Creating table '%s'", name)
         if model.annotated:
@@ -913,7 +914,8 @@ class ViewStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
-        self.adapter.create_schema(exp.to_table(name).db)
+        table = exp.to_table(name)
+        self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
         logger.info("Creating view '%s'", name)
         self.adapter.create_view(
