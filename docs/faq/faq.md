@@ -103,8 +103,9 @@
 
     A SQLMesh [`audit`](../concepts/audits.md) validates that transformed *data* meet some criteria. For example, an `audit` might verify that a column contains no `NULL` values or has no duplicated values. SQLMesh automatically runs audits when a `sqlmesh plan` is executed and the plan is applied or when `sqlmesh run` is executed.
 
+<a id="cron-question"></a> 
 ??? question "What is the model `cron` parameter?"
-    SQLMesh does not fully refresh models when a project is run. Instead, you specify how frequently each model should run with its `cron` parameter (defaults to daily).
+    SQLMesh does not fully refresh models when a project is run. Instead, you specify how frequently each model should run with its [`cron` parameter](../concepts/models/overview.md#cron) (defaults to daily).
 
     When you execute `sqlmesh run`, SQLMesh compares each model's `cron` value to its record of when the model was last run. If enough time has elapsed it will run the model, otherwise it does nothing.
 
@@ -115,7 +116,7 @@
 
     SQLMesh’s `plan` command is the primary tool for understanding the effects of changes you make to your project. If your project files have changed or are different from the state of an environment, you execute `sqlmesh plan [environment name]` to synchronize the environment's state with your project files. `sqlmesh plan` will generate a summary of the actions needed to implement the changes, automatically run unit tests, and prompt you to `apply` the plan and implement the changes.
 
-    If your project files have not changed, you execute `sqlmesh run` to run your project's models and audits. You can execute `sqlmesh run` yourself or with the native [Airflow integration](https://sqlmesh.readthedocs.io/en/latest/integrations/airflow/). If running it yourself, a sensible approach is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your most frequent model’s `cron` is hour, your `cron` tool should execute `sqlmesh run` at least every hour.
+    If your project files have not changed, you execute `sqlmesh run` to run your project's models and audits. You can execute `sqlmesh run` yourself or with the native [Airflow integration](../integrations/airflow.md). If running it yourself, a sensible approach is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your most frequent model’s `cron` is hour, your `cron` tool should execute `sqlmesh run` at least every hour.
 
 ??? question "What are start date and end date for?"
     SQLMesh uses the ["intervals" approach](https://tobikodata.com/data_load_patterns_101.html) to determine the date ranges that should be included in an incremental by time model query. It divides time into disjoint intervals and tracks which intervals have ever been processed.
@@ -130,7 +131,7 @@
     Specify the [`plan` command's](../reference/cli.md#plan) `--restate-model` option and the model name(s) you want to reprocess. Applying the plan will reprocess those models and all models downstream from them. You can use the `--start` and `--end` options to limit the reprocessing to a specific date range.
 
 ??? question "How do I reuse an existing table instead of creating a new one?"
-    Sometimes a table is too large to completely rebuild for a breaking change, so you need to reuse the existing table. This is done with [forward-only plans](../concepts/plans.md#forward-only-plans). Create one by adding the `--forward-only` option to the [`plan` command]((../reference/cli.md#plan)): `sqlmesh plan [environment name] --forward-only`.
+    Sometimes a table is too large to completely rebuild for a breaking change, so you need to reuse the existing table. This is done with [forward-only plans](../concepts/plans.md#forward-only-plans). Create one by adding the `--forward-only` option to the [`plan` command](../reference/cli.md#plan): `sqlmesh plan [environment name] --forward-only`.
 
     When a forward-only plan is applied to the `prod` environment, none of the plan's changed models will have new physical tables created for them. Instead, physical tables from previous model versions are reused. All changes made as part of a forward-only plan automatically get a forward-only category assigned to them - they can't be mixed together with regular breaking/non-breaking changes.
 
@@ -145,6 +146,18 @@
     SQLMesh requires storing state information about projects and when their transformations were run. By default, it stores this information in the same database where the models run. 
     
     Unlike data transformations, storing state information requires database transactions. Some databases, like BigQuery, aren’t optimized for executing transactions, so storing state information in them can slow down your project. If this occurs, you can store state information in a different database, such as PostgreSQL, that executes transactions more efficiently.
+
+## Scheduling
+
+??? question "How do I run SQLMesh models on a schedule?"
+    You can run SQLMesh models using the [built-in scheduler](../guides/scheduling.md#built-in-scheduler) or with the native [Airflow integration](../integrations/airflow.md). 
+    
+    Both approaches use each model's `cron` parameter to determine when the model should run - see the [question about `cron` above](#cron-question) for more information.
+
+    The built-in scheduler works by executing the command `sqlmesh run`. A sensible approach to running on your project on a schedule is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your most frequent model’s `cron` is hour, the `cron` tool should execute `sqlmesh run` at least every hour.
+
+??? question "How do I use SQLMesh with Airflow?"
+    SQLMesh has first-class support for Airflow - learn more [here](../integrations/airflow.md).
 
 ## Warnings and Errors
 
