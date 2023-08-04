@@ -65,7 +65,7 @@ class ModelTest(unittest.TestCase):
 
     def setUp(self) -> None:
         """Load all input tables"""
-        for table, rows in self.body.get("inputs", {}).items():
+        for table_name, rows in self.body.get("inputs", {}).items():
             df = pd.DataFrame.from_records(rows)  # noqa
             columns_to_types: dict[str, exp.DataType] = {}
 
@@ -73,9 +73,10 @@ class ModelTest(unittest.TestCase):
                 # convert ruamel into python
                 v = v.real if hasattr(v, "real") else v
                 columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
-
-            self.engine_adapter.create_schema(table)
-            self.engine_adapter.create_view(_test_fixture_name(table), df, columns_to_types)
+            table = exp.to_table(table_name)
+            if table.db:
+                self.engine_adapter.create_schema(table.db, catalog_name=table.catalog)
+            self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
 
     def tearDown(self) -> None:
         """Drop all input tables"""
