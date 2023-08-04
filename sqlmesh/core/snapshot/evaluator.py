@@ -329,7 +329,7 @@ class SnapshotEvaluator:
         for audit_name, audit_args in snapshot.model.audits:
             audit = audits_by_name[audit_name]
             if audit.skip:
-                results.append(AuditResult(audit=audit, skipped=True))
+                results.append(AuditResult(audit=audit, model=snapshot.model, skipped=True))
                 continue
             query = audit.render_query(
                 snapshot,
@@ -346,12 +346,19 @@ class SnapshotEvaluator:
                 select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
             )
             if count and raise_exception:
-                message = f"Audit '{audit_name}' for model '{snapshot.model.name}' failed.\nGot {count} results, expected 0.\n{query}"
+                audit_error = AuditError(
+                    audit_name=audit_name,
+                    model_name=snapshot.model.name,
+                    count=count,
+                    query=query,
+                )
                 if audit.blocking:
-                    raise AuditError(message)
+                    raise audit_error
                 else:
-                    logger.warning(f"{message}\nAudit is warn only so proceeding with execution.")
-            results.append(AuditResult(audit=audit, count=count, query=query))
+                    logger.warning(
+                        f"{audit_error}\nAudit is warn only so proceeding with execution."
+                    )
+            results.append(AuditResult(audit=audit, model=snapshot.model, count=count, query=query))
         return results
 
     @contextmanager
@@ -693,7 +700,7 @@ class PromotableStrategy(EvaluationStrategy):
     ) -> None:
         schema = view_name.schema_for_environment(environment_naming_info=environment_naming_info)
         if schema is not None:
-            self.adapter.create_schema(schema)
+            self.adapter.create_schema(schema, catalog_name=view_name.catalog)
 
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
@@ -729,7 +736,8 @@ class MaterializableStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
-        self.adapter.create_schema(exp.to_table(name).db)
+        table = exp.to_table(name)
+        self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
         logger.info("Creating table '%s'", name)
         if model.annotated:
@@ -906,7 +914,8 @@ class ViewStrategy(PromotableStrategy):
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
-        self.adapter.create_schema(exp.to_table(name).db)
+        table = exp.to_table(name)
+        self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
         logger.info("Creating view '%s'", name)
         self.adapter.create_view(

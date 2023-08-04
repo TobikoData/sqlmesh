@@ -501,6 +501,11 @@ def create_external_models(obj: Context) -> None:
     default=20,
     help="The limit of the sample dataframe.",
 )
+@click.option(
+    "--show-sample",
+    is_flag=True,
+    help="Show a sample of the rows that differ. With many columns, the output can be very wide.",
+)
 @click.pass_obj
 @error_handler
 def table_diff(

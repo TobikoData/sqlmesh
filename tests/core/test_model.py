@@ -34,6 +34,7 @@ from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable
 
 
@@ -1609,16 +1610,47 @@ def test_model_normalization():
             columns ( a STRUCT <`a` INT64> ),
             partitioned_by foo(`ds`),
             dialect bigquery,
+            grain [id, ds]
         );
         SELECT * FROM project-1.db.raw
         """
     )
 
     model = SqlModel.parse_raw(load_sql_based_model(expr, depends_on={"project-2.db.raw"}).json())
+    assert model.name == '"project-1".db.tbl'
     assert model.columns_to_types["a"].sql(dialect="bigquery") == "STRUCT<`a` INT64>"
     assert model.partitioned_by[0].sql(dialect="bigquery") == "foo(`ds`)"
-    assert model.name == '"project-1".db.tbl'
+    assert model.grain == ["id", "ds"]
     assert model.depends_on == {'"project-1".db.raw', '"project-2".db.raw'}
+
+    expr = d.parse(
+        """
+        MODEL (
+            name foo,
+            kind INCREMENTAL_BY_TIME_RANGE (
+              time_column a
+            ),
+            columns (a int),
+            partitioned_by foo("ds"),
+            dialect snowflake,
+            grain [id, ds],
+            tags (pii, fact),
+            clustered_by a
+        );
+        SELECT * FROM bla
+        """
+    )
+
+    model = SqlModel.parse_raw(load_sql_based_model(expr).json())
+    assert model.name == "FOO"
+    assert model.time_column.column == "A"
+    assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
+    assert model.partitioned_by[0].sql(dialect="snowflake") == "A"
+    assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
+    assert model.grain == ["ID", "DS"]
+    assert model.tags == ["pii", "fact"]
+    assert model.clustered_by == ["A"]
+    assert model.depends_on == {"BLA"}
 
 
 def test_incremental_unmanaged_validation():
@@ -1686,29 +1718,31 @@ def test_custom_interval_unit():
 
 def test_model_table_properties():
     # Validate a tuple.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
-            MODEL (
-                name test_schema.test_model,
-                table_properties (
-                    key_a = 'value_a',
-                    'key_b' = 1,
-                    key_c = true,
-                    "key_d" = 2.0,
-                )
-            );
-            SELECT a FROM tbl;
+    model = load_sql_based_model(
+        d.parse(
             """
+        MODEL (
+            name test_schema.test_model,
+            table_properties (
+                key_a = 'value_a',
+                'key_b' = 1,
+                key_c = true,
+                "key_d" = 2.0,
             )
-        ).table_properties
-        == {
-            "key_a": exp.convert("value_a"),
-            "key_b": exp.convert(1),
-            "key_c": exp.convert(True),
-            "key_d": exp.convert(2.0),
-        }
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+    assert model.table_properties == {
+        "key_a": exp.convert("value_a"),
+        "key_b": exp.convert(1),
+        "key_c": exp.convert(True),
+        "key_d": exp.convert(2.0),
+    }
+    assert (
+        "table_properties ('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"
+        in model.render_definition()[0].sql()
     )
 
     # Validate a tuple with one item.
@@ -1813,3 +1847,37 @@ def test_model_table_properties():
                 """
             )
         )
+
+
+def test_model_jinja_macro_rendering():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            dialect spark,
+            owner owner_name,
+        );
+
+        JINJA_STATEMENT_BEGIN;
+        {{ test_package.macro_a() }}
+        {{ macro_b() }}
+        JINJA_END;
+
+        SELECT 1 AS x;
+    """
+    )
+
+    jinja_macros = JinjaMacroRegistry(
+        packages={
+            "test_package": {"macro_a": MacroInfo(definition="macro_a_body", depends_on=[])},
+        },
+        root_macros={"macro_b": MacroInfo(definition="macro_b_body", depends_on=[])},
+        global_objs={"test_int": 1, "test_str": "value"},
+    )
+
+    model = load_sql_based_model(expressions, jinja_macros=jinja_macros)
+    definition = model.render_definition()
+
+    assert definition[1].sql() == "test_int = 1\ntest_str = 'value'"
+    assert definition[2].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_b_body\nJINJA_END;"
+    assert definition[3].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_a_body\nJINJA_END;"

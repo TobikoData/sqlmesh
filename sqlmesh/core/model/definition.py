@@ -83,7 +83,7 @@ class _Model(ModelMeta, frozen=True):
 
         SELECT
           1 AS column_a # my first column,
-          @var AS my_column #my second column,
+          @var AS my_column # my second column,
         ;
 
     Args:
@@ -192,6 +192,7 @@ class _Model(ModelMeta, frozen=True):
         model = d.Model(expressions=expressions)
         model.comments = [comment] if comment else None
 
+        jinja_expressions = []
         python_expressions = []
         if include_python:
             python_env = d.PythonCode(
@@ -203,9 +204,12 @@ class _Model(ModelMeta, frozen=True):
             if python_env.expressions:
                 python_expressions.append(python_env)
 
+            jinja_expressions = self._jinja_macros_to_exprs()
+
         return [
             model,
             *python_expressions,
+            *jinja_expressions,
         ]
 
     def render_query(
@@ -617,8 +621,7 @@ class _Model(ModelMeta, frozen=True):
 
                 columns_to_types = self.columns_to_types
                 if columns_to_types is not None:
-                    column_names = {c.lower() for c in columns_to_types}
-                    missing_keys = unique_keys - column_names
+                    missing_keys = unique_keys - set(columns_to_types)
                     if missing_keys:
                         missing_keys_str = ", ".join(f"'{k}'" for k in sorted(missing_keys))
                         raise_config_error(
@@ -756,6 +759,28 @@ class _Model(ModelMeta, frozen=True):
                         metadata.extend(e.comments)
 
         return hash_data(metadata)
+
+    def _jinja_macros_to_exprs(self) -> t.List[exp.Expression]:
+        output: t.List[exp.Expression] = []
+
+        if self.jinja_macros.global_objs:
+            output.append(
+                d.PythonCode(
+                    expressions=[
+                        f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
+                        for k, v in sorted(self.jinja_macros.global_objs.items())
+                    ]
+                )
+            )
+
+        for macro_name, macro_info in sorted(self.jinja_macros.root_macros.items()):
+            output.append(d.jinja_statement(macro_info.definition))
+
+        for _, package in sorted(self.jinja_macros.packages.items()):
+            for macro_name, macro_info in sorted(package.items()):
+                output.append(d.jinja_statement(macro_info.definition))
+
+        return output
 
 
 class _SqlBasedModel(_Model):
@@ -1208,9 +1233,10 @@ class SeedModel(_SqlBasedModel):
         """
         if not self.is_hydrated:
             return self
+
         return self.copy(
             update={
-                "seed": Seed(content=""),
+                "seed": Seed(content="", dialect=self.dialect),
                 "is_hydrated": False,
                 "column_hashes_": self.column_hashes,
             }
@@ -1224,8 +1250,13 @@ class SeedModel(_SqlBasedModel):
         """
         if self.is_hydrated:
             return self
+
         return self.copy(
-            update={"seed": Seed(content=content), "is_hydrated": True, "column_hashes_": None}
+            update={
+                "seed": Seed(content=content, dialect=self.dialect),
+                "is_hydrated": True,
+                "column_hashes_": None,
+            },
         )
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
@@ -1552,7 +1583,9 @@ def create_seed_model(
     seed_path = Path(seed_kind.path)
     if not seed_path.is_absolute():
         seed_path = path / seed_path if path.is_dir() else path.parents[0] / seed_path
-    seed = create_seed(seed_path)
+
+    dialect = kwargs.get("dialect") or ""
+    seed = create_seed(seed_path, dialect=dialect)
 
     pre_statements = pre_statements or []
     post_statements = post_statements or []
@@ -1873,4 +1906,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "tags": _single_value_or_tuple,
     "grain": _single_value_or_tuple,
     "hash_raw_query": exp.convert,
+    "table_properties_": lambda value: exp.Tuple(
+        expressions=[exp.Literal.string(k).eq(v) for k, v in (value or {}).items()]
+    ),
 }

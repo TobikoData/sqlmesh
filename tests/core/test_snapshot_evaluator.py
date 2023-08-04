@@ -137,7 +137,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     adapter_mock.create_schema.assert_has_calls(
         [
-            call("sqlmesh__test_schema"),
+            call("sqlmesh__test_schema", catalog_name=""),
         ]
     )
 
@@ -189,7 +189,7 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
-    adapter_mock.create_schema.assert_called_once_with("test_schema__test_env")
+    adapter_mock.create_schema.assert_called_once_with("test_schema__test_env", catalog_name=None)
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         parse_one(
@@ -359,7 +359,7 @@ def test_promote_model_info(mocker: MockerFixture):
         EnvironmentNamingInfo(name="test_env"),
     )
 
-    adapter_mock.create_schema.assert_called_once_with("test_schema__test_env")
+    adapter_mock.create_schema.assert_called_once_with("test_schema__test_env", catalog_name=None)
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         parse_one("SELECT * FROM physical_schema.test_schema__test_model__1"),

@@ -46,11 +46,13 @@ def test_create_schema(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.create_schema("test_schema")
     adapter.create_schema("test_schema", ignore_if_exists=False)
+    adapter.create_schema("test_schema", catalog_name="test_catalog")
 
     adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE SCHEMA IF NOT EXISTS "test_schema"'),
             call('CREATE SCHEMA "test_schema"'),
+            call('CREATE SCHEMA IF NOT EXISTS "test_catalog"."test_schema"'),
         ]
     )
 

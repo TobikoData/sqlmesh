@@ -72,7 +72,7 @@ export interface ApiQueryMeta extends QueryMeta {
   onSuccess: () => void
 }
 
-const DELAY = 2000
+const DELAY = 15000
 
 export type UseQueryWithTimeoutOptions<
   TData = any,

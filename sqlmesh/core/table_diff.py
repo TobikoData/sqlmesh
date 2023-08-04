@@ -55,6 +55,7 @@ class RowDiff(PydanticModel, frozen=True):
     target: str
     stats: t.Dict[str, float]
     sample: pd.DataFrame
+    column_stats: pd.DataFrame
     source_alias: t.Optional[str] = None
     target_alias: t.Optional[str] = None
     model_name: t.Optional[str] = None
@@ -157,7 +158,18 @@ class TableDiff:
                     t_index.append(col)
 
             comparisons = [
-                exp.func("IF", exp.column(c, "s").eq(exp.column(c, "t")), 1, 0).as_(f"{c}_matches")
+                exp.Case()
+                .when(exp.column(c, "s").eq(exp.column(c, "t")), exp.Literal.number(1))
+                .when(
+                    exp.column(c, "s").is_(exp.Null()) & exp.column(c, "t").is_(exp.Null()),
+                    exp.Literal.number(1),
+                )
+                .when(
+                    exp.column(c, "s").is_(exp.Null()) | exp.column(c, "t").is_(exp.Null()),
+                    exp.Literal.number(0),
+                )
+                .else_(exp.Literal.number(0))
+                .as_(f"{c}_matches")
                 for c, t in self.source_schema.items()
                 if t == self.target_schema.get(c)
             ]
@@ -191,6 +203,13 @@ class TableDiff:
                     *(exp.func("SUM", c.alias).as_(c.alias) for c in comparisons),
                 ).from_(table)
 
+                column_stats_query = exp.select(
+                    *(
+                        (exp.func("SUM", c.alias) / exp.func("COUNT", c.alias)).as_(c.alias)
+                        for c in comparisons
+                    )
+                ).from_(table)
+
                 sample_query = (
                     exp.select(
                         *(c.alias for c in s_selects.values()),
@@ -210,6 +229,9 @@ class TableDiff:
                     target=self.target,
                     stats=self.adapter.fetchdf(summary_query).iloc[0].to_dict(),
                     sample=self.adapter.fetchdf(sample_query),
+                    column_stats=self.adapter.fetchdf(column_stats_query).T.rename(
+                        columns={0: "pct_match"}
+                    ),
                     source_alias=self.source_alias,
                     target_alias=self.target_alias,
                     model_name=self.model_name,

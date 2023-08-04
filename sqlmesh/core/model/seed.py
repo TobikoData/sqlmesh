@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.utils.pandas import columns_to_types_from_df
 from sqlmesh.utils.pydantic import PydanticModel
@@ -19,6 +20,7 @@ class Seed(PydanticModel):
     """
 
     content: str
+    dialect: str = ""
     _df: t.Optional[pd.DataFrame] = None
 
     @property
@@ -49,9 +51,16 @@ class Seed(PydanticModel):
                 index_col=False,
                 on_bad_lines="error",
             )
+            self._df = self._df.rename(
+                columns={
+                    col: normalize_identifiers(col, dialect=self.dialect).name
+                    for col in self._df.columns
+                },
+            )
+
         return self._df
 
 
-def create_seed(path: str | Path) -> Seed:
+def create_seed(path: str | Path, dialect: t.Optional[str] = "") -> Seed:
     with open(Path(path), "r") as fd:
-        return Seed(content=fd.read())
+        return Seed(content=fd.read(), dialect=dialect)

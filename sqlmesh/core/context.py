@@ -58,7 +58,7 @@ from sqlmesh.core.dialect import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
-from sqlmesh.core.loader import Loader, SqlMeshLoader, update_model_schemas
+from sqlmesh.core.loader import Loader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.metric import Metric
 from sqlmesh.core.model import Model
@@ -271,7 +271,7 @@ class Context(BaseContext):
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
 
-        self._loader = (loader or self.config.loader or SqlMeshLoader)()
+        self._loader = (loader or self.config.loader)()
 
         # Should we dedupe notification_targets? If so how?
         self.notification_targets = (notification_targets or []) + self.config.notification_targets
@@ -408,7 +408,7 @@ class Context(BaseContext):
         Returns:
             True if the run was successful, False otherwise.
         """
-        environment = environment or c.PROD
+        environment = environment or self.config.default_target_environment
         self.notification_target_manager.notify(
             NotificationEvent.RUN_START, environment=environment
         )
@@ -766,7 +766,7 @@ class Context(BaseContext):
         Returns:
             The populated Plan object.
         """
-        environment = environment or c.PROD
+        environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
 
         if skip_backfill and not no_gaps and environment == c.PROD:
@@ -852,11 +852,9 @@ class Context(BaseContext):
             environment: The environment to diff against.
             detailed: Show the actual SQL differences if True.
         """
-        environment = environment or c.PROD
+        environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
-        self.console.show_model_difference_summary(
-            self._context_diff(environment or c.PROD), detailed
-        )
+        self.console.show_model_difference_summary(self._context_diff(environment), detailed)
 
     def table_diff(
         self,
@@ -867,6 +865,7 @@ class Context(BaseContext):
         where: t.Optional[str | exp.Condition] = None,
         limit: int = 20,
         show: bool = True,
+        show_sample: bool = True,
     ) -> TableDiff:
         """Show a diff between two tables.
 
@@ -878,7 +877,8 @@ class Context(BaseContext):
             model_or_snapshot: The model or snapshot to use when environments are passed in.
             where: An optional where statement to filter results.
             limit: The limit of the sample dataframe.
-            show: Show the table diff in the console.
+            show: Show the table diff output in the console.
+            show_sample: Show the sample dataframe in the console. Requires show=True.
 
         Returns:
             The TableDiff object containing schema and summary differences.
@@ -922,7 +922,7 @@ class Context(BaseContext):
         )
         if show:
             self.console.show_schema_diff(table_diff.schema_diff())
-            self.console.show_row_diff(table_diff.row_diff())
+            self.console.show_row_diff(table_diff.row_diff(), show_sample=show_sample)
         return table_diff
 
     def get_dag(self, format: str = "svg") -> graphviz.Digraph:
@@ -996,6 +996,7 @@ class Context(BaseContext):
                     tests=tests,
                     models=self._models,
                     engine_adapter=self._test_engine_adapter,
+                    dialect=self.config.dialect,
                     verbosity=verbosity,
                     patterns=match_patterns,
                 )
@@ -1015,11 +1016,13 @@ class Context(BaseContext):
                     test_meta,
                     models=self._models,
                     engine_adapter=self._test_engine_adapter,
+                    dialect=self.config.dialect,
                     verbosity=verbosity,
                     stream=stream,
                 )
         finally:
             self._test_engine_adapter.close()
+
         return result
 
     def audit(
