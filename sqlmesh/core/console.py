@@ -168,7 +168,7 @@ class Console(abc.ABC):
         """Show table schema diff."""
 
     @abc.abstractmethod
-    def show_row_diff(self, row_diff: RowDiff) -> None:
+    def show_row_diff(self, row_diff: RowDiff, show_sample: bool = True) -> None:
         """Show table summary diff."""
 
 
@@ -657,7 +657,7 @@ class TerminalConsole(Console):
 
         self.console.print(tree)
 
-    def show_row_diff(self, row_diff: RowDiff) -> None:
+    def show_row_diff(self, row_diff: RowDiff, show_sample: bool = True) -> None:
         source_name = row_diff.source
         if row_diff.source_alias:
             source_name = row_diff.source_alias.upper()
@@ -669,11 +669,13 @@ class TerminalConsole(Console):
         self.console.print(f" [yellow]{source_name}[/yellow]: {row_diff.source_count} rows")
         self.console.print(f" [green]{target_name}[/green]: {row_diff.target_count} rows")
         self.console.print(f" Change: {row_diff.count_pct_change:.1f}%")
-        if row_diff.sample.shape[0] > 0:
+        if row_diff.sample.shape[0] > 0 and show_sample:
             self.console.print("\n[b]Sample Rows:[/b]")
             self.console.print(row_diff.sample.to_string(index=False), end="\n\n")
         else:
-            self.console.print("\n[b]All rows match[/b]")
+            self.console.print("\n[b]No added/removed rows![/b]")
+        self.console.print("\n[b]Column Stats:[/b]")
+        self.console.print(row_diff.column_stats.to_string(index=True), end="\n\n")
 
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool
