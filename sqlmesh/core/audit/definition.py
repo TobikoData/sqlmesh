@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pydantic import Field, validator
 from sqlglot import exp
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
@@ -210,7 +211,13 @@ class Audit(AuditMeta, frozen=True):
         else:
             where = None
 
-        query = exp.select("*").from_(this_model).where(where).subquery()
+        # The model's name is already normalized, but in case of snapshots we also prepend a
+        # case-sensitive physical schema name, so we quote here to ensure that we won't have
+        # a broken schema reference after the resulting query is normalized in `render`.
+        quoted_model_name = quote_identifiers(
+            exp.to_table(this_model, dialect=self.dialect), dialect=self.dialect
+        )
+        query = exp.select("*").from_(quoted_model_name).where(where).subquery()
 
         rendered_query = query_renderer.render(
             start=start,
