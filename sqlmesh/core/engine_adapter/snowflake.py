@@ -77,7 +77,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
         # See: https://stackoverflow.com/a/75627721
         for column, kind in (columns_to_types or {}).items():
             if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):
-                df[column] = pd.to_datetime(df[column], errors="coerce").dt.date
+                df[column] = pd.to_datetime(df[column]).dt.date
 
         write_pandas(
             self._connection_pool.get(),
