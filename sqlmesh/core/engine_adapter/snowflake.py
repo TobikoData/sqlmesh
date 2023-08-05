@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 import pandas as pd
-from pandas.api.types import is_datetime64_dtype
+from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter
