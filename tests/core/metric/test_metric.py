@@ -122,14 +122,22 @@ def test_expand_metrics():
         d.parse_one("COUNT(DISTINCT model.y) AS b"): {"model"},
     }
 
-    first_meta = load_metric_ddl(expressions[0], dialect="snowflake")
-    snowflake_metrics = expand_metrics({first_meta.name: first_meta})
+    metas = {}
+
+    for expr in expressions:
+        meta = load_metric_ddl(expr, dialect="snowflake")
+        metas[meta.name] = meta
+
+    snowflake_metrics = expand_metrics(metas)
 
     # Checks that metric names are not normalized according to the target dialect
     assert "A" not in snowflake_metrics
+    assert "B" not in snowflake_metrics
+    assert "C" not in snowflake_metrics
+    assert "D" not in snowflake_metrics
 
-    metric_a = metrics["a"]
-    assert metric_a.name == "a"
-    assert metric_a.expression.sql() == "SUM(model.x)"
-    assert metric_a.expanded.sql() == "SUM(model.x) AS a"
-    assert metric_a.formula.sql() == "a AS a"
+    metric_c = metrics["c"]
+    assert metric_c.name == "c"
+    assert metric_c.expression.sql() == "a / b"
+    assert metric_c.expanded.sql() == "SUM(model.x) AS a / COUNT(DISTINCT model.y) AS b"
+    assert metric_c.formula.sql() == "a / b AS c"
