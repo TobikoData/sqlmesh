@@ -116,7 +116,7 @@ class MetricMeta(PydanticModel, frozen=True):
                 agg_or_ref = True
             elif isinstance(node, exp.Column) and not node.table:
                 agg_or_ref = True
-                ref = d.normalize_model_name(node.sql(dialect=self.dialect), dialect=self.dialect)
+                ref = node.sql(dialect=self.dialect)
 
                 if ref not in metrics:
                     metrics[ref] = metas[ref].to_metric(metas, metrics)
