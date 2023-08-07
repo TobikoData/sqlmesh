@@ -1,4 +1,6 @@
 site_name: SQLMesh
+repo_url: https://github.com/TobikoData/sqlmesh
+repo_name: TobikoData/sqlmesh
 nav:
   - "Overview": index.md
   - Get started:
@@ -100,3 +102,11 @@ markdown_extensions:
 extra_css:
   - stylesheets/extra.css
 copyright: Tobiko Data Inc.
+extra:
+  social:
+    - icon: fontawesome/brands/slack
+      link: https://tobikodata.com/slack
+    - icon: fontawesome/solid/paper-plane 
+      link: mailto:hello@tobikodata.com
+    - icon: fontawesome/brands/github
+      link: https://github.com/TobikoData/sqlmesh/issues/new
