@@ -83,5 +83,5 @@ def test_data_diff(sushi_context_fixed_date):
     assert row_diff.t_only_count == 1
     assert row_diff.sample.shape == (1, 10)
     assert row_diff.joined_sample.shape == (0, 2)
-    assert row_diff.s_sample.shape == (0, 3)
-    assert row_diff.t_sample.shape == (1, 3)
+    assert row_diff.s_sample.shape == (0, 5)
+    assert row_diff.t_sample.shape == (1, 5)

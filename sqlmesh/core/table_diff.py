@@ -289,7 +289,7 @@ class TableDiff:
                     for c in column_stats[column_stats["pct_match"] < 100].index
                 ]
                 for cols in comparison_cols:
-                    joined_sample_cols.extend([*cols])
+                    joined_sample_cols.extend(cols)
                 joined_sample = sample[sample["rows_joined"] == 1][joined_sample_cols]
                 joined_sample.rename(
                     columns={
@@ -302,14 +302,14 @@ class TableDiff:
                 s_sample = sample[(sample["s_exists"] == 1) & (sample["rows_joined"] == 0)][
                     [
                         *[f"s__{c}" for c in index_cols],
-                        *[f"s__{c}" for c in column_stats.index if not c in index_cols],
+                        *[f"s__{c}" for c in self.source_schema if not c in index_cols],
                     ]
                 ]
 
                 t_sample = sample[(sample["t_exists"] == 1) & (sample["rows_joined"] == 0)][
                     [
                         *[f"t__{c}" for c in index_cols],
-                        *[f"t__{c}" for c in column_stats.index if not c in index_cols],
+                        *[f"t__{c}" for c in self.target_schema if not c in index_cols],
                     ]
                 ]
 
