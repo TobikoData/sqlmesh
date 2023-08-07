@@ -261,7 +261,7 @@ class TableDiff:
                     self.adapter.fetchdf(column_stats_query)
                     .T.rename(
                         columns={0: "pct_match"},
-                        index=lambda x: x.replace("_matches", ""),
+                        index=lambda x: str(x).replace("_matches", "") if x else "",
                     )
                     .drop(index=index_cols)
                 )
