@@ -130,7 +130,7 @@ def test_expand_metrics():
     snowflake_metrics = expand_metrics(metas)
     assert all(metric_name.islower() for metric_name in snowflake_metrics)
 
-    metric_c = metrics["c"]
+    metric_c = snowflake_metrics["c"]
     assert metric_c.name == "c"
     assert metric_c.expression.sql() == "a / b"
     assert metric_c.expanded.sql() == "SUM(model.x) AS a / COUNT(DISTINCT model.y) AS b"
