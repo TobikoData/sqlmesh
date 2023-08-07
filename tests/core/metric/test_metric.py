@@ -85,7 +85,6 @@ def test_expand_metrics():
     )
 
     metas = {}
-
     for expr in expressions:
         meta = load_metric_ddl(expr, dialect="")
         metas[meta.name] = meta
@@ -123,18 +122,13 @@ def test_expand_metrics():
     }
 
     metas = {}
-
     for expr in expressions:
         meta = load_metric_ddl(expr, dialect="snowflake")
         metas[meta.name] = meta
 
-    snowflake_metrics = expand_metrics(metas)
-
     # Checks that metric names are not normalized according to the target dialect
-    assert "A" not in snowflake_metrics
-    assert "B" not in snowflake_metrics
-    assert "C" not in snowflake_metrics
-    assert "D" not in snowflake_metrics
+    snowflake_metrics = expand_metrics(metas)
+    assert all(metric_name.islower() for metric_name in snowflake_metrics)
 
     metric_c = metrics["c"]
     assert metric_c.name == "c"
