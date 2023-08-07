@@ -675,11 +675,11 @@ class TerminalConsole(Console):
         self.console.print(row_diff.column_stats.to_string(index=True), end="\n\n")
 
         if show_sample:
+            self.console.print("\n[b][blue]JOINED ROWS[/blue] data differences:[/b]")
             if row_diff.joined_sample.shape[0] > 0:
-                self.console.print("\n[b][blue]JOINED ROWS[/blue] sample differences:[/b]")
                 self.console.print(row_diff.joined_sample.to_string(index=False), end="\n\n")
             else:
-                self.console.print("\n[b]All joined rows match![/b]")
+                self.console.print("  [b]All joined rows match![/b]")
 
             if row_diff.s_sample.shape[0] > 0:
                 self.console.print(f"\n[b][yellow]{source_name} ONLY[/yellow] sample rows:[/b]")
