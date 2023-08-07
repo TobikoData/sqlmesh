@@ -164,8 +164,8 @@ class ManifestHelper:
                 sources=_sources(node),
             )
             # Implicit dependencies for model test arg
-            dependencies.macros.add(MacroReference(package="dbt", name="get_where_subquery"))
-            dependencies.macros.add(MacroReference(package="dbt", name="should_store_failures"))
+            dependencies.macros.append(MacroReference(package="dbt", name="get_where_subquery"))
+            dependencies.macros.append(MacroReference(package="dbt", name="should_store_failures"))
 
             test_owner = _test_owner(node)
             if not test_owner:

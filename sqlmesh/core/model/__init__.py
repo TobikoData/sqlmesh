@@ -12,6 +12,9 @@ from sqlmesh.core.model.definition import (
     load_sql_based_model,
 )
 from sqlmesh.core.model.kind import (
+    EmbeddedKind,
+    ExternalKind,
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
@@ -21,6 +24,7 @@ from sqlmesh.core.model.kind import (
     SeedKind,
     TimeColumn,
     ViewKind,
+    model_kind_validator,
 )
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed

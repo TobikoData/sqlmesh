@@ -6,11 +6,17 @@ from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends
-from pydantic import BaseSettings
 
 from sqlmesh.core.context import Context
+from sqlmesh.utils.pydantic import PYDANTIC_MAJOR_VERSION
 from web.server.exceptions import ApiException
 from web.server.models import FileType
+
+if PYDANTIC_MAJOR_VERSION >= 2:
+    from pydantic_settings import BaseSettings  # type: ignore
+else:
+    from pydantic import BaseSettings  # type: ignore
+
 
 logger = logging.getLogger(__name__)
 get_context_lock = asyncio.Lock()

@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 
 from dbt.contracts.relation import RelationType
-from pydantic import Field, validator
+from pydantic import Field
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
@@ -23,11 +23,13 @@ from sqlmesh.dbt.common import (
     GeneralConfig,
     QuotingConfig,
     SqlStr,
+    sql_str_validator,
 )
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
@@ -54,6 +56,8 @@ class Hook(DbtConfig):
 
     sql: SqlStr
     transaction: bool = True  # TODO not yet supported
+
+    _sql_validator = sql_str_validator
 
 
 class BaseModelConfig(GeneralConfig):
@@ -100,7 +104,8 @@ class BaseModelConfig(GeneralConfig):
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: QuotingConfig = Field(default_factory=QuotingConfig)
 
-    @validator("pre_hook", "post_hook", pre=True)
+    @field_validator("pre_hook", "post_hook", mode="before")
+    @classmethod
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[Hook]:
         hooks = []
         for hook in ensure_list(v):
@@ -115,11 +120,13 @@ class BaseModelConfig(GeneralConfig):
 
         return hooks
 
-    @validator("full_refresh", pre=True)
+    @field_validator("full_refresh", mode="before")
+    @classmethod
     def _validate_bool(cls, v: str) -> bool:
         return ensure_bool(v)
 
-    @validator("grants", pre=True)
+    @field_validator("grants", mode="before")
+    @classmethod
     def _validate_grants(cls, v: t.Dict[str, str]) -> t.Dict[str, t.List[str]]:
         return {key: ensure_list(value) for key, value in v.items()}
 

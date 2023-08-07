@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import Field, root_validator, validator
+from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -14,28 +14,35 @@ from sqlmesh.core.model.kind import (
     TimeColumn,
     ViewKind,
     _Incremental,
+    model_kind_validator,
 )
 from sqlmesh.core.node import Node, str_or_exp_to_str
 from sqlmesh.core.reference import Reference
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import (
+    field_validator,
+    field_validator_v1_args,
+    model_validator,
+    model_validator_v1_args,
+)
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
-class ModelMeta(Node):
+class ModelMeta(Node, extra="allow"):
     """Metadata for models which can be defined in SQL."""
 
     dialect: str = ""
     name: str
     kind: ModelKind = ViewKind()
-    retention: t.Optional[int]  # not implemented yet
-    storage_format: t.Optional[str]
+    retention: t.Optional[int] = None  # not implemented yet
+    storage_format: t.Optional[str] = None
     partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
     clustered_by: t.List[str] = []
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
-    column_descriptions_: t.Optional[t.Dict[str, str]]
+    column_descriptions_: t.Optional[t.Dict[str, str]] = None
     audits: t.List[AuditReference] = []
     tags: t.List[str] = []
     grains: t.List[exp.Expression] = []
@@ -46,12 +53,10 @@ class ModelMeta(Node):
         default=None, alias="table_properties"
     )
 
-    _model_kind_validator = ModelKind.field_validator()
+    _model_kind_validator = model_kind_validator
 
-    class Config(Node.Config):
-        extra = "allow"
-
-    @validator("audits", pre=True)
+    @field_validator("audits", mode="before")
+    @classmethod
     def _audits_validator(cls, v: t.Any) -> t.Any:
         def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, str]]:
             kwargs = {}
@@ -92,17 +97,19 @@ class ModelMeta(Node):
             ]
         return v
 
-    @validator("tags", pre=True)
+    @field_validator("tags", mode="before")
+    @field_validator_v1_args
     def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
         return cls._validate_value_or_tuple(v, values)
 
-    @validator("clustered_by", pre=True)
+    @field_validator("clustered_by", mode="before")
+    @field_validator_v1_args
     def _normalized_value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
         return cls._validate_value_or_tuple(v, values, normalize=True)
 
     @classmethod
     def _validate_value_or_tuple(
-        cls, v: t.Any, values: t.Dict[str, t.Any], normalize: bool = False
+        cls, v: t.Dict[str, t.Any], values: t.Dict[str, t.Any], normalize: bool = False
     ) -> t.Any:
         dialect = values.get("dialect")
         _normalize = lambda v: normalize_identifiers(v, dialect=dialect) if normalize else v
@@ -117,11 +124,13 @@ class ModelMeta(Node):
 
         return v
 
-    @validator("dialect", "storage_format", pre=True)
+    @field_validator("dialect", "storage_format", mode="before")
+    @classmethod
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
 
-    @validator("partitioned_by_", pre=True)
+    @field_validator("partitioned_by_", mode="before")
+    @field_validator_v1_args
     def _partition_by_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.List[exp.Expression]:
@@ -159,7 +168,8 @@ class ModelMeta(Node):
 
         return partitions
 
-    @validator("columns_to_types_", pre=True)
+    @field_validator("columns_to_types_", mode="before")
+    @field_validator_v1_args
     def _columns_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -184,7 +194,8 @@ class ModelMeta(Node):
 
         return v
 
-    @validator("table_properties_", pre=True)
+    @field_validator("table_properties_", mode="before")
+    @field_validator_v1_args
     def _properties_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, exp.Expression]]:
@@ -222,7 +233,8 @@ class ModelMeta(Node):
 
         return table_properties
 
-    @validator("depends_on_", pre=True)
+    @field_validator("depends_on_", mode="before")
+    @field_validator_v1_args
     def _depends_on_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
         dialect = values.get("dialect")
 
@@ -240,7 +252,8 @@ class ModelMeta(Node):
 
         return v
 
-    @validator("grains", "references", pre=True)
+    @field_validator("grains", "references", mode="before")
+    @field_validator_v1_args
     def _refs_validator(cls, vs: t.Any, values: t.Dict[str, t.Any]) -> t.List[exp.Expression]:
         dialect = values.get("dialect")
 
@@ -264,7 +277,7 @@ class ModelMeta(Node):
 
         return refs
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
     def _pre_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         if "grain" in values:
             if "grains" in values:
@@ -274,11 +287,11 @@ class ModelMeta(Node):
             values["grains"] = [values.pop("grain")]
         return values
 
-    @root_validator
+    @model_validator(mode="after")
+    @model_validator_v1_args
     def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values = cls._kind_validator(values)
         values = cls._normalize_name(values)
-        values = cls._set_physical_schema_override(values)
         return values
 
     @classmethod
@@ -299,14 +312,6 @@ class ModelMeta(Node):
     @classmethod
     def _normalize_name(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values["name"] = d.normalize_model_name(values["name"], dialect=values.get("dialect"))
-        return values
-
-    @classmethod
-    def _set_physical_schema_override(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        physical_schema_override_map = values.get("physical_schema_override_map") or {}
-        values["physical_schema_override"] = physical_schema_override_map.get(
-            exp.to_table(values["name"]).db, values.get("physical_schema_override")
-        )
         return values
 
     @property

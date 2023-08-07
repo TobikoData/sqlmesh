@@ -324,7 +324,7 @@ gateways:
     snowflake:
         connection:
             type: snowflake
-            account: 123
+            account: abc123
             user: CDE
 
 model_defaults:
@@ -341,7 +341,7 @@ model_defaults:
         assert len(loaded_configs) == 1
         snowflake_connection = list(loaded_configs.values())[0].gateways["snowflake"].connection  # type: ignore
         assert isinstance(snowflake_connection, SnowflakeConnectionConfig)
-        assert snowflake_connection.account == "123"
+        assert snowflake_connection.account == "abc123"
         assert snowflake_connection.user == "ABC"
         assert snowflake_connection.password == "XYZ"
 

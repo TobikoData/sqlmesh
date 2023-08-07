@@ -6,11 +6,10 @@ import typing as t
 from collections import defaultdict
 
 from jinja2 import Environment, Template, nodes
-from pydantic import validator
 from sqlglot import Dialect, Parser, TokenType
 
 from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import PydanticModel, field_serializer, field_validator
 
 
 def environment(**kwargs: t.Any) -> Environment:
@@ -24,7 +23,7 @@ ENVIRONMENT = environment()
 
 
 class MacroReference(PydanticModel, frozen=True):
-    package: t.Optional[str]
+    package: t.Optional[str] = None
     name: str
 
     @property
@@ -177,7 +176,8 @@ class JinjaMacroRegistry(PydanticModel):
     _parser_cache: t.Dict[t.Tuple[t.Optional[str], str], Template] = {}
     __environment: t.Optional[Environment] = None
 
-    @validator("global_objs", pre=True)
+    @field_validator("global_objs", mode="before")
+    @classmethod
     def _validate_attribute_dict(cls, value: t.Any) -> t.Any:
         def _attribute_dict(val: t.Dict[str, t.Any]) -> AttributeDict:
             return AttributeDict(
@@ -187,6 +187,18 @@ class JinjaMacroRegistry(PydanticModel):
         if isinstance(value, t.Dict):
             return _attribute_dict(value)
         return value
+
+    @field_serializer("global_objs")
+    def _serialize_attribute_dict(
+        self, value: t.Dict[str, JinjaGlobalAttribute]
+    ) -> t.Dict[str, t.Any]:
+        # NOTE: This is called only when used with Pydantic V2.
+        def _convert(
+            val: t.Union[t.Dict[str, JinjaGlobalAttribute], t.Dict[str, t.Any]]
+        ) -> t.Dict[str, t.Any]:
+            return {k: _convert(v) if isinstance(v, AttributeDict) else v for k, v in val.items()}
+
+        return _convert(value)
 
     def add_macros(self, macros: t.Dict[str, MacroInfo], package: t.Optional[str] = None) -> None:
         """Adds macros to the target package.
@@ -318,7 +330,7 @@ class JinjaMacroRegistry(PydanticModel):
             top_level_packages=[*self.top_level_packages, *other.top_level_packages],
         )
 
-    def __deepcopy__(self, memo: t.Dict[int, t.Any]) -> JinjaMacroRegistry:
+    def __deepcopy__(self, memo: t.Optional[t.Dict[int, t.Any]] = None) -> JinjaMacroRegistry:
         return JinjaMacroRegistry.parse_obj(self.dict())
 
     def _parse_macro(self, name: str, package: t.Optional[str]) -> Template:
@@ -344,7 +356,7 @@ class JinjaMacroRegistry(PydanticModel):
     def _trim_macros(
         self,
         names: t.Set[str],
-        package: t.Optional[str],
+        package: t.Optional[str] = None,
         visited: t.Optional[t.Dict[t.Optional[str], t.Set[str]]] = None,
     ) -> JinjaMacroRegistry:
         if visited is None:

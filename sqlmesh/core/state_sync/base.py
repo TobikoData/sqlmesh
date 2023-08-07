@@ -6,7 +6,6 @@ import logging
 import pkgutil
 import typing as t
 
-from pydantic import validator
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
@@ -21,7 +20,11 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.utils import major_minor
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import (
+    PydanticModel,
+    field_validator,
+    field_validator_v1_args,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +52,10 @@ class PromotionResult(PydanticModel):
     removed: t.List[SnapshotTableInfo]
     removed_environment_naming_info: t.Optional[EnvironmentNamingInfo]
 
-    @validator("removed_environment_naming_info")
+    @field_validator("removed_environment_naming_info")
+    @field_validator_v1_args
     def _validate_removed_environment_naming_info(
-        cls, v: t.Optional[EnvironmentNamingInfo], values: t.Dict
+        cls, v: t.Optional[EnvironmentNamingInfo], values: t.Any
     ) -> t.Optional[EnvironmentNamingInfo]:
         if v and not values["removed"]:
             raise ValueError("removed_environment_naming_info must be None if removed is empty")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import Field, root_validator, validator
+from pydantic import Field
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
@@ -17,6 +17,7 @@ from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.hashing import crc32
+from sqlmesh.utils.pydantic import field_validator, model_validator
 
 
 class Config(BaseConfig):
@@ -46,7 +47,7 @@ class Config(BaseConfig):
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
     """
 
-    gateways: t.Union[t.Dict[str, GatewayConfig], GatewayConfig] = GatewayConfig()
+    gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
     default_connection: ConnectionConfig = DuckDBConnectionConfig()
     default_test_connection: ConnectionConfig = DuckDBConnectionConfig()
     default_scheduler: SchedulerConfig = BuiltInSchedulerConfig()
@@ -82,15 +83,18 @@ class Config(BaseConfig):
         "physical_schema_override": UpdateStrategy.KEY_UPDATE,
     }
 
-    @validator("gateways", always=True)
-    def _gateways_ensure_dict(
-        cls, value: t.Union[t.Dict[str, GatewayConfig], GatewayConfig]
-    ) -> t.Dict[str, GatewayConfig]:
-        if not isinstance(value, dict):
+    @field_validator("gateways", mode="before", always=True)
+    @classmethod
+    def _gateways_ensure_dict(cls, value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        try:
+            if not isinstance(value, GatewayConfig):
+                GatewayConfig.parse_obj(value)
             return {"": value}
-        return value
+        except Exception:
+            return value
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def _normalize_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         if "gateways" not in values and "gateway" in values:
             values["gateways"] = values.pop("gateway")

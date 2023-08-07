@@ -28,7 +28,7 @@ async def get_environments(
         environments[c.PROD] = Environment(
             name=c.PROD,
             snapshots=[],
-            start_at=0,
+            start_at=c.EPOCH,
             plan_id="",
         )
     return environments

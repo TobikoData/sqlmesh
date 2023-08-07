@@ -203,7 +203,8 @@ class SQLMeshMagics(Magics):
                 self._context.console.log_error(
                     f"Test found that does not have `model` defined: {model_test_metadata.path}"
                 )
-            tests[model][model_test_metadata.test_name] = model_test_metadata
+            else:
+                tests[model][model_test_metadata.test_name] = model_test_metadata
 
         model = self._context.get_model(args.model, raise_if_missing=True)
 

@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import IntEnum
 
-from pydantic import Field, validator
+from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
@@ -28,7 +28,7 @@ from sqlmesh.utils.date import (
 )
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.hashing import hash_data
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 if sys.version_info >= (3, 9):
     from typing import Annotated
@@ -131,8 +131,8 @@ class SnapshotIntervals(PydanticModel, frozen=True):
 class SnapshotDataVersion(PydanticModel, frozen=True):
     fingerprint: SnapshotFingerprint
     version: str
-    temp_version: t.Optional[str]
-    change_category: t.Optional[SnapshotChangeCategory]
+    temp_version: t.Optional[str] = None
+    change_category: t.Optional[SnapshotChangeCategory] = None
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
 
     def snapshot_id(self, name: str) -> SnapshotId:
@@ -155,8 +155,8 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
 
 
 class QualifiedViewName(PydanticModel, frozen=True):
-    catalog: t.Optional[str]
-    schema_name: t.Optional[str]
+    catalog: t.Optional[str] = None
+    schema_name: t.Optional[str] = None
     table: str
 
     def for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
@@ -194,7 +194,7 @@ class SnapshotInfoMixin(ModelKindMixin):
     temp_version: t.Optional[str]
     change_category: t.Optional[SnapshotChangeCategory]
     fingerprint: SnapshotFingerprint
-    previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
+    previous_versions: t.Tuple[SnapshotDataVersion, ...]
 
     @property
     def identifier(self) -> str:
@@ -282,11 +282,11 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     name: str
     fingerprint: SnapshotFingerprint
     version: str
-    temp_version: t.Optional[str]
+    temp_version: t.Optional[str] = None
     physical_schema_: str = Field(alias="physical_schema")
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
-    change_category: t.Optional[SnapshotChangeCategory]
+    change_category: t.Optional[SnapshotChangeCategory] = None
     kind_name: ModelKindName
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
@@ -387,7 +387,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
 
-    @validator("ttl")
+    @field_validator("ttl")
     @classmethod
     def _time_delta_must_be_positive(cls, v: str) -> str:
         current_time = now()

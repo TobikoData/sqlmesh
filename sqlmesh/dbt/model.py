@@ -3,26 +3,27 @@ from __future__ import annotations
 import logging
 import typing as t
 
-from pydantic import validator
 from sqlglot import exp
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import (
+    EmbeddedKind,
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
     Model,
     ModelKind,
-    ModelKindName,
     ViewKind,
     create_sql_model,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
-from sqlmesh.dbt.common import SqlStr, extract_jinja_config
+from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
@@ -93,19 +94,25 @@ class ModelConfig(BaseModelConfig):
     _sql_embedded_config: t.Optional[SqlStr] = None
     _sql_no_config: t.Optional[SqlStr] = None
 
-    @validator(
+    _sql_validator = sql_str_validator
+
+    @field_validator(
         "unique_key",
         "cluster_by",
-        pre=True,
+        "tags",
+        mode="before",
     )
+    @classmethod
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
         return ensure_list(v)
 
-    @validator("sql", pre=True)
+    @field_validator("sql", mode="before")
+    @classmethod
     def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:
         return SqlStr(v)
 
-    @validator("partition_by", pre=True)
+    @field_validator("partition_by", mode="before")
+    @classmethod
     def _validate_partition_by(cls, v: t.Any) -> t.Union[t.List[str], t.Dict[str, t.Any]]:
         if isinstance(v, str):
             return [v]
@@ -140,7 +147,7 @@ class ModelConfig(BaseModelConfig):
         """
         materialization = self.model_materialization
         if materialization == Materialization.TABLE:
-            return ModelKind(name=ModelKindName.FULL)
+            return FullKind()
         if materialization == Materialization.VIEW:
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
@@ -199,7 +206,7 @@ class ModelConfig(BaseModelConfig):
                 insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES
             )
         if materialization == Materialization.EPHEMERAL:
-            return ModelKind(name=ModelKindName.EMBEDDED)
+            return EmbeddedKind()
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     @property
