@@ -665,19 +665,18 @@ class TerminalConsole(Console):
         if row_diff.target_alias:
             target_name = row_diff.target_alias.upper()
 
-        self.console.print("\n[b]Outer Join Row Counts:[/b]")
-        self.console.print(f" [b][blue]JOINED[/blue][/b]: {row_diff.join_count} rows")
-        self.console.print(
-            f" [b][yellow]{source_name} ONLY[/yellow][/b]: {row_diff.s_only_count} rows"
-        )
-        self.console.print(
-            f" [b][green]{target_name} ONLY[/green][/b]: {row_diff.t_only_count} rows"
-        )
-        self.console.print("\n[b][blue]JOINED rows[/blue] comparison stats:[/b]")
+        tree = Tree("[b]Outer Join Row Counts:[/b]")
+        tree.add(f" [b][blue]JOINED[/blue]:[/b] {row_diff.join_count} rows")
+        tree.add(f" [b][yellow]{source_name} ONLY[/yellow]:[/b] {row_diff.s_only_count} rows")
+        tree.add(f" [b][green]{target_name} ONLY[/green]:[/b] {row_diff.t_only_count} rows")
+        self.console.print("\n", tree)
+
+        self.console.print("\n[b][blue]JOINED ROWS[/blue] comparison stats:[/b]")
         self.console.print(row_diff.column_stats.to_string(index=True), end="\n\n")
+
         if show_sample:
             if row_diff.joined_sample.shape[0] > 0:
-                self.console.print("\n[b][blue]JOINED rows[/blue] sample differences:[/b]")
+                self.console.print("\n[b][blue]JOINED ROWS[/blue] sample differences:[/b]")
                 self.console.print(row_diff.joined_sample.to_string(index=False), end="\n\n")
             else:
                 self.console.print("\n[b]All joined rows match![/b]")
