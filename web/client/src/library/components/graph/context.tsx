@@ -9,10 +9,15 @@ import {
   useCallback,
   useMemo,
 } from 'react'
-import { getNodesBetween, toNodeOrEdgeId } from './help'
+import {
+  getNodesBetween,
+  toNodeOrEdgeId,
+  hasActiveEdge,
+  hasActiveEdgeConnector,
+} from './help'
 import { type ErrorIDE } from '~/library/pages/ide/context'
 import { EnumSide } from '~/types/enum'
-import { isNil } from '@utils/index'
+import { isFalse, isNil } from '@utils/index'
 import { type Edge, type Node } from 'reactflow'
 
 export interface Connections {
@@ -20,7 +25,7 @@ export interface Connections {
   right: string[]
 }
 export type ActiveColumns = Map<string, { ins: string[]; outs: string[] }>
-export type ActiveEdges = Map<string, number>
+export type ActiveEdges = Map<string, Array<[string, string]>>
 export type ActiveNodes = Set<string>
 export type SelectedNodes = Set<string>
 export type HighlightedNodes = Record<string, string[]>
@@ -50,9 +55,9 @@ interface LineageFlow {
   setSelectedNodes: React.Dispatch<React.SetStateAction<SelectedNodes>>
   setWithColumns: React.Dispatch<React.SetStateAction<boolean>>
   setConnections: React.Dispatch<React.SetStateAction<Map<string, Connections>>>
-  hasActiveEdge: (edge?: string | null) => boolean
-  addActiveEdges: (edges: string[]) => void
-  removeActiveEdges: (edges: string[]) => void
+  hasActiveEdge: (edge: [Maybe<string>, Maybe<string>]) => boolean
+  addActiveEdges: (edges: Array<[string, string]>) => void
+  removeActiveEdges: (edges: Array<[string, string]>) => void
   setActiveEdges: React.Dispatch<React.SetStateAction<ActiveEdges>>
   setLineage: React.Dispatch<
     React.SetStateAction<Record<string, Lineage> | undefined>
@@ -130,17 +135,37 @@ export default function LineageFlowProvider({
   const [activeNodes, setActiveNodes] = useState<ActiveNodes>(new Set())
   const [highlightedNodes, setHighlightedNodes] = useState<HighlightedNodes>({})
 
-  const hasActiveEdge = useCallback(
-    function hasActiveEdge(edge?: string | null): boolean {
-      return edge == null ? false : (activeEdges.get(edge) ?? 0) > 0
+  const checkActiveEdge = useCallback(
+    function checkActiveEdge(edge: [Maybe<string>, Maybe<string>]): boolean {
+      return hasActiveEdge(activeEdges, edge)
     },
     [activeEdges],
   )
 
   const addActiveEdges = useCallback(
-    function addActiveEdges(edges: string[]): void {
+    function addActiveEdges(edges: Array<[string, string]>): void {
       setActiveEdges(activeEdges => {
-        edges.forEach(edge => activeEdges.set(edge, 1))
+        edges.forEach(([leftConnect, rightConnect]) => {
+          const left = activeEdges.get(leftConnect) ?? []
+          const right = activeEdges.get(rightConnect) ?? []
+          const hasDuplicateLeft = left.some(
+            ([left, right]) => left === leftConnect && right === rightConnect,
+          )
+          const hasDuplicateRight = right.some(
+            ([left, right]) => left === leftConnect && right === rightConnect,
+          )
+
+          if (isFalse(hasDuplicateLeft)) {
+            left.push([leftConnect, rightConnect])
+          }
+
+          if (isFalse(hasDuplicateRight)) {
+            right.push([leftConnect, rightConnect])
+          }
+
+          activeEdges.set(leftConnect, left)
+          activeEdges.set(rightConnect, right)
+        })
 
         return new Map(activeEdges)
       })
@@ -149,20 +174,31 @@ export default function LineageFlowProvider({
   )
 
   const removeActiveEdges = useCallback(
-    function removeActiveEdges(edges: string[]): void {
+    function removeActiveEdges(edges: Array<[string, string]>): void {
+      console.log('removeActiveEdges', edges)
       setActiveEdges(activeEdges => {
-        edges.forEach(edge => {
-          activeEdges.set(toNodeOrEdgeId(EnumSide.Left, edge), 0)
-          activeEdges.set(toNodeOrEdgeId(EnumSide.Right, edge), 0)
+        edges.forEach(([left, right]) => {
+          const edgesLeft = (activeEdges.get(left) ?? []).filter(
+            e => e[0] !== left && e[1] !== right,
+          )
+          const edgesRight = (activeEdges.get(right) ?? []).filter(
+            e => e[0] !== left && e[1] !== right,
+          )
+
+          activeEdges.set(left, edgesLeft)
+          activeEdges.set(right, edgesRight)
         })
 
         return new Map(activeEdges)
       })
 
       setConnections(connections => {
-        edges.forEach(edge => {
-          connections.delete(edge)
+        edges.forEach(([left, right]) => {
+          connections.delete(left)
+          connections.delete(right)
         })
+
+        console.log('connections', connections)
 
         return new Map(connections)
       })
@@ -172,12 +208,19 @@ export default function LineageFlowProvider({
 
   const isActiveColumn = useCallback(
     function isActive(modelName: string, columnName: string): boolean {
+      const leftConnector = toNodeOrEdgeId(EnumSide.Left, modelName, columnName)
+      const rightConnector = toNodeOrEdgeId(
+        EnumSide.Right,
+        modelName,
+        columnName,
+      )
+
       return (
-        hasActiveEdge(toNodeOrEdgeId(EnumSide.Left, modelName, columnName)) ||
-        hasActiveEdge(toNodeOrEdgeId(EnumSide.Right, modelName, columnName))
+        hasActiveEdgeConnector(activeEdges, leftConnector) ||
+        hasActiveEdgeConnector(activeEdges, rightConnector)
       )
     },
-    [hasActiveEdge],
+    [checkActiveEdge, activeEdges],
   )
 
   const nodesConnections: Record<
@@ -263,7 +306,7 @@ export default function LineageFlowProvider({
         setManuallySelectedColumn,
         addActiveEdges,
         removeActiveEdges,
-        hasActiveEdge,
+        hasActiveEdge: checkActiveEdge,
         handleClickModel,
         handleError,
         isActiveColumn,

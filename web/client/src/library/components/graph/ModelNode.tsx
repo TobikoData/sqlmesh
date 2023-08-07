@@ -1,10 +1,21 @@
 import { isNil, isArrayNotEmpty, isNotNil } from '@utils/index'
 import clsx from 'clsx'
 import { useMemo, useCallback } from 'react'
-import { ModelColumns, ModelNodeHeaderHandles } from './Graph'
+import {
+  EnumLineageNodeModelType,
+  ModelColumns,
+  ModelNodeHeaderHandles,
+} from './Graph'
 import { useLineageFlow } from './context'
 import { type GraphNodeData } from './help'
 import { Position, type NodeProps } from 'reactflow'
+
+export const EnumColumnType = {
+  UNKNOWN: 'UNKNOWN',
+  STRUCT: 'STRUCT',
+} as const
+
+export type ColumnType = KeyOf<typeof EnumColumnType>
 
 export default function ModelNode({
   id,
@@ -34,16 +45,18 @@ export default function ModelNode({
       const found = columns.find(({ name }) => name === column)
 
       if (isNil(found)) {
-        columns.push({ name: column, type: 'UNKNOWN' })
+        columns.push({ name: column, type: EnumColumnType.UNKNOWN })
       }
     })
 
     columns.forEach(column => {
-      column.type = isNil(column.type)
-        ? 'UNKNOWN'
-        : column.type.startsWith('STRUCT')
-        ? 'STRUCT'
-        : column.type
+      let columnType = column.type ?? EnumColumnType.UNKNOWN
+
+      if (columnType.startsWith(EnumColumnType.STRUCT)) {
+        columnType = EnumColumnType.STRUCT
+      }
+
+      column.type = columnType
     })
 
     return {
@@ -90,11 +103,10 @@ export default function ModelNode({
   )
   const splat = highlightedNodes?.['*']
   const isInteractive = mainNode !== id && isNotNil(handleClickModel)
-  const isCTE = data.type === 'cte'
-  const isModelExternal = model?.type === 'external'
-  const isModelSeed = model?.type === 'seed'
+  const isCTE = data.type === EnumLineageNodeModelType.cte
+  const isModelExternal = model?.type === EnumLineageNodeModelType.external
+  const isModelSeed = model?.type === EnumLineageNodeModelType.seed
   const showColumns = withColumns && isArrayNotEmpty(columns)
-  const type = isCTE ? 'cte' : model?.type
   const isMainNode = mainNode === id || highlightedNodeModels.includes(id)
   const isActiveNode =
     selectedNodes.size > 0 || activeNodes.size > 0 || withConnected
@@ -124,7 +136,7 @@ export default function ModelNode({
     >
       <ModelNodeHeaderHandles
         id={id}
-        type={type}
+        type={data.type}
         label={data.label}
         isSelected={selectedNodes.has(id)}
         isDraggable={true}
@@ -151,7 +163,7 @@ export default function ModelNode({
             className="max-h-[15rem]"
             nodeId={id}
             columns={columns}
-            disabled={model?.type === 'python' || data.type !== 'model'}
+            disabled={model?.type !== EnumLineageNodeModelType.sql}
             withHandles={true}
             withSource={true}
           />

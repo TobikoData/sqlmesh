@@ -34,6 +34,7 @@ import {
   getActiveNodes,
   getUpdatedEdges,
   getUpdatedNodes,
+  getModelNodeTypeTitle,
 } from './help'
 import {
   debounceSync,
@@ -76,6 +77,17 @@ import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from '@components/editor/hooks'
 import { useApiColumnLineage } from '@api/index'
 import ModelNode from './ModelNode'
+
+export const EnumLineageNodeModelType = {
+  python: 'python',
+  sql: 'sql',
+  cte: 'cte',
+  seed: 'seed',
+  external: 'external',
+  unknown: 'unknown',
+} as const
+
+export type LineageNodeModelType = KeyOf<typeof EnumLineageNodeModelType>
 
 const ModelColumnDisplay = memo(function ModelColumnDisplay({
   columnName,
@@ -243,7 +255,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
 }: {
   id: string
   label: string
-  type?: string
+  type?: LineageNodeModelType
   hasLeft?: boolean
   hasRight?: boolean
   count?: number
@@ -295,19 +307,13 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
         {type != null && (
           <span
             title={
-              type === 'python'
-                ? 'Column lineage disabled for Python models'
-                : type === 'cte'
-                ? 'CTE'
-                : 'SQL Query'
+              type === EnumLineageNodeModelType.python
+                ? `Column lineage disabled for  ${type} models`
+                : 'Column lineage'
             }
             className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
           >
-            {type === 'python' && 'Python'}
-            {type === 'sql' && 'SQL'}
-            {type === 'seed' && 'Seed'}
-            {type === 'cte' && 'CTE'}
-            {type === 'external' && 'External'}
+            {getModelNodeTypeTitle(type)}
           </span>
         )}
         <span
@@ -495,7 +501,6 @@ const ModelColumns = memo(function ModelColumns({
     setManuallySelectedColumn,
     setLineage,
     removeActiveEdges,
-    hasActiveEdge,
     addActiveEdges,
     lineage,
   } = useLineageFlow()
@@ -520,7 +525,7 @@ const ModelColumns = memo(function ModelColumns({
     })
 
     return [active, rest]
-  }, [nodeId, columns, showColumns, isActiveColumn, hasActiveEdge])
+  }, [nodeId, columns, showColumns, isActiveColumn])
 
   const updateColumnLineage = useCallback(
     function updateColumnLineage(
@@ -535,12 +540,6 @@ const ModelColumns = memo(function ModelColumns({
         columnLineage,
       )
 
-      console.log({
-        mergedLineage,
-        newConnections,
-        activeEdges,
-      })
-
       setLineage(mergedLineage)
       setConnections(newConnections)
       addActiveEdges(activeEdges)
@@ -550,11 +549,11 @@ const ModelColumns = memo(function ModelColumns({
 
   const isSelectManually = useCallback(
     function isSelectManually(columnName: string): boolean {
-      if (manuallySelectedColumn == null) return false
+      if (isNil(manuallySelectedColumn)) return false
 
       const [selectedModel, selectedColumn] = manuallySelectedColumn
 
-      if (selectedModel == null || selectedColumn == null) return false
+      if (isNil(selectedModel) || isNil(selectedColumn)) return false
 
       return selectedModel.name === nodeId && selectedColumn.name === columnName
     },
@@ -565,24 +564,38 @@ const ModelColumns = memo(function ModelColumns({
     function removeEdges(columnId: string): void {
       const visited = new Set<string>()
 
+      console.log('connections', connections)
+
       removeActiveEdges(
-        [
-          columnId,
-          walk(columnId, EnumSide.Left),
-          walk(columnId, EnumSide.Right),
-        ].flat(),
+        walk(columnId, EnumSide.Left).concat(walk(columnId, EnumSide.Right)),
       )
 
-      function walk(id: string, side: Side): string[] {
+      function walk(id: string, side: Side): Array<[string, string]> {
         if (visited.has(id)) return []
 
         const edges = connections.get(id)?.[side] ?? []
 
+        connections.delete(id)
+
         visited.add(id)
 
-        return [id, edges.map(edge => walk(edge, side))].flat(
-          Infinity,
-        ) as string[]
+        setConnections(connections)
+
+        return edges
+          .map(edge =>
+            [
+              side === EnumSide.Left
+                ? [
+                    toNodeOrEdgeId(EnumSide.Left, id),
+                    toNodeOrEdgeId(EnumSide.Right, edge),
+                  ]
+                : [
+                    toNodeOrEdgeId(EnumSide.Left, edge),
+                    toNodeOrEdgeId(EnumSide.Right, id),
+                  ],
+            ].concat(walk(edge, side)),
+          )
+          .flat() as Array<[string, string]>
       }
     },
     [removeActiveEdges, connections],
@@ -762,12 +775,20 @@ function ModelColumnLineage({
   const lineageIndex = useMemo(() => getLineageIndex(lineage), [lineage])
 
   useEffect(() => {
-    const WITH_COLUMNS_LIMIT = 40
+    const WITH_COLUMNS_LIMIT = 30
 
     if (isArrayEmpty(allEdges) || isNil(mainNode)) return
 
-    const newActiveNodes = getActiveNodes(allEdges, activeEdges, selectedEdges)
-    console.log('newActiveNodes', newActiveNodes, activeEdges)
+    if (activeEdges.size > 0) {
+      setIsBuildingLayout(true)
+    }
+
+    const newActiveNodes = getActiveNodes(
+      allEdges,
+      activeEdges,
+      selectedEdges,
+      nodesMap,
+    )
     const newNodes = getUpdatedNodes(
       Object.values(nodesMap),
       newActiveNodes,
@@ -792,14 +813,6 @@ function ModelColumnLineage({
       withImpact,
       withSecondary,
     )
-
-    if (
-      nodes.length !== newNodes.length &&
-      newEdges.length > WITH_COLUMNS_LIMIT
-    ) {
-      setWithColumns(false)
-    }
-
     setTimeout(() => {
       void createGraphLayout({
         nodesMap,
@@ -825,6 +838,13 @@ function ModelColumnLineage({
               duration: 1000,
             })
           }
+
+          if (
+            nodes.length !== newNodes.length &&
+            newNodes.length > WITH_COLUMNS_LIMIT
+          ) {
+            setWithColumns(false)
+          }
         })
     }, 100)
   }, [lineageIndex, withColumns, activeEdges, selectedEdges])
@@ -832,7 +852,12 @@ function ModelColumnLineage({
   useEffect(() => {
     if (isNil(mainNode) || isArrayEmpty(nodes)) return
 
-    const newActiveNodes = getActiveNodes(allEdges, activeEdges, selectedEdges)
+    const newActiveNodes = getActiveNodes(
+      allEdges,
+      activeEdges,
+      selectedEdges,
+      nodesMap,
+    )
     const newNodes = getUpdatedNodes(
       nodes,
       newActiveNodes,
@@ -864,6 +889,7 @@ function ModelColumnLineage({
     setActiveNodes(newActiveNodes)
   }, [
     connections,
+    nodesMap,
     allEdges,
     activeEdges,
     selectedNodes,
@@ -896,11 +922,13 @@ function ModelColumnLineage({
   const countDataSources = nodes.filter(
     n =>
       isFalse(n.hidden) &&
-      (models.get(n.id)?.type === 'external' ||
-        models.get(n.id)?.type === 'seed'),
+      (models.get(n.id)?.type === EnumLineageNodeModelType.external ||
+        models.get(n.id)?.type === EnumLineageNodeModelType.seed),
   ).length
   const countCTEs = nodes.filter(
-    n => isFalse(n.hidden) && models.get(n.id)?.type === 'cte',
+    n =>
+      isFalse(n.hidden) &&
+      models.get(n.id)?.type === EnumLineageNodeModelType.cte,
   ).length
 
   return (
