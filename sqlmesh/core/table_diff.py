@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import typing as t
 
 import pandas as pd
@@ -54,28 +53,28 @@ class RowDiff(PydanticModel, frozen=True):
     source: str
     target: str
     stats: t.Dict[str, float]
-    sample: pd.DataFrame
+    joined_sample: pd.DataFrame
+    s_sample: pd.DataFrame
+    t_sample: pd.DataFrame
     column_stats: pd.DataFrame
     source_alias: t.Optional[str] = None
     target_alias: t.Optional[str] = None
     model_name: t.Optional[str] = None
 
     @property
-    def source_count(self) -> int:
-        """Count of the source."""
-        return int(self.stats["s_count"])
+    def join_count(self) -> int:
+        """Count of successfully joined rows."""
+        return int(self.stats["join_count"])
 
     @property
-    def target_count(self) -> int:
-        """Count of the target."""
-        return int(self.stats["t_count"])
+    def s_only_count(self) -> int:
+        """Count of rows only present in source."""
+        return int(self.stats["s_only_count"])
 
     @property
-    def count_pct_change(self) -> float:
-        """The percentage change of the counts."""
-        if self.source_count == 0:
-            return math.inf
-        return ((self.target_count - self.source_count) / self.source_count) * 100
+    def t_only_count(self) -> int:
+        """Count of rows only present in target."""
+        return int(self.stats["t_only_count"])
 
 
 class TableDiff:
@@ -147,15 +146,17 @@ class TableDiff:
             s_selects = {c: exp.column(c, "s").as_(f"s__{c}") for c in self.source_schema}
             t_selects = {c: exp.column(c, "t").as_(f"t__{c}") for c in self.target_schema}
 
+            index_cols = []
             s_index = []
             t_index = []
 
             for col in self.on.find_all(exp.Column):
-                col.not_().is_(exp.Null())
+                index_cols.append(col.name)
                 if col.table == "s":
                     s_index.append(col)
                 elif col.table == "t":
                     t_index.append(col)
+            index_cols = list(dict.fromkeys(index_cols))
 
             comparisons = [
                 exp.Case()
@@ -184,6 +185,21 @@ class TableDiff:
                     exp.func("IF", exp.or_(*(c.not_().is_(exp.Null()) for c in t_index)), 1, 0).as_(
                         "t_exists"
                     ),
+                    exp.func(
+                        "IF",
+                        exp.and_(
+                            *(
+                                exp.and_(
+                                    exp.column(c, "s").eq(exp.column(c, "t")),
+                                    exp.column(c, "s").not_().is_(exp.Null()),
+                                    exp.column(c, "t").not_().is_(exp.Null()),
+                                )
+                                for c in index_cols
+                            ),
+                        ),
+                        1,
+                        0,
+                    ).as_("rows_joined"),
                     *comparisons,
                 )
                 .from_(exp.alias_(self.source, "s"))
@@ -198,40 +214,118 @@ class TableDiff:
 
             with self.adapter.temp_table(query, name="sqlmesh_temp.diff") as table:
                 summary_query = exp.select(
-                    exp.func("SUM", "s_exists").as_("s_count"),
-                    exp.func("SUM", "t_exists").as_("t_count"),
-                    *(exp.func("SUM", c.alias).as_(c.alias) for c in comparisons),
-                ).from_(table)
-
-                column_stats_query = exp.select(
-                    *(
-                        (exp.func("SUM", c.alias) / exp.func("COUNT", c.alias)).as_(c.alias)
-                        for c in comparisons
-                    )
-                ).from_(table)
-
-                sample_query = (
+                    "*",
+                    (exp.column("s_count") - exp.column("join_count")).as_("s_only_count"),
+                    (exp.column("t_count") - exp.column("join_count")).as_("t_only_count"),
+                ).from_(
                     exp.select(
-                        *(c.alias for c in s_selects.values()),
-                        *(c.alias for c in t_selects.values()),
+                        exp.func("SUM", "s_exists").as_("s_count"),
+                        exp.func("SUM", "t_exists").as_("t_count"),
+                        exp.func("SUM", "rows_joined").as_("join_count"),
+                        *(exp.func("SUM", c.alias).as_(c.alias) for c in comparisons),
                     )
                     .from_(table)
-                    .where(exp.or_(*(exp.column(c.alias).eq(0) for c in comparisons)))
-                    .order_by(
-                        *(s_selects[c.name].alias for c in s_index),
-                        *(t_selects[c.name].alias for c in t_index),
-                    )
-                    .limit(self.limit)
+                    .subquery()
                 )
+                stats = self.adapter.fetchdf(summary_query).iloc[0].to_dict()
+
+                column_stats_query = (
+                    exp.select(
+                        *(
+                            exp.func(
+                                "ROUND",
+                                100 * (exp.func("SUM", c.alias) / exp.func("COUNT", c.alias)),
+                                1,
+                            ).as_(c.alias)
+                            for c in comparisons
+                        )
+                    )
+                    .from_(table)
+                    .where(exp.column("rows_joined").eq(exp.Literal.number(1)))
+                )
+                column_stats = (
+                    self.adapter.fetchdf(column_stats_query)
+                    .T.rename(
+                        columns={0: "pct_match"},
+                        index=lambda x: x.replace("_matches", ""),
+                    )
+                    .drop(index=index_cols)
+                )
+
+                def build_sample_query(sample_where: exp.Expression) -> exp.Select:
+                    return (
+                        exp.select(
+                            *(c.alias for c in s_selects.values()),
+                            *(c.alias for c in t_selects.values()),
+                        )
+                        .from_(table)
+                        .where(
+                            exp.and_(
+                                sample_where,
+                                exp.or_(*(exp.column(c.alias).eq(0) for c in comparisons)),
+                            )
+                        )
+                        .order_by(
+                            *(s_selects[c.name].alias for c in s_index),
+                            *(t_selects[c.name].alias for c in t_index),
+                        )
+                        .limit(self.limit)
+                    )
+
+                joined_sample_cols = [f"s__{c}" for c in index_cols]
+                comparison_cols = [
+                    (f"s__{c}", f"t__{c}")
+                    for c in column_stats[column_stats["pct_match"] < 100].index
+                ]
+                for cols in comparison_cols:
+                    joined_sample_cols.extend([*cols])
+                joined_sample = self.adapter.fetchdf(
+                    build_sample_query(exp.column("rows_joined").eq(exp.Literal.number(1)))
+                )[joined_sample_cols]
+                joined_sample.rename(
+                    columns={
+                        c: c.split("__")[1] if c.split("__")[1] in index_cols else c
+                        for c in joined_sample_cols
+                    },
+                    inplace=True,
+                )
+
+                s_sample = self.adapter.fetchdf(
+                    build_sample_query(
+                        exp.and_(
+                            exp.column("s_exists").eq(exp.Literal.number(1)),
+                            exp.column("rows_joined").eq(exp.Literal.number(0)),
+                        )
+                    )
+                )[
+                    [
+                        *[f"s__{c}" for c in index_cols],
+                        *[f"s__{c}" for c in column_stats.index if not c in index_cols],
+                    ]
+                ]
+
+                t_sample = self.adapter.fetchdf(
+                    build_sample_query(
+                        exp.and_(
+                            exp.column("t_exists").eq(exp.Literal.number(1)),
+                            exp.column("rows_joined").eq(exp.Literal.number(0)),
+                        )
+                    )
+                )[
+                    [
+                        *[f"t__{c}" for c in index_cols],
+                        *[f"t__{c}" for c in column_stats.index if not c in index_cols],
+                    ]
+                ]
 
                 self._row_diff = RowDiff(
                     source=self.source,
                     target=self.target,
-                    stats=self.adapter.fetchdf(summary_query).iloc[0].to_dict(),
-                    sample=self.adapter.fetchdf(sample_query),
-                    column_stats=self.adapter.fetchdf(column_stats_query).T.rename(
-                        columns={0: "pct_match"}
-                    ),
+                    stats=stats,
+                    column_stats=column_stats,
+                    joined_sample=joined_sample,
+                    s_sample=s_sample,
+                    t_sample=t_sample,
                     source_alias=self.source_alias,
                     target_alias=self.target_alias,
                     model_name=self.model_name,

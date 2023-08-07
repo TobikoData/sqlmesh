@@ -665,17 +665,30 @@ class TerminalConsole(Console):
         if row_diff.target_alias:
             target_name = row_diff.target_alias.upper()
 
-        self.console.print("\n[b]Row Count:[/b]")
-        self.console.print(f" [yellow]{source_name}[/yellow]: {row_diff.source_count} rows")
-        self.console.print(f" [green]{target_name}[/green]: {row_diff.target_count} rows")
-        self.console.print(f" Change: {row_diff.count_pct_change:.1f}%")
-        if row_diff.sample.shape[0] > 0 and show_sample:
-            self.console.print("\n[b]Sample Rows:[/b]")
-            self.console.print(row_diff.sample.to_string(index=False), end="\n\n")
-        else:
-            self.console.print("\n[b]No added/removed rows![/b]")
-        self.console.print("\n[b]Column Stats:[/b]")
+        self.console.print("\n[b]Outer Join Row Counts:[/b]")
+        self.console.print(f" [b][blue]JOINED[/blue][/b]: {row_diff.join_count} rows")
+        self.console.print(
+            f" [b][yellow]{source_name} ONLY[/yellow][/b]: {row_diff.s_only_count} rows"
+        )
+        self.console.print(
+            f" [b][green]{target_name} ONLY[/green][/b]: {row_diff.t_only_count} rows"
+        )
+        self.console.print("\n[b][blue]JOINED rows[/blue] comparison stats:[/b]")
         self.console.print(row_diff.column_stats.to_string(index=True), end="\n\n")
+        if show_sample:
+            if row_diff.joined_sample.shape[0] > 0:
+                self.console.print("\n[b][blue]JOINED rows[/blue] sample differences:[/b]")
+                self.console.print(row_diff.joined_sample.to_string(index=False), end="\n\n")
+            else:
+                self.console.print("\n[b]All joined rows match![/b]")
+
+            if row_diff.s_sample.shape[0] > 0:
+                self.console.print(f"\n[b][yellow]{source_name} ONLY[/yellow] sample rows:[/b]")
+                self.console.print(row_diff.s_sample.to_string(index=False), end="\n\n")
+
+            if row_diff.t_sample.shape[0] > 0:
+                self.console.print(f"\n[b][green]{target_name} ONLY[/green] sample rows:[/b]")
+                self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
 
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool
