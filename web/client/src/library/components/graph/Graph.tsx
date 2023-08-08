@@ -564,8 +564,6 @@ const ModelColumns = memo(function ModelColumns({
     function removeEdges(columnId: string): void {
       const visited = new Set<string>()
 
-      console.log('connections', connections)
-
       removeActiveEdges(
         walk(columnId, EnumSide.Left).concat(walk(columnId, EnumSide.Right)),
       )

@@ -175,7 +175,6 @@ export default function LineageFlowProvider({
 
   const removeActiveEdges = useCallback(
     function removeActiveEdges(edges: Array<[string, string]>): void {
-      console.log('removeActiveEdges', edges)
       setActiveEdges(activeEdges => {
         edges.forEach(([left, right]) => {
           const edgesLeft = (activeEdges.get(left) ?? []).filter(
@@ -197,8 +196,6 @@ export default function LineageFlowProvider({
           connections.delete(left)
           connections.delete(right)
         })
-
-        console.log('connections', connections)
 
         return new Map(connections)
       })
