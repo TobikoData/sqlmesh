@@ -12,9 +12,7 @@ import { useStoreContext } from '@context/context'
 export default function App(): JSX.Element {
   const setVersion = useStoreContext(s => s.setVersion)
 
-  const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta({
-    debounceImmediate: true,
-  })
+  const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta()
 
   useEffect(() => {
     void getMeta().then(({ data }) => setVersion(data?.version))

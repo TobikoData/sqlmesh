@@ -388,7 +388,7 @@ function useQueryWithTimeout<
     trigger,
     withDebounce = true,
     debounceDelay = 1000,
-    debounceImmediate = false,
+    debounceImmediate = true,
     callbackCancel,
     callbackError,
   }: ApiOptions & { errorKey: ErrorKey },
