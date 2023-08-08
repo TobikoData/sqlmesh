@@ -173,11 +173,10 @@ class ModelMeta(Node):
             return columns_to_types
 
         if isinstance(v, dict):
-            for column_name, data_type in v.items():
+            for k, data_type in v.items():
                 expr = exp.DataType.build(data_type, dialect=dialect)
                 expr.meta["dialect"] = dialect
-                identifier = t.cast(exp.Identifier, exp.to_identifier(column_name))
-                columns_to_types[normalize_identifiers(identifier, dialect=dialect).name] = expr
+                columns_to_types[normalize_identifiers(k, dialect=dialect).name] = expr
 
             return columns_to_types
 
