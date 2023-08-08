@@ -233,6 +233,10 @@ class SnapshotInfoMixin(ModelKindMixin):
         raise NotImplementedError
 
     @property
+    def model_kind_name(self) -> ModelKindName:
+        raise NotImplementedError
+
+    @property
     def is_forward_only(self) -> bool:
         return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
@@ -256,6 +260,7 @@ class SnapshotInfoMixin(ModelKindMixin):
             is_dev: Whether the table name will be used in development mode.
             for_read: Whether the table name will be used for reading by a different snapshot.
         """
+        is_dev = is_dev and self.model_kind_name != ModelKindName.VIEW
         if is_dev and for_read:
             # If this snapshot is used for **reading**, return a temporary table
             # only if this snapshot captures a direct forward-only change applied to its model.
@@ -643,7 +648,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         intervals = (
             self.dev_intervals
-            if is_dev and self.is_forward_only and self.is_paused
+            if is_dev and not self.is_view and self.is_forward_only and self.is_paused
             else self.intervals
         )
         restatements = restatements or set()
@@ -724,7 +729,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
         )
-        if is_forward_only and self.previous_version:
+        if is_forward_only and self.previous_version and not self.is_view:
             self.version = self.previous_version.data_version.version
             self.physical_schema_ = self.previous_version.physical_schema
         else:
@@ -773,7 +778,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """Provided whether the snapshot is used in a development mode or not, returns True
         if the snapshot targets a temporary table or a clone and False otherwise.
         """
-        return is_dev and (self.is_forward_only or self.is_indirect_non_breaking) and self.is_paused
+        return (
+            is_dev
+            and not self.is_view
+            and (self.is_forward_only or self.is_indirect_non_breaking)
+            and self.is_paused
+        )
 
     def version_get_or_generate(self) -> str:
         """Helper method to get the version or generate it from the fingerprint."""

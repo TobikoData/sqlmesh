@@ -147,32 +147,34 @@ def validate_query_change(
         DataType.Type.FLOAT,
     )
 
-    directly_modified = ["sushi.items"]
-    indirectly_modified = [
+    directly_modified = {"sushi.items"}
+    indirectly_modified = {
         "sushi.order_items",
         "sushi.waiter_revenue_by_day",
         "sushi.customer_revenue_by_day",
         "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
-    ]
-    not_modified = [
+    }
+    not_modified = {
         key
         for key in context.snapshots
         if key not in directly_modified and key not in indirectly_modified
-    ]
+    }
+
+    view_models = {s.name for s in context.snapshots.values() if s.is_view}
 
     if change_category == SnapshotChangeCategory.BREAKING and not logical:
         models_same = not_modified
-        models_different = directly_modified + indirectly_modified
+        models_different = directly_modified | indirectly_modified
     elif change_category == SnapshotChangeCategory.FORWARD_ONLY:
-        models_same = not_modified + directly_modified + indirectly_modified
-        models_different = []
+        models_same = not_modified | directly_modified | indirectly_modified - view_models
+        models_different = view_models
     else:
-        models_same = not_modified + indirectly_modified
-        models_different = directly_modified
+        models_same = not_modified | indirectly_modified - view_models
+        models_different = directly_modified | view_models
 
     def _validate_plan(context, plan):
-        validate_plan_changes(plan, modified=directly_modified + indirectly_modified)
+        validate_plan_changes(plan, modified=directly_modified | indirectly_modified)
         assert bool(plan.missing_intervals) != logical
 
     def _validate_apply(context):
@@ -267,7 +269,15 @@ def validate_model_kind_change(
             ).model.kind.name
             == kind.name
         )
-        assert bool(plan.missing_intervals) != logical
+
+        if logical:
+            view_snapshots = {s.name for s in plan.snapshots if s.is_view}
+            missing_intervals = [
+                i for i in plan.missing_intervals if i.snapshot_name not in view_snapshots
+            ]
+        else:
+            missing_intervals = plan.missing_intervals
+        assert bool(missing_intervals) != logical
 
     apply_to_environment(
         context,
@@ -515,7 +525,7 @@ def setup_rebase(
             context.snapshots["sushi.waiter_revenue_by_day"].version
             == versions["sushi.waiter_revenue_by_day"]
         )
-        assert context.snapshots["sushi.top_waiters"].version == versions["sushi.top_waiters"]
+        assert context.snapshots["sushi.top_waiters"].version != versions["sushi.top_waiters"]
         assert (
             context.snapshots["sushi.customer_revenue_by_day"].version
             == versions["sushi.customer_revenue_by_day"]
@@ -848,7 +858,7 @@ def validate_plan_changes(
 
 
 def validate_versions_same(
-    model_names: t.List[str],
+    model_names: t.Iterable[str],
     versions: t.Dict[str, str],
     other_versions: t.Dict[str, str],
 ) -> None:
@@ -857,7 +867,7 @@ def validate_versions_same(
 
 
 def validate_versions_different(
-    model_names: t.List[str],
+    model_names: t.Iterable[str],
     versions: t.Dict[str, str],
     other_versions: t.Dict[str, str],
 ) -> None:

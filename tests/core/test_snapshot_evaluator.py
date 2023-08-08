@@ -354,6 +354,33 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
     )
 
 
+def test_promote_view_forward_only_snapshot(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW
+            );
+
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"), is_dev=True)
+
+    adapter_mock.create_view.assert_called_once_with(
+        "test_schema__test_env.test_model",
+        exp.select("*").from_(snapshot.table_name()),
+    )
+
+
 def test_promote_model_info(mocker: MockerFixture):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"

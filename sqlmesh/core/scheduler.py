@@ -209,7 +209,7 @@ class Scheduler:
         else:
             environment_naming_info = environment
 
-        is_dev = environment != c.PROD
+        is_dev = environment_naming_info.name != c.PROD
         execution_time = execution_time or now()
         batches = self.batches(
             start,
