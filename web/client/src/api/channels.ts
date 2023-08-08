@@ -55,8 +55,8 @@ class EventSourceConnection {
     this.timerId = setTimeout(() => {
       console.log(`Reconnecting Event Source ${this.source}`)
       this.cleanup()
-      this.resubscribe()
       this.setEventSource()
+      this.resubscribe()
     }, delay)
   }
 
