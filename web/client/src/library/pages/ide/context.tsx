@@ -20,6 +20,7 @@ export const EnumErrorKey = {
   FileExplorer: 'file-explorer',
   Table: 'table',
   TableDiff: 'table-diff',
+  SaveFile: 'save-file',
 } as const
 
 export type ErrorKey = (typeof EnumErrorKey)[keyof typeof EnumErrorKey]
