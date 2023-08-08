@@ -139,13 +139,17 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   )
 
   const updateFileContent = useCallback(
-    debounceSync(function updateFileContent(value: string): void {
-      if (tab == null) return
+    debounceSync(
+      function updateFileContent(value: string): void {
+        if (tab == null) return
 
-      tab.file.content = value
+        tab.file.content = value
 
-      refreshTab()
-    }),
+        refreshTab()
+      },
+      500,
+      true,
+    ),
     [tab.id],
   )
 

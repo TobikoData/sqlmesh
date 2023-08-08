@@ -386,7 +386,7 @@ const ModelColumn = memo(function ModelColumn({
         withHandles ? 'p-0' : 'py-1 px-2 rounded-md mb-1',
         className,
       )}
-      onClick={debounceSync(toggleColumnLineage, 500)}
+      onClick={debounceSync(toggleColumnLineage, 500, true)}
     >
       <div
         className={clsx(
