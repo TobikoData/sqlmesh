@@ -671,16 +671,16 @@ function getUpdatedNodes(
 
     const hasSelections = selectedNodes.size > 0 || connections.size > 0
     const isActiveNode = activeNodes.size === 0 || activeNodes.has(node.id)
-    const isImpactNode = connectedNodes.has(node.id)
+    const isImpactedNode = connectedNodes.has(node.id)
     const isSecondaryNode = isFalse(connectedNodes.has(node.id))
     const withoutImpactNodes =
       isFalse(withImpact) && isFalse(withConnected) && isFalse(hasSelections)
     const withoutSecondaryNodes =
       isFalse(withSecondary) && isFalse(hasSelections)
     const shouldHideSecondary = isSecondaryNode && withoutSecondaryNodes
-    const shouldHideImpact = isImpactNode && withoutImpactNodes
+    const shouldHideImpacted = isImpactedNode && withoutImpactNodes
 
-    if (isFalse(shouldHideImpact) && isFalse(shouldHideSecondary)) {
+    if (isFalse(shouldHideImpacted) && isFalse(shouldHideSecondary)) {
       node.hidden = isFalse(isActiveNode)
     }
 
