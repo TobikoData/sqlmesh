@@ -1673,7 +1673,7 @@ def test_incremental_unmanaged_validation():
 def test_custom_interval_unit():
     assert (
         load_sql_based_model(
-            d.parse("MODEL (name db.table, interval_unit minute); SELECT a FROM tbl;")
+            d.parse("MODEL (name db.table, interval_unit MINUTE); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.MINUTE
     )
@@ -1687,7 +1687,7 @@ def test_custom_interval_unit():
 
     assert (
         load_sql_based_model(
-            d.parse("MODEL (name db.table, interval_unit hour, cron '@daily'); SELECT a FROM tbl;")
+            d.parse("MODEL (name db.table, interval_unit Hour, cron '@daily'); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.HOUR
     )
@@ -1714,6 +1714,16 @@ def test_custom_interval_unit():
         ).interval_unit
         == IntervalUnit.MINUTE
     )
+
+    with pytest.raises(ConfigError, match=r"Interval unit 'month' larger than cron '@daily'"):
+        load_sql_based_model(
+            d.parse("MODEL (name db.table, interval_unit month); SELECT a FROM tbl;")
+        )
+
+    with pytest.raises(ConfigError, match=r"Interval unit 'day' larger than cron '@hourly'"):
+        load_sql_based_model(
+            d.parse("MODEL (name db.table, interval_unit Day, cron '@hourly'); SELECT a FROM tbl;")
+        )
 
 
 def test_model_table_properties():

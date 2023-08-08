@@ -86,6 +86,20 @@ class IntervalUnit(str, Enum):
         """
         return self.croniter(self.cron_next(value)).get_prev()
 
+    @property
+    def seconds(self) -> int:
+        if self == IntervalUnit.MINUTE:
+            return 60
+        if self == IntervalUnit.HOUR:
+            return 60 * 60
+        if self == IntervalUnit.DAY:
+            return 60 * 60 * 24
+        if self == IntervalUnit.MONTH:
+            return 60 * 60 * 24 * 28
+        if self == IntervalUnit.YEAR:
+            return 60 * 60 * 24 * 365
+        return 0
+
 
 class Node(PydanticModel):
     """
@@ -98,8 +112,9 @@ class Node(PydanticModel):
         start: The earliest date that the node will be executed for. If this is None,
             then the date is inferred by taking the most recent start date of its ancestors.
             The start date can be a static datetime or a relative datetime like "1 year ago"
-        cron: A cron string specifying how often the ndoe should be run, leveraging the
+        cron: A cron string specifying how often the node should be run, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
+        interval_unit: The duration of an interval for the model. By default, it is computed from the cron expression.
         stamp: An optional arbitrary string sequence used to create new node versions without making
             changes to any of the functional components of the definition.
     """
@@ -109,14 +124,14 @@ class Node(PydanticModel):
     owner: t.Optional[str]
     start: t.Optional[TimeLike]
     cron: str = "@daily"
-    stamp: t.Optional[str]
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
+    stamp: t.Optional[str]
 
     _croniter: t.Optional[CroniterCache] = None
     __inferred_interval_unit: t.Optional[IntervalUnit] = None
 
     @validator("name", pre=True)
-    def _name_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> str:
+    def _name_validator(cls, v: t.Any) -> str:
         return v.meta.get("sql") or v.sql() if isinstance(v, exp.Expression) else str(v)
 
     @validator("start", pre=True)
@@ -139,9 +154,27 @@ class Node(PydanticModel):
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
 
-    @validator("owner", "description", "stamp", "interval_unit_", pre=True)
+    @validator("owner", "description", "stamp", pre=True)
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
+
+    @validator("interval_unit_", pre=True)
+    def _interval_unit_validator(
+        cls, v: t.Any, values: t.Dict[str, t.Any]
+    ) -> t.Optional[IntervalUnit]:
+        if v is None:
+            return v
+
+        if not isinstance(v, IntervalUnit):
+            v = IntervalUnit(t.cast(str, str_or_exp_to_str(v)).lower())
+        cron = values.get("cron")
+        if not cron:
+            return v
+
+        max_interval_unit = interval_unit_for_cron(cron)
+        if v.seconds > max_interval_unit.seconds:
+            raise ConfigError(f"Interval unit '{v}' larger than cron '{cron}'")
+        return v
 
     @property
     def batch_size(self) -> t.Optional[int]:
@@ -232,19 +265,7 @@ class Node(PydanticModel):
             The IntervalUnit enum.
         """
         if not self.__inferred_interval_unit:
-            croniter = CroniterCache(self.cron)
-            samples = [croniter.get_next() for _ in range(sample_size)]
-            min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-            if min_interval >= 31536000:
-                self.__inferred_interval_unit = IntervalUnit.YEAR
-            elif min_interval >= 2419200:
-                self.__inferred_interval_unit = IntervalUnit.MONTH
-            elif min_interval >= 86400:
-                self.__inferred_interval_unit = IntervalUnit.DAY
-            elif min_interval >= 3600:
-                self.__inferred_interval_unit = IntervalUnit.HOUR
-            else:
-                self.__inferred_interval_unit = IntervalUnit.MINUTE
+            self.__inferred_interval_unit = interval_unit_for_cron(self.cron, sample_size)
         return self.__inferred_interval_unit
 
 
@@ -252,3 +273,19 @@ def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:
     if isinstance(v, exp.Expression):
         return v.name
     return str(v) if v is not None else None
+
+
+def interval_unit_for_cron(cron: str, sample_size: int = 10) -> IntervalUnit:
+    croniter = CroniterCache(cron)
+    samples = [croniter.get_next() for _ in range(sample_size)]
+    min_interval = min(b - a for a, b in zip(samples, samples[1:]))
+    if min_interval >= 31536000:
+        return IntervalUnit.YEAR
+    elif min_interval >= 2419200:
+        return IntervalUnit.MONTH
+    elif min_interval >= 86400:
+        return IntervalUnit.DAY
+    elif min_interval >= 3600:
+        return IntervalUnit.HOUR
+    else:
+        return IntervalUnit.MINUTE
