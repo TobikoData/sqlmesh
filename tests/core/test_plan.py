@@ -145,7 +145,7 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     plan = sushi_context_pre_scheduling.plan(
         restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True
     )
-    assert plan.restatements == {"sushi.waiter_revenue_by_day"}
+    assert plan.restatements == {"sushi.waiter_revenue_by_day", "sushi.top_waiters"}
     assert plan.requires_backfill
 
     with pytest.raises(PlanError, match=r"Cannot restate from 'unknown_model'.*"):
@@ -157,7 +157,7 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
         SqlModel(
             name="a",
             query=parse_one("select 1, key"),
-            kind="VIEW",
+            kind="EMBEDDED",
         )
     )
 

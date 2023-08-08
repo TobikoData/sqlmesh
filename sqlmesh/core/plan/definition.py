@@ -448,7 +448,7 @@ class Plan:
 
             snapshots = self.context_diff.snapshots
             downstream = [
-                d for d in downstream if snapshots[d].is_materialized and not snapshots[d].is_seed
+                d for d in downstream if not snapshots[d].is_symbolic and not snapshots[d].is_seed
             ]
 
             if not self.is_dev:
