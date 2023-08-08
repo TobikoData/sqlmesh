@@ -61,10 +61,10 @@ export default function ModelLineage({
   return (
     <ReactFlowProvider>
       {isFetching && (
-        <div className="w-full h-full bg-theme flex justify-center items-center ">
+        <div className="w-full h-full bg-theme flex justify-center items-center">
           <Loading className="inline-block">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
-            <h3 className="text-md">Loading Model`s Lineage...</h3>
+            <h3 className="text-md">Loading Model&#39;s Lineage...</h3>
           </Loading>
         </div>
       )}

@@ -164,7 +164,7 @@ function getNodeMap({
       type: isNotNil(model)
         ? (model.type as LineageNodeModelType)
         : // If model name present in lineage but not in global models
-        // it means either this is a CTE or  model is UNKNOWN
+        // it means either this is a CTE or model is UNKNOWN
         // CTEs only have connections between columns
         // where UNKNOWN model has connection only from another model
         isFalse(currentModelNames.includes(modelName)) &&
@@ -458,17 +458,6 @@ function mergeConnections(
           })
         })
       })
-
-      // Now we need to update active edges from connections
-      // Left bucket contains references to all sources (right handlers)
-      // And right bucket contains references to all targets (left handlers)
-
-      // connectionsModelTarget.left.forEach(id => {
-      //   activeEdges.push([modelColumnIdTarget, toNodeOrEdgeId(EnumSide.Right, id)])
-      // })
-      // connectionsModelTarget.right.forEach(id => {
-      //   activeEdges.push([modelColumnIdTarget, toNodeOrEdgeId(EnumSide.Left, id)])
-      // })
     }
   }
 
