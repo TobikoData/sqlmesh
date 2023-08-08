@@ -45,7 +45,7 @@ After running `sqlmesh plan dev` and applying the plan, the updated model will b
 
 Compare the two versions of the model with the table diff tool by running `sqlmesh table_diff prod:dev sqlmesh_example.full_model`.
 
-The first argument `prod:dev` specifies that `prod` is the baseline environment to which we will compare `dev`. The second argument `sqlmesh_example.full_model` is the name of the model to compare across the `prod` and `dev` environments.
+The first argument `prod:dev` specifies that `prod` is the source environment to which we will compare the target environment `dev`. The second argument `sqlmesh_example.full_model` is the name of the model to compare across the `prod` and `dev` environments.
 
 Because the `grain` is set to `item_id` in the `MODEL` statement, SQLMesh knows how to perform the join between the two models. If `grain` were not set, the command would need to include the `-o item_id` option to specify that the tables should be joined on column `item_id`. If more than one column should be used for the join, specify `-o` once for each join column.
 
@@ -101,21 +101,21 @@ PROD ONLY sample rows:
           3              1
 ```
 
-The "JOINED ROWS data differences" section does not display any rows because all columns matched between the two tables.
+The "JOINED ROWS data differences" section does not display any rows because all columns matched between the two tables for the joined rows.
 
-The "PROD ONLY sample rows" section shows the one row that is present in `PROD` but not in `DEV`. The column names begin with `s__` to indicate that they were specified as the "source" (as compared to "target") in the table diff comparison command.
+The "PROD ONLY sample rows" section shows the one row that is present in `PROD` but not in `DEV`. The column names begin with `s__` to indicate that they were specified as the source in the `table_diff` command.
 
 ## Diffing tables or views
 
 Compare tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.
 
-The source and target tables should be fully qualified with catalog or schema names such that a database query of the form `SELECT ... FROM [source table]` would execute correctly.
+The source and target tables should be fully qualified with catalog or schema names such that a SQL query of the form `SELECT ... FROM [source table]` would execute correctly.
 
 Recall that SQLMesh models are accessible via views in the database or engine. In the `prod` environment, the view has the same name as the model. For example, in the quickstart example project the `prod` seed model is represented by the view `sqlmesh_example.seed_model`.
 
 In some situations, it might be appropriate to diff two different models. While this is not such a situation, as a demonstration we can compare the seed and full models with the model change made above.
 
-First, run and apply `sqlmesh plan` to deploy the model change to `prod`. Diffing the seed and full models generates the following:
+First, run and apply `sqlmesh plan` to deploy the model change to `prod`. Diffing the seed and full models then generates the following output:
 
 ```bash linenums="1"
 $ sqlmesh table_diff sqlmesh_example.seed_model:sqlmesh_example.full_model -o item_id --show-sample
