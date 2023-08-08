@@ -3,7 +3,6 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import Field, root_validator, validator
-from pydantic.fields import ModelField
 from sqlglot import exp
 from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
@@ -39,9 +38,8 @@ class ModelMeta(Node):
     column_descriptions_: t.Optional[t.Dict[str, str]]
     audits: t.List[AuditReference] = []
     tags: t.List[str] = []
-    grain: t.Optional[Reference] = None
-    grains: t.List[Reference] = []
-    references: t.List[Reference] = []
+    grains: t.List[exp.Expression] = []
+    references: t.List[exp.Expression] = []
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
     table_properties_: t.Optional[t.Dict[str, exp.Expression]] = Field(
@@ -242,28 +240,39 @@ class ModelMeta(Node):
 
         return v
 
-    @validator("grain", pre=True)
-    def _grain_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[Reference]:
-        if isinstance(v, (exp.Expression, str)):
-            return Reference(expression=v, unique=True, dialect=values.get("dialect"))
-        return Reference(**v)
-
     @validator("grains", "references", pre=True)
-    def _refs_validator(
-        cls, vs: t.Any, values: t.Dict[str, t.Any], field: ModelField
-    ) -> t.List[Reference]:
+    def _refs_validator(cls, vs: t.Any, values: t.Dict[str, t.Any]) -> t.List[exp.Expression]:
+        dialect = values.get("dialect")
+
         if isinstance(vs, exp.Paren):
             vs = vs.unnest()
 
         if isinstance(vs, (exp.Tuple, exp.Array)):
             vs = vs.expressions
+        else:
+            vs = [
+                d.parse_one(v, dialect=dialect) if isinstance(v, str) else v
+                for v in ensure_collection(vs)
+            ]
 
-        return [
-            Reference(expression=v, unique=field.name == "grains", dialect=values.get("dialect"))
-            if isinstance(v, (exp.Expression, str))
-            else Reference(**v)
-            for v in ensure_collection(vs)
-        ]
+        refs = []
+
+        for v in vs:
+            v = exp.column(v) if isinstance(v, exp.Identifier) else v
+            v.meta["dialect"] = dialect
+            refs.append(v)
+
+        return refs
+
+    @root_validator(pre=True)
+    def _pre_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        if "grain" in values:
+            if "grains" in values:
+                raise ConfigError(
+                    f"Cannot use argument 'grain' ({values['grain']}) with 'grains' ({values['grains']}), use only grains"
+                )
+            values["grains"] = [values.pop("grain")]
+        return values
 
     @root_validator
     def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
@@ -350,7 +359,9 @@ class ModelMeta(Node):
     @property
     def all_references(self) -> t.List[Reference]:
         """All references including grains."""
-        return ([self.grain] if self.grain else []) + self.grains + self.references
+        return [Reference(model_name=self.name, expression=e, unique=True) for e in self.grains] + [
+            Reference(model_name=self.name, expression=e, unique=True) for e in self.references
+        ]
 
     @property
     def _partition_by_columns(self) -> t.List[exp.Column]:

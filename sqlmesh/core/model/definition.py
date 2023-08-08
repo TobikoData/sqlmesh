@@ -16,7 +16,7 @@ from astor import to_source
 from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
-from sqlglot.helper import ensure_collection, ensure_list
+from sqlglot.helper import ensure_list
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
@@ -1700,7 +1700,7 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
 
-    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs}, path)
+    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs} - {"grain"}, path)
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
@@ -1890,11 +1890,7 @@ def _single_expr_or_tuple(values: t.Sequence[exp.Expression]) -> exp.Expression 
 
 
 def _refs_to_sql(values: t.Any) -> exp.Expression:
-    from sqlmesh.core.reference import Reference
-
-    if isinstance(values, Reference):
-        return values.expression
-    return exp.Tuple(expressions=[_refs_to_sql(ref) for ref in ensure_collection(values)])
+    return exp.Tuple(expressions=values)
 
 
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
@@ -1912,7 +1908,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
     "tags": _single_value_or_tuple,
-    "grain": _refs_to_sql,
     "grains": _refs_to_sql,
     "references": _refs_to_sql,
     "hash_raw_query": exp.convert,

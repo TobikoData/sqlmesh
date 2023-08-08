@@ -1,7 +1,7 @@
 from sqlglot import exp
 
 from sqlmesh.core.metric import Renderer
-from sqlmesh.core.reference import Graph
+from sqlmesh.core.reference import ReferenceGraph
 
 
 def test_render(sushi_context_pre_scheduling, assert_exp_eq):
@@ -13,7 +13,7 @@ def test_render(sushi_context_pre_scheduling, assert_exp_eq):
             context.metrics["items_per_order"],
             context.metrics["total_orders_from_active_customers"],
         ],
-        graph=Graph(context.models.values()),
+        graph=ReferenceGraph(context.models.values()),
         sources={
             "sushi.order_items": exp.select("*").from_("sushi.order_items"),
         },

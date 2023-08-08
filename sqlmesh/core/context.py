@@ -903,8 +903,10 @@ class Context(BaseContext):
             source_alias = source_env.name
             target_alias = target_env.name
 
-            if not on and model.grain:
-                on = model.grain.columns
+            if not on:
+                for ref in model.all_references:
+                    if ref.unique:
+                        on = ref.columns
 
         if not on:
             raise SQLMeshError("Missing join condition 'on'")

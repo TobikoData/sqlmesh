@@ -3,7 +3,6 @@ from __future__ import annotations
 import typing as t
 from collections import defaultdict, deque
 
-from pydantic import validator
 from sqlglot import exp
 
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
@@ -14,8 +13,8 @@ if t.TYPE_CHECKING:
 
 
 class Reference(PydanticModel, frozen=True):
+    model_name: str
     expression: exp.Expression
-    dialect: str
     unique: bool = False
     _name: str = ""
 
@@ -28,21 +27,6 @@ class Reference(PydanticModel, frozen=True):
         if isinstance(expression, (exp.Array, exp.Tuple)):
             return [e.output_name for e in expression.expressions]
         return [expression.output_name]
-
-    @validator("expression", pre=True)
-    def _expression_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> exp.Expression:
-        from sqlmesh.core.model.common import parse_expression
-
-        expression = parse_expression(v, values)
-
-        if not isinstance(expression, exp.Expression):
-            raise ConfigError(
-                f"Reference '{v}' must be a single expression. For compound keys create a tuple eg: (a, b) as c"
-            )
-
-        if isinstance(expression, exp.Identifier):
-            expression = exp.column(expression)
-        return expression
 
     @property
     def name(self) -> str:
@@ -67,7 +51,7 @@ class Reference(PydanticModel, frozen=True):
         return self._name
 
 
-class Graph:
+class ReferenceGraph:
     def __init__(self, models: t.Iterable[Model]):
         self._model_refs: t.DefaultDict[str, t.Dict[str, Reference]] = defaultdict(dict)
         self._ref_models: t.DefaultDict[str, t.Dict[str, str]] = defaultdict(dict)
@@ -80,28 +64,27 @@ class Graph:
             self._model_refs[model.name][ref.name] = ref
             self._ref_models[ref.name][model.name] = model.name
 
-    def find_path(
-        self, source: str, target: str, max_depth: int = 3
-    ) -> t.List[t.Tuple[str, Reference]]:
-        queue = deque([(source, ref)] for ref in self._model_refs[source].values())
+    def find_path(self, source: str, target: str, max_depth: int = 3) -> t.List[Reference]:
+        queue = deque(([ref] for ref in self._model_refs[source].values()))
 
         while queue:
             path = queue.popleft()
             visited = set()
             many = False
 
-            for model_name, ref in path:
-                visited.add(model_name)
+            for ref in path:
+                visited.add(ref.model_name)
                 many = many or not ref.unique
 
-            ref_name = path[-1][-1].name
+            ref_name = path[-1].name
 
             for model_name in self._ref_models[ref_name].values():
                 for ref in self._model_refs[model_name].values():
+                    # paths cannot have loops or contain many to many refs
                     if model_name in visited or (many and not ref.unique):
                         continue
 
-                    new_path = path + [(model_name, ref)]
+                    new_path = path + [ref]
 
                     if model_name == target:
                         return new_path
@@ -110,5 +93,5 @@ class Graph:
                         queue.append(new_path)
 
         raise SQLMeshError(
-            f"Cannot find path between {source} and {target}. Make sure that references/grains are configured and that a many to many join is not occurring."
+            f"Cannot find path between '{source}' and '{target}'. Make sure that references/grains are configured and that a many to many join is not occurring."
         )

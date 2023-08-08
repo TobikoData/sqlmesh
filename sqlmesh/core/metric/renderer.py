@@ -8,14 +8,17 @@ from sqlglot.helper import ensure_collection
 from sqlmesh.core.metric.definition import Metric, remove_namespace
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.reference import Graph
+    from sqlmesh.core.reference import ReferenceGraph
+
+
+AggsAndJoins = t.Tuple[t.Set[exp.AggFunc], t.Set[str]]
 
 
 class Renderer:
     def __init__(
         self,
         metrics: t.Collection[Metric],
-        graph: Graph,
+        graph: ReferenceGraph,
         dialect: str = "",
         sources: t.Optional[t.Dict[str, exp.Expression]] = None,
     ):
@@ -46,16 +49,14 @@ class Renderer:
         group_by = ensure_collection(group_by)
         formulas = []
         # ensure that relative order of sources stays the same if passed in
-        sources: t.Dict[str, t.Tuple[t.Set[exp.AggFunc], t.Set[str]]] = {
-            name: (set(), set()) for name in self.sources
-        }
+        sources: t.Dict[str, AggsAndJoins] = {name: (set(), set()) for name in self.sources}
 
         for metric in self.metrics:
             formulas.append(metric.formula)
-            for agg, tables in metric.aggs.items():
-                aggs, joins = sources.setdefault(tables[0], (set(), set()))
+            for agg, (measure, dims) in metric.aggs.items():
+                aggs, joins = sources.setdefault(measure, (set(), set()))
                 aggs.add(agg)
-                joins.update(tables[1:])
+                joins.update(dims)
 
         if not isinstance(where, dict):
             where = exp.maybe_parse(where, dialect=self.dialect)
@@ -117,10 +118,10 @@ class Renderer:
         for join in joins:
             path = self.graph.find_path(name, join)
             for i in range(len(path) - 1):
-                a_model, a_ref = path[i]
-                b_model, b_ref = path[i + 1]
-                a_model_alias = remove_namespace(a_model)
-                b_model_alias = remove_namespace(b_model)
+                a_ref = path[i]
+                b_ref = path[i + 1]
+                a_model_alias = remove_namespace(a_ref.model_name)
+                b_model_alias = remove_namespace(b_ref.model_name)
 
                 a = a_ref.expression.copy()
                 a.set("table", exp.to_identifier(a_model_alias))
@@ -128,7 +129,7 @@ class Renderer:
                 b.set("table", exp.to_identifier(b_model_alias))
 
                 source.join(
-                    b_model,
+                    b_ref.model_name,
                     on=a.eq(b),
                     join_type="LEFT",
                     join_alias=b_model_alias,

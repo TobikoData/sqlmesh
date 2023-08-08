@@ -13,6 +13,8 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
 
+MeasureAndDimTables = t.Tuple[str, t.Tuple[str, ...]]
+
 
 def load_metric_ddl(
     expression: exp.Expression, dialect: t.Optional[str], path: Path = Path(), **kwargs: t.Any
@@ -151,7 +153,7 @@ class Metric(MetricMeta, frozen=True):
     expanded: exp.Expression
 
     @property
-    def aggs(self) -> t.Dict[exp.AggFunc, t.List[str]]:
+    def aggs(self) -> t.Dict[exp.AggFunc, MeasureAndDimTables]:
         """Returns a dictionary of aggregation to referenced tables.
 
         This method removes catalog and schema information from columns.
@@ -161,7 +163,7 @@ class Metric(MetricMeta, frozen=True):
                 lambda node: exp.column(node.this, table=remove_namespace(node, self.dialect))
                 if isinstance(node, exp.Column) and node.table
                 else node
-            ): _get_ordered_tables(agg, self.dialect)
+            ): _get_measure_and_dim_tables(agg, self.dialect)
             for agg in self.expanded.find_all(exp.AggFunc)
         }
 
@@ -185,7 +187,7 @@ def _raise_metric_config_error(msg: str, path: Path) -> None:
     raise ConfigError(f"{msg}. '{path}'")
 
 
-def _get_ordered_tables(expression: exp.Expression, dialect: str) -> t.List[str]:
+def _get_measure_and_dim_tables(expression: exp.Expression, dialect: str) -> MeasureAndDimTables:
     """Finds all the table references in a metric definition.
 
     Additionally ensure than the first table returned is the 'measure' or numeric value being aggregated.
@@ -201,7 +203,7 @@ def _get_ordered_tables(expression: exp.Expression, dialect: str) -> t.List[str]
             return True
         if isinstance(parent, (exp.If, exp.Case)) and node.arg_key != "this":
             return is_measure(parent)
-        if isinstance(parent, (exp.Binary, exp.Paren)):
+        if isinstance(parent, (exp.Binary, exp.Paren, exp.Distinct)):
             return is_measure(parent)
         return False
 
@@ -213,12 +215,8 @@ def _get_ordered_tables(expression: exp.Expression, dialect: str) -> t.List[str]
             if not measure_table and is_measure(node):
                 measure_table = table
 
-    ordered = []
+    if not measure_table:
+        raise ConfigError(f"Could not infer a measures table from '{expression}'")
 
-    if measure_table:
-        tables.pop(measure_table)
-        ordered.append(measure_table)
-
-    ordered.extend(tables)
-
-    return ordered
+    tables.pop(measure_table)
+    return (measure_table, tuple(tables.keys()))
