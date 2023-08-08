@@ -593,12 +593,12 @@ function getUpdatedEdges(
       const isSecondaryEdge =
         isFalse(connectedNodes.has(edge.source)) ||
         isFalse(connectedNodes.has(edge.target))
-      const withoutImactNodes =
+      const withoutImpactNodes =
         isFalse(withImpact) && isFalse(withConnected) && isFalse(hasSelections)
       const withoutSecondaryNodes =
         isFalse(withSecondary) && isFalse(hasSelections)
       const shouldHideSecondary = isSecondaryEdge && withoutSecondaryNodes
-      const shouldHideImpact = isImpactEdge && withoutImactNodes
+      const shouldHideImpact = isImpactEdge && withoutImpactNodes
       const isVisibleEdge =
         selectedNodes.size > 0 &&
         selectedEdges.has(edge.id) &&
@@ -673,12 +673,12 @@ function getUpdatedNodes(
     const isActiveNode = activeNodes.size === 0 || activeNodes.has(node.id)
     const isImpactNode = connectedNodes.has(node.id)
     const isSecondaryNode = isFalse(connectedNodes.has(node.id))
-    const withoutImactNodes =
+    const withoutImpactNodes =
       isFalse(withImpact) && isFalse(withConnected) && isFalse(hasSelections)
     const withoutSecondaryNodes =
       isFalse(withSecondary) && isFalse(hasSelections)
     const shouldHideSecondary = isSecondaryNode && withoutSecondaryNodes
-    const shouldHideImpact = isImpactNode && withoutImactNodes
+    const shouldHideImpact = isImpactNode && withoutImpactNodes
 
     if (isFalse(shouldHideImpact) && isFalse(shouldHideSecondary)) {
       node.hidden = isFalse(isActiveNode)
@@ -719,12 +719,9 @@ function hasActiveEdge(
 
 function hasActiveEdgeConnector(
   activeEdges: ActiveEdges = new Map(),
-  maybeConnector: string,
+  connector: string,
 ): boolean {
-  const left = activeEdges.get(maybeConnector) ?? []
-  const right = activeEdges.get(maybeConnector) ?? []
-
-  return left.length > 0 || right.length > 0
+  return (activeEdges.get(connector) ?? []).length > 0
 }
 
 function getModelNodeTypeTitle(type: LineageNodeModelType): string {
