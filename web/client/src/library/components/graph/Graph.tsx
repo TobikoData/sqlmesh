@@ -755,7 +755,7 @@ function ModelColumnLineage({
 
   const [isBuildingLayout, setIsBuildingLayout] = useState(true)
   const [hasBackground, setHasBackground] = useState(true)
-  const [withImpact, setWithImpact] = useState(true)
+  const [withImpacted, setWithImpact] = useState(true)
   const [withSecondary, setWithSecondary] = useState(true)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
@@ -795,7 +795,7 @@ function ModelColumnLineage({
       selectedNodes,
       connections,
       withConnected,
-      withImpact,
+      withImpacted,
       withSecondary,
       withColumns,
     )
@@ -808,7 +808,7 @@ function ModelColumnLineage({
       selectedNodes,
       connectedNodes,
       withConnected,
-      withImpact,
+      withImpacted,
       withSecondary,
     )
     setTimeout(() => {
@@ -864,7 +864,7 @@ function ModelColumnLineage({
       selectedNodes,
       connections,
       withConnected,
-      withImpact,
+      withImpacted,
       withSecondary,
       withColumns,
     )
@@ -878,7 +878,7 @@ function ModelColumnLineage({
       selectedNodes,
       connectedNodes,
       withConnected,
-      withImpact,
+      withImpacted,
       withSecondary,
     )
 
@@ -894,7 +894,7 @@ function ModelColumnLineage({
     selectedEdges,
     connectedNodes,
     withConnected,
-    withImpact,
+    withImpacted,
     withSecondary,
     withColumns,
     mainNode,
@@ -971,7 +971,7 @@ function ModelColumnLineage({
                   <b>Selected:</b> {countSelected}
                 </span>
               )}
-              {withImpact && countSelected === 0 && countImpact > 0 && (
+              {withImpacted && countSelected === 0 && countImpact > 0 && (
                 <span className="mr-2">
                   <b>Impact:</b> {countImpact}
                 </span>
@@ -1021,7 +1021,7 @@ function ModelColumnLineage({
                   withColumns && 'Columns',
                   hasBackground && 'Background',
                   withConnected && 'Connected',
-                  withImpact && 'Impact',
+                  withImpacted && 'Impact',
                   withSecondary && 'Secondary',
                 ].filter(Boolean) as string[]
               }

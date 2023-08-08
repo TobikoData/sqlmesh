@@ -573,7 +573,7 @@ function getUpdatedEdges(
   selectedNodes: Set<string>,
   connectedNodes: Set<string>,
   withConnected: boolean = false,
-  withImpact: boolean = false,
+  withImpacted: boolean = false,
   withSecondary: boolean = false,
 ): Edge[] {
   const tempEdges = edges.map(edge => {
@@ -588,17 +588,19 @@ function getUpdatedEdges(
       // Edge between models
       const hasSelections =
         selectedNodes.size > 0 || connections.size > 0 || activeNodes.size > 0
-      const isImpactEdge =
+      const isImpactedEdge =
         connectedNodes.has(edge.source) || connectedNodes.has(edge.target)
       const isSecondaryEdge =
         isFalse(connectedNodes.has(edge.source)) ||
         isFalse(connectedNodes.has(edge.target))
-      const withoutImpactNodes =
-        isFalse(withImpact) && isFalse(withConnected) && isFalse(hasSelections)
+      const withoutImpactedNodes =
+        isFalse(withImpacted) &&
+        isFalse(withConnected) &&
+        isFalse(hasSelections)
       const withoutSecondaryNodes =
         isFalse(withSecondary) && isFalse(hasSelections)
       const shouldHideSecondary = isSecondaryEdge && withoutSecondaryNodes
-      const shouldHideImpact = isImpactEdge && withoutImpactNodes
+      const shouldHideImpacted = isImpactedEdge && withoutImpactedNodes
       const isVisibleEdge =
         selectedNodes.size > 0 &&
         selectedEdges.has(edge.id) &&
@@ -606,7 +608,7 @@ function getUpdatedEdges(
         activeNodes.has(edge.target)
 
       if (
-        isFalse(shouldHideImpact) &&
+        isFalse(shouldHideImpacted) &&
         isFalse(shouldHideSecondary) &&
         (isFalse(hasSelections) || isVisibleEdge)
       ) {
@@ -662,7 +664,7 @@ function getUpdatedNodes(
   selectedNodes: Set<string>,
   connections: Map<string, Connections>,
   withConnected: boolean = true,
-  withImpact: boolean = true,
+  withImpacted: boolean = true,
   withSecondary: boolean = true,
   withColumns: boolean = true,
 ): Node[] {
@@ -673,12 +675,12 @@ function getUpdatedNodes(
     const isActiveNode = activeNodes.size === 0 || activeNodes.has(node.id)
     const isImpactedNode = connectedNodes.has(node.id)
     const isSecondaryNode = isFalse(connectedNodes.has(node.id))
-    const withoutImpactNodes =
-      isFalse(withImpact) && isFalse(withConnected) && isFalse(hasSelections)
+    const withoutImpactedNodes =
+      isFalse(withImpacted) && isFalse(withConnected) && isFalse(hasSelections)
     const withoutSecondaryNodes =
       isFalse(withSecondary) && isFalse(hasSelections)
     const shouldHideSecondary = isSecondaryNode && withoutSecondaryNodes
-    const shouldHideImpacted = isImpactedNode && withoutImpactNodes
+    const shouldHideImpacted = isImpactedNode && withoutImpactedNodes
 
     if (isFalse(shouldHideImpacted) && isFalse(shouldHideSecondary)) {
       node.hidden = isFalse(isActiveNode)
