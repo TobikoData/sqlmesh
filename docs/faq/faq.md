@@ -3,14 +3,14 @@
 ## General
 
 ???+ question "What is SQLMesh?"
-    SQLMesh is an open source data transformation framework that brings the best practices of DevOps to data teams. It enables data engineers, scientists, and analysts to efficiently run and deploy data transformations written in SQL or Python. 
-    
-    It is created and maintained by Tobiko Data, a company founded by data leaders from Airbnb, Apple, and Netflix. 
-    
+    SQLMesh is an open source data transformation framework that brings the best practices of DevOps to data teams. It enables data engineers, scientists, and analysts to efficiently run and deploy data transformations written in SQL or Python.
+
+    It is created and maintained by Tobiko Data, a company founded by data leaders from Airbnb, Apple, and Netflix.
+
     Check out the [quickstart guide](../quick_start.md) to see it in action.
 
 ??? question "What is SQLMesh used for?"
-    SQLMesh is used to manage and execute data transformations - the process of converting raw data into a form useful for making business decisions. 
+    SQLMesh is used to manage and execute data transformations - the process of converting raw data into a form useful for making business decisions.
 
 ??? question "What problems does SQLMesh solve?"
     **Problem: organizing, maintaining, and changing data transformation code in SQL or Python**
@@ -56,14 +56,14 @@
 
 ??? question "What is semantic understanding of SQL?"
     Semantic understanding is the result of analyzing SQL code to determine what it does at a granular level. SQLMesh uses the free, open-source Python library [SQLGlot](https://github.com/tobymao/sqlglot) to parse the SQL code and build the semantic understanding.
-    
+
     Semantic understanding allows SQLMesh to do things like transpilation (executing one SQL dialect on an engine running another dialect) and protecting incremental loading queries from duplicating data.
 
 ??? question "Does SQLMesh work like Terraform?"
-    SQLMesh was inspired by Terraform, but its commands are not equivalent. 
-    
-    Terraform's "plan" approach compares a local configuration to a remote configuration and determines what actions are needed to synchronize the two. Similarly, SQLMesh compares the state of local project files (such as SQL models) to an environment and determines the actions needed to synchronize them. 
-    
+    SQLMesh was inspired by Terraform, but its commands are not equivalent.
+
+    Terraform's "plan" approach compares a local configuration to a remote configuration and determines what actions are needed to synchronize the two. Similarly, SQLMesh compares the state of local project files (such as SQL models) to an environment and determines the actions needed to synchronize them.
+
     However, the commands to create and apply a plan are different. In Terraform, the "plan" command generates a plan and saves it to file. The "apply" command reads a plan file and applies it.
 
     In SQLMesh, the `sqlmesh plan` command generates a plan, runs any unit tests, and prompts the user to apply the plan. There is no "apply" command in SQLMesh.
@@ -71,23 +71,23 @@
 ## Getting Started
 
 ??? question "How do I install SQLMesh?"
-    SQLMesh is a Python library. After ensuring you have [an appropriate Python runtime](../prerequisites.md), install it [with `pip`](../installation.md).  
+    SQLMesh is a Python library. After ensuring you have [an appropriate Python runtime](../prerequisites.md), install it [with `pip`](../installation.md).
 
 ??? question "How do I use SQLMesh?"
-    SQLMesh has three interfaces: [command line](../reference/cli.md), [Jupyter or Databricks notebook](../reference/notebook.md), and graphical user interface. 
-    
+    SQLMesh has three interfaces: [command line](../reference/cli.md), [Jupyter or Databricks notebook](../reference/notebook.md), and graphical user interface.
+
     The [quickstart guide](../quick_start.md) demonstrates an example project in each of the interfaces.
 
 ## Usage
 
 ??? question "Why does SQLMesh create schemas?"
     SQLMesh creates schemas for two reasons:
-    
+
     - SQLMesh stores state/metadata information about a project in the `sqlmesh` schema. This schema is created in the project's default gateway, or you can [specify a different location](../reference/configuration.md#state-connection).
     - SQLMesh uses [Virtual Data Environments](https://tobikodata.com/virtual-data-environments.html) to prevent duplicative computation whenever possible.
 
-    Virtual Data Environments work by maintaining a *virtual layer* of views that users interact with when building models and a *physical layer* of tables that stores the actual data. 
-    
+    Virtual Data Environments work by maintaining a *virtual layer* of views that users interact with when building models and a *physical layer* of tables that stores the actual data.
+
     Each SQLMesh environment consists of a collection of views. When changes are promoted from one environment to another (e.g., dev to prod), SQLMesh determines whether the data in an underlying physical table is equivalent between the environments. If it is, SQLMesh simply modifies the environment's view to pull from a different underlying physical table instead of redoing the computations that have already occurred.
 
     SQLMesh creates schemas for both the physical and virtual layers. The physical layer is stored in a schema named `sqlmesh__[project name]`. For example, the [quickstart example's](../quick_start.md) physical layer is stored in the `sqlmesh__sqlmesh_example` schema.
@@ -103,7 +103,7 @@
 
     A SQLMesh [`audit`](../concepts/audits.md) validates that transformed *data* meet some criteria. For example, an `audit` might verify that a column contains no `NULL` values or has no duplicated values. SQLMesh automatically runs audits when a `sqlmesh plan` is executed and the plan is applied or when `sqlmesh run` is executed.
 
-<a id="cron-question"></a> 
+<a id="cron-question"></a>
 ??? question "What is the model `cron` parameter?"
     SQLMesh does not fully refresh models when a project is run. Instead, you specify how frequently each model should run with its [`cron` parameter](../concepts/models/overview.md#cron) (defaults to daily).
 
@@ -140,18 +140,18 @@
 ## Databases/Engines
 
 ??? question "What databases/engines does SQLMesh work with?"
-    SQLMesh works with BigQuery, Databricks, DuckDB, MySQL, PostgreSQL, GCP PostgreSQL, Redshift, Snowflake, and Spark. See [this page](../integrations/engines.md) for more information.
+    SQLMesh works with BigQuery, Databricks, DuckDB, MySQL, PostgreSQL, GCP PostgreSQL, Redshift, Snowflake, and Spark. See [this page](../integrations/overview.md) for more information.
 
 ??? question "When would you use different databases for executing data transformations and storing state information?"
-    SQLMesh requires storing state information about projects and when their transformations were run. By default, it stores this information in the same database where the models run. 
-    
+    SQLMesh requires storing state information about projects and when their transformations were run. By default, it stores this information in the same database where the models run.
+
     Unlike data transformations, storing state information requires database transactions. Some databases, like BigQuery, aren’t optimized for executing transactions, so storing state information in them can slow down your project. If this occurs, you can store state information in a different database, such as PostgreSQL, that executes transactions more efficiently.
 
 ## Scheduling
 
 ??? question "How do I run SQLMesh models on a schedule?"
-    You can run SQLMesh models using the [built-in scheduler](../guides/scheduling.md#built-in-scheduler) or with the native [Airflow integration](../integrations/airflow.md). 
-    
+    You can run SQLMesh models using the [built-in scheduler](../guides/scheduling.md#built-in-scheduler) or with the native [Airflow integration](../integrations/airflow.md).
+
     Both approaches use each model's `cron` parameter to determine when the model should run - see the [question about `cron` above](#cron-question) for more information.
 
     The built-in scheduler works by executing the command `sqlmesh run`. A sensible approach to running on your project on a schedule is to use Linux’s `cron` tool to execute `sqlmesh run` on a cadence at least as frequent as your briefest SQLMesh model `cron` parameter. For example, if your most frequent model’s `cron` is hour, the `cron` tool should execute `sqlmesh run` at least every hour.
@@ -186,28 +186,28 @@
 
     - Configure your project and set up a project database (using DuckDB locally or a database connection)
     - Create, configure, and modify models, audits, tests, and other project components
-    - Execute `sqlmesh plan [environment name]` to: 
-        - Generate a summary of the differences between your project files and the environment and whether each change is `breaking`. The `plan` includes a list of the actions needed to implement the changes and automatically runs the project's unit `test`s. 
+    - Execute `sqlmesh plan [environment name]` to:
+        - Generate a summary of the differences between your project files and the environment and whether each change is `breaking`. The `plan` includes a list of the actions needed to implement the changes and automatically runs the project's unit `test`s.
         - Optionally apply the plan to implement the actions and run the project's `audit`s.
     - Execute `sqlmesh run` on a schedule to ingest and transform new data
 
 ??? question "Differences in running models?"
-    dbt projects are executed with the commands `dbt run` (models only) or `dbt build` (models, tests, snapshots). 
-    
+    dbt projects are executed with the commands `dbt run` (models only) or `dbt build` (models, tests, snapshots).
+
     In SQLMesh, the execution depends on whether the project’s contents have been modified since the last execution:
 
     - If they have been modified, the `sqlmesh plan` command both:
-        1. Generates a summary of the actions that will occur to implement the code changes and 
+        1. Generates a summary of the actions that will occur to implement the code changes and
         2. Prompts the user to "apply" the plan and execute those actions.
-    - If they have not been modified, the [`sqlmesh run`](../reference/cli.md#run) command will evaluate the project models and run the audits. SQLMesh determines which project models should be executed based on their [`cron` configuration parameter](../concepts/models/overview.md#cron). 
-    
+    - If they have not been modified, the [`sqlmesh run`](../reference/cli.md#run) command will evaluate the project models and run the audits. SQLMesh determines which project models should be executed based on their [`cron` configuration parameter](../concepts/models/overview.md#cron).
+
         For example, if a model’s `cron` is `daily` then `sqlmesh run` will only execute the model once per day. If you issue `sqlmesh run` the first time on a day the model will execute; if you issue `sqlmesh run` again nothing will happen because the model shouldn’t be executed again until tomorrow.
 
 ??? question "Differences in state management?"
     **dbt**
 
     By default, dbt runs/builds are independent and have no knowledge of previous runs/builds. This knowledge is called “state” (as in “the state of things”).
-    
+
     dbt has the ability to store/maintain state with the `state` selector method and the `defer` feature. dbt stores state information in `artifacts` like the manifest JSON file and reads the files at runtime.
 
     The dbt documentation [“Caveats to state comparison” page](https://docs.getdbt.com/reference/node-selection/state-comparison-caveats) comments on those features: “The state: selection method is a powerful feature, with a lot of underlying complexity.”
@@ -218,8 +218,8 @@
 
     State information is stored by default - you do not need to take any action to maintain or to use it when executing models. As the dbt caveats page says, state information is powerful but complex. SQLMesh handles that complexity for you so you don't need to learn about or understand the underlying mechanics.
 
-    SQLMesh stores state information in database tables. By default, it stores this information in the same [database/connection where your project models run](../reference/configuration.md#gateways). You can specify a [different database/connection](../reference/configuration.md#state-connection) if you would prefer to store state information somewhere else. 
-    
+    SQLMesh stores state information in database tables. By default, it stores this information in the same [database/connection where your project models run](../reference/configuration.md#gateways). You can specify a [different database/connection](../reference/configuration.md#state-connection) if you would prefer to store state information somewhere else.
+
     SQLMesh adds information to the state tables via transactions, and some databases like BigQuery are not optimized to execute transactions. Changing the state connection to another database like PostgreSQL can alleviate performance issues you may encounter due to state transactions.
 
 ??? question "How do I get column-level lineage for my dbt project?"

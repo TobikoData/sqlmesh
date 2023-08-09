@@ -50,13 +50,15 @@ gateways:
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh | int  |    N     |
 
 #### Engine connection configuration
-* [BigQuery](../integrations/engines.md#bigquery-localbuilt-in-scheduler)
-* [Databricks](../integrations/engines.md#databricks-localbuilt-in-scheduler)
-* [DuckDB](../integrations/engines.md#duckdb-localbuilt-in-scheduler)
-* [Postgres](../integrations/engines.md#postgres-localbuilt-in-scheduler)
-* [Redshift](../integrations/engines.md#redshift-localbuilt-in-scheduler)
-* [Snowflake](../integrations/engines.md#snowflake-localbuilt-in-scheduler)
-* [Spark](../integrations/engines.md#spark-localbuilt-in-scheduler)
+* [BigQuery](../integrations/engines/bigquery.md)
+* [Databricks](../integrations/engines/databricks.md)
+* [DuckDB](../integrations/engines/duckdb.md)
+* [MySQL](../integrations/engines/mysql.md)
+* [Postgres](../integrations/engines/postgres.md)
+* [GCP Postgres](../integrations/engines/gcp-postgres.md)
+* [Redshift](../integrations/engines/redshift.md)
+* [Snowflake](../integrations/engines/snowflake.md)
+* [Spark](../integrations/engines/spark.md)
 
 ### State connection
 
@@ -77,7 +79,7 @@ gateways:
 #### Configure State Schema Name
 
 By default the schema name used to store state tables is `sqlmesh`. This can be configured by providing `state_schema` config property as
-part of the gateway configuration. 
+part of the gateway configuration.
 
 ```yaml linenums="1"
 gateways:
@@ -178,9 +180,9 @@ See [Airflow Integration Guide](../integrations/airflow.md) for information on h
 | `default_target_environment` | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   | string               | N        |
 
 ## Model configuration
-This section contains options that are specific to models. 
+This section contains options that are specific to models.
 
-The `model_defaults` configuration is **required** and must contain a value for the `dialect` key. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed. 
+The `model_defaults` configuration is **required** and must contain a value for the `dialect` key. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
 Other values are set automatically unless explicitly overridden in the model definition.
 
@@ -204,9 +206,7 @@ model_defaults:
 ## Virtual Data Environment configuration
 
 ### Physical Schema Override
-By default SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__<schema>`. This can be 
-overriden on a per-schema basis using the `physical_schema_override` option. This will remove the `sqlmesh__` prefix 
-and just use the name you provide.
+By default SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__<schema>`. This can be overridden on a per-schema basis using the `physical_schema_override` option. This will remove the `sqlmesh__` prefix and just use the name you provide.
 
 Config example:
 
@@ -215,30 +215,23 @@ physical_schema_override:
   db: my_db
 ```
 
-If you had a model name of `db.table` then the physical table would be created as `my_db.table_<fingerprint>` instead
-of the default behavior of `sqlmesh__db.table_<fingerprint>`.
+If you had a model name of `db.table` then the physical table would be created as `my_db.table_<fingerprint>` instead of the default behavior of `sqlmesh__db.table_<fingerprint>`.
 
-Keep in mind this applies to just the physical tables that SQLMesh creates. The views are still created in `db` (prod) 
-or `db__<env>`. You may want to override this behavior if you have permissions/governance rules you are trying to 
-adhere to at your organization and therefore need more control over the schema names used.
+Keep in mind this applies to just the physical tables that SQLMesh creates. The views are still created in `db` (prod) or `db__<env>`. You may want to override this behavior if you have permissions/governance rules you are trying to adhere to at your organization and therefore need more control over the schema names used.
 
 ### View Schema Override
 
-By default SQLMesh appends the environment name to the schema name when creating new environments. This can be changed
-to instead append a suffix at the end of table instead. This means that new environment views will be created in the 
-same schema as production but be differentiated having their names end with `__<env>`.
+By default SQLMesh appends the environment name to the schema name when creating new environments. This can be changed to append a suffix at the end of table instead. This means that new environment views will be created in the same schema as production but be differentiated having their names end with `__<env>`.
 
 Config example:
-    
+
 ```yaml linenums="1"
 environment_suffix_target: table
 ```
 
 If you had a model name of `db.users`, and you were creating a `dev` environment, then the view would be created as `db.users__dev` instead of the default behavior of `db__dev.users`.
 
-The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean
-interface for accessing the views. However if you are deploying SQLMesh in an environment with tight restrictions on 
-schema creation then this can be a useful way of reducing the number of schemas that need to be created.
+The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas that need to be created.
 
 ## Additional details
 
@@ -261,7 +254,7 @@ Supported values:
 * `off`: Always prompt the user for input; automatic categorization will not be attempted.
 
 ### Kind
-The default model kind. For more information, refer to [model kinds](../concepts/models/model_kinds.md). 
+The default model kind. For more information, refer to [model kinds](../concepts/models/model_kinds.md).
 
 Example:
 
