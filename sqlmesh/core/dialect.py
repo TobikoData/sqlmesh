@@ -146,6 +146,8 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
             if macro_name == "SQL":
                 into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
                 return self.expression(MacroSQL, this=field.expressions[0], into=into)
+        else:
+            field = exp.Anonymous(this=field.sql_name(), expressions=list(field.args.values()))
 
         return self.expression(MacroFunc, this=field)
 

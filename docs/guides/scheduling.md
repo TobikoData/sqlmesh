@@ -7,9 +7,9 @@ SQLMesh currently offers two ways of scheduling model evaluation:
 
 ## Built-in scheduler
 
-SQLMesh includes a built-in scheduler that schedules model evaluation without any additional tools or dependencies. It provides all the functionality needed to use SQLMesh in production. 
+SQLMesh includes a built-in scheduler that schedules model evaluation without any additional tools or dependencies. It provides all the functionality needed to use SQLMesh in production.
 
-By default, the scheduler stores your SQLMesh project's state (information about models, data, and run history) in the SQL engine used to execute your models. Some engines, such as BigQuery, are not optimized for the transactions the scheduler executes to store state, which may degrade the scheduler's performance. 
+By default, the scheduler stores your SQLMesh project's state (information about models, data, and run history) in the SQL engine used to execute your models. Some engines, such as BigQuery, are not optimized for the transactions the scheduler executes to store state, which may degrade the scheduler's performance.
 
 When running the scheduler in production, we recommend evaluating its performance with your SQL engine. If you observe degraded performance, consider providing the scheduler its own transactional database such as PostgreSQL to improve performance. See the [connections guide](./connections.md#state-connection) for more information on providing a separate database/engine for the scheduler.
 
