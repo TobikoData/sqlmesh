@@ -19,7 +19,6 @@ from sqlmesh.core.model import (
     ViewKind,
     create_sql_model,
 )
-from sqlmesh.core.node import IntervalUnit
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
 from sqlmesh.dbt.common import SqlStr, extract_jinja_config
 from sqlmesh.dbt.target import TargetConfig
@@ -275,8 +274,6 @@ class ModelConfig(BaseModelConfig):
         for field in ["cron", "interval_unit", "forward_only", "disable_restatement"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
-                if field == "interval_unit":
-                    field_val = IntervalUnit(field_val.lower())
                 optional_kwargs[field] = field_val
 
         if not context.target:

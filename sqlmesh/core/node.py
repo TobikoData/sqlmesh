@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 from enum import Enum
 
-from pydantic import Field, validator
+from pydantic import Field, root_validator, validator
 from sqlglot import exp
 
 from sqlmesh.utils.cron import CroniterCache
@@ -28,6 +28,16 @@ class IntervalUnit(str, Enum):
     DAY = "day"
     HOUR = "hour"
     MINUTE = "minute"
+
+    @classmethod
+    def from_cron(klass, cron: str, sample_size: int = 10) -> IntervalUnit:
+        croniter = CroniterCache(cron)
+        samples = [croniter.get_next() for _ in range(sample_size)]
+        min_interval = min(b - a for a, b in zip(samples, samples[1:]))
+        for unit, seconds in sorted(INTERVAL_SECONDS.items(), key=lambda x: x[1], reverse=True):
+            if seconds <= min_interval:
+                return unit
+        raise ConfigError(f"Invalid cron '{cron}': must have a cadence of 1 minute or more.")
 
     @property
     def is_date_granularity(self) -> bool:
@@ -88,17 +98,16 @@ class IntervalUnit(str, Enum):
 
     @property
     def seconds(self) -> int:
-        if self == IntervalUnit.MINUTE:
-            return 60
-        if self == IntervalUnit.HOUR:
-            return 60 * 60
-        if self == IntervalUnit.DAY:
-            return 60 * 60 * 24
-        if self == IntervalUnit.MONTH:
-            return 60 * 60 * 24 * 28
-        if self == IntervalUnit.YEAR:
-            return 60 * 60 * 24 * 365
-        return 0
+        return INTERVAL_SECONDS[self]
+
+
+INTERVAL_SECONDS = {
+    IntervalUnit.YEAR: 60 * 60 * 24 * 365,
+    IntervalUnit.MONTH: 60 * 60 * 24 * 28,
+    IntervalUnit.DAY: 60 * 60 * 24,
+    IntervalUnit.HOUR: 60 * 60,
+    IntervalUnit.MINUTE: 60,
+}
 
 
 class Node(PydanticModel):
@@ -159,22 +168,21 @@ class Node(PydanticModel):
         return str_or_exp_to_str(v)
 
     @validator("interval_unit_", pre=True)
-    def _interval_unit_validator(
-        cls, v: t.Any, values: t.Dict[str, t.Any]
-    ) -> t.Optional[IntervalUnit]:
-        if v is None:
-            return v
-
-        if not isinstance(v, IntervalUnit):
-            v = IntervalUnit(t.cast(str, str_or_exp_to_str(v)).lower())
-        cron = values.get("cron")
-        if not cron:
-            return v
-
-        max_interval_unit = interval_unit_for_cron(cron)
-        if v.seconds > max_interval_unit.seconds:
-            raise ConfigError(f"Interval unit '{v}' larger than cron '{cron}'")
+    def _interval_unit_validator(cls, v: t.Any) -> t.Optional[IntervalUnit]:
+        v = str_or_exp_to_str(v)
+        if v:
+            v = v.lower()
         return v
+
+    @root_validator
+    def _node_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        interval_unit = values.get("interval_unit_")
+        if interval_unit:
+            cron = values["cron"]
+            max_interval_unit = IntervalUnit.from_cron(cron)
+            if interval_unit.seconds > max_interval_unit.seconds:
+                raise ConfigError(f"Interval unit '{interval_unit}' larger than cron '{cron}'")
+        return values
 
     @property
     def batch_size(self) -> t.Optional[int]:
@@ -265,7 +273,7 @@ class Node(PydanticModel):
             The IntervalUnit enum.
         """
         if not self.__inferred_interval_unit:
-            self.__inferred_interval_unit = interval_unit_for_cron(self.cron, sample_size)
+            self.__inferred_interval_unit = IntervalUnit.from_cron(self.cron, sample_size)
         return self.__inferred_interval_unit
 
 
@@ -273,19 +281,3 @@ def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:
     if isinstance(v, exp.Expression):
         return v.name
     return str(v) if v is not None else None
-
-
-def interval_unit_for_cron(cron: str, sample_size: int = 10) -> IntervalUnit:
-    croniter = CroniterCache(cron)
-    samples = [croniter.get_next() for _ in range(sample_size)]
-    min_interval = min(b - a for a, b in zip(samples, samples[1:]))
-    if min_interval >= 31536000:
-        return IntervalUnit.YEAR
-    elif min_interval >= 2419200:
-        return IntervalUnit.MONTH
-    elif min_interval >= 86400:
-        return IntervalUnit.DAY
-    elif min_interval >= 3600:
-        return IntervalUnit.HOUR
-    else:
-        return IntervalUnit.MINUTE
