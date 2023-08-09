@@ -14,7 +14,7 @@ T = t.TypeVar("T", bound=t.Hashable)
 
 class DAG(t.Generic[T]):
     def __init__(self, graph: t.Optional[t.Dict[T, t.Set[T]]] = None):
-        self._graph: t.Dict[T, t.Set[T]] = {}
+        self._dag: t.Dict[T, t.Set[T]] = {}
         self._sorted: t.Optional[t.List[T]] = None
 
         for node, dependencies in (graph or {}).items():
@@ -28,10 +28,10 @@ class DAG(t.Generic[T]):
             dependencies: Optional dependencies to add to the node.
         """
         self._sorted = None
-        if node not in self._graph:
-            self._graph[node] = set()
+        if node not in self._dag:
+            self._dag[node] = set()
         if dependencies:
-            self._graph[node].update(dependencies)
+            self._dag[node].update(dependencies)
             for d in dependencies:
                 self.add(d)
 
@@ -40,7 +40,7 @@ class DAG(t.Generic[T]):
         """Returns a copy of this DAG with all its edges reversed."""
         result = DAG[T]()
 
-        for node, deps in self._graph.items():
+        for node, deps in self._dag.items():
             result.add(node)
             for dep in deps:
                 result.add(dep, [node])
@@ -61,7 +61,7 @@ class DAG(t.Generic[T]):
 
         while queue:
             node = queue.pop()
-            deps = self._graph.get(node, set())
+            deps = self._dag.get(node, set())
             graph[node] = deps
             queue.update(deps)
 
@@ -74,12 +74,12 @@ class DAG(t.Generic[T]):
     @property
     def leaves(self) -> t.Set[T]:
         """Returns all nodes in the graph without any upstream dependencies."""
-        return {dep for deps in self._graph.values() for dep in deps if dep not in self._graph}
+        return {dep for deps in self._dag.values() for dep in deps if dep not in self._dag}
 
     @property
     def graph(self) -> t.Dict[T, t.Set[T]]:
         graph = {}
-        for node, deps in self._graph.items():
+        for node, deps in self._dag.items():
             graph[node] = deps.copy()
         return graph
 
@@ -122,7 +122,7 @@ class DAG(t.Generic[T]):
             """Visit topologically sorted nodes after input node and yield downstream dependants."""
             downstream = {node}
             for current_node in sorted_nodes[node_index + 1 :]:
-                upstream = self._graph.get(current_node, set())
+                upstream = self._dag.get(current_node, set())
                 if not upstream.isdisjoint(downstream):
                     downstream.add(current_node)
                     yield current_node
