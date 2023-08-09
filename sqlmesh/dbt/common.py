@@ -4,7 +4,6 @@ import re
 import typing as t
 from pathlib import Path
 
-import pydantic
 from pydantic import Field
 from ruamel.yaml.constructor import DuplicateKeyError
 from sqlglot.helper import ensure_list
@@ -14,11 +13,7 @@ from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroReference
-from sqlmesh.utils.pydantic import (
-    PYDANTIC_MAJOR_VERSION,
-    PydanticModel,
-    field_validator,
-)
+from sqlmesh.utils.pydantic import PydanticModel, field_validator
 from sqlmesh.utils.yaml import load
 
 T = t.TypeVar("T", bound="GeneralConfig")
@@ -63,15 +58,8 @@ sql_str_validator = field_validator("sql", mode="before", check_fields=False)(
 )
 
 
-class DbtConfig(BaseConfig):
-    if PYDANTIC_MAJOR_VERSION >= 2:
-        model_config = pydantic.ConfigDict(extra="allow", frozen=False, validate_assignment=True)  # type: ignore
-    else:
-
-        class Config:
-            extra = "allow"
-            allow_mutation = True
-            validate_assignment = True
+class DbtConfig(BaseConfig, extra="allow", validate_assignment=True, frozen=False):
+    pass
 
 
 class QuotingConfig(DbtConfig):

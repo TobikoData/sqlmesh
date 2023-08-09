@@ -1700,7 +1700,7 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
 
-    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs} - {"grain"}, path)
+    _validate_model_fields(klass, {"name", *kwargs} - {"grain"}, path)
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
