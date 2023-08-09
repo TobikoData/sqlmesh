@@ -694,7 +694,10 @@ class EngineAdapter:
             insert_exp = exp.insert(
                 query,
                 table,
-                columns=list(columns_to_types or []),
+                # Change once Databricks supports REPLACE WHERE with columns
+                columns=list(columns_to_types or [])
+                if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where
+                else None,
                 overwrite=self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite,
             )
             if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
