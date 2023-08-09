@@ -1452,16 +1452,16 @@ def test_model_ctas_query():
 
 
 def test_is_breaking_change():
-    model = create_external_model("a", columns={"a": "int", "b": "int"})
+    model = create_external_model("a", columns={"a": "int", "limit": "int"})
     assert model.is_breaking_change(create_external_model("a", columns={"a": "int"})) is False
     assert model.is_breaking_change(create_external_model("a", columns={"a": "text"})) is None
     assert (
-        model.is_breaking_change(create_external_model("a", columns={"a": "int", "b": "int"}))
+        model.is_breaking_change(create_external_model("a", columns={"a": "int", "limit": "int"}))
         is False
     )
     assert (
         model.is_breaking_change(
-            create_external_model("a", columns={"a": "int", "b": "int", "c": "int"})
+            create_external_model("a", columns={"a": "int", "limit": "int", "c": "int"})
         )
         is None
     )
