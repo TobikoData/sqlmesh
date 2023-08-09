@@ -13,7 +13,7 @@ pip install "sqlmesh[bigquery]"
 
 | Option                          | Description                                                                                                    |  Type  | Required |
 |---------------------------------|----------------------------------------------------------------------------------------------------------------|:------:|:--------:|
-| `method`                        | Connection methods - see [allowed values below](#connection-methods). Default: `oath`.                         | string |    N     |
+| `method`                        | Connection methods - see [allowed values below](#connection-methods). Default: `ouath`.                        | string |    N     |
 | `project`                       | The name of the GCP project                                                                                    | string |    N     |
 | `location`                      | The location of for the datasets (can be regional or multi-regional)                                           | string |    N     |
 | `keyfile`                       | Path to the keyfile to be used with service-account method                                                     | string |    N     |
@@ -58,7 +58,7 @@ sqlmesh_airflow = SQLMeshAirflow(
 ```
 
 ## Connection Methods
-- [oath](https://google-auth.readthedocs.io/en/master/reference/google.auth.html#google.auth.default) (default)
+- [oauth](https://google-auth.readthedocs.io/en/master/reference/google.auth.html#google.auth.default) (default)
     - Related Credential Configuration:
         - `scopes` (Optional)
 - [oauth-secrets](https://google-auth.readthedocs.io/en/stable/reference/google.oauth2.credentials.html)
