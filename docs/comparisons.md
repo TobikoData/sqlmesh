@@ -26,7 +26,7 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 | `Jinja support`                   | ✅ | ✅
 | `Jinja macros`                    | ✅ | [✅](../concepts/macros/jinja_macros)
 | `Python macros`                   | ❌ | [✅](../concepts/macros/sqlmesh_macros)
-| Validation   
+| Validation
 | `SQL semantic validation`         | ❌ | [✅](../concepts/glossary/#semantic-understanding)
 | `Unit tests`                      | ❌ | [✅](../concepts/tests)
 | `Table diff`                      | ❌ | ✅
@@ -44,9 +44,9 @@ SQLMesh aims to be dbt format-compatible. Importing existing dbt projects with m
 | `Open-source UI`                  | ❌ | ✅
 | `Native Notebook Support`         | ❌ | [✅](../reference/notebook)
 | Visualization
-| `Documentation generation`        | ✅ | ✅ 
+| `Documentation generation`        | ✅ | ✅
 | `Column-level lineage`            | ❌ | ✅
-| Miscellaneous 
+| Miscellaneous
 | `Package manager`                 | ✅ | ❌
 | `Multi-repository support`        | ❌ | [✅](../guides/multi_repo)
 | `SQL transpilation`               | ❌ | [✅](../concepts/models/sql_models/#transpilation)
@@ -165,7 +165,7 @@ Data quality checks such as detecting NULL values and duplicated rows are extrem
 [Unit and integration tests](./concepts/tests.md) are the tools to use to validate business logic. SQLMesh encourages users to add unit tests to all of their models to ensure changes don't unexpectedly break assumptions. Unit tests are designed to be fast and self contained so that they can run in continuous integration (CI) frameworks.
 
 ### Python models
-dbt's Python models only run remotely on adapters of data platforms that have a full Python runtime, limiting the number of users that can take advantage of them and making the models difficult to debug. 
+dbt's Python models only run remotely on adapters of data platforms that have a full Python runtime, limiting the number of users that can take advantage of them and making the models difficult to debug.
 
 SQLMesh's [Python models](../concepts/models/python_models) run locally and can be used with any data warehouse. Breakpoints can be added to debug the model.
 

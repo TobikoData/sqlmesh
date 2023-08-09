@@ -14,7 +14,7 @@ cd sqlmesh-example
 
 If using a python virtual environment, ensure it's activated first by running the `source .env/bin/activate` command from the folder used during [installation](../installation.md).
 
-Create a SQLMesh scaffold with the following command, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed. 
+Create a SQLMesh scaffold with the following command, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
 In this example, we specify the `snowflake` dialect:
 
@@ -28,7 +28,7 @@ See the [quick start overview](../quick_start.md#project-directories-and-files) 
 
 SQLMesh's key actions are creating and applying *plans* to *environments*. At this point, the only environment is the empty `prod` environment.
 
-The first SQLMesh plan must execute every model to populate the production environment. Running `sqlmesh plan` will generate the plan and the following output: 
+The first SQLMesh plan must execute every model to populate the production environment. Running `sqlmesh plan` will generate the plan and the following output:
 
 ```bash linenums="1"
 $ sqlmesh plan
@@ -54,10 +54,10 @@ Line 5 describes what environments the plan will affect when applied - a new `pr
 
 Lines 7-10 of the output show that SQLMesh detected three new models relative to the current empty environment.
 
-Lines 11-14 list each model that will be executed by the plan, along with the date intervals that will be run. Note that `full_model` and `incremental_model` both show `2020-01-01` as their start date because: 
+Lines 11-14 list each model that will be executed by the plan, along with the date intervals that will be run. Note that `full_model` and `incremental_model` both show `2020-01-01` as their start date because:
 
-1. The incremental model specifies that date in the `start` property of its `MODEL` statement and 
-2. The full model depends on the incremental model. 
+1. The incremental model specifies that date in the `start` property of its `MODEL` statement and
+2. The full model depends on the incremental model.
 
 The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
 
@@ -111,7 +111,7 @@ WHERE
 ## 4. Work with a development environment
 
 ### 4.1 Create a dev environment
-Now that you've modified a model, it's time to create a development environment so that you can validate the model change without affecting production. 
+Now that you've modified a model, it's time to create a development environment so that you can validate the model change without affecting production.
 
 Run `sqlmesh plan dev` to create a development environment called `dev`:
 
@@ -144,20 +144,20 @@ Directly Modified: sqlmesh_example.incremental_model (Non-breaking)
     └── sqlmesh_example.full_model
 Models needing backfill (missing dates):
 └── sqlmesh_example__dev.incremental_model: 2020-01-01 - 2023-07-16
-Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history: 
+Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
 ```
 
 Line 5 of the output states that a new environment `dev` will be created from the existing `prod` environment.
 
-Lines 6-10 summarize the differences between the modified model and the `prod` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model. 
+Lines 6-10 summarize the differences between the modified model and the `prod` environment, detecting that we directly modified `incremental_model` and that `full_model` was indirectly modified because it selects from the incremental model.
 
 On line 24, we see that SQLMesh automatically classified the change as `Non-breaking` because understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
 
 Hit `Enter` at the prompt to backfill data from our start date `2020-01-01`. Another prompt will appear asking for a backfill end date; hit `Enter` to backfill until now. Finally, enter `y` and press `Enter` to apply the plan and execute the backfill:
 
 ```bash linenums="1"
-Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history: 
-Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now: 
+Enter the backfill start date (eg. '1 year', '2020-01-01') or blank to backfill from the beginning of history:
+Enter the backfill end date (eg. '1 month ago', '2020-01-01') or blank to backfill up until now:
 Apply - Backfill Tables [y/n]: y
 Creating new model versions for 'dev' ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% • 2/2 • 0:00:00
 
@@ -172,12 +172,12 @@ Virtually Updating 'dev' ━━━━━━━━━━━━━━━━━━�
 The target environment has been updated successfully
 ```
 
-Line 8 of the output shows that SQLMesh applied the change to `sqlmesh_example__dev.incremental_model`. In the model schema, the suffix "`__dev`" indicates that it is in the `dev` environment. 
+Line 8 of the output shows that SQLMesh applied the change to `sqlmesh_example__dev.incremental_model`. In the model schema, the suffix "`__dev`" indicates that it is in the `dev` environment.
 
 SQLMesh did not need to backfill anything for the `full_model` since the change was `Non-breaking`.
 
 ### 4.2 Validate updates in dev
-You can now view this change by querying data from `incremental_model` with `sqlmesh fetchdf "select * from sqlmesh_example__dev.incremental_model"`. 
+You can now view this change by querying data from `incremental_model` with `sqlmesh fetchdf "select * from sqlmesh_example__dev.incremental_model"`.
 
 Note that the environment name `__dev` is appended to the schema namespace `sqlmesh_example` in the query:
 
@@ -216,7 +216,7 @@ The production table does not have `new_column` because the changes to `dev` hav
 ## 5. Update the prod environment
 
 ### 5.1 Apply updates to prod
-Now that we've tested the changes in dev, it's time to move them to production. Run `sqlmesh plan` to plan and apply your changes to the `prod` environment. 
+Now that we've tested the changes in dev, it's time to move them to production. Run `sqlmesh plan` to plan and apply your changes to the `prod` environment.
 
 Enter `y` and press `Enter` at the `Apply - Virtual Update [y/n]:` prompt to apply the plan and execute the backfill:
 

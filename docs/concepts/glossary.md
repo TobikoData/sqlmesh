@@ -4,7 +4,7 @@
 A tree representation of the syntactic structure of source code. Each tree node represents a construct that occurs. The tree is abstract because it does not represent every detail appearing in the actual syntax; it also does not have a standard representation.
 
 ## Automatic Data Rebasing
-When merging in changes from another branch, SQLMesh automatically reads the history of changes and applies the changes and determines what needs to be rebuilt (if anything). This is done by leveraging the change category of each change to determine the lineage of breaking/non-breaking changes and where there might be overlap.  
+When merging in changes from another branch, SQLMesh automatically reads the history of changes and applies the changes and determines what needs to be rebuilt (if anything). This is done by leveraging the change category of each change to determine the lineage of breaking/non-breaking changes and where there might be overlap.
 
 ## CI/CD
 An engineering process that combines both Continuous Integration (automated code creation and testing) and Continuous Delivery (deployment of code and tests) in a manner that is scalable, reliable, and secure. SQLMesh accomplishes this with [tests](tests.md) and [audits](audits.md).
@@ -67,7 +67,7 @@ Functions that a user of a database server provides to extend its functionality,
 A view is the result of a SQL query on a database.
 
 ## Virtual Environments
-SQLMesh's unique approach to environment that allows it to provide both environment isolation and the ability to share tables across environments. This is done in a way to ensure data consistency and accuracy. See [plan application](plans.md#plan-application) for more information. 
+SQLMesh's unique approach to environment that allows it to provide both environment isolation and the ability to share tables across environments. This is done in a way to ensure data consistency and accuracy. See [plan application](plans.md#plan-application) for more information.
 
 ## Virtual Update
 Term used to describe a plan that can be applied without having to load any additional data or build any additional tables. See [Virtual Update](plans.md#virtual-update) for more information.

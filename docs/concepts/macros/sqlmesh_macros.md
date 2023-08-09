@@ -2,11 +2,11 @@
 
 ## Macro systems: two approaches
 
-SQLMesh macros behave differently than those of templating systems like [Jinja](https://jinja.palletsprojects.com/en/3.1.x/). 
+SQLMesh macros behave differently than those of templating systems like [Jinja](https://jinja.palletsprojects.com/en/3.1.x/).
 
-Macro systems are based on string substitution. The macro system scans code files, identifies special characters that signify macro content, and replaces the macro elements with other text. 
+Macro systems are based on string substitution. The macro system scans code files, identifies special characters that signify macro content, and replaces the macro elements with other text.
 
-In a general sense, that is the entire functionality templating systems. They have tools that provide control flow logic (if-then) and other functionality, but *that functionality is solely to support substituting in the correct strings*. 
+In a general sense, that is the entire functionality templating systems. They have tools that provide control flow logic (if-then) and other functionality, but *that functionality is solely to support substituting in the correct strings*.
 
 Templating systems are intentionally agnostic to the programming language being templated, and most of them work for everything from blog posts to HTML to SQL.
 
@@ -14,9 +14,9 @@ In contrast, SQLMesh macros are designed specifically for generating SQL code. T
 
 ### SQLMesh macro approach
 
-This section describes how SQLMesh macros work under the hood. Feel free to skip over this section and return if and when it is useful. This information is **not** required to use SQLMesh macros, but it will be useful for debugging any macros exhibiting puzzling behavior. 
+This section describes how SQLMesh macros work under the hood. Feel free to skip over this section and return if and when it is useful. This information is **not** required to use SQLMesh macros, but it will be useful for debugging any macros exhibiting puzzling behavior.
 
-The critical distinction between the SQLMesh macro approach and templating systems is the role string substitution plays. In templating systems, string substitution is the entire and only point. 
+The critical distinction between the SQLMesh macro approach and templating systems is the role string substitution plays. In templating systems, string substitution is the entire and only point.
 
 In SQLMesh, string substitution is just one step toward modifying the semantic representation of the SQL query. *SQLMesh macros work by building and modifying the semantic representation of the SQL query.*
 
@@ -105,12 +105,12 @@ SQLMesh's macro system has multiple operators that allow different forms of dyna
 
 ### Control flow operators
 
-Macro systems use control flow operators such as `for` loops and `if` statements to enable powerful dynamic SQL code. 
+Macro systems use control flow operators such as `for` loops and `if` statements to enable powerful dynamic SQL code.
 
 This section describes how SQLMesh's control flow operators `@EACH` and `@IF` work.
 
 #### @EACH introduction
-Before diving into the `@EACH` operator, let's dissect a `for` loop to understand its components. 
+Before diving into the `@EACH` operator, let's dissect a `for` loop to understand its components.
 
 `for` loops have two primary parts: a collection of items and an action that should be taken for each item. For example, here is a `for` loop in Python:
 
@@ -139,7 +139,7 @@ The loop executes one time for each item in the list, substituting in the item f
 #### @EACH basics
 The SQLMesh `@EACH` operator is used to implement the equivalent of a `for` loop in SQLMesh macros.
 
-`@EACH` gets its name from the fact that a loop performs the action "for each" item in the collection. It is fundamentally equivalent to the Python loop above, but you specify the two loop components differently. 
+`@EACH` gets its name from the fact that a loop performs the action "for each" item in the collection. It is fundamentally equivalent to the Python loop above, but you specify the two loop components differently.
 
 This example accomplishes a similar task to the Python example above:
 
@@ -163,21 +163,21 @@ Because of the automatic print and comma-separation, the anonymous function `num
 
 ```sql linenums="1"
 SELECT
-    4, 
-    5, 
+    4,
+    5,
     6
 FROM table
 ```
 
 #### @EACH string substitution
 
-The basic example above is too simple to be useful. Many uses of `@EACH` will involve using the values as one or both of a literal value and an identifier. 
+The basic example above is too simple to be useful. Many uses of `@EACH` will involve using the values as one or both of a literal value and an identifier.
 
 For example, a column `favorite_number` in our data might contain values `4`, `5`, and `6`, and we want to unpack that column into three indicator (i.e., binary, dummy, one-hot encoded) columns. We could write that by hand as:
 
 ```sql linenums="1"
 SELECT
-    CASE WHEN favorite_number = 4 THEN 1 ELSE 0 END as favorite_4, 
+    CASE WHEN favorite_number = 4 THEN 1 ELSE 0 END as favorite_4,
     CASE WHEN favorite_number = 5 THEN 1 ELSE 0 END as favorite_5,
     CASE WHEN favorite_number = 6 THEN 1 ELSE 0 END as favorite_6
 FROM table
@@ -201,14 +201,14 @@ FROM table
 It renders to this SQL:
 
 ```sql linenums="1"
-SELECT 
-  CASE WHEN favorite_number = 4 THEN 1 ELSE 0 END AS column, 
+SELECT
+  CASE WHEN favorite_number = 4 THEN 1 ELSE 0 END AS column,
   CASE WHEN favorite_number = 5 THEN 1 ELSE 0 END AS column,
   CASE WHEN favorite_number = 6 THEN 1 ELSE 0 END AS column
 FROM table
 ```
 
-Note that the number `4`, `5`, and `6` are unquoted in *both* the input `@EACH` array in brackets and the resulting SQL query. 
+Note that the number `4`, `5`, and `6` are unquoted in *both* the input `@EACH` array in brackets and the resulting SQL query.
 
 We can instead quote them in the input `@EACH` array:
 
@@ -221,8 +221,8 @@ FROM table
 And they will be quoted in the resulting SQL query:
 
 ```sql linenums="1"
-SELECT 
-  CASE WHEN favorite_number = '4' THEN 1 ELSE 0 END AS column, 
+SELECT
+  CASE WHEN favorite_number = '4' THEN 1 ELSE 0 END AS column,
   CASE WHEN favorite_number = '5' THEN 1 ELSE 0 END AS column,
   CASE WHEN favorite_number = '6' THEN 1 ELSE 0 END AS column
 FROM table
@@ -239,8 +239,8 @@ FROM table
 This query will render to:
 
 ```sql linenums="1"
-SELECT 
-  CASE WHEN favorite_number = '4' THEN 1 ELSE 0 END AS column_4, 
+SELECT
+  CASE WHEN favorite_number = '4' THEN 1 ELSE 0 END AS column_4,
   CASE WHEN favorite_number = '5' THEN 1 ELSE 0 END AS column_5,
   CASE WHEN favorite_number = '6' THEN 1 ELSE 0 END AS column_6
 FROM table
@@ -252,20 +252,20 @@ This syntax works regardless of whether the array values are quoted or not.
 
 SQLMesh's `@IF` macro allows components of a SQL query to change based on the result of a logical condition.
 
-It includes three elements: 
+It includes three elements:
 
 1. A logical condition that evaluates to `TRUE` or `FALSE`
 2. A value to return if the condition is `TRUE`
 3. A value to return if the condition is `FALSE` [optional]
 
-These elements are specified as `@IF([logical condition], [value if TRUE], [value if FALSE])`. 
+These elements are specified as `@IF([logical condition], [value if TRUE], [value if FALSE])`.
 
 The value to return if the condition is `FALSE` is optional - if it is not provided and the condition is `FALSE`, then the macro has no effect on the resulting query.
 
 The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports the following operators:
 
 - Equality: `=` for equals, `!=` or `<>` for not equals
-- Comparison: `<`, `>`, `<=`, `>=`, 
+- Comparison: `<`, `>`, `<=`, `>=`,
 - Between: `[number] BETWEEN [low number] AND [high number]`
 - Membership: `[item] IN ([comma-separated list of items])`
 
@@ -318,7 +318,7 @@ FROM table
 
 #### @EVAL
 
-`@EVAL` evaluates its arguments with SQLGlot's SQL executor. 
+`@EVAL` evaluates its arguments with SQLGlot's SQL executor.
 
 It allows you to execute mathematical or other calculations in SQL code. It behaves similarly to the first argument of the [`@IF` operator](#if), but it is not limited to logical conditions.
 
@@ -348,13 +348,13 @@ FROM table
 
 SQLMesh's macro system includes two helper operators that do not directly act on the SQL query's semantic representation. Instead, they manipulate arrays of values that are used by other SQLMesh macro operators like `@EACH`.
 
-Like [`@EACH`](#each-basics), they take two arguments: an array of items in brackets `[]` and an anonymous function specifying what actions to take with the items. 
+Like [`@EACH`](#each-basics), they take two arguments: an array of items in brackets `[]` and an anonymous function specifying what actions to take with the items.
 
 #### @FILTER
 
 `@FILTER` is used to subset an input array of items to only those meeting the logical condition specified in the anonymous function. Its output can be consumed by other macro operators such as [`@EACH`](#each-basics) or [`@REDUCE`](#reduce).
 
-The user-specified anonymous function must evaluate to `TRUE` or `FALSE`. `@FILTER` applies the function to each item in the array, only including the item in the output array if it meets the condition. 
+The user-specified anonymous function must evaluate to `TRUE` or `FALSE`. `@FILTER` applies the function to each item in the array, only including the item in the output array if it meets the condition.
 
 The anonymous function should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports standard SQL equality and comparison operators - see [`@IF`](#if) above for more information about supported operators.
 
@@ -368,17 +368,17 @@ It applies the condition `x > 1` to each item in the input array `[1,2,3]` and r
 
 #### @REDUCE
 
-`@REDUCE` is used to combine the items in an array. 
+`@REDUCE` is used to combine the items in an array.
 
-The anonymous function specifies how the items in the input array should be combined. In contrast to `@EACH` and `@FILTER`, the anonymous function takes two arguments whose values are named in parentheses. 
+The anonymous function specifies how the items in the input array should be combined. In contrast to `@EACH` and `@FILTER`, the anonymous function takes two arguments whose values are named in parentheses.
 
 For example, an anonymous function for `@EACH` might be specified `x -> x + 1`. The `x` to the left of the arrow tells SQLMesh that the array items will be referred to as `x` in the code to the right of the arrow.
 
 Because the `@REDUCE` anonymous function takes two arguments, the text to the left of the arrow must contain two comma-separated names in parentheses. For example, `(x, y) -> x + y` tells SQLMesh that items will be referred to as `x` and `y` in the code to the right of the arrow.
 
-Note that even though the anonymous function takes only two arguments the input array can contain as many items as necessary. 
+Note that even though the anonymous function takes only two arguments the input array can contain as many items as necessary.
 
-Consider the anonymous function `(x, y) -> x + y`. Conceptually, only the `y` argument corresponds to items in the array; the `x` argument is a temporary value created when the function is evaluated. 
+Consider the anonymous function `(x, y) -> x + y`. Conceptually, only the `y` argument corresponds to items in the array; the `x` argument is a temporary value created when the function is evaluated.
 
 For the call `@REDUCE([1,2,3,4], (x, y) -> x + y)`, the anonymous function is applied to the array in the following steps:
 
@@ -426,13 +426,13 @@ SQLMesh's macro system has six operators that correspond to different clauses in
 Each of these operators is used to dynamically add the code for its corresponding clause to a model's SQL query.
 
 #### How SQL clause operators work
-The SQL clause operators take a single argument that determines whether the clause is generated. 
+The SQL clause operators take a single argument that determines whether the clause is generated.
 
 If the argument is `TRUE` the clause code is generated, if `FALSE` the code is not. The argument should be written *in SQL* and its value is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine.
 
 Each SQL clause operator may only be used once in a query, but any common table expressions or subqueries may contain their own single use of the operator as well.
 
-As an example of SQL clause operators, let's revisit the example model from the [User-defined Variables](#user-defined-variables) section above. 
+As an example of SQL clause operators, let's revisit the example model from the [User-defined Variables](#user-defined-variables) section above.
 
 As written, the model will always include the `WHERE` clause. We could make its presence dynamic by using the `@WHERE` macro operator:
 
@@ -469,7 +469,7 @@ GROUP BY item_id
 
 If the `@WHERE` argument were instead set to `FALSE` the `WHERE` clause would be omitted from the query.
 
-These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by the SQLGlot SQL engine. 
+These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by the SQLGlot SQL engine.
 
 For example, the `WHERE` clause will be included in this query because 1 less than 2:
 
@@ -492,7 +492,7 @@ FROM
 GROUP BY item_id
 ```
 
-The operator's argument code can include macro variables. 
+The operator's argument code can include macro variables.
 
 In this example, the two numbers being compared are defined as macro variables instead of being hard-coded:
 
@@ -537,7 +537,7 @@ The `@WITH` operator is used to create [common table expressions](https://en.wik
 CTEs are typically used in place of derived tables (subqueries in the `FROM` clause) to make SQL code easier to read. Less commonly, recursive CTEs support analysis of hierarchical data with SQL.
 
 ```sql linenums="1"
-@WITH(True) all_cities as (select * from city) 
+@WITH(True) all_cities as (select * from city)
 select *
 FROM all_cities
 ```
@@ -545,7 +545,7 @@ FROM all_cities
 renders to
 
 ```sql linenums="1"
-WITH all_cities as (select * from city) 
+WITH all_cities as (select * from city)
 select *
 FROM all_cities
 ```
@@ -557,7 +557,7 @@ The `@JOIN` operator specifies joins between tables or other SQL objects; it sup
 ```sql linenums="1"
 select *
 FROM all_cities
-LEFT OUTER @JOIN(True) country 
+LEFT OUTER @JOIN(True) country
     ON city.country = country.name
 ```
 
@@ -566,7 +566,7 @@ renders to
 ```sql linenums="1"
 select *
 FROM all_cities
-LEFT OUTER JOIN country 
+LEFT OUTER JOIN country
     ON city.country = country.name
 ```
 
@@ -609,7 +609,7 @@ GROUP BY city_id
 #### @HAVING operator
 
 ```sql linenums="1"
-SELECT 
+SELECT
 count(city_pop) as population
 FROM all_cities
 GROUP BY city_id
@@ -619,7 +619,7 @@ GROUP BY city_id
 renders to
 
 ```sql linenums="1"
-SELECT 
+SELECT
 count(city_pop) as population
 FROM all_cities
 GROUP BY city_id
@@ -644,9 +644,9 @@ ORDER BY city_pop
 
 ## User-defined macro functions
 
-User-defined macro functions allow the same macro code to be used in multiple models. 
+User-defined macro functions allow the same macro code to be used in multiple models.
 
-SQLMesh supports user-defined macro functions written in two languages - SQL and Python: 
+SQLMesh supports user-defined macro functions written in two languages - SQL and Python:
 
 - SQL macro functions must use the [Jinja templating system](./jinja_macros.md#user-defined-macro-functions).
 - Python macro functions use the SQLGlot library to allow more complex operations than macro variables and operators provide alone.
@@ -700,7 +700,7 @@ The rendered query will treat `text` as a string if we double-quote the single-q
 ```python linenums="1"
 from sqlmesh import macro
 
-@macro() 
+@macro()
 def print_text(evaluator):
   return "'text'"
 ```
@@ -722,7 +722,7 @@ For example, we might want to create indicator variables from the values in a st
 ```python linenums="1"
 from sqlmesh import macro
 
-@macro() 
+@macro()
 def make_indicators(evaluator, string_column, string_values):
   cases = []
 
@@ -755,7 +755,7 @@ Note that in the call `@make_indicators('vehicle', ['truck', 'bus'])`, all three
 
 #### Accessing macro variable values
 
-Both predefined and user-defined macro variables can be accessed within a Python macro function. 
+Both predefined and user-defined macro variables can be accessed within a Python macro function.
 
 The first argument to every macro function, the macro evaluation context `evaluator`, contains macro variable values in its `locals` attribute. `evaluator.locals` is a dictionary whose key:value pairs are macro variables names and the associated values.
 
@@ -860,10 +860,10 @@ FROM table
 WHERE @between_where(a, 1, 3) -- column name `a` is not quoted in the function call
 ```
 
-That is because the expression version requires `column` to be a SQLGlot [Column expression](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L1097). 
+That is because the expression version requires `column` to be a SQLGlot [Column expression](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L1097).
 
 Column expressions are sub-classes of the [Condition class](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L666), so they have builder methods like [`between`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L769) and [`like`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L779).
 
 ## Mixing macro systems
 
-SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways. 
+SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways.

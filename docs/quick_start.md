@@ -7,7 +7,7 @@ Before beginning, ensure that you meet all the [prerequisites](prerequisites.md)
 
 This project demonstrates key SQLMesh features by walking through the SQLMesh workflow on a simple data pipeline. This section describes the project structure and the SQLMesh concepts you will encounter as you work through it.
 
-The project contains three models with a CSV file as the only data source: 
+The project contains three models with a CSV file as the only data source:
 
 ```
 ┌─────────────┐
@@ -27,15 +27,15 @@ The project contains three models with a CSV file as the only data source:
                                              └──────────────┘
 ```
 
-Although the project is simple, it touches on all the primary concepts needed to use SQLMesh productively. 
+Although the project is simple, it touches on all the primary concepts needed to use SQLMesh productively.
 
 ### Plans
 
-SQLMesh's key actions are creating and applying *plans* to *environments*. 
+SQLMesh's key actions are creating and applying *plans* to *environments*.
 
-A [SQLMesh environment](./concepts/environments.md) is an isolated namespace containing models and the data they generated. The most important environment is `prod` ("production"), which consists of the databases behind the applications your business uses to operate each day. Environments other than `prod` provide a place where you can test and preview changes to model code before they go live and affect business operations. 
+A [SQLMesh environment](./concepts/environments.md) is an isolated namespace containing models and the data they generated. The most important environment is `prod` ("production"), which consists of the databases behind the applications your business uses to operate each day. Environments other than `prod` provide a place where you can test and preview changes to model code before they go live and affect business operations.
 
-A [SQLMesh plan](./concepts/plans.md) contains a comparison of one environment to another and the set of changes needed to bring them into alignment. For example, if a new SQL model was added, tested, and run in the `dev` environment, it would need to be added and run in the `prod` environment to bring them into alignment. SQLMesh identifies all such changes and classifies them as either breaking or non-breaking. 
+A [SQLMesh plan](./concepts/plans.md) contains a comparison of one environment to another and the set of changes needed to bring them into alignment. For example, if a new SQL model was added, tested, and run in the `dev` environment, it would need to be added and run in the `prod` environment to bring them into alignment. SQLMesh identifies all such changes and classifies them as either breaking or non-breaking.
 
 Breaking changes are those that invalidate data already existing in an environment. For example, if a `WHERE` clause was added to a model in the `dev` environment, existing data created by that model in the `prod` environment are now invalid because they may contain rows that would be filtered out by the new `WHERE` clause. Other changes, like adding a new column to a model in `dev`, are non-breaking because all the existing data in `prod` are still valid to use - only new data must be added to align the environments.
 
@@ -51,7 +51,7 @@ A plan's actions are determined by the [kinds](./concepts/models/model_kinds.md)
 
 ### Project directories and files
 
-SQLMesh uses a scaffold generator to initiate a new project. The generator will create multiple sub-directories and files for organizing your SQLMesh project code. 
+SQLMesh uses a scaffold generator to initiate a new project. The generator will create multiple sub-directories and files for organizing your SQLMesh project code.
 
 See the [CLI](./quickstart/cli.md), [Notebook](./quickstart/notebook.md), or [UI](./quickstart/ui.md) quickstart guides for details on how to initiate a SQLMesh project with the scaffold generator.
 
@@ -87,7 +87,7 @@ It will also create the files needed for this quickstart example:
 
 SQLMesh project-level configuration parameters are specified in the `config.yaml` file in the project directory.
 
-This example project uses the embedded DuckDB SQL engine, so its configuration specifies `duckdb` as the local gateway's connection and the `local` gateway as the default. 
+This example project uses the embedded DuckDB SQL engine, so its configuration specifies `duckdb` as the local gateway's connection and the `local` gateway as the default.
 
 The command to run the scaffold generator **requires** a default SQL dialect for your models, which it places in the config `model_defaults` `dialect` key. In this example, we specified the `duckdb` SQL dialect as the default:
 
@@ -126,9 +126,9 @@ This is the complete dataset:
 
 ### Project models
 
-We now briefly review each model in the project. 
+We now briefly review each model in the project.
 
-The first model is a `SEED` model that imports `seed_data.csv`. This model consists of only a `MODEL` statement because `SEED` models do not query a database. 
+The first model is a `SEED` model that imports `seed_data.csv`. This model consists of only a `MODEL` statement because `SEED` models do not query a database.
 
 In addition to specifying the model name and CSV path relative to the model file, it includes the column names and data types of the columns in the CSV. It also sets the `grain` of the model to the columns that collectively form the model's unique identifier, `id` and `ds`.
 
@@ -147,7 +147,7 @@ MODEL (
 );
 ```
 
-The second model is an `INCREMENTAL_BY_TIME_RANGE` model that includes both a `MODEL` statement and a SQL query selecting from the first seed model. 
+The second model is an `INCREMENTAL_BY_TIME_RANGE` model that includes both a `MODEL` statement and a SQL query selecting from the first seed model.
 
 The `MODEL` statement's `kind` property includes the required specification of the data column containing each record's timestamp. It also includes the optional `start` property specifying the earliest date/time for which the model should process data and the `cron` property specifying that the model should run daily. It sets the model's grain to columns `id` and `ds`.
 

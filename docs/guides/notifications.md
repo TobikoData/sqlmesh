@@ -8,7 +8,7 @@ Notifications are configured with `notification targets`. Targets are specified 
 
 A project may specify both global and user-specific notifications. Each target's notifications will be sent for all instances of each [event type](#sqlmesh-event-types) (e.g., notifications for `run` will be sent for *all* of the project's environments), with exceptions for audit failures and when an [override is configured for development](#notifications-during-development).
 
-[Audit](../concepts/audits.md) failure notifications can be sent for specific models if five conditions are met: 
+[Audit](../concepts/audits.md) failure notifications can be sent for specific models if five conditions are met:
 
 1. A model's `owner` field is populated
 2. The model executes one or more audits
@@ -129,7 +129,7 @@ This example stops all notifications other than those for `User1`:
 
 SQLMesh notifications are triggered by events. The events that should trigger a notification are specified in the notification target's `notify_on` field.
 
-Notifications are support for [`plan` application](../concepts/plans.md) start/end/failure, [`run`](../reference/cli.md#run) start/end/failure, and [`audit`](../concepts/audits.md) failures. 
+Notifications are support for [`plan` application](../concepts/plans.md) start/end/failure, [`run`](../reference/cli.md#run) start/end/failure, and [`audit`](../concepts/audits.md) failures.
 
 For `plan` and `run` start/end, the target environment name is included in the notification message. For failures, the Python exception or error text is included in the notification message.
 
@@ -153,7 +153,7 @@ SQLMesh supports two types of Slack notification. Slack webhooks can notify a Sl
 
 ### Webhook Configuration
 
-SQLMesh uses Slack's "Incoming Webhooks" for webhook notifications. When you [create an incoming webhook](https://api.slack.com/messaging/webhooks) in Slack, you will receive a unique URL associated with a specific Slack channel. SQLMesh transmits the notification message by submitting a JSON payload to that URL. 
+SQLMesh uses Slack's "Incoming Webhooks" for webhook notifications. When you [create an incoming webhook](https://api.slack.com/messaging/webhooks) in Slack, you will receive a unique URL associated with a specific Slack channel. SQLMesh transmits the notification message by submitting a JSON payload to that URL.
 
 This example shows a Slack webhook notification target. Notifications are triggered by plan application start, plan application failure, or SQLMesh run start. The specification uses an environment variable `SLACK_WEBHOOK_URL` instead of hard-coding the URL directly into the configuration file:
 
@@ -221,7 +221,7 @@ This example shows an email notification target, where `sushi@example.com` email
 
     ```yaml linenums="1"
     notification_targets:
-      - type: smtp 
+      - type: smtp
         notify_on:
           - run_failure
         host: "{{ env_var('SMTP_HOST') }}"
@@ -253,7 +253,7 @@ This example shows an email notification target, where `sushi@example.com` email
 
 ### Overriding Notification Targets
 
-In Python configuration files, new notification targets can be configured to send custom messages. 
+In Python configuration files, new notification targets can be configured to send custom messages.
 
 To customize a notification, create a new notification target class as a subclass of one of the three target classes described above (`SlackWebhookNotificationTarget`, `SlackApiNotificationTarget`, or `BasicSMTPNotificationTarget`). See the definitions of these classes on Github [here](https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/core/notification_target.py).
 
@@ -265,11 +265,11 @@ Each of those notification target classes is a subclass of `BaseNotificationTarg
 | notify_apply_end     | Environment name: `env`          |
 | notify_apply_failure | Exception stack trace: `exc`     |
 | notify_run_start     | Environment name: `env`          |
-| notify_run_end       | Environment name: `env`          | 
+| notify_run_end       | Environment name: `env`          |
 | notify_run_failure   | Exception stack trace: `exc`     |
 | notify_audit_failure | Audit error trace: `audit_error` |
 
-This example creates a new notification target class `CustomSMTPNotificationTarget`. 
+This example creates a new notification target class `CustomSMTPNotificationTarget`.
 
 It overrides the default `notify_run_failure` function to read a log file `"/home/sqlmesh/sqlmesh.log"` and append its contents to the exception stack trace `exc`:
 

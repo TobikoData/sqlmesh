@@ -2,7 +2,7 @@
 
 This page works through the SQLMesh example project using the SQLMesh web browser user interface.
 
-The SQLMesh browser UI requires additional Python libraries not included in the base SQLMesh installation. To use the UI, install SQLMesh with the `web` add-on. 
+The SQLMesh browser UI requires additional Python libraries not included in the base SQLMesh installation. To use the UI, install SQLMesh with the `web` add-on.
 
 First, if using a python virtual environment, ensure it's activated by running `source .env/bin/activate` command from the folder used during [installation](../installation.md).
 
@@ -26,7 +26,7 @@ cd sqlmesh-example
 
 If using a python virtual environment, ensure it's activated by running `source .env/bin/activate` from the folder used during [installation](../installation.md).
 
-Create a SQLMesh scaffold with the following command, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed. 
+Create a SQLMesh scaffold with the following command, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
 In this example, we specify the `snowflake` dialect:
 
@@ -90,12 +90,12 @@ The first SQLMesh plan must execute every model to populate the production envir
 The pane contains multiple pieces of information about the plan:
 
 - The pane title on the top left states that the plan's target environment is `prod`. The error indicator on the top right shows that the plan has no errors associated with it.
-- The `Initializing Prod Environment` section shows that the plan is initializing the `prod` environment. 
+- The `Initializing Prod Environment` section shows that the plan is initializing the `prod` environment.
 - The `Tests` section notes that the plan successfully executed the project's test `tests/test_full_model.yaml` with duckdb.
 - The `Models` section shows that SQLMesh detected three new models added relative to the current empty environment.
 - In the `Backfill` section, the `Needs Backfill` sub-section lists each model that will be executed by the plan, along with the date intervals that will be run. Both `full_model` and `incremental_model` show `2020-01-01` as their start date because:
 
-    1. The incremental model specifies that date in the `start` property of its `MODEL` statement and 
+    1. The incremental model specifies that date in the `start` property of its `MODEL` statement and
     2. The full model depends on the incremental model
 
     The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
@@ -104,7 +104,7 @@ The pane contains multiple pieces of information about the plan:
 
 Click the blue button labeled `Apply And Backfill` to apply the plan and initiate backfill. The `Backfill` section contents at the bottom will update.
 
-The updated backfill output shows the operation's completion status. The first progress indicator shows the total number of tasks and completion percentage for the entire backfill operation. The remaining progress bars show completion percentage and run time for each model (very fast in this simple example). 
+The updated backfill output shows the operation's completion status. The first progress indicator shows the total number of tasks and completion percentage for the entire backfill operation. The remaining progress bars show completion percentage and run time for each model (very fast in this simple example).
 
 ![Apply plan pane](./ui/ui-quickstart_apply-plan.png)
 
@@ -113,7 +113,7 @@ Click the blue `Done` button to close the pane.
 You've now created a new production environment with all of history backfilled.
 
 ### 2.2 Create a dev environment
-Now that you've created a production environment, it's time to create a development environment so that you can modify models without affecting production. 
+Now that you've created a production environment, it's time to create a development environment so that you can modify models without affecting production.
 
 Open the environment menu by clicking the button labeled `prod \/` next to the blue `Run plan` button on the top right. Type `dev` into the Environment field and click the blue `Add` button.
 
@@ -129,11 +129,11 @@ Click the `Run Plan` button, and a new pane will open:
 
 The pane title on the top left states that the plan's target environment is now `dev`. The error indicator on the top right shows that the plan has no errors associated with it.
 
-The output does not list any added or modified models because `dev` is being created from the existing `prod` environment without modification. 
+The output does not list any added or modified models because `dev` is being created from the existing `prod` environment without modification.
 
 Dates in the `Set Dates` section are automatically populated based on the `prod` environment.
 
-The `Additional Options` section can be opened to display detailed configuration options for the plan. 
+The `Additional Options` section can be opened to display detailed configuration options for the plan.
 
 Click the blue `Run` button to create the new plan:
 
@@ -167,7 +167,7 @@ Modify the incremental SQL model by adding a new column to the query:
 Press `Cmd + S` (`Ctrl + S` on Windows) to save the modified model file.
 
 ## 4. Plan and apply updates
-Preview the impact of the change by clicking the `Run Plan` button in the top right. 
+Preview the impact of the change by clicking the `Run Plan` button in the top right.
 
 Click the blue `Run` button in the newly opened pane, and the updated plan information will appear:
 
@@ -207,7 +207,7 @@ Now that we've tested the changes in dev, it's time to move them to prod. Open t
 
 ![`prod` environment selected in environment menu](./ui/ui-quickstart_plan-prod-modified.png)
 
-Click the `Run Plan` button, and a warning screen will appear: 
+Click the `Run Plan` button, and a warning screen will appear:
 
 ![`prod` environment modification warning](./ui/ui-quickstart_plan-prod-modified-warning.png)
 

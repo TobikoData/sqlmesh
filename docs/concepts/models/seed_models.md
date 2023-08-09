@@ -16,7 +16,7 @@ Seed models are a good fit for static datasets that change infrequently or not a
 
 ## Creating a seed model
 
-Similar to [SQL models](./sql_models.md), `SEED` models are defined in files with the `.sql` extension in the `models/` directory of the SQLMesh project. 
+Similar to [SQL models](./sql_models.md), `SEED` models are defined in files with the `.sql` extension in the `models/` directory of the SQLMesh project.
 
 Use the special kind `SEED` in the `MODEL` definition to indicate that the model is a seed model:
 

@@ -1,8 +1,8 @@
 # Macro variables
 
-The most common use case for macros is variable substitution. For example, you might have a SQL query that filters by date in the `WHERE` clause. 
+The most common use case for macros is variable substitution. For example, you might have a SQL query that filters by date in the `WHERE` clause.
 
-Instead of manually changing the date each time the model is run, you can use a macro variable to make the date dynamic. With the dynamic approach, the date changes automatically based on when the query is run. 
+Instead of manually changing the date each time the model is run, you can use a macro variable to make the date dynamic. With the dynamic approach, the date changes automatically based on when the query is run.
 
 Consider this query that filters for rows where column `my_date` is after '2023-01-01':
 
@@ -12,7 +12,7 @@ FROM table
 WHERE my_date > '2023-01-01'
 ```
 
-To make this query's date dynamic you could use the predefined SQLMesh macro variable `@execution_ds`: 
+To make this query's date dynamic you could use the predefined SQLMesh macro variable `@execution_ds`:
 
 ```sql linenums="1"
 SELECT *
@@ -20,7 +20,7 @@ FROM table
 WHERE my_date > @execution_ds
 ```
 
-The `@` symbol tells SQLMesh that `@execution_ds` is a macro variable that requires substitution before the SQL is executed. 
+The `@` symbol tells SQLMesh that `@execution_ds` is a macro variable that requires substitution before the SQL is executed.
 
 The macro variable `@execution_ds` is predefined, so its value will be automatically set by SQLMesh based on when the execution started. If the model was executed on February 1, 2023 the rendered query would be:
 
@@ -35,7 +35,7 @@ This example used one of SQLMesh's predefined variables, but you can also define
 We describe SQLMesh's predefined variables below; user-defined macro variables are discussed in the [SQLMesh macros](./sqlmesh_macros.md#user-defined-variables) and [Jinja macros](./jinja_macros.md#user-defined-variables) pages.
 
 ## Predefined Variables
-SQLMesh comes with predefined variables that can be used in your queries. They are automatically set by the SQLMesh runtime. 
+SQLMesh comes with predefined variables that can be used in your queries. They are automatically set by the SQLMesh runtime.
 
 These variables are related to time and comprise a combination of prefixes (start, end, execution) and postfixes (date, ds, ts, epoch, millis).
 
