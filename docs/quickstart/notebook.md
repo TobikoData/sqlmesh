@@ -1,8 +1,8 @@
 # Notebook
 
-This page works through the SQLMesh example project using the SQLMesh notebook interface. 
+This page works through the SQLMesh example project using the SQLMesh notebook interface.
 
-The notebook interface works with both Jupyter and Databricks notebooks. Learn more about configuring a Databricks connection at the [Execution Engines](../integrations/engines.md#databricks) page.
+The notebook interface works with both Jupyter and Databricks notebooks. Learn more about configuring a Databricks connection at the [Execution Engines](../integrations/engines/databricks.md) page.
 
 ## 1. Create the SQLMesh project
 First, create a SQLMesh project directory with your operating system's graphical or command-line tools. Next, create a Jupyter or Databricks notebook file - it does not need to be in the SQLMesh project directory.
@@ -13,7 +13,7 @@ Import the SQLMesh library to load the notebook magic commands:
 
 ![Cell importing the SQLMesh library](./notebook/nb-quickstart_import.png)
 
-Next, create a SQLMesh scaffold with the `%init` notebook magic, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed. 
+Next, create a SQLMesh scaffold with the `%init` notebook magic, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
 In this example, we specify the `snowflake` dialect:
 
@@ -25,13 +25,13 @@ Inform SQLMesh of the project location by setting a context with the `%context` 
 
 ![Notebook output after setting SQLMesh context](./notebook/nb-quickstart_context.png)
 
-You can specify multiple directories in one call to `%context` if your SQLMesh project has [multiple repositories](../guides/multi_repo.md). 
+You can specify multiple directories in one call to `%context` if your SQLMesh project has [multiple repositories](../guides/multi_repo.md).
 
 ## 2. Create a prod environment
 
 SQLMesh's key actions are creating and applying *plans* to *environments*. At this point, the only environment is the empty `prod` environment.
 
-The first SQLMesh plan must execute every model to populate the production environment. Running the notebook magic `%plan` will generate the plan and the following output: 
+The first SQLMesh plan must execute every model to populate the production environment. Running the notebook magic `%plan` will generate the plan and the following output:
 
 ![Notebook output after plan creation](./notebook/nb-quickstart_plan.png)
 
@@ -43,8 +43,8 @@ The `Summary of differences` section shows that SQLMesh detected three new model
 
 The `Models needing backfill` section lists each model that will be executed by the plan, along with the date intervals that will be run. Both `full_model` and `incremental_model` show `2020-01-01` as their start date because:
 
-1. The incremental model specifies that date in the `start` property of its `MODEL` statement and 
-2. The full model depends on the incremental model. 
+1. The incremental model specifies that date in the `start` property of its `MODEL` statement and
+2. The full model depends on the incremental model.
 
 The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
 
@@ -75,7 +75,7 @@ We modify the incremental SQL model by adding a new column to the query. When we
 ## 4. Work with a development environment
 
 ### 4.1 Create a dev environment
-Now that you've modified a model, it's time to create a development environment so that you can validate the model change without affecting production. 
+Now that you've modified a model, it's time to create a development environment so that you can validate the model change without affecting production.
 
 Run `%plan dev` to create a development environment called `dev`. The following output will be displayed:
 
@@ -89,26 +89,26 @@ The `Summary of differences` section summarizes the differences between the modi
 
 SQLMesh automatically classified the change as `Non-breaking` because understood that the change was additive (added a column not used by `full_model`) and did not invalidate any data already in `prod`.
 
-The `Models needing backfill` section shows that only the directly modified `incremental_model` needs backfill and provides a date picker to specify the start and end dates for the backfill. 
+The `Models needing backfill` section shows that only the directly modified `incremental_model` needs backfill and provides a date picker to specify the start and end dates for the backfill.
 
 Click the green button to perform the backfill:
 
 ![Notebook output after dev plan application](./notebook/nb-quickstart_apply-plan-dev.png)
 
-The output shows that SQLMesh created a new model version in `dev`. The last line of the output shows that SQLMesh applied the change to `sqlmesh_example__dev.incremental_model`. In the model schema, the suffix "`__dev`" indicates that it is in the `dev` environment. 
+The output shows that SQLMesh created a new model version in `dev`. The last line of the output shows that SQLMesh applied the change to `sqlmesh_example__dev.incremental_model`. In the model schema, the suffix "`__dev`" indicates that it is in the `dev` environment.
 
 SQLMesh did not need to backfill anything for the `full_model` since the change was `Non-breaking`.
 
 ### 4.2 Validate updates in dev
-You can now view this change by querying data from `incremental_model` with the `%%fetchdf` *cell* magic (note the two `%` symbols) and the SQL query `select * from sqlmesh_example__dev.incremental_model`. 
+You can now view this change by querying data from `incremental_model` with the `%%fetchdf` *cell* magic (note the two `%` symbols) and the SQL query `select * from sqlmesh_example__dev.incremental_model`.
 
 Note that the environment name `__dev` is appended to the schema namespace `sqlmesh_example` in the query:
 
 ![Notebook output after executing %%fetchdf on `dev` incremental_model](./notebook/nb-quickstart_fetchdf-dev.png)
 
-You can see that `new_column` was added to the dataset. 
+You can see that `new_column` was added to the dataset.
 
-The production table was not modified; you can validate this by querying the production table using `%%fetchdf` and the query `select * from sqlmesh_example.incremental_model`. 
+The production table was not modified; you can validate this by querying the production table using `%%fetchdf` and the query `select * from sqlmesh_example.incremental_model`.
 
 Note that nothing has been appended to the schema namespace `sqlmesh_example` because `prod` is the default environment:
 

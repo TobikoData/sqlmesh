@@ -52,11 +52,21 @@ nav:
       - reference/python.md
     - reference/configuration.md
   - Integrations:
-    - integrations/overview.md
-    - integrations/airflow.md
-    - integrations/dbt.md
-    - integrations/github.md
-    - integrations/engines.md
+    - "Overview": integrations/overview.md
+    - Tools:
+      - integrations/airflow.md
+      - integrations/dbt.md
+      - integrations/github.md
+    - Execution engines:
+      - integrations/engines/bigquery.md
+      - integrations/engines/databricks.md
+      - integrations/engines/duckdb.md
+      - integrations/engines/mysql.md
+      - integrations/engines/postgres.md
+      - integrations/engines/gcp-postgres.md
+      - integrations/engines/redshift.md
+      - integrations/engines/snowflake.md
+      - integrations/engines/spark.md
   - Resources:
     - comparisons.md
     - development.md
@@ -106,7 +116,7 @@ extra:
   social:
     - icon: fontawesome/brands/slack
       link: https://tobikodata.com/slack
-    - icon: fontawesome/solid/paper-plane 
+    - icon: fontawesome/solid/paper-plane
       link: mailto:hello@tobikodata.com
     - icon: fontawesome/brands/github
       link: https://github.com/TobikoData/sqlmesh/issues/new
