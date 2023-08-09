@@ -245,6 +245,7 @@ def test_evaluate_materialized_view(
             model.render_query(),
             model.columns_to_types,
             materialized=True,
+            table_properties={},
         )
 
 
@@ -284,6 +285,7 @@ def test_evaluate_materialized_view_with_execution_time_macro(
         model.render_query(execution_time="2020-01-02"),
         model.columns_to_types,
         materialized=True,
+        table_properties={},
     )
 
 
@@ -351,6 +353,43 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
         snapshot.table_name(),
         model.render_query(),
         materialized=True,
+        table_properties={},
+    )
+
+
+def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW (
+                    materialized true
+                ),
+                table_properties (
+                    "key" = 'value'
+                )
+            );
+
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.create_view.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        materialized=True,
+        table_properties={
+            "key": exp.convert("value"),
+        },
     )
 
 
