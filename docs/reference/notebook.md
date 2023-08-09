@@ -39,9 +39,9 @@ Alternatively, create the project with a notebook magic:
 ```
 
 ### Databricks notebooks
-To use your Databricks cluster, update the `default_connection` and `test_connection` in the `config.yaml` file. 
+To use your Databricks cluster, update the `default_connection` and `test_connection` in the `config.yaml` file.
 
-See the [Execution Engines](../integrations/engines.md#databricks) page for information on configuring a Databricks connection.
+See the [Execution Engines](../integrations/engines/databricks.md) page for information on configuring a Databricks connection.
 
 ## context
 ```
@@ -55,9 +55,9 @@ positional arguments:
 
 ## init
 ```
-%init path sql_dialect [--template TEMPLATE] 
+%init path sql_dialect [--template TEMPLATE]
 
-Creates a SQLMesh project scaffold. Argument `sql_dialect` is required unless the dbt 
+Creates a SQLMesh project scaffold. Argument `sql_dialect` is required unless the dbt
 template option is specified.
 
 positional arguments:
@@ -84,7 +84,7 @@ options:
             [--skip-backfill] [--forward-only]
             [--effective-from EFFECTIVE_FROM] [--no-prompts] [--auto-apply]
             [--no-auto-categorization]
-            
+
 
 Goes through a set of prompts to both establish a plan and apply it
 
@@ -127,7 +127,7 @@ options:
 ## evaluate
 ```
 %evaluate model [--start START] [--end END] [--execution-time EXECUTION_TIME] [--limit LIMIT]
-                
+
 Evaluate a model query and fetches a dataframe.
 
 positional arguments:
@@ -147,7 +147,7 @@ options:
 ```
 %render model [--start START] [--end END] [--execution-time EXECUTION_TIME] [--expand EXPAND]
               [--dialect DIALECT]
-              
+
 
 Renders a model's query, optionally expanding referenced models.
 
@@ -174,7 +174,7 @@ options:
 Fetch a dataframe with a cell's SQL query, optionally storing it in a variable.
 
 positional arguments:
-  df_var                An optional variable name to store the resulting 
+  df_var                An optional variable name to store the resulting
                         dataframe.
 ```
 
