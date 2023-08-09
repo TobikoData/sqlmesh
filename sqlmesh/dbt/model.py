@@ -51,6 +51,7 @@ class ModelConfig(BaseModelConfig):
         time_column: The name of the time column
         cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
+        interval_unit: The duration of an interval for the model. By default, it is computed from the cron expression.
         batch_size: The maximum number of incremental intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
@@ -67,6 +68,7 @@ class ModelConfig(BaseModelConfig):
     sql: SqlStr = SqlStr("")
     time_column: t.Optional[str] = None
     cron: t.Optional[str] = None
+    interval_unit: t.Optional[str] = None
     batch_size: t.Optional[int] = None
     lookback: t.Optional[int] = None
     forward_only: t.Optional[bool] = None
@@ -269,7 +271,7 @@ class ModelConfig(BaseModelConfig):
                 d.parse_one(c, dialect=dialect).name for c in self.cluster_by
             ]
 
-        for field in ["cron", "forward_only", "disable_restatement"]:
+        for field in ["cron", "interval_unit", "forward_only", "disable_restatement"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
                 optional_kwargs[field] = field_val

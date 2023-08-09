@@ -76,6 +76,7 @@ def test_model_to_sqlmesh_fields():
         partition_by=["a"],
         cluster_by=["a", '"b"'],
         cron="@hourly",
+        interval_unit="Minute",
         batch_size=5,
         lookback=3,
         unique_key=["a"],
@@ -96,6 +97,7 @@ def test_model_to_sqlmesh_fields():
     assert [col.sql() for col in model.partitioned_by] == ["a"]
     assert model.clustered_by == ["a", "b"]
     assert model.cron == "@hourly"
+    assert model.interval_unit.value == "minute"
     assert model.stamp == "bar"
     assert model.dialect == "duckdb"
     assert model.owner == "Sally"
