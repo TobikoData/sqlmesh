@@ -9,7 +9,7 @@ SQL models are the main types of models used by SQLMesh. SQL models consist of t
 SQL models are designed to look and feel like you're simply using SQL, but they can be customized for advanced use cases.
 
 ## Definition
-To create an example SQL model, add a file named `my_model.sql` into the `models/` directory (or a subdirectory of `models/`) within your SQLMesh project. 
+To create an example SQL model, add a file named `my_model.sql` into the `models/` directory (or a subdirectory of `models/`) within your SQLMesh project.
 
 Although the name of the file doesn't matter, it is recommended to name it something that includes the word "model". Each file can only have one model defined within it.
 
@@ -48,7 +48,7 @@ The `MODEL` DDL is used to specify metadata about the model such as name, [kind]
 Refer to `model` [properties](./overview.md#properties) for the full list of allowed properties.
 
 ### Optional statements
-Optional SQL statements can help you prepare the model's `SELECT` statement. For example, you might create temporary tables or set permissions. 
+Optional SQL statements can help you prepare the model's `SELECT` statement. For example, you might create temporary tables or set permissions.
 
 However, be careful not to run any command that could conflict with the execution of the model's query, such as creating a physical table.
 
@@ -56,7 +56,7 @@ However, be careful not to run any command that could conflict with the executio
 The model must contain a standalone `SELECT` query. The result of this query will be used to populate the model table or view.
 
 ## Automatic dependencies
-SQLMesh parses your SQL, so it understands what the code does and how it relates to other models. There is no need for you to manually specify dependencies to other models with special tags or commands. 
+SQLMesh parses your SQL, so it understands what the code does and how it relates to other models. There is no need for you to manually specify dependencies to other models with special tags or commands.
 
 For example, consider a model with this query:
 
@@ -67,7 +67,7 @@ JOIN countries
   ON employees.id = countries.employee_id
 ```
 
-SQLMesh will detect that the model depends on both `employees` and `countries`. When executing this model, it will ensure that `employees` and `countries` are executed first. 
+SQLMesh will detect that the model depends on both `employees` and `countries`. When executing this model, it will ensure that `employees` and `countries` are executed first.
 
 External dependencies not defined in SQLMesh are also supported. SQLMesh can either depend on them implicitly through the order in which they are executed, or through signals if you are using [Airflow](../../integrations/airflow.md).
 
@@ -80,14 +80,14 @@ SQLMesh encourages explicitly assigning a data type for each model column. This 
 SQLMesh encourages explicit type casting. SQL's type coercion can be tricky to deal with, so it is best to ensure that the data in your model is exactly as you want it.
 
 ### Explicit SELECTs
-Although `SELECT *` is convenient, it is dangerous because a model's results can change due to external factors (e.g., an upstream source adding or removing a column). In general, we encourage listing out every column you need or using [`create_external_models`](../../reference/cli.md#create_external_models) to capture the schema of an external data source. 
+Although `SELECT *` is convenient, it is dangerous because a model's results can change due to external factors (e.g., an upstream source adding or removing a column). In general, we encourage listing out every column you need or using [`create_external_models`](../../reference/cli.md#create_external_models) to capture the schema of an external data source.
 
 If you select from an external source, `SELECT *` will prevent SQLMesh from performing some optimization steps and from determining upstream column-level lineage. Use an [`external` model kind](./model_kinds.md#external) to enable optimizations and upstream column-level lineage for external sources.
 
 ## Transpilation
-SQLMesh leverages [SQLGlot](https://github.com/tobymao/sqlglot) to parse and transpile SQL. Therefore, you can write your SQL in any supported dialect and transpile it into another supported dialect. 
+SQLMesh leverages [SQLGlot](https://github.com/tobymao/sqlglot) to parse and transpile SQL. Therefore, you can write your SQL in any supported dialect and transpile it into another supported dialect.
 
-You can also use advanced syntax that may not be available in your engine of choice. For example, `x::int` is equivalent to `CAST(x as INT)`, but is only supported in some dialects. SQLGlot allows you to use this feature regardless of what engine you're using. 
+You can also use advanced syntax that may not be available in your engine of choice. For example, `x::int` is equivalent to `CAST(x as INT)`, but is only supported in some dialects. SQLGlot allows you to use this feature regardless of what engine you're using.
 
 Additionally, you won't have to worry about minor formatting differences such as trailing commas, as SQLGlot will remove them at parse time.
 

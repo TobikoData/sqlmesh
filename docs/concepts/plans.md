@@ -25,19 +25,19 @@ sqlmesh plan [environment name]
 If no environment name is specified, the plan is generated for the `prod` environment.
 
 ## Change categories
-Categories only need to be provided for models that have been modified directly. The categorization of indirectly modified downstream models is inferred based on the types of changes to the directly modified models. 
+Categories only need to be provided for models that have been modified directly. The categorization of indirectly modified downstream models is inferred based on the types of changes to the directly modified models.
 
 If more than one upstream dependency of an indirectly modified model has been modified and they have conflicting categories, the most conservative category (breaking) is assigned to this model.
 
 ### Breaking change
-If a directly modified model change is categorized as breaking, it and its downstream dependencies will be backfilled. 
+If a directly modified model change is categorized as breaking, it and its downstream dependencies will be backfilled.
 
-In general, this is the safest option because it guarantees all downstream dependencies will reflect the change. However, it is a more expensive option because it involves additional data reprocessing, which has a runtime cost associated with it (refer to [backfilling](#backfilling)). 
+In general, this is the safest option because it guarantees all downstream dependencies will reflect the change. However, it is a more expensive option because it involves additional data reprocessing, which has a runtime cost associated with it (refer to [backfilling](#backfilling)).
 
 Choose this option when a change has been made to a model's logic that has a functional impact on its downstream dependencies. For example, adding or modifying a model's `WHERE` clause is a breaking change because downstream models contain rows that would now be filtered out.
 
 ### Non-breaking change
-A directly-modified model that is classified as non-breaking will be backfilled, but its downstream dependencies will not. 
+A directly-modified model that is classified as non-breaking will be backfilled, but its downstream dependencies will not.
 
 This is a common choice in scenarios such as an addition of a new column, an action which doesn't affect downstream models, as new columns can't be used by downstream models without modifying them directly to select the column. If any downstream models contain a `select *` from the model, SQLMesh attempts to infer breaking status on a best-effort basis. We recommend explicitly specifying a query's columns to avoid unnecessary recomputation.
 
@@ -57,20 +57,20 @@ This unique approach to understanding and applying changes is what enables SQLMe
 ### Backfilling
 Despite all the benefits, the approach described above is not without trade-offs. When a new model version is just created, a physical table assigned to it is empty. Therefore, SQLMesh needs to re-apply the logic of the new model version to the entire date range of this model in order to populate the new version's physical table. This process is called backfilling.
 
-At the moment, we are using the term backfilling broadly to describe any situation in which a model is updated. That includes these operations: 
+At the moment, we are using the term backfilling broadly to describe any situation in which a model is updated. That includes these operations:
 
 * When a VIEW model is created
-* When a FULL model is built 
+* When a FULL model is built
 * When an INCREMENTAL model is built for the first time
 * When an INCREMENTAL model has recent data appended to it
 * When an INCREMENTAL model has older data inserted (i.e., resolving a data gap or prepending historical data)
 
-We will be iterating on terminology to better capture the nuances of each type in future versions. 
+We will be iterating on terminology to better capture the nuances of each type in future versions.
 
 Note for incremental models: despite the fact that backfilling can happen incrementally (see `batch_size` parameter on models), there is an extra cost associated with this operation due to additional runtime involved. If the runtime cost is a concern, a [forward-only plan](#forward-only-plans) can be used instead.
 
 ### Virtual Update
-Another benefit of the SQLMesh approach is that data for a new model version can be fully pre-built while still in a development environment. That way all changes and their downstream dependencies can be fully previewed before they are promoted to the production environment. 
+Another benefit of the SQLMesh approach is that data for a new model version can be fully pre-built while still in a development environment. That way all changes and their downstream dependencies can be fully previewed before they are promoted to the production environment.
 
 With this approach, the process of promoting a change to production is reduced to reference swapping. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then the update is referred to as a Virtual Update. Virtual Updates impose no additional runtime overhead or cost.
 
@@ -102,7 +102,7 @@ There are cases when models need to be re-evaluated for a given time range, even
 
 For this reason, the `plan` command supports the `--restate-model` option, which allows users to specify one or more names of a model to be reprocessed. Each name can also refer to an external table defined outside SQLMesh.
 
-Application of a plan will trigger a cascading backfill for all specified models (other than external tables), as well as all models downstream from them. The plan's date range determines the data intervals that will be affected. 
+Application of a plan will trigger a cascading backfill for all specified models (other than external tables), as well as all models downstream from them. The plan's date range determines the data intervals that will be affected.
 
 For example, this command creates a plan that restates the model `db.model_a` and all its downstream dependencies, as well as all models that refer to the `external.table_a` table and their downstream dependencies:
 
