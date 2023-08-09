@@ -130,7 +130,7 @@ Options:
   --host TEXT     Bind socket to this host. Default: 127.0.0.1
   --port INTEGER  Bind socket to this port. Default: 8000
   --help          Show this message and exit.
-```  
+```
 
 ## info
 ```
@@ -138,7 +138,7 @@ Usage: sqlmesh info [OPTIONS]
 
   Print information about a SQLMesh project.
 
-  Includes counts of project models and macros and connection tests for the data 
+  Includes counts of project models and macros and connection tests for the data
   warehouse and test runner.
 
 Options:
@@ -149,7 +149,7 @@ Options:
 ```
 Usage: sqlmesh init [SQL_DIALECT] [OPTIONS]
 
-  Create a new SQLMesh repository. Argument SQL_DIALECT is required unless the dbt 
+  Create a new SQLMesh repository. Argument SQL_DIALECT is required unless the dbt
   template option is specified.
 
 Options:
