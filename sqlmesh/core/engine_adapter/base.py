@@ -443,6 +443,13 @@ class EngineAdapter:
         if materialized and self.SUPPORTS_MATERIALIZED_VIEWS:
             properties.append("expressions", exp.MaterializedProperty())
 
+        create_view_properties = self._create_view_properties(
+            create_kwargs.pop("table_properties", None)
+        )
+        if create_view_properties:
+            for view_property in create_view_properties.expressions:
+                properties.append("expressions", view_property)
+
         if properties.expressions:
             create_kwargs["properties"] = properties
 
@@ -954,6 +961,13 @@ class EngineAdapter:
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
+        return None
+
+    def _create_view_properties(
+        self,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+    ) -> t.Optional[exp.Properties]:
+        """Creates a SQLGlot table properties expression for view"""
         return None
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:

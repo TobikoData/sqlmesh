@@ -896,6 +896,7 @@ class ViewStrategy(PromotableStrategy):
             query_or_df,
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
+            table_properties=model.table_properties,
         )
 
     def append(
@@ -923,6 +924,7 @@ class ViewStrategy(PromotableStrategy):
             name,
             model.render_query_or_raise(**render_kwargs),
             materialized=self._is_materialized_view(model),
+            table_properties=model.table_properties,
         )
 
     def migrate(
@@ -940,6 +942,7 @@ class ViewStrategy(PromotableStrategy):
             ),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
+            table_properties=model.table_properties,
         )
 
     def delete(self, name: str) -> None:
