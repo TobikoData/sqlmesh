@@ -342,7 +342,9 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> t.List[exp.Property]:
         if not table_properties:
             return []
-        return [exp.Property(this=key, value=value) for key, value in table_properties.items()]
+        return [
+            exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
+        ]
 
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         return False
