@@ -427,7 +427,13 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     )
 
 
-def test_migrate_view(mocker: MockerFixture, make_snapshot):
+@pytest.mark.parametrize(
+    "change_category",
+    [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.INDIRECT_NON_BREAKING],
+)
+def test_migrate_view(
+    mocker: MockerFixture, make_snapshot, change_category: SnapshotChangeCategory
+):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
@@ -442,7 +448,7 @@ def test_migrate_view(mocker: MockerFixture, make_snapshot):
         query=parse_one("SELECT c, a FROM tbl"),
     )
     snapshot = make_snapshot(model, version="1")
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = change_category
 
     evaluator.migrate([snapshot], {})
 

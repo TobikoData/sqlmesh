@@ -419,7 +419,10 @@ class SnapshotEvaluator:
     def _migrate_snapshot(
         self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
     ) -> None:
-        if snapshot.change_category != SnapshotChangeCategory.FORWARD_ONLY:
+        if not snapshot.is_paused or snapshot.change_category not in (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        ):
             return
 
         parent_snapshots_by_name = {
