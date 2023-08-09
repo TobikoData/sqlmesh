@@ -266,12 +266,14 @@ class ModelMeta(Node):
 
     @root_validator(pre=True)
     def _pre_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if "grain" in values:
-            if "grains" in values:
+        grain = values.pop("grain", None)
+        if grain:
+            grains = values.get("grains")
+            if grains:
                 raise ConfigError(
-                    f"Cannot use argument 'grain' ({values['grain']}) with 'grains' ({values['grains']}), use only grains"
+                    f"Cannot use argument 'grain' ({grain}) with 'grains' ({grains}), use only grains"
                 )
-            values["grains"] = [values.pop("grain")]
+            values["grains"] = ensure_list(grain)
         return values
 
     @root_validator
