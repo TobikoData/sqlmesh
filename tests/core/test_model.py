@@ -1715,12 +1715,16 @@ def test_custom_interval_unit():
         == IntervalUnit.MINUTE
     )
 
-    with pytest.raises(ConfigError, match=r"Interval unit 'month' larger than cron '@daily'"):
+    with pytest.raises(
+        ConfigError, match=r"Interval unit of '.*' is larger than cron period of '@daily'"
+    ):
         load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit month); SELECT a FROM tbl;")
         )
 
-    with pytest.raises(ConfigError, match=r"Interval unit 'day' larger than cron '@hourly'"):
+    with pytest.raises(
+        ConfigError, match=r"Interval unit of '.*' is larger than cron period of '@hourly'"
+    ):
         load_sql_based_model(
             d.parse("MODEL (name db.table, interval_unit Day, cron '@hourly'); SELECT a FROM tbl;")
         )

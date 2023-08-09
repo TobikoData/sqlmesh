@@ -181,7 +181,9 @@ class Node(PydanticModel):
             cron = values["cron"]
             max_interval_unit = IntervalUnit.from_cron(cron)
             if interval_unit.seconds > max_interval_unit.seconds:
-                raise ConfigError(f"Interval unit '{interval_unit}' larger than cron '{cron}'")
+                raise ConfigError(
+                    f"Interval unit of '{interval_unit}' is larger than cron period of '{cron}'"
+                )
         return values
 
     @property
