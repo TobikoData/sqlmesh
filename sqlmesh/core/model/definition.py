@@ -718,7 +718,7 @@ class _Model(ModelMeta, frozen=True):
             str(self.batch_size) if self.batch_size is not None else None,
             json.dumps(self.mapping_schema, sort_keys=True),
             *sorted(self.tags),
-            *sorted(self.grain),
+            *sorted(ref.json(sort_keys=True) for ref in self.all_references),
             str(self.forward_only),
             str(self.disable_restatement),
             str(self.interval_unit_) if self.interval_unit_ is not None else None,
@@ -1700,7 +1700,7 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
 
-    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs}, path)
+    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs} - {"grain"}, path)
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
@@ -1889,6 +1889,10 @@ def _single_expr_or_tuple(values: t.Sequence[exp.Expression]) -> exp.Expression 
     return values[0] if len(values) == 1 else exp.Tuple(expressions=values)
 
 
+def _refs_to_sql(values: t.Any) -> exp.Expression:
+    return exp.Tuple(expressions=values)
+
+
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),
     "start": lambda value: exp.Literal.string(value),
@@ -1904,7 +1908,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
     "tags": _single_value_or_tuple,
-    "grain": _single_value_or_tuple,
+    "grains": _refs_to_sql,
+    "references": _refs_to_sql,
     "hash_raw_query": exp.convert,
     "table_properties_": lambda value: exp.Tuple(
         expressions=[exp.Literal.string(k).eq(v) for k, v in (value or {}).items()]

@@ -146,6 +146,8 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
             if macro_name == "SQL":
                 into = field.expressions[1].this.lower() if len(field.expressions) > 1 else None
                 return self.expression(MacroSQL, this=field.expressions[0], into=into)
+        else:
+            field = exp.Anonymous(this=field.sql_name(), expressions=list(field.args.values()))
 
         return self.expression(MacroFunc, this=field)
 
@@ -699,10 +701,13 @@ def pandas_to_sql(
     )
 
 
-def normalize_model_name(table: str | exp.Table, dialect: DialectType = None) -> str:
-    return exp.table_name(
-        normalize_identifiers(exp.to_table(table, dialect=dialect), dialect=dialect),
-    )
+def normalize_model_name(table: str | exp.Table | exp.Column, dialect: DialectType = None) -> str:
+    if isinstance(table, exp.Column):
+        table = exp.table_(*reversed(table.parts[:-1]))  # type: ignore
+    else:
+        table = exp.to_table(table, dialect=dialect)
+
+    return exp.table_name(normalize_identifiers(table, dialect=dialect))
 
 
 def extract_columns_to_types(query: exp.Subqueryable) -> t.Dict[str, exp.DataType]:

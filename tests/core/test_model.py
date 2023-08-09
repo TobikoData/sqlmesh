@@ -53,6 +53,10 @@ def test_load(assert_exp_eq):
             ),
             tags [tag_foo, tag_bar],
             grain [a, b],
+            references (
+                f,
+                g
+            ),
         );
 
         @DEF(x, 1);
@@ -124,7 +128,11 @@ def test_load(assert_exp_eq):
     """,
     )
     assert model.tags == ["tag_foo", "tag_bar"]
-    assert model.grain == ["a", "b"]
+    assert [r.json() for r in model.all_references] == [
+        '{"model_name": "db.table", "expression": "[a, b]", "unique": true}',
+        '{"model_name": "db.table", "expression": "f", "unique": true}',
+        '{"model_name": "db.table", "expression": "g", "unique": true}',
+    ]
 
 
 def test_model_multiple_select_statements():
@@ -774,6 +782,14 @@ def test_render_definition():
             ),
             storage_format iceberg,
             partitioned_by a,
+            grains (
+                [a, b],
+                c
+            ),
+            references (
+                [a, b],
+                c
+            ),
         );
 
         @DEF(x, 1);
@@ -1620,7 +1636,6 @@ def test_model_normalization():
     assert model.name == '"project-1".db.tbl'
     assert model.columns_to_types["a"].sql(dialect="bigquery") == "STRUCT<`a` INT64>"
     assert model.partitioned_by[0].sql(dialect="bigquery") == "foo(`ds`)"
-    assert model.grain == ["id", "ds"]
     assert model.depends_on == {'"project-1".db.raw', '"project-2".db.raw'}
 
     expr = d.parse(
@@ -1647,7 +1662,6 @@ def test_model_normalization():
     assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
     assert model.partitioned_by[0].sql(dialect="snowflake") == "A"
     assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
-    assert model.grain == ["ID", "DS"]
     assert model.tags == ["pii", "fact"]
     assert model.clustered_by == ["A"]
     assert model.depends_on == {"BLA"}

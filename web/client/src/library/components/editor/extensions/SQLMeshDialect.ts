@@ -27,7 +27,7 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   const SQLTypes = options.types
   const SQLMeshModelDictionary = getSQLMeshModelKeywords(dialects)
   const SQLMeshKeywords =
-    'metric columns grain tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
+    'columns grain grains references metric tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
   const SQLMeshTypes =
     'expression seed full incremental_by_time_range incremental_by_unique_key view embedded'
 
