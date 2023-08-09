@@ -22,13 +22,7 @@ from sqlmesh.core.model import (
     load_sql_based_model,
 )
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotChangeCategory,
-    SnapshotEvaluator,
-    SnapshotFingerprint,
-    SnapshotTableInfo,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotEvaluator
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
 
@@ -393,31 +387,28 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
     )
 
 
-def test_promote_model_info(mocker: MockerFixture):
+def test_promote_model_info(mocker: MockerFixture, make_snapshot):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    evaluator.promote(
-        [
-            SnapshotTableInfo(
-                physical_schema="physical_schema",
-                name="test_schema.test_model",
-                fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
-                version="1",
-                change_category=SnapshotChangeCategory.BREAKING,
-                parents=[],
-                kind_name=ModelKindName.FULL,
-            )
-        ],
-        EnvironmentNamingInfo(name="test_env"),
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=ModelKind(name=ModelKindName.FULL),
+        query=parse_one("SELECT a FROM tbl"),
     )
+
+    snapshot = make_snapshot(model, version="1")
+    snapshot.physical_schema_ = "physical_schema"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
     adapter_mock.create_schema.assert_called_once_with("test_schema__test_env", catalog_name=None)
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
-        parse_one("SELECT * FROM physical_schema.test_schema__test_model__1"),
+        parse_one("SELECT * FROM physical_schema.test_schema__test_model__3512709882"),
     )
 
 

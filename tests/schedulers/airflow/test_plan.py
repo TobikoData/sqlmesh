@@ -334,9 +334,8 @@ def test_create_plan_dag_spec_unbounded_end(
     random_name,
     unbounded_end: t.Optional[str],
 ):
-    unrelated_snapshot = make_snapshot(
-        create_sql_model(random_name(), parse_one("SELECT 2, ds")), version="1"
-    )
+    unrelated_snapshot = make_snapshot(create_sql_model(random_name(), parse_one("SELECT 2, ds")))
+    unrelated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     environment_name = random_name()
     new_environment = Environment(

@@ -38,7 +38,7 @@ class EvaluateCommandPayload(PydanticModel):
 
 
 class PromoteCommandPayload(PydanticModel):
-    snapshots: t.List[SnapshotTableInfo]
+    snapshots: t.List[Snapshot]
     environment_naming_info: EnvironmentNamingInfo
     is_dev: bool
 
