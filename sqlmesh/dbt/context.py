@@ -4,6 +4,7 @@ import typing as t
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from sqlmesh.core.config import Config as SQLMeshConfig
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
@@ -32,6 +33,8 @@ class DbtContext:
             create_builtins_module=SQLMESH_DBT_PACKAGE, top_level_packages=["dbt"]
         )
     )
+
+    sqlmesh_config: SQLMeshConfig = field(default_factory=SQLMeshConfig)
 
     _project_name: t.Optional[str] = None
     _variables: t.Dict[str, t.Any] = field(default_factory=dict)
