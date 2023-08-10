@@ -140,8 +140,8 @@ class GeneralConfig(DbtConfig):
     _SQL_FIELDS: t.ClassVar[t.List[str]] = []
 
     @property
-    def attribute_dict(self) -> AttributeDict[str, t.Any]:
-        return AttributeDict(self.dict())
+    def config_attribute_dict(self) -> AttributeDict[str, t.Any]:
+        return AttributeDict(self.dict(exclude=EXCLUDED_CONFIG_ATTRIBUTE_KEYS))
 
     def replace(self, other: T) -> None:
         """
@@ -223,3 +223,25 @@ def extract_jinja_config(input: str) -> t.Tuple[str, str]:
         no_config = SqlStr(no_config.replace(extracted, "").strip())
 
     return (no_config, only_config)
+
+
+EXCLUDED_CONFIG_ATTRIBUTE_KEYS = {
+    "config",
+    "config_call_dict",
+    "depends_on",
+    "dependencies",
+    "metrics",
+    "original_file_path",
+    "packages",
+    "patch_path",
+    "path",
+    "post_hook",
+    "pre_hook",
+    "raw_code",
+    "refs",
+    "resource_type",
+    "sources",
+    "sql",
+    "tests",
+    "unrendered_config",
+}
