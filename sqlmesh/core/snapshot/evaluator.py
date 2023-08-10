@@ -104,6 +104,8 @@ class SnapshotEvaluator:
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
+        snapshots.setdefault(snapshot.name, snapshot)
+
         if not limit and not snapshot.is_forward_only:
             self._ensure_no_paused_forward_only_upstream(snapshot, snapshots)
 

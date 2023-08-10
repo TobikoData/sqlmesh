@@ -31,7 +31,7 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.common import parse_expression
 from sqlmesh.core.node import IntervalUnit, Node
 from sqlmesh.core.renderer import QueryRenderer
-from sqlmesh.core.snapshot import SnapshotChangeCategory
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
@@ -963,9 +963,54 @@ def test_render_query(assert_exp_eq):
         WHERE
           y BETWEEN @start_date and @end_date AND
           y BETWEEN @start_ds and @end_ds
+          AND z IN (SELECT z FROM test)
         """
         ),
     )
+
+    snapshot = Snapshot.from_model(model, nodes={})
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    assert_exp_eq(
+        model.render_query(
+            start="2020-10-28", end="2020-10-28", snapshots={snapshot.name: snapshot}
+        ),
+        """
+        SELECT
+          "y" AS "y"
+        FROM "x" AS "x"
+        WHERE
+          "y" BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
+          AND "y" BETWEEN '2020-10-28' AND '2020-10-28'
+          AND "z" IN (
+            SELECT
+              "z"
+            FROM "sqlmesh__default"."test__3576302149" AS "test"
+          )
+        """,
+    )
+
+    assert_exp_eq(
+        model.render_query(
+            start="2020-10-28",
+            end="2020-10-28",
+            table_mapping={"x": "x_mapped", "test": "sqlmesh__default.foo"},
+        ),
+        """
+        SELECT
+          "y" AS "y"
+        FROM "x_mapped" AS "x"
+        WHERE
+          "y" BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
+          AND "y" BETWEEN '2020-10-28' AND '2020-10-28'
+          AND "z" IN (
+            SELECT
+              "z"
+            FROM "sqlmesh__default"."foo" AS "test"
+          )
+        """,
+    )
+
     assert_exp_eq(
         model.render_query(start="2020-10-28", end="2020-10-28"),
         """
@@ -975,17 +1020,11 @@ def test_render_query(assert_exp_eq):
         WHERE
           "y" BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
           AND "y" BETWEEN '2020-10-28' AND '2020-10-28'
-        """,
-    )
-    assert_exp_eq(
-        model.render_query(start="2020-10-28", end="2020-10-28", table_mapping={"x": "x_mapped"}),
-        """
-        SELECT
-          "y" AS "y"
-        FROM "x_mapped" AS "x"
-        WHERE
-          "y" BETWEEN DATE_STR_TO_DATE('2020-10-28') AND DATE_STR_TO_DATE('2020-10-28')
-          AND "y" BETWEEN '2020-10-28' AND '2020-10-28'
+          AND "z" IN (
+            SELECT
+              "z"
+            FROM "test" AS "test"
+          )
         """,
     )
 
