@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.config.base import BaseConfig
-from sqlmesh.core.model.kind import ModelKind
+from sqlmesh.core.model.kind import ModelKind, model_kind_validator
 from sqlmesh.utils.date import TimeLike
 
 
@@ -26,12 +26,12 @@ class ModelDefaultsConfig(BaseConfig):
             (eg. 'parquet')
     """
 
-    kind: t.Optional[ModelKind]
-    dialect: t.Optional[str]
-    cron: t.Optional[str]
-    owner: t.Optional[str]
-    start: t.Optional[TimeLike]
-    batch_size: t.Optional[int]
-    storage_format: t.Optional[str]
+    kind: t.Optional[ModelKind] = None
+    dialect: t.Optional[str] = None
+    cron: t.Optional[str] = None
+    owner: t.Optional[str] = None
+    start: t.Optional[TimeLike] = None
+    batch_size: t.Optional[int] = None
+    storage_format: t.Optional[str] = None
 
-    _model_kind_validator = ModelKind.field_validator()
+    _model_kind_validator = model_kind_validator

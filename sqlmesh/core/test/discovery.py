@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import itertools
 import pathlib
+import typing as t
 from collections.abc import Iterator
 
 import ruamel
@@ -15,7 +16,7 @@ from sqlmesh.utils.yaml import load as yaml_load
 class ModelTestMetadata(PydanticModel):
     path: pathlib.Path
     test_name: str
-    body: ruamel.yaml.comments.CommentedMap
+    body: t.Union[t.Dict, ruamel.yaml.comments.CommentedMap]
 
     @property
     def fully_qualified_test_name(self) -> str:

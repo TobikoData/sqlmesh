@@ -166,24 +166,24 @@ class _Model(ModelMeta, frozen=True):
         """
         expressions = []
         comment = None
-        for field in ModelMeta.__fields__.values():
-            field_value = getattr(self, field.name)
+        for field_name, field_info in ModelMeta.all_field_infos().items():
+            field_value = getattr(self, field_name)
 
-            if field_value != field.default:
-                if field.name == "description":
+            if field_value != field_info.default:
+                if field_name == "description":
                     comment = field_value
-                elif field.name == "kind":
+                elif field_name == "kind":
                     expressions.append(
                         exp.Property(
                             this="kind",
                             value=field_value.to_expression(dialect=self.dialect),
                         )
                     )
-                elif field.name != "column_descriptions_":
+                elif field_name != "column_descriptions_":
                     expressions.append(
                         exp.Property(
-                            this=field.alias or field.name,
-                            value=META_FIELD_CONVERTER.get(field.name, exp.to_identifier)(
+                            this=field_info.alias or field_name,
+                            value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(
                                 field_value
                             ),
                         )
@@ -1700,7 +1700,7 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
 
-    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs} - {"grain"}, path)
+    _validate_model_fields(klass, {"name", *kwargs} - {"grain"}, path)
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
@@ -1717,7 +1717,7 @@ def _create_model(
                 "jinja_macros": jinja_macros,
                 "dialect": dialect,
                 "depends_on": depends_on,
-                "physical_schema_override_map": physical_schema_override,
+                "physical_schema_override": physical_schema_override.get(exp.to_table(name).db),
                 **kwargs,
             },
         )

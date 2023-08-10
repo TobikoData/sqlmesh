@@ -4,7 +4,7 @@ import re
 import typing as t
 from pathlib import Path
 
-from pydantic import Field, validator
+from pydantic import Field
 from ruamel.yaml.constructor import DuplicateKeyError
 from sqlglot.helper import ensure_list
 
@@ -13,7 +13,7 @@ from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.conversions import ensure_bool, try_str_to_bool
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import MacroReference
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import PydanticModel, field_validator
 from sqlmesh.utils.yaml import load
 
 T = t.TypeVar("T", bound="GeneralConfig")
@@ -53,11 +53,13 @@ class SqlStr(str):
     pass
 
 
-class DbtConfig(BaseConfig):
-    class Config:
-        extra = "allow"
-        allow_mutation = True
-        validate_assignment = True
+sql_str_validator = field_validator("sql", mode="before", check_fields=False)(
+    lambda v: SqlStr(v) if isinstance(v, str) else v
+)
+
+
+class DbtConfig(BaseConfig, extra="allow", validate_assignment=True, frozen=False):
+    pass
 
 
 class QuotingConfig(DbtConfig):
@@ -65,7 +67,8 @@ class QuotingConfig(DbtConfig):
     schema_: t.Optional[bool] = Field(default=None, alias="schema")
     identifier: t.Optional[bool] = None
 
-    @validator("database", "schema_", "identifier", pre=True)
+    @field_validator("database", "schema_", "identifier", mode="before")
+    @classmethod
     def _validate_bool(cls, v: t.Optional[bool]) -> t.Optional[bool]:
         if v is None:
             return None
@@ -94,11 +97,13 @@ class GeneralConfig(DbtConfig):
     tags: t.List[str] = []
     meta: t.Dict[str, t.Any] = {}
 
-    @validator("enabled", pre=True)
+    @field_validator("enabled", mode="before")
+    @classmethod
     def _validate_bool(cls, v: str) -> bool:
         return ensure_bool(v)
 
-    @validator("docs", pre=True)
+    @field_validator("docs", mode="before")
+    @classmethod
     def _validate_dict(cls, v: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         for key, value in v.items():
             if isinstance(value, str):
@@ -106,15 +111,18 @@ class GeneralConfig(DbtConfig):
 
         return v
 
-    @validator("persist_docs", pre=True)
+    @field_validator("persist_docs", mode="before")
+    @classmethod
     def _validate_persist_docs(cls, v: t.Dict[str, str]) -> t.Dict[str, bool]:
         return {key: bool(value) for key, value in v.items()}
 
-    @validator("tags", pre=True)
+    @field_validator("tags", mode="before")
+    @classmethod
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
         return ensure_list(v)
 
-    @validator("meta", pre=True)
+    @field_validator("meta", mode="before")
+    @classmethod
     def _validate_meta(cls, v: t.Dict[str, t.Union[str, t.Any]]) -> t.Dict[str, t.Any]:
         return parse_meta(v)
 
@@ -142,7 +150,7 @@ class GeneralConfig(DbtConfig):
         Args:
             other: The instance to apply to this instance
         """
-        for field in other.__fields_set__:
+        for field in other.fields_set:
             setattr(self, field, getattr(other, field))
 
 
@@ -156,16 +164,26 @@ class Dependencies(PydanticModel):
         refs: The table_name for models used
     """
 
-    macros: t.Set[MacroReference] = set()
-    sources: t.Set[str] = set()
-    refs: t.Set[str] = set()
+    macros: t.List[MacroReference] = []
+    sources: t.List[str] = []
+    refs: t.List[str] = []
 
     def union(self, other: Dependencies) -> Dependencies:
         return Dependencies(
-            macros=self.macros | other.macros,
-            sources=self.sources | other.sources,
-            refs=self.refs | other.refs,
+            macros=list(set(self.macros) | set(other.macros)),
+            sources=list(set(self.sources) | set(other.sources)),
+            refs=list(set(self.refs) | set(other.refs)),
         )
+
+    @field_validator("sources", "refs", mode="after")
+    @classmethod
+    def _sort_list(cls, v: t.List[t.Any]) -> t.List[t.Any]:
+        return sorted(v)
+
+    @field_validator("macros", mode="after")
+    @classmethod
+    def _sort_macros(cls, v: t.List[MacroReference]) -> t.List[MacroReference]:
+        return sorted(v, key=lambda x: (x.package or "", x.name))
 
     def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
         # See https://github.com/pydantic/pydantic/issues/1090

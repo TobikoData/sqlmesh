@@ -3,13 +3,18 @@ from __future__ import annotations
 import typing as t
 from enum import Enum
 
-from pydantic import Field, root_validator, validator
+from pydantic import Field
 from sqlglot import exp
 
 from sqlmesh.utils.cron import CroniterCache
 from sqlmesh.utils.date import TimeLike, to_datetime
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import (
+    PydanticModel,
+    field_validator,
+    model_validator,
+    model_validator_v1_args,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import Audit
@@ -129,21 +134,23 @@ class Node(PydanticModel):
     """
 
     name: str
-    description: t.Optional[str]
-    owner: t.Optional[str]
-    start: t.Optional[TimeLike]
+    description: t.Optional[str] = None
+    owner: t.Optional[str] = None
+    start: t.Optional[TimeLike] = None
     cron: str = "@daily"
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
-    stamp: t.Optional[str]
+    stamp: t.Optional[str] = None
 
     _croniter: t.Optional[CroniterCache] = None
     __inferred_interval_unit: t.Optional[IntervalUnit] = None
 
-    @validator("name", pre=True)
+    @field_validator("name", mode="before")
+    @classmethod
     def _name_validator(cls, v: t.Any) -> str:
         return v.meta.get("sql") or v.sql() if isinstance(v, exp.Expression) else str(v)
 
-    @validator("start", pre=True)
+    @field_validator("start", mode="before")
+    @classmethod
     def _date_validator(cls, v: t.Any) -> t.Optional[TimeLike]:
         if isinstance(v, exp.Expression):
             v = v.name
@@ -151,7 +158,8 @@ class Node(PydanticModel):
             raise ConfigError(f"'{v}' needs to be time-like: https://pypi.org/project/dateparser")
         return v
 
-    @validator("cron", pre=True)
+    @field_validator("cron", mode="before")
+    @classmethod
     def _cron_validator(cls, v: t.Any) -> t.Optional[str]:
         cron = str_or_exp_to_str(v)
         if cron:
@@ -163,18 +171,20 @@ class Node(PydanticModel):
                 raise ConfigError(f"Invalid cron expression '{cron}'")
         return cron
 
-    @validator("owner", "description", "stamp", pre=True)
-    def _string_validator(cls, v: t.Any) -> t.Optional[str]:
+    @field_validator("owner", "description", "stamp", mode="before")
+    @classmethod
+    def _string_expr_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
 
-    @validator("interval_unit_", pre=True)
+    @field_validator("interval_unit_", mode="before")
     def _interval_unit_validator(cls, v: t.Any) -> t.Optional[IntervalUnit]:
         v = str_or_exp_to_str(v)
         if v:
             v = v.lower()
         return v
 
-    @root_validator
+    @model_validator(mode="after")
+    @model_validator_v1_args
     def _node_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         interval_unit = values.get("interval_unit_")
         if interval_unit:

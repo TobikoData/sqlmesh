@@ -128,10 +128,10 @@ def test_load(assert_exp_eq):
     """,
     )
     assert model.tags == ["tag_foo", "tag_bar"]
-    assert [r.json() for r in model.all_references] == [
-        '{"model_name": "db.table", "expression": "[a, b]", "unique": true}',
-        '{"model_name": "db.table", "expression": "f", "unique": true}',
-        '{"model_name": "db.table", "expression": "g", "unique": true}',
+    assert [r.dict() for r in model.all_references] == [
+        {"model_name": "db.table", "expression": d.parse_one("[a, b]"), "unique": True},
+        {"model_name": "db.table", "expression": d.parse_one("f"), "unique": True},
+        {"model_name": "db.table", "expression": d.parse_one("g"), "unique": True},
     ]
 
 
@@ -1429,14 +1429,14 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
     loader = mocker.Mock(return_value=model)
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
-    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_b", loader) == model
-    assert cache.get_or_load("test_model", "test_entry_b", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_b", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_b", loader).dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
-    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
 
     assert loader.call_count == 3
 
@@ -1488,7 +1488,7 @@ def test_parse_expression_list_with_jinja():
         "JINJA_STATEMENT_BEGIN;\n{{ log('log message') }}\nJINJA_END;",
         "GRANT SELECT ON TABLE foo TO DEV",
     ]
-    assert input == [val.sql() for val in parse_expression(input, {})]
+    assert input == [val.sql() for val in parse_expression(SqlModel, input, {})]
 
 
 def test_no_depends_on_runtime_jinja_query():

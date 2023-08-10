@@ -113,8 +113,8 @@ class BaseConfig(PydanticModel):
 
         updated_fields = {}
 
-        for field in other.__fields_set__:
-            if field in self.__fields__:
+        for field in other.fields_set:
+            if field in self.all_field_infos():
                 updated_fields[field] = update_field(
                     getattr(self, field),
                     getattr(other, field),

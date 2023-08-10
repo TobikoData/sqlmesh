@@ -4,7 +4,7 @@ import pathlib
 import typing as t
 from pathlib import Path
 
-from pydantic import Field, validator
+from pydantic import Field
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
@@ -16,7 +16,7 @@ from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.jinja import JinjaMacroRegistry
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
@@ -38,13 +38,15 @@ class AuditMeta(PydanticModel):
 
     _bool_validator = bool_validator
 
-    @validator("name", "dialect", pre=True)
+    @field_validator("name", "dialect", mode="before")
+    @classmethod
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         if isinstance(v, exp.Expression):
             return v.name.lower()
         return str(v).lower() if v is not None else None
 
-    @validator("defaults", pre=True)
+    @field_validator("defaults", mode="before")
+    @classmethod
     def _map_validator(cls, v: t.Any) -> t.Dict[str, t.Any]:
         if isinstance(v, (exp.Tuple, exp.Array)):
             return dict(map(_maybe_parse_arg_pair, v.expressions))
@@ -262,9 +264,9 @@ class AuditResult(PydanticModel):
     """The audit this result is for."""
     model: _Model
     """The model this audit is for."""
-    count: t.Optional[int]
+    count: t.Optional[int] = None
     """The number of records returned by the audit query. This could be None if the audit was skipped."""
-    query: t.Optional[exp.Expression]
+    query: t.Optional[exp.Expression] = None
     """The rendered query used by the audit. This could be None if the audit was skipped."""
     skipped: bool = False
     """Whether this audit was skipped or not."""

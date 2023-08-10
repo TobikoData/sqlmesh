@@ -115,9 +115,9 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
 
     snapshot: Snapshot
     parent_snapshots: t.Dict[str, Snapshot]
-    start: t.Optional[TimeLike]
-    end: t.Optional[TimeLike]
-    execution_time: t.Optional[TimeLike]
+    start: t.Optional[TimeLike] = None
+    end: t.Optional[TimeLike] = None
+    execution_time: t.Optional[TimeLike] = None
     is_dev: bool
 
     def post_hook(

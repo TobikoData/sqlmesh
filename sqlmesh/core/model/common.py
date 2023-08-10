@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import validator
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core.dialect import parse
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import field_validator, field_validator_v1_args
 
 
+@field_validator_v1_args
 def parse_expression(
+    cls: t.Type,
     v: t.Union[t.List[str], t.List[exp.Expression], str, exp.Expression, t.Callable, None],
     values: t.Dict[str, t.Any],
 ) -> t.List[exp.Expression] | exp.Expression | t.Callable | None:
@@ -43,13 +45,12 @@ def parse_expression(
     return v
 
 
-expression_validator = validator(
+expression_validator = field_validator(
     "query",
     "expressions_",
     "pre_statements_",
     "post_statements_",
-    pre=True,
-    allow_reuse=True,
+    mode="before",
     check_fields=False,
 )(parse_expression)
 
@@ -62,13 +63,12 @@ def parse_bool(v: t.Any) -> bool:
     return str_to_bool(str(v or ""))
 
 
-bool_validator = validator(
+bool_validator = field_validator(
     "skip",
     "blocking",
     "forward_only",
     "disable_restatement",
     "insert_overwrite",
-    pre=True,
-    allow_reuse=True,
+    mode="before",
     check_fields=False,
 )(parse_bool)

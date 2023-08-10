@@ -73,7 +73,7 @@ def snapshot(
         model,
         nodes={parent_model.name: parent_model, model.name: model},
     )
-    snapshot.version = snapshot.fingerprint
+    snapshot.version = snapshot.fingerprint.to_version()
     return snapshot
 
 
@@ -121,7 +121,7 @@ def test_json(snapshot: Snapshot):
         "project": "",
         "indirect_versions": {},
         "updated_ts": 1663891973000,
-        "version": snapshot.fingerprint.dict(),
+        "version": snapshot.fingerprint.to_version(),
     }
 
 

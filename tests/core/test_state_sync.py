@@ -14,9 +14,8 @@ from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
-    ModelKind,
-    ModelKindName,
     Seed,
     SeedKind,
     SeedModel,
@@ -142,7 +141,7 @@ def test_push_snapshots(
             make_snapshot(
                 SqlModel(
                     name="a",
-                    kind=ModelKind(name=ModelKindName.FULL),
+                    kind=FullKind(),
                     query=parse_one(
                         """
             select 'x' + ' ' as y,
@@ -364,7 +363,7 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     snapshot_b = make_snapshot(
         SqlModel(
             name="b",
-            kind=ModelKind(name=ModelKindName.FULL),
+            kind=FullKind(),
             query=parse_one("select * from a"),
         ),
         nodes={"a": snapshot_a.model},
@@ -447,7 +446,7 @@ def test_promote_snapshots_suffix_change(
     snapshot_b = make_snapshot(
         SqlModel(
             name="b",
-            kind=ModelKind(name=ModelKindName.FULL),
+            kind=FullKind(),
             query=parse_one("select * from a"),
         ),
         nodes={"a": snapshot_a.model},

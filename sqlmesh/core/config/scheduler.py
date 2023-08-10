@@ -4,7 +4,7 @@ import abc
 import sys
 import typing as t
 
-from pydantic import Field, root_validator
+from pydantic import Field
 from requests import Session
 
 from sqlmesh.core.config.base import BaseConfig
@@ -13,6 +13,7 @@ from sqlmesh.core.console import Console
 from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
+from sqlmesh.utils.pydantic import model_validator
 
 if t.TYPE_CHECKING:
     from google.auth.transport.requests import AuthorizedSession
@@ -147,7 +148,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
         )
 
 
-class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
+class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extra="allow"):
     """The Google Cloud Composer configuration.
 
     Args:
@@ -172,10 +173,6 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
-    class Config:
-        # See `check_supported_fields` for the supported extra fields
-        extra = "allow"
-
     def __init__(self, **data: t.Any) -> None:
         super().__init__(**data)
         self._session: t.Optional[AuthorizedSession] = data.get("session")
@@ -199,9 +196,10 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
             console=console,
         )
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def check_supported_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        allowed_field_names = {field.alias for field in cls.__fields__.values()}
+        allowed_field_names = {field.alias for field in cls.all_field_infos().values()}
         allowed_field_names.add("session")
 
         for field_name in values:
