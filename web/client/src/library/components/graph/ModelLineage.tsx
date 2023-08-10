@@ -33,7 +33,7 @@ export default function ModelLineage({
 
   const { refetch: getModelLineage, isFetching } = useApiModelLineage(
     model.name,
-    { debounceDelay: 2000 },
+    { debounceDelay: 2000, debounceImmediate: false },
   )
 
   useEffect(() => {
