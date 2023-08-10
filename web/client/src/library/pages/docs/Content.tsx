@@ -63,7 +63,8 @@ export default function Content(): JSX.Element {
             <div className="flex flex-col h-full px-2">
               <ModelLineage
                 model={model}
-                fingerprint={model.id as string}
+                key={model.id}
+                fingerprint={model.id}
               />
             </div>
           </SplitPane>

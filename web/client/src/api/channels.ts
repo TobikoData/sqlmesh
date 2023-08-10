@@ -8,7 +8,7 @@ const DELAY_AND_RETRY = 3000
 class EventSourceConnection {
   channels = new Map<string, Optional<(e: MessageEvent) => void>>()
   eventSource: Optional<EventSource>
-  timerId: Optional<ReturnType<typeof setTimeout>>
+  timerId: Optional<number>
   source: string
   delay: number = DELAY_AND_RECONNECT
 
@@ -50,14 +50,14 @@ class EventSourceConnection {
   }
 
   reconnect(delay: number): void {
-    clearTimeout(this.timerId)
+    clearTimeout(this.timerId as number)
 
     this.timerId = setTimeout(() => {
       console.log(`Reconnecting Event Source ${this.source}`)
       this.cleanup()
       this.setEventSource()
       this.resubscribe()
-    }, delay)
+    }, delay) as unknown as number
   }
 
   getEventSource(): EventSource {
