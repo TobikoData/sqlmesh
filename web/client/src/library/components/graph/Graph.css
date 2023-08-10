@@ -2,6 +2,10 @@
   z-index: 10 !important;
 }
 
+react-flow__attribution {
+  background: transparent;
+}
+
 .lineage__column-source b {
   font-weight: 900;
   color: var(--color-primary);

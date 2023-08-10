@@ -161,8 +161,9 @@ function PlanChangePreviewDirect({
                       <div className="h-[16rem] bg-theme-lighter rounded-xl p-2">
                         <LineageFlowProvider withColumns={false}>
                           <ModelLineage
-                            model={model}
+                            key={model.id}
                             fingerprint={model.id}
+                            model={model}
                             highlightedNodes={{
                               'border-4 border-secondary-500': [model.name],
                               'border-4 border-warning-500':
