@@ -17,11 +17,19 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"))
     adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), replace=False)
+    # Test that `table_properties` are ignored for base engine adapter
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a FROM tbl"),
+        replace=True,
+        table_properties={"a": exp.convert(1)},
+    )
 
     adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
             call('CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
+            call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
         ]
     )
 
