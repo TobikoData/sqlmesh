@@ -581,21 +581,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A [start, end) pair.
         """
-        # start_ts = to_timestamp(self.model.cron_floor(start))
-        # end_ts = to_timestamp(
-        #     self.model.cron_next(end)
-        #     if is_date(end) and self.model.interval_unit() == IntervalUnit.DAY
-        #     else self.model.cron_floor(end)
-        # )
-        # XXX(reakman): Fix this
-        end = execution_time or now() if for_removal and self.depends_on_past else end
         interval_unit = self.model.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
 
         if is_date(end):
             end = to_datetime(end) + timedelta(days=1)
         end_ts = to_timestamp(interval_unit.cron_floor(end))
-
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
             raise ValueError(
@@ -673,9 +664,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         start_ts, end_ts = (
             to_timestamp(ts)
-            for ts in self.inclusive_exclusive(
-                start, end, execution_time, strict=False
-            )
+            for ts in self.inclusive_exclusive(start, end, execution_time, strict=False)
         )
 
         interval_unit = self.model.interval_unit
@@ -806,7 +795,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.version or self.fingerprint.to_version()
 
     def is_valid_start(
-        self, start: t.Optional[TimeLike], snapshot_start: t.Optional[TimeLike] = None
+        self,
+        start: t.Optional[TimeLike],
+        snapshot_start: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
     ) -> bool:
         """Checks if the given start and end are valid for this snapshot.
         Args:
@@ -824,7 +816,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             # provided start_ts. Otherwise we know that we are doing a non-contiguous load and therefore this is not
             # a valid start.
             missing_intervals = self.missing_intervals(
-                snapshot_start, make_inclusive_end(now()), snapshot_start=snapshot_start
+                snapshot_start, now(), execution_time=execution_time, snapshot_start=snapshot_start
             )
             earliest_interval = missing_intervals[0][0] if missing_intervals else None
             if earliest_interval:
@@ -834,9 +826,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def get_latest(self, snapshot_start: t.Optional[TimeLike] = None) -> t.Optional[TimeLike]:
         """The latest interval loaded for the snapshot. Snapshot start is used if intervals are not defined"""
         return (
-            to_end_date(
-                (to_timestamp(max(x[1] for x in self.intervals)), self.model.interval_unit())
-            )
+            to_end_date((to_timestamp(max(x[1] for x in self.intervals)), self.model.interval_unit))
             if self.intervals
             else snapshot_start
         )

@@ -537,13 +537,7 @@ class Plan:
             if snapshot:
                 downstream.append(snapshot)
 
-            # XXX(reakman): Fix this
-            snapshots = self.context_diff.snapshots
-            downstream = [
-                d for d in downstream if not snapshots[d].is_symbolic and not snapshots[d].is_seed
-            ]
-            downstream = [d for d in downstream if d.is_materialized and not d.is_seed]
-
+            downstream = [d for d in downstream if not d.is_symbolic and not d.is_seed]
             if not self.is_dev:
                 models_with_disabled_restatement = [
                     f"'{d.name}'" for d in downstream if d.model.disable_restatement

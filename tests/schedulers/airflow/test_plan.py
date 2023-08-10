@@ -235,6 +235,7 @@ def test_restatement(
     state_sync_mock.get_snapshots.return_value = {the_snapshot.snapshot_id: the_snapshot}
     state_sync_mock.get_environment.return_value = old_environment
     the_snapshot.intervals = intervals_after_restatement
+    now_value = "2022-01-09T23:59:59+00:00"
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now", side_effect=lambda: to_datetime(now_value)
     ), mock.patch(

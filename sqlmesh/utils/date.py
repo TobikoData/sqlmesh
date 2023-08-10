@@ -3,13 +3,18 @@ from __future__ import annotations
 import time
 import typing as t
 import warnings
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
+
+from croniter import croniter
+
+from sqlmesh.utils.errors import ConfigError
 
 warnings.filterwarnings(
     "ignore",
     message="The localize method is no longer necessary, as this time zone supports the fold attribute",
 )
-from datetime import date, datetime, timedelta, timezone
+
 
 import dateparser
 from sqlglot import exp
@@ -23,6 +28,30 @@ DATE_INT_FMT = "%Y%m%d"
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.scheduler import Interval
+
+
+@ttl_cache()
+def cron_next(cron: str, time: TimeLike) -> float:
+    return croniter(cron, to_datetime(time)).get_next()
+
+
+@ttl_cache()
+def cron_prev(cron: str, time: TimeLike) -> float:
+    return croniter(cron, to_datetime(time)).get_prev()
+
+
+class CroniterCache:
+    def __init__(self, cron: str, time: t.Optional[TimeLike] = None):
+        self.cron = cron
+        self.curr: TimeLike = time or now()
+
+    def get_next(self) -> float:
+        self.curr = cron_next(self.cron, self.curr)
+        return t.cast(float, self.curr)
+
+    def get_prev(self) -> float:
+        self.curr = cron_prev(self.cron, self.curr)
+        return t.cast(float, self.curr)
 
 
 class IntervalUnit(str, Enum):
@@ -39,9 +68,85 @@ class IntervalUnit(str, Enum):
     HOUR = "hour"
     MINUTE = "minute"
 
+    @classmethod
+    def from_cron(klass, cron: str, sample_size: int = 10) -> IntervalUnit:
+        croniter = CroniterCache(cron)
+        samples = [croniter.get_next() for _ in range(sample_size)]
+        min_interval = min(b - a for a, b in zip(samples, samples[1:]))
+        for unit, seconds in sorted(INTERVAL_SECONDS.items(), key=lambda x: x[1], reverse=True):
+            if seconds <= min_interval:
+                return unit
+        raise ConfigError(f"Invalid cron '{cron}': must have a cadence of 1 minute or more.")
+
     @property
     def is_date_granularity(self) -> bool:
         return self in (IntervalUnit.YEAR, IntervalUnit.MONTH, IntervalUnit.DAY)
+
+    @property
+    def _cron_expr(self) -> str:
+        if self == IntervalUnit.MINUTE:
+            return "* * * * *"
+        if self == IntervalUnit.HOUR:
+            return "0 * * * *"
+        if self == IntervalUnit.DAY:
+            return "0 0 * * *"
+        if self == IntervalUnit.MONTH:
+            return "0 0 1 * *"
+        if self == IntervalUnit.YEAR:
+            return "0 0 1 1 *"
+        return ""
+
+    def croniter(self, value: TimeLike) -> CroniterCache:
+        return CroniterCache(self._cron_expr, value)
+
+    def cron_next(self, value: TimeLike) -> TimeLike:
+        """
+        Get the next timestamp given a time-like value for this interval unit.
+
+        Args:
+            value: A variety of date formats.
+
+        Returns:
+            The timestamp for the next run.
+        """
+        return self.croniter(value).get_next()
+
+    def cron_prev(self, value: TimeLike) -> TimeLike:
+        """
+        Get the previous timestamp given a time-like value for this interval unit.
+
+        Args:
+            value: A variety of date formats.
+
+        Returns:
+            The timestamp for the previous run.
+        """
+        return self.croniter(value).get_prev()
+
+    def cron_floor(self, value: TimeLike) -> TimeLike:
+        """
+        Get the floor timestamp given a time-like value for this interval unit.
+
+        Args:
+            value: A variety of date formats.
+
+        Returns:
+            The timestamp floor.
+        """
+        return self.croniter(self.cron_next(value)).get_prev()
+
+    @property
+    def seconds(self) -> int:
+        return INTERVAL_SECONDS[self]
+
+
+INTERVAL_SECONDS = {
+    IntervalUnit.YEAR: 60 * 60 * 24 * 365,
+    IntervalUnit.MONTH: 60 * 60 * 24 * 28,
+    IntervalUnit.DAY: 60 * 60 * 24,
+    IntervalUnit.HOUR: 60 * 60,
+    IntervalUnit.MINUTE: 60,
+}
 
 
 def now(minute_floor: bool = True) -> datetime:
