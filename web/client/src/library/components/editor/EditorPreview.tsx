@@ -150,8 +150,9 @@ export default function EditorPreview({
                 )}
               >
                 <ModelLineage
-                  model={model}
+                  key={tab.file.fingerprint}
                   fingerprint={tab.file.fingerprint}
+                  model={model}
                 />
               </Tab.Panel>
             )}

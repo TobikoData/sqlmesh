@@ -25,6 +25,7 @@ const client = new QueryClient({
   }),
   defaultOptions: {
     queries: {
+      networkMode: 'always',
       refetchOnWindowFocus: false,
       retry: false,
       staleTime: Infinity,
