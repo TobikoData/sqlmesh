@@ -447,7 +447,7 @@ class Plan:
             self.is_dev
             and not self.context_diff.is_new_environment
             and self.include_unmodified
-            and len(self.context_diff.unpromoted_models) > 0
+            and bool(self.context_diff.unpromoted_models)
         )
 
     def _add_restatements(self, restate_models: t.Iterable[str]) -> None:
