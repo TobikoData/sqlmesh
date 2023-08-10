@@ -14,7 +14,6 @@ from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
-    ModelKindName,
     PythonModel,
     SqlModel,
     TimeColumn,
@@ -395,7 +394,7 @@ def test_promote_model_info(mocker: MockerFixture, make_snapshot):
 
     model = SqlModel(
         name="test_schema.test_model",
-        kind=ModelKind(name=ModelKindName.FULL),
+        kind=FullKind(),
         query=parse_one("SELECT a FROM tbl"),
     )
 
