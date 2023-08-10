@@ -70,6 +70,11 @@ def test_ast_correctness(macro_evaluator):
     "sql, expected, args",
     [
         (
+            "select @each([(a, b), (c, d)], (x, y) -> x as y)",
+            "SELECT a AS b, c AS d",
+            {},
+        ),
+        (
             "select @each(['a', 'b'], x -> x = y as is_@{x})",
             "SELECT 'a' = y as is_a, 'b' = y as is_b",
             {},
