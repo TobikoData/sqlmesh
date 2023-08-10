@@ -821,12 +821,7 @@ class Context(BaseContext):
         if (
             not plan.context_diff.has_changes
             and not plan.requires_backfill
-            and not (
-                plan.is_dev
-                and not plan.context_diff.is_new_environment
-                and plan.include_unmodified
-                and plan.context_diff.unpromoted_models
-            )
+            and not plan.has_unmodified_unpromoted
         ):
             return
         if plan.uncategorized:

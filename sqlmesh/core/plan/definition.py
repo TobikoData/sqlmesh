@@ -440,6 +440,16 @@ class Plan:
 
         return self.__missing_intervals
 
+    @property
+    def has_unmodified_unpromoted(self) -> bool:
+        """Is the plan for an existing dev environment and contains unmodified models that have not been promoted."""
+        return (
+            self.is_dev
+            and not self.context_diff.is_new_environment
+            and self.include_unmodified
+            and len(self.context_diff.unpromoted_models) > 0
+        )
+
     def _add_restatements(self, restate_models: t.Iterable[str]) -> None:
         for table in restate_models:
             downstream = self._dag.downstream(table)

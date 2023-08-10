@@ -469,13 +469,7 @@ class TerminalConsole(Console):
             self._prompt_backfill(plan, auto_apply)
         elif plan.context_diff.has_changes and not auto_apply:
             self._prompt_promote(plan)
-        elif (
-            plan.is_dev
-            and not plan.context_diff.is_new_environment
-            and plan.include_unmodified
-            and plan.context_diff.unpromoted_models
-            and not auto_apply
-        ):
+        elif plan.has_unmodified_unpromoted and not auto_apply:
             self.log_status_update("\n[bold]Virtually updating unmodified models\n")
             self._prompt_promote(plan)
 

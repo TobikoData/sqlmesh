@@ -210,9 +210,7 @@ class ContextDiff(PydanticModel):
     @property
     def unpromoted_models(self) -> t.Set[str]:
         """The set of model names that have have not yet been promoted in the target environment."""
-        return {
-            *self.existing,
-        } - self.previously_promoted_model_names
+        return self.existing - self.previously_promoted_model_names
 
     def directly_modified(self, model_name: str) -> bool:
         """Returns whether or not a model was directly modified in this context.
