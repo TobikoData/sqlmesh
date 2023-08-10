@@ -12,7 +12,8 @@ from sqlmesh.core.model import Model, Seed, SeedKind, SeedModel, SqlModel
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
-from sqlmesh.utils.date import to_datetime
+from sqlmesh.utils.date import to_date, to_datetime
+from sqlmesh.utils.pydantic import PYDANTIC_MAJOR_VERSION
 
 
 @pytest.fixture
@@ -52,6 +53,13 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     )
     target.execute(context, lambda: mocker.Mock(), "spark")
 
+    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
+
+    if PYDANTIC_MAJOR_VERSION >= 2:
+        # FIXME: https://github.com/pydantic/pydantic/issues/7039
+        interval_ds = to_date(interval_ds)
+        logical_ds = to_date(logical_ds)
+
     evaluator_evaluate_mock.assert_called_once_with(
         snapshot,
         interval_ds,
@@ -60,8 +68,6 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
         snapshots=parent_snapshots,
         is_dev=False,
     )
-
-    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
 
 
 @pytest.mark.airflow
@@ -103,6 +109,15 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
     target = targets.SnapshotEvaluationTarget(snapshot=snapshot, parent_snapshots={}, is_dev=False)
     target.execute(context, lambda: mocker.Mock(), "spark")
 
+    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
+
+    get_snapshots_mock.assert_called_once_with([snapshot], hydrate_seeds=True)
+
+    if PYDANTIC_MAJOR_VERSION >= 2:
+        # FIXME: https://github.com/pydantic/pydantic/issues/7039
+        interval_ds = to_date(interval_ds)
+        logical_ds = to_date(logical_ds)
+
     evaluator_evaluate_mock.assert_called_once_with(
         snapshot,
         interval_ds,
@@ -111,10 +126,6 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
         snapshots={snapshot.name: snapshot},
         is_dev=False,
     )
-
-    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
-
-    get_snapshots_mock.assert_called_once_with([snapshot], hydrate_seeds=True)
 
 
 @pytest.mark.airflow

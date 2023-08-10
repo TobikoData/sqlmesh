@@ -6,7 +6,7 @@ import sys
 import typing as t
 from enum import Enum
 
-from pydantic import Field, root_validator
+from pydantic import Field
 
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
@@ -16,6 +16,7 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import model_validator
 
 if sys.version_info >= (3, 9):
     from typing import Annotated, Literal
@@ -79,7 +80,7 @@ class DuckDBConnectionConfig(_ConnectionConfig):
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
     """
 
-    database: t.Optional[str]
+    database: t.Optional[str] = None
 
     concurrent_tasks: Literal[1] = 1
 
@@ -116,12 +117,12 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
     """
 
     account: str
-    user: t.Optional[str]
-    password: t.Optional[str]
-    warehouse: t.Optional[str]
-    database: t.Optional[str]
-    role: t.Optional[str]
-    authenticator: t.Optional[str]
+    user: t.Optional[str] = None
+    password: t.Optional[str] = None
+    warehouse: t.Optional[str] = None
+    database: t.Optional[str] = None
+    role: t.Optional[str] = None
+    authenticator: t.Optional[str] = None
 
     concurrent_tasks: int = 4
 
@@ -129,7 +130,8 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
 
     _concurrent_tasks_validator = concurrent_tasks_validator
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
@@ -182,15 +184,15 @@ class DatabricksConnectionConfig(_ConnectionConfig):
         disable_databricks_connect: Even if databricks connect is installed, do not use it.
     """
 
-    server_hostname: t.Optional[str]
-    http_path: t.Optional[str]
-    access_token: t.Optional[str]
-    catalog: t.Optional[str]
-    http_headers: t.Optional[t.List[t.Tuple[str, str]]]
-    session_configuration: t.Optional[t.Dict[str, t.Any]]
-    databricks_connect_server_hostname: t.Optional[str]
-    databricks_connect_access_token: t.Optional[str]
-    databricks_connect_cluster_id: t.Optional[str]
+    server_hostname: t.Optional[str] = None
+    http_path: t.Optional[str] = None
+    access_token: t.Optional[str] = None
+    catalog: t.Optional[str] = None
+    http_headers: t.Optional[t.List[t.Tuple[str, str]]] = None
+    session_configuration: t.Optional[t.Dict[str, t.Any]] = None
+    databricks_connect_server_hostname: t.Optional[str] = None
+    databricks_connect_access_token: t.Optional[str] = None
+    databricks_connect_cluster_id: t.Optional[str] = None
     force_databricks_connect: bool = False
     disable_databricks_connect: bool = False
 
@@ -201,7 +203,8 @@ class DatabricksConnectionConfig(_ConnectionConfig):
     _concurrent_tasks_validator = concurrent_tasks_validator
     _http_headers_validator = http_headers_validator
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def _databricks_connect_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         from sqlmesh import runtime_env
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
@@ -449,7 +452,8 @@ class GCPPostgresConnectionConfig(_ConnectionConfig):
     type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
     concurrent_tasks: int = 4
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def _validate_auth_method(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
@@ -524,27 +528,27 @@ class RedshiftConnectionConfig(_ConnectionConfig):
         serverless_work_group: The name of work group for serverless end point. Default value None.
     """
 
-    user: t.Optional[str]
-    password: t.Optional[str]
-    database: t.Optional[str]
-    host: t.Optional[str]
-    port: t.Optional[int]
-    source_address: t.Optional[str]
-    unix_sock: t.Optional[str]
-    ssl: t.Optional[bool]
-    sslmode: t.Optional[str]
-    timeout: t.Optional[int]
-    tcp_keepalive: t.Optional[bool]
-    application_name: t.Optional[str]
-    preferred_role: t.Optional[str]
-    principal_arn: t.Optional[str]
-    credentials_provider: t.Optional[str]
-    region: t.Optional[str]
-    cluster_identifier: t.Optional[str]
-    iam: t.Optional[bool]
-    is_serverless: t.Optional[bool]
-    serverless_acct_id: t.Optional[str]
-    serverless_work_group: t.Optional[str]
+    user: t.Optional[str] = None
+    password: t.Optional[str] = None
+    database: t.Optional[str] = None
+    host: t.Optional[str] = None
+    port: t.Optional[int] = None
+    source_address: t.Optional[str] = None
+    unix_sock: t.Optional[str] = None
+    ssl: t.Optional[bool] = None
+    sslmode: t.Optional[str] = None
+    timeout: t.Optional[int] = None
+    tcp_keepalive: t.Optional[bool] = None
+    application_name: t.Optional[str] = None
+    preferred_role: t.Optional[str] = None
+    principal_arn: t.Optional[str] = None
+    credentials_provider: t.Optional[str] = None
+    region: t.Optional[str] = None
+    cluster_identifier: t.Optional[str] = None
+    iam: t.Optional[bool] = None
+    is_serverless: t.Optional[bool] = None
+    serverless_acct_id: t.Optional[str] = None
+    serverless_work_group: t.Optional[str] = None
 
     concurrent_tasks: int = 4
 
@@ -593,7 +597,7 @@ class PostgresConnectionConfig(_ConnectionConfig):
     password: str
     port: int
     database: str
-    keepalives_idle: t.Optional[int]
+    keepalives_idle: t.Optional[int] = None
     connect_timeout: int = 10
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None

@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 import typing as t
 
-from pydantic import Field, validator
+from pydantic import Field
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo
 from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 
 class EnvironmentNamingInfo(PydanticModel):
@@ -26,7 +26,7 @@ class EnvironmentNamingInfo(PydanticModel):
     name: str = c.PROD
     suffix_target: EnvironmentSuffixTarget = Field(default=EnvironmentSuffixTarget.SCHEMA)
 
-    @validator("name", pre=True)
+    @field_validator("name", mode="before")
     @classmethod
     def _normalize_name(cls, v: str) -> str:
         return word_characters_only(v).lower()
@@ -77,21 +77,21 @@ class Environment(EnvironmentNamingInfo):
 
     snapshots: t.List[SnapshotTableInfo]
     start_at: TimeLike
-    end_at: t.Optional[TimeLike]
+    end_at: t.Optional[TimeLike] = None
     plan_id: str
-    previous_plan_id: t.Optional[str]
-    expiration_ts: t.Optional[int]
-    finalized_ts: t.Optional[int]
+    previous_plan_id: t.Optional[str] = None
+    expiration_ts: t.Optional[int] = None
+    finalized_ts: t.Optional[int] = None
     promoted_snapshot_ids: t.Optional[t.List[SnapshotId]] = None
 
-    @validator("snapshots", pre=True)
+    @field_validator("snapshots", mode="before")
     @classmethod
     def _convert_snapshots(cls, v: str | t.List[SnapshotTableInfo]) -> t.List[SnapshotTableInfo]:
         if isinstance(v, str):
             return [SnapshotTableInfo.parse_obj(obj) for obj in json.loads(v)]
         return v
 
-    @validator("promoted_snapshot_ids", pre=True)
+    @field_validator("promoted_snapshot_ids", mode="before")
     @classmethod
     def _convert_snapshot_ids(cls, v: str | t.List[SnapshotId]) -> t.List[SnapshotId]:
         if isinstance(v, str):

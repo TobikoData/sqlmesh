@@ -19,6 +19,7 @@ from sqlmesh.core.model import (
     SqlModel,
     TimeColumn,
 )
+from sqlmesh.core.model.kind import model_kind_type_from_name
 from sqlmesh.core.plan import Plan, SnapshotIntervals
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -232,7 +233,7 @@ def change_model_kind(context: Context, kind: ModelKindName):
             partitioned_by=[],
             audits=[],
         )
-    context.upsert_model("sushi.items", kind=ModelKind(name=kind))
+    context.upsert_model("sushi.items", kind=model_kind_type_from_name(kind)())  # type: ignore
 
 
 def validate_model_kind_change(
@@ -257,7 +258,7 @@ def validate_model_kind_change(
     elif kind_name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
         kind = IncrementalByUniqueKeyKind(unique_key="id")
     else:
-        kind = ModelKind(name=kind_name)
+        kind = model_kind_type_from_name(kind_name)()  # type: ignore
 
     def _validate_plan(context, plan):
         validate_plan_changes(plan, modified=directly_modified + indirectly_modified)

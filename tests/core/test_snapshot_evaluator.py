@@ -11,9 +11,9 @@ from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
-    ModelKind,
     ModelKindName,
     PythonModel,
     SqlModel,
@@ -39,7 +39,7 @@ def snapshot(duck_conn, make_snapshot) -> Snapshot:
 
     model = SqlModel(
         name="db.model",
-        kind=ModelKind(name=ModelKindName.FULL),
+        kind=FullKind(),
         query=parse_one("SELECT a::int FROM tbl"),
     )
 
@@ -535,7 +535,7 @@ def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):
     snapshot = make_snapshot(
         SqlModel(
             name="db.model",
-            kind=ModelKind(name=ModelKindName.FULL),
+            kind=FullKind(),
             query=parse_one("SELECT a::int FROM tbl"),
         )
     )

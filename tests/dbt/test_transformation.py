@@ -11,11 +11,11 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import (
+    EmbeddedKind,
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
-    ModelKind,
-    ModelKindName,
     SqlModel,
     ViewKind,
 )
@@ -41,13 +41,9 @@ def test_model_name():
 def test_model_kind():
     target = DuckDbConfig(name="target", schema="foo")
 
-    assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == ModelKind(
-        name=ModelKindName.FULL
-    )
+    assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == FullKind()
     assert ModelConfig(materialized=Materialization.VIEW).model_kind(target) == ViewKind()
-    assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(target) == ModelKind(
-        name=ModelKindName.EMBEDDED
-    )
+    assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(target) == EmbeddedKind()
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
         target

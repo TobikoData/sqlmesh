@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dbt.adapters.base import BaseRelation, Column
 from dbt.contracts.relation import Policy
-from pydantic import Field, root_validator, validator
+from pydantic import Field
 
 from sqlmesh.core.config.connection import (
     BigQueryConnectionConfig,
@@ -29,6 +29,7 @@ from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import field_validator, model_validator
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -135,7 +136,8 @@ class DuckDbConfig(TargetConfig):
     schema_: str = Field(default="main", alias="schema")
     path: str = DUCKDB_IN_MEMORY
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def validate_authentication(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
@@ -184,24 +186,25 @@ class SnowflakeConfig(TargetConfig):
     user: str
 
     # User and password authentication
-    password: t.Optional[str]
+    password: t.Optional[str] = None
 
     # SSO authentication
-    authenticator: t.Optional[str]
+    authenticator: t.Optional[str] = None
 
     # TODO add other forms of authentication
 
     # Optional
-    warehouse: t.Optional[str]
-    role: t.Optional[str]
+    warehouse: t.Optional[str] = None
+    role: t.Optional[str] = None
     client_session_keep_alive: bool = False
-    query_tag: t.Optional[str]
+    query_tag: t.Optional[str] = None
     connect_retries: int = 0
     connect_timeout: int = 10
     retry_on_database_errors: bool = False
     retry_all: bool = False
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def validate_authentication(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
@@ -272,7 +275,8 @@ class PostgresConfig(TargetConfig):
     role: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def validate_database(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
@@ -281,7 +285,8 @@ class PostgresConfig(TargetConfig):
             raise ConfigError("Either database or dbname must be set")
         return values
 
-    @validator("port")
+    @field_validator("port")
+    @classmethod
     def _validate_port(cls, v: t.Union[int, str]) -> int:
         return int(v)
 
@@ -333,7 +338,8 @@ class RedshiftConfig(TargetConfig):
     search_path: t.Optional[str] = None
     sslmode: t.Optional[str] = None
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def validate_database(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
@@ -458,7 +464,8 @@ class BigQueryConfig(TargetConfig):
     priority: BigQueryPriority = BigQueryPriority.INTERACTIVE
     maximum_bytes_billed: t.Optional[int] = None
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def validate_fields(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:

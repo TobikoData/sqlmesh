@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.environment import Environment
 from sqlmesh.utils.errors import PlanError
 from web.server.main import api_console, app
 from web.server.settings import Settings, get_loaded_context, get_settings
@@ -468,20 +469,13 @@ def test_render_invalid_model(web_sushi_context: Context) -> None:
 def test_get_environments(project_context: Context) -> None:
     response = client.get("/api/environments")
     assert response.status_code == 200
-    assert response.json() == {
-        "prod": {
-            "name": "prod",
-            "snapshots": [],
-            "start_at": 0,
-            "end_at": None,
-            "plan_id": "",
-            "previous_plan_id": None,
-            "expiration_ts": None,
-            "finalized_ts": None,
-            "promoted_snapshot_ids": None,
-            "suffix_target": "schema",
-        }
-    }
+    response_json = response.json()
+    assert len(response_json) == 1
+
+    environment = Environment.parse_obj(response_json["prod"])
+    assert environment == Environment(
+        name="prod", snapshots=[], start_at="1970-01-01", plan_id="", suffix_target="schema"
+    )
 
 
 def test_get_lineage(web_sushi_context: Context) -> None:
