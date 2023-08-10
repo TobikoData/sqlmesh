@@ -53,6 +53,15 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         )
 
 
+def test_create_view_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), table_properties={"a": exp.convert(1)})  # type: ignore
+    adapter.cursor.execute.assert_called_once_with(
+        "CREATE OR REPLACE VIEW `test_view` TBLPROPERTIES ('a'=1) AS SELECT `a` FROM `tbl`"
+    )
+
+
 def test_alter_table(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     current_table_name = "test_table"
