@@ -818,7 +818,16 @@ class Context(BaseContext):
         Args:
             plan: The plan to apply.
         """
-        if not plan.context_diff.has_changes and not plan.requires_backfill:
+        if (
+            not plan.context_diff.has_changes
+            and not plan.requires_backfill
+            and not (
+                plan.is_dev
+                and not plan.context_diff.is_new_environment
+                and plan.include_unmodified
+                and plan.context_diff.unpromoted_models
+            )
+        ):
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
