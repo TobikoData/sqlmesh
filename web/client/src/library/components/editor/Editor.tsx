@@ -2,12 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Divider } from '../divider/Divider'
 import { useStoreProject } from '../../../context/project'
 import SplitPane from '../splitPane/SplitPane'
-import {
-  debounceSync,
-  isFalse,
-  isNil,
-  isStringEmptyOrNil,
-} from '../../../utils'
+import { isFalse, isNil, isStringEmptyOrNil } from '../../../utils'
 import EditorFooter from './EditorFooter'
 import EditorTabs from './EditorTabs'
 import EditorInspector from './EditorInspector'
@@ -139,17 +134,13 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
   )
 
   const updateFileContent = useCallback(
-    debounceSync(
-      function updateFileContent(value: string): void {
-        if (tab == null) return
+    function updateFileContent(value: string): void {
+      if (tab == null) return
 
-        tab.file.content = value
+      tab.file.content = value
 
-        refreshTab()
-      },
-      500,
-      true,
-    ),
+      refreshTab()
+    },
     [tab.id],
   )
 
