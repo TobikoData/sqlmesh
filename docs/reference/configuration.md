@@ -2,22 +2,22 @@
 
 This page provides information about SQLMesh configuration and lists the available configuration parameters.
 
-## Configuration files
+Currently, this page only describes how to specify configuration parameters using YAML; details about Python configuration are forthcoming.
 
-SQLMesh configurations can be set as environment variables, in a config file within a project folder, or in a config file in the `~/.sqlmesh` folder.
+## Configuration files
 
 **NOTE:** SQLMesh project configurations have the following two requirements:
 
-1. A `config.yaml` or `config.py` file must be present in the project's folder - it cannot solely rely on environment variables or a configuration file in `~/.sqlmesh`.
+1. A `config.yaml` or `config.py` file must be present in the project's folder.
 2. That configuration file must contain a default SQL dialect for the project's models in the [`model_defaults` `dialect` key](#models).
 
-The configuration sources have the following order of precedence:
+SQLMesh configuration parameters can be set as environment variables, in the configuration file within a project folder, or in a configuration file in the `~/.sqlmesh` folder.
 
-1. Set as an environment variable (for example, `SQLMESH__MODEL_DEFAULTS__DIALECT`). [HIGHEST PRECEDENCE]
-2. Set in `config.yaml` or `config.py` in a project folder.
-3. Set in `config.yaml` or `config.py` in the `~/.sqlmesh` folder. [LOWEST PRECEDENCE]
+The sources have the following order of precedence:
 
-Currently, this page only describes how to specify configuration parameters using YAML; more Python information to come.
+1. Environment variable (e.g., `SQLMESH__MODEL_DEFAULTS__DIALECT`). [HIGHEST PRECEDENCE]
+2. `config.yaml` or `config.py` in a project folder.
+3. `config.yaml` or `config.py` in the `~/.sqlmesh` folder. [LOWEST PRECEDENCE]
 
 ## Root configurations
 
