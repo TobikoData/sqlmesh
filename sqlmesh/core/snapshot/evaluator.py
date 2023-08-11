@@ -31,7 +31,7 @@ import pandas as pd
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
-from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
+from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.model import IncrementalUnmanagedKind, Model, ViewKind
@@ -301,7 +301,7 @@ class SnapshotEvaluator:
         """Execute a snapshot's model's audit queries.
 
         Args:
-            snapshot: Snapshot to evaluate.  start: The start datetime to audit. Defaults to epoch start.
+            snapshot: Snapshot to evaluate.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
@@ -328,37 +328,20 @@ class SnapshotEvaluator:
         results = []
         for audit_name, audit_args in snapshot.model.audits:
             audit = audits_by_name[audit_name]
-            if audit.skip:
-                results.append(AuditResult(audit=audit, model=snapshot.model, skipped=True))
-                continue
-            query = audit.render_query(
-                snapshot,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                snapshots=snapshots,
-                is_dev=is_dev,
-                engine_adapter=self.adapter,
-                **audit_args,
-                **kwargs,
-            )
-            count, *_ = self.adapter.fetchone(
-                select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
-            )
-            if count and raise_exception:
-                audit_error = AuditError(
-                    audit_name=audit_name,
-                    model_name=snapshot.model.name,
-                    count=count,
-                    query=query,
+            results.append(
+                self._audit(
+                    audit=audit,
+                    audit_args=audit_args,
+                    snapshot=snapshot,
+                    snapshots=snapshots,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    raise_exception=raise_exception,
+                    is_dev=is_dev,
+                    **kwargs,
                 )
-                if audit.blocking:
-                    raise audit_error
-                else:
-                    logger.warning(
-                        f"{audit_error}\nAudit is warn only so proceeding with execution."
-                    )
-            results.append(AuditResult(audit=audit, model=snapshot.model, count=count, query=query))
+            )
         return results
 
     @contextmanager
@@ -486,6 +469,57 @@ class SnapshotEvaluator:
                 raise SQLMeshError(
                     f"Snapshot {snapshot.snapshot_id} depends on a paused forward-only snapshot {p.snapshot_id}. Create and apply a new plan to fix this issue."
                 )
+
+    def _audit(
+        self,
+        audit: Audit,
+        audit_args: t.Dict[t.Any, t.Any],
+        snapshot: Snapshot,
+        snapshots: t.Dict[str, Snapshot],
+        start: t.Optional[TimeLike],
+        end: t.Optional[TimeLike],
+        execution_time: t.Optional[TimeLike],
+        raise_exception: bool,
+        is_dev: bool,
+        **kwargs: t.Any,
+    ) -> AuditResult:
+        if audit.skip:
+            return AuditResult(
+                audit=audit,
+                model=snapshot.model,
+                skipped=True,
+            )
+        query = audit.render_query(
+            snapshot,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            is_dev=is_dev,
+            engine_adapter=self.adapter,
+            **audit_args,
+            **kwargs,
+        )
+        count, *_ = self.adapter.fetchone(
+            select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
+        )
+        if count and raise_exception:
+            audit_error = AuditError(
+                audit_name=audit.name,
+                model_name=snapshot.model.name,
+                count=count,
+                query=query,
+            )
+            if audit.blocking:
+                raise audit_error
+            else:
+                logger.warning(f"{audit_error}\nAudit is warn only so proceeding with execution.")
+        return AuditResult(
+            audit=audit,
+            model=snapshot.model,
+            count=count,
+            query=query,
+        )
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
