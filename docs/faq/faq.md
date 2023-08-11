@@ -147,6 +147,8 @@
 
     Unlike data transformations, storing state information requires database transactions. Some databases, like BigQuery, aren’t optimized for executing transactions, so storing state information in them can slow down your project. If this occurs, you can store state information in a different database, such as PostgreSQL, that executes transactions more efficiently.
 
+    Learn more about storing state information at the [configuration reference page](../reference/configuration.md#state-connection).
+
 ## Scheduling
 
 ??? question "How do I run SQLMesh models on a schedule?"
