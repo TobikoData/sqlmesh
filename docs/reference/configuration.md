@@ -4,21 +4,20 @@ This page provides information about SQLMesh configuration and lists the availab
 
 ## Configuration files
 
-SQLMesh configurations can be set as environment variables, in the `config.yaml` file within a project folder, or in the file with the same name in the `~/.sqlmesh` folder.
+SQLMesh configurations can be set as environment variables, in a config file within a project folder, or in a config file in the `~/.sqlmesh` folder.
+
+**NOTE:** SQLMesh project configurations have the following two requirements:
+
+1. A `config.yaml` or `config.py` file must be present in the project's folder - it cannot solely rely on environment variables or a configuration file in `~/.sqlmesh`.
+2. That configuration file must contain a default SQL dialect for the project's models in the [`model_defaults` `dialect` key](#models).
 
 The configuration sources have the following order of precedence:
 
-1. Set as an environment variable (for example, `SQLMESH__MODEL_DEFAULTS__DIALECT`).
+1. Set as an environment variable (for example, `SQLMESH__MODEL_DEFAULTS__DIALECT`). [HIGHEST PRECEDENCE]
 2. Set in `config.yaml` or `config.py` in a project folder.
-3. Set in `config.yaml` or `config.py` in the `~/.sqlmesh` folder.
+3. Set in `config.yaml` or `config.py` in the `~/.sqlmesh` folder. [LOWEST PRECEDENCE]
 
-Currently, this page only describes how to specify configuration parameters using YAML, with Python information to come.
-
-### Project file
-
-A SQLMesh project **must** contain a `config.yaml` file in its directory - it cannot solely rely on environment variables or a configuration file in `~/.sqlmesh`.
-
-The SQLMesh project configuration file **must** contain a default SQL dialect for the project's models in the [`model_defaults` `dialect` key](#models).
+Currently, this page only describes how to specify configuration parameters using YAML; more Python information to come.
 
 ## Root configurations
 
@@ -56,18 +55,20 @@ Configuration options for SQLMesh environment creation and promotion.
 Configuration options for SQLMesh virtual data environment schemas.
 
 #### Physical Schema Override
-By default SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__[model schema]`. This can be overridden on a per-schema basis using the `physical_schema_override` option. This will remove the `sqlmesh__` prefix and just use the name you provide.
+By default, SQLMesh creates physical tables for a model with a naming convention of `sqlmesh__[model schema]`.
 
-Config example that overrides the default physical schemas for the `db` model schema:
+This can be overridden on a per-schema basis using the `physical_schema_override` option, which removes the `sqlmesh__` prefix and uses the name you provide.
+
+This example configuration overrides the default physical schemas for the `db` model schema:
 
 ```yaml linenums="1"
 physical_schema_override:
   db: my_db
 ```
 
-If you had a model name of `db.table` then the physical table would be created as `my_db.table_<fingerprint>` instead of the default behavior of `sqlmesh__db.table_<fingerprint>`. Similarly, the physical tables for a model named `db2.table` would be created as `my_db2.table_<fingerprint>` instead of `sqlmesh__db2.table_<fingerprint>`
+If you had a model name of `db.table`, the physical table would be created as `my_db.table_<fingerprint>` instead of the default behavior of `sqlmesh__db.table_<fingerprint>`.
 
-Keep in mind this applies to just the _physical tables_ that SQLMesh creates. The views are still created in `db` (prod) or `db__<env>`. You may want to override this behavior if you have permissions/governance rules you are trying to adhere to at your organization and therefore need more control over the schema names used.
+This key only applies to the _physical tables_ that SQLMesh creates - the views are still created in `db` (prod) or `db__<env>`.
 
 #### View Schema Override
 
@@ -79,7 +80,7 @@ Config example:
 environment_suffix_target: table
 ```
 
-If you had a model name of `db.users`, and you were creating a `dev` environment, then the view would be created as `db.users__dev` instead of the default behavior of `db__dev.users`.
+If you created a `dev` environment for a project containing a model named `db.users`, the model view would be created as `db.users__dev` instead of the default behavior of `db__dev.users`.
 
 The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However, if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas SQLMesh uses.
 
@@ -168,7 +169,7 @@ These pages describe the connection configuration options for each execution eng
 
 Configuration for the state backend connection if different from the data warehouse connection. The data warehouse connection is used if the `state_connection` key is not specified.
 
-Example configuration for a postgres state connection:
+Example postgres state connection configuration:
 
 ```yaml linenums="1"
 gateways:
