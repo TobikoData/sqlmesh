@@ -45,8 +45,6 @@ class ContextDiff(PydanticModel):
     """New models."""
     removed: t.Set[str]
     """Deleted models."""
-    existing: t.Set[str]
-    """Existing"""
     modified_snapshots: t.Dict[str, t.Tuple[Snapshot, Snapshot]]
     """Modified snapshots."""
     snapshots: t.Dict[str, Snapshot]
@@ -175,7 +173,6 @@ class ContextDiff(PydanticModel):
             create_from=create_from,
             added=added,
             removed=removed,
-            existing=existing_models,
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
@@ -210,7 +207,7 @@ class ContextDiff(PydanticModel):
     @property
     def unpromoted_models(self) -> t.Set[str]:
         """The set of model names that have have not yet been promoted in the target environment."""
-        return self.existing - self.previously_promoted_model_names
+        return set(self.snapshots) - self.previously_promoted_model_names
 
     def directly_modified(self, model_name: str) -> bool:
         """Returns whether or not a model was directly modified in this context.
