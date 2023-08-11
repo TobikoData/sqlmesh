@@ -47,36 +47,40 @@ def test_model_kind():
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
         target
-    ) == IncrementalByTimeRangeKind(time_column="foo")
+    ) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="delete+insert",
+        forward_only=False,
     ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="insert_overwrite",
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", unique_key=["bar"]
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
-    ).model_kind(target) == IncrementalByUniqueKeyKind(unique_key=["bar"])
+    ).model_kind(target) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
     assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(
         target
-    ) == IncrementalByUniqueKeyKind(unique_key=["bar"])
+    ) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
     ).model_kind(target) == IncrementalByTimeRangeKind(
-        time_column="foo", forward_only=True, disable_restatement=True
+        time_column="foo", forward_only=True, disable_restatement=False
     )
 
     assert ModelConfig(
-        materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="append"
+        materialized=Materialization.INCREMENTAL,
+        time_column="foo",
+        incremental_strategy="append",
+        disable_restatement=True,
     ).model_kind(target) == IncrementalByTimeRangeKind(
         time_column="foo", forward_only=True, disable_restatement=True
     )
@@ -86,6 +90,7 @@ def test_model_kind():
         time_column="foo",
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
+        forward_only=False,
     ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
 
     assert ModelConfig(
