@@ -314,9 +314,14 @@ def _norm_var_arg_lambda(
         expressions = items
 
     if not callable(func):
-        return expressions, lambda *args: func.this.transform(
+        return expressions, lambda args: func.this.transform(
             substitute,
-            {expression.name: arg for expression, arg in zip(func.expressions, args)},
+            {
+                expression.name: arg
+                for expression, arg in zip(
+                    func.expressions, args.expressions if isinstance(args, exp.Tuple) else [args]
+                )
+            },
         )
 
     return expressions, func
@@ -399,7 +404,7 @@ def reduce_(evaluator: MacroEvaluator, *args: t.Any) -> t.Any:
     """
     *items, func = args
     items, func = _norm_var_arg_lambda(evaluator, func, *items)  # type: ignore
-    return reduce(func, ensure_collection(items))
+    return reduce(lambda a, b: func(exp.Tuple(expressions=[a, b])), ensure_collection(items))
 
 
 @macro("FILTER")

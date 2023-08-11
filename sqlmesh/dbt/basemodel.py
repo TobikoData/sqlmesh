@@ -247,6 +247,7 @@ class BaseModelConfig(GeneralConfig):
             "pre_statements": [d.jinja_statement(hook.sql) for hook in self.pre_hook],
             "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             "tags": self.tags,
+            "physical_schema_override": context.sqlmesh_config.physical_schema_override,
             **optional_kwargs,
         }
 
