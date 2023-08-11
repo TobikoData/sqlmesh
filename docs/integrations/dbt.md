@@ -136,20 +136,18 @@ The project is now configured to use airflow. Going forward, this also means tha
 
 SQLMesh supports running dbt projects using the majority of dbt jinja methods, including:
 
-| Method      | Method              | Method       | Method
-| ------      | ------              | ------       | ------
-| adapter (*) | env_var             | project_name | target
-| as_bool     | exceptions          | ref          | this
-| as_native   | from_yaml           | return       | to_yaml
-| as_number   | is_incremental (**) | run_query    | var
-| as_text     | load_result         | schema       | zip
-| api         | log                 | set          |
-| builtins    | modules             | source       |
-| config      | print               | statement    |
+| Method      | Method          | Method       | Method
+| ------      | ------          | ------       | ------
+| adapter (*) | env_var         | project_name | target
+| as_bool     | exceptions      | ref          | this
+| as_native   | from_yaml       | return       | to_yaml
+| as_number   | is_incremental  | run_query    | var
+| as_text     | load_result     | schema       | zip
+| api         | log             | set          |
+| builtins    | modules         | source       |
+| config      | print           | statement    |
 
 \* `adapter.rename_relation` and `adapter.expand_target_column_types` are not currently supported.
-
-\*\* this is ignored, see [above](#insert-overwrite-and-deleteinsert-modifications).
 
 ## Unsupported dbt features
 
@@ -161,6 +159,17 @@ SQLMesh is continuously adding functionality to run dbt projects. This is a list
 * dbt test (in development)
 * dbt docs
 * dbt snapshots
+
+The dbt jinja methods that are not currently supported are:
+
+* debug
+* run_started_at
+* selected_sources
+* adapter.expand_target_column_types
+* adapter.rename_relation
+* schemas
+* graph.nodes.values
+* graph.metrics.values
 
 ## Missing something you need?
 
