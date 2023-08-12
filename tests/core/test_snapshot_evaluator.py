@@ -198,6 +198,35 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
+def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    def create_and_cleanup(name):
+        model = SqlModel(
+            name=name,
+            kind=IncrementalByTimeRangeKind(time_column="a"),
+            storage_format="parquet",
+            query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+        )
+
+        snapshot = make_snapshot(model)
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+        evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+        evaluator.cleanup([snapshot])
+        return snapshot
+
+    snapshot = create_and_cleanup("catalog.test_schema.test_model")
+    adapter_mock.drop_table.assert_called_once_with(
+        f"catalog.sqlmesh__test_schema.catalog__test_schema__test_model__{snapshot.version}"
+    )
+    adapter_mock.reset_mock()
+    snapshot = create_and_cleanup("test_schema.test_model")
+    adapter_mock.drop_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
+    )
+
+
 @pytest.mark.parametrize("view_exists", [True, False])
 def test_evaluate_materialized_view(
     mocker: MockerFixture, adapter_mock, make_snapshot, view_exists: bool
