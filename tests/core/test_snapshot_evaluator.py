@@ -225,6 +225,11 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.drop_table.assert_called_once_with(
         f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
     )
+    adapter_mock.reset_mock()
+    snapshot = create_and_cleanup("test_model")
+    adapter_mock.drop_table.assert_called_once_with(
+        f"sqlmesh__default.test_model__{snapshot.version}"
+    )
 
 
 @pytest.mark.parametrize("view_exists", [True, False])
