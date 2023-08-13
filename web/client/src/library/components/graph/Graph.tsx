@@ -114,7 +114,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
 
   return (
     <div className={clsx('flex w-full items-center relative', className)}>
-      {source != null && (
+      {isNotNil(source) && (
         <Popover
           onMouseLeave={() => {
             setIsShowing(false)
@@ -162,20 +162,22 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
           )}
         </Popover>
       )}
-      <div className={clsx('w-full flex justify-between items-center')}>
-        <span className={clsx('flex items-center', disabled && 'opacity-50')}>
-          {disabled && <LockClosedIcon className="w-3 h-3 mr-2" />}
-          <span>{columnName}</span>
-        </span>
-        <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-2">
-          {columnType}
-        </span>
+      <div className="w-full">
+        <div className="w-full flex justify-between items-center">
+          <span className={clsx('flex items-center', disabled && 'opacity-50')}>
+            {disabled && <LockClosedIcon className="w-3 h-3 mr-2" />}
+            <b>{columnName}</b>
+          </span>
+          <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-2">
+            {columnType}
+          </span>
+        </div>
+        {isNotNil(columnDescription) && (
+          <p className="block text-neutral-600 dark:text-neutral-300 mt-2">
+            {columnDescription}
+          </p>
+        )}
       </div>
-      {columnDescription != null && (
-        <p className="text-neutral-600 dark:text-neutral-300 mt-1">
-          {columnDescription}
-        </p>
-      )}
     </div>
   )
 })
@@ -442,6 +444,7 @@ const ModelColumn = memo(function ModelColumn({
             <ModelColumnDisplay
               columnName={column.name}
               columnType={column.type}
+              columnDescription={column.description}
               disabled={disabled}
               source={source}
               className={clsx(
@@ -461,6 +464,7 @@ const ModelColumn = memo(function ModelColumn({
             <ModelColumnDisplay
               columnName={column.name}
               columnType={column.type}
+              columnDescription={column.description}
               disabled={disabled}
               source={source}
               className={clsx(

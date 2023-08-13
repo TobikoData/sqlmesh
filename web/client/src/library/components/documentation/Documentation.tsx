@@ -2,7 +2,14 @@ import React from 'react'
 import { Disclosure, Tab } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { EnumFileExtensions } from '@models/file'
-import { isString, isTrue, toDateFormat } from '@utils/index'
+import {
+  isArrayNotEmpty,
+  isFalse,
+  isNumber,
+  isString,
+  isTrue,
+  toDateFormat,
+} from '@utils/index'
 import clsx from 'clsx'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { ModelColumns } from '@components/graph/Graph'
@@ -217,7 +224,7 @@ function Section({
               </div>
             </Disclosure.Button>
             <Disclosure.Panel className="pb-2 overflow-hidden">
-              <div className="px-2">{children}</div>
+              <div className="px-4 mb-2 text-xs">{children}</div>
             </Disclosure.Panel>
           </>
         )}
@@ -226,7 +233,7 @@ function Section({
   )
 }
 
-function DetailsItem({
+function DetailsItem<TValue = any>({
   className,
   name,
   value,
@@ -235,39 +242,59 @@ function DetailsItem({
   children,
 }: {
   name: string
-  value: string | boolean | number
+  value: Primitive | TValue[]
   className?: string
   isHighlighted?: boolean
   isCapitalize?: boolean
   children?: React.ReactNode
 }): JSX.Element {
-  const maybeDate = new Date(value as string)
-  const isDate = isString(value) && !isNaN(maybeDate.getTime())
-  const isBoolean = typeof value === 'boolean'
   return (
     <li
       className={clsx('w-full border-b border-primary-10 py-1 mb-1', className)}
     >
-      <div className="flex justify-between text-xs">
-        <strong
-          className={clsx(
-            'mr-2',
-            isCapitalize && 'capitalize',
-            isHighlighted && 'text-brand-500',
-          )}
-        >
-          {name}
-        </strong>
-        <p className="text-xs rounded text-neutral-500 dark:text-neutral-400">
-          {isBoolean
-            ? isTrue(value)
-              ? 'True'
-              : 'False'
-            : isDate
-            ? toDateFormat(maybeDate)
-            : value}
-        </p>
-      </div>
+      {isArrayNotEmpty(value) ? (
+        <>
+          <strong className="mr-2 text-xs capitalize">{name}</strong>
+          {(value as TValue[]).map((item: any) => (
+            <span
+              className="w-full items-center flex ml-2 mb-1"
+              key={item}
+            >
+              <ul className="w-full flex ml-3 whitespace-nowrap">
+                {Object.entries(item).map(([key, value]) => (
+                  <li
+                    key={key}
+                    className="flex"
+                  >
+                    <div className="flex text-xs">
+                      <strong className="mr-2">{key}:</strong>
+                      <p className="text-xs rounded text-neutral-500 dark:text-neutral-400">
+                        {getValue(value as Primitive)}
+                      </p>
+                      <span className="px-2 text-neutral-20">|</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </span>
+          ))}
+        </>
+      ) : (
+        <div className="flex justify-between text-xs whitespace-nowrap">
+          <strong
+            className={clsx(
+              'mr-2',
+              isCapitalize && 'capitalize',
+              isHighlighted && 'text-brand-500',
+            )}
+          >
+            {name}
+          </strong>
+          <p className="text-xs rounded text-neutral-500 dark:text-neutral-400">
+            {getValue(value as Primitive)}
+          </p>
+        </div>
+      )}
       <p className="text-xs ">{children}</p>
     </li>
   )
@@ -277,3 +304,17 @@ Documentation.NotFound = NotFound
 Documentation.Container = Container
 
 export default Documentation
+
+function getValue(value: Primitive): string {
+  const maybeDate = new Date(value as string)
+  const isDate = isString(value) && !isNaN(maybeDate.getTime())
+  const isBoolean = typeof value === 'boolean'
+
+  if (isBoolean && isTrue(value)) return 'True'
+  if (isBoolean && isFalse(value)) return 'False'
+  if (isDate) return toDateFormat(maybeDate)
+  if (isNumber(value)) return value.toString()
+  if (isString(value)) return value
+
+  return ''
+}
