@@ -94,6 +94,7 @@ const Documentation = function Documentation({
             disabled={model?.type === 'python'}
             withHandles={false}
             withSource={false}
+            withDescription={true}
             limit={10}
           />
         </Section>

@@ -96,12 +96,14 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
   className,
   source,
   disabled = false,
+  withDescription = true,
 }: {
   columnName: string
   columnType: string
   columnDescription?: string
   source?: string
   disabled?: boolean
+  withDescription?: boolean
   className?: string
 }): JSX.Element {
   const { handleClickModel } = useLineageFlow()
@@ -172,7 +174,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
             {columnType}
           </span>
         </div>
-        {isNotNil(columnDescription) && (
+        {isNotNil(columnDescription) && withDescription && (
           <p className="block text-neutral-600 dark:text-neutral-300 mt-2">
             {columnDescription}
           </p>
@@ -356,6 +358,7 @@ const ModelColumn = memo(function ModelColumn({
   removeEdges,
   selectManually,
   withHandles = false,
+  withDescription = true,
   source,
 }: {
   id: string
@@ -367,6 +370,7 @@ const ModelColumn = memo(function ModelColumn({
   hasRight?: boolean
   withHandles?: boolean
   source?: string
+  withDescription?: boolean
   updateColumnLineage: (
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
@@ -425,7 +429,6 @@ const ModelColumn = memo(function ModelColumn({
         className={clsx(
           'flex w-full items-center',
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-          className,
         )}
       >
         {withHandles ? (
@@ -446,6 +449,7 @@ const ModelColumn = memo(function ModelColumn({
               columnType={column.type}
               columnDescription={column.description}
               disabled={disabled}
+              withDescription={withDescription}
               source={source}
               className={clsx(
                 isError && 'text-danger-500',
@@ -466,6 +470,7 @@ const ModelColumn = memo(function ModelColumn({
               columnType={column.type}
               columnDescription={column.description}
               disabled={disabled}
+              withDescription={withDescription}
               source={source}
               className={clsx(
                 isError && 'text-danger-500',
@@ -488,6 +493,7 @@ const ModelColumns = memo(function ModelColumns({
   limit = 5,
   withHandles = false,
   withSource = false,
+  withDescription = true,
 }: {
   nodeId: string
   columns: Column[]
@@ -496,6 +502,7 @@ const ModelColumns = memo(function ModelColumns({
   limit?: number
   withHandles?: boolean
   withSource?: boolean
+  withDescription?: boolean
 }): JSX.Element {
   const {
     connections,
@@ -635,6 +642,7 @@ const ModelColumns = memo(function ModelColumns({
                   : undefined
               }
               withHandles={withHandles}
+              withDescription={withDescription}
               source={
                 withSource
                   ? lineage?.[nodeId]?.columns?.[column.name]?.source
@@ -666,11 +674,12 @@ const ModelColumns = memo(function ModelColumns({
       <div
         className={clsx(
           'overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical-md py-2',
+          columnsSelected.length > 0 && 'pt-1 border-t border-neutral-10',
           withHandles ? 'w-full bg-theme-lighter cursor-default' : '',
           className,
         )}
       >
-        {columnsRest.map(column => (
+        {columnsRest.map((column, idx) => (
           <ModelColumn
             key={toNodeOrEdgeId(nodeId, column.name)}
             id={toNodeOrEdgeId(nodeId, column.name)}
@@ -688,12 +697,14 @@ const ModelColumns = memo(function ModelColumns({
                 : undefined
             }
             className={clsx(
+              'border-t border-neutral-10 first:border-0',
               filter === '' ||
                 (showColumns ? column.name.includes(filter) : true)
                 ? 'opacity-100'
                 : 'opacity-0 h-0 overflow-hidden',
             )}
             withHandles={withHandles}
+            withDescription={withDescription}
             source={
               withSource
                 ? lineage?.[nodeId]?.columns?.[column.name]?.source
