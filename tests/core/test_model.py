@@ -399,6 +399,12 @@ def test_json_serde():
             cron '@daily',
             storage_format parquet,
             partitioned_by a,
+            table_properties (
+                key_a = 'value_a',
+                'key_b' = 1,
+                key_c = true,
+                "key_d" = 2.0,
+            ),
         );
 
         @DEF(key, 'value');

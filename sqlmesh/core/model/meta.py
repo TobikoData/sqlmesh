@@ -225,8 +225,7 @@ class ModelMeta(Node, extra="allow"):
                 table_properties[eq_expr.this.name] = value_expr
         elif isinstance(v, dict):
             for key, value in v.items():
-                value_expr = exp.convert(value, copy=True)
-                value_expr.meta["dialect"] = dialect
+                value_expr = d.parse_one(value, dialect=dialect)
                 table_properties[key] = value_expr
         else:
             raise ConfigError(f"Unexpected table properties '{v}'")
