@@ -1750,7 +1750,14 @@ def test_custom_interval_unit():
         )
 
 
-def test_model_table_properties():
+def test_model_table_properties(sushi_context):
+    # Validate python model table properties
+    assert sushi_context.models["sushi.items"].table_properties == {
+        "string_prop": exp.Literal.string("some_value"),
+        "int_prop": exp.Literal.number(1),
+        "float_prop": exp.Literal.number(1.0),
+        "bool_prop": exp.true(),
+    }
     # Validate a tuple.
     model = load_sql_based_model(
         d.parse(
@@ -1855,10 +1862,10 @@ def test_model_table_properties():
         name="test_schema.test_model",
         query=d.parse_one("SELECT a FROM tbl"),
         table_properties={
-            "key_a": "value_a",
-            "key_b": 1,
-            "key_c": True,
-            "key_d": 2.0,
+            "key_a": exp.Literal.string("value_a"),
+            "key_b": exp.Literal.number(1),
+            "key_c": exp.true(),
+            "key_d": exp.Literal.number(2.0),
         },
     ).table_properties == {
         "key_a": exp.convert("value_a"),

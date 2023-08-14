@@ -38,6 +38,10 @@ class model(registry_decorator):
             )
             for call in calls
         ]
+        if "table_properties" in self.kwargs:
+            self.kwargs["table_properties"] = {
+                key: exp.convert(value) for key, value in self.kwargs["table_properties"].items()
+            }
 
         self.columns = {
             column_name: column_type
