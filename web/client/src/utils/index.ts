@@ -32,11 +32,11 @@ export function isStringNotEmpty(value: unknown): boolean {
   return isString(value) && value.trim() !== ''
 }
 
-export function isArrayNotEmpty(value: unknown): boolean {
+export function isArrayNotEmpty<T = any>(value: unknown): value is T[] {
   return Array.isArray(value) && value.length > 0
 }
 
-export function isArrayEmpty(value: unknown): boolean {
+export function isArrayEmpty(value: unknown): value is [] {
   return Array.isArray(value) && value.length === 0
 }
 

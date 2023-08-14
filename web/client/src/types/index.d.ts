@@ -8,4 +8,4 @@ type Nil = undefined | null
 type Optional<T> = T | undefined
 type Maybe<T> = T | Nil
 type Callback = () => void
-type Primitive = string | number | boolean | symbol
+type Primitive = string | number | boolean

@@ -234,7 +234,7 @@ function Section({
   )
 }
 
-function DetailsItem<TValue = any>({
+function DetailsItem<TValue = Record<string, Primitive>>({
   className,
   name,
   value,
@@ -253,16 +253,18 @@ function DetailsItem<TValue = any>({
     <li
       className={clsx('w-full border-b border-primary-10 py-1 mb-1', className)}
     >
-      {isArrayNotEmpty(value) ? (
+      {isArrayNotEmpty<TValue>(value) ? (
         <>
           <strong className="mr-2 text-xs capitalize">{name}</strong>
-          {(value as TValue[]).map((item: any) => (
+          {value.map((item, idx) => (
             <span
               className="w-full items-center flex ml-2 mb-1"
-              key={item}
+              key={idx}
             >
               <ul className="w-full flex ml-3 whitespace-nowrap">
-                {Object.entries(item).map(([key, value]) => (
+                {Object.entries<Primitive>(
+                  item as Record<string, Primitive>,
+                ).map(([key, val]) => (
                   <li
                     key={key}
                     className="flex"
@@ -270,7 +272,7 @@ function DetailsItem<TValue = any>({
                     <div className="flex text-xs">
                       <strong className="mr-2">{key}:</strong>
                       <p className="text-xs rounded text-neutral-500 dark:text-neutral-400">
-                        {getValue(value as Primitive)}
+                        {getValue(val)}
                       </p>
                       <span className="px-2 text-neutral-20">|</span>
                     </div>
@@ -292,7 +294,7 @@ function DetailsItem<TValue = any>({
             {name}
           </strong>
           <p className="text-xs rounded text-neutral-500 dark:text-neutral-400">
-            {getValue(value as Primitive)}
+            {getValue(value)}
           </p>
         </div>
       )}
