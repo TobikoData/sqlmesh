@@ -5,7 +5,6 @@ import { EnumFileExtensions } from '@models/file'
 import {
   isArrayNotEmpty,
   isFalse,
-  isNumber,
   isString,
   isTrue,
   toDateFormat,
@@ -316,8 +315,6 @@ function getValue(value: Primitive): string {
   if (isBoolean && isTrue(value)) return 'True'
   if (isBoolean && isFalse(value)) return 'False'
   if (isDate) return toDateFormat(maybeDate)
-  if (isNumber(value)) return value.toString()
-  if (isString(value)) return value
 
-  return ''
+  return String(value)
 }
