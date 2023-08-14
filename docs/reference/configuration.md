@@ -129,7 +129,7 @@ Configuration for the data warehouse connection.
 
 The allowed keys include:
 
-- The optional [`concurrent_tasks`](#concurrent-tasks) key specifies the maximum number of concurrent tasks SQLMesh will run; it is allowed for all engines. Default value is 4 for engines that allow concurrent tasks.
+- The optional [`concurrent_tasks`](#concurrent-tasks) key specifies the maximum number of concurrent tasks SQLMesh will run. Default value is 4 for engines that support concurrent tasks.
 - Most keys are specific to the connection engine `type` - see [below](#engine-connection-configuration). The default data warehouse connection type is an in-memory DuckDB database.
 
 Example snowflake connection configuration:
@@ -138,7 +138,6 @@ Example snowflake connection configuration:
 gateways:
     my_gateway:
         connection:
-            concurrent_tasks: 3
             type: snowflake
             user: <username>
             password: <password>
@@ -149,7 +148,7 @@ gateways:
 
 | Option             | Description                                                                                                                     | Type | Required |
 |--------------------|---------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
-| `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh. Default value is 4 for engines that allow concurrent tasks. | int  |    N     |
+| `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh. Default value is 4 for engines that support concurrent tasks. | int  |    N     |
 
 #### Engine connection configuration
 
@@ -206,7 +205,7 @@ This would create all state tables in the schema `custom_name`.
 
 ### Test connection
 
-Configuration for a connection used when running unit tests. An in-memory DuckDB database is used if the `test_connection` key is not specified.
+Configuration for a connection used to run unit tests. An in-memory DuckDB database is used if the `test_connection` key is not specified.
 
 ```yaml linenums="1"
 gateways:
@@ -264,6 +263,8 @@ See [Airflow Integration Guide](../integrations/airflow.md) for information abou
 
 #### Cloud Composer
 
+The Google Cloud Composer scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
+
 Example configuration:
 
 ```yaml linenums="1"
@@ -273,7 +274,6 @@ gateways:
             type: cloud_composer
             airflow_url: <airflow_url>
 ```
-This scheduler type shares the same configuration options as the `airflow` type, except for `username` and `password`. Cloud Composer relies on `gcloud` authentication, so the `username` and `password` options are not required.
 
 ## Gateway/connection defaults
 
@@ -289,7 +289,9 @@ If a configuration contains multiple gateways, SQLMesh will use the first one in
 
 ### Default connections/scheduler
 
-The `default_connection`, `default_test_connection`, and `default_scheduler` keys are used to specify shared defaults across multiple gateways. For example, you might have a specific connection where your tests should run regardless of which gateway is being used. Instead of duplicating the test connection information in each gateway specification, specify it once in the `default_test_connection` key.
+The `default_connection`, `default_test_connection`, and `default_scheduler` keys are used to specify shared defaults across multiple gateways.
+
+For example, you might have a specific connection where your tests should run regardless of which gateway is being used. Instead of duplicating the test connection information in each gateway specification, specify it once in the `default_test_connection` key.
 
 | Option                    | Description                                                                                                                                            | Type       | Required |
 |---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|:----------:|:--------:|
@@ -311,7 +313,7 @@ Other values are set automatically unless explicitly overridden in the model def
 | `dialect`        | The SQL dialect in which the model's query is written                                                                                                                                                                                                                                                                |     string     |    N     |
 | `cron`           | The default cron expression specifying how often the model should be refreshed                                                                                                                                                                                                                                 |     string     |    N     |
 | `owner`          | The owner of a model; may be used for notification purposes                                                                                                                                                                                                                                                   |     string     |    N     |
-| `start`          | The date/time that determines the earliest data interval that should be processed by a model. This value is used to identify missing data intervals during plan application and restatement. The value can be a datetime string, epoch time in milliseconds, or a relative datetime such as `1 year ago`.      | string or int  |    N     |
+| `start`          | The date/time that determines the earliest date interval that should be processed by a model. This value is used to identify missing data intervals during plan application and restatement. The value can be a datetime string, epoch time in milliseconds, or a relative datetime such as `1 year ago`.      | string or int  |    N     |
 | `batch_size`     | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. |      int       |    N     |
 | `storage_format` | The storage format that should be used to store physical tables; only applicable to engines such as Spark                                                                                                                                                                                                     |     string     |    N     |
 
@@ -344,4 +346,10 @@ model_defaults:
 ```
 
 ## Debug mode
-To enable the debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y". Enabling this mode ensures that full backtraces are printed when using CLI. Additionally the default log level is set to `DEBUG` when this mode is enabled.
+To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y". Enabling this mode ensures that full backtraces are printed when using CLI. Additionally the default log level is set to `DEBUG` when this mode is enabled.
+
+Example enabling debug mode for the CLI command `sqlmesh plan`:
+
+```bash
+$ SQLMESH_DEBUG=1 sqlmesh plan
+```
