@@ -449,13 +449,14 @@ class SnapshotEvaluator:
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         snapshot = snapshot.table_info
         table_names = [snapshot.table_name()]
-        if snapshot.version != snapshot.fingerprint:
+        if snapshot.version != snapshot.fingerprint.to_version():
             table_names.append(snapshot.table_name(is_dev=True))
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
         for table_name in table_names:
-            if not table_name.startswith(snapshot.physical_schema):
+            table = exp.to_table(table_name)
+            if table.db != snapshot.physical_schema:
                 raise SQLMeshError(
                     f"Table '{table_name}' is not a part of the physical schema '{snapshot.physical_schema}' and so can't be dropped."
                 )
