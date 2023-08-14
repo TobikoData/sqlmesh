@@ -55,7 +55,6 @@ async def write_file(
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
     context: Context = Depends(get_context),
-    path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
 ) -> models.File:
     """Create, update, or rename a file."""
     path_or_new_path = path
@@ -65,12 +64,21 @@ async def write_file(
     else:
         (settings.project_path / path_or_new_path).write_text(content, encoding="utf-8")
 
+    found_models = [
+        model
+        for model in context.models.values()
+        if model._path == settings.project_path / path_or_new_path
+    ]
+    if found_models:
+        context.format_model(model=found_models[0])
+
+    path_or_new_path_mapping = await get_path_mapping(settings=get_settings())
     content = (settings.project_path / path_or_new_path).read_text()
     return models.File(
         name=os.path.basename(path_or_new_path),
         path=path_or_new_path,
         content=content,
-        type=path_mapping.get(Path(path)),
+        type=path_or_new_path_mapping.get(Path(path_or_new_path)),
     )
 
 
