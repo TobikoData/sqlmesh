@@ -100,6 +100,12 @@ The [`batch_size` parameter](../concepts/models/overview.md#batch_size) determin
 
 The [`lookback` parameter](../concepts/models/overview.md#lookback) is used to capture late arriving data. It sets the number of units of late arriving data the model should expect and must be a positive integer.
 
+**Note:** By default, all incremental dbt models are configured to be [forward-only](../concepts/plans.md#forward-only-plans). However, you can change this behavior by setting the `forward_only: false` setting either in the configuration of an individual model or globally for all models in the `dbt_project.yaml` file. The [forward-only](../concepts/plans.md#forward-only-plans) mode aligns more closely with the typical operation of dbt and therefore better meets user's expectations.
+
+#### on_schema_change
+
+It's important to note, that the `on_schema_change` setting is ignored by SQLMesh. Schema changes are only applied during the [plan](../concepts/plans.md) application (i.e. `sqlmesh plan`) and never during runtime (i.e. `sqlmesh run`). The target table's schema is **always** updated to match the model's query, as if the `on_schema_change` setting was set to `sync_all_columns`.
+
 ## Tests
 SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (coming soon).
 
