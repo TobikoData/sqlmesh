@@ -9,7 +9,6 @@ import {
   type QueryKey,
   type UseQueryOptions,
   type QueryMeta,
-  QueryFunction,
 } from '@tanstack/react-query'
 import {
   type ContextEnvironment,
@@ -73,12 +72,9 @@ export interface ApiQueryMeta extends QueryMeta {
 const DELAY = 15000
 
 export type UseQueryWithTimeoutOptions<
-  TQueryFnData = unknown,
+  TData = any,
   TError extends ApiExceptionPayload = ApiExceptionPayload,
-  TData = TQueryFnData,
-  TQueryKey extends QueryKey = QueryKey,
 > = UseQueryResult<TData, TError> & {
-  queryFn: QueryFunction<TQueryFnData, TQueryKey>
   cancel: <TData = any>() => Promise<TData | undefined>
   isTimeout: boolean
 }
