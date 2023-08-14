@@ -510,7 +510,7 @@ class SnapshotEvaluator:
         if count and raise_exception:
             audit_error = AuditError(
                 audit_name=audit.name,
-                model_name=snapshot.model.name,
+                snapshot_id=snapshot.snapshot_id,
                 count=count,
                 query=query,
             )

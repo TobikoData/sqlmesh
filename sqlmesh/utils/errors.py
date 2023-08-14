@@ -7,6 +7,9 @@ from pathlib import Path
 from sqlglot import exp
 from sqlglot.helper import AutoName
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.snapshot import SnapshotId
+
 
 class ErrorLevel(AutoName):
     IGNORE = auto()
@@ -56,12 +59,16 @@ class AuditConfigError(ConfigError):
 
 class AuditError(SQLMeshError):
     def __init__(
-        self, audit_name: str, model_name: str, count: int, query: exp.Subqueryable
+        self, audit_name: str, snapshot_id: SnapshotId, count: int, query: exp.Subqueryable
     ) -> None:
         self.audit_name = audit_name
-        self.model_name = model_name
+        self.snapshot_id = snapshot_id
         self.count = count
         self.query = query
+
+    @property
+    def model_name(self) -> str:
+        return self.snapshot_id.name
 
     def __str__(self) -> str:
         return f"Audit '{self.audit_name}' for model '{self.model_name}' failed.\nGot {self.count} results, expected 0.\n{self.query}"
