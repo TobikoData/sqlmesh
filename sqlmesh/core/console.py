@@ -674,14 +674,14 @@ class TerminalConsole(Console):
         tree.add(f" [b][green]{target_name} ONLY[/green]:[/b] {row_diff.t_only_count} rows")
         self.console.print("\n", tree)
 
-        self.console.print("\n[b][blue]COMMON ROWS[/blue] comparison stats:[/b]")
+        self.console.print("\n[b][blue]COMMON ROWS[/blue] column comparison stats:[/b]")
         if row_diff.column_stats.shape[0] > 0:
             self.console.print(row_diff.column_stats.to_string(index=True), end="\n\n")
         else:
             self.console.print("  No columns with same name and data type in both tables")
 
         if show_sample:
-            self.console.print("\n[b][blue]COMMON ROWS[/blue] data differences:[/b]")
+            self.console.print("\n[b][blue]COMMON ROWS[/blue] sample data differences:[/b]")
             if row_diff.joined_sample.shape[0] > 0:
                 self.console.print(row_diff.joined_sample.to_string(index=False), end="\n\n")
             else:
