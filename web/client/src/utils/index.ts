@@ -10,8 +10,16 @@ export function isFalseOrNil(value: unknown): boolean {
   return isNil(value) || isFalse(value)
 }
 
-export function isString(value: unknown): boolean {
+export function isString(value: unknown): value is string {
   return typeof value === 'string'
+}
+
+export function isNumber(value: unknown): value is number {
+  return typeof value === 'number'
+}
+
+export function isPrimitive(value: unknown): value is Primitive {
+  return isString(value) || isNumber(value) || typeof value === 'boolean'
 }
 
 export function isStringEmptyOrNil(
@@ -21,10 +29,10 @@ export function isStringEmptyOrNil(
 }
 
 export function isStringNotEmpty(value: unknown): boolean {
-  return isString(value) && (value as string).trim() !== ''
+  return isString(value) && value.trim() !== ''
 }
 
-export function isArrayNotEmpty(value: unknown): boolean {
+export function isArrayNotEmpty<T = any>(value: unknown): value is T[] {
   return Array.isArray(value) && value.length > 0
 }
 
