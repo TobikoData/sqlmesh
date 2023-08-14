@@ -166,6 +166,7 @@ export default function ModelNode({
             disabled={model?.type !== EnumLineageNodeModelType.sql}
             withHandles={true}
             withSource={true}
+            withDescription={false}
           />
           <div
             className={clsx(
