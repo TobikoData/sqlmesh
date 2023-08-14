@@ -87,7 +87,13 @@ The default behavior of appending the suffix to schemas is recommended because i
 ### Auto categorize changes
 Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type.
 
-Default values are set as follows:
+Supported values:
+
+* `full`: Never prompt the user for input, instead fall back to the most conservative category ([breaking](../concepts/plans.md#breaking-change)) if the category can't be determined automatically.
+* `semi`: Prompt the user for input only if the change category can't be determined automatically.
+* `off`: Always prompt the user for input; automatic categorization will not be attempted.
+
+Example showing default values:
 
 ```yaml linenums="1"
 auto_categorize_changes:
@@ -95,12 +101,6 @@ auto_categorize_changes:
     sql: full
     seed: full
 ```
-
-Supported values:
-
-* `full`: Never prompt the user for input, instead fall back to the most conservative category ([breaking](../concepts/plans.md#breaking-change)) if the category can't be determined automatically.
-* `semi`: Prompt the user for input only if the change category can't be determined automatically.
-* `off`: Always prompt the user for input; automatic categorization will not be attempted.
 
 ## Gateways
 
