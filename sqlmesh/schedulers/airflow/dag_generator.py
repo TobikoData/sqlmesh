@@ -284,7 +284,7 @@ class SnapshotDagGenerator:
 
         if request.promoted_snapshots:
             create_views_task = self._create_snapshot_promotion_operator(
-                request.promoted_snapshots,
+                [snapshots[x.snapshot_id] for x in request.promoted_snapshots],
                 request.environment_naming_info,
                 request.ddl_concurrent_tasks,
                 request.is_dev,
@@ -410,7 +410,7 @@ class SnapshotDagGenerator:
 
     def _create_snapshot_promotion_operator(
         self,
-        snapshots: t.List[SnapshotTableInfo],
+        snapshots: t.List[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         ddl_concurrent_tasks: int,
         is_dev: bool,

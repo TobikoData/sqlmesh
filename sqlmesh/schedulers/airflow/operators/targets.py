@@ -182,7 +182,7 @@ class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], Pydant
         [SnapshotEvaluator, commands.PromoteCommandPayload], None
     ] = commands.promote
 
-    snapshots: t.List[SnapshotTableInfo]
+    snapshots: t.List[Snapshot]
     environment_naming_info: EnvironmentNamingInfo
     ddl_concurrent_tasks: int
     is_dev: bool
