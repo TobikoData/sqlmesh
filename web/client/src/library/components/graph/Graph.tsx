@@ -96,12 +96,14 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
   className,
   source,
   disabled = false,
+  withDescription = true,
 }: {
   columnName: string
   columnType: string
   columnDescription?: string
   source?: string
   disabled?: boolean
+  withDescription?: boolean
   className?: string
 }): JSX.Element {
   const { handleClickModel } = useLineageFlow()
@@ -114,7 +116,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
 
   return (
     <div className={clsx('flex w-full items-center relative', className)}>
-      {source != null && (
+      {isNotNil(source) && (
         <Popover
           onMouseLeave={() => {
             setIsShowing(false)
@@ -162,20 +164,22 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
           )}
         </Popover>
       )}
-      <div className={clsx('w-full flex justify-between items-center')}>
-        <span className={clsx('flex items-center', disabled && 'opacity-50')}>
-          {disabled && <LockClosedIcon className="w-3 h-3 mr-2" />}
-          <span>{columnName}</span>
-        </span>
-        <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-2">
-          {columnType}
-        </span>
+      <div className="w-full">
+        <div className="w-full flex justify-between items-center">
+          <span className={clsx('flex items-center', disabled && 'opacity-50')}>
+            {disabled && <LockClosedIcon className="w-3 h-3 mr-2" />}
+            <b>{columnName}</b>
+          </span>
+          <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-2">
+            {columnType}
+          </span>
+        </div>
+        {isNotNil(columnDescription) && withDescription && (
+          <p className="block text-neutral-600 dark:text-neutral-300 mt-2">
+            {columnDescription}
+          </p>
+        )}
       </div>
-      {columnDescription != null && (
-        <p className="text-neutral-600 dark:text-neutral-300 mt-1">
-          {columnDescription}
-        </p>
-      )}
     </div>
   )
 })
@@ -354,6 +358,7 @@ const ModelColumn = memo(function ModelColumn({
   removeEdges,
   selectManually,
   withHandles = false,
+  withDescription = true,
   source,
 }: {
   id: string
@@ -365,6 +370,7 @@ const ModelColumn = memo(function ModelColumn({
   hasRight?: boolean
   withHandles?: boolean
   source?: string
+  withDescription?: boolean
   updateColumnLineage: (
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,
   ) => void
@@ -423,7 +429,6 @@ const ModelColumn = memo(function ModelColumn({
         className={clsx(
           'flex w-full items-center',
           disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-          className,
         )}
       >
         {withHandles ? (
@@ -442,7 +447,9 @@ const ModelColumn = memo(function ModelColumn({
             <ModelColumnDisplay
               columnName={column.name}
               columnType={column.type}
+              columnDescription={column.description}
               disabled={disabled}
+              withDescription={withDescription}
               source={source}
               className={clsx(
                 isError && 'text-danger-500',
@@ -461,7 +468,9 @@ const ModelColumn = memo(function ModelColumn({
             <ModelColumnDisplay
               columnName={column.name}
               columnType={column.type}
+              columnDescription={column.description}
               disabled={disabled}
+              withDescription={withDescription}
               source={source}
               className={clsx(
                 isError && 'text-danger-500',
@@ -484,6 +493,7 @@ const ModelColumns = memo(function ModelColumns({
   limit = 5,
   withHandles = false,
   withSource = false,
+  withDescription = true,
 }: {
   nodeId: string
   columns: Column[]
@@ -492,6 +502,7 @@ const ModelColumns = memo(function ModelColumns({
   limit?: number
   withHandles?: boolean
   withSource?: boolean
+  withDescription?: boolean
 }): JSX.Element {
   const {
     connections,
@@ -631,6 +642,7 @@ const ModelColumns = memo(function ModelColumns({
                   : undefined
               }
               withHandles={withHandles}
+              withDescription={withDescription}
               source={
                 withSource
                   ? lineage?.[nodeId]?.columns?.[column.name]?.source
@@ -662,11 +674,12 @@ const ModelColumns = memo(function ModelColumns({
       <div
         className={clsx(
           'overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical-md py-2',
+          columnsSelected.length > 0 && 'pt-1 border-t border-neutral-10',
           withHandles ? 'w-full bg-theme-lighter cursor-default' : '',
           className,
         )}
       >
-        {columnsRest.map(column => (
+        {columnsRest.map((column, idx) => (
           <ModelColumn
             key={toNodeOrEdgeId(nodeId, column.name)}
             id={toNodeOrEdgeId(nodeId, column.name)}
@@ -684,12 +697,14 @@ const ModelColumns = memo(function ModelColumns({
                 : undefined
             }
             className={clsx(
+              'border-t border-neutral-10 first:border-0',
               filter === '' ||
                 (showColumns ? column.name.includes(filter) : true)
                 ? 'opacity-100'
                 : 'opacity-0 h-0 overflow-hidden',
             )}
             withHandles={withHandles}
+            withDescription={withDescription}
             source={
               withSource
                 ? lineage?.[nodeId]?.columns?.[column.name]?.source

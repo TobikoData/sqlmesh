@@ -72,7 +72,7 @@ class ModelConfig(BaseModelConfig):
     interval_unit: t.Optional[str] = None
     batch_size: t.Optional[int] = None
     lookback: t.Optional[int] = None
-    forward_only: t.Optional[bool] = None
+    forward_only: bool = True
     disable_restatement: t.Optional[bool] = None
 
     # DBT configuration fields
@@ -152,7 +152,7 @@ class ModelConfig(BaseModelConfig):
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
             incremental_kwargs = {}
-            for field in ("batch_size", "lookback"):
+            for field in ("batch_size", "lookback", "forward_only", "disable_restatement"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
                     incremental_kwargs[field] = field_val
@@ -162,7 +162,6 @@ class ModelConfig(BaseModelConfig):
                     IncrementalByTimeRangeKind
                 )
 
-                is_supported = True
                 if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
                     logger.warning(
                         "SQLMesh incremental by time strategy is not compatible with '%s' incremental strategy in model '%s'. Supported strategies include %s.",
@@ -170,13 +169,10 @@ class ModelConfig(BaseModelConfig):
                         self.sql_name,
                         collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
                     )
-                    is_supported = False
 
                 return IncrementalByTimeRangeKind(
                     time_column=self.time_column,
                     **incremental_kwargs,
-                    forward_only=not is_supported,
-                    disable_restatement=not is_supported,
                 )
 
             if self.unique_key:
@@ -203,7 +199,8 @@ class ModelConfig(BaseModelConfig):
                 IncrementalUnmanagedKind
             )
             return IncrementalUnmanagedKind(
-                insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES
+                insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
+                forward_only=incremental_kwargs.get("forward_only", True),
             )
         if materialization == Materialization.EPHEMERAL:
             return EmbeddedKind()
@@ -278,7 +275,7 @@ class ModelConfig(BaseModelConfig):
                 d.parse_one(c, dialect=dialect).name for c in self.cluster_by
             ]
 
-        for field in ["cron", "interval_unit", "forward_only", "disable_restatement"]:
+        for field in ["cron", "interval_unit"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
                 optional_kwargs[field] = field_val

@@ -194,7 +194,7 @@ class SnapshotEvaluator:
 
     def promote(
         self,
-        target_snapshots: t.Iterable[SnapshotInfoLike],
+        target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         is_dev: bool = False,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
@@ -212,7 +212,9 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._promote_snapshot(s, environment_naming_info, is_dev, on_complete),
+                lambda s: self._promote_snapshot(
+                    s, environment_naming_info, is_dev, on_complete, s.model
+                ),
                 self.ddl_concurrent_tasks,
             )
 
@@ -424,10 +426,11 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         is_dev: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+        model: Model,
     ) -> None:
         table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
         _evaluation_strategy(snapshot, self.adapter).promote(
-            snapshot.qualified_view_name, environment_naming_info, table_name
+            snapshot.qualified_view_name, environment_naming_info, table_name, model
         )
 
         if on_complete is not None:
@@ -449,13 +452,14 @@ class SnapshotEvaluator:
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         snapshot = snapshot.table_info
         table_names = [snapshot.table_name()]
-        if snapshot.version != snapshot.fingerprint:
+        if snapshot.version != snapshot.fingerprint.to_version():
             table_names.append(snapshot.table_name(is_dev=True))
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
         for table_name in table_names:
-            if not table_name.startswith(snapshot.physical_schema):
+            table = exp.to_table(table_name)
+            if table.db != snapshot.physical_schema:
                 raise SQLMeshError(
                     f"Table '{table_name}' is not a part of the physical schema '{snapshot.physical_schema}' and so can't be dropped."
                 )
@@ -634,6 +638,7 @@ class EvaluationStrategy(abc.ABC):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
+        model: Model,
     ) -> None:
         """Updates the target view to point to the target table.
 
@@ -641,6 +646,7 @@ class EvaluationStrategy(abc.ABC):
             view_name: The name of the target view.
             environment_naming_info: The naming information for the target environment
             table_name: The name of the target table.
+            model: The target model. Not currently used but can be used by others if needed.
         """
 
     @abc.abstractmethod
@@ -705,6 +711,7 @@ class SymbolicStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
+        model: Model,
     ) -> None:
         pass
 
@@ -722,6 +729,7 @@ class EmbeddedStrategy(SymbolicStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
+        model: Model,
     ) -> None:
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Dropping view '%s' for non-materialized table", target_name)
@@ -734,6 +742,7 @@ class PromotableStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
+        model: Model,
     ) -> None:
         schema = view_name.schema_for_environment(environment_naming_info=environment_naming_info)
         if schema is not None:
