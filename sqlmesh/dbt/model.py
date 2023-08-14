@@ -200,7 +200,7 @@ class ModelConfig(BaseModelConfig):
             )
             return IncrementalUnmanagedKind(
                 insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
-                forward_only=self.forward_only,
+                forward_only=incremental_kwargs.get("forward_only", True),
             )
         if materialization == Materialization.EPHEMERAL:
             return EmbeddedKind()
