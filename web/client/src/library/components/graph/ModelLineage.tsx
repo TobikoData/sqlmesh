@@ -31,10 +31,11 @@ export default function ModelLineage({
     setWithColumns,
   } = useLineageFlow()
 
-  const { refetch: getModelLineage, isFetching } = useApiModelLineage(
-    model.name,
-    { debounceDelay: 2000, debounceImmediate: false },
-  )
+  const {
+    refetch: getModelLineage,
+    isFetching,
+    cancel,
+  } = useApiModelLineage(model.name)
 
   useEffect(() => {
     if (isStringEmptyOrNil(fingerprint)) return
@@ -56,6 +57,10 @@ export default function ModelLineage({
         setHighlightedNodes(highlightedNodes)
         setWithColumns(true)
       })
+
+    return () => {
+      void cancel?.()
+    }
   }, [fingerprint])
 
   return (
