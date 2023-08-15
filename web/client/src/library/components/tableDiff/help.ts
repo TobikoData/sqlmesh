@@ -75,15 +75,19 @@ function getRows(
   deleted: number
   added: number
 } {
-  const rows = Object.values(diff.row_diff.sample)[0]
+  const rows = Object.values(diff.row_diff.sample)[0] ?? {}
   const deleted: string[] = []
   const added: string[] = []
   const rest: string[] = []
 
-  Object.entries(rows ?? {}).forEach(([key]) => {
-    if (isAddedRow(diff, key, on)) added.push(key)
-    else if (isDeletedRow(diff, key, on)) deleted.push(key)
-    else rest.push(key)
+  Object.keys(rows).forEach(key => {
+    if (isAddedRow(diff, key, on)) {
+      added.push(key)
+    } else if (isDeletedRow(diff, key, on)) {
+      deleted.push(key)
+    } else {
+      rest.push(key)
+    }
   })
 
   return {
