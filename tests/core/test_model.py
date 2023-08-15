@@ -1822,7 +1822,7 @@ def test_model_table_properties(sushi_context):
         "key_a": exp.convert("value_a"),
         "key_b": exp.convert(1),
     }
-    assert model.table_properties_ == d.parse_one("""[key_a = 'value_a', 'key_b' = 1]""")
+    assert model.table_properties_ == d.parse_one("""(key_a = 'value_a', 'key_b' = 1)""")
 
     # Validate empty.
     model = load_sql_based_model(
@@ -1853,7 +1853,7 @@ def test_model_table_properties(sushi_context):
         )
     )
     assert model.table_properties == {"key": d.parse_one("['value']")}
-    assert model.table_properties_ == d.parse_one("""[key = ['value']]""")
+    assert model.table_properties_ == exp.Tuple(expressions=[d.parse_one("key = ['value']")])
 
     # Validate dict parsing.
     model = create_sql_model(

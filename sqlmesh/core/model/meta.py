@@ -49,9 +49,7 @@ class ModelMeta(Node, extra="allow"):
     references: t.List[exp.Expression] = []
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
-    table_properties_: t.Optional[t.Union[exp.Tuple, exp.Array]] = Field(
-        default=None, alias="table_properties"
-    )
+    table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
     _table_properties: t.Dict[str, exp.Expression] = {}
 
     _model_kind_validator = model_kind_validator
@@ -197,12 +195,9 @@ class ModelMeta(Node, extra="allow"):
 
     @field_validator("table_properties_", mode="before")
     @field_validator_v1_args
-    def _properties_validator(
-        cls, v: t.Any, values: t.Dict[str, t.Any]
-    ) -> t.Optional[t.Union[exp.Tuple, exp.Array]]:
+    def _properties_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[exp.Tuple]:
         if v is None:
             return v
-        properties: t.Union[exp.Tuple, exp.Array]
         dialect = values.get("dialect")
         if isinstance(v, str):
             v = d.parse_one(v, dialect=dialect)
@@ -216,17 +211,15 @@ class ModelMeta(Node, extra="allow"):
                         f"Invalid table property '{eq_expr.sql(dialect=dialect)}'. "
                         "Table properties must be specified as key-value pairs <key> = <value>. "
                     )
-            if isinstance(v, exp.Paren):
-                properties = exp.Tuple(expressions=eq_expressions)
-            else:
-                properties = v
+            properties = (
+                exp.Tuple(expressions=eq_expressions)
+                if isinstance(v, (exp.Paren, exp.Array))
+                else v
+            )
         elif isinstance(v, dict):
             properties = exp.Tuple(
                 expressions=[
-                    exp.EQ(
-                        this=exp.Literal.string(key),
-                        expression=exp.convert(value, copy=True),
-                    )
+                    exp.Literal.string(key).eq(exp.convert(value, copy=True))
                     for key, value in v.items()
                 ]
             )
