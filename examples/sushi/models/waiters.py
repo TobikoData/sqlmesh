@@ -1,11 +1,9 @@
+from macros.macros import incremental_by_ds  # type: ignore
 from sqlglot import exp
 
-import sqlmesh.core.dialect
 from sqlmesh import model
 from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.core.model import EmbeddedKind
-
-from macros.macros import incremental_by_ds
 
 
 @model(
