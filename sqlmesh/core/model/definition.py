@@ -685,7 +685,7 @@ class _Model(ModelMeta, frozen=True):
             data.append(column_name)
             data.append(column_type.sql())
 
-        for key, value in (self.table_properties_ or {}).items():
+        for key, value in (self.table_properties or {}).items():
             data.append(key)
             data.append(value.sql())
 
@@ -1911,7 +1911,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "grains": _refs_to_sql,
     "references": _refs_to_sql,
     "hash_raw_query": exp.convert,
-    "table_properties_": lambda value: exp.Tuple(
-        expressions=[exp.Literal.string(k).eq(v) for k, v in (value or {}).items()]
-    ),
+    "table_properties_": lambda value: value,
 }
