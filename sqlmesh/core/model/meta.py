@@ -218,10 +218,7 @@ class ModelMeta(Node, extra="allow"):
             )
         elif isinstance(v, dict):
             properties = exp.Tuple(
-                expressions=[
-                    exp.Literal.string(key).eq(exp.convert(value, copy=True))
-                    for key, value in v.items()
-                ]
+                expressions=[exp.Literal.string(key).eq(value) for key, value in v.items()]
             )
         else:
             raise SQLMeshError(f"Unexpected table properties '{v}'")
