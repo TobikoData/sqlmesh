@@ -170,7 +170,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         completed = False
         try:
             self.snapshot_evaluator.promote(
-                promotion_result.added,
+                [plan.context_diff.snapshots[s.name] for s in promotion_result.added],
                 environment.naming_info,
                 is_dev=plan.is_dev,
                 on_complete=on_complete,

@@ -1147,7 +1147,12 @@
           "storage_format": { "type": "string", "title": "Storage Format" },
           "time_column": { "type": "string", "title": "Time Column" },
           "tags": { "type": "string", "title": "Tags" },
-          "grain": { "type": "string", "title": "Grain" },
+          "references": {
+            "items": { "$ref": "#/components/schemas/Reference" },
+            "type": "array",
+            "title": "References",
+            "default": []
+          },
           "partitioned_by": { "type": "string", "title": "Partitioned By" },
           "clustered_by": { "type": "string", "title": "Clustered By" },
           "lookback": { "type": "integer", "title": "Lookback" },
@@ -1286,6 +1291,16 @@
         "type": "object",
         "required": ["sql"],
         "title": "Query"
+      },
+      "Reference": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "expression": { "type": "string", "title": "Expression" },
+          "unique": { "type": "boolean", "title": "Unique" }
+        },
+        "type": "object",
+        "required": ["name", "expression", "unique"],
+        "title": "Reference"
       },
       "RenderInput": {
         "properties": {
