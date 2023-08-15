@@ -906,7 +906,7 @@ class SqlModel(_SqlBasedModel):
         post_statements: The list of SQL statements that follow after the model's query.
     """
 
-    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    query: t.Union[exp.Subqueryable, d.JinjaQuery, d.MacroFunc]
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -1479,6 +1479,13 @@ def load_sql_based_model(
             raise
 
 
+QUERY_TYPES = (
+    exp.Subqueryable,
+    d.JinjaQuery,
+    d.MacroFunc,
+)
+
+
 def create_sql_model(
     name: str,
     query: exp.Expression,
@@ -1515,9 +1522,10 @@ def create_sql_model(
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
     """
-    if not isinstance(query, (exp.Subqueryable, d.JinjaQuery)):
+    if not isinstance(query, QUERY_TYPES):
         raise_config_error(
-            "A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block",
+            "A query is required and must be a SELECT statement, a UNION statement, a JINJA_QUERY block,"
+            " or a single macro function invocation that expands into a SELECT or a UNION statement.",
             path,
         )
 
@@ -1788,6 +1796,7 @@ def _python_env(
     python_env: t.Dict[str, Executable] = {}
 
     used_macros = {}
+    serialized_env = {}
 
     expressions = ensure_list(expressions)
     for expression in expressions:
@@ -1802,15 +1811,13 @@ def _python_env(
             used_macros[macro_ref.name] = macros[macro_ref.name]
 
     for name, macro in used_macros.items():
-        if not macro.func.__module__.startswith("sqlmesh."):
-            build_env(
-                macro.func,
-                env=python_env,
-                name=name,
-                path=module_path,
-            )
+        if isinstance(macro, Executable):
+            serialized_env[name] = macro
+        elif not macro.func.__module__.startswith("sqlmesh."):
+            build_env(macro.func, env=python_env, name=name, path=module_path)
 
-    return serialize_env(python_env, path=module_path)
+    serialized_env.update(serialize_env(python_env, path=module_path))
+    return serialized_env
 
 
 def _parse_depends_on(model_func: str, python_env: t.Dict[str, Executable]) -> t.Set[str]:

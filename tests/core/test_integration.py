@@ -621,8 +621,8 @@ def test_auto_categorization(sushi_context: Context):
     version = sushi_context.snapshots["sushi.waiter_as_customer_by_day"].version
     fingerprint = sushi_context.snapshots["sushi.waiter_as_customer_by_day"].fingerprint
 
-    model = t.cast(SqlModel, sushi_context.models["sushi.waiters"])
-    sushi_context.upsert_model("sushi.waiters", query=model.query.select("'foo' AS foo"))  # type: ignore
+    model = t.cast(SqlModel, sushi_context.models["sushi.customers"])
+    sushi_context.upsert_model("sushi.customers", query=model.query.select("'foo' AS foo"))  # type: ignore
     apply_to_environment(sushi_context, environment)
 
     assert (
