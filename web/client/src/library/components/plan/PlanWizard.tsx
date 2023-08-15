@@ -329,8 +329,8 @@ export default function PlanWizard({
                         planState === EnumPlanState.Finished
                           ? EnumVariant.Success
                           : planState === EnumPlanState.Failed
-                            ? EnumVariant.Danger
-                            : EnumVariant.Info
+                          ? EnumVariant.Danger
+                          : EnumVariant.Info
                       }
                     >
                       {planState === EnumPlanState.Finished && (
@@ -343,8 +343,8 @@ export default function PlanWizard({
                           planState === EnumPlanState.Finished
                             ? EnumVariant.Success
                             : planState === EnumPlanState.Failed
-                              ? EnumVariant.Danger
-                              : EnumVariant.Info
+                            ? EnumVariant.Danger
+                            : EnumVariant.Info
                         }
                         className="w-full"
                       />

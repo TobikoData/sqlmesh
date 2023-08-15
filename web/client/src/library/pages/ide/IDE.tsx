@@ -111,14 +111,11 @@ export default function PageIDE(): JSX.Element {
   )
 
   useEffect(() => {
-    const unsubscribeTasks = subscribe<PlanProgress>('tasks', updateTasks)
-    const unsubscribeModels = subscribe<Model[]>('models', updateModels)
-    const unsubscribeErrors = subscribe<ErrorIDE>('errors', displayErrors)
-    const unsubscribePromote = subscribe<any>(
-      'promote-environment',
-      handlePromote,
-    )
-    const unsubscribeFile = subscribe<{
+    const channelTasks = channel<PlanProgress>('tasks', updateTasks)
+    const channelModels = channel<Model[]>('models', updateModels)
+    const channelErrors = channel<ErrorIDE>('errors', displayErrors)
+    const channelPromote = channel<any>('promote-environment', handlePromote)
+    const channelFile = channel<{
       changes: Array<{
         change: FileExplorerChange
         path: string
@@ -129,10 +126,6 @@ export default function PageIDE(): JSX.Element {
       changes.sort((a: any) =>
         a.change === EnumFileExplorerChange.Deleted ? -1 : 1,
       )
-      const channelTasks = channel<PlanProgress>('tasks', updateTasks)
-      const channelModels = channel<Model[]>('models', updateModels)
-      const channelErrors = channel<ErrorIDE>('errors', displayErrors)
-      const channelPromote = channel<any>('promote-environment', handlePromote)
 
       changes.forEach(({ change, path, file }) => {
         if (change === EnumFileExplorerChange.Modified) {
@@ -216,10 +209,11 @@ export default function PageIDE(): JSX.Element {
       setProject(project)
     })
 
-    channelTasks?.subscribe()
-    channelModels?.subscribe()
-    channelErrors?.subscribe()
-    channelPromote?.subscribe()
+    channelTasks.subscribe()
+    channelModels.subscribe()
+    channelErrors.subscribe()
+    channelPromote.subscribe()
+    channelFile.subscribe()
 
     return () => {
       void cancelRequestModels()
@@ -227,24 +221,11 @@ export default function PageIDE(): JSX.Element {
       void cancelRequestEnvironments()
       void cancelRequestPlan()
 
-      unsubscribeTasks?.()
-      unsubscribeModels?.()
-      unsubscribePromote?.()
-      unsubscribeErrors?.()
-      unsubscribeFile?.()
-      debouncedGetEnvironemnts.cancel()
-      debouncedGetModels.cancel()
-      debouncedGetFiles.cancel()
-      debouncedRunPlan.cancel()
-
-      apiCancelFiles(client)
-      apiCancelModels(client)
-      apiCancelGetEnvironments(client)
-
-      channelTasks?.unsubscribe()
-      channelModels?.unsubscribe()
-      channelErrors?.unsubscribe()
-      channelPromote?.unsubscribe()
+      channelTasks.unsubscribe()
+      channelModels.unsubscribe()
+      channelErrors.unsubscribe()
+      channelPromote.unsubscribe()
+      channelFile.unsubscribe()
     }
   }, [])
 
