@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import typing as t
 from pathlib import Path
 
@@ -63,10 +64,32 @@ async def write_file(
         path_or_new_path = validate_path(new_path, context)
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
-        dialect = context.config_for_path(Path(path_or_new_path)).dialect
-        expressions = parse(content, default_dialect=dialect)
-        content = format_model_expressions(expressions, dialect)
-        (settings.project_path / path_or_new_path).write_text(content, encoding="utf-8")
+        full_path = settings.project_path / path
+        is_sql = pathlib.Path(path_or_new_path).suffix == ".sql"
+        model_sql = next(
+            (
+                model
+                for model in context._models.values()
+                if model.is_sql and model._path == full_path
+            ),
+            None,
+        )
+        dialect = (
+            model_sql.dialect
+            if model_sql
+            else context.config_for_path(Path(path_or_new_path)).dialect
+        )
+        if is_sql:
+            try:
+                expressions = parse(content, default_dialect=dialect)
+                content = format_model_expressions(expressions, dialect)
+            except Exception:
+                raise ApiException(
+                    message="Unable to format SQL file",
+                    origin="API -> files -> write_file",
+                )
+
+        full_path.write_text(content, encoding="utf-8")
 
     path_or_new_path_mapping = await get_path_mapping(settings=settings)
     content = (settings.project_path / path_or_new_path).read_text()
