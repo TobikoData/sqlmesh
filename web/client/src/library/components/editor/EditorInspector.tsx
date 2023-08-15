@@ -1,6 +1,6 @@
 import { type Table } from 'apache-arrow'
 import clsx from 'clsx'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   type EvaluateInputStart,
   type RenderInputStart,
@@ -485,17 +485,21 @@ function FormDiffModel({
     on,
     where,
   })
+
+  const getTableDiff = useCallback(
+    function getTableDiff(): void {
+      setPreviewDiff(undefined)
+
+      void getDiff().then(({ data }) => {
+        setPreviewDiff(data)
+      })
+    },
+    [model.name],
+  )
+
   useEffect(() => {
     setSelectedSource(list[0]!.value)
   }, [list])
-
-  function getTableDiff(): void {
-    setPreviewDiff(undefined)
-
-    void getDiff().then(({ data }) => {
-      setPreviewDiff(data)
-    })
-  }
 
   const shouldEnableAction =
     tab.file.isSQLMeshModel && [selectedSource, target, limit].every(Boolean)

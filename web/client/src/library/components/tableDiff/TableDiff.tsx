@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import {
   EMPTY_TABLE_CELL,
   TARGET_PREFIX,
@@ -13,17 +13,13 @@ import {
   isDeletedRow,
   isModified,
 } from './help'
-import { Disclosure, Listbox, Transition } from '@headlessui/react'
-import {
-  CheckIcon,
-  MinusCircleIcon,
-  PlusCircleIcon,
-  ChevronDownIcon,
-} from '@heroicons/react/24/solid'
-import { isFalse } from '@utils/index'
+import { Disclosure } from '@headlessui/react'
+import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
+import { isArrayNotEmpty, isFalse } from '@utils/index'
+import { Footer, GhostRows } from '@components/table/Table'
+import ListboxShow from '@components/listbox/ListboxShow'
 
-export interface Filters {
-  [key: string]: boolean
+export interface Filters extends Record<string, boolean> {
   modifiedRows: boolean
   addedRows: boolean
   removedRows: boolean
@@ -51,38 +47,57 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
   const grain: string[] = Array.from(new Set(diff.on.flat()))
 
   return (
-    <div className="px-2 h-full flex flex-col">
-      <TableDiffStats
-        diff={diff}
-        rows={rows}
-        columns={headers}
-      />
-      <div className="mt-2 flex rounded-lg items-center px-2">
-        <div className="w-full flex justify-end items-center">
-          <SelectFilters
-            filters={filters}
-            setFilters={setFilters}
+    <div className="px-2 h-full flex flex-col rounded-lg">
+      {isArrayNotEmpty(rows) && (
+        <>
+          <TableDiffStats
+            diff={diff}
+            rows={rows}
+            columns={headers}
           />
-        </div>
-      </div>
-      <div className="overflow-auto h-full hover:scrollbar scrollbar--horizontal scrollbar--vertical">
+          <div className="mt-2 mb-1 flex rounded-lg items-center">
+            <div className="w-full flex justify-end items-center">
+              <ListboxShow
+                options={Object.keys(filters).reduce(
+                  (acc: Record<string, (value: boolean) => void>, key) => {
+                    acc[key] = (value: boolean) =>
+                      setFilters(oldVal => ({
+                        ...oldVal,
+                        [key]: value,
+                      }))
+
+                    return acc
+                  },
+                  {},
+                )}
+                value={Object.entries(filters)
+                  .filter(([k, v]) => v)
+                  .map(([k, v]) => k)}
+              />
+            </div>
+          </div>
+        </>
+      )}
+      <div className="overflow-auto h-full rounded-lg hover:scrollbar scrollbar--horizontal scrollbar--vertical">
         <table
           cellPadding={0}
           cellSpacing={0}
-          className="w-full text-xs text-neutral-600 dark:text-neutral-200 font-normal border-separate "
+          className="w-full text-xs text-neutral-600 dark:text-neutral-200 font-normal border-separate"
         >
-          <thead className="sticky top-0 bg-theme z-10">
+          <thead className="sticky bg-theme top-0 z-10">
             <tr>
               {headers.all.map(header => (
                 <th
                   key={header}
                   colSpan={hasModified(diff, rows.all, header, diff.on) ? 2 : 1}
                   className={clsx(
-                    'text-left whitespace-nowrap py-1 px-2 font-bold bg-primary-10',
-                    header in diff.schema_diff.added &&
-                      'border-t-2 border-l-2 border-r-2 border-success-500',
-                    header in diff.schema_diff.removed &&
-                      'border-t-2 border-l-2 border-r-2 border-danger-500',
+                    'text-left whitespace-nowrap py-1 px-2 font-bold',
+                    header in diff.schema_diff.added
+                      ? 'border-t-2 border-l-2 border-r-2 border-success-500'
+                      : header in diff.schema_diff.removed
+                      ? 'border-t-2 border-l-2 border-r-2 border-danger-500'
+                      : 'border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                    grain.includes(header) ? 'bg-brand-10' : 'bg-primary-10',
                   )}
                 >
                   <div className="flex justify-between">
@@ -115,68 +130,105 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {rows.all.map(rowKey => (
-              <tr
-                key={rowKey}
-                className="even:bg-neutral-10"
-              >
-                {headers.all.map(header =>
-                  hasModified(diff, rows.all, header, diff.on) ? (
-                    <>
+            {isArrayNotEmpty(rows.all) ? (
+              rows.all.map(rowKey => (
+                <tr key={rowKey}>
+                  {headers.all.map(header =>
+                    hasModified(diff, rows.all, header, diff.on) ? (
+                      <>
+                        <td
+                          key={`${rowKey}-${header}-source`}
+                          className={clsx(
+                            'p-1 border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                            isAddedRow(diff, rowKey, diff.on)
+                              ? 'bg-success-10 text-success-500'
+                              : isDeletedRow(diff, rowKey, diff.on)
+                              ? 'bg-danger-5 text-danger-500'
+                              : isModified(diff, header, rowKey)
+                              ? 'bg-primary-10 text-primary-500'
+                              : '',
+                          )}
+                        >
+                          <div
+                            className={clsx(
+                              'px-2 py-1 whitespace-nowrap font-bold rounded-md',
+                              isAddedRow(diff, rowKey, diff.on)
+                                ? 'bg-success-10 text-success-500'
+                                : isDeletedRow(diff, rowKey, diff.on)
+                                ? 'bg-danger-5 text-danger-500'
+                                : isModified(diff, header, rowKey)
+                                ? 'bg-primary-10 text-primary-500'
+                                : '',
+                            )}
+                          >
+                            {getCellContentSource(diff, header, rowKey)}
+                          </div>
+                        </td>
+                        <td
+                          key={`${rowKey}-${header}-target`}
+                          className="p-1 border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0"
+                        >
+                          <div
+                            className={clsx(
+                              'px-2 py-1 whitespace-nowrap font-bold rounded-md',
+                              isAddedRow(diff, rowKey, diff.on)
+                                ? 'bg-success-20 text-success-500'
+                                : isDeletedRow(diff, rowKey, diff.on)
+                                ? 'bg-danger-10 text-danger-500'
+                                : isModified(diff, header, rowKey)
+                                ? 'bg-primary-10 text-primary-500'
+                                : '',
+                            )}
+                          >
+                            {getCellContentTarget(diff, header, rowKey)}
+                          </div>
+                        </td>
+                      </>
+                    ) : (
                       <td
-                        key={`${rowKey}-${header}-source`}
+                        key={`${rowKey}-${header}`}
                         className={clsx(
-                          'px-2 py-1 whitespace-nowrap font-bold',
-                          isAddedRow(diff, rowKey, diff.on)
-                            ? 'bg-success-10 text-success-500'
-                            : isDeletedRow(diff, rowKey, diff.on)
-                            ? 'bg-danger-5 text-danger-500'
-                            : isModified(diff, header, rowKey)
-                            ? 'bg-primary-20 text-primary-500'
-                            : '',
+                          'p-1',
+                          header in diff.schema_diff.added
+                            ? 'border-l-2 border-r-2 border-success-500 text-success-500 font-bold'
+                            : header in diff.schema_diff.removed
+                            ? 'border-l-2 border-r-2 border-danger-500 !text-danger-500 font-bold'
+                            : 'border-r border-b border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                          isDeletedRow(diff, rowKey, diff.on) &&
+                            'bg-danger-5 !text-danger-500 font-bold',
+                          isAddedRow(diff, rowKey, diff.on) &&
+                            'bg-success-10 text-success-500 font-bold',
+                          grain.includes(header) && 'bg-brand-10',
                         )}
                       >
-                        {getCellContentSource(diff, header, rowKey)}
+                        <div
+                          className={clsx(
+                            'px-2 py-1 whitespace-nowrap rounded-md',
+                            isDeletedRow(diff, rowKey, diff.on) &&
+                              'bg-danger-5 !text-danger-500 font-bold',
+                            isAddedRow(diff, rowKey, diff.on) &&
+                              'bg-success-10 text-success-500 font-bold',
+                          )}
+                        >
+                          {getCellContent(
+                            diff,
+                            TARGET_PREFIX,
+                            header,
+                            rowKey,
+                          ) ?? EMPTY_TABLE_CELL}
+                        </div>
                       </td>
-                      <td
-                        key={`${rowKey}-${header}-target`}
-                        className={clsx(
-                          'px-2 py-1 whitespace-nowrap font-bold',
-                          isAddedRow(diff, rowKey, diff.on)
-                            ? 'bg-success-20 text-success-500'
-                            : isDeletedRow(diff, rowKey, diff.on)
-                            ? 'bg-danger-10 text-danger-500'
-                            : isModified(diff, header, rowKey)
-                            ? 'bg-primary-20 text-primary-500'
-                            : '',
-                        )}
-                      >
-                        {getCellContentTarget(diff, header, rowKey)}
-                      </td>
-                    </>
-                  ) : (
-                    <td
-                      key={`${rowKey}-${header}`}
-                      className={clsx(
-                        'px-2 py-1 whitespace-nowrap',
-                        header in diff.schema_diff.added &&
-                          'border-l-2 border-r-2 border-success-500 text-success-500 font-bold',
-                        header in diff.schema_diff.removed &&
-                          'border-l-2 border-r-2 border-danger-500 !text-danger-500 font-bold',
-                        isDeletedRow(diff, rowKey, diff.on) &&
-                          'bg-danger-5 !text-danger-500 font-bold',
-                        isAddedRow(diff, rowKey, diff.on) &&
-                          'bg-success-10 text-success-500 font-bold',
-                        grain.includes(header) && 'bg-brand-10',
-                      )}
-                    >
-                      {getCellContent(diff, TARGET_PREFIX, header, rowKey) ??
-                        EMPTY_TABLE_CELL}
-                    </td>
-                  ),
-                )}
-              </tr>
-            ))}
+                    ),
+                  )}
+                </tr>
+              ))
+            ) : (
+              <GhostRows
+                columns={
+                  headers.all.length > 0 ? headers.all.length : undefined
+                }
+              />
+            )}
           </tbody>
           <tfoot className="sticky bg-theme bottom-0">
             <tr>
@@ -186,7 +238,10 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                     <th
                       key={`${header}-source`}
                       className={clsx(
-                        'text-left whitespace-nowrap px-2 py-1 bg-primary-10',
+                        'text-left whitespace-nowrap px-2 py-1 border-r border-t border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                        grain.includes(header)
+                          ? 'bg-brand-10'
+                          : 'bg-primary-10',
                       )}
                     >
                       Source
@@ -194,7 +249,10 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                     <th
                       key={`${header}-target`}
                       className={clsx(
-                        'text-left whitespace-nowrap px-2 py-1 bg-primary-10',
+                        'text-left whitespace-nowrap px-2 py-1 border-r border-t border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                        grain.includes(header)
+                          ? 'bg-brand-10'
+                          : 'bg-primary-10',
                       )}
                     >
                       Target
@@ -204,11 +262,13 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
                   <th
                     key={header}
                     className={clsx(
-                      'text-left whitespace-nowrap px-2 py-1 bg-primary-10 font-bold',
-                      header in diff.schema_diff.added &&
-                        'border-b-2 border-l-2 border-r-2 border-success-500',
-                      header in diff.schema_diff.removed &&
-                        'border-b-2 border-l-2 border-r-2 border-danger-500',
+                      'text-left whitespace-nowrap px-2 py-1 font-bold',
+                      header in diff.schema_diff.added
+                        ? 'border-b-2 border-l-2 border-r-2 border-success-500'
+                        : header in diff.schema_diff.removed
+                        ? 'border-b-2 border-l-2 border-r-2 border-danger-500'
+                        : 'border-r border-t border-neutral-100 dark:border-neutral-700 last:border-r-0',
+                      grain.includes(header) ? 'bg-brand-10' : 'bg-primary-10',
                     )}
                   >
                     {(header in diff.schema_diff.removed ||
@@ -223,30 +283,33 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
           </tfoot>
         </table>
       </div>
-      <div className="flex px-2 mt-2">
-        <div className="flex ml-2 items-center">
-          <span className="inline-block w-3 h-3 bg-brand-500 mr-2 rounded-full"></span>
-          <small className="text-neutral-600 dark:text-neutral-400">
-            Grain
-          </small>
-        </div>
-        <div className="flex ml-2 items-center">
-          <span className="inline-block w-3 h-3 bg-primary-500 mr-2 rounded-full"></span>
-          <small className="text-neutral-600 dark:text-neutral-400">
-            Changed
-          </small>
-        </div>
-        <div className="flex ml-2 items-center">
-          <span className="inline-block w-3 h-3 bg-success-500 mr-2 rounded-full"></span>
-          <small className="text-neutral-600 dark:text-neutral-400">
-            Added
-          </small>
-        </div>
-        <div className="flex ml-2 items-center">
-          <span className="inline-block w-3 h-3 bg-danger-500 mr-2 rounded-full"></span>
-          <small className="text-neutral-600 dark:text-neutral-400">
-            Deleted
-          </small>
+      <div className="flex justify-between items-center px-2 mt-2">
+        <Footer count={rows.all.length} />
+        <div className="flex text-xs">
+          <div className="flex ml-2 items-center">
+            <span className="inline-block w-3 h-3 bg-brand-500 mr-2 rounded-full"></span>
+            <small className="text-neutral-600 dark:text-neutral-400">
+              Grain
+            </small>
+          </div>
+          <div className="flex ml-2 items-center">
+            <span className="inline-block w-3 h-3 bg-primary-500 mr-2 rounded-full"></span>
+            <small className="text-neutral-600 dark:text-neutral-400">
+              Changed
+            </small>
+          </div>
+          <div className="flex ml-2 items-center">
+            <span className="inline-block w-3 h-3 bg-success-500 mr-2 rounded-full"></span>
+            <small className="text-neutral-600 dark:text-neutral-400">
+              Added
+            </small>
+          </div>
+          <div className="flex ml-2 items-center">
+            <span className="inline-block w-3 h-3 bg-danger-500 mr-2 rounded-full"></span>
+            <small className="text-neutral-600 dark:text-neutral-400">
+              Deleted
+            </small>
+          </div>
         </div>
       </div>
     </div>
@@ -332,85 +395,5 @@ function TableDiffStats({
         </>
       )}
     </Disclosure>
-  )
-}
-
-function SelectFilters({
-  filters,
-  setFilters,
-}: {
-  filters: Filters
-  setFilters: React.Dispatch<React.SetStateAction<Filters>>
-}): JSX.Element {
-  const [selected, setSelected] = useState(Object.keys(filters))
-
-  return (
-    <Listbox
-      value={selected}
-      onChange={value => {
-        setSelected(value)
-        setFilters(
-          Object.keys(filters).reduce(
-            (acc: Filters, key) => {
-              acc[key] = value.includes(key)
-
-              return acc
-            },
-            { ...filters },
-          ),
-        )
-      }}
-      multiple
-    >
-      <div className="relative m-1 flex">
-        <Listbox.Button className="flex items-center relative w-full cursor-default text-xs rounded-md text-primary-500 border-2 border-primary-500 py-1 px-2 text-center focus:outline-none focus-visible:border-accent-500 focus-visible:ring-2 focus-visible:ring-light focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-300">
-          <span className="block truncate">Show</span>
-          <ChevronDownIcon
-            className="ml-2 h-4 w-4"
-            aria-hidden="true"
-          />
-        </Listbox.Button>
-        <Transition
-          as={Fragment}
-          leave="transition ease-in duration-100"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <Listbox.Options className="absolute top-10 right-0 z-50 max-h-60 min-w-16 overflow-auto rounded-md bg-theme py-2 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-            {Object.keys(filters).map(key => (
-              <Listbox.Option
-                key={key}
-                className={({ active }) =>
-                  `relative cursor-default select-none py-1 pl-10 pr-4 ${
-                    active ? 'bg-warning-100 text-warning-900' : 'text-gray-900'
-                  }`
-                }
-                value={key}
-              >
-                {({ selected }) => (
-                  <>
-                    <span
-                      className={`block truncate ${
-                        selected ? 'font-medium' : 'font-normal'
-                      }`}
-                    >
-                      {key}
-                    </span>
-                    {selected ? (
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-warning-600">
-                        <CheckIcon
-                          className="h-4 w-4"
-                          aria-hidden="true"
-                        />
-                      </span>
-                    ) : null}
-                  </>
-                )}
-              </Listbox.Option>
-            ))}
-          </Listbox.Options>
-        </Transition>
-      </div>
-    </Listbox>
   )
 }
