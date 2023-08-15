@@ -919,6 +919,7 @@ class EngineAdapter:
             )
             logger.debug(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
+            print(sql)
 
     @contextlib.contextmanager
     def temp_table(self, query_or_df: QueryOrDF, name: TableName = "diff") -> t.Iterator[exp.Table]:

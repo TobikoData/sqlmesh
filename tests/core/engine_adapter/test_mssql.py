@@ -551,16 +551,21 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
 
 def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    adapter.cursor.fetchone.return_value = (1,)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
     adapter.cursor.execute.assert_has_calls(
         [
-            call('DROP TABLE IF EXISTS "test_table"'),
-            call('CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)'),
+            call("""SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table'"""),
+            call('TRUNCATE "test_table"'),
             call(
-                'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
+                'INSERT INTO "test_table" ("a", "b") '
+                'SELECT '
+                    'CAST("a" AS INTEGER) AS "a", '
+                    'CAST("b" AS INTEGER) AS "b" '
+                'FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
             ),
         ]
     )
