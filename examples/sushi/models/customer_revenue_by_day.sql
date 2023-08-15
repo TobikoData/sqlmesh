@@ -1,15 +1,15 @@
 /* Table of revenue from customers by day. */
 MODEL (
   name sushi.customer_revenue_by_day,
-  kind INCREMENTAL_BY_TIME_RANGE (
+  kind incremental_by_time_range (
     time_column (ds, 'YYYY-MM-dd'),
-    batch_size 10
+    batch_size 10,
   ),
   owner jen,
   cron '@daily',
   dialect hive,
   tags expensive,
-  grain ARRAY(customer_id, ds)
+  grain [customer_id, ds],
 );
 
 WITH order_total AS (
