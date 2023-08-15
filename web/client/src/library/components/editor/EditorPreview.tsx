@@ -79,8 +79,6 @@ export default function EditorPreview({
 
   const model = models.get(tab.file.path)
 
-  console.log({ previewDiff })
-
   return (
     <div
       className={clsx(
