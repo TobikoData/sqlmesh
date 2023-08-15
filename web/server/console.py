@@ -65,11 +65,9 @@ class ApiConsole(TerminalConsole):
                 self.current_task_status[snapshot.name]["completed"]
                 >= self.current_task_status[snapshot.name]["total"]
             ):
-                self.current_task_status[snapshot.name]["end"] = now_timestamp(
-                )
+                self.current_task_status[snapshot.name]["end"] = now_timestamp()
             self.queue.put_nowait(
-                self._make_event(
-                    {"tasks": self.current_task_status}, event="tasks")
+                self._make_event({"tasks": self.current_task_status}, event="tasks")
             )
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
@@ -81,8 +79,7 @@ class ApiConsole(TerminalConsole):
 
         if success:
             self.queue.put_nowait(
-                self._make_event(
-                    "All model batches have been executed successfully")
+                self._make_event("All model batches have been executed successfully")
             )
 
     def log_test_results(
@@ -124,8 +121,7 @@ class ApiConsole(TerminalConsole):
     def log(
         self, event: str | None = None, data: str | dict[str, t.Any] | None = None, ok: bool = True
     ) -> None:
-        self.queue.put_nowait(self._make_event(
-            data=data or {}, event=event, ok=ok))
+        self.queue.put_nowait(self._make_event(data=data or {}, event=event, ok=ok))
 
     def stop_promotion_progress(self, success: bool = True) -> None:
         self.promotion_task = None

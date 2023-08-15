@@ -69,11 +69,10 @@ async def apply(
         forward_only=plan_options.forward_only,
         no_auto_categorization=plan_options.no_auto_categorization,
     )
-    request.app.state.task = plan_task = asyncio.create_task(
-        run_in_executor(plan_func))
+    request.app.state.task = plan_task = asyncio.create_task(run_in_executor(plan_func))
     try:
         console.log(event="report", data={"type": "plan", "status": "init"})
-        plan = await task
+        plan = await plan_task
         console.log(event="report", data={"type": "plan", "status": "success"})
     except PlanError as e:
         console.log(event="report", data={"type": "plan", "status": "fail"})
@@ -84,17 +83,13 @@ async def apply(
 
     if not plan_options.skip_tests:
         tests_func = functools.partial(context._run_tests)
-        request.app.state.task = asyncio.create_task(
-            run_in_executor(tests_func))
+        request.app.state.task = asyncio.create_task(run_in_executor(tests_func))
         try:
-            console.log(event="report", data={
-                        "type": "tests", "status": "init"})
+            console.log(event="report", data={"type": "tests", "status": "init"})
             result, test_output = await request.app.state.task
-            console.log(event="report", data={
-                        "type": "tests", "status": "success"})
+            console.log(event="report", data={"type": "tests", "status": "success"})
             if not result.wasSuccessful():
-                console.log(event="report", data={
-                            "type": "tests", "status": "fail"})
+                console.log(event="report", data={"type": "tests", "status": "fail"})
                 console.log(
                     event="errors",
                     data=ApiException(
@@ -108,8 +103,7 @@ async def apply(
                 target_dialect=context._test_engine_adapter.dialect,
             )
         except PlanError as e:
-            console.log(event="report", data={
-                        "type": "tests", "status": "fail"})
+            console.log(event="report", data={"type": "tests", "status": "fail"})
             raise ApiException(
                 message=str(e),
                 origin="API -> commands -> apply",
@@ -119,8 +113,7 @@ async def apply(
     if categories is not None:
         _categorize(plan, categories)
 
-    plan_evaluator = context._scheduler.create_plan_evaluator(
-        context)  # type: ignore
+    plan_evaluator = context._scheduler.create_plan_evaluator(context)  # type: ignore
     # tasks = (
     #     [plan_evaluator._push, plan_evaluator._restate, plan_evaluator._backfill, plan_evaluator._promote]
     #     if not has_paused_forward_only(plan.snapshots, plan.snapshots) or plan.is_dev
@@ -147,17 +140,13 @@ async def apply(
             plan_evaluator._restate,  # type: ignore
             plan=plan,
         )
-        request.app.state.task = asyncio.create_task(
-            run_in_executor(restate_func))
+        request.app.state.task = asyncio.create_task(run_in_executor(restate_func))
         try:
-            console.log(event="report", data={
-                        "type": "restate", "status": "init"})
+            console.log(event="report", data={"type": "restate", "status": "init"})
             await request.app.state.task
-            console.log(event="report", data={
-                        "type": "restate", "status": "success"})
+            console.log(event="report", data={"type": "restate", "status": "success"})
         except PlanError as e:
-            console.log(event="report", data={
-                        "type": "restate", "status": "fail"})
+            console.log(event="report", data={"type": "restate", "status": "fail"})
             raise ApiException(
                 message=str(e),
                 origin="API -> commands -> apply",
@@ -169,17 +158,13 @@ async def apply(
         plan_evaluator._backfill,  # type: ignore
         plan=plan,
     )
-    request.app.state.task = asyncio.create_task(
-        run_in_executor(backfill_func))
+    request.app.state.task = asyncio.create_task(run_in_executor(backfill_func))
     try:
-        console.log(event="report", data={
-                    "type": "backfill", "status": "init"})
+        console.log(event="report", data={"type": "backfill", "status": "init"})
         await request.app.state.task
-        console.log(event="report", data={
-                    "type": "backfill", "status": "success"})
+        console.log(event="report", data={"type": "backfill", "status": "success"})
     except PlanError as e:
-        console.log(event="report", data={
-                    "type": "backfill", "status": "fail"})
+        console.log(event="report", data={"type": "backfill", "status": "fail"})
         raise ApiException(
             message=str(e),
             origin="API -> commands -> apply",
@@ -193,8 +178,7 @@ async def apply(
     try:
         console.log(event="report", data={"type": "promote", "status": "init"})
         await request.app.state.task
-        console.log(event="report", data={
-                    "type": "promote", "status": "success"})
+        console.log(event="report", data={"type": "promote", "status": "success"})
     except PlanError as e:
         console.log(event="report", data={"type": "promote", "status": "fail"})
         raise ApiException(
@@ -202,7 +186,7 @@ async def apply(
             origin="API -> commands -> apply",
         )
 
-    # request.app.state.task = asyncio.create_task(run_in_executor(context.apply, plan))
+    request.app.state.task = apply_task = asyncio.create_task(run_in_executor(context.apply, plan))
     # context.console.task = request.app.state.task
     if not plan.requires_backfill or plan_options.skip_backfill:
         try:
