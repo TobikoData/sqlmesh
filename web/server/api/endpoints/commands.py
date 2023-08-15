@@ -174,7 +174,7 @@ async def apply(
         plan_evaluator._promote,  # type: ignore
         plan=plan,
     )
-    request.app.state.task = asyncio.create_task(run_in_executor(promote_func))
+    request.app.state.task = apply_task = asyncio.create_task(run_in_executor(promote_func))
     try:
         console.log(event="report", data={"type": "promote", "status": "init"})
         await request.app.state.task
