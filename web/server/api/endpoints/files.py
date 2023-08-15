@@ -9,6 +9,7 @@ from starlette.status import HTTP_204_NO_CONTENT, HTTP_404_NOT_FOUND
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
+from sqlmesh.core.dialect import format_model_expressions, parse
 from web.server import models
 from web.server.exceptions import ApiException
 from web.server.settings import Settings, get_context, get_path_mapping, get_settings
@@ -62,17 +63,12 @@ async def write_file(
         path_or_new_path = validate_path(new_path, context)
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
+        dialect = context.config_for_path(Path(path_or_new_path)).dialect
+        expressions = parse(content, default_dialect=dialect)
+        content = format_model_expressions(expressions, dialect)
         (settings.project_path / path_or_new_path).write_text(content, encoding="utf-8")
 
-    found_models = [
-        model
-        for model in context.models.values()
-        if model._path == settings.project_path / path_or_new_path
-    ]
-    if found_models:
-        context.format_model(model=found_models[0])
-
-    path_or_new_path_mapping = await get_path_mapping(settings=get_settings())
+    path_or_new_path_mapping = await get_path_mapping(settings=settings)
     content = (settings.project_path / path_or_new_path).read_text()
     return models.File(
         name=os.path.basename(path_or_new_path),
