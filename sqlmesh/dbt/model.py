@@ -294,13 +294,9 @@ class ModelConfig(BaseModelConfig):
 
             table_properties = {}
             if self.partition_expiration_days is not None:
-                table_properties["partition_expiration_days"] = exp.convert(
-                    self.partition_expiration_days
-                )
+                table_properties["partition_expiration_days"] = self.partition_expiration_days
             if self.require_partition_filter is not None:
-                table_properties["require_partition_filter"] = exp.convert(
-                    self.require_partition_filter
-                )
+                table_properties["require_partition_filter"] = self.require_partition_filter
 
             if table_properties:
                 model_kwargs["table_properties"] = table_properties
