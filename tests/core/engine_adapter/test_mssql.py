@@ -558,13 +558,15 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
 
     adapter.cursor.execute.assert_has_calls(
         [
-            call("""SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table'"""),
+            call(
+                """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table'"""
+            ),
             call('TRUNCATE "test_table"'),
             call(
                 'INSERT INTO "test_table" ("a", "b") '
-                'SELECT '
-                    'CAST("a" AS INTEGER) AS "a", '
-                    'CAST("b" AS INTEGER) AS "b" '
+                "SELECT "
+                'CAST("a" AS INTEGER) AS "a", '
+                'CAST("b" AS INTEGER) AS "b" '
                 'FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
             ),
         ]
