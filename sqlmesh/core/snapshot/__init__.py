@@ -16,6 +16,7 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotTableInfo,
     earliest_start_date,
     fingerprint_from_node,
+    get_snapshot_removal_intervals,
     has_paused_forward_only,
     merge_intervals,
     missing_intervals,

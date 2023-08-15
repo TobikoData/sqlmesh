@@ -28,6 +28,7 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotId,
     SnapshotInfoLike,
+    get_snapshot_removal_intervals,
     has_paused_forward_only,
 )
 from sqlmesh.core.state_sync import StateSync
@@ -191,19 +192,15 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         target_snapshots = [s for s in plan.snapshots if s.name in plan.restatements]
-        if plan.is_dev:
-            self.state_sync.remove_interval(
-                [],
-                start=plan.start,
-                end=plan.end,
-                all_snapshots=target_snapshots,
-            )
-        else:
-            self.state_sync.remove_interval(
-                target_snapshots,
-                start=plan.start,
-                end=plan.end,
-            )
+
+        snapshot_intervals = get_snapshot_removal_intervals(
+            plan._dag, plan.start, plan.end, target_snapshots
+        )
+        self.state_sync.remove_interval(
+            snapshot_intervals,
+            plan._execution_time,
+            remove_shared_versions=plan.is_dev,
+        )
 
 
 class AirflowPlanEvaluator(PlanEvaluator):

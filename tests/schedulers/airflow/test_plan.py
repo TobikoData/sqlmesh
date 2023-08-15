@@ -93,7 +93,7 @@ def test_create_plan_dag_spec(
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
-        restatements={"raw.items"},
+        restatements=set(),
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -164,7 +164,6 @@ def test_create_plan_dag_spec(
 
 
 @pytest.mark.airflow
-@pytest.mark.airflow
 @pytest.mark.parametrize(
     "the_snapshot, intervals_after_restatement, expected_intervals",
     [
@@ -182,14 +181,6 @@ def test_create_plan_dag_spec(
             [
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
                 (to_datetime("2022-01-03"), to_datetime("2022-01-04")),
-                (to_datetime("2022-01-04"), to_datetime("2022-01-05")),
-                (to_datetime("2022-01-05"), to_datetime("2022-01-06")),
-                (to_datetime("2022-01-06"), to_datetime("2022-01-07")),
-                (to_datetime("2022-01-07"), to_datetime("2022-01-08")),
-                # Unexpected behavior: We restate up until "now" therefore we go until 2022-01-10.
-                # Ideally we would return to the "latest" which would be the largest we have ever loaded which is the
-                # 7th
-                (to_datetime("2022-01-08"), to_datetime("2022-01-09")),
             ],
         ),
     ],
@@ -352,7 +343,7 @@ def test_create_plan_dag_spec_unbounded_end(
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
-        restatements={"raw.items"},
+        restatements=set(),
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,

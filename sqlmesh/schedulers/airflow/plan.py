@@ -4,7 +4,7 @@ import typing as t
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import SnapshotTableInfo
+from sqlmesh.core.snapshot import SnapshotTableInfo, get_snapshot_removal_intervals
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now, now_timestamp
@@ -40,21 +40,13 @@ def create_plan_dag_spec(
             for snapshot in all_snapshots.values()
             if snapshot.name in request.restatements and snapshot.snapshot_id not in new_snapshots
         ]
-        if request.is_dev:
-            # Remove intervals for target snapshots only when in dev.
-            state_sync.remove_interval(
-                [],
-                start=request.environment.start_at,
-                end=end,
-                all_snapshots=snapshots_for_restatement,
-            )
-        else:
-            # Remove intervals for target snapshots and snapshots that share the same version with target ones.
-            state_sync.remove_interval(
-                snapshots_for_restatement,
-                start=request.environment.start_at,
-                end=end,
-            )
+        snapshot_intervals = get_snapshot_removal_intervals(
+            request.environment.dag, request.environment.start_at, end, snapshots_for_restatement
+        )
+        state_sync.remove_interval(
+            snapshot_intervals,
+            remove_shared_versions=True,
+        )
 
     if not request.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(

@@ -239,7 +239,7 @@ class CommonStateSyncMixin(StateSync):
                         target_snapshot.snapshot_id,
                     )
                     self.remove_interval(
-                        [], effective_from_ts, current_ts, all_snapshots=[snapshot]
+                        [(snapshot, snapshot.get_removal_interval(effective_from_ts, current_ts))]
                     )
 
                 if snapshot.unpaused_ts:

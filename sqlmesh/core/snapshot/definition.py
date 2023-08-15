@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import sys
 import typing as t
 from collections import defaultdict
@@ -15,6 +16,7 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -557,30 +559,34 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             end: End interval to remove.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
         """
-        interval = self.inclusive_exclusive(start, end, execution_time, for_removal=True)
+        interval = self.get_removal_interval(start, end, execution_time=execution_time)
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
+
+    def get_removal_interval(
+        self,
+        start: TimeLike,
+        end: TimeLike,
+        execution_time: t.Optional[TimeLike] = None,
+    ) -> Interval:
+        end = execution_time or now() if self.depends_on_past else end
+        return self.inclusive_exclusive(start, end)
 
     def inclusive_exclusive(
         self,
         start: TimeLike,
         end: TimeLike,
-        execution_time: t.Optional[TimeLike] = None,
         strict: bool = True,
-        for_removal: bool = False,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
         Args:
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
-            execution_time: The date/time time reference to use for execution time. Defaults to now.
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
-            for_removal: Whether the interval is being used for removal.
         Returns:
             A [start, end) pair.
         """
-        end = execution_time or now() if for_removal and self.depends_on_past else end
         interval_unit = self.model.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
 
@@ -620,7 +626,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         execution_time: t.Optional[TimeLike] = None,
-        restatements: t.Optional[t.Set[str]] = None,
         is_dev: bool = False,
         ignore_cron: bool = False,
     ) -> Intervals:
@@ -646,7 +651,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             if is_dev and self.is_forward_only and self.is_paused
             else self.intervals
         )
-        restatements = restatements or set()
 
         if self.is_symbolic or (self.is_seed and intervals):
             return []
@@ -656,7 +660,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
-                start, end, execution_time, strict=False, for_removal=self.name in restatements
+                start,
+                end,
+                strict=False,
             )
         )
 
@@ -1071,7 +1077,6 @@ def missing_intervals(
             ),
             end_date,
             execution_time=execution_time,
-            restatements=restatements,
             is_dev=is_dev,
             ignore_cron=ignore_cron,
         )
@@ -1149,3 +1154,48 @@ def start_date(
         cache[snapshot.name] = earliest
 
     return earliest
+
+
+def get_snapshot_removal_intervals(
+    dag: DAG[str],
+    start: TimeLike,
+    end: TimeLike,
+    snapshots: t.Iterable[Snapshot],
+    execution_time: t.Optional[TimeLike] = None,
+) -> t.List[t.Tuple[Snapshot, Interval]]:
+    """Get the intervals to remove from a snapshot.
+
+    Args:
+        dag: DAG of snapshots.
+        snapshots: Snapshots to remove.
+
+    Returns:
+        Intervals to remove.
+    """
+
+    def traverse_dag(
+        dag: DAG[str],
+        snapshot_mapping: t.Dict[str, Snapshot],
+        scoped_start: TimeLike,
+        scoped_end: TimeLike,
+        results: t.Dict[str, t.Tuple[Snapshot, Interval]],
+    ) -> None:
+        for snapshot_name in dag:
+            snapshot = snapshot_mapping[snapshot_name]
+            interval = snapshot.get_removal_interval(scoped_start, scoped_end, execution_time)
+            _, (existing_start, existing_end) = results.get(
+                snapshot_name, (None, (math.inf, -math.inf))
+            )
+            scoped_start = int(min(interval[0], existing_start))
+            scoped_end = int(max(interval[1], existing_end))
+            results[snapshot_name] = (snapshot, (scoped_start, scoped_end))
+            subdag = dag.subdag(snapshot_name)
+            if subdag.sorted != dag.sorted:
+                traverse_dag(
+                    dag.subdag(snapshot_name), snapshot_mapping, scoped_start, scoped_end, results
+                )
+
+    snapshot_mapping = {snapshot.name: snapshot for snapshot in snapshots}
+    results: t.Dict[str, t.Tuple[Snapshot, Interval]] = {}
+    traverse_dag(dag, snapshot_mapping, start, end, results)
+    return list(results.values())

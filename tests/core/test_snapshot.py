@@ -236,12 +236,13 @@ def test_incremental_time_self_reference(make_snapshot):
     )
     snapshot.add_interval(to_date("1 week ago"), to_date("1 day ago"))
     assert snapshot.missing_intervals(to_date("1 week ago"), to_date("1 day ago")) == []
-    snapshot.remove_interval(to_date("1 week ago"), to_date("1 week ago"))
-    assert snapshot.missing_intervals(
-        to_date("1 week ago"), to_date("1 week ago"), restatements={"name"}
-    ) == [
-        (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
-        for x in reversed(range(7))
+    # Remove should take away not only 3 days ago but also everything after since this model
+    # depends on past
+    snapshot.remove_interval(to_date("3 days ago"), to_date("3 days ago"))
+    assert snapshot.missing_intervals(to_date("1 week ago"), to_date("1 day ago")) == [
+        (to_timestamp(to_date("3 days ago")), to_timestamp(to_date("2 days ago"))),
+        (to_timestamp(to_date("2 days ago")), to_timestamp(to_date("1 days ago"))),
+        (to_timestamp(to_date("1 days ago")), to_timestamp(to_date("today"))),
     ]
 
 

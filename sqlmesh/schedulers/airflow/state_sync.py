@@ -6,6 +6,7 @@ import typing as t
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
+from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync import StateSync, Versions
 from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.schedulers.airflow.client import AirflowClient
@@ -179,10 +180,9 @@ class HttpStateSync(StateSync):
 
     def remove_interval(
         self,
-        snapshots: t.Iterable[SnapshotInfoLike],
-        start: TimeLike,
-        end: TimeLike,
-        all_snapshots: t.Optional[t.Iterable[Snapshot]] = None,
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        execution_time: t.Optional[TimeLike] = None,
+        remove_shared_versions: bool = False,
     ) -> None:
         """Remove an interval from a list of snapshots and sync it to the store.
 

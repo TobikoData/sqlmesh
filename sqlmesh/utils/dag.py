@@ -139,3 +139,10 @@ class DAG(t.Generic[T]):
             A new dag consisting of the dependent and descendant nodes.
         """
         return self.subdag(node, *self.downstream(node))
+
+    def __contains__(self, item: T) -> bool:
+        return item in self.graph
+
+    def __iter__(self) -> t.Iterator[T]:
+        for node in self.sorted:
+            yield node
