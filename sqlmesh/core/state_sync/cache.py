@@ -3,10 +3,9 @@ from __future__ import annotations
 import sys
 import typing as t
 
-from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
-from sqlmesh.core.state_sync.base import PromotionResult, StateSync, Versions
+from sqlmesh.core.state_sync.base import DelegatingStateSync, StateSync
 from sqlmesh.utils.date import TimeLike, now_timestamp
 
 if sys.version_info >= (3, 8):
@@ -15,7 +14,7 @@ else:
     from typing_extensions import Literal
 
 
-class CachingStateSync(StateSync):
+class CachingStateSync(DelegatingStateSync):
     """In memory cache for snapshots that implements the state sync api.
 
     Args:
@@ -24,7 +23,7 @@ class CachingStateSync(StateSync):
     """
 
     def __init__(self, state_sync: StateSync, ttl: int = 30):
-        self.state_sync = state_sync
+        super().__init__(state_sync)
         # The cache can contain a snapshot or False or None.
         # False means that the snapshot does not exist in the state sync but has been requested before
         # None means that the snapshot has not been requested.
@@ -104,27 +103,6 @@ class CachingStateSync(StateSync):
 
         return existing
 
-    def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
-        return self.state_sync.nodes_exist(names, exclude_external)
-
-    def get_environment(self, environment: str) -> t.Optional[Environment]:
-        return self.state_sync.get_environment(environment)
-
-    def get_environments(self) -> t.List[Environment]:
-        return self.state_sync.get_environments()
-
-    def recycle(self) -> None:
-        self.state_sync.recycle()
-
-    def close(self) -> None:
-        self.state_sync.close()
-
-    def get_versions(self, validate: bool = True) -> Versions:
-        return self.state_sync.get_versions(validate)
-
-    def _get_versions(self, lock_for_update: bool = False) -> Versions:
-        return self.state_sync._get_versions(lock_for_update)
-
     def push_snapshots(self, snapshots: t.Iterable[Snapshot]) -> None:
         snapshots = tuple(snapshots)
 
@@ -143,9 +121,6 @@ class CachingStateSync(StateSync):
     def delete_expired_snapshots(self) -> t.List[Snapshot]:
         self.snapshot_cache.clear()
         return self.state_sync.delete_expired_snapshots()
-
-    def invalidate_environment(self, name: str) -> None:
-        self.state_sync.invalidate_environment(name)
 
     def add_interval(
         self,
@@ -168,26 +143,3 @@ class CachingStateSync(StateSync):
         for s in snapshots:
             self.snapshot_cache.pop(s.snapshot_id, None)
         self.state_sync.remove_interval(snapshots, start, end, all_snapshots)
-
-    def promote(self, environment: Environment, no_gaps: bool = False) -> PromotionResult:
-        return self.state_sync.promote(environment, no_gaps)
-
-    def finalize(self, environment: Environment) -> None:
-        self.state_sync.finalize(environment)
-
-    def delete_expired_environments(self) -> t.List[Environment]:
-        return self.state_sync.delete_expired_environments()
-
-    def unpause_snapshots(
-        self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
-    ) -> None:
-        self.state_sync.unpause_snapshots(snapshots, unpaused_dt)
-
-    def compact_intervals(self) -> None:
-        self.state_sync.compact_intervals()
-
-    def migrate(self, skip_backup: bool = False) -> None:
-        self.state_sync.migrate(skip_backup)
-
-    def rollback(self) -> None:
-        self.state_sync.rollback()

@@ -329,3 +329,20 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def rollback(self) -> None:
         """Rollback to previous backed up state."""
+
+
+class DelegatingStateSync(StateSync):
+    def __init__(self, state_sync: StateSync) -> None:
+        self.state_sync = state_sync
+
+
+def _create_delegate_method(name: str) -> t.Callable:
+    def delegate(self: t.Any, *args: t.Any, **kwargs: t.Any) -> t.Any:
+        return getattr(self.state_sync, name)(*args, **kwargs)
+
+    return delegate
+
+
+DelegatingStateSync.__abstractmethods__ = frozenset()
+for name in StateSync.__abstractmethods__:
+    setattr(DelegatingStateSync, name, _create_delegate_method(name))
