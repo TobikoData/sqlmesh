@@ -9,7 +9,6 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.snapshot import SnapshotId, SnapshotTableInfo
 from sqlmesh.utils import word_characters_only
-from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
@@ -84,7 +83,6 @@ class Environment(EnvironmentNamingInfo):
     expiration_ts: t.Optional[int] = None
     finalized_ts: t.Optional[int] = None
     promoted_snapshot_ids: t.Optional[t.List[SnapshotId]] = None
-    _dag: t.Optional[DAG[str]] = None
 
     @field_validator("snapshots", mode="before")
     @classmethod
@@ -111,12 +109,3 @@ class Environment(EnvironmentNamingInfo):
     @property
     def naming_info(self) -> EnvironmentNamingInfo:
         return EnvironmentNamingInfo(name=self.name, suffix_target=self.suffix_target)
-
-    @property
-    def dag(self) -> DAG[str]:
-        if self._dag is None:
-            self._dag: DAG[str] = DAG()
-            id_mapping = {s.snapshot_id: s for s in self.snapshots}
-            for snapshot in self.snapshots:
-                self._dag.add(snapshot.name, [id_mapping[dep].name for dep in snapshot.parents])
-        return self._dag

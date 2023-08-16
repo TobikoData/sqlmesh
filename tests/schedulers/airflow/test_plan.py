@@ -24,7 +24,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
-from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -93,7 +93,7 @@ def test_create_plan_dag_spec(
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
-        restatements=set(),
+        restatements={},
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -208,7 +208,12 @@ def test_restatement(
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
-        restatements={the_snapshot.name},
+        restatements={
+            the_snapshot.name: (
+                to_timestamp(to_date("2022-01-02")),
+                to_timestamp(to_date("2022-01-04")),
+            )
+        },
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -295,7 +300,7 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         environment=new_environment,
         no_gaps=False,
         skip_backfill=False,
-        restatements=set(),
+        restatements={},
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -343,7 +348,7 @@ def test_create_plan_dag_spec_unbounded_end(
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
-        restatements=set(),
+        restatements={},
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,

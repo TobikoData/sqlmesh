@@ -148,9 +148,3 @@ class DAG(t.Generic[T]):
     def __iter__(self) -> t.Iterator[T]:
         for node in self.sorted:
             yield node
-
-    def __len__(self) -> int:
-        return len(self.sorted)
-
-    def __bool__(self) -> bool:
-        return bool(self.sorted)

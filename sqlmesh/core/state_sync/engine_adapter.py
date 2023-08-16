@@ -500,21 +500,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         execution_time: t.Optional[TimeLike] = None,
         remove_shared_versions: bool = False,
     ) -> None:
-        def get_name_version_key(snapshot: SnapshotInfoLike) -> str:
-            assert snapshot.version
-            return "__".join([snapshot.name, snapshot.version])
-
         if remove_shared_versions:
             name_version_mapping = {
-                get_name_version_key(s): (s, interval) for s, interval in snapshot_intervals
+                str(s.name_version): (s, interval) for s, interval in snapshot_intervals
             }
             all_snapshots = self._get_snapshots_with_same_version(
                 [s[0] for s in snapshot_intervals]
             )
-            snapshot_intervals = []
-            for snapshot in all_snapshots:
-                key = get_name_version_key(snapshot)
-                snapshot_intervals.append((snapshot, name_version_mapping[key][1]))
+            snapshot_intervals = [
+                (snapshot, name_version_mapping[str(snapshot.name_version)][1])
+                for snapshot in all_snapshots
+            ]
 
         if logger.isEnabledFor(logging.INFO):
             snapshot_ids = ", ".join(str(s.snapshot_id) for s, _ in snapshot_intervals)

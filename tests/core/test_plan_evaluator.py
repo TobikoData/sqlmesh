@@ -82,7 +82,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         mocker.ANY,
         no_gaps=False,
         notification_targets=[],
-        restatements=set(),
+        restatements={},
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
         skip_backfill=False,

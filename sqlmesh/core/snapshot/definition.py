@@ -15,7 +15,6 @@ from sqlmesh.core.audit import Audit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -118,6 +117,9 @@ class SnapshotId(PydanticModel, frozen=True):
 class SnapshotNameVersion(PydanticModel, frozen=True):
     name: str
     version: str
+
+    def __str__(self) -> str:
+        return "__".join([self.name, self.version])
 
 
 class SnapshotIntervals(PydanticModel, frozen=True):
@@ -332,6 +334,11 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     @property
     def model_kind_name(self) -> ModelKindName:
         return self.kind_name
+
+    @property
+    def name_version(self) -> SnapshotNameVersion:
+        """Returns the name and version of the snapshot."""
+        return SnapshotNameVersion(name=self.name, version=self.version)
 
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
@@ -555,16 +562,14 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             self.intervals = merged_intervals
 
     def remove_interval(
-        self, start: TimeLike, end: TimeLike, execution_time: t.Optional[TimeLike] = None
+        self, interval: Interval, execution_time: t.Optional[TimeLike] = None
     ) -> None:
         """Remove an interval from the snapshot.
 
         Args:
-            start: Start interval to remove.
-            end: End interval to remove.
+            interval: The interval to remove.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
         """
-        interval = self.get_removal_interval(start, end, execution_time=execution_time)
         self.intervals = remove_interval(self.intervals, *interval)
         self.dev_intervals = remove_interval(self.dev_intervals, *interval)
 
@@ -573,9 +578,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         execution_time: t.Optional[TimeLike] = None,
+        *,
+        strict: bool = True,
     ) -> Interval:
         end = execution_time or now() if self.depends_on_past else end
-        return self.inclusive_exclusive(start, end)
+        return self.inclusive_exclusive(start, end, strict)
 
     def inclusive_exclusive(
         self,
@@ -872,6 +879,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
         return self.model.depends_on_past
 
+    @property
+    def name_version(self) -> SnapshotNameVersion:
+        """Returns the name and version of the snapshot."""
+        return SnapshotNameVersion(name=self.name, version=self.version)
+
     def _ensure_categorized(self) -> None:
         if not self.change_category:
             raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been categorized yet.")
@@ -1058,7 +1070,7 @@ def missing_intervals(
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
-    restatements: t.Optional[t.Iterable[str]] = None,
+    restatements: t.Optional[t.Dict[str, Interval]] = None,
     is_dev: bool = False,
     ignore_cron: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
@@ -1067,13 +1079,14 @@ def missing_intervals(
     cache: t.Dict[str, datetime] = {}
     start_dt = to_datetime(start or earliest_start_date(snapshots, cache))
     end_date = end or now()
-    restatements = set(restatements or [])
+    restatements = restatements or {}
 
     for snapshot in snapshots:
-        if snapshot.name in restatements:
+        interval = restatements.get(snapshot.name)
+        if interval:
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
-            snapshot.remove_interval(start_dt, end_date, execution_time)
+            snapshot.remove_interval(interval, execution_time)
 
         intervals = snapshot.missing_intervals(
             max(
@@ -1159,36 +1172,3 @@ def start_date(
         cache[snapshot.name] = earliest
 
     return earliest
-
-
-def get_snapshot_removal_intervals(
-    dag: DAG[str],
-    start: TimeLike,
-    end: TimeLike,
-    snapshots: t.Iterable[Snapshot],
-    execution_time: t.Optional[TimeLike] = None,
-) -> t.Iterable[t.Tuple[Snapshot, Interval]]:
-    """Get the intervals to remove from a snapshot. Some snapshots may extend the start/end that they are
-    removing so the DAG is used in order to ensure that downstream snapshots also remove that extended start/end.
-
-    Args:
-        dag: DAG of snapshots in order to support visting snapshots in topological order.
-        start: Start time to remove.
-        end: End time to remove.
-        snapshots: Snapshots to remove.
-        execution_time: Execution time to remove. If not provided, the current time is used.
-
-    Returns:
-        Snapshots to remove alongside with their intervals.
-    """
-    snapshot_mapping = {snapshot.name: snapshot for snapshot in snapshots}
-    results: t.Dict[str, t.Tuple[Snapshot, Interval]] = {}
-    for snapshot_name in dag:
-        snapshot = snapshot_mapping[snapshot_name]
-        interval = snapshot.get_removal_interval(start, end, execution_time)
-        upstream_snapshots = dag.upstream(snapshot_name)
-        possible_intervals = [results[s][1] for s in upstream_snapshots] + [interval]
-        snapshot_start = min(i[0] for i in possible_intervals)
-        snapshot_end = max(i[1] for i in possible_intervals)
-        results[snapshot_name] = (snapshot_mapping[snapshot_name], (snapshot_start, snapshot_end))
-    return results.values()

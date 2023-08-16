@@ -28,7 +28,6 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotId,
     SnapshotInfoLike,
-    get_snapshot_removal_intervals,
     has_paused_forward_only,
 )
 from sqlmesh.core.state_sync import StateSync
@@ -191,13 +190,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not plan.restatements:
             return
 
-        target_snapshots = [s for s in plan.snapshots if s.name in plan.restatements]
-
-        snapshot_intervals = get_snapshot_removal_intervals(
-            plan._dag, plan.start, plan.end, target_snapshots
-        )
         self.state_sync.remove_interval(
-            snapshot_intervals,
+            plan.restatement_snapshots,
             plan._execution_time,
             remove_shared_versions=not plan.is_dev,
         )
