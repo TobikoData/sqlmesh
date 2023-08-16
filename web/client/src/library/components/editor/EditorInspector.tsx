@@ -28,6 +28,7 @@ import {
 } from '@api/index'
 import TabList from '@components/tab/Tab'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
+import { EnumAction, useStoreActionManager } from '@context/manager'
 
 interface FormModel {
   model?: string
@@ -308,6 +309,8 @@ function FormActionsModel({
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
+  const shouldLock = useStoreActionManager(s => s.shouldLock)
+
   const [form, setForm] = useState<FormModel>({
     start: toDateFormat(toDate(Date.now() - DAY)),
     end: toDateFormat(new Date()),
@@ -323,7 +326,9 @@ function FormActionsModel({
   )
 
   const shouldEvaluate =
-    tab.file.isSQLMeshModel && Object.values(form).every(Boolean)
+    tab.file.isSQLMeshModel &&
+    Object.values(form).every(Boolean) &&
+    isFalse(shouldLock(EnumAction.ModelEvaluate))
 
   function evaluateModel(): void {
     setPreviewQuery(undefined)

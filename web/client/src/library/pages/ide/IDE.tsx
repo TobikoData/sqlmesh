@@ -42,6 +42,7 @@ import {
   type FileExplorerChange,
 } from '@components/fileExplorer/context'
 import { EnumAction, useStoreActionManager } from '@context/manager'
+import Spinner from '@components/logo/Spinner'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -93,6 +94,7 @@ export default function PageIDE(): JSX.Element {
 
   const enqueueAction = useStoreActionManager(s => s.enqueueAction)
   const resetCurrentAction = useStoreActionManager(s => s.resetCurrentAction)
+  const currentAction = useStoreActionManager(s => s.currentAction)
 
   // We need to fetch from IDE level to make sure
   // all pages have access to models and files
@@ -356,10 +358,29 @@ export default function PageIDE(): JSX.Element {
             )}
           </Button>
         </div>
+        {currentAction !== EnumAction.None && (
+          <div className="flex group text-xs text-neutral-400 cursor-pointer px-2 py-1 rounded-md bg-neutral-10">
+            <Spinner
+              variant={EnumVariant.Info}
+              className="w-4 h-4"
+            />
+            <span className="ml-2 group-hover:hidden">Running</span>
+            <span
+              className="cursor-pointer ml-2 text-neutral-600 hidden group-hover:inline"
+              onClick={(e: React.MouseEvent) => {
+                e.stopPropagation()
+                resetCurrentAction()
+              }}
+            >
+              Cancel
+            </span>
+            <b className="block ml-2 text-neutral-600 ">{currentAction}</b>
+          </div>
+        )}
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <RunPlan />
           <Suspense>
-            {activePlan != null && <ActivePlan plan={activePlan} />}
+            {isNotNil(activePlan) && <ActivePlan plan={activePlan} />}
           </Suspense>
           <ReportErrors />
         </div>

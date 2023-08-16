@@ -1,13 +1,7 @@
 import { Menu, Popover, Transition } from '@headlessui/react'
 import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import React, {
-  useState,
-  useEffect,
-  Fragment,
-  type MouseEvent,
-  useCallback,
-} from 'react'
+import React, { useState, useEffect, Fragment, type MouseEvent } from 'react'
 import { useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
@@ -20,7 +14,13 @@ import {
 } from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
-import { isArrayNotEmpty, includes, isFalse, isStringEmptyOrNil } from '~/utils'
+import {
+  isArrayNotEmpty,
+  includes,
+  isFalse,
+  isStringEmptyOrNil,
+  isNil,
+} from '~/utils'
 import { Button, makeButton, type ButtonSize } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Input from '@components/input/Input'
@@ -52,9 +52,7 @@ export default function RunPlan(): JSX.Element {
   )
 
   const enqueueAction = useStoreActionManager(s => s.enqueueAction)
-  const currentAction = useStoreActionManager(s => s.currentAction)
   const shouldLock = useStoreActionManager(s => s.shouldLock)
-  const resetCurrentAction = useStoreActionManager(s => s.resetCurrentAction)
 
   const [hasChanges, setHasChanges] = useState(false)
   const [plan, setPlan] = useState<ContextEnvironment | undefined>()
@@ -81,7 +79,7 @@ export default function RunPlan(): JSX.Element {
   }, [environment])
 
   useEffect(() => {
-    if (dataPlan == null) return
+    if (isNil(dataPlan)) return
 
     setPlan(dataPlan)
     setInitialDates(dataPlan.start, dataPlan.end)
@@ -124,28 +122,11 @@ export default function RunPlan(): JSX.Element {
     <div
       className={clsx(
         'flex items-center',
-        environment == null &&
+        isNil(environment) &&
           'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
       <div className="flex items-center relative">
-        {shouldLock(EnumAction.Plan) && (
-          <span className="block mr-2 group whitespace-nowrap text-xs text-neutral-400">
-            Locked while running{' '}
-            <b className="text-neutral-600 group-hover:hidden">
-              {currentAction}
-            </b>
-            <b
-              className="cursor-pointer text-neutral-600 hidden group-hover:inline"
-              onClick={(e: React.MouseEvent) => {
-                e.stopPropagation()
-                resetCurrentAction()
-              }}
-            >
-              Cancel
-            </b>
-          </span>
-        )}
         <Button
           className={clsx(
             'mx-0',
@@ -294,7 +275,7 @@ function PlanChanges({
                 <ChangesPreview
                   headline="Direct Changes"
                   type={EnumPlanChangeType.Direct}
-                  changes={plan!.changes!.modified.direct!.map(
+                  changes={plan!.changes!.modified.direct.map(
                     ({ model_name }) => model_name,
                   )}
                 />
@@ -304,7 +285,7 @@ function PlanChanges({
                 <ChangesPreview
                   headline="Indirectly Modified"
                   type={EnumPlanChangeType.Indirect}
-                  changes={plan!.changes!.modified.indirect!.map(
+                  changes={plan!.changes!.modified.indirect.map(
                     ({ model_name }) => model_name,
                   )}
                 />

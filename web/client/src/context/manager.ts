@@ -36,18 +36,22 @@ interface ActionManager {
   shouldLock: (action: Action) => boolean
 }
 
-const lockDefaul = [
+const lockDefault = [
   EnumAction.Audits,
   EnumAction.Plan,
   EnumAction.PlanApply,
   EnumAction.Tests,
+  EnumAction.Diff,
+  EnumAction.ModelEvaluate,
 ]
 
 const lock: Record<string, Action[]> = {
-  [EnumAction.Plan]: lockDefaul,
-  [EnumAction.PlanApply]: lockDefaul,
-  [EnumAction.Audits]: lockDefaul,
-  [EnumAction.Tests]: lockDefaul,
+  [EnumAction.Plan]: lockDefault,
+  [EnumAction.PlanApply]: lockDefault,
+  [EnumAction.Audits]: lockDefault,
+  [EnumAction.Tests]: lockDefault,
+  [EnumAction.Diff]: lockDefault,
+  [EnumAction.ModelEvaluate]: lockDefault,
 }
 
 const useStoreActionManager = create(
@@ -159,17 +163,4 @@ const useStoreActionManager = create(
       },
     ),
   ),
-)
-
-// Debug, should be renmoved
-useStoreActionManager.subscribe(
-  s => s.currentAction,
-  currentAction => {
-    const s = useStoreActionManager.getState()
-
-    console.table({
-      currentAction,
-      queue: s.queue,
-    })
-  },
 )
