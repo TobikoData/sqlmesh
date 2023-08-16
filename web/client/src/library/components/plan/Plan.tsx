@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { includes, isFalse, isObjectNotEmpty, isTrue } from '~/utils'
+import { includes, isFalse, isTrue } from '~/utils'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -21,7 +21,6 @@ import PlanBackfillDates from './PlanBackfillDates'
 import { type ModelEnvironment } from '~/models/environment'
 import { useApplyPayload, usePlanPayload } from './hooks'
 import { useChannelEvents } from '@api/channels'
-import SplitPane from '../splitPane/SplitPane'
 import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
@@ -45,13 +44,7 @@ function Plan({
   const dispatch = usePlanDispatch()
   const { errors, removeError } = useIDE()
 
-  const {
-    auto_apply,
-    hasChanges,
-    hasBackfills,
-    hasVirtualUpdate,
-    testsReportErrors,
-  } = usePlan()
+  const { auto_apply, hasChanges, hasBackfills, hasVirtualUpdate } = usePlan()
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -287,11 +280,6 @@ function Plan({
         if (data?.type === EnumPlanApplyType.Virtual) {
           setPlanState(EnumPlanState.Finished)
         }
-
-        elTaskProgress?.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        })
       })
       .catch(console.log)
       .finally(() => {
@@ -339,25 +327,12 @@ function Plan({
     })
   }
 
-  const shouldSplitPane = isObjectNotEmpty(testsReportErrors)
-
   return (
     <div className="flex flex-col w-full h-full overflow-hidden pt-6">
-      {shouldSplitPane ? (
-        <SplitPane
-          sizes={isObjectNotEmpty(testsReportErrors) ? [50, 50] : [30, 70]}
-          direction="vertical"
-          snapOffset={0}
-          className="flex flex-col w-full h-full overflow-hidden"
-        >
-          <PlanBlock elTaskProgress={elTaskProgress} />
-        </SplitPane>
-      ) : (
-        <PlanBlock
-          elTaskProgress={elTaskProgress}
-          hasDivider={true}
-        />
-      )}
+      <PlanBlock
+        elTaskProgress={elTaskProgress}
+        hasDivider={true}
+      />
       <Divider />
       <Plan.Actions
         disabled={disabled}

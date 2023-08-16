@@ -32,6 +32,7 @@ import Banner from '@components/banner/Banner'
 import TasksOverview from '../tasksOverview/TasksOverview'
 import Loading from '@components/loading/Loading'
 import Title from '@components/title/Title'
+import ReportTestsErrors from '@components/report/ReportTestsErrors'
 
 interface PropsPlanWizardStepMessage extends React.HTMLAttributes<HTMLElement> {
   hasSpinner?: boolean
@@ -58,6 +59,7 @@ export default function PlanWizard({
     hasVirtualUpdate,
     testsReportMessages,
     planReport,
+    testsReportErrors,
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
@@ -161,10 +163,15 @@ export default function PlanWizard({
     hasNoChanges: hasNoChanges || isArrayEmpty(Object.keys(tasks)),
     skip_backfill,
   })
+  const isFailed = Array.from(planReport.values()).some(
+    report => report.status === 'fail',
+  )
+
+  console.log({ planReport, isFailed }, Object.values(planReport))
 
   return (
     <div className="w-full h-full py-4 overflow-hidden">
-      <div className="w-full h-full px-4 overflow-y-auto scrollbar scrollbar--vertical ">
+      <div className="w-full h-full px-4 overflow-y-auto hover:scrollbar scrollbar--vertical ">
         {planAction === EnumPlanAction.Run ? (
           <Plan.StepOptions className="w-full" />
         ) : (
@@ -224,14 +231,33 @@ export default function PlanWizard({
                       />
                     </Banner>
                   )}
-                {planReport.get('tests')!.status === 'fail' && (
-                  <PlanWizardStepMessage
-                    index={2}
-                    variant={EnumVariant.Danger}
-                  >
-                    Tests Failed
-                  </PlanWizardStepMessage>
-                )}
+                {planReport.get('tests')!.status === 'fail' &&
+                  isNotNil(testsReportErrors) &&
+                  isObjectNotEmpty(testsReportErrors) && (
+                    <Banner variant={EnumVariant.Danger}>
+                      <Disclosure defaultOpen={true}>
+                        {({ open }) => (
+                          <>
+                            <div className="flex items-center">
+                              <p className="w-full mr-2 text-sm">
+                                {testsReportErrors?.title}
+                              </p>
+                              <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                                {open ? (
+                                  <MinusCircleIcon className="w-4 text-danger-500" />
+                                ) : (
+                                  <PlusCircleIcon className="w-4 text-danger-500" />
+                                )}
+                              </Disclosure.Button>
+                            </div>
+                            <Disclosure.Panel className="px-4 pb-2 text-sm">
+                              <ReportTestsErrors report={testsReportErrors} />
+                            </Disclosure.Panel>
+                          </>
+                        )}
+                      </Disclosure>
+                    </Banner>
+                  )}
                 {planReport.get('tests')!.status === 'skip' && (
                   <PlanWizardStepMessage
                     index={2}
@@ -242,8 +268,8 @@ export default function PlanWizard({
                 )}
               </div>
             )}
-            {planReport.has('push') && (
-              <div className="px-2">
+            {planReport.has('push') && isFalse(isFailed) && (
+              <div className="px-2 mt-2">
                 {planReport.get('push')!.status === 'init' && (
                   <PlanWizardStepMessage
                     index={3}
@@ -275,7 +301,7 @@ export default function PlanWizard({
                 )}
               </div>
             )}
-            {planReport.has('restate') && (
+            {planReport.has('restate') && isFalse(isFailed) && (
               <div className="px-2">
                 {planReport.get('restate')!.status === 'init' && (
                   <PlanWizardStepMessage
@@ -316,29 +342,16 @@ export default function PlanWizard({
                 )}
               </div>
             )}
-            {(isNotNil(activeBackfill) || hasVirtualUpdate) && (
-              <Disclosure
-                key={backfillStepHeadline}
-                defaultOpen={hasBackfills}
-              >
-                {({ open }) => (
-                  <div className="px-2">
-                    <Banner
-                      className="my-2 flex items-center"
-                      variant={
-                        planState === EnumPlanState.Finished
-                          ? EnumVariant.Success
-                          : planState === EnumPlanState.Failed
-                          ? EnumVariant.Danger
-                          : EnumVariant.Info
-                      }
-                    >
-                      {planState === EnumPlanState.Finished && (
-                        <CheckCircleIcon className="w-5 mr-4" />
-                      )}
-                      <Title
-                        text={backfillStepHeadline}
-                        size={EnumSize.sm}
+            {(isNotNil(activeBackfill) || hasVirtualUpdate) &&
+              isFalse(isFailed) && (
+                <Disclosure
+                  key={backfillStepHeadline}
+                  defaultOpen={hasBackfills}
+                >
+                  {({ open }) => (
+                    <div className="px-2">
+                      <Banner
+                        className="my-2 flex items-center"
                         variant={
                           planState === EnumPlanState.Finished
                             ? EnumVariant.Success
@@ -346,88 +359,102 @@ export default function PlanWizard({
                             ? EnumVariant.Danger
                             : EnumVariant.Info
                         }
-                        className="w-full"
-                      />
-                      {showDetails && (
-                        <div className="flex items-center">
-                          <p className="mr-2 text-sm">Details</p>
-                          <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
-                            {open ? (
-                              <MinusCircleIcon className="w-5" />
-                            ) : (
-                              <PlusCircleIcon className="w-5" />
-                            )}
-                          </Disclosure.Button>
-                        </div>
-                      )}
-                    </Banner>
-                    <Disclosure.Panel className="px-4 pb-2 text-sm">
-                      {hasBackfills &&
-                        isFalse(skip_backfill) &&
-                        isArrayNotEmpty(Object.keys(tasks)) && (
-                          <>
-                            <Suspense
-                              fallback={<Spinner className="w-4 h-4 mr-2" />}
-                            >
-                              <TasksOverview
-                                tasks={tasks}
-                                setRefTasksOverview={setRefTasksOverview}
-                              >
-                                {({
-                                  total,
-                                  completed,
-                                  models,
-                                  completedBatches,
-                                  totalBatches,
-                                }) => (
-                                  <>
-                                    <TasksOverview.Summary
-                                      environment={environment.name}
-                                      planState={planState}
-                                      headline="Target Environment"
-                                      completed={completed}
-                                      total={total}
-                                      completedBatches={completedBatches}
-                                      totalBatches={totalBatches}
-                                      updateType={
-                                        hasVirtualUpdate
-                                          ? 'Virtual'
-                                          : 'Backfill'
-                                      }
-                                      updatedAt={activeBackfill?.updated_at}
-                                    />
-                                    {models != null && (
-                                      <TasksOverview.Details
-                                        models={models}
-                                        changes={{
-                                          modified,
-                                          added,
-                                          removed,
-                                        }}
-                                        showBatches={hasBackfills}
-                                        showVirtualUpdate={hasVirtualUpdate}
-                                        showProgress={true}
-                                      />
-                                    )}
-                                  </>
-                                )}
-                              </TasksOverview>
-                            </Suspense>
-                          </>
+                      >
+                        {planState === EnumPlanState.Finished && (
+                          <CheckCircleIcon className="w-5 mr-4" />
                         )}
-                      {hasVirtualUpdate && (
-                        <div>
-                          <small className="text-sm">
-                            {virtualUpdateDescription}
-                          </small>
-                        </div>
-                      )}
-                    </Disclosure.Panel>
-                  </div>
-                )}
-              </Disclosure>
-            )}
-            {planReport.has('promote') && (
+                        <Title
+                          text={backfillStepHeadline}
+                          size={EnumSize.sm}
+                          variant={
+                            planState === EnumPlanState.Finished
+                              ? EnumVariant.Success
+                              : planState === EnumPlanState.Failed
+                              ? EnumVariant.Danger
+                              : EnumVariant.Info
+                          }
+                          className="w-full"
+                        />
+                        {showDetails && (
+                          <div className="flex items-center">
+                            <p className="mr-2 text-sm">Details</p>
+                            <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                              {open ? (
+                                <MinusCircleIcon className="w-5" />
+                              ) : (
+                                <PlusCircleIcon className="w-5" />
+                              )}
+                            </Disclosure.Button>
+                          </div>
+                        )}
+                      </Banner>
+                      <Disclosure.Panel className="px-4 pb-2 text-sm">
+                        {hasBackfills &&
+                          isFalse(skip_backfill) &&
+                          isArrayNotEmpty(Object.keys(tasks)) && (
+                            <>
+                              <Suspense
+                                fallback={<Spinner className="w-4 h-4 mr-2" />}
+                              >
+                                <TasksOverview
+                                  tasks={tasks}
+                                  setRefTasksOverview={setRefTasksOverview}
+                                >
+                                  {({
+                                    total,
+                                    completed,
+                                    models,
+                                    completedBatches,
+                                    totalBatches,
+                                  }) => (
+                                    <>
+                                      <TasksOverview.Summary
+                                        environment={environment.name}
+                                        planState={planState}
+                                        headline="Target Environment"
+                                        completed={completed}
+                                        total={total}
+                                        completedBatches={completedBatches}
+                                        totalBatches={totalBatches}
+                                        updateType={
+                                          hasVirtualUpdate
+                                            ? 'Virtual'
+                                            : 'Backfill'
+                                        }
+                                        updatedAt={activeBackfill?.updated_at}
+                                      />
+                                      {models != null && (
+                                        <TasksOverview.Details
+                                          models={models}
+                                          changes={{
+                                            modified,
+                                            added,
+                                            removed,
+                                          }}
+                                          showBatches={hasBackfills}
+                                          showVirtualUpdate={hasVirtualUpdate}
+                                          showProgress={true}
+                                        />
+                                      )}
+                                    </>
+                                  )}
+                                </TasksOverview>
+                              </Suspense>
+                            </>
+                          )}
+                        {hasVirtualUpdate && (
+                          <div>
+                            <small className="text-sm">
+                              {virtualUpdateDescription}
+                            </small>
+                          </div>
+                        )}
+                      </Disclosure.Panel>
+                    </div>
+                  )}
+                </Disclosure>
+              )}
+            {planReport.has('promote') && isFalse(isFailed) && (
               <div className="px-2">
                 {planReport.get('promote')!.status === 'init' && (
                   <PlanWizardStepMessage
@@ -475,7 +502,7 @@ function PlanModelChanges(): JSX.Element {
     isPlanRunning
 
   return (
-    <div className={clsx('w-full px-2', shouldBeFullAndCenter && 'h-full')}>
+    <div className={clsx('w-full', shouldBeFullAndCenter && 'h-full')}>
       {isPlanRunning && (
         <Banner
           isFull
@@ -505,7 +532,7 @@ function PlanModelChanges(): JSX.Element {
             <div className="flex">
               {isArrayNotEmpty(added) && (
                 <PlanChangePreview
-                  className="w-full my-2 max-h-[50vh]"
+                  className="w-full my-2"
                   headline="Added Models"
                   type={EnumPlanChangeType.Add}
                 >
@@ -517,7 +544,7 @@ function PlanModelChanges(): JSX.Element {
               )}
               {isArrayNotEmpty(removed) && (
                 <PlanChangePreview
-                  className="w-full my-2 max-h-[50vh]"
+                  className="w-full my-2"
                   headline="Removed Models"
                   type={EnumPlanChangeType.Remove}
                 >
@@ -533,8 +560,8 @@ function PlanModelChanges(): JSX.Element {
             <>
               {isArrayNotEmpty(modified?.direct) && (
                 <PlanChangePreview
-                  className="m-2 max-h-[50vh]"
-                  headline="Modified Directly "
+                  className="m-2"
+                  headline="Modified Directly"
                   type={EnumPlanChangeType.Direct}
                 >
                   <PlanChangePreview.Direct changes={modified.direct ?? []} />
@@ -542,7 +569,7 @@ function PlanModelChanges(): JSX.Element {
               )}
               {isArrayNotEmpty(modified.indirect) && (
                 <PlanChangePreview
-                  className="m-2 max-h-[50vh]"
+                  className="m-2"
                   headline="Modified Indirectly"
                   type={EnumPlanChangeType.Indirect}
                 >

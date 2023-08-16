@@ -132,7 +132,7 @@ async def apply(
         console.log(event="report", data={"type": "push", "status": "fail"})
         raise ApiException(
             message=str(e),
-            origin="API -> commands -> apply",
+            origin="API -> commands -> apply -> push",
         )
 
     if plan_options.restate_models:

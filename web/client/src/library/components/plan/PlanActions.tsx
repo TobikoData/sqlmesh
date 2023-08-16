@@ -196,14 +196,7 @@ export default function PlanActions({
         )}
       </div>
       <div className="flex items-center">
-        {(isNone ||
-          [
-            isProcessing,
-            isRun,
-            disabled,
-            environment.isInitial && environment.isDefault,
-            isDone,
-          ].every(isFalse)) && (
+        {(isNone || [isProcessing, isRun, disabled, isDone].every(isFalse)) && (
           <Button
             onClick={handleReset}
             variant={EnumVariant.Neutral}
