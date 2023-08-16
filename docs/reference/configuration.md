@@ -59,16 +59,16 @@ By default, SQLMesh creates physical tables for a model with a naming convention
 
 This can be overridden on a per-schema basis using the `physical_schema_override` option, which removes the `sqlmesh__` prefix and uses the name you provide.
 
-This example configuration overrides the default physical schemas for the `db` model schema:
+This example configuration overrides the default physical schemas for the `my_schema` model schema:
 
 ```yaml linenums="1"
 physical_schema_override:
-  db: my_db
+  my_schema: my_new_schema
 ```
 
-If you had a model name of `db.table`, the physical table would be created as `my_db.table_<fingerprint>` instead of the default behavior of `sqlmesh__db.table_<fingerprint>`.
+If you had a model name of `my_schema.table`, the physical table would be created as `my_new_schema.table_<fingerprint>` instead of the default behavior of `sqlmesh__my_schema.table_<fingerprint>`.
 
-This key only applies to the _physical tables_ that SQLMesh creates - the views are still created in `db` (prod) or `db__<env>`.
+This key only applies to the _physical tables_ that SQLMesh creates - the views are still created in `my_schema` (prod) or `my_schema__<env>`.
 
 #### View Schema Override
 
@@ -80,7 +80,7 @@ Config example:
 environment_suffix_target: table
 ```
 
-If you created a `dev` environment for a project containing a model named `db.users`, the model view would be created as `db.users__dev` instead of the default behavior of `db__dev.users`.
+If you created a `dev` environment for a project containing a model named `my_schema.users`, the model view would be created as `my_schema.users__dev` instead of the default behavior of `my_schema__dev.users`.
 
 The default behavior of appending the suffix to schemas is recommended because it leaves production with a single clean interface for accessing the views. However, if you are deploying SQLMesh in an environment with tight restrictions on schema creation then this can be a useful way of reducing the number of schemas SQLMesh uses.
 
@@ -277,7 +277,11 @@ gateways:
 
 ## Gateway/connection defaults
 
-The default gateway and connection keys specify what gateway/connection should be used if a command does not explicitly specify one or some gateways in the `gateways` dictionaries do not specify every connection.
+The default gateway and connection keys specify what should happen when gateways or connections are not explicitly specified.
+
+The gateway specified in `default_gateway` is used when a `sqlmesh` command does not explicitly specify a gateway. All SQLMesh CLI commands [accept a gateway option](./cli.md#cli) after `sqlmesh` and before the command name; for example, `sqlmesh --gateway my_gateway plan`. If the option is not specified in a command call, the `default_gateway` is used.
+
+The three default connection types are used when some gateways in the `gateways` configuration dictionaries do not specify every connection type.
 
 ### Default gateway
 
