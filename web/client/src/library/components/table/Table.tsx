@@ -80,10 +80,12 @@ export default function Table({
 
   return (
     <div className="w-full h-full flex flex-col">
-      <Header
-        filter={filter}
-        setFilter={setFilter}
-      />
+      {isArrayNotEmpty(virtualRows) && (
+        <Header
+          filter={filter}
+          setFilter={setFilter}
+        />
+      )}
       <div
         ref={elTableContainer}
         className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
@@ -96,7 +98,7 @@ export default function Table({
             'text-neutral-700 dark:text-neutral-300 text-xs font-medium whitespace-nowrap text-left',
           )}
         >
-          {isArrayNotEmpty(virtualRows) && (
+          {isArrayNotEmpty(columns) && (
             <thead className="sticky top-0">
               {table.getHeaderGroups().map(headerGroup => (
                 <tr
@@ -185,7 +187,9 @@ export default function Table({
                 )}
               </>
             ) : (
-              <GhostRows columns={columns.length} />
+              <GhostRows
+                columns={columns.length > 0 ? columns.length : undefined}
+              />
             )}
           </tbody>
         </table>
@@ -203,7 +207,7 @@ function Header({
   setFilter: (search: string) => void
 }): JSX.Element {
   return (
-    <tr className="text-neutral-700 dark:text-neutral-300 text-xs font-medium py-2">
+    <div className="text-neutral-700 dark:text-neutral-300 text-xs font-medium py-2">
       <div className="flex justify-end items-center">
         <Input
           className="!m-0 mb-2"
@@ -221,11 +225,11 @@ function Header({
           )}
         </Input>
       </div>
-    </tr>
+    </div>
   )
 }
 
-function Footer({ count }: { count: number }): JSX.Element {
+export function Footer({ count }: { count: number }): JSX.Element {
   return (
     <div className="text-neutral-700 dark:text-neutral-300 text-xs font-medium py-2">
       <p>Total Rows: {count}</p>
@@ -233,7 +237,7 @@ function Footer({ count }: { count: number }): JSX.Element {
   )
 }
 
-function GhostRows({
+export function GhostRows({
   rows = 7,
   columns = 5,
 }: {
@@ -247,7 +251,7 @@ function GhostRows({
         .map((_, row) => (
           <tr
             key={row}
-            className="odd:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
+            className="odd:bg-neutral-10"
             style={{ height: `${MIN_HEIGHT_ROW}px` }}
           >
             {Array(columns)
