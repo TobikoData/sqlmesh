@@ -1215,7 +1215,7 @@ def test_python_model_deps() -> None:
     ).depends_on == {"foo", "bar.baz"}
 
 
-def test_sqlglot_builder_models(assert_exp_eq) -> None:
+def test_python_models_returning_sql(assert_exp_eq) -> None:
     config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
     context = Context(config=config)
 
