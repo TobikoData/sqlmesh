@@ -76,7 +76,7 @@ async def write_file(
         full_path = settings.project_path / path
         if pathlib.Path(path_or_new_path).suffix == ".sql":
             path_to_model_mapping = await get_path_to_model_mapping(settings=settings)
-            model = path_to_model_mapping.get(Path(path_or_new_path))
+            model = path_to_model_mapping.get(Path(full_path))
             default_dialect = context.config_for_path(Path(path_or_new_path)).dialect
             dialect = model.dialect if model and model.is_sql else default_dialect
 
