@@ -13,7 +13,13 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import format_model_expressions, parse
 from web.server import models
 from web.server.exceptions import ApiException
-from web.server.settings import Settings, get_context, get_path_mapping, get_settings
+from web.server.settings import (
+    Settings,
+    get_context,
+    get_path_mapping,
+    get_path_to_model_mapping,
+    get_settings,
+)
 from web.server.utils import is_relative_to, replace_file, validate_path
 
 router = APIRouter()
@@ -66,25 +72,16 @@ async def write_file(
     else:
         full_path = settings.project_path / path
         is_sql = pathlib.Path(path_or_new_path).suffix == ".sql"
-        model_sql = next(
-            (
-                model
-                for model in context._models.values()
-                if model.is_sql and model._path == full_path
-            ),
-            None,
-        )
-        dialect = (
-            model_sql.dialect
-            if model_sql
-            else context.config_for_path(Path(path_or_new_path)).dialect
-        )
+        path_to_model_mapping = await get_path_to_model_mapping(settings=settings)
+        model = path_to_model_mapping.get(Path(path_or_new_path))
+        default_dialect = context.config_for_path(Path(path_or_new_path)).dialect
+        dialect = model.dialect if model and model.is_sql else default_dialect
         if is_sql:
             try:
-                expressions = parse(content, default_dialect=dialect)
+                expressions = parse(content, default_dialect=default_dialect)
                 content = format_model_expressions(expressions, dialect)
             except Exception:
-                raise ApiException(
+                ApiException(
                     message="Unable to format SQL file",
                     origin="API -> files -> write_file",
                 )
