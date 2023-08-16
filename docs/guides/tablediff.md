@@ -20,126 +20,134 @@ The table diff tool can be called in two ways: comparison of a SQLMesh model acr
 
 Compare a SQLMesh model across environments with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source environment]:[target environment] [model name]`.
 
-For example, we could add a `WHERE` clause to the [SQLMesh quickstart](../quick_start.md) model `sqlmesh_example.full_model`:
+For example, we could make two modifications to the [SQLMesh quickstart](../quick_start.md) model `sqlmesh_example.incremental_model`:
+
+1. Change the row whose `item_id` is `3` to `4` with a `CASE WHEN` statement
+2. Remove row whose `item_id` is `1` by adding a `WHERE` clause
 
 ```sql linenums="1"
 MODEL (
-  name sqlmesh_example.full_model,
-  kind FULL,
-  cron '@daily',
-  grain item_id,
-  audits [assert_positive_order_ids],
+    name sqlmesh_example.incremental_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column ds
+    ),
+    start '2020-01-01',
+    cron '@daily',
+    grain [id, ds]
 );
 
 SELECT
-  item_id,
-  count(distinct id) AS num_orders,
+    id,
+    CASE WHEN item_id = 3 THEN 4 ELSE item_id END as item_id, -- Change item_id 3 to 4
+    ds,
 FROM
-    sqlmesh_example.incremental_model
+    sqlmesh_example.seed_model
 WHERE
-  item_id < 3 -- Added `WHERE` clause
-GROUP BY item_id
+    ds between @start_ds and @end_ds
+    AND id != 1 -- Remove row whose item_id is 1
 ```
 
 After running `sqlmesh plan dev` and applying the plan, the updated model will be present in the `dev` environment but not in `prod`.
 
-Compare the two versions of the model with the table diff tool by running `sqlmesh table_diff prod:dev sqlmesh_example.full_model`.
+Compare the two versions of the model with the table diff tool by running `sqlmesh table_diff prod:dev sqlmesh_example.incremental_model`.
 
-The first argument `prod:dev` specifies that `prod` is the source environment to which we will compare the target environment `dev`. The second argument `sqlmesh_example.full_model` is the name of the model to compare across the `prod` and `dev` environments.
+The first argument `prod:dev` specifies that `prod` is the source environment to which we will compare the target environment `dev`. The second argument `sqlmesh_example.incremental_model` is the name of the model to compare across the `prod` and `dev` environments.
 
-Because the `grain` is set to `item_id` in the `MODEL` statement, SQLMesh knows how to perform the join between the two models. If `grain` were not set, the command would need to include the `-o item_id` option to specify that the tables should be joined on column `item_id`. If more than one column should be used for the join, specify `-o` once for each join column.
+Because the `grain` is set to `[id, ds]` in the `MODEL` statement, SQLMesh knows how to perform the join between the two models. If `grain` were not set, the command would need to include the `-o id -o ds` option to specify that the tables should be joined on column `id` and `ds`. Specify `-o` once for each join column.
 
 Table diff returns this output:
 
 ```bash linenums="1"
-$ sqlmesh table_diff prod:dev sqlmesh_example.full_model
+$ sqlmesh table_diff prod:dev sqlmesh_example.incremental_model
 
-Schema Diff Between 'PROD' and 'DEV' environments for model 'sqlmesh_example.full_model':
+Schema Diff Between 'PROD' and 'DEV' environments for model 'sqlmesh_example.incremental_model':
 └── Schemas match
 
 
-Outer Join Row Counts:
-├──  JOINED: 2 rows
+Row Counts:
+├──  COMMON: 6 rows
 ├──  PROD ONLY: 1 rows
 └──  DEV ONLY: 0 rows
 
-JOINED ROWS comparison stats:
-            pct_match
-num_orders      100.0
+COMMON ROWS column comparison stats:
+         pct_match
+item_id       83.3
 ```
 
-The "Schema Diff" section shows that the `PROD` and `DEV` schemas match.
+The "Schema Diff" section shows that the `PROD` and `DEV` schemas match because no columns have been added, removed, or change data type.
 
-The "Outer Join Row Counts" section shows that 2 rows were successfully joined and 1 row is only present in the `PROD` model.
+The "Row Counts" section shows that 6 rows were successfully joined and the 1 row we removed is only present in the `PROD` model.
 
-The `JOINED ROWS comparison stats` section shows that the `num_orders` column values had a 100% match for the two joined rows. All non-join columns with the same data type in both tables are included in the comparison stats.
+The `COMMON ROWS column comparison stats` section shows that the `item_id` column values had an 83.3% match for the six joined rows (5 of the 6 row values were unchanged by our `CASE WHEN` statement). All non-join columns with the same data type in both tables are included in the comparison stats.
 
 If we include the `--show-sample` option in the command, the output also includes rows from the different join components.
 
 ```bash linenums="1"
-$ sqlmesh table_diff prod:dev sqlmesh_example.full_model --show-sample
+$ sqlmesh table_diff prod:dev sqlmesh_example.incremental_model --show-sample
 
-Schema Diff Between 'PROD' and 'DEV' environments for model 'sqlmesh_example.full_model':
+Schema Diff Between 'PROD' and 'DEV' environments for model 'sqlmesh_example.incremental_model':
 └── Schemas match
 
 
-Outer Join Row Counts:
-├──  JOINED: 2 rows
+Row Counts:
+├──  COMMON: 6 rows
 ├──  PROD ONLY: 1 rows
 └──  DEV ONLY: 0 rows
 
-JOINED ROWS comparison stats:
-            pct_match
-num_orders      100.0
+COMMON ROWS column comparison stats:
+         pct_match
+item_id       83.3
 
 
-JOINED ROWS data differences:
-  All joined rows match!
+COMMON ROWS sample data differences:
+ id         ds  PROD__item_id  DEV__item_id
+  3 2020-01-03              3           4.0
+
 
 PROD ONLY sample rows:
- s__item_id  s__num_orders
-          3              1
+ id         ds  item_id
+  1 2020-01-01        2
 ```
 
-The "JOINED ROWS data differences" section does not display any rows because all columns matched between the two tables for the joined rows.
+The `COMMON ROWS sample data differences` section displays the row whose `item_id` value changed. The `PROD__item_id` column shows that `item_id` is 3 in the `PROD` table, and the `DEV__item_id` column shows that `item_id` is 4.0 in the `DEV` table.
 
-The "PROD ONLY sample rows" section shows the one row that is present in `PROD` but not in `DEV`. The column names begin with `s__` to indicate that they were specified as the source in the `table_diff` command.
+The `PROD ONLY sample rows` section shows the one row that is present in `PROD` but not in `DEV`.
 
 ## Diffing tables or views
 
-Compare tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.
+Compare specific tables or views with the SQLMesh CLI interface by using the command `sqlmesh table_diff [source table]:[target table]`.
 
 The source and target tables should be fully qualified with catalog or schema names such that a SQL query of the form `SELECT ... FROM [source table]` would execute correctly.
 
-Recall that SQLMesh models are accessible via views in the database or engine. In the `prod` environment, the view has the same name as the model. For example, in the quickstart example project the `prod` seed model is represented by the view `sqlmesh_example.seed_model`.
+Recall that SQLMesh models are accessible via views in the database. In the `prod` environment, the view has the same name as the model. For example, in the quickstart example project the `prod` incremental model is represented by the view `sqlmesh_example.incremental_model`. In the `dev` environment, `__dev` is appended to the schema name so the incremental model is represented by the view `sqlmesh_example__dev.incremental_model`.
 
-In some situations, it might be appropriate to diff two different models. While this is not such a situation, as a demonstration we can compare the seed and full models with the model change made above.
-
-First, run and apply `sqlmesh plan` to deploy the model change to `prod`. Diffing the seed and full models then generates the following output:
+We can replicate the comparison in the previous section by comparing the model views directly. Because we are passing the view names directly, the command needs to manually specify that the join should be on the `id` and `ds` columns with the `-o id -o ds` flags.
 
 ```bash linenums="1"
-$ sqlmesh table_diff sqlmesh_example.seed_model:sqlmesh_example.full_model -o item_id --show-sample
+$ sqlmesh table_diff sqlmesh_example.incremental_model:sqlmesh_example__dev.incremental_model -o id -o ds --show-sample
 
-Schema Diff Between 'SQLMESH_EXAMPLE.SEED_MODEL' and 'SQLMESH_EXAMPLE.FULL_MODEL':
-├── Added Columns:
-│   └── num_orders (BIGINT)
-└── Removed Columns:
-    ├── id (INT)
-    └── ds (DATE)
+Schema Diff Between 'SQLMESH_EXAMPLE.INCREMENTAL_MODEL' and 'SQLMESH_EXAMPLE__DEV.INCREMENTAL_MODEL':
+└── Schemas match
 
 
-Outer Join Row Counts:
-├──  JOINED: 6 rows
-├──  SQLMESH_EXAMPLE.SEED_MODEL ONLY: 1 rows
-└──  SQLMESH_EXAMPLE.FULL_MODEL ONLY: 0 rows
+Row Counts:
+├──  COMMON: 6 rows
+├──  SQLMESH_EXAMPLE.INCREMENTAL_MODEL ONLY: 1 rows
+└──  SQLMESH_EXAMPLE__DEV.INCREMENTAL_MODEL ONLY: 0 rows
 
-JOINED ROWS comparison stats:
-  No columns with same name and data type in both tables
+COMMON ROWS column comparison stats:
+         pct_match
+item_id       83.3
 
-JOINED ROWS data differences:
-  All joined rows match
 
-SQLMESH_EXAMPLE.SEED_MODEL ONLY sample rows:
- s__item_id  s__id      s__ds
-          3      3 2020-01-03
+COMMON ROWS sample data differences:
+ id         ds  s__item_id  t__item_id
+  3 2020-01-03           3         4.0
+
+
+SQLMESH_EXAMPLE.INCREMENTAL_MODEL ONLY sample rows:
+ id         ds  item_id
+  1 2020-01-01        2
 ```
+
+The output matches, with the exception of the column labels in the `COMMON ROWS sample data differences`. The underlying table for each column is indicated by `s__` for "source" table (first table in the command's colon operator `:`) and `t__` for "target" table (second table in the command's colon operator `:`).
