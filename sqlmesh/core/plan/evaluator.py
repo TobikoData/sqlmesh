@@ -191,7 +191,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             return
 
         self.state_sync.remove_interval(
-            plan.restatement_snapshots,
+            [
+                (plan.context_diff.snapshots[s], interval)
+                for s, interval in plan.restatements.items()
+            ],
             plan._execution_time,
             remove_shared_versions=not plan.is_dev,
         )

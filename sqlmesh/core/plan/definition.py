@@ -301,12 +301,6 @@ class Plan:
         return self._restatements
 
     @property
-    def restatement_snapshots(self) -> t.List[t.Tuple[Snapshot, Interval]]:
-        return [
-            (self.context_diff.snapshots[s], interval) for s, interval in self.restatements.items()
-        ]
-
-    @property
     def loaded_snapshot_intervals(self) -> t.List[LoadedSnapshotIntervals]:
         loaded_snapshots = []
         for snapshot in self.directly_modified:
@@ -460,7 +454,7 @@ class Plan:
     def _add_restatements(self, restate_models: t.Iterable[str]) -> None:
         def is_restateable_snapshot(snapshot: Snapshot) -> bool:
             if not self.is_dev and snapshot.model.disable_restatement:
-                logger.warning("Restatement is disabled for model '%s'.", snapshot.name)
+                logger.debug("Restatement is disabled for model '%s'.", snapshot.name)
                 return False
             return not snapshot.is_symbolic and not snapshot.is_seed
 
