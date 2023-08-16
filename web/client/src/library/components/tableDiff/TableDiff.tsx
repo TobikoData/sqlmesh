@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import {
   EMPTY_TABLE_CELL,
   TARGET_PREFIX,
@@ -15,7 +15,7 @@ import {
 } from './help'
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
-import { isArrayNotEmpty, isFalse } from '@utils/index'
+import { isArrayNotEmpty, isFalse, isNotNil } from '@utils/index'
 import { Footer, GhostRows } from '@components/table/Table'
 import ListboxShow from '@components/listbox/ListboxShow'
 
@@ -286,33 +286,45 @@ export default function TableDiff({ diff }: { diff: any }): JSX.Element {
       </div>
       <div className="flex justify-between items-center px-2 mt-2">
         <Footer count={rows.all.length} />
-        <div className="flex text-xs">
-          <div className="flex ml-2 items-center">
-            <span className="inline-block w-3 h-3 bg-brand-500 mr-2 rounded-full"></span>
-            <small className="text-neutral-600 dark:text-neutral-400">
-              Grain
-            </small>
-          </div>
-          <div className="flex ml-2 items-center">
-            <span className="inline-block w-3 h-3 bg-primary-500 mr-2 rounded-full"></span>
-            <small className="text-neutral-600 dark:text-neutral-400">
-              Changed
-            </small>
-          </div>
-          <div className="flex ml-2 items-center">
-            <span className="inline-block w-3 h-3 bg-success-500 mr-2 rounded-full"></span>
-            <small className="text-neutral-600 dark:text-neutral-400">
-              Added
-            </small>
-          </div>
-          <div className="flex ml-2 items-center">
-            <span className="inline-block w-3 h-3 bg-danger-500 mr-2 rounded-full"></span>
-            <small className="text-neutral-600 dark:text-neutral-400">
-              Deleted
-            </small>
-          </div>
-        </div>
+        <Legend />
       </div>
+    </div>
+  )
+}
+
+function Legend(): JSX.Element {
+  const items = [
+    ['Grain', 'bg-brand-500'],
+    ['Changed', 'bg-primary-500'],
+    ['Added', 'bg-success-500'],
+    ['Deleted', 'bg-danger-500'],
+  ]
+  return (
+    <div className="flex text-xs">
+      {items.map(([text = '', className]) => (
+        <LegendItem
+          key={text}
+          text={text}
+          className={className}
+        />
+      ))}
+    </div>
+  )
+}
+
+function LegendItem({
+  text,
+  className,
+}: {
+  text: string
+  className?: string
+}): JSX.Element {
+  return (
+    <div className="flex ml-2 items-center">
+      <span
+        className={clsx('inline-block w-3 h-3 mr-2 rounded-full', className)}
+      ></span>
+      <small className="text-neutral-600 dark:text-neutral-400">{text}</small>
     </div>
   )
 }
@@ -340,61 +352,79 @@ function TableDiffStats({
           </Disclosure.Button>
           <Disclosure.Panel className="px-4 pb-2 text-sm text-neutral-500">
             <div className="p-2 grid grid-cols-3 gap-4 mb-3">
-              <div className="rounded-xl overflow-hidden px-3 py-6 bg-primary-10">
-                <h3 className="text-neutral-500 dark:text-neutral-300 text-sm font-bold">
-                  Row Count Change
-                </h3>
+              <TableDiffStatsCard text="Row Count Change">
                 <p className="text-6xl font-light text-primary-500 mt-3">
                   {Math.round(Math.abs(diff.row_diff.count_pct_change))}
                   <small className="text-sm">%</small>
                 </p>
-              </div>
-              <div className="rounded-xl overflow-hidden px-3 py-6 bg-primary-10">
-                <div className="flex justify-between">
-                  <h3 className="text-neutral-500 dark:text-neutral-300 text-sm font-bold">
-                    Row Changes
-                  </h3>
-                  <small className="inline-block px-2 py-0.5 bg-neutral-10 rounded-full">
-                    {rows.all.length}
-                  </small>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <p className="text-center text-6xl font-light text-primary-500 mt-3">
-                    {rows.modified}
-                  </p>
-                  <p className="text-center text-6xl font-light text-success-500 mt-3">
-                    {rows.added}
-                  </p>
-                  <p className="text-center text-6xl font-light text-danger-500 mt-3">
-                    {rows.deleted}
-                  </p>
-                </div>
-              </div>
-              <div className="rounded-xl overflow-hidden px-3 py-6 bg-primary-10">
-                <div className="flex justify-between">
-                  <h3 className="text-neutral-500 dark:text-neutral-300 text-sm font-bold">
-                    Column Changes
-                  </h3>
-                  <small className="inline-block px-2 py-0.5 bg-neutral-10 rounded-full">
-                    {columns.all.length}
-                  </small>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <p className="text-center text-6xl font-light text-primary-500 mt-3">
-                    {columns.modified}
-                  </p>
-                  <p className="text-center text-6xl font-light text-success-500 mt-3">
-                    {columns.added}
-                  </p>
-                  <p className="text-center text-6xl font-light text-danger-500 mt-3">
-                    {columns.deleted}
-                  </p>
-                </div>
-              </div>
+              </TableDiffStatsCard>
+              <TableDiffStatsCard
+                text="Column Count Change"
+                count={rows.all.length}
+              >
+                <p className="text-center text-6xl font-light text-primary-500 mt-3">
+                  {rows.modified}
+                </p>
+                <p className="text-center text-6xl font-light text-success-500 mt-3">
+                  {rows.added}
+                </p>
+                <p className="text-center text-6xl font-light text-danger-500 mt-3">
+                  {rows.deleted}
+                </p>
+              </TableDiffStatsCard>
+              <TableDiffStatsCard
+                text="Column Changes"
+                count={columns.all.length}
+              >
+                <p className="text-center text-6xl font-light text-primary-500 mt-3">
+                  {columns.modified}
+                </p>
+                <p className="text-center text-6xl font-light text-success-500 mt-3">
+                  {columns.added}
+                </p>
+                <p className="text-center text-6xl font-light text-danger-500 mt-3">
+                  {columns.deleted}
+                </p>
+              </TableDiffStatsCard>
             </div>
           </Disclosure.Panel>
         </>
       )}
     </Disclosure>
+  )
+}
+
+function TableDiffStatsCard({
+  text,
+  children,
+  className,
+  count,
+}: {
+  text: string
+  children: React.ReactNode
+  count?: number
+  className?: string
+}): JSX.Element {
+  return (
+    <div
+      className={clsx(
+        'rounded-xl overflow-hidden px-3 py-6 bg-primary-10',
+        className,
+      )}
+    >
+      <div className="flex justify-between">
+        <h3 className="text-neutral-500 dark:text-neutral-300 text-sm font-bold">
+          {text}
+        </h3>
+        {isNotNil(count) && (
+          <div>
+            <small className="inline-block px-2 py-0.5 bg-neutral-10 rounded-full">
+              {count}
+            </small>
+          </div>
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-2">{children}</div>
+    </div>
   )
 }

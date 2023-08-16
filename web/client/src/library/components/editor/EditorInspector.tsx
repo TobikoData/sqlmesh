@@ -486,16 +486,13 @@ function FormDiffModel({
     where,
   })
 
-  const getTableDiff = useCallback(
-    function getTableDiff(): void {
-      setPreviewDiff(undefined)
+  const getTableDiff = useCallback(() => {
+    setPreviewDiff(undefined)
 
-      void getDiff().then(({ data }) => {
-        setPreviewDiff(data)
-      })
-    },
-    [model.name],
-  )
+    void getDiff().then(({ data }) => {
+      setPreviewDiff(data)
+    })
+  }, [model.name])
 
   useEffect(() => {
     setSelectedSource(list[0]!.value)
