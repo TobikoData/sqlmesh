@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import Depends
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.model.definition import Model
 from sqlmesh.utils.pydantic import PYDANTIC_MAJOR_VERSION
 from web.server.exceptions import ApiException
 from web.server.models import FileType
@@ -61,6 +62,11 @@ def _get_loaded_context(path: str | Path, config: str) -> Context:
     return context
 
 
+@lru_cache()
+def _get_path_to_model_mapping(context: Context) -> dict[Path, Model]:
+    return {model._path: model for model in context._models.values()}
+
+
 async def get_path_mapping(settings: Settings = Depends(get_settings)) -> dict[Path, FileType]:
     try:
         context = await get_loaded_context(settings)
@@ -68,6 +74,17 @@ async def get_path_mapping(settings: Settings = Depends(get_settings)) -> dict[P
         logger.exception("Error creating a context")
         return {}
     return _get_path_mappings(context)
+
+
+async def get_path_to_model_mapping(
+    settings: Settings = Depends(get_settings),
+) -> dict[Path, Model]:
+    try:
+        context = await get_loaded_context(settings)
+    except Exception:
+        logger.exception("Error creating a context")
+        return {}
+    return _get_path_to_model_mapping(context)
 
 
 async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Context:
