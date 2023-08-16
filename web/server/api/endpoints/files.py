@@ -1,17 +1,28 @@
 from __future__ import annotations
 
+import json
 import os
+import pathlib
 import typing as t
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response
+from sse_starlette import ServerSentEvent
 from starlette.status import HTTP_204_NO_CONTENT, HTTP_404_NOT_FOUND
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
+from sqlmesh.core.dialect import format_model_expressions, parse
 from web.server import models
+from web.server.console import api_console
 from web.server.exceptions import ApiException
-from web.server.settings import Settings, get_context, get_path_mapping, get_settings
+from web.server.settings import (
+    Settings,
+    get_context,
+    get_path_mapping,
+    get_path_to_model_mapping,
+    get_settings,
+)
 from web.server.utils import is_relative_to, replace_file, validate_path
 
 router = APIRouter()
@@ -55,7 +66,6 @@ async def write_file(
     path: str = Depends(validate_path),
     settings: Settings = Depends(get_settings),
     context: Context = Depends(get_context),
-    path_mapping: t.Dict[Path, models.FileType] = Depends(get_path_mapping),
 ) -> models.File:
     """Create, update, or rename a file."""
     path_or_new_path = path
@@ -63,14 +73,34 @@ async def write_file(
         path_or_new_path = validate_path(new_path, context)
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
-        (settings.project_path / path_or_new_path).write_text(content, encoding="utf-8")
+        full_path = settings.project_path / path
+        if pathlib.Path(path_or_new_path).suffix == ".sql":
+            path_to_model_mapping = await get_path_to_model_mapping(settings=settings)
+            model = path_to_model_mapping.get(Path(path_or_new_path))
+            default_dialect = context.config_for_path(Path(path_or_new_path)).dialect
+            dialect = model.dialect if model and model.is_sql else default_dialect
 
+            try:
+                expressions = parse(content, default_dialect=default_dialect)
+                content = format_model_expressions(expressions, dialect)
+            except Exception:
+                error = ApiException(
+                    message="Unable to format SQL file",
+                    origin="API -> files -> write_file",
+                ).to_dict()
+                api_console.queue.put_nowait(
+                    ServerSentEvent(event="errors", data=json.dumps(error))
+                )
+
+        full_path.write_text(content, encoding="utf-8")
+
+    path_or_new_path_mapping = await get_path_mapping(settings=settings)
     content = (settings.project_path / path_or_new_path).read_text()
     return models.File(
         name=os.path.basename(path_or_new_path),
         path=path_or_new_path,
         content=content,
-        type=path_mapping.get(Path(path)),
+        type=path_or_new_path_mapping.get(Path(path_or_new_path)),
     )
 
 

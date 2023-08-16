@@ -360,13 +360,8 @@ export function useMutationApiSaveFile(
   return useMutation({
     mutationFn: async ({ path, body }) =>
       await writeFileApiFilesPathPost(path, body),
-    onError() {
-      addError(EnumErrorKey.SaveFile, {
-        message: 'File was not saved',
-        timestamp: Date.now(),
-        origin: 'writeFileApiFilesPathPost',
-        trigger: 'API -> useMutationApiSaveFile',
-      })
+    onError(error: ErrorIDE) {
+      addError(EnumErrorKey.SaveFile, error)
     },
     async onMutate({ path }) {
       await client.cancelQueries({
