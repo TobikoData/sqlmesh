@@ -28,8 +28,10 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
     categorize_change,
     fingerprint_from_node,
+    get_snapshot_removal_intervals,
     has_paused_forward_only,
 )
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
@@ -1108,3 +1110,166 @@ def test_model_custom_interval_unit(make_snapshot):
     )
 
     assert len(snapshot.missing_intervals("2023-01-29", "2023-01-29")) == 24
+
+
+@pytest.mark.parametrize(
+    "graph,depends_on_past_names,start,end,execution_time,expected",
+    [
+        (
+            # Empty DAG
+            {},
+            set(),
+            "1 week ago",
+            "1 week ago",
+            "1 day ago",
+            [],
+        ),
+        (
+            # No dependencies single depends on past
+            {
+                "a": {},
+                "b": {},
+            },
+            set("b"),
+            "1 week ago",
+            "1 week ago",
+            "1 day ago",
+            [
+                ("a", ("1 week ago", "6 days ago")),
+                ("b", ("1 week ago", "today")),
+            ],
+        ),
+        # Simple dependency with leaf depends on past
+        (
+            {
+                "a": {},
+                "b": {"a"},
+            },
+            set("b"),
+            "1 week ago",
+            "1 week ago",
+            "1 day ago",
+            [
+                ("a", ("1 week ago", "6 days ago")),
+                ("b", ("1 week ago", "today")),
+            ],
+        ),
+        # Simple dependency with root depends on past
+        (
+            {
+                "a": {},
+                "b": {"a"},
+            },
+            set("a"),
+            "1 week ago",
+            "1 week ago",
+            "1 day ago",
+            [
+                ("a", ("1 week ago", "today")),
+                ("b", ("1 week ago", "today")),
+            ],
+        ),
+        # Two unrelated subgraphs with root depends on past
+        (
+            {
+                "a": {},
+                "b": {},
+                "c": {"a"},
+                "d": {"b"},
+            },
+            set("a"),
+            "1 week ago",
+            "1 week ago",
+            "1 day ago",
+            [
+                ("a", ("1 week ago", "today")),
+                ("b", ("1 week ago", "6 days ago")),
+                ("c", ("1 week ago", "today")),
+                ("d", ("1 week ago", "6 days ago")),
+            ],
+        ),
+        # Simple root depends on past with adjusted execution time
+        (
+            {
+                "a": {},
+                "b": {"a"},
+            },
+            set("a"),
+            "1 week ago",
+            "1 week ago",
+            "3 day ago",
+            [
+                ("a", ("1 week ago", "2 days ago")),
+                ("b", ("1 week ago", "2 days ago")),
+            ],
+        ),
+        (
+            # a -> c -> d
+            # b -> c -> e -> g
+            # b -> f -> g
+            # c depends on past
+            {
+                "a": {},
+                "b": {},
+                "c": {"a", "b"},
+                "d": {"c"},
+                "e": {"c"},
+                "f": {"b"},
+                "g": {"f", "e"},
+            },
+            set("c"),
+            "1 week ago",
+            "1 week ago",
+            "1 day ago",
+            [
+                ("a", ("1 week ago", "6 days ago")),
+                ("b", ("1 week ago", "6 days ago")),
+                ("c", ("1 week ago", "today")),
+                ("d", ("1 week ago", "today")),
+                ("e", ("1 week ago", "today")),
+                ("f", ("1 week ago", "6 days ago")),
+                ("g", ("1 week ago", "today")),
+            ],
+        ),
+    ],
+)
+def test_get_snapshot_removal_intervals(
+    graph: t.Dict[str, t.Set[str]],
+    depends_on_past_names: t.Set[str],
+    start: str,
+    end: str,
+    execution_time: str,
+    expected: t.List[t.Tuple[str, t.Tuple[str, str]]],
+    make_snapshot,
+):
+    dag = DAG(graph)
+    start_date = to_date(start)
+    end_date = to_date(end)
+    execution_time_date = to_date(execution_time)
+    snapshot_mapping = {
+        snapshot_name: make_snapshot(
+            SqlModel(
+                name=snapshot_name,
+                kind=IncrementalByTimeRangeKind(time_column="ds"),
+                cron="@daily",
+                start="1 week ago",
+                query=parse_one(
+                    f"SELECT 1 FROM {snapshot_name}"
+                    if snapshot_name in depends_on_past_names
+                    else "SELECT 1"
+                ),
+            )
+        )
+        for snapshot_name in dag
+    }
+    result = get_snapshot_removal_intervals(
+        dag=dag,
+        start=start_date,
+        end=end_date,
+        snapshots=snapshot_mapping.values(),
+        execution_time=execution_time_date,
+    )
+    assert sorted([(x[0].name, x[1]) for x in result]) == [
+        (name, (to_timestamp(to_date(start)), to_timestamp(to_date(end))))
+        for name, (start, end) in expected
+    ]

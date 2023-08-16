@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import sys
 import typing as t
 from collections import defaultdict
@@ -111,6 +110,9 @@ class SnapshotId(PydanticModel, frozen=True):
     def snapshot_id(self) -> SnapshotId:
         """Helper method to return self."""
         return self
+
+    def __lt__(self, other: SnapshotId) -> bool:
+        return self.name < other.name
 
 
 class SnapshotNameVersion(PydanticModel, frozen=True):
@@ -523,6 +525,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     def __hash__(self) -> int:
         return hash((self.__class__, self.name, self.fingerprint))
+
+    def __lt__(self, other: Snapshot) -> bool:
+        return self.name < other.name
 
     def add_interval(self, start: TimeLike, end: TimeLike, is_dev: bool = False) -> None:
         """Add a newly processed time interval to the snapshot.
@@ -1162,40 +1167,28 @@ def get_snapshot_removal_intervals(
     end: TimeLike,
     snapshots: t.Iterable[Snapshot],
     execution_time: t.Optional[TimeLike] = None,
-) -> t.List[t.Tuple[Snapshot, Interval]]:
-    """Get the intervals to remove from a snapshot.
+) -> t.Iterable[t.Tuple[Snapshot, Interval]]:
+    """Get the intervals to remove from a snapshot. Some snapshots may extend the start/end that they are
+    removing so the DAG is used in order to ensure that downstream snapshots also remove that extended start/end.
 
     Args:
-        dag: DAG of snapshots.
+        dag: DAG of snapshots in order to support visting snapshots in topological order.
+        start: Start time to remove.
+        end: End time to remove.
         snapshots: Snapshots to remove.
+        execution_time: Execution time to remove. If not provided, the current time is used.
 
     Returns:
-        Intervals to remove.
+        Snapshots to remove alongside with their intervals.
     """
-
-    def traverse_dag(
-        dag: DAG[str],
-        snapshot_mapping: t.Dict[str, Snapshot],
-        scoped_start: TimeLike,
-        scoped_end: TimeLike,
-        results: t.Dict[str, t.Tuple[Snapshot, Interval]],
-    ) -> None:
-        for snapshot_name in dag:
-            snapshot = snapshot_mapping[snapshot_name]
-            interval = snapshot.get_removal_interval(scoped_start, scoped_end, execution_time)
-            _, (existing_start, existing_end) = results.get(
-                snapshot_name, (None, (math.inf, -math.inf))
-            )
-            scoped_start = int(min(interval[0], existing_start))
-            scoped_end = int(max(interval[1], existing_end))
-            results[snapshot_name] = (snapshot, (scoped_start, scoped_end))
-            subdag = dag.subdag(snapshot_name)
-            if subdag.sorted != dag.sorted:
-                traverse_dag(
-                    dag.subdag(snapshot_name), snapshot_mapping, scoped_start, scoped_end, results
-                )
-
     snapshot_mapping = {snapshot.name: snapshot for snapshot in snapshots}
     results: t.Dict[str, t.Tuple[Snapshot, Interval]] = {}
-    traverse_dag(dag, snapshot_mapping, start, end, results)
-    return list(results.values())
+    for snapshot_name in dag:
+        snapshot = snapshot_mapping[snapshot_name]
+        interval = snapshot.get_removal_interval(start, end, execution_time)
+        upstream_snapshots = dag.upstream(snapshot_name)
+        possible_intervals = [results[s][1] for s in upstream_snapshots] + [interval]
+        snapshot_start = min(i[0] for i in possible_intervals)
+        snapshot_end = max(i[1] for i in possible_intervals)
+        results[snapshot_name] = (snapshot_mapping[snapshot_name], (snapshot_start, snapshot_end))
+    return results.values()

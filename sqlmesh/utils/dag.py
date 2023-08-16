@@ -99,7 +99,9 @@ class DAG(t.Generic[T]):
                 for deps in unprocessed_nodes.values():
                     deps -= next_nodes
 
-                self._sorted.extend(next_nodes)
+                # Sort to make the order deterministic
+                # TODO: Make protocol that makes the type var both hashable and sortable once we are on Python 3.8+
+                self._sorted.extend(sorted(next_nodes))  # type: ignore
 
         return self._sorted
 
@@ -146,3 +148,9 @@ class DAG(t.Generic[T]):
     def __iter__(self) -> t.Iterator[T]:
         for node in self.sorted:
             yield node
+
+    def __len__(self) -> int:
+        return len(self.sorted)
+
+    def __bool__(self) -> bool:
+        return bool(self.sorted)

@@ -199,7 +199,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.state_sync.remove_interval(
             snapshot_intervals,
             plan._execution_time,
-            remove_shared_versions=plan.is_dev,
+            remove_shared_versions=not plan.is_dev,
         )
 
 
