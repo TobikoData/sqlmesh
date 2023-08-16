@@ -118,9 +118,6 @@ class SnapshotNameVersion(PydanticModel, frozen=True):
     name: str
     version: str
 
-    def __str__(self) -> str:
-        return "__".join([self.name, self.version])
-
 
 class SnapshotIntervals(PydanticModel, frozen=True):
     name: str

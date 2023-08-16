@@ -502,13 +502,13 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     ) -> None:
         if remove_shared_versions:
             name_version_mapping = {
-                str(s.name_version): (s, interval) for s, interval in snapshot_intervals
+                s.name_version: (s, interval) for s, interval in snapshot_intervals
             }
             all_snapshots = self._get_snapshots_with_same_version(
                 [s[0] for s in snapshot_intervals]
             )
             snapshot_intervals = [
-                (snapshot, name_version_mapping[str(snapshot.name_version)][1])
+                (snapshot, name_version_mapping[snapshot.name_version][1])
                 for snapshot in all_snapshots
             ]
 

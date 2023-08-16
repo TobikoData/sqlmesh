@@ -482,11 +482,7 @@ class Plan:
             interval = snapshot.get_removal_interval(
                 self.start, self.end, self._execution_time, strict=False
             )
-            upstream_snapshots = [
-                s
-                for s in self._dag.upstream(snapshot_name)
-                if is_restateable_snapshot(snapshot_mapping[s])
-            ]
+            upstream_snapshots = [s for s in self._dag.upstream(snapshot_name)]
             possible_intervals = [
                 restatements.get(s, dummy_interval) for s in upstream_snapshots
             ] + [interval]
