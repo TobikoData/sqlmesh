@@ -872,3 +872,68 @@ def test_add_restatements(
         name: (to_timestamp(to_date(start)), to_timestamp(to_date(end)))
         for name, (start, end) in expected.items()
     }
+
+
+def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            # self reference query so it depends_on_past
+            query=parse_one("select 1, ds FROM a"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_child = make_snapshot(
+        SqlModel(
+            name="a_child",
+            query=parse_one("select 1, ds FROM a"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    snapshot_child.categorize_as(SnapshotChangeCategory.BREAKING)
+    unrelated_snapshot = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select 1, ds"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    unrelated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.depends_on_past
+    assert not snapshot_child.depends_on_past
+    assert not unrelated_snapshot.depends_on_past
+    assert snapshot_child.model.depends_on == {"a"}
+    assert unrelated_snapshot.model.depends_on == set()
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {
+        "a": snapshot,
+        "a_child": snapshot_child,
+        "b": unrelated_snapshot,
+    }
+    context_diff_mock.added = set()
+    context_diff_mock.removed = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {
+        snapshot.snapshot_id: snapshot,
+        snapshot_child.snapshot_id: snapshot_child,
+        unrelated_snapshot.snapshot_id: unrelated_snapshot,
+    }
+    context_diff_mock.environment = "dev"
+
+    dev_plan_start_aligned = Plan(
+        context_diff_mock, start="2023-01-01", end="2023-01-10", is_dev=True
+    )
+    assert len(dev_plan_start_aligned.new_snapshots) == 3
+    assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == ["a", "a_child", "b"]
+    dev_plan_start_ahead_of_model = Plan(
+        context_diff_mock, start="2023-01-02", end="2023-01-10", is_dev=True
+    )
+    assert len(dev_plan_start_ahead_of_model.new_snapshots) == 1
+    assert [x.name for x in dev_plan_start_ahead_of_model.new_snapshots] == ["b"]
+    assert len(dev_plan_start_ahead_of_model.ignored_snapshot_names) == 2
+    assert sorted(list(dev_plan_start_ahead_of_model.ignored_snapshot_names)) == ["a", "a_child"]

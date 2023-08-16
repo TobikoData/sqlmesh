@@ -21,6 +21,7 @@ MILLIS_THRESHOLD = time.time() + 100 * 365 * 24 * 3600
 DATE_INT_FMT = "%Y%m%d"
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.node import IntervalUnit
     from sqlmesh.core.scheduler import Interval
 
 
@@ -277,3 +278,14 @@ def time_like_to_str(time_like: TimeLike) -> str:
     if is_date(time_like):
         return to_ds(time_like)
     return to_datetime(time_like).isoformat()
+
+
+def to_end_date(
+    end_and_units: t.Union[t.Tuple[int, IntervalUnit], t.List[t.Tuple[int, IntervalUnit]]]
+) -> TimeLike:
+    end_and_units = [end_and_units] if isinstance(end_and_units, tuple) else end_and_units
+
+    end, unit = max(end_and_units)
+    if unit.is_day:
+        return to_date(make_inclusive_end(end))
+    return end
