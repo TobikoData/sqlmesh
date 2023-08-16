@@ -64,32 +64,22 @@ class model(registry_decorator):
         entrypoint = self.func.__name__
 
         build_env(self.func, env=env, name=entrypoint, path=module_path)
-        serialized_env = serialize_env(env, path=module_path)
 
-        if self.is_sql:
-            query = MacroFunc(this=exp.Anonymous(this=entrypoint))
-
-            return create_sql_model(
-                self.name,
-                query,
-                defaults=defaults,
-                path=path,
-                module_path=module_path,
-                time_column_format=time_column_format,
-                python_env=serialized_env,
-                dialect=dialect,
-                physical_schema_override=physical_schema_override,
-                **self.kwargs,
-            )
-
-        return create_python_model(
-            self.name,
-            entrypoint,
+        common_kwargs = dict(
             defaults=defaults,
             path=path,
             time_column_format=time_column_format,
-            python_env=serialized_env,
-            columns=self.columns,
+            python_env=serialize_env(env, path=module_path),
             physical_schema_override=physical_schema_override,
             **self.kwargs,
         )
+
+        if self.is_sql:
+            query = MacroFunc(this=exp.Anonymous(this=entrypoint))
+            dialect = common_kwargs.pop("dialect", dialect)
+
+            return create_sql_model(
+                self.name, query, module_path=module_path, dialect=dialect, **common_kwargs
+            )
+
+        return create_python_model(self.name, entrypoint, columns=self.columns, **common_kwargs)

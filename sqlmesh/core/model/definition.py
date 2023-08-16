@@ -1479,13 +1479,6 @@ def load_sql_based_model(
             raise
 
 
-QUERY_TYPES = (
-    exp.Subqueryable,
-    d.JinjaQuery,
-    d.MacroFunc,
-)
-
-
 def create_sql_model(
     name: str,
     query: exp.Expression,
@@ -1522,10 +1515,12 @@ def create_sql_model(
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
     """
-    if not isinstance(query, QUERY_TYPES):
+    if not isinstance(query, (exp.Subqueryable, d.JinjaQuery, d.MacroFunc)):
+        # Users are not expected to pass in a single MacroFunc instance for a model's query;
+        # this is an implementation detail which allows us to create python models that return
+        # SQL, either in the form of SQLGlot expressions or just plain strings.
         raise_config_error(
-            "A query is required and must be a SELECT statement, a UNION statement, a JINJA_QUERY block,"
-            " or a single macro function invocation that expands into a SELECT or a UNION statement.",
+            "A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block",
             path,
         )
 

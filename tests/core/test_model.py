@@ -13,7 +13,7 @@ from sqlmesh.core.config import Config
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.macros import macro
+from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
@@ -1213,6 +1213,63 @@ def test_python_model_deps() -> None:
         module_path=Path("."),
         path=Path("."),
     ).depends_on == {"foo", "bar.baz"}
+
+
+def test_sqlglot_builder_models(assert_exp_eq) -> None:
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
+    context = Context(config=config)
+
+    @model(
+        name="model1",
+        is_sql=True,
+        description="A dummy model.",
+        kind="full",
+        dialect="snowflake",
+    )
+    def model1_entrypoint(evaluator: MacroEvaluator) -> exp.Select:
+        return exp.select("x", "y").from_(exp.values([("1", 2), ("2", 3)], "_v", ["x", "y"]))
+
+    @model(name="model2", is_sql=True, kind="full", dialect="snowflake")
+    def model2_entrypoint(evaluator: MacroEvaluator) -> exp.Select:
+        return exp.select("*").from_("model1")
+
+    model1 = model.get_registry()["model1"].model(module_path=Path("."), path=Path("."))
+    model2 = model.get_registry()["model2"].model(module_path=Path("."), path=Path("."))
+
+    context.upsert_model(model1)
+    context.upsert_model(model2)
+
+    assert isinstance(model1, SqlModel)
+    assert isinstance(model1.query, d.MacroFunc)
+    assert model1.description == "A dummy model."
+    assert model1.depends_on == set()
+    assert_exp_eq(
+        context.render("model1"),
+        """
+        SELECT
+          "_V"."X" AS "X",
+          "_V"."Y" AS "Y"
+        FROM (VALUES ('1', 2), ('2', 3)) AS "_V"("X", "Y")
+        """,
+    )
+
+    assert isinstance(model2, SqlModel)
+    assert isinstance(model2.query, d.MacroFunc)
+    assert model2.depends_on == {"MODEL1"}
+    assert_exp_eq(
+        context.render("model2"),
+        """
+        SELECT
+          "MODEL1"."X" AS "X",
+          "MODEL1"."Y" AS "Y"
+        FROM (
+          SELECT
+            "_V"."X" AS "X",
+            "_V"."Y" AS "Y"
+          FROM (VALUES ('1', 2), ('2', 3)) AS "_V"("X", "Y")
+        ) AS "MODEL1"
+        """,
+    )
 
 
 def test_star_expansion(assert_exp_eq) -> None:
