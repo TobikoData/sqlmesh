@@ -255,7 +255,7 @@ function Plan({
       },
     ])
 
-    enqueueAction(EnumAction.PlanApply)
+    enqueueAction({ action: EnumAction.PlanApply })
 
     planApply()
       .then(({ data }) => {
@@ -281,34 +281,41 @@ function Plan({
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
-    enqueueAction(EnumAction.Plan, async () => {
-      const { data } = await planRun()
+    enqueueAction({
+      action: EnumAction.Plan,
+      callback: planRun,
+      onCallbackSuccess({ data }: { data: any }) {
+        dispatch([
+          {
+            type: EnumPlanActions.Backfills,
+            backfills: data?.backfills,
+          },
+          {
+            type: EnumPlanActions.Changes,
+            ...data?.changes,
+          },
+          {
+            type: EnumPlanActions.Dates,
+            start: data?.start,
+            end: data?.end,
+          },
+        ])
 
-      dispatch([
-        {
-          type: EnumPlanActions.Backfills,
-          backfills: data?.backfills,
-        },
-        {
-          type: EnumPlanActions.Changes,
-          ...data?.changes,
-        },
-        {
-          type: EnumPlanActions.Dates,
-          start: data?.start,
-          end: data?.end,
-        },
-      ])
-
-      setIsPlanRan(true)
-      setPlanState(EnumPlanState.Init)
-
-      if (auto_apply) {
-        apply()
-      } else {
-        setPlanAction(EnumPlanAction.Apply)
-      }
+        setIsPlanRan(true)
+        setPlanState(EnumPlanState.Init)
+      },
+      cancel: cancelRequestPlanRun,
     })
+
+    if (auto_apply) {
+      enqueueAction({
+        action: EnumAction.PlanApply,
+        callback: apply,
+        cancel: cancelRequestPlanApply,
+      })
+    } else {
+      setPlanAction(EnumPlanAction.Apply)
+    }
   }
 
   const shouldSplitPane = isObjectNotEmpty(testsReportErrors)

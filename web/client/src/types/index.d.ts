@@ -7,7 +7,6 @@ type KeyOf<T> = T[keyof T]
 type Nil = undefined | null
 type Optional<T> = T | undefined
 type Maybe<T> = T | Nil
-type Callback = () => void
-type Primitive = string | number | boolean
-type Cancelable<T> = T & { cancel?: Callback }
+type Callback<T = any> = (payload?: T) => void
 type AsyncCallback = () => Promise<void>
+type Primitive = string | number | boolean

@@ -53,6 +53,7 @@ export default function RunPlan(): JSX.Element {
 
   const enqueueAction = useStoreActionManager(s => s.enqueueAction)
   const shouldLock = useStoreActionManager(s => s.shouldLock)
+  const currentAction = useStoreActionManager(s => s.currentAction)
 
   const [hasChanges, setHasChanges] = useState(false)
   const [plan, setPlan] = useState<ContextEnvironment | undefined>()
@@ -63,6 +64,7 @@ export default function RunPlan(): JSX.Element {
     refetch: planRun,
     data: dataPlan,
     isFetching,
+    cancel: cancelRequestPlan,
   } = useApiPlanRun(environment.name, {
     planOptions: { skip_tests: true, include_unmodified: true },
   })
@@ -75,7 +77,11 @@ export default function RunPlan(): JSX.Element {
 
     if (isFalse(environment.isSynchronized)) return
 
-    enqueueAction(EnumAction.Plan, planRun)
+    enqueueAction({
+      action: EnumAction.Plan,
+      callback: planRun,
+      cancel: cancelRequestPlan,
+    })
   }, [environment])
 
   useEffect(() => {
@@ -116,7 +122,8 @@ export default function RunPlan(): JSX.Element {
     planState === EnumPlanState.Applying ||
     planState === EnumPlanState.Running ||
     planState === EnumPlanState.Cancelling ||
-    shouldLock(EnumAction.Plan)
+    shouldLock(EnumAction.Plan) ||
+    currentAction === EnumAction.Plan
 
   return (
     <div

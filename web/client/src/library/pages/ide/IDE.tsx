@@ -94,6 +94,8 @@ export default function PageIDE(): JSX.Element {
 
   const enqueueAction = useStoreActionManager(s => s.enqueueAction)
   const resetCurrentAction = useStoreActionManager(s => s.resetCurrentAction)
+  const cancelCurrentAction = useStoreActionManager(s => s.cancelCurrentAction)
+
   const currentAction = useStoreActionManager(s => s.currentAction)
 
   // We need to fetch from IDE level to make sure
@@ -244,7 +246,11 @@ export default function PageIDE(): JSX.Element {
 
     // This use case is happening when user refreshes the page
     // while plan is still applying
-    enqueueAction(EnumAction.Plan, planRun)
+    enqueueAction({
+      action: EnumAction.Plan,
+      callback: planRun,
+      cancel: cancelRequestPlan,
+    })
   }, [dataEnvironments])
 
   useEffect(() => {
@@ -253,7 +259,11 @@ export default function PageIDE(): JSX.Element {
     }
 
     if (hasSynchronizedEnvironments()) {
-      enqueueAction(EnumAction.Plan, planRun)
+      enqueueAction({
+        action: EnumAction.Plan,
+        callback: planRun,
+        cancel: cancelRequestPlan,
+      })
     }
   }, [models])
 
@@ -294,7 +304,9 @@ export default function PageIDE(): JSX.Element {
       resetCurrentAction()
     } else {
       setState(EnumPlanState.Applying)
-      enqueueAction(EnumAction.PlanApply)
+      enqueueAction({
+        action: EnumAction.PlanApply,
+      })
     }
   }
 
@@ -369,7 +381,7 @@ export default function PageIDE(): JSX.Element {
               className="cursor-pointer ml-2 text-neutral-600 hidden group-hover:inline"
               onClick={(e: React.MouseEvent) => {
                 e.stopPropagation()
-                resetCurrentAction()
+                cancelCurrentAction()
               }}
             >
               Cancel

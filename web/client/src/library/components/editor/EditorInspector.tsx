@@ -11,7 +11,7 @@ import {
 } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { isFalse, toDate, toDateFormat } from '~/utils'
+import { isFalse, isNotNil, toDate, toDateFormat } from '~/utils'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
@@ -310,6 +310,7 @@ function FormActionsModel({
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
   const shouldLock = useStoreActionManager(s => s.shouldLock)
+  const currentAction = useStoreActionManager(s => s.currentAction)
 
   const [form, setForm] = useState<FormModel>({
     start: toDateFormat(toDate(Date.now() - DAY)),
@@ -325,10 +326,12 @@ function FormActionsModel({
     Object.assign(form, { model: model.name }),
   )
 
+  const isValidForm = Object.values(form).every(Boolean)
   const shouldEvaluate =
     tab.file.isSQLMeshModel &&
-    Object.values(form).every(Boolean) &&
-    isFalse(shouldLock(EnumAction.ModelEvaluate))
+    isValidForm &&
+    isFalse(shouldLock(EnumAction.ModelEvaluate)) &&
+    currentAction !== EnumAction.ModelEvaluate
 
   function evaluateModel(): void {
     setPreviewQuery(undefined)
@@ -347,7 +350,7 @@ function FormActionsModel({
     <>
       <InspectorForm>
         <form className="w-full">
-          {isFalse(shouldEvaluate) && (
+          {isFalse(isValidForm) && (
             <FormFieldset>
               <Banner variant={EnumVariant.Warning}>
                 <Banner.Description className="w-full mr-2 text-sm">

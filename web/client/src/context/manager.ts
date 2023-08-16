@@ -22,17 +22,31 @@ export const EnumAction = {
 export { useStoreActionManager }
 
 export type Action = KeyOf<typeof EnumAction>
+interface ActionHandel {
+  action: Action
+  callback?: AsyncCallback | Callback
+  cancel?: AsyncCallback | Callback
+  onCallbackSuccess?: Callback
+  onCallbackError?: Callback
+  onCallbackFinally?: Callback
+  onCancelSuccess?: Callback
+  onCancelError?: Callback
+  onCancelFinally?: Callback
+}
 
 interface ActionManager {
   currentAction: Action
-  currentCallback?: Cancelable<AsyncCallback>
-  queue: Array<[Action, Optional<() => Promise<any>>]>
+  currentCallback?: AsyncCallback | Callback
+  currentCancel?: Callback
+  queue: ActionHandel[]
   resetCurrentAction: () => void
+  cancelCurrentAction: () => void
   isRunningAction: (action?: Action) => boolean
+  isRunningActionCancel: (action?: Action) => boolean
   isWaitingAction: (action?: Action) => boolean
   isActiveAction: (action?: Action) => boolean
-  enqueueAction: (action: Action, callback?: () => Promise<any>) => void
-  dequeueAction: () => Promise<void>
+  enqueueAction: (payload: ActionHandel) => void
+  dequeueAction: () => void
   shouldLock: (action: Action) => boolean
 }
 
@@ -64,64 +78,86 @@ const useStoreActionManager = create(
         resetCurrentAction() {
           const s = get()
 
-          if (isNotNil(s.currentCallback)) {
-            s.currentCallback.cancel?.()
-          }
-
           set({
             currentAction: EnumAction.None,
             currentCallback: undefined,
+            currentCancel: undefined,
             queue: s.queue.slice(),
           })
 
           void s.dequeueAction()
         },
-        isRunningAction(action?: Action) {
+        cancelCurrentAction() {
+          const s = get()
+
+          if (isNotNil(s.currentCancel)) {
+            s.currentCancel()
+          }
+
+          set({
+            currentAction: EnumAction.None,
+            currentCallback: undefined,
+            currentCancel: undefined,
+            queue: s.queue.slice(),
+          })
+
+          void s.dequeueAction()
+        },
+        isRunningAction(action) {
           const s = get()
 
           return isNil(action)
             ? isNotNil(s.currentCallback)
             : isNotNil(s.currentCallback) && s.currentAction === action
         },
-        isWaitingAction(action?: Action) {
+        isRunningActionCancel(action) {
+          const s = get()
+
+          return isNil(action)
+            ? isNotNil(s.currentCancel)
+            : isNotNil(s.currentCancel) && s.currentAction === action
+        },
+        isWaitingAction(action) {
           const s = get()
 
           return isNil(action)
             ? isNil(s.currentCallback) && s.currentAction !== EnumAction.None
             : isNil(s.currentCallback) && s.currentAction === action
         },
-        isActiveAction(action?: Action): boolean {
+        isActiveAction(action): boolean {
           const s = get()
 
           return isNil(action)
             ? s.currentAction !== EnumAction.None
             : s.currentAction === action
         },
-        shouldLock(action: Action) {
+        shouldLock(action) {
           const s = get()
 
           return lock[s.currentAction]?.includes(action) ?? false
         },
-        enqueueAction(action, callback) {
+        enqueueAction(payload) {
           const s = get()
 
-          console.log('enqueueAction', action, s.queue)
+          if (payload.action === s.currentAction && isNil(payload.callback))
+            return
 
-          if (action === s.currentAction && isNil(callback)) return
+          const queue = s.queue.filter(({ action: a }) => a !== payload.action)
 
-          const queue = s.queue.filter(([a]) => a !== action)
-
-          queue.push([action, callback])
+          queue.push(payload)
 
           set({ queue })
 
-          if (action === s.currentAction && isNotNil(callback)) {
+          if (
+            payload.action === s.currentAction &&
+            isNotNil(payload.callback)
+          ) {
             s.resetCurrentAction()
           } else {
             void s.dequeueAction()
           }
         },
-        async dequeueAction() {
+        dequeueAction() {
           const s = get()
 
           if (
@@ -131,29 +167,55 @@ const useStoreActionManager = create(
           )
             return
 
-          const [currentAction, callback] = s.queue.shift() ?? []
+          const payload = s.queue.shift()
 
-          if (isNil(currentAction)) {
+          if (
+            isNil(payload) ||
+            isNil(payload.action) ||
+            (isNil(payload.callback) && payload.action === EnumAction.None)
+          ) {
             s.resetCurrentAction()
           } else {
-            if (isNil(callback) && currentAction === EnumAction.None) {
-              s.resetCurrentAction()
-            } else {
-              set({
-                currentAction, // currentAction should not be None
-                currentCallback: callback,
-              })
-
-              if (isNil(callback)) return
+            const currentAction = payload.action
+            const currentCallback = (): void => {
+              if (isNil(payload.callback)) return
 
               try {
-                await callback()
-              } catch (error) {
-                console.log(error)
-              }
+                ;(payload.callback as AsyncCallback)()
+                  .then(payload.onCallbackSuccess)
+                  .catch(payload.onCallbackError)
+                  .finally(() => {
+                    payload.onCallbackFinally?.()
 
-              s.resetCurrentAction()
+                    s.resetCurrentAction()
+                  })
+              } catch {
+                ;(payload.callback as Callback)()
+
+                s.resetCurrentAction()
+              }
             }
+
+            const currentCancel = (): void => {
+              if (isNil(payload.cancel)) return
+
+              try {
+                ;(payload.cancel as AsyncCallback)()
+                  .then(payload.onCancelSuccess)
+                  .catch(payload.onCancelError)
+                  .finally(payload.onCancelFinally)
+              } catch {
+                ;(payload.cancel as Callback)()
+              }
+            }
+
+            set({
+              currentAction,
+              currentCallback,
+              currentCancel,
+            })
+
+            currentCallback()
           }
         },
       }),
