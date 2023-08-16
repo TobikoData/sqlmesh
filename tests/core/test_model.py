@@ -1230,8 +1230,8 @@ def test_sqlglot_builder_models(assert_exp_eq) -> None:
         return exp.select("x", "y").from_(exp.values([("1", 2), ("2", 3)], "_v", ["x", "y"]))
 
     @model(name="model2", is_sql=True, kind="full", dialect="snowflake")
-    def model2_entrypoint(evaluator: MacroEvaluator) -> exp.Select:
-        return exp.select("*").from_("model1")
+    def model2_entrypoint(evaluator: MacroEvaluator) -> str:
+        return "select * from model1"
 
     model1 = model.get_registry()["model1"].model(module_path=Path("."), path=Path("."))
     model2 = model.get_registry()["model2"].model(module_path=Path("."), path=Path("."))
