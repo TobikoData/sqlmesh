@@ -1,4 +1,4 @@
-import { debounceAsync, isNil, isNotNil } from '@utils/index'
+import { isNil, isNotNil } from '@utils/index'
 import { create } from 'zustand'
 import { persist, subscribeWithSelector } from 'zustand/middleware'
 
@@ -132,22 +132,18 @@ const useStoreActionManager = create(
           if (isNil(currentAction)) {
             s.resetCurrentAction()
           } else {
-            const currentCallback = isNotNil(callback)
-              ? debounceAsync(callback, 1000)
-              : undefined
-
-            if (isNil(currentCallback) && currentAction === EnumAction.None) {
+            if (isNil(callback) && currentAction === EnumAction.None) {
               s.resetCurrentAction()
             } else {
               set({
                 currentAction, // currentAction should not be None
-                currentCallback,
+                currentCallback: callback,
               })
 
-              if (isNil(currentCallback)) return
+              if (isNil(callback)) return
 
               try {
-                await currentCallback()
+                await callback()
               } catch (error) {
                 console.log(error)
               }

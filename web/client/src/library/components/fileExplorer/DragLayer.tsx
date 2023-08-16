@@ -28,15 +28,15 @@ export default function DragLayer(): JSX.Element {
 
     return artifact instanceof ModelArtifact
       ? {
-        artifact: monitor.getItem(),
-        isDragging: monitor.isDragging(),
-        currentOffset: monitor.getSourceClientOffset(),
-      }
+          artifact: monitor.getItem(),
+          isDragging: monitor.isDragging(),
+          currentOffset: monitor.getSourceClientOffset(),
+        }
       : {
-        artifact: undefined,
-        currentOffset: undefined,
-        isDragging: false,
-      }
+          artifact: undefined,
+          currentOffset: undefined,
+          isDragging: false,
+        }
   })
   const artifacts = useMemo(
     () =>

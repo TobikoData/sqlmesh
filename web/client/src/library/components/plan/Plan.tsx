@@ -78,10 +78,6 @@ function Plan({
     useApiPlanApply(environment.name, applyPayload)
   const { refetch: cancelPlan } = useApiCancelPlan()
 
-  const debouncedPlanApply = useCallback(debounceAsync(planApply, 1000, true), [
-    planApply,
-  ])
-
   useEffect(() => {
     const unsubscribeTests = subscribe('tests', testsReport)
 
@@ -174,13 +170,13 @@ function Plan({
     dispatch([
       isTrue(data.ok)
         ? {
-          type: EnumPlanActions.TestsReportMessages,
-          testsReportMessages: data,
-        }
+            type: EnumPlanActions.TestsReportMessages,
+            testsReportMessages: data,
+          }
         : {
-          type: EnumPlanActions.TestsReportErrors,
-          testsReportErrors: data,
-        },
+            type: EnumPlanActions.TestsReportErrors,
+            testsReportErrors: data,
+          },
     ])
   }
 
@@ -284,7 +280,6 @@ function Plan({
     ])
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
-
 
     enqueueAction(EnumAction.Plan, async () => {
       const { data } = await planRun()
