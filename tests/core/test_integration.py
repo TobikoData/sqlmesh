@@ -677,21 +677,20 @@ def test_incremental_time_self_reference(
             SnapshotIntervals(
                 snapshot_name="sushi.customer_revenue_lifetime",
                 intervals=[
-                    (
-                        to_timestamp(to_date(f"{x + 1} days ago")),
-                        to_timestamp(to_date(f"{x} days ago")),
-                    )
-                    for x in reversed(range(7))
+                    (to_timestamp(to_date("1 week ago")), to_timestamp(to_date("6 days ago"))),
+                    (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
+                    (to_timestamp(to_date("5 days ago")), to_timestamp(to_date("4 days ago"))),
+                    (to_timestamp(to_date("4 days ago")), to_timestamp(to_date("3 days ago"))),
+                    (to_timestamp(to_date("3 days ago")), to_timestamp(to_date("2 days ago"))),
+                    (to_timestamp(to_date("2 days ago")), to_timestamp(to_date("1 days ago"))),
+                    (to_timestamp(to_date("1 day ago")), to_timestamp(to_date("today"))),
                 ],
             ),
             SnapshotIntervals(
                 snapshot_name="sushi.customer_revenue_by_day",
                 intervals=[
-                    (
-                        to_timestamp(to_date(f"{x + 1} days ago")),
-                        to_timestamp(to_date(f"{x} days ago")),
-                    )
-                    for x in reversed(range(5, 7))
+                    (to_timestamp(to_date("1 week ago")), to_timestamp(to_date("6 days ago"))),
+                    (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
                 ],
             ),
         ],

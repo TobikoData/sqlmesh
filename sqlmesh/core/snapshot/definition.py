@@ -1083,17 +1083,20 @@ def missing_intervals(
 
     for snapshot in snapshots:
         interval = restatements.get(snapshot.name)
+        snapshot_start_date = start_dt
+        snapshot_end_date = end_date
         if interval:
+            snapshot_start_date, snapshot_end_date = interval
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
             snapshot.remove_interval(interval, execution_time)
 
         intervals = snapshot.missing_intervals(
             max(
-                start_dt,
-                to_datetime(start_date(snapshot, snapshots, cache) or start_dt),
+                to_datetime(snapshot_start_date),
+                to_datetime(start_date(snapshot, snapshots, cache) or snapshot_start_date),
             ),
-            end_date,
+            snapshot_end_date,
             execution_time=execution_time,
             is_dev=is_dev,
             ignore_cron=ignore_cron,

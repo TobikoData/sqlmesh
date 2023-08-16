@@ -67,7 +67,7 @@ class AirflowClient:
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
             request_id=request_id,
-            restatements=set(restatements or []),
+            restatements=restatements or {},
             notification_targets=notification_targets or [],
             backfill_concurrent_tasks=backfill_concurrent_tasks,
             ddl_concurrent_tasks=ddl_concurrent_tasks,
