@@ -63,6 +63,12 @@ ITEMS = [
         ("not_null", {"columns": [to_column("name"), to_column("price")]}),
         ("assert_items_price_exceeds_threshold", {"price": 0}),
     ],
+    table_properties={
+        "string_prop": "some_value",
+        "int_prop": 1,
+        "float_prop": 1.0,
+        "bool_prop": True,
+    },
 )
 def execute(
     context: ExecutionContext,

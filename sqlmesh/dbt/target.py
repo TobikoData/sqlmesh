@@ -359,9 +359,12 @@ class RedshiftConfig(TargetConfig):
 
     @property
     def column_class(self) -> t.Type[Column]:
-        from dbt.adapters.redshift import RedshiftColumn
+        if DBT_VERSION < (1, 6):
+            from dbt.adapters.redshift import RedshiftColumn  # type: ignore
 
-        return RedshiftColumn
+            return RedshiftColumn
+        else:
+            return super().column_class
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return RedshiftConnectionConfig(

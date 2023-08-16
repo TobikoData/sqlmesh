@@ -71,6 +71,7 @@ class PydanticModel(pydantic.BaseModel):
             json_encoders={
                 exp.Expression: _expression_encoder,
                 exp.DataType: _expression_encoder,
+                exp.Tuple: _expression_encoder,
                 t.Union[exp.Subqueryable, d.JinjaQuery]: _expression_encoder,  # type: ignore
             },
             protected_namespaces=(),

@@ -399,6 +399,12 @@ def test_json_serde():
             cron '@daily',
             storage_format parquet,
             partitioned_by a,
+            table_properties (
+                key_a = 'value_a',
+                'key_b' = 1,
+                key_c = true,
+                "key_d" = 2.0,
+            ),
         );
 
         @DEF(key, 'value');
@@ -1744,7 +1750,14 @@ def test_custom_interval_unit():
         )
 
 
-def test_model_table_properties():
+def test_model_table_properties(sushi_context):
+    # # Validate python model table properties
+    assert sushi_context.models["sushi.items"].table_properties == {
+        "string_prop": exp.Literal.string("some_value"),
+        "int_prop": exp.Literal.number(1),
+        "float_prop": exp.Literal.number(1.0),
+        "bool_prop": exp.true(),
+    }
     # Validate a tuple.
     model = load_sql_based_model(
         d.parse(
@@ -1768,98 +1781,100 @@ def test_model_table_properties():
         "key_c": exp.convert(True),
         "key_d": exp.convert(2.0),
     }
-    assert (
-        "table_properties ('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"
-        in model.render_definition()[0].sql()
+    assert model.table_properties_ == d.parse_one(
+        """(key_a = 'value_a', 'key_b' = 1, key_c = TRUE, "key_d" = 2.0)"""
     )
 
     # Validate a tuple with one item.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
+    model = load_sql_based_model(
+        d.parse(
+            """
             MODEL (
                 name test_schema.test_model,
                 table_properties (key_a = 'value_a')
             );
             SELECT a FROM tbl;
             """
-            )
-        ).table_properties
-        == {"key_a": exp.convert("value_a")}
+        )
+    )
+    assert model.table_properties == {"key_a": exp.convert("value_a")}
+    assert (
+        model.table_properties_.sql()
+        == exp.Tuple(expressions=[d.parse_one("key_a = 'value_a'")]).sql()
     )
 
     # Validate an array.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
-            MODEL (
-                name test_schema.test_model,
-                table_properties [
-                    key_a = 'value_a',
-                    'key_b' = 1,
-                ]
-            );
-            SELECT a FROM tbl;
+    model = load_sql_based_model(
+        d.parse(
             """
-            )
-        ).table_properties
-        == {
-            "key_a": exp.convert("value_a"),
-            "key_b": exp.convert(1),
-        }
+        MODEL (
+            name test_schema.test_model,
+            table_properties [
+                key_a = 'value_a',
+                'key_b' = 1,
+            ]
+        );
+        SELECT a FROM tbl;
+        """
+        )
     )
+    assert model.table_properties == {
+        "key_a": exp.convert("value_a"),
+        "key_b": exp.convert(1),
+    }
+    assert model.table_properties_ == d.parse_one("""(key_a = 'value_a', 'key_b' = 1)""")
 
     # Validate empty.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
-            MODEL (
-                name test_schema.test_model
-            );
-            SELECT a FROM tbl;
+    model = load_sql_based_model(
+        d.parse(
             """
-            )
-        ).table_properties
-        == {}
+        MODEL (
+            name test_schema.test_model
+        );
+        SELECT a FROM tbl;
+        """
+        )
     )
+    assert model.table_properties == {}
+    assert model.table_properties_ is None
 
     # Validate sql expression.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
-            MODEL (
-                name test_schema.test_model,
-                table_properties [
-                    key = ['value']
-                ]
-            );
-            SELECT a FROM tbl;
+    model = load_sql_based_model(
+        d.parse(
             """
-            )
-        ).table_properties
-        == {"key": d.parse_one("['value']")}
+        MODEL (
+            name test_schema.test_model,
+            table_properties [
+                key = ['value']
+            ]
+        );
+        SELECT a FROM tbl;
+        """
+        )
     )
+    assert model.table_properties == {"key": d.parse_one("['value']")}
+    assert model.table_properties_ == exp.Tuple(expressions=[d.parse_one("key = ['value']")])
 
     # Validate dict parsing.
-    assert create_sql_model(
+    model = create_sql_model(
         name="test_schema.test_model",
         query=d.parse_one("SELECT a FROM tbl"),
         table_properties={
-            "key_a": "value_a",
-            "key_b": 1,
-            "key_c": True,
-            "key_d": 2.0,
+            "key_a": exp.Literal.string("value_a"),
+            "key_b": exp.Literal.number(1),
+            "key_c": exp.true(),
+            "key_d": exp.Literal.number(2.0),
         },
-    ).table_properties == {
+    )
+    assert model.table_properties == {
         "key_a": exp.convert("value_a"),
         "key_b": exp.convert(1),
         "key_c": exp.convert(True),
         "key_d": exp.convert(2.0),
     }
+    assert model.table_properties_ == d.parse_one(
+        """('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"""
+    )
 
     with pytest.raises(ConfigError, match=r"Invalid table property 'invalid'.*"):
         load_sql_based_model(

@@ -19,7 +19,7 @@ from sqlmesh.core.model.kind import (
 from sqlmesh.core.node import Node, str_or_exp_to_str
 from sqlmesh.core.reference import Reference
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.pydantic import (
     field_validator,
     field_validator_v1_args,
@@ -49,9 +49,8 @@ class ModelMeta(Node, extra="allow"):
     references: t.List[exp.Expression] = []
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
-    table_properties_: t.Optional[t.Dict[str, exp.Expression]] = Field(
-        default=None, alias="table_properties"
-    )
+    table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
+    _table_properties: t.Dict[str, exp.Expression] = {}
 
     _model_kind_validator = model_kind_validator
 
@@ -196,42 +195,35 @@ class ModelMeta(Node, extra="allow"):
 
     @field_validator("table_properties_", mode="before")
     @field_validator_v1_args
-    def _properties_validator(
-        cls, v: t.Any, values: t.Dict[str, t.Any]
-    ) -> t.Optional[t.Dict[str, exp.Expression]]:
+    def _properties_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[exp.Tuple]:
         if v is None:
             return v
-
         dialect = values.get("dialect")
-
-        table_properties = {}
-        if isinstance(v, exp.Expression):
-            if isinstance(v, (exp.Tuple, exp.Array)):
-                eq_expressions: t.List[exp.Expression] = v.expressions
-            elif isinstance(v, exp.Paren):
-                eq_expressions = [v.unnest()]
-            else:
-                eq_expressions = [v]
-
+        if isinstance(v, str):
+            v = d.parse_one(v, dialect=dialect)
+        if isinstance(v, (exp.Array, exp.Paren, exp.Tuple)):
+            eq_expressions: t.List[exp.Expression] = (
+                [v.unnest()] if isinstance(v, exp.Paren) else v.expressions
+            )
             for eq_expr in eq_expressions:
                 if not isinstance(eq_expr, exp.EQ):
                     raise ConfigError(
                         f"Invalid table property '{eq_expr.sql(dialect=dialect)}'. "
                         "Table properties must be specified as key-value pairs <key> = <value>. "
                     )
-
-                value_expr = eq_expr.expression.copy()
-                value_expr.meta["dialect"] = dialect
-                table_properties[eq_expr.this.name] = value_expr
+            properties = (
+                exp.Tuple(expressions=eq_expressions)
+                if isinstance(v, (exp.Paren, exp.Array))
+                else v
+            )
         elif isinstance(v, dict):
-            for key, value in v.items():
-                value_expr = exp.convert(value, copy=True)
-                value_expr.meta["dialect"] = dialect
-                table_properties[key] = value_expr
+            properties = exp.Tuple(
+                expressions=[exp.Literal.string(key).eq(value) for key, value in v.items()]
+            )
         else:
-            raise ConfigError(f"Unexpected table properties '{v}'")
-
-        return table_properties
+            raise SQLMeshError(f"Unexpected table properties '{v}'")
+        properties.meta["dialect"] = dialect
+        return properties
 
     @field_validator("depends_on_", mode="before")
     @field_validator_v1_args
@@ -361,7 +353,10 @@ class ModelMeta(Node, extra="allow"):
     @property
     def table_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of table properties."""
-        return self.table_properties_ or {}
+        if not self._table_properties and self.table_properties_:
+            for expression in self.table_properties_.expressions:
+                self._table_properties[expression.this.name] = expression.expression
+        return self._table_properties
 
     @property
     def all_references(self) -> t.List[Reference]:

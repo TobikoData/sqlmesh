@@ -290,12 +290,30 @@ class TableDiff:
                 ]
                 for cols in comparison_cols:
                     joined_sample_cols.extend(cols)
+                joined_renamed_cols = {
+                    c: c.split("__")[1] if c.split("__")[1] in index_cols else c
+                    for c in joined_sample_cols
+                }
+                if self.source != self.source_alias and self.target != self.target_alias:
+                    joined_renamed_cols = {
+                        c: n.replace(
+                            "s__", f"{self.source_alias.upper() if self.source_alias else ''}__"
+                        )
+                        if n.startswith("s__")
+                        else n
+                        for c, n in joined_renamed_cols.items()
+                    }
+                    joined_renamed_cols = {
+                        c: n.replace(
+                            "t__", f"{self.target_alias.upper() if self.target_alias else ''}__"
+                        )
+                        if n.startswith("t__")
+                        else n
+                        for c, n in joined_renamed_cols.items()
+                    }
                 joined_sample = sample[sample["rows_joined"] == 1][joined_sample_cols]
                 joined_sample.rename(
-                    columns={
-                        c: c.split("__")[1] if c.split("__")[1] in index_cols else c
-                        for c in joined_sample_cols
-                    },
+                    columns=joined_renamed_cols,
                     inplace=True,
                 )
 
@@ -305,6 +323,9 @@ class TableDiff:
                         *[f"s__{c}" for c in self.source_schema if not c in index_cols],
                     ]
                 ]
+                s_sample.rename(
+                    columns={c: c.replace("s__", "") for c in s_sample.columns}, inplace=True
+                )
 
                 t_sample = sample[(sample["t_exists"] == 1) & (sample["rows_joined"] == 0)][
                     [
@@ -312,6 +333,9 @@ class TableDiff:
                         *[f"t__{c}" for c in self.target_schema if not c in index_cols],
                     ]
                 ]
+                t_sample.rename(
+                    columns={c: c.replace("t__", "") for c in t_sample.columns}, inplace=True
+                )
 
                 sample.drop(columns=sample_filter_cols, inplace=True)
 
