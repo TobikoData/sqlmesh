@@ -52,6 +52,7 @@ MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 class InsertOverwriteStrategy(Enum):
     DELETE_INSERT = 1
     INSERT_OVERWRITE = 2
+    # Note: Replace where on Databricks requires that `spark.sql.sources.partitionOverwriteMode` be set to `static`
     REPLACE_WHERE = 3
 
     @property
