@@ -276,6 +276,14 @@ def build_env(
                 build_env(v, env=env, name=k, path=path)
 
     if name not in env:
+        registry_name = getattr(obj, "registry_name", None)
+        if registry_name:
+            from sqlmesh.core.macros import macro
+
+            if registry_name == macro.registry_name:
+                # We only need to add the undecorated code of @macro() functions in env
+                obj = obj.__wrapped__
+
         env[name] = obj
         if obj_module and _is_relative_to(obj_module.__file__, path):
             walk(obj)

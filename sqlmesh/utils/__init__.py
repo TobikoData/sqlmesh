@@ -112,6 +112,9 @@ class registry_decorator:
         def wrapper(*args: t.Any, **kwargs: t.Any) -> DECORATOR_RETURN_TYPE:
             return func(*args, **kwargs)
 
+        # Additional metadata that can be useful for metaprogramming purposes
+        setattr(wrapper, "registry_name", self.registry_name)
+
         return wrapper
 
     @classmethod
