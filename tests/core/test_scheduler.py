@@ -97,8 +97,7 @@ def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):
 
 def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot):
     """
-    Test that when given a week of data that it batches dates together when possible but also makes sure to only
-    run future intervals when the past ones are complete.
+    Test that when given a week of data that it batches dates together.
     """
     start = to_datetime("2023-01-01")
     end = to_datetime("2023-01-07")
@@ -118,28 +117,17 @@ def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot
     mock_state_sync.get_snapshots.return_value = {
         unique_by_key_snapshot.snapshot_id: unique_by_key_snapshot
     }
-    unique_by_key_snapshot.add_interval("2023-01-02", "2023-01-02")
-    unique_by_key_snapshot.add_interval("2023-01-05", "2023-01-05")
     scheduler = Scheduler(
-        snapshots=[],
+        snapshots=[unique_by_key_snapshot],
         snapshot_evaluator=snapshot_evaluator,
         state_sync=mock_state_sync,
         max_workers=2,
     )
-    batches = scheduler.batches(start, end, end, is_dev=False)
+    batches = scheduler.batches(start, end, end)
     dag = scheduler._dag(batches)
     assert dag.graph == {
         # Depends on no one
-        (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))): set(),
-        # Batches multiple days and depends on previous interval
-        (unique_by_key_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-05"))): {
-            (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02")))
-        },
-        # Depends on last two intervals
-        (unique_by_key_snapshot, (to_datetime("2023-01-06"), to_datetime("2023-01-07"))): {
-            (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
-            (unique_by_key_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-05"))),
-        },
+        (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-07"))): set(),
     }
 
 

@@ -3,6 +3,7 @@ from collections import Counter
 
 import pytest
 from pytest_mock.plugin import MockerFixture
+from sqlglot import exp
 from sqlglot.expressions import DataType
 
 from sqlmesh.core import constants as c
@@ -382,7 +383,6 @@ def test_no_override(sushi_context: Context) -> None:
         DataType.Type.BIGINT,
     )
     plan = sushi_context.plan("prod")
-    plan.set_start(start(sushi_context))
 
     items = plan.context_diff.snapshots["sushi.items"]
     order_items = plan.context_diff.snapshots["sushi.order_items"]
@@ -452,7 +452,6 @@ def setup_rebase(
         DataType.Type.FLOAT,
     )
     plan = context.plan("prod")
-    plan.set_start(start(context))
 
     plan_choice(plan, remote_choice)
     remote_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
@@ -774,6 +773,29 @@ def test_environment_suffix_target_table(mocker: MockerFixture):
     } == set()
 
 
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_ignored_snapshots(sushi_context: Context):
+    environment = "dev"
+    apply_to_environment(sushi_context, environment)
+    # Make breaking change to model upstream of a depends_on_past model
+    sushi_context.upsert_model("sushi.order_items", stamp="1")
+    # Apply the change starting at a date later then the beginning of the downstream depends_on_past model
+    plan = apply_to_environment(
+        sushi_context, environment, choice=SnapshotChangeCategory.BREAKING, plan_start="2 days ago"
+    )
+    # Validate that the depends_on_past model is ignored
+    assert plan.ignored_snapshot_names == {"sushi.customer_revenue_lifetime"}
+    # Validate that the table was really ignored
+    metadata = DuckDBMetadata.from_context(sushi_context)
+    # Make sure prod view exists
+    assert exp.to_table("sushi.customer_revenue_lifetime") in metadata.qualified_views
+    # Make sure dev view doesn't exist since it was ignored
+    assert exp.to_table("sushi__dev.customer_revenue_lifetime") not in metadata.qualified_views
+    # Make sure that dev view for order items was created
+    assert exp.to_table("sushi__dev.order_items") in metadata.qualified_views
+
+
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
@@ -790,6 +812,7 @@ def apply_to_environment(
     choice: t.Optional[SnapshotChangeCategory] = None,
     plan_validators: t.Optional[t.Iterable[t.Callable]] = None,
     apply_validators: t.Optional[t.Iterable[t.Callable]] = None,
+    plan_start: t.Optional[TimeLike] = None,
 ):
     plan_validators = plan_validators or []
     apply_validators = apply_validators or []
@@ -800,7 +823,8 @@ def apply_to_environment(
         no_prompts=True,
         include_unmodified=True,
     )
-    plan.set_start(start(context))
+    if environment != c.PROD:
+        plan.set_start(plan_start or start(context))
 
     if choice:
         plan_choice(plan, choice)
@@ -811,6 +835,7 @@ def apply_to_environment(
     validate_apply_basics(context, environment, plan.snapshots)
     for validator in apply_validators:
         validator(context)
+    return plan
 
 
 def change_data_type(

@@ -694,7 +694,7 @@ class Plan:
         snapshots = self.context_diff.snapshots.values()
         cache: t.Optional[t.Dict[str, datetime]] = {}
         for snapshot_name in full_dag:
-            snapshot = self.context_diff.snapshots.get(snapshot_name)
+            snapshot = self._get_snapshot(snapshot_name)
             # If the snapshot doesn't exist then it must be an external model
             if not snapshot:
                 continue

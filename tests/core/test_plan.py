@@ -442,11 +442,11 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
 
 
 def test_effective_from(make_snapshot, mocker: MockerFixture):
-    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM a")))
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM b")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.add_interval("2023-01-01", "2023-03-01")
 
-    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds FROM a")))
+    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds FROM b")))
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
