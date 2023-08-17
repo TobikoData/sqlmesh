@@ -56,14 +56,14 @@ df = context.fetchdf(f"SELECT * FROM {table}")
 
 The `table` method will automatically add the referenced model to the Python model's dependencies.
 
-The only other way to set dependencies of models in Python models is to define them explicitly in the `@model` decorator using the keyword `dependencies`. The dependencies defined in the model decorator take precedence over any dynamic references inside the function.
+The only other way to set dependencies of models in Python models is to define them explicitly in the `@model` decorator using the keyword `depends_on`. The dependencies defined in the model decorator take precedence over any dynamic references inside the function.
 
 In this example, only `upstream_dependency` will be captured, while `another_dependency` will be ignored:
 
 ```python linenums="1"
 @model(
     "my_model.with_explicit_dependencies",
-    dependencies=["upstream_dependency"], # captured
+    depends_on=["upstream_dependency"], # captured
 )
 def execute(
     context: ExecutionContext,
