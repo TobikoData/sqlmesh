@@ -307,6 +307,7 @@ class SqlMeshLoader(Loader):
                         path=path,
                         module_path=context_path,
                         defaults=config.model_defaults.dict(),
+                        dialect=config.model_defaults.dialect,
                         time_column_format=config.time_column_format,
                         physical_schema_override=config.physical_schema_override,
                     )
