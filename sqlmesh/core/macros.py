@@ -255,7 +255,6 @@ class macro(registry_decorator):
     Registered macros can be referenced in SQL statements to make queries more dynamic/cleaner.
 
     Example:
-        from typing import t
         from sqlglot import exp
         from sqlmesh.core.macros import MacroEvaluator, macro
 
