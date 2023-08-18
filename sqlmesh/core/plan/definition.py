@@ -107,7 +107,6 @@ class Plan:
         self._execution_time = execution_time or now()
         self._apply = apply
         self.__missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
-        self._restatements: t.Dict[str, Interval] = {}
         self._categorized: t.Optional[t.List[Snapshot]] = None
         self._uncategorized: t.Optional[t.List[Snapshot]] = None
 
