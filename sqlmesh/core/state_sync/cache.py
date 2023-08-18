@@ -5,6 +5,7 @@ import typing as t
 
 from sqlmesh.core.model import SeedModel
 from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
+from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync.base import DelegatingStateSync, StateSync
 from sqlmesh.utils.date import TimeLike, now_timestamp
 
@@ -134,12 +135,10 @@ class CachingStateSync(DelegatingStateSync):
 
     def remove_interval(
         self,
-        snapshots: t.Iterable[SnapshotInfoLike],
-        start: TimeLike,
-        end: TimeLike,
-        all_snapshots: t.Optional[t.Iterable[Snapshot]] = None,
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        execution_time: t.Optional[TimeLike] = None,
+        remove_shared_versions: bool = False,
     ) -> None:
-        snapshots = tuple(snapshots)
-        for s in snapshots:
+        for s, _ in snapshot_intervals:
             self.snapshot_cache.pop(s.snapshot_id, None)
-        self.state_sync.remove_interval(snapshots, start, end, all_snapshots)
+        self.state_sync.remove_interval(snapshot_intervals, execution_time, remove_shared_versions)

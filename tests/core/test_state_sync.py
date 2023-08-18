@@ -274,7 +274,10 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
     state_sync.add_interval(snapshot_a, "2020-01-01", "2020-01-10")
     state_sync.add_interval(snapshot_b, "2020-01-11", "2020-01-30")
 
-    state_sync.remove_interval([snapshot_a], "2020-01-15", "2020-01-17")
+    state_sync.remove_interval(
+        [(snapshot_a, snapshot_a.inclusive_exclusive("2020-01-15", "2020-01-17"))],
+        remove_shared_versions=True,
+    )
 
     snapshots = state_sync.get_snapshots([snapshot_a, snapshot_b])
 
@@ -332,9 +335,13 @@ def test_compact_intervals(state_sync: EngineAdapterStateSync, make_snapshot: t.
 
     state_sync.add_interval(snapshot, "2020-01-01", "2020-01-10")
     state_sync.add_interval(snapshot, "2020-01-11", "2020-01-15")
-    state_sync.remove_interval([snapshot], "2020-01-05", "2020-01-12")
+    state_sync.remove_interval(
+        [(snapshot, snapshot.inclusive_exclusive("2020-01-05", "2020-01-12"))]
+    )
     state_sync.add_interval(snapshot, "2020-01-12", "2020-01-16")
-    state_sync.remove_interval([snapshot], "2020-01-14", "2020-01-16")
+    state_sync.remove_interval(
+        [(snapshot, snapshot.inclusive_exclusive("2020-01-14", "2020-01-16"))]
+    )
 
     expected_intervals = [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-05")),
@@ -1128,7 +1135,7 @@ def test_cache(state_sync, make_snapshot, mocker):
         mock.assert_called()
 
     # clear the cache by removing intervals
-    cache.remove_interval([snapshot], "2020-01-01", "2020-01-01")
+    cache.remove_interval([(snapshot, snapshot.inclusive_exclusive("2020-01-01", "2020-01-01"))])
 
     # prime the cache
     assert cache.get_snapshots([snapshot.snapshot_id]) == {snapshot.snapshot_id: snapshot}

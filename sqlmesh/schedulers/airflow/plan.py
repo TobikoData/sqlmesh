@@ -35,26 +35,14 @@ def create_plan_dag_spec(
         unpaused_dt = end
 
     if request.restatements:
-        snapshots_for_restatement = [
-            snapshot
-            for snapshot in all_snapshots.values()
-            if snapshot.name in request.restatements and snapshot.snapshot_id not in new_snapshots
-        ]
-        if request.is_dev:
-            # Remove intervals for target snapshots only when in dev.
-            state_sync.remove_interval(
-                [],
-                start=request.environment.start_at,
-                end=end,
-                all_snapshots=snapshots_for_restatement,
-            )
-        else:
-            # Remove intervals for target snapshots and snapshots that share the same version with target ones.
-            state_sync.remove_interval(
-                snapshots_for_restatement,
-                start=request.environment.start_at,
-                end=end,
-            )
+        state_sync.remove_interval(
+            [
+                (s, request.restatements[s.name])
+                for s in all_snapshots.values()
+                if s.name in request.restatements and s.snapshot_id not in new_snapshots
+            ],
+            remove_shared_versions=not request.is_dev,
+        )
 
     if not request.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(

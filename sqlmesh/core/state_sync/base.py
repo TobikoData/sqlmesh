@@ -17,6 +17,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
+from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.utils import major_minor
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
@@ -247,10 +248,9 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def remove_interval(
         self,
-        snapshots: t.Iterable[SnapshotInfoLike],
-        start: TimeLike,
-        end: TimeLike,
-        all_snapshots: t.Optional[t.Iterable[Snapshot]] = None,
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        execution_time: t.Optional[TimeLike] = None,
+        remove_shared_versions: bool = False,
     ) -> None:
         """Remove an interval from a list of snapshots and sync it to the store.
 
