@@ -458,9 +458,13 @@ class Plan:
                 return False
             return not snapshot.is_symbolic and not snapshot.is_seed
 
+        restatements: t.Dict[str, Interval] = {}
+        if not restate_models:
+            self._restatements = restatements
+            return
+
         dummy_interval = (sys.maxsize, -sys.maxsize)
         snapshot_mapping = self.context_diff.snapshots
-        restatements = {}
         # Add restate snapshots and their downstream snapshots
         for snapshot_name in restate_models:
             if snapshot_name not in snapshot_mapping or not is_restateable_snapshot(
@@ -482,9 +486,11 @@ class Plan:
             interval = snapshot.get_removal_interval(
                 self.start, self.end, self._execution_time, strict=False
             )
-            upstream_snapshots = [s for s in self._dag.upstream(snapshot_name)]
+            # Since we are traversing the graph in topological order and the largest interval range is pushed down
+            # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
+            snapshot_dependencies = snapshot.model.depends_on
             possible_intervals = [
-                restatements.get(s, dummy_interval) for s in upstream_snapshots
+                restatements.get(s, dummy_interval) for s in snapshot_dependencies
             ] + [interval]
             snapshot_start = min(i[0] for i in possible_intervals)
             snapshot_end = max(i[1] for i in possible_intervals)
