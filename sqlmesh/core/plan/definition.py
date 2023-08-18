@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import typing as t
 from collections import defaultdict
 from enum import Enum
@@ -19,7 +20,7 @@ from sqlmesh.core.snapshot import (
     merge_intervals,
     missing_intervals,
 )
-from sqlmesh.core.snapshot.definition import format_intervals
+from sqlmesh.core.snapshot.definition import Interval, format_intervals
 from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
@@ -110,7 +111,7 @@ class Plan:
             self._dag.add(name, snapshot.model.depends_on)
 
         self.__missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
-        self._restatements: t.Set[str] = set()
+        self._restatements: t.Dict[str, Interval] = {}
 
         if restate_models and context_diff.new_snapshots:
             raise PlanError(
@@ -296,7 +297,7 @@ class Plan:
         )
 
     @property
-    def restatements(self) -> t.Set[str]:
+    def restatements(self) -> t.Dict[str, Interval]:
         return self._restatements
 
     @property
@@ -451,30 +452,50 @@ class Plan:
         )
 
     def _add_restatements(self, restate_models: t.Iterable[str]) -> None:
-        for table in restate_models:
-            downstream = self._dag.downstream(table)
-            if table in self.context_diff.snapshots:
-                downstream.append(table)
+        def is_restateable_snapshot(snapshot: Snapshot) -> bool:
+            if not self.is_dev and snapshot.model.disable_restatement:
+                logger.debug("Restatement is disabled for model '%s'.", snapshot.name)
+                return False
+            return not snapshot.is_symbolic and not snapshot.is_seed
 
-            snapshots = self.context_diff.snapshots
-            downstream = [
-                d for d in downstream if not snapshots[d].is_symbolic and not snapshots[d].is_seed
-            ]
+        restatements: t.Dict[str, Interval] = {}
+        if not restate_models:
+            self._restatements = restatements
+            return
 
-            if not self.is_dev:
-                models_with_disabled_restatement = [
-                    f"'{d}'" for d in downstream if snapshots[d].model.disable_restatement
-                ]
-                if models_with_disabled_restatement:
-                    raise PlanError(
-                        f"Restatement is disabled for models: {', '.join(models_with_disabled_restatement)}."
-                    )
-
-            if not downstream:
+        dummy_interval = (sys.maxsize, -sys.maxsize)
+        snapshot_mapping = self.context_diff.snapshots
+        # Add restate snapshots and their downstream snapshots
+        for snapshot_name in restate_models:
+            if snapshot_name not in snapshot_mapping or not is_restateable_snapshot(
+                snapshot_mapping[snapshot_name]
+            ):
                 raise PlanError(
-                    f"Cannot restate from '{table}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled for this model."
+                    f"Cannot restate from '{snapshot_name}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled for this model."
                 )
-            self._restatements.update(downstream)
+            restatements[snapshot_name] = dummy_interval
+            for downstream_snapshot_name in self._dag.downstream(snapshot_name):
+                if is_restateable_snapshot(snapshot_mapping[downstream_snapshot_name]):
+                    restatements[downstream_snapshot_name] = dummy_interval
+        # Get restatement intervals for all restated snapshots and make sure that if a snapshot expands it's
+        # restatement range that it's downstream dependencies all expand their restatement ranges as well.
+        for snapshot_name in self._dag:
+            if snapshot_name not in restatements:
+                continue
+            snapshot = snapshot_mapping[snapshot_name]
+            interval = snapshot.get_removal_interval(
+                self.start, self.end, self._execution_time, strict=False
+            )
+            # Since we are traversing the graph in topological order and the largest interval range is pushed down
+            # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
+            snapshot_dependencies = snapshot.model.depends_on
+            possible_intervals = [
+                restatements.get(s, dummy_interval) for s in snapshot_dependencies
+            ] + [interval]
+            snapshot_start = min(i[0] for i in possible_intervals)
+            snapshot_end = max(i[1] for i in possible_intervals)
+            restatements[snapshot_name] = (snapshot_start, snapshot_end)
+        self._restatements = restatements
 
     def _build_directly_and_indirectly_modified(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
         """Builds collections of directly and indirectly modified snapshots.

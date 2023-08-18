@@ -236,12 +236,14 @@ def test_incremental_time_self_reference(make_snapshot):
     )
     snapshot.add_interval(to_date("1 week ago"), to_date("1 day ago"))
     assert snapshot.missing_intervals(to_date("1 week ago"), to_date("1 day ago")) == []
-    snapshot.remove_interval(to_date("1 week ago"), to_date("1 week ago"))
-    assert snapshot.missing_intervals(
-        to_date("1 week ago"), to_date("1 week ago"), restatements={"name"}
-    ) == [
-        (to_timestamp(to_date(f"{x + 1} days ago")), to_timestamp(to_date(f"{x} days ago")))
-        for x in reversed(range(7))
+    # Remove should take away not only 3 days ago but also everything after since this model
+    # depends on past
+    interval = snapshot.get_removal_interval(to_date("3 days ago"), to_date("3 days ago"))
+    snapshot.remove_interval(interval)
+    assert snapshot.missing_intervals(to_date("1 week ago"), to_date("1 day ago")) == [
+        (to_timestamp(to_date("3 days ago")), to_timestamp(to_date("2 days ago"))),
+        (to_timestamp(to_date("2 days ago")), to_timestamp(to_date("1 days ago"))),
+        (to_timestamp(to_date("1 days ago")), to_timestamp(to_date("today"))),
     ]
 
 
@@ -336,49 +338,49 @@ def test_seed_intervals(make_snapshot):
 
 def test_remove_intervals(snapshot: Snapshot):
     snapshot.add_interval("2020-01-01", "2020-01-01")
-    snapshot.remove_interval("2020-01-01", "2020-01-01")
+    snapshot.remove_interval(snapshot.get_removal_interval("2020-01-01", "2020-01-01"))
     assert snapshot.intervals == []
 
     snapshot.add_interval("2020-01-01", "2020-01-01")
     snapshot.add_interval("2020-01-03", "2020-01-03")
-    snapshot.remove_interval("2020-01-01", "2020-01-01")
+    snapshot.remove_interval(snapshot.get_removal_interval("2020-01-01", "2020-01-01"))
     assert snapshot.intervals == [(to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))]
 
-    snapshot.remove_interval("2020-01-01", "2020-01-05")
+    snapshot.remove_interval(snapshot.get_removal_interval("2020-01-01", "2020-01-05"))
     assert snapshot.intervals == []
 
     snapshot.add_interval("2020-01-01", "2020-01-05")
     snapshot.add_interval("2020-01-07", "2020-01-10")
-    snapshot.remove_interval("2020-01-03", "2020-01-04")
+    snapshot.remove_interval(snapshot.get_removal_interval("2020-01-03", "2020-01-04"))
     assert snapshot.intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-03")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
         (to_timestamp("2020-01-07"), to_timestamp("2020-01-11")),
     ]
-    snapshot.remove_interval("2020-01-01", "2020-01-01")
+    snapshot.remove_interval(snapshot.get_removal_interval("2020-01-01", "2020-01-01"))
     assert snapshot.intervals == [
         (to_timestamp("2020-01-02"), to_timestamp("2020-01-03")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
         (to_timestamp("2020-01-07"), to_timestamp("2020-01-11")),
     ]
-    snapshot.remove_interval("2020-01-10", "2020-01-10")
+    snapshot.remove_interval(snapshot.get_removal_interval("2020-01-10", "2020-01-10"))
     assert snapshot.intervals == [
         (to_timestamp("2020-01-02"), to_timestamp("2020-01-03")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
         (to_timestamp("2020-01-07"), to_timestamp("2020-01-10")),
     ]
-    snapshot.remove_interval("2020-01-07", "2020-01-07")
+    snapshot.remove_interval(snapshot.get_removal_interval("2020-01-07", "2020-01-07"))
     assert snapshot.intervals == [
         (to_timestamp("2020-01-02"), to_timestamp("2020-01-03")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
         (to_timestamp("2020-01-08"), to_timestamp("2020-01-10")),
     ]
-    snapshot.remove_interval("2020-01-06", "2020-01-21")
+    snapshot.remove_interval(snapshot.get_removal_interval("2020-01-06", "2020-01-21"))
     assert snapshot.intervals == [
         (to_timestamp("2020-01-02"), to_timestamp("2020-01-03")),
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-06")),
     ]
-    snapshot.remove_interval("2019-01-01", "2022-01-01")
+    snapshot.remove_interval(snapshot.get_removal_interval("2019-01-01", "2022-01-01"))
     assert snapshot.intervals == []
 
 

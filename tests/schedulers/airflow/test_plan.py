@@ -24,7 +24,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
-from sqlmesh.utils.date import to_datetime, to_timestamp
+from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -93,7 +93,7 @@ def test_create_plan_dag_spec(
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
-        restatements={"raw.items"},
+        restatements={},
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -164,7 +164,6 @@ def test_create_plan_dag_spec(
 
 
 @pytest.mark.airflow
-@pytest.mark.airflow
 @pytest.mark.parametrize(
     "the_snapshot, intervals_after_restatement, expected_intervals",
     [
@@ -182,14 +181,6 @@ def test_create_plan_dag_spec(
             [
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
                 (to_datetime("2022-01-03"), to_datetime("2022-01-04")),
-                (to_datetime("2022-01-04"), to_datetime("2022-01-05")),
-                (to_datetime("2022-01-05"), to_datetime("2022-01-06")),
-                (to_datetime("2022-01-06"), to_datetime("2022-01-07")),
-                (to_datetime("2022-01-07"), to_datetime("2022-01-08")),
-                # Unexpected behavior: We restate up until "now" therefore we go until 2022-01-10.
-                # Ideally we would return to the "latest" which would be the largest we have ever loaded which is the
-                # 7th
-                (to_datetime("2022-01-08"), to_datetime("2022-01-09")),
             ],
         ),
     ],
@@ -217,7 +208,12 @@ def test_restatement(
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
-        restatements={the_snapshot.name},
+        restatements={
+            the_snapshot.name: (
+                to_timestamp(to_date("2022-01-02")),
+                to_timestamp(to_date("2022-01-04")),
+            )
+        },
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -304,7 +300,7 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         environment=new_environment,
         no_gaps=False,
         skip_backfill=False,
-        restatements=set(),
+        restatements={},
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,
@@ -352,7 +348,7 @@ def test_create_plan_dag_spec_unbounded_end(
         environment=new_environment,
         no_gaps=True,
         skip_backfill=False,
-        restatements={"raw.items"},
+        restatements={},
         notification_targets=[],
         backfill_concurrent_tasks=1,
         ddl_concurrent_tasks=1,

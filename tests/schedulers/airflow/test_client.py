@@ -140,7 +140,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "skip_backfill": False,
         "notification_targets": [],
         "request_id": request_id,
-        "restatements": [],
+        "restatements": {},
         "backfill_concurrent_tasks": 1,
         "ddl_concurrent_tasks": 1,
         "users": [],

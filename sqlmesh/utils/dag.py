@@ -99,7 +99,9 @@ class DAG(t.Generic[T]):
                 for deps in unprocessed_nodes.values():
                     deps -= next_nodes
 
-                self._sorted.extend(next_nodes)
+                # Sort to make the order deterministic
+                # TODO: Make protocol that makes the type var both hashable and sortable once we are on Python 3.8+
+                self._sorted.extend(sorted(next_nodes))  # type: ignore
 
         return self._sorted
 
@@ -139,3 +141,10 @@ class DAG(t.Generic[T]):
             A new dag consisting of the dependent and descendant nodes.
         """
         return self.subdag(node, *self.downstream(node))
+
+    def __contains__(self, item: T) -> bool:
+        return item in self.graph
+
+    def __iter__(self) -> t.Iterator[T]:
+        for node in self.sorted:
+            yield node
