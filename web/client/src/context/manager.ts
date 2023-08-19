@@ -1,28 +1,46 @@
-import { isNil, isNotNil } from '@utils/index'
+import {
+  isArrayEmpty,
+  isArrayNotEmpty,
+  isFalse,
+  isNil,
+  isNotNil,
+} from '@utils/index'
 import { create } from 'zustand'
 import { persist, subscribeWithSelector } from 'zustand/middleware'
 
 export const EnumAction = {
   None: 'none',
+  Meta: 'meta',
   Audits: 'audits',
   Tests: 'tests',
   Plan: 'plan',
   PlanApply: 'planApply',
+  Backfill: 'backfill',
   Diff: 'diff',
   Query: 'query',
   ModelRender: 'modelRender',
   ModelEvaluate: 'modelEvaluate',
+  EditorSaveChanges: 'editorSaveChanges',
   FileExplorerCreate: 'fileExplorerCreate',
   FileExplorerDelete: 'fileExplorerDelete',
   FileExplorerRename: 'fileExplorerRename',
   FileExplorerMove: 'fileExplorerMove',
   FileExplorerModify: 'fileExplorerModify',
+  FileExplorerGet: 'fileExplorerGet',
 } as const
 
 export { useStoreActionManager }
 
-export type Action = KeyOf<typeof EnumAction>
-interface ActionHandel {
+export type Action = KeyOf<typeof EnumAction> | string
+type ActionGroup = Action[]
+interface ActionQueue {
+  currentAction: Action
+  currentCallback?: Callback
+  currentCancel?: Callback
+  queue: ActionHandler[]
+}
+
+interface ActionHandler {
   action: Action
   callback?: AsyncCallback | Callback
   cancel?: AsyncCallback | Callback
@@ -32,197 +50,424 @@ interface ActionHandel {
   onCancelSuccess?: Callback
   onCancelError?: Callback
   onCancelFinally?: Callback
+  rules?: Array<Callback<ActionManager, boolean>>
 }
 
 interface ActionManager {
-  currentAction: Action
-  currentCallback?: AsyncCallback | Callback
-  currentCancel?: Callback
-  queue: ActionHandel[]
-  resetCurrentAction: () => void
-  cancelCurrentAction: () => void
-  isRunningAction: (action?: Action) => boolean
-  isRunningActionCancel: (action?: Action) => boolean
-  isWaitingAction: (action?: Action) => boolean
+  queues: Map<ActionGroup, ActionQueue>
+  currentActions: Action[]
+  results: Record<Action, any>
+  addCurrentAction: (action: Action) => void
+  removeCurrentAction: (action: Action) => void
+  resetQueueCurrentByAction: (action: Action) => void
+  resetQueueCurrentByGroup: (group: ActionGroup) => void
+  isRunningActionByGroup: (group?: ActionGroup, action?: Action) => boolean
+  isRunningCancelActionByGroup: (
+    group?: ActionGroup,
+    action?: Action,
+  ) => boolean
   isActiveAction: (action?: Action) => boolean
-  enqueueAction: (payload: ActionHandel) => void
-  dequeueAction: () => void
+  enqueue: (payload: ActionHandler) => void
+  enqueueMany: (payloads: ActionHandler[]) => void
+  dequeue: () => void
   shouldLock: (action: Action) => boolean
 }
 
-const lockDefault = [
-  EnumAction.Audits,
-  EnumAction.Plan,
-  EnumAction.PlanApply,
-  EnumAction.Tests,
-  EnumAction.Diff,
-  EnumAction.ModelEvaluate,
-]
+// const groupOne = [
+//   EnumAction.Plan,
+//   EnumAction.PlanApply,
+//   EnumAction.Backfill,
+//   EnumAction.ModelEvaluate,
+//   EnumAction.Audits,
+//   EnumAction.Tests,
+//   EnumAction.Diff,
+// ]
 
-const lock: Record<string, Action[]> = {
-  [EnumAction.Plan]: lockDefault,
-  [EnumAction.PlanApply]: lockDefault,
-  [EnumAction.Audits]: lockDefault,
-  [EnumAction.Tests]: lockDefault,
-  [EnumAction.Diff]: lockDefault,
-  [EnumAction.ModelEvaluate]: lockDefault,
+// const groupTwo = [
+//   EnumAction.FileExplorerGet,
+//   EnumAction.FileExplorerCreate,
+//   EnumAction.FileExplorerDelete,
+//   EnumAction.FileExplorerRename,
+//   EnumAction.FileExplorerMove,
+//   EnumAction.FileExplorerModify,
+// ]
+
+//
+const lock: Record<Action, ActionGroup> = {
+  [EnumAction.Plan]: [EnumAction.PlanApply, EnumAction.Backfill],
+  [EnumAction.PlanApply]: [
+    EnumAction.Plan,
+    EnumAction.Backfill,
+    EnumAction.ModelEvaluate,
+  ],
+  [EnumAction.Backfill]: [EnumAction.ModelEvaluate],
+  [EnumAction.Query]: [EnumAction.Backfill],
+  [EnumAction.ModelEvaluate]: [
+    EnumAction.Plan,
+    EnumAction.PlanApply,
+    EnumAction.Backfill,
+    EnumAction.ModelRender,
+  ],
+  [EnumAction.FileExplorerGet]: [],
+  // [EnumAction.Audits]: groupOne,
+  // [EnumAction.Tests]: groupOne,
+  // [EnumAction.Diff]: groupOne,
+  // [EnumAction.FileExplorerGet]: groupTwo,
+  // [EnumAction.FileExplorerCreate]: groupTwo,
+  // [EnumAction.FileExplorerDelete]: groupTwo,
+  // [EnumAction.FileExplorerRename]: groupTwo,
+  // [EnumAction.FileExplorerMove]: groupTwo,
+  // [EnumAction.FileExplorerModify]: groupTwo,
 }
+
+const actionsSorted = topologicalSort(lock)
+
+console.log(actionsSorted)
+
+const initialQueue = new Map<ActionGroup, ActionQueue>(
+  Array.from(new Set(Object.values(lock))).map(group => [
+    group,
+    createEmptyActionQueue(),
+  ]),
+)
 
 const useStoreActionManager = create(
   subscribeWithSelector(
-    persist<ActionManager, [], [], { currentAction: Action }>(
+    persist<ActionManager, [], [], { currentActions: Action[] }>(
       (set, get) => ({
-        isDequeueing: false,
-        currentAction: EnumAction.None,
-        queue: [],
-        resetCurrentAction() {
+        queues: initialQueue,
+        currentActions: [],
+        results: {},
+        addCurrentAction(action) {
           const s = get()
 
-          set({
-            currentAction: EnumAction.None,
-            currentCallback: undefined,
-            currentCancel: undefined,
-            queue: s.queue.slice(),
-          })
-
-          void s.dequeueAction()
+          set({ currentActions: [...s.currentActions, action] })
         },
-        cancelCurrentAction() {
+        removeCurrentAction(action) {
           const s = get()
+          const index = s.currentActions.indexOf(action)
 
-          if (isNotNil(s.currentCancel)) {
-            s.currentCancel()
+          if (index > -1) {
+            s.currentActions.splice(index, 1)
           }
 
-          set({
-            currentAction: EnumAction.None,
-            currentCallback: undefined,
-            currentCancel: undefined,
-            queue: s.queue.slice(),
+          set({ currentActions: structuredClone(s.currentActions) })
+        },
+        resetQueueCurrentByGroup(group) {
+          const s = get()
+          const q = s.queues.get(group)
+
+          if (isNil(q)) return
+
+          s.removeCurrentAction(q.currentAction)
+
+          s.queues.set(
+            group,
+            createEmptyActionQueue(s.queues.get(group)?.queue),
+          )
+
+          set({ queues: new Map(s.queues) })
+
+          void s.dequeue()
+        },
+        resetQueueCurrentByAction(action) {
+          const s = get()
+          const group = lock[action]
+
+          if (isNil(group)) {
+            s.removeCurrentAction(action)
+
+            return
+          }
+
+          s.resetQueueCurrentByGroup(group)
+        },
+        enqueueMany(payloads = []) {
+          payloads.forEach(payload => get().enqueue(payload))
+        },
+        enqueue(payload) {
+          const s = get()
+          const group = lock[payload.action]
+
+          if (isNil(group)) {
+            s.addCurrentAction(payload.action)
+
+            s.results[payload.action] = undefined
+
+            const callback = toCallback(payload, set, get)
+
+            void callback()
+          } else {
+            const q = s.queues.get(group)
+
+            if (isNil(q)) return
+
+            const queue = q.queue.filter(
+              ({ action, rules }) =>
+                action !== payload.action && isArrayEmpty(rules),
+            )
+
+            queue.push(payload)
+
+            s.queues.set(group, Object.assign(q, { queue }))
+
+            set({ queues: new Map(s.queues) })
+
+            void s.dequeue()
+          }
+        },
+        dequeue() {
+          const s = get()
+          const [group, q] = getCandidate(actionsSorted, get)
+
+          if (isNil(group) || isNil(q) || s.isRunningActionByGroup(group))
+            return
+
+          const payload = q.queue.shift()
+
+          if (
+            isNil(payload) ||
+            isNil(payload.action) ||
+            (isNil(payload.callback) && payload.action === EnumAction.None) ||
+            (isArrayNotEmpty(payload.rules) &&
+              payload.rules.some(rule => isFalse(rule(get()))))
+          )
+            return
+
+          s.results[payload.action] = undefined
+
+          const currentAction = payload.action
+          const currentCallback = toCallback(payload, set, get)
+          const currentCancel = toCancelCallback(payload)
+
+          s.queues.set(group, {
+            currentAction,
+            currentCallback,
+            currentCancel,
+            queue: q.queue,
           })
 
-          void s.dequeueAction()
+          s.addCurrentAction(payload.action)
+
+          set({ queues: new Map(s.queues) })
+
+          currentCallback()
         },
-        isRunningAction(action) {
+        isRunningActionByGroup(group, action) {
+          if (isNil(group)) return false
+
           const s = get()
+          const q = s.queues.get(group)
+
+          if (isNil(q)) return false
 
           return isNil(action)
-            ? isNotNil(s.currentCallback)
-            : isNotNil(s.currentCallback) && s.currentAction === action
+            ? isNotNil(q.currentCallback)
+            : isNotNil(q.currentCallback) && q.currentAction === action
         },
-        isRunningActionCancel(action) {
+        isRunningCancelActionByGroup(group, action) {
+          if (isNil(group)) return false
+
           const s = get()
+          const q = s.queues.get(group)
+
+          if (isNil(q)) return false
 
           return isNil(action)
-            ? isNotNil(s.currentCancel)
-            : isNotNil(s.currentCancel) && s.currentAction === action
-        },
-        isWaitingAction(action) {
-          const s = get()
-
-          return isNil(action)
-            ? isNil(s.currentCallback) && s.currentAction !== EnumAction.None
-            : isNil(s.currentCallback) && s.currentAction === action
+            ? isNotNil(q.currentCancel)
+            : isNotNil(q.currentCancel) && q.currentAction === action
         },
         isActiveAction(action): boolean {
           const s = get()
 
           return isNil(action)
-            ? s.currentAction !== EnumAction.None
-            : s.currentAction === action
+            ? s.currentActions.length > 0
+            : s.currentActions.includes(action)
         },
         shouldLock(action) {
           const s = get()
+          const group = lock[action]
 
-          return lock[s.currentAction]?.includes(action) ?? false
-        },
-        enqueueAction(payload) {
-          const s = get()
+          if (isNil(group)) return false
 
-          if (payload.action === s.currentAction && isNil(payload.callback))
-            return
-
-          const queue = s.queue.filter(({ action: a }) => a !== payload.action)
-
-          queue.push(payload)
-
-          set({ queue })
-
-          if (
-            payload.action === s.currentAction &&
-            isNotNil(payload.callback)
-          ) {
-            s.resetCurrentAction()
-          } else {
-            void s.dequeueAction()
-          }
-        },
-        dequeueAction() {
-          const s = get()
-
-          if (
-            s.isActiveAction() ||
-            s.isRunningAction(EnumAction.None) ||
-            s.queue.length < 1
+          return (
+            group.some(a => s.currentActions.includes(a)) ||
+            s.currentActions.includes(action)
           )
-            return
-
-          const payload = s.queue.shift()
-
-          if (
-            isNil(payload) ||
-            isNil(payload.action) ||
-            (isNil(payload.callback) && payload.action === EnumAction.None)
-          ) {
-            s.resetCurrentAction()
-          } else {
-            const currentAction = payload.action
-            const currentCallback = (): void => {
-              if (isNil(payload.callback)) return
-
-              try {
-                ;(payload.callback as AsyncCallback)()
-                  .then(payload.onCallbackSuccess)
-                  .catch(payload.onCallbackError)
-                  .finally(() => {
-                    payload.onCallbackFinally?.()
-
-                    s.resetCurrentAction()
-                  })
-              } catch {
-                ;(payload.callback as Callback)()
-
-                s.resetCurrentAction()
-              }
-            }
-
-            const currentCancel = (): void => {
-              if (isNil(payload.cancel)) return
-
-              try {
-                ;(payload.cancel as AsyncCallback)()
-                  .then(payload.onCancelSuccess)
-                  .catch(payload.onCancelError)
-                  .finally(payload.onCancelFinally)
-              } catch {
-                ;(payload.cancel as Callback)()
-              }
-            }
-
-            set({
-              currentAction,
-              currentCallback,
-              currentCancel,
-            })
-
-            currentCallback()
-          }
         },
       }),
       {
         name: 'action-manager',
-        partialize: s => ({ currentAction: s.currentAction }),
+        partialize: s => ({ currentActions: s.currentActions }),
+        onRehydrateStorage() {
+          return s => {
+            if (isNil(s)) return
+
+            for (const action of s.currentActions) {
+              const group = lock[action]
+
+              if (isNil(group)) continue
+
+              const q = s.queues.get(group)
+
+              if (isNil(q)) continue
+
+              q.currentAction = action
+            }
+          }
+        },
       },
     ),
   ),
 )
+
+function toCallback(
+  payload: ActionHandler,
+  set: (
+    partial:
+      | ActionManager
+      | Partial<ActionManager>
+      | ((state: ActionManager) => ActionManager | Partial<ActionManager>),
+    replace?: boolean | undefined,
+  ) => void,
+  get: () => ActionManager,
+): Callback {
+  return () => {
+    if (isNil(payload.callback)) return
+
+    try {
+      ;(payload.callback as AsyncCallback)()
+        .then(data => {
+          payload.onCallbackSuccess?.(data, set, get)
+        })
+        .catch(error => {
+          payload.onCallbackError?.(error, set, get)
+        })
+        .finally(() => {
+          payload.onCallbackFinally?.(set, get)
+
+          get().resetQueueCurrentByAction(payload.action)
+        })
+    } catch {
+      ;(payload.callback as Callback)?.(set, get)
+
+      get().resetQueueCurrentByAction(payload.action)
+    }
+  }
+}
+
+function toCancelCallback(payload: ActionHandler): Callback {
+  return () => {
+    if (isNil(payload.cancel)) return
+
+    try {
+      ;(payload.cancel as AsyncCallback)()
+        .then(payload.onCancelSuccess)
+        .catch(payload.onCancelError)
+        .finally(() => {
+          payload.onCancelFinally?.()
+        })
+    } catch {
+      ;(payload.cancel as Callback)()
+    }
+  }
+}
+
+function createEmptyActionQueue(queue: ActionHandler[] = []): ActionQueue {
+  return {
+    currentAction: EnumAction.None,
+    currentCallback: undefined,
+    currentCancel: undefined,
+    queue,
+  }
+}
+
+function topologicalSort(graph: Record<Action, ActionGroup>): Action[] {
+  const counts: Record<Action, number> = {}
+  const result: Action[] = []
+
+  for (const vertex in graph) {
+    counts[vertex] = 0
+  }
+  for (const vertex in graph) {
+    const naighbors = graph[vertex] ?? []
+    for (const neighbor of naighbors) {
+      counts[neighbor] = (counts[neighbor] ?? 0) + 1
+    }
+  }
+
+  const queue: Action[] = []
+
+  for (const vertex in counts) {
+    if (counts[vertex] === 0) {
+      queue.push(vertex)
+    }
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!
+
+    result.push(current)
+
+    const neighbors = graph[current] ?? []
+
+    for (const neighbor of neighbors) {
+      counts[neighbor]--
+
+      if (counts[neighbor] === 0) {
+        queue.push(neighbor)
+      }
+    }
+  }
+
+  for (const vertex in counts) {
+    if (counts[vertex]! > 0) {
+      result.push(vertex)
+    }
+  }
+
+  return result
+}
+
+function getCandidate(
+  actions: Action[],
+  get: () => ActionManager,
+): [ActionGroup, ActionQueue, boolean] {
+  return actions.reduce((acc: any, action) => {
+    const s = get()
+
+    const group = lock[action]
+
+    if (isNil(group)) return acc
+
+    const q = s.queues.get(group)
+
+    if (isNil(q)) return acc
+
+    if (
+      isArrayEmpty(q.queue) ||
+      s.isRunningActionByGroup(group) ||
+      (isNotNil(acc[2]) && isFalse(acc[2]))
+    )
+      return acc
+
+    let hasDependency = false
+
+    for (const action of group) {
+      if (lock[action] !== group && isNotNil(lock[action])) {
+        hasDependency = true
+
+        if (
+          s.isActiveAction(action) ||
+          s.isRunningActionByGroup(lock[action])
+        ) {
+          return acc
+        }
+      }
+    }
+
+    return hasDependency && isArrayNotEmpty(acc)
+      ? acc
+      : [group, q, hasDependency]
+  }, []) as [ActionGroup, ActionQueue, boolean]
+}

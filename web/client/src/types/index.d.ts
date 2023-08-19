@@ -7,6 +7,10 @@ type KeyOf<T> = T[keyof T]
 type Nil = undefined | null
 type Optional<T> = T | undefined
 type Maybe<T> = T | Nil
-type Callback<T = any> = (payload?: T) => void
-type AsyncCallback = () => Promise<void>
+type Callback<TPayload = any, TReturn = void> = (
+  ...payload: TPayload[] | any
+) => TReturn
+type AsyncCallback<TPayload = any, TReturn = void> = (
+  ...payload: TPayload[] | any
+) => Promise<TReturn>
 type Primitive = string | number | boolean

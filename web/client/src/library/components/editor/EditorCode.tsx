@@ -22,6 +22,7 @@ import { dracula, tomorrow } from 'thememirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
+import { EnumAction, useStoreActionManager } from '@context/manager'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 
@@ -155,6 +156,8 @@ function CodeEditorRemoteFile({
 }): JSX.Element {
   const client = useQueryClient()
 
+  const enqueue = useStoreActionManager(s => s.enqueue)
+
   const files = useStoreProject(s => s.files)
 
   const {
@@ -188,7 +191,10 @@ function CodeEditorRemoteFile({
         linux: 'Ctrl-s',
         preventDefault: true,
         run() {
-          debouncedSaveChange()
+          enqueue({
+            action: EnumAction.EditorSaveChanges,
+            callback: debouncedSaveChange,
+          })
 
           return true
         },

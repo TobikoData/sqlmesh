@@ -12,7 +12,10 @@ import { useStoreContext } from '@context/context'
 import { EnumAction, useStoreActionManager } from '@context/manager'
 
 export default function App(): JSX.Element {
-  const resetCurrentAction = useStoreActionManager(s => s.resetCurrentAction)
+  const enqueue = useStoreActionManager(s => s.enqueue)
+  const resetQueueCurrentByAction = useStoreActionManager(
+    s => s.resetQueueCurrentByAction,
+  )
   const isActiveAction = useStoreActionManager(s => s.isActiveAction)
 
   const setVersion = useStoreContext(s => s.setVersion)
@@ -20,17 +23,24 @@ export default function App(): JSX.Element {
   const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta()
 
   useEffect(() => {
-    void getMeta().then(({ data }) => {
-      if (isNil(data)) return
+    enqueue({
+      action: EnumAction.Meta,
+      callback: getMeta,
+      onCallbackSuccess({ data }) {
+        if (isNil(data)) return
 
-      setVersion(data.version)
+        setVersion(data.version)
 
-      if (
-        (isFalse(data.has_running_task) && isActiveAction(EnumAction.Plan)) ||
-        isActiveAction(EnumAction.PlanApply)
-      ) {
-        resetCurrentAction()
-      }
+        if (isFalse(data.has_running_task)) {
+          if (isActiveAction(EnumAction.Plan)) {
+            resetQueueCurrentByAction(EnumAction.Plan)
+          } else if (isActiveAction(EnumAction.PlanApply)) {
+            resetQueueCurrentByAction(EnumAction.PlanApply)
+          } else if (isActiveAction(EnumAction.Backfill)) {
+            resetQueueCurrentByAction(EnumAction.Backfill)
+          }
+        }
+      },
     })
 
     return () => {

@@ -51,9 +51,9 @@ export default function RunPlan(): JSX.Element {
     s => s.hasSynchronizedEnvironments,
   )
 
-  const enqueueAction = useStoreActionManager(s => s.enqueueAction)
+  const enqueue = useStoreActionManager(s => s.enqueue)
   const shouldLock = useStoreActionManager(s => s.shouldLock)
-  const currentAction = useStoreActionManager(s => s.currentAction)
+  const currentActions = useStoreActionManager(s => s.currentActions)
 
   const [hasChanges, setHasChanges] = useState(false)
   const [plan, setPlan] = useState<ContextEnvironment | undefined>()
@@ -77,7 +77,7 @@ export default function RunPlan(): JSX.Element {
 
     if (isFalse(environment.isSynchronized)) return
 
-    enqueueAction({
+    enqueue({
       action: EnumAction.Plan,
       callback: planRun,
       cancel: cancelRequestPlan,
@@ -123,7 +123,7 @@ export default function RunPlan(): JSX.Element {
     planState === EnumPlanState.Running ||
     planState === EnumPlanState.Cancelling ||
     shouldLock(EnumAction.Plan) ||
-    currentAction === EnumAction.Plan
+    currentActions.includes(EnumAction.Plan)
 
   return (
     <div

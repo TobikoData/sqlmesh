@@ -174,3 +174,14 @@ export function toUniqueName(prefix?: string, suffix?: string): string {
     suffix ?? ''
   }`.toLowerCase()
 }
+
+export function camelCaseToRegularCase(camelCaseString: string): string {
+  // Replace each capital letter with a space followed by the lowercase version of the letter
+  const regularCaseString = camelCaseString.replace(/([A-Z])/g, ' $1')
+
+  // Capitalize the first letter and remove any leading spaces
+  return (
+    regularCaseString.charAt(0).toUpperCase() +
+    regularCaseString.slice(1).trim()
+  )
+}

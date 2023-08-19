@@ -11,7 +11,7 @@ import {
 } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { isFalse, isNotNil, toDate, toDateFormat } from '~/utils'
+import { isFalse, toDate, toDateFormat } from '~/utils'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
@@ -203,9 +203,13 @@ function InspectorActions({
 }
 
 function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
+  const engine = useStoreEditor(s => s.engine)
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
-  const engine = useStoreEditor(s => s.engine)
+
+  const enqueue = useStoreActionManager(s => s.enqueue)
+  const shouldLock = useStoreActionManager(s => s.shouldLock)
+  const currentActions = useStoreActionManager(s => s.currentActions)
 
   const [form, setForm] = useState<FormArbitrarySql>({
     limit: LIMIT,
@@ -215,14 +219,20 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
     sql: tab.file.content,
     limit: form.limit,
   })
-  const shouldSendQuery = Object.values(form).every(Boolean)
+  const shouldSendQuery =
+    Object.values(form).every(Boolean) &&
+    isFalse(currentActions.includes(EnumAction.Query))
 
   function sendQuery(): void {
     setPreviewTable(undefined)
     setPreviewQuery(tab.file.content)
 
-    void getFetchdf().then(({ data }) => {
-      setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
+    enqueue({
+      action: EnumAction.Query,
+      callback: getFetchdf,
+      onCallbackSuccess({ data }) {
+        setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
+      },
     })
   }
 
@@ -285,7 +295,11 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
         <Button
           size={EnumSize.sm}
           variant={EnumVariant.Alternative}
-          disabled={isFalse(shouldSendQuery) || isFetching}
+          disabled={
+            shouldLock(EnumAction.Query) ||
+            isFalse(shouldSendQuery) ||
+            isFetching
+          }
           onClick={e => {
             e.stopPropagation()
 
@@ -309,8 +323,9 @@ function FormActionsModel({
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
+  const enqueueMany = useStoreActionManager(s => s.enqueueMany)
   const shouldLock = useStoreActionManager(s => s.shouldLock)
-  const currentAction = useStoreActionManager(s => s.currentAction)
+  const currentActions = useStoreActionManager(s => s.currentActions)
 
   const [form, setForm] = useState<FormModel>({
     start: toDateFormat(toDate(Date.now() - DAY)),
@@ -322,7 +337,7 @@ function FormActionsModel({
   const { refetch: getRender } = useApiRender(
     Object.assign(form, { model: model.name }),
   )
-  const { refetch: getEvaluate } = useApiEvaluate(
+  const { refetch: getEvaluate, isFetching } = useApiEvaluate(
     Object.assign(form, { model: model.name }),
   )
 
@@ -330,20 +345,28 @@ function FormActionsModel({
   const shouldEvaluate =
     tab.file.isSQLMeshModel &&
     isValidForm &&
-    isFalse(shouldLock(EnumAction.ModelEvaluate)) &&
-    currentAction !== EnumAction.ModelEvaluate
+    isFalse(currentActions.includes(EnumAction.ModelEvaluate))
 
   function evaluateModel(): void {
     setPreviewQuery(undefined)
     setPreviewTable(undefined)
 
-    void getRender().then(({ data }) => {
-      setPreviewQuery(data?.sql)
-    })
-
-    void getEvaluate().then(({ data }) => {
-      setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
-    })
+    enqueueMany([
+      {
+        action: EnumAction.ModelRender,
+        callback: getRender,
+        onCallbackSuccess({ data }) {
+          setPreviewQuery(data?.sql)
+        },
+      },
+      {
+        action: EnumAction.ModelEvaluate,
+        callback: getEvaluate,
+        onCallbackSuccess({ data }) {
+          setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
+        },
+      },
+    ])
   }
 
   return (
@@ -451,7 +474,11 @@ function FormActionsModel({
             <Button
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEvaluate)}
+              disabled={
+                isFalse(shouldEvaluate) ||
+                shouldLock(EnumAction.ModelEvaluate) ||
+                isFetching
+              }
               onClick={e => {
                 e.stopPropagation()
 
@@ -480,12 +507,16 @@ function FormDiffModel({
 }): JSX.Element {
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
 
+  const enqueue = useStoreActionManager(s => s.enqueue)
+  const shouldLock = useStoreActionManager(s => s.shouldLock)
+  const currentActions = useStoreActionManager(s => s.currentActions)
+
   const [selectedSource, setSelectedSource] = useState(list[0]!.value)
   const [limit, setLimit] = useState(LIMIT_DIFF)
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff({
+  const { refetch: getDiff, isFetching } = useApiTableDiff({
     source: selectedSource,
     target: target.value,
     model_or_snapshot: model.name,
@@ -497,8 +528,12 @@ function FormDiffModel({
   const getTableDiff = useCallback(() => {
     setPreviewDiff(undefined)
 
-    void getDiff().then(({ data }) => {
-      setPreviewDiff(data)
+    enqueue({
+      action: EnumAction.Diff,
+      callback: getDiff,
+      onCallbackSuccess({ data }) {
+        setPreviewDiff(data)
+      },
     })
   }, [model.name])
 
@@ -507,7 +542,9 @@ function FormDiffModel({
   }, [list])
 
   const shouldEnableAction =
-    tab.file.isSQLMeshModel && [selectedSource, target, limit].every(Boolean)
+    tab.file.isSQLMeshModel &&
+    [selectedSource, target, limit].every(Boolean) &&
+    isFalse(currentActions.includes(EnumAction.Diff))
 
   return (
     <>
@@ -603,7 +640,11 @@ function FormDiffModel({
               className="ml-2"
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEnableAction)}
+              disabled={
+                shouldLock(EnumAction.Diff) ||
+                isFalse(shouldEnableAction) ||
+                isFetching
+              }
               onClick={e => {
                 e.stopPropagation()
 
@@ -622,28 +663,39 @@ function FormDiffModel({
 function FormDiff(): JSX.Element {
   const setPreviewDiff = useStoreEditor(s => s.setPreviewDiff)
 
+  const enqueue = useStoreActionManager(s => s.enqueue)
+  const shouldLock = useStoreActionManager(s => s.shouldLock)
+  const currentActions = useStoreActionManager(s => s.currentActions)
+
   const [source, setSource] = useState('')
   const [target, setTarget] = useState('')
   const [limit, setLimit] = useState(LIMIT_DIFF)
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff({
+  const { refetch: getDiff, isFetching } = useApiTableDiff({
     source,
     target,
     limit,
     on,
     where,
   })
+
   function getTableDiff(): void {
     setPreviewDiff(undefined)
 
-    void getDiff().then(({ data }) => {
-      setPreviewDiff(data)
+    enqueue({
+      action: EnumAction.Diff,
+      callback: getDiff,
+      onCallbackSuccess({ data }) {
+        setPreviewDiff(data)
+      },
     })
   }
 
-  const shouldEnableAction = [source, target, limit, on].every(Boolean)
+  const shouldEnableAction =
+    [source, target, limit, on].every(Boolean) &&
+    isFalse(currentActions.includes(EnumAction.Diff))
 
   return (
     <>
@@ -745,7 +797,11 @@ function FormDiff(): JSX.Element {
           className="ml-2"
           size={EnumSize.sm}
           variant={EnumVariant.Alternative}
-          disabled={isFalse(shouldEnableAction)}
+          disabled={
+            shouldLock(EnumAction.Diff) ||
+            isFalse(shouldEnableAction) ||
+            isFetching
+          }
           onClick={e => {
             e.stopPropagation()
 

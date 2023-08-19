@@ -13,6 +13,7 @@ import {
 } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import {
+  camelCaseToRegularCase,
   isArrayEmpty,
   isFalse,
   isNil,
@@ -87,16 +88,21 @@ export default function PageIDE(): JSX.Element {
   const selectTab = useStoreEditor(s => s.selectTab)
   const createTab = useStoreEditor(s => s.createTab)
   const addTabs = useStoreEditor(s => s.addTabs)
+  const closeTabs = useStoreEditor(s => s.closeTabs)
   const closeTab = useStoreEditor(s => s.closeTab)
   const inTabs = useStoreEditor(s => s.inTabs)
 
   const subscribe = useChannelEvents()
 
-  const enqueueAction = useStoreActionManager(s => s.enqueueAction)
-  const resetCurrentAction = useStoreActionManager(s => s.resetCurrentAction)
-  const cancelCurrentAction = useStoreActionManager(s => s.cancelCurrentAction)
+  const enqueueMany = useStoreActionManager(s => s.enqueueMany)
+  const enqueue = useStoreActionManager(s => s.enqueue)
+  const isActiveAction = useStoreActionManager(s => s.isActiveAction)
+  const resetQueueCurrentByAction = useStoreActionManager(
+    s => s.resetQueueCurrentByAction,
+  )
 
-  const currentAction = useStoreActionManager(s => s.currentAction)
+  const currentActions = useStoreActionManager(s => s.currentActions)
+  const queues = useStoreActionManager(s => s.queues)
 
   // We need to fetch from IDE level to make sure
   // all pages have access to models and files
@@ -204,20 +210,32 @@ export default function PageIDE(): JSX.Element {
       setActiveRange()
     })
 
-    void getModels().then(({ data }) => {
-      updateModels(data as Model[])
-    })
+    enqueueMany([
+      {
+        action: 'request-models',
+        callback: getModels,
+        onCallbackSuccess({ data }) {
+          updateModels(data as Model[])
+        },
+      },
+      {
+        action: EnumAction.FileExplorerGet,
+        callback: getFiles,
+        onCallbackSuccess({ data }) {
+          closeTabs()
+          setProject(new ModelDirectory())
 
-    void getFiles().then(({ data }) => {
-      if (isNil(data)) return
+          if (isNil(data)) return
 
-      const project = new ModelDirectory(data)
-      const files = project.allFiles
+          const project = new ModelDirectory(data)
+          const files = project.allFiles
 
-      restoreEditorTabsFromSaved(files)
-      setFiles(files)
-      setProject(project)
-    })
+          restoreEditorTabsFromSaved(files)
+          setFiles(files)
+          setProject(project)
+        },
+      },
+    ])
 
     return () => {
       void cancelRequestModels()
@@ -240,13 +258,13 @@ export default function PageIDE(): JSX.Element {
   }, [location])
 
   useEffect(() => {
-    if (dataEnvironments == null || isObjectEmpty(dataEnvironments)) return
+    if (isNil(dataEnvironments) || isObjectEmpty(dataEnvironments)) return
 
     addSynchronizedEnvironments(Object.values(dataEnvironments))
 
     // This use case is happening when user refreshes the page
     // while plan is still applying
-    enqueueAction({
+    enqueue({
       action: EnumAction.Plan,
       callback: planRun,
       cancel: cancelRequestPlan,
@@ -255,11 +273,15 @@ export default function PageIDE(): JSX.Element {
 
   useEffect(() => {
     if (models.size > 0 && isFalse(hasSynchronizedEnvironments())) {
-      void getEnvironments()
+      enqueue({
+        action: 'request-environments',
+        callback: getEnvironments,
+        cancel: cancelRequestEnvironments,
+      })
     }
 
     if (hasSynchronizedEnvironments()) {
-      enqueueAction({
+      enqueue({
         action: EnumAction.Plan,
         callback: planRun,
         cancel: cancelRequestPlan,
@@ -279,11 +301,11 @@ export default function PageIDE(): JSX.Element {
   }
 
   function updateTasks(data?: PlanProgress): void {
-    if (data == null) return
+    if (isNil(data)) return
 
     if (isFalse(isObject(data.tasks))) {
       setState(EnumPlanState.Init)
-      resetCurrentAction()
+      resetQueueCurrentByAction(EnumAction.Backfill)
 
       return
     }
@@ -298,15 +320,15 @@ export default function PageIDE(): JSX.Element {
 
     if (isFalse(data.ok)) {
       setState(EnumPlanState.Failed)
-      resetCurrentAction()
+      resetQueueCurrentByAction(EnumAction.Backfill)
     } else if (isAllTasksCompleted(data.tasks)) {
       setState(EnumPlanState.Finished)
-      resetCurrentAction()
+      resetQueueCurrentByAction(EnumAction.Backfill)
     } else {
       setState(EnumPlanState.Applying)
-      enqueueAction({
-        action: EnumAction.PlanApply,
-      })
+      if (isFalse(isActiveAction(EnumAction.Backfill))) {
+        enqueue({ action: EnumAction.Backfill })
+      }
     }
   }
 
@@ -348,6 +370,9 @@ export default function PageIDE(): JSX.Element {
 
   const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
   const confirmation = confirmations[0]
+  const actionsInQueue = Array.from(queues.values())
+    .map(({ queue }) => queue)
+    .flat()
 
   return (
     <Container.Page>
@@ -370,26 +395,34 @@ export default function PageIDE(): JSX.Element {
             )}
           </Button>
         </div>
-        {currentAction !== EnumAction.None && (
-          <div className="flex group text-xs text-neutral-400 cursor-pointer px-2 py-1 rounded-md bg-neutral-10">
+        {currentActions.length > 0 && (
+          <div className="flex overflow-hidden text-xs text-neutral-400 px-2 py-1 rounded-md bg-neutral-10">
             <Spinner
               variant={EnumVariant.Info}
               className="w-4 h-4"
             />
-            <span className="ml-2 group-hover:hidden">Running</span>
-            <span
-              className="cursor-pointer ml-2 text-neutral-600 hidden group-hover:inline"
-              onClick={(e: React.MouseEvent) => {
-                e.stopPropagation()
-                cancelCurrentAction()
-              }}
-            >
-              Cancel
+            <span className="flex">
+              <span className="ml-2">Running</span>
+              <b className="block w-full ml-2 text-neutral-600 whitespace-nowrap overflow-hidden text-ellipsis">
+                {currentActions.length > 4
+                  ? `${currentActions.length} actions`
+                  : currentActions.map(camelCaseToRegularCase).join(', ')}
+                {actionsInQueue.length > 0 && (
+                  <span className="ml-2 text-neutral-500 whitespace-nowrap">
+                    with{' '}
+                    {actionsInQueue.length > 2
+                      ? actionsInQueue.length
+                      : `${actionsInQueue
+                          .map(q => camelCaseToRegularCase(q.action))
+                          .join(', ')}`}{' '}
+                    queued
+                  </span>
+                )}
+              </b>
             </span>
-            <b className="block ml-2 text-neutral-600 ">{currentAction}</b>
           </div>
         )}
-        <div className="px-3 flex items-center min-w-[10rem] justify-end">
+        <div className="flex px-3 items-center justify-end">
           <RunPlan />
           <Suspense>
             {isNotNil(activePlan) && <ActivePlan plan={activePlan} />}

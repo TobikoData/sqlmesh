@@ -51,8 +51,10 @@ function Plan({
     testsReportErrors,
   } = usePlan()
 
-  const enqueueAction = useStoreActionManager(s => s.enqueueAction)
-  const resetCurrentAction = useStoreActionManager(s => s.resetCurrentAction)
+  const enqueue = useStoreActionManager(s => s.enqueue)
+  const resetQueueCurrentByAction = useStoreActionManager(
+    s => s.resetQueueCurrentByAction,
+  )
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -241,7 +243,11 @@ function Plan({
         reset()
       })
       .finally(() => {
-        resetCurrentAction()
+        resetQueueCurrentByAction(
+          planAction === EnumPlanAction.Applying
+            ? EnumAction.PlanApply
+            : EnumAction.Plan,
+        )
       })
   }
 
@@ -255,21 +261,23 @@ function Plan({
       },
     ])
 
-    enqueueAction({ action: EnumAction.PlanApply })
-
-    planApply()
-      .then(({ data }) => {
+    enqueue({
+      action: EnumAction.PlanApply,
+      callback: planApply,
+      onCallbackSuccess({ data }) {
         if (data?.type === EnumPlanApplyType.Virtual) {
           setPlanState(EnumPlanState.Finished)
-          resetCurrentAction()
+          resetQueueCurrentByAction(EnumAction.PlanApply)
         }
-      })
-      .finally(() => {
+      },
+      onCallbackFinally() {
         elTaskProgress?.current?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         })
-      })
+      },
+      cancel: cancelRequestPlanApply,
+    })
   }
 
   function run(): void {
@@ -281,7 +289,7 @@ function Plan({
     setPlanAction(EnumPlanAction.Running)
     setPlanState(EnumPlanState.Running)
 
-    enqueueAction({
+    enqueue({
       action: EnumAction.Plan,
       callback: planRun,
       onCallbackSuccess({ data }: { data: any }) {
@@ -308,7 +316,7 @@ function Plan({
     })
 
     if (auto_apply) {
-      enqueueAction({
+      enqueue({
         action: EnumAction.PlanApply,
         callback: apply,
         cancel: cancelRequestPlanApply,
