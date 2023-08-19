@@ -225,14 +225,7 @@ const useStoreActionManager = create(
 
           const payload = q.queue.shift()
 
-          if (
-            isNil(payload) ||
-            isNil(payload.action) ||
-            (isNil(payload.callback) && payload.action === EnumAction.None) ||
-            (isArrayNotEmpty(payload.rules) &&
-              payload.rules.some(rule => isFalse(rule(get()))))
-          )
-            return
+          if (shouldSkipDequeue(payload, get)) return
 
           s.results[payload.action] = undefined
 
@@ -320,6 +313,19 @@ const useStoreActionManager = create(
     ),
   ),
 )
+
+function shouldSkipDequeue(
+  payload: Optional<ActionHandler>,
+  get: () => ActionManager,
+): payload is undefined {
+  return (
+    isNil(payload) ||
+    isNil(payload.action) ||
+    (isNil(payload.callback) && payload.action === EnumAction.None) ||
+    (isArrayNotEmpty(payload.rules) &&
+      payload.rules.some(rule => isFalse(rule(get()))))
+  )
+}
 
 function toCallback(
   payload: ActionHandler,
