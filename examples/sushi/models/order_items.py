@@ -21,6 +21,7 @@ ITEMS = "sushi.items"
         batch_size=30,
     ),
     cron="@daily",
+    start="1 week ago",
     columns={
         "id": "int",
         "order_id": "int",

@@ -152,7 +152,6 @@ class Plan:
 
     def set_start(self, new_start: TimeLike) -> None:
         self._start = new_start
-        self.__missing_intervals = None
         self._refresh_dag_and_ignored_snapshots()
 
     @classmethod
@@ -164,9 +163,6 @@ class Plan:
                 return to_date(make_inclusive_end(end))
             return end
         return now()
-
-    def _get_snapshot(self, snapshot_name: str) -> t.Optional[Snapshot]:
-        return self.context_diff.snapshots.get(snapshot_name)
 
     @property
     def end(self) -> TimeLike:
@@ -228,15 +224,12 @@ class Plan:
     @property
     def snapshots(self) -> t.List[Snapshot]:
         """Gets all the snapshots in the plan/environment."""
-        return [
-            snapshot
-            for snapshot in [
-                self._get_snapshot(snapshot_name)
-                for snapshot_name in self._dag
-                if snapshot_name not in self.ignored_snapshot_names
-            ]
-            if snapshot
-        ]
+        return self._snapshots
+
+    @property
+    def snapshot_mapping(self) -> t.Dict[str, Snapshot]:
+        """Gets a mapping of snapshot name to snapshot."""
+        return {snapshot.name: snapshot for snapshot in self.snapshots}
 
     @property
     def new_snapshots(self) -> t.List[Snapshot]:
@@ -293,7 +286,7 @@ class Plan:
                 continue
             loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
             for downstream_indirect in self.indirectly_modified.get(snapshot.name, set()):
-                downstream_snapshot = self.context_diff.snapshots[downstream_indirect]
+                downstream_snapshot = self.snapshot_mapping[downstream_indirect]
                 # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                 if downstream_snapshot.is_indirect_non_breaking:
                     continue
@@ -320,7 +313,7 @@ class Plan:
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
-        return snapshot.snapshot_id in self.context_diff.new_snapshots
+        return snapshot.snapshot_id in [s.snapshot_id for s in self.new_snapshots]
 
     def apply(self) -> None:
         """Runs apply if an apply function was passed in."""
@@ -346,7 +339,7 @@ class Plan:
         snapshot.categorize_as(choice)
 
         for child in self.indirectly_modified[snapshot.name]:
-            child_snapshot = self.context_diff.snapshots[child]
+            child_snapshot = self.snapshot_mapping[child]
             # If the snapshot isn't new then we are reverting to a previously existing snapshot
             # and therefore we don't want to recategorize it.
             if not self.is_new_snapshot(child_snapshot):
@@ -467,25 +460,24 @@ class Plan:
             return
 
         dummy_interval = (sys.maxsize, -sys.maxsize)
-        snapshot_mapping = self.context_diff.snapshots
         # Add restate snapshots and their downstream snapshots
         for snapshot_name in restate_models:
-            if snapshot_name not in snapshot_mapping or not is_restateable_snapshot(
-                snapshot_mapping[snapshot_name]
+            if snapshot_name not in self.snapshot_mapping or not is_restateable_snapshot(
+                self.snapshot_mapping[snapshot_name]
             ):
                 raise PlanError(
                     f"Cannot restate from '{snapshot_name}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled for this model."
                 )
             restatements[snapshot_name] = dummy_interval
             for downstream_snapshot_name in self._dag.downstream(snapshot_name):
-                if is_restateable_snapshot(snapshot_mapping[downstream_snapshot_name]):
+                if is_restateable_snapshot(self.snapshot_mapping[downstream_snapshot_name]):
                     restatements[downstream_snapshot_name] = dummy_interval
         # Get restatement intervals for all restated snapshots and make sure that if a snapshot expands it's
         # restatement range that it's downstream dependencies all expand their restatement ranges as well.
         for snapshot_name in self._dag:
             if snapshot_name not in restatements:
                 continue
-            snapshot = snapshot_mapping[snapshot_name]
+            snapshot = self.snapshot_mapping[snapshot_name]
             interval = snapshot.get_removal_interval(
                 self.start, self.end, self._execution_time, strict=False
             )
@@ -510,7 +502,7 @@ class Plan:
         directly_modified = []
         all_indirectly_modified = set()
 
-        for model_name, snapshot in self.context_diff.snapshots.items():
+        for model_name, snapshot in self.snapshot_mapping.items():
             if model_name in self.context_diff.modified_snapshots:
                 if self.context_diff.directly_modified(model_name):
                     directly_modified.append(snapshot)
@@ -535,7 +527,9 @@ class Plan:
         returns a list of added and directly modified snapshots as well as the mapping of
         indirectly modified snapshots.
         """
-        for model_name, snapshot in self.context_diff.snapshots.items():
+        for model_name, snapshot in self.snapshot_mapping.items():
+            if snapshot.intervals:
+                continue
             upstream_model_names = self._dag.upstream(model_name)
 
             if model_name in self.context_diff.modified_snapshots:
@@ -561,10 +555,7 @@ class Plan:
                             model_name, set()
                         ) | {model_name}
                         for downstream in this_model_with_downstream:
-                            if (
-                                self.context_diff.snapshots[downstream].model.columns_to_types
-                                is None
-                            ):
+                            if self.snapshot_mapping[downstream].model.columns_to_types is None:
                                 model_with_missing_columns = downstream
                                 break
 
@@ -590,7 +581,7 @@ class Plan:
                     and not snapshot.version
                     and not any(
                         self.context_diff.directly_modified(upstream)
-                        and not self.context_diff.snapshots[upstream].version
+                        and not self.snapshot_mapping[upstream].version
                         for upstream in upstream_model_names
                     )
                 ):
@@ -603,7 +594,7 @@ class Plan:
         self, model_name: str, upstream_model_names: t.Iterable[str]
     ) -> None:
         for upstream in upstream_model_names:
-            upstream_snapshot = self.context_diff.snapshots.get(upstream)
+            upstream_snapshot = self.snapshot_mapping.get(upstream)
             if (
                 upstream_snapshot
                 and upstream_snapshot.version
@@ -685,6 +676,9 @@ class Plan:
     def _refresh_dag_and_ignored_snapshots(
         self, restate_models: t.Optional[t.Iterable[str]] = None
     ) -> None:
+        self._restatements = {}
+        self._snapshots: t.List[Snapshot] = []
+
         self.ignored_snapshot_names: t.Set[str] = set()
         full_dag: DAG[str] = DAG()
         self._dag: DAG[str] = DAG()
@@ -693,7 +687,7 @@ class Plan:
         snapshots = self.context_diff.snapshots.values()
         cache: t.Optional[t.Dict[str, datetime]] = {}
         for snapshot_name in full_dag:
-            snapshot = self._get_snapshot(snapshot_name)
+            snapshot = self.context_diff.snapshots.get(snapshot_name)
             # If the snapshot doesn't exist then it must be an external model
             if not snapshot:
                 continue
@@ -701,11 +695,9 @@ class Plan:
                 self._start, start_date(snapshot, snapshots, cache)
             ) and snapshot.model.depends_on.isdisjoint(self.ignored_snapshot_names):
                 self._dag.add(snapshot_name, snapshot.model.depends_on)
+                self._snapshots.append(snapshot)
             else:
                 self.ignored_snapshot_names.add(snapshot_name)
-
-        self.__missing_intervals = None
-        self._restatements = {}
 
         if restate_models and self.new_snapshots:
             raise PlanError(
@@ -719,6 +711,7 @@ class Plan:
             restate_models = [s.name for s in self.new_snapshots if s.is_materialized]
 
         self._add_restatements(restate_models or [])
+        self.__missing_intervals = None
 
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range(self._start, self._end)

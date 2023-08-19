@@ -5,6 +5,7 @@ MODEL (
     time_column (ds, '%Y-%m-%d'),
     batch_size 10,
   ),
+  start '1 week ago',
   owner jen,
   cron '@daily',
   audits (

@@ -7,6 +7,7 @@ MODEL (
   ),
   owner jen,
   cron '@daily',
+  start '1 week ago',
   dialect hive,
   tags expensive,
   grain [customer_id, ds],

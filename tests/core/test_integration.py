@@ -819,6 +819,7 @@ def apply_to_environment(
 
     plan = context.plan(
         environment,
+        start=plan_start or start(context) if environment != c.PROD else None,
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
         no_prompts=True,
         include_unmodified=True,
