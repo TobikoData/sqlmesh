@@ -94,7 +94,11 @@ interface ActionManager {
 
 //
 const lock: Record<Action, ActionGroup> = {
-  [EnumAction.Plan]: [EnumAction.PlanApply, EnumAction.Backfill],
+  [EnumAction.Plan]: [
+    EnumAction.PlanApply,
+    EnumAction.Backfill,
+    EnumAction.ModelEvaluate,
+  ],
   [EnumAction.PlanApply]: [
     EnumAction.Plan,
     EnumAction.Backfill,
