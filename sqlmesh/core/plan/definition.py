@@ -101,6 +101,7 @@ class Plan:
         self.categorizer_config = categorizer_config or CategorizerConfig()
         self.auto_categorization_enabled = auto_categorization_enabled
         self.include_unmodified = include_unmodified
+        self._restate_models = set(restate_models or [])
         self._effective_from: t.Optional[TimeLike] = None
         self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
         self._end = end if end or not is_dev else now()
@@ -110,7 +111,7 @@ class Plan:
         self._categorized: t.Optional[t.List[Snapshot]] = None
         self._uncategorized: t.Optional[t.List[Snapshot]] = None
 
-        self._refresh_dag_and_ignored_snapshots(restate_models=restate_models or [])
+        self._refresh_dag_and_ignored_snapshots()
 
         if effective_from:
             self._set_effective_from(effective_from)
@@ -152,6 +153,7 @@ class Plan:
 
     def set_start(self, new_start: TimeLike) -> None:
         self._start = new_start
+        self.__missing_intervals = None
         self._refresh_dag_and_ignored_snapshots()
 
     @classmethod
@@ -191,10 +193,9 @@ class Plan:
 
     @end.setter
     def end(self, new_end: TimeLike) -> None:
-        self._ensure_valid_date_range(self._start, new_end)
         self._end = new_end
         self.override_end = True
-        self.__missing_intervals = None
+        self._refresh_dag_and_ignored_snapshots()
 
     @property
     def is_start_and_end_allowed(self) -> bool:
@@ -447,7 +448,7 @@ class Plan:
             and bool(self.context_diff.unpromoted_models)
         )
 
-    def _add_restatements(self, restate_models: t.Iterable[str]) -> None:
+    def _add_restatements(self) -> None:
         def is_restateable_snapshot(snapshot: Snapshot) -> bool:
             if not self.is_dev and snapshot.model.disable_restatement:
                 logger.debug("Restatement is disabled for model '%s'.", snapshot.name)
@@ -455,11 +456,18 @@ class Plan:
             return not snapshot.is_symbolic and not snapshot.is_seed
 
         restatements: t.Dict[str, Interval] = {}
+        dummy_interval = (sys.maxsize, -sys.maxsize)
+        restate_models = self._restate_models
+        if not restate_models and self.is_dev and self.forward_only:
+            # Add model names for new forward-only snapshots to the restatement list
+            # in order to compute previews.
+            restate_models = {
+                s.name for s in self.context_diff.new_snapshots.values() if s.is_materialized
+            }
         if not restate_models:
             self._restatements = restatements
             return
 
-        dummy_interval = (sys.maxsize, -sys.maxsize)
         # Add restate snapshots and their downstream snapshots
         for snapshot_name in restate_models:
             if snapshot_name not in self.snapshot_mapping or not is_restateable_snapshot(
@@ -673,44 +681,17 @@ class Plan:
                 "No changes were detected. Make a change or run with --include-unmodified to create a new environment without changes."
             )
 
-    def _refresh_dag_and_ignored_snapshots(
-        self, restate_models: t.Optional[t.Iterable[str]] = None
-    ) -> None:
+    def _refresh_dag_and_ignored_snapshots(self) -> None:
         self._restatements = {}
-        self._snapshots: t.List[Snapshot] = []
+        self._dag, self._snapshots, self.ignored_snapshot_names = self._build_snapshots_and_dag()
 
-        self.ignored_snapshot_names: t.Set[str] = set()
-        full_dag: DAG[str] = DAG()
-        self._dag: DAG[str] = DAG()
-        for name, context_snapshot in self.context_diff.snapshots.items():
-            full_dag.add(name, context_snapshot.model.depends_on)
-        snapshots = self.context_diff.snapshots.values()
-        cache: t.Optional[t.Dict[str, datetime]] = {}
-        for snapshot_name in full_dag:
-            snapshot = self.context_diff.snapshots.get(snapshot_name)
-            # If the snapshot doesn't exist then it must be an external model
-            if not snapshot:
-                continue
-            if snapshot.is_valid_start(
-                self._start, start_date(snapshot, snapshots, cache)
-            ) and snapshot.model.depends_on.isdisjoint(self.ignored_snapshot_names):
-                self._dag.add(snapshot_name, snapshot.model.depends_on)
-                self._snapshots.append(snapshot)
-            else:
-                self.ignored_snapshot_names.add(snapshot_name)
-
-        if restate_models and self.new_snapshots:
+        if self._restate_models and self.new_snapshots:
             raise PlanError(
                 "Model changes and restatements can't be a part of the same plan. "
                 "Revert or apply changes before proceeding with restatements."
             )
 
-        if not restate_models and self.is_dev and self.forward_only:
-            # Add model names for new forward-only snapshots to the restatement list
-            # in order to compute previews.
-            restate_models = [s.name for s in self.new_snapshots if s.is_materialized]
-
-        self._add_restatements(restate_models or [])
+        self._add_restatements()
         self.__missing_intervals = None
 
         self._ensure_new_env_with_changes()
@@ -720,14 +701,37 @@ class Plan:
         self._ensure_no_forward_only_new_models()
         self._ensure_no_broken_references()
 
-        directly_indirectly_modified = self._build_directly_and_indirectly_modified()
-        self.directly_modified = directly_indirectly_modified[0]
-        self.indirectly_modified = directly_indirectly_modified[1]
+        (
+            self.directly_modified,
+            self.indirectly_modified,
+        ) = self._build_directly_and_indirectly_modified()
 
         self._categorize_snapshots()
 
         self._categorized = None
         self._uncategorized = None
+
+    def _build_snapshots_and_dag(self) -> t.Tuple[DAG[str], t.List[Snapshot], t.Set[str]]:
+        ignored_snapshot_names: t.Set[str] = set()
+        full_dag: DAG[str] = DAG()
+        filtered_dag: DAG[str] = DAG()
+        filtered_snapshots = []
+        cache: t.Optional[t.Dict[str, datetime]] = {}
+        for name, context_snapshot in self.context_diff.snapshots.items():
+            full_dag.add(name, context_snapshot.model.depends_on)
+        for snapshot_name in full_dag:
+            snapshot = self.context_diff.snapshots.get(snapshot_name)
+            # If the snapshot doesn't exist then it must be an external model
+            if not snapshot:
+                continue
+            if snapshot.is_valid_start(
+                self._start, start_date(snapshot, self.context_diff.snapshots.values(), cache)
+            ) and snapshot.model.depends_on.isdisjoint(ignored_snapshot_names):
+                filtered_dag.add(snapshot_name, snapshot.model.depends_on)
+                filtered_snapshots.append(snapshot)
+            else:
+                ignored_snapshot_names.add(snapshot_name)
+        return filtered_dag, filtered_snapshots, ignored_snapshot_names
 
 
 class PlanStatus(str, Enum):
