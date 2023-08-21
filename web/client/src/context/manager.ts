@@ -76,26 +76,6 @@ interface ActionManager {
   shouldLock: (action: Action) => boolean
 }
 
-// const groupOne = [
-//   EnumAction.Plan,
-//   EnumAction.PlanApply,
-//   EnumAction.Backfill,
-//   EnumAction.ModelEvaluate,
-//   EnumAction.Audits,
-//   EnumAction.Tests,
-//   EnumAction.Diff,
-// ]
-
-// const groupTwo = [
-//   EnumAction.FileExplorerGet,
-//   EnumAction.FileExplorerCreate,
-//   EnumAction.FileExplorerDelete,
-//   EnumAction.FileExplorerRename,
-//   EnumAction.FileExplorerMove,
-//   EnumAction.FileExplorerModify,
-// ]
-
-//
 const lock: Record<Action, ActionGroup> = {
   [EnumAction.Plan]: [
     EnumAction.PlanApply,
@@ -109,6 +89,7 @@ const lock: Record<Action, ActionGroup> = {
   ],
   [EnumAction.Backfill]: [EnumAction.ModelEvaluate],
   [EnumAction.Query]: [EnumAction.Backfill],
+  [EnumAction.ModelRender]: [],
   [EnumAction.ModelEvaluate]: [
     EnumAction.Plan,
     EnumAction.PlanApply,
@@ -116,15 +97,15 @@ const lock: Record<Action, ActionGroup> = {
     EnumAction.ModelRender,
   ],
   [EnumAction.FileExplorerGet]: [],
-  // [EnumAction.Audits]: groupOne,
-  // [EnumAction.Tests]: groupOne,
-  // [EnumAction.Diff]: groupOne,
-  // [EnumAction.FileExplorerGet]: groupTwo,
-  // [EnumAction.FileExplorerCreate]: groupTwo,
-  // [EnumAction.FileExplorerDelete]: groupTwo,
-  // [EnumAction.FileExplorerRename]: groupTwo,
-  // [EnumAction.FileExplorerMove]: groupTwo,
-  // [EnumAction.FileExplorerModify]: groupTwo,
+  [EnumAction.FileExplorerCreate]: [],
+  [EnumAction.FileExplorerDelete]: [],
+  [EnumAction.FileExplorerRename]: [],
+  [EnumAction.FileExplorerMove]: [],
+  [EnumAction.FileExplorerModify]: [],
+  [EnumAction.Meta]: [],
+  [EnumAction.Audits]: [],
+  [EnumAction.Tests]: [],
+  [EnumAction.Diff]: [],
 }
 
 const actionsSorted = topologicalSort(lock)
