@@ -463,6 +463,8 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         plan = Plan(context_diff_mock)
         plan.effective_from = "2023-02-01"
 
+    # The snapshot gets categorized as breaking in previous step so we want to reset that back to None
+    updated_snapshot.change_category = None
     plan = Plan(
         context_diff_mock, forward_only=True, start="2023-01-01", end="2023-03-01", is_dev=True
     )

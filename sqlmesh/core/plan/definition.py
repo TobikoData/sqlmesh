@@ -228,18 +228,14 @@ class Plan:
         return self._snapshots
 
     @property
-    def snapshot_mapping(self) -> t.Dict[str, Snapshot]:
+    def _snapshot_mapping(self) -> t.Dict[str, Snapshot]:
         """Gets a mapping of snapshot name to snapshot."""
-        return {snapshot.name: snapshot for snapshot in self.snapshots}
+        return self.__snapshot_mapping
 
     @property
     def new_snapshots(self) -> t.List[Snapshot]:
         """Gets only new snapshots in the plan/environment."""
-        return [
-            snapshot
-            for snapshot in self.snapshots
-            if snapshot.snapshot_id in self.context_diff.new_snapshots
-        ]
+        return self._new_snapshots
 
     @property
     def environment(self) -> Environment:
@@ -287,7 +283,7 @@ class Plan:
                 continue
             loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
             for downstream_indirect in self.indirectly_modified.get(snapshot.name, set()):
-                downstream_snapshot = self.snapshot_mapping[downstream_indirect]
+                downstream_snapshot = self._snapshot_mapping[downstream_indirect]
                 # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                 if downstream_snapshot.is_indirect_non_breaking:
                     continue
@@ -296,16 +292,11 @@ class Plan:
 
     @property
     def has_changes(self) -> bool:
-        modified_names = (
-            set().union(
-                *[
-                    self.context_diff.added,
-                    self.context_diff.removed,
-                    self.context_diff.modified_snapshots,
-                ]
-            )
-            - self.ignored_snapshot_names
-        )
+        modified_names = {
+            *self.context_diff.added,
+            *self.context_diff.removed,
+            *self.context_diff.modified_snapshots,
+        } - self.ignored_snapshot_names
         return (
             self.context_diff.is_new_environment
             or self.context_diff.is_unfinalized_environment
@@ -314,7 +305,7 @@ class Plan:
 
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
-        return snapshot.snapshot_id in [s.snapshot_id for s in self.new_snapshots]
+        return snapshot.snapshot_id in {s.snapshot_id for s in self.new_snapshots}
 
     def apply(self) -> None:
         """Runs apply if an apply function was passed in."""
@@ -340,7 +331,7 @@ class Plan:
         snapshot.categorize_as(choice)
 
         for child in self.indirectly_modified[snapshot.name]:
-            child_snapshot = self.snapshot_mapping[child]
+            child_snapshot = self._snapshot_mapping[child]
             # If the snapshot isn't new then we are reverting to a previously existing snapshot
             # and therefore we don't want to recategorize it.
             if not self.is_new_snapshot(child_snapshot):
@@ -470,22 +461,22 @@ class Plan:
 
         # Add restate snapshots and their downstream snapshots
         for snapshot_name in restate_models:
-            if snapshot_name not in self.snapshot_mapping or not is_restateable_snapshot(
-                self.snapshot_mapping[snapshot_name]
+            if snapshot_name not in self._snapshot_mapping or not is_restateable_snapshot(
+                self._snapshot_mapping[snapshot_name]
             ):
                 raise PlanError(
                     f"Cannot restate from '{snapshot_name}'. Either such model doesn't exist, no other materialized model references it, or restatement was disabled for this model."
                 )
             restatements[snapshot_name] = dummy_interval
             for downstream_snapshot_name in self._dag.downstream(snapshot_name):
-                if is_restateable_snapshot(self.snapshot_mapping[downstream_snapshot_name]):
+                if is_restateable_snapshot(self._snapshot_mapping[downstream_snapshot_name]):
                     restatements[downstream_snapshot_name] = dummy_interval
         # Get restatement intervals for all restated snapshots and make sure that if a snapshot expands it's
         # restatement range that it's downstream dependencies all expand their restatement ranges as well.
         for snapshot_name in self._dag:
             if snapshot_name not in restatements:
                 continue
-            snapshot = self.snapshot_mapping[snapshot_name]
+            snapshot = self._snapshot_mapping[snapshot_name]
             interval = snapshot.get_removal_interval(
                 self.start, self.end, self._execution_time, strict=False
             )
@@ -510,7 +501,7 @@ class Plan:
         directly_modified = []
         all_indirectly_modified = set()
 
-        for model_name, snapshot in self.snapshot_mapping.items():
+        for model_name, snapshot in self._snapshot_mapping.items():
             if model_name in self.context_diff.modified_snapshots:
                 if self.context_diff.directly_modified(model_name):
                     directly_modified.append(snapshot)
@@ -535,8 +526,8 @@ class Plan:
         returns a list of added and directly modified snapshots as well as the mapping of
         indirectly modified snapshots.
         """
-        for model_name, snapshot in self.snapshot_mapping.items():
-            if snapshot.intervals:
+        for model_name, snapshot in self._snapshot_mapping.items():
+            if snapshot.change_category:
                 continue
             upstream_model_names = self._dag.upstream(model_name)
 
@@ -563,7 +554,7 @@ class Plan:
                             model_name, set()
                         ) | {model_name}
                         for downstream in this_model_with_downstream:
-                            if self.snapshot_mapping[downstream].model.columns_to_types is None:
+                            if self._snapshot_mapping[downstream].model.columns_to_types is None:
                                 model_with_missing_columns = downstream
                                 break
 
@@ -589,7 +580,7 @@ class Plan:
                     and not snapshot.version
                     and not any(
                         self.context_diff.directly_modified(upstream)
-                        and not self.snapshot_mapping[upstream].version
+                        and not self._snapshot_mapping[upstream].version
                         for upstream in upstream_model_names
                     )
                 ):
@@ -602,7 +593,7 @@ class Plan:
         self, model_name: str, upstream_model_names: t.Iterable[str]
     ) -> None:
         for upstream in upstream_model_names:
-            upstream_snapshot = self.snapshot_mapping.get(upstream)
+            upstream_snapshot = self._snapshot_mapping.get(upstream)
             if (
                 upstream_snapshot
                 and upstream_snapshot.version
@@ -683,7 +674,13 @@ class Plan:
 
     def _refresh_dag_and_ignored_snapshots(self) -> None:
         self._restatements = {}
-        self._dag, self._snapshots, self.ignored_snapshot_names = self._build_snapshots_and_dag()
+        (
+            self._dag,
+            self._snapshots,
+            self._new_snapshots,
+            self.__snapshot_mapping,
+            self.ignored_snapshot_names,
+        ) = self._build_snapshots_and_dag()
 
         if self._restate_models and self.new_snapshots:
             raise PlanError(
@@ -711,11 +708,15 @@ class Plan:
         self._categorized = None
         self._uncategorized = None
 
-    def _build_snapshots_and_dag(self) -> t.Tuple[DAG[str], t.List[Snapshot], t.Set[str]]:
+    def _build_snapshots_and_dag(
+        self,
+    ) -> t.Tuple[DAG[str], t.List[Snapshot], t.List[Snapshot], t.Dict[str, Snapshot], t.Set[str]]:
         ignored_snapshot_names: t.Set[str] = set()
         full_dag: DAG[str] = DAG()
         filtered_dag: DAG[str] = DAG()
         filtered_snapshots = []
+        filtered_new_snapshots = []
+        filtered_snapshot_mapping = {}
         cache: t.Optional[t.Dict[str, datetime]] = {}
         for name, context_snapshot in self.context_diff.snapshots.items():
             full_dag.add(name, context_snapshot.model.depends_on)
@@ -729,9 +730,18 @@ class Plan:
             ) and snapshot.model.depends_on.isdisjoint(ignored_snapshot_names):
                 filtered_dag.add(snapshot_name, snapshot.model.depends_on)
                 filtered_snapshots.append(snapshot)
+                filtered_snapshot_mapping[snapshot_name] = snapshot
+                if snapshot.snapshot_id in self.context_diff.new_snapshots:
+                    filtered_new_snapshots.append(snapshot)
             else:
                 ignored_snapshot_names.add(snapshot_name)
-        return filtered_dag, filtered_snapshots, ignored_snapshot_names
+        return (
+            filtered_dag,
+            filtered_snapshots,
+            filtered_new_snapshots,
+            filtered_snapshot_mapping,
+            ignored_snapshot_names,
+        )
 
 
 class PlanStatus(str, Enum):

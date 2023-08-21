@@ -6,7 +6,6 @@ MODEL (
   ),
   owner jen,
   cron '@daily',
-  start '1 week ago',
   audits (
     not_null(columns = [waiter_id]),
     forall(criteria = [LENGTH(waiter_name) > 0])

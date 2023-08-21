@@ -19,11 +19,12 @@ from sqlmesh.utils.date import (
     TimeLike,
     is_date,
     make_inclusive,
+    make_inclusive_end,
     now,
     now_timestamp,
+    to_date,
     to_datetime,
     to_ds,
-    to_end_date,
     to_timestamp,
     yesterday,
 )
@@ -810,7 +811,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.depends_on_past and start:
             if not snapshot_start:
                 raise SQLMeshError("Snapshot must have a start defined if it depends on past")
-            start_ts = to_timestamp(self.model.cron_floor(start))
+            start_ts = to_timestamp(self.model.interval_unit.cron_floor(start))
             if not self.intervals:
                 return to_timestamp(snapshot_start) >= start_ts
             # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
@@ -824,12 +825,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 return earliest_interval >= start_ts
         return True
 
-    def get_latest(self, snapshot_start: t.Optional[TimeLike] = None) -> t.Optional[TimeLike]:
-        """The latest interval loaded for the snapshot. Snapshot start is used if intervals are not defined"""
+    def get_latest(self, default: t.Optional[TimeLike] = None) -> t.Optional[TimeLike]:
+        """The latest interval loaded for the snapshot. Default is used if intervals are not defined"""
+
+        def to_end_date(end: int, unit: IntervalUnit) -> TimeLike:
+            if unit.is_day:
+                return to_date(make_inclusive_end(end))
+            return end
+
         return (
-            to_end_date((to_timestamp(max(x[1] for x in self.intervals)), self.model.interval_unit))
+            to_end_date(to_timestamp(self.intervals[-1][1]), self.model.interval_unit)
             if self.intervals
-            else snapshot_start
+            else default
         )
 
     @property

@@ -594,11 +594,7 @@ class TerminalConsole(Console):
             self._print(
                 self._get_ignored_tree(plan.ignored_snapshot_names, plan.context_diff.snapshots)
             )
-        if (
-            plan.has_changes
-            and not auto_apply
-            and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables")
-        ):
+        if not auto_apply and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables"):
             plan.apply()
 
     def _prompt_promote(self, plan: Plan) -> None:
