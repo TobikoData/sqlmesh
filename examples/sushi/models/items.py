@@ -50,7 +50,7 @@ ITEMS = [
 @model(
     "sushi.items",
     kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
-    start="3 months ago",
+    start="1 week ago",
     cron="@daily",
     columns={
         "id": "int",

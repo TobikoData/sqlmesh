@@ -49,6 +49,26 @@ class IntervalUnit(str, Enum):
         return self in (IntervalUnit.YEAR, IntervalUnit.MONTH, IntervalUnit.DAY)
 
     @property
+    def is_year(self) -> bool:
+        return self == IntervalUnit.YEAR
+
+    @property
+    def is_month(self) -> bool:
+        return self == IntervalUnit.MONTH
+
+    @property
+    def is_day(self) -> bool:
+        return self == IntervalUnit.DAY
+
+    @property
+    def is_hour(self) -> bool:
+        return self == IntervalUnit.HOUR
+
+    @property
+    def is_minute(self) -> bool:
+        return self == IntervalUnit.MINUTE
+
+    @property
     def _cron_expr(self) -> str:
         if self == IntervalUnit.MINUTE:
             return "* * * * *"

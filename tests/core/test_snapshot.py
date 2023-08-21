@@ -1109,3 +1109,26 @@ def test_model_custom_interval_unit(make_snapshot):
     )
 
     assert len(snapshot.missing_intervals("2023-01-29", "2023-01-29")) == 24
+
+
+def test_is_valid_start(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test",
+            query="SELECT 1 FROM test",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.depends_on_past
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")
+    snapshot.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert snapshot.is_valid_start("2023-01-02", "2023-01-01")
+    assert not snapshot.is_valid_start("2023-01-03", "2023-01-01")
+    snapshot.intervals = []
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
+    assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")

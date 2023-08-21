@@ -19,8 +19,10 @@ from sqlmesh.utils.date import (
     TimeLike,
     is_date,
     make_inclusive,
+    make_inclusive_end,
     now,
     now_timestamp,
+    to_date,
     to_datetime,
     to_ds,
     to_timestamp,
@@ -793,6 +795,49 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def version_get_or_generate(self) -> str:
         """Helper method to get the version or generate it from the fingerprint."""
         return self.version or self.fingerprint.to_version()
+
+    def is_valid_start(
+        self,
+        start: t.Optional[TimeLike],
+        snapshot_start: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+    ) -> bool:
+        """Checks if the given start and end are valid for this snapshot.
+        Args:
+            start: The start date/time of the interval (inclusive)
+            snapshot_start: The start date/time of the snapshot (inclusive)
+        """
+        # The snapshot may not have a start defined. If so we use the provided snapshot start.
+        if self.depends_on_past and start:
+            if not snapshot_start:
+                raise SQLMeshError("Snapshot must have a start defined if it depends on past")
+            start_ts = to_timestamp(self.model.interval_unit.cron_floor(start))
+            if not self.intervals:
+                return to_timestamp(snapshot_start) >= start_ts
+            # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
+            # provided start_ts. Otherwise we know that we are doing a non-contiguous load and therefore this is not
+            # a valid start.
+            missing_intervals = self.missing_intervals(
+                snapshot_start, now(), execution_time=execution_time
+            )
+            earliest_interval = missing_intervals[0][0] if missing_intervals else None
+            if earliest_interval:
+                return earliest_interval >= start_ts
+        return True
+
+    def get_latest(self, default: t.Optional[TimeLike] = None) -> t.Optional[TimeLike]:
+        """The latest interval loaded for the snapshot. Default is used if intervals are not defined"""
+
+        def to_end_date(end: int, unit: IntervalUnit) -> TimeLike:
+            if unit.is_day:
+                return to_date(make_inclusive_end(end))
+            return end
+
+        return (
+            to_end_date(to_timestamp(self.intervals[-1][1]), self.model.interval_unit)
+            if self.intervals
+            else default
+        )
 
     @property
     def physical_schema(self) -> str:
