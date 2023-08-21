@@ -61,6 +61,9 @@ interface ActionManager {
   removeCurrentAction: (action: Action) => void
   resetQueueCurrentByAction: (action: Action) => void
   resetQueueCurrentByGroup: (group: ActionGroup) => void
+  isRunningAction: (action?: Action) => boolean
+  findGroupByAction: (action: Action) => Optional<ActionGroup>
+  findQueueByAction: (action: Action) => Optional<ActionQueue>
   isRunningActionByGroup: (group?: ActionGroup, action?: Action) => boolean
   isRunningCancelActionByGroup: (
     group?: ActionGroup,
@@ -125,9 +128,6 @@ const lock: Record<Action, ActionGroup> = {
 }
 
 const actionsSorted = topologicalSort(lock)
-
-console.log(actionsSorted)
-
 const initialQueue = new Map<ActionGroup, ActionQueue>(
   Array.from(new Set(Object.values(lock))).map(group => [
     group,
@@ -156,6 +156,15 @@ const useStoreActionManager = create(
           }
 
           set({ currentActions: structuredClone(s.currentActions) })
+
+          // Clean up in case orphan actions
+          if (isArrayNotEmpty(s.currentActions)) {
+            s.currentActions.forEach(a => {
+              if (isFalse(s.isRunningAction(a))) {
+                s.removeCurrentAction(a)
+              }
+            })
+          }
         },
         resetQueueCurrentByGroup(group) {
           const s = get()
@@ -208,7 +217,7 @@ const useStoreActionManager = create(
 
             const queue = q.queue.filter(
               ({ action, rules }) =>
-                action !== payload.action && isArrayEmpty(rules),
+                action !== payload.action || isArrayNotEmpty(rules),
             )
 
             queue.push(payload)
@@ -249,6 +258,25 @@ const useStoreActionManager = create(
           set({ queues: new Map(s.queues) })
 
           currentCallback()
+        },
+        findGroupByAction(action) {
+          return lock[action]
+        },
+        findQueueByAction(action) {
+          const s = get()
+          const group = s.findGroupByAction(action)
+
+          return isNil(group) ? undefined : s.queues.get(group)
+        },
+        isRunningAction(action) {
+          if (isNil(action)) return false
+
+          const s = get()
+          const q = s.findQueueByAction(action)
+
+          if (isNil(q)) return false
+
+          return q.currentAction === action
         },
         isRunningActionByGroup(group, action) {
           if (isNil(group)) return false
@@ -301,11 +329,7 @@ const useStoreActionManager = create(
             if (isNil(s)) return
 
             for (const action of s.currentActions) {
-              const group = lock[action]
-
-              if (isNil(group)) continue
-
-              const q = s.queues.get(group)
+              const q = s.findQueueByAction(action)
 
               if (isNil(q)) continue
 
@@ -446,13 +470,10 @@ function getCandidate(
   return actions.reduce((acc: any, action) => {
     const s = get()
 
-    const group = lock[action]
+    const group = s.findGroupByAction(action)
+    const q = s.findQueueByAction(action)
 
-    if (isNil(group)) return acc
-
-    const q = s.queues.get(group)
-
-    if (isNil(q)) return acc
+    if (isNil(q) || isNil(group)) return acc
 
     if (
       isArrayEmpty(q.queue) ||
