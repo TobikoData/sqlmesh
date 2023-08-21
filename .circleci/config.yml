@@ -47,11 +47,8 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install packages
-          command: npm --prefix web/client ci
-      - run:
           name: Build UI
-          command: npm --prefix web/client run build
+          command: make ui-build
       - persist_to_workspace:
           root: web/client
           paths:

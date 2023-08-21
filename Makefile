@@ -82,3 +82,11 @@ ui-up:
 
 ui-down:
 	docker-compose down
+
+ui-build:
+	npm --prefix web/client ci && npm --prefix web/client run build
+
+clean-build:
+	rm -rf build/ && rm -rf dist/ && rm -rf *.egg-info
+
+dev-publish: clean-build ui-build publish
