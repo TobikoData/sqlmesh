@@ -220,6 +220,10 @@ class Scheduler:
             restatements=restatements,
             ignore_cron=ignore_cron,
         )
+        if not batches:
+            self.console.log_success("No models scheduled to run at this time.")
+            return True
+
         dag = self._dag(batches)
 
         visited = set()
