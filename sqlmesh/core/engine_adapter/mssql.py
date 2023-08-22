@@ -90,7 +90,7 @@ class MSSQLEngineAdapter(
         if reference_table.db is None:
             raise SQLMeshError("table must be qualified when using Pandas DataFrames")
         with self.temp_table(query_or_df, reference_table) as temp_table:
-            rows: t.List[t.Tuple[t.Any]] = list(df.itertuples(False, None))
+            rows: t.List[t.Iterable[t.Any]] = list(df.itertuples(False, None))
 
             conn = self._connection_pool.get()
             conn.bulk_copy(temp_table.name, rows)
