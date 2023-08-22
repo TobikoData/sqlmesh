@@ -71,6 +71,7 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_schema_file
+from sqlmesh.core.selector import ModelSelector
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -545,58 +546,7 @@ class Context(BaseContext):
         If one of the snapshots has been previosly stored in the persisted state, the stored
         instance will be returned.
         """
-        prod = self.state_reader.get_environment(c.PROD)
-        remote_snapshots = (
-            {
-                snapshot.name: snapshot
-                for snapshot in self.state_reader.get_snapshots(prod.snapshots).values()
-            }
-            if prod
-            else {}
-        )
-
-        fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
-        models = self._models.copy()
-        audits = self._audits.copy()
-        projects = {config.project for config in self.configs.values()}
-
-        for name, snapshot in remote_snapshots.items():
-            if name not in models and snapshot.project not in projects:
-                models[name] = snapshot.model
-
-                for audit in snapshot.audits:
-                    if name not in audits:
-                        audits[name] = audit
-
-        snapshots = {}
-
-        for model in models.values():
-            if model.name not in self._models and model.name in remote_snapshots:
-                snapshot = remote_snapshots[model.name]
-                ttl = snapshot.ttl
-                project = snapshot.project
-            else:
-                config = self.config_for_model(model)
-                ttl = config.snapshot_ttl
-                project = config.project
-
-            snapshot = Snapshot.from_model(
-                model,
-                nodes=models,
-                audits=audits,
-                cache=fingerprint_cache,
-                ttl=ttl,
-                project=project,
-            )
-            snapshots[model.name] = snapshot
-
-        stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
-
-        for snapshot in stored_snapshots.values():
-            # Keep the original model instance to preserve the query cache.
-            snapshot.node = snapshots[snapshot.name].node
-
-        return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in snapshots.items()}
+        return self._snapshots()
 
     def render(
         self,
@@ -728,6 +678,7 @@ class Context(BaseContext):
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
+        model_selections: t.Optional[t.Iterable[str]] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -762,6 +713,7 @@ class Context(BaseContext):
                 option determines the behavior.
             effective_from: The effective date from which to apply forward-only changes on production.
             include_unmodified: Indicates whether to include unmodified models in the target development environment.
+            model_selections: A list of model selection strings to filter the models that should be included into this plan.
 
         Returns:
             The populated Plan object.
@@ -783,8 +735,18 @@ class Context(BaseContext):
         if include_unmodified is None:
             include_unmodified = self.config.include_unmodified
 
+        models_override: t.Optional[UniqueKeyDict[str, Model]] = None
+        if model_selections:
+            models_override = ModelSelector(self.state_reader, self._models, self.path).select(
+                model_selections, environment, fallback_env_name=create_from or c.PROD
+            )
+
         plan = Plan(
-            context_diff=self._context_diff(environment or c.PROD, create_from=create_from),
+            context_diff=self._context_diff(
+                environment or c.PROD,
+                snapshots=self._snapshots(models_override),
+                create_from=create_from,
+            ),
             start=start,
             end=end,
             execution_time=execution_time,
@@ -1177,6 +1139,62 @@ class Context(BaseContext):
             )
             for name, snapshot in self.snapshots.items()
         }
+
+    def _snapshots(
+        self, models_override: t.Optional[UniqueKeyDict[str, Model]] = None
+    ) -> t.Dict[str, Snapshot]:
+        prod = self.state_reader.get_environment(c.PROD)
+        remote_snapshots = (
+            {
+                snapshot.name: snapshot
+                for snapshot in self.state_reader.get_snapshots(prod.snapshots).values()
+            }
+            if prod
+            else {}
+        )
+
+        fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
+        models = (models_override or self._models).copy()
+        audits = self._audits.copy()
+        projects = {config.project for config in self.configs.values()}
+
+        for name, snapshot in remote_snapshots.items():
+            if name not in models and snapshot.project not in projects:
+                models[name] = snapshot.model
+
+                for audit in snapshot.audits:
+                    if name not in audits:
+                        audits[name] = audit
+
+        snapshots = {}
+
+        for model in models.values():
+            if model.name not in self._models and model.name in remote_snapshots:
+                snapshot = remote_snapshots[model.name]
+                ttl = snapshot.ttl
+                project = snapshot.project
+            else:
+                config = self.config_for_model(model)
+                ttl = config.snapshot_ttl
+                project = config.project
+
+            snapshot = Snapshot.from_model(
+                model,
+                nodes=models,
+                audits=audits,
+                cache=fingerprint_cache,
+                ttl=ttl,
+                project=project,
+            )
+            snapshots[model.name] = snapshot
+
+        stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
+
+        for snapshot in stored_snapshots.values():
+            # Keep the original model instance to preserve the query cache.
+            snapshot.node = snapshots[snapshot.name].node
+
+        return {name: stored_snapshots.get(s.snapshot_id, s) for name, s in snapshots.items()}
 
     def _context_diff(
         self,

@@ -306,6 +306,12 @@ class SQLMeshMagics(Magics):
         help="Include unmodified models in the target environment.",
         default=None,
     )
+    @argument(
+        "--select",
+        type=str,
+        nargs="*",
+        help="Select specific model changes that should be included in the plan.",
+    )
     @line_magic
     def plan(self, line: str) -> None:
         """Goes through a set of prompts to both establish a plan and apply it"""
@@ -332,6 +338,7 @@ class SQLMeshMagics(Magics):
             no_auto_categorization=args.no_auto_categorization,
             effective_from=args.effective_from,
             include_unmodified=args.include_unmodified,
+            model_selections=args.select,
         )
         self._context.console = console
 
