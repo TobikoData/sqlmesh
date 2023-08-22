@@ -1,6 +1,6 @@
 # Python models
 
-Although SQL is a powerful tool, some use cases are better handled by Python. For example, Python may be a better option in pipelines that involve machine learning, interacting with external APIs, or complex business logic that cannot be expressed in SQL. 
+Although SQL is a powerful tool, some use cases are better handled by Python. For example, Python may be a better option in pipelines that involve machine learning, interacting with external APIs, or complex business logic that cannot be expressed in SQL.
 
 SQLMesh has first-class support for models defined in Python; there are no restrictions on what can be done in the Python model as long as it returns a Pandas or Spark DataFrame instance.
 
@@ -29,7 +29,7 @@ def execute(
 ) -> pd.DataFrame:
 ```
 
-The `execute` function is wrapped with the `@model` [decorator](https://wiki.python.org/moin/PythonDecorators), which is used to capture the model's metadata (similar to the `MODEL` DDL statement in [SQL models](./sql_models.md)). 
+The `execute` function is wrapped with the `@model` [decorator](https://wiki.python.org/moin/PythonDecorators), which is used to capture the model's metadata (similar to the `MODEL` DDL statement in [SQL models](./sql_models.md)).
 
 Because SQLMesh creates tables before evaluating models, the schema of the output DataFrame is a required argument. The `@model` argument `columns` contains a dictionary of column names to types.
 
@@ -38,7 +38,7 @@ The function takes an `ExecutionContext` that is able to run queries and to retr
 If the function output is too large, it can also be returned in chunks using Python generators.
 
 ## Execution context
-Python models can do anything you want, but it is strongly recommended for all models to be [idempotent](../glossary.md#idempotency). Python models can fetch data from upstream models or even data outside of SQLMesh. 
+Python models can do anything you want, but it is strongly recommended for all models to be [idempotent](../glossary.md#idempotency). Python models can fetch data from upstream models or even data outside of SQLMesh.
 
 Given an execution `ExecutionContext` "context", you can fetch a DataFrame with the `fetchdf` method:
 
@@ -54,16 +54,16 @@ table = context.table("upstream_model")
 df = context.fetchdf(f"SELECT * FROM {table}")
 ```
 
-The `table` method will automatically add the referenced model to the Python model's dependencies. 
+The `table` method will automatically add the referenced model to the Python model's dependencies.
 
-The only other way to set dependencies of models in Python models is to define them explicitly in the `@model` decorator using the keyword `dependencies`. The dependencies defined in the model decorator take precedence over any dynamic references inside the function. 
+The only other way to set dependencies of models in Python models is to define them explicitly in the `@model` decorator using the keyword `depends_on`. The dependencies defined in the model decorator take precedence over any dynamic references inside the function.
 
 In this example, only `upstream_dependency` will be captured, while `another_dependency` will be ignored:
 
 ```python linenums="1"
 @model(
     "my_model.with_explicit_dependencies",
-    dependencies=["upstream_dependency"], # captured
+    depends_on=["upstream_dependency"], # captured
 )
 def execute(
     context: ExecutionContext,
@@ -74,12 +74,12 @@ def execute(
 ) -> pd.DataFrame:
 
     # ignored due to @model dependency "upstream_dependency"
-    context.table("another_dependency") 
+    context.table("another_dependency")
 ```
 
 ## Examples
 ### Basic
-The following is an example of a Python model returning a static Pandas DataFrame. 
+The following is an example of a Python model returning a static Pandas DataFrame.
 
 **Note:** All of the [metadata](./overview.md#properties) field names are the same as those in the SQL `MODEL` DDL.
 
@@ -186,7 +186,7 @@ def execute(
 ```
 
 ### Batching
-If the output of a Python model is very large and you cannot use Spark, it may be helpful to split the output into multiple batches. 
+If the output of a Python model is very large and you cannot use Spark, it may be helpful to split the output into multiple batches.
 
 With Pandas or other single machine DataFrame libraries, all data is stored in memory. Instead of returning a single DataFrame instance, you can return multiple instances using the Python generator API. This minimizes the memory footprint by reducing the size of data loaded into memory at any given time.
 

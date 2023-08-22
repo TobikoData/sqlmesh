@@ -321,12 +321,30 @@ class SparkEngineAdapter(EngineAdapter):
                 )
             )
 
-        for key, value in (table_properties or {}).items():
-            properties.append(exp.Property(this=key, value=value))
+        properties.extend(self.__table_properties_to_expressions(table_properties))
 
         if properties:
             return exp.Properties(expressions=properties)
         return None
+
+    def _create_view_properties(
+        self,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+    ) -> t.Optional[exp.Properties]:
+        """Creates a SQLGlot table properties expression for view"""
+        if not table_properties:
+            return None
+        return exp.Properties(expressions=self.__table_properties_to_expressions(table_properties))
+
+    @classmethod
+    def __table_properties_to_expressions(
+        cls, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
+    ) -> t.List[exp.Property]:
+        if not table_properties:
+            return []
+        return [
+            exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
+        ]
 
     def supports_transactions(self, transaction_type: TransactionType) -> bool:
         return False

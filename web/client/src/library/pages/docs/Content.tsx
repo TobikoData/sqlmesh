@@ -8,21 +8,21 @@ import { EnumRoutes } from '~/routes'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import LineageFlowProvider from '@components/graph/context'
 import { type ErrorIDE } from '../ide/context'
+import { isNil } from '@utils/index'
 
 export default function Content(): JSX.Element {
   const { modelName } = useParams()
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
-  const model =
-    modelName == null
-      ? undefined
-      : models.get(ModelSQLMeshModel.decodeName(modelName))
+  const model = isNil(modelName)
+    ? undefined
+    : models.get(ModelSQLMeshModel.decodeName(modelName))
 
   function handleClickModel(modelName: string): void {
     const model = models.get(modelName)
 
-    if (model == null) return
+    if (isNil(model)) return
 
     navigate(
       EnumRoutes.IdeDocsModels + '/' + ModelSQLMeshModel.encodeName(model.name),
@@ -35,7 +35,7 @@ export default function Content(): JSX.Element {
 
   return (
     <div className="flex overflow-auto w-full h-full">
-      {model == null ? (
+      {isNil(model) ? (
         <NotFound
           link={EnumRoutes.IdeDocs}
           descritpion={
@@ -63,7 +63,8 @@ export default function Content(): JSX.Element {
             <div className="flex flex-col h-full px-2">
               <ModelLineage
                 model={model}
-                fingerprint={model.id as string}
+                key={model.id}
+                fingerprint={model.id}
               />
             </div>
           </SplitPane>

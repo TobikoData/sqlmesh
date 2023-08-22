@@ -31,7 +31,7 @@ import pandas as pd
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
-from sqlmesh.core.audit import BUILT_IN_AUDITS, AuditResult
+from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.model import IncrementalUnmanagedKind, Model, ViewKind
@@ -194,7 +194,7 @@ class SnapshotEvaluator:
 
     def promote(
         self,
-        target_snapshots: t.Iterable[SnapshotInfoLike],
+        target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         is_dev: bool = False,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
@@ -212,7 +212,9 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._promote_snapshot(s, environment_naming_info, is_dev, on_complete),
+                lambda s: self._promote_snapshot(
+                    s, environment_naming_info, is_dev, on_complete, s.model
+                ),
                 self.ddl_concurrent_tasks,
             )
 
@@ -301,7 +303,7 @@ class SnapshotEvaluator:
         """Execute a snapshot's model's audit queries.
 
         Args:
-            snapshot: Snapshot to evaluate.  start: The start datetime to audit. Defaults to epoch start.
+            snapshot: Snapshot to evaluate.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
@@ -328,37 +330,20 @@ class SnapshotEvaluator:
         results = []
         for audit_name, audit_args in snapshot.model.audits:
             audit = audits_by_name[audit_name]
-            if audit.skip:
-                results.append(AuditResult(audit=audit, model=snapshot.model, skipped=True))
-                continue
-            query = audit.render_query(
-                snapshot,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                snapshots=snapshots,
-                is_dev=is_dev,
-                engine_adapter=self.adapter,
-                **audit_args,
-                **kwargs,
-            )
-            count, *_ = self.adapter.fetchone(
-                select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
-            )
-            if count and raise_exception:
-                audit_error = AuditError(
-                    audit_name=audit_name,
-                    model_name=snapshot.model.name,
-                    count=count,
-                    query=query,
+            results.append(
+                self._audit(
+                    audit=audit,
+                    audit_args=audit_args,
+                    snapshot=snapshot,
+                    snapshots=snapshots,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    raise_exception=raise_exception,
+                    is_dev=is_dev,
+                    **kwargs,
                 )
-                if audit.blocking:
-                    raise audit_error
-                else:
-                    logger.warning(
-                        f"{audit_error}\nAudit is warn only so proceeding with execution."
-                    )
-            results.append(AuditResult(audit=audit, model=snapshot.model, count=count, query=query))
+            )
         return results
 
     @contextmanager
@@ -419,7 +404,10 @@ class SnapshotEvaluator:
     def _migrate_snapshot(
         self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
     ) -> None:
-        if snapshot.change_category != SnapshotChangeCategory.FORWARD_ONLY:
+        if not snapshot.is_paused or snapshot.change_category not in (
+            SnapshotChangeCategory.FORWARD_ONLY,
+            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        ):
             return
 
         parent_snapshots_by_name = {
@@ -438,10 +426,11 @@ class SnapshotEvaluator:
         environment_naming_info: EnvironmentNamingInfo,
         is_dev: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
+        model: Model,
     ) -> None:
         table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
         _evaluation_strategy(snapshot, self.adapter).promote(
-            snapshot.qualified_view_name, environment_naming_info, table_name
+            snapshot.qualified_view_name, environment_naming_info, table_name, model
         )
 
         if on_complete is not None:
@@ -463,13 +452,14 @@ class SnapshotEvaluator:
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         snapshot = snapshot.table_info
         table_names = [snapshot.table_name()]
-        if snapshot.version != snapshot.fingerprint:
+        if snapshot.version != snapshot.fingerprint.to_version():
             table_names.append(snapshot.table_name(is_dev=True))
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
         for table_name in table_names:
-            if not table_name.startswith(snapshot.physical_schema):
+            table = exp.to_table(table_name)
+            if table.db != snapshot.physical_schema:
                 raise SQLMeshError(
                     f"Table '{table_name}' is not a part of the physical schema '{snapshot.physical_schema}' and so can't be dropped."
                 )
@@ -483,6 +473,57 @@ class SnapshotEvaluator:
                 raise SQLMeshError(
                     f"Snapshot {snapshot.snapshot_id} depends on a paused forward-only snapshot {p.snapshot_id}. Create and apply a new plan to fix this issue."
                 )
+
+    def _audit(
+        self,
+        audit: Audit,
+        audit_args: t.Dict[t.Any, t.Any],
+        snapshot: Snapshot,
+        snapshots: t.Dict[str, Snapshot],
+        start: t.Optional[TimeLike],
+        end: t.Optional[TimeLike],
+        execution_time: t.Optional[TimeLike],
+        raise_exception: bool,
+        is_dev: bool,
+        **kwargs: t.Any,
+    ) -> AuditResult:
+        if audit.skip:
+            return AuditResult(
+                audit=audit,
+                model=snapshot.model,
+                skipped=True,
+            )
+        query = audit.render_query(
+            snapshot,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            is_dev=is_dev,
+            engine_adapter=self.adapter,
+            **audit_args,
+            **kwargs,
+        )
+        count, *_ = self.adapter.fetchone(
+            select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
+        )
+        if count and raise_exception:
+            audit_error = AuditError(
+                audit_name=audit.name,
+                model_name=snapshot.model.name,
+                count=count,
+                query=query,
+            )
+            if audit.blocking:
+                raise audit_error
+            else:
+                logger.warning(f"{audit_error}\nAudit is warn only so proceeding with execution.")
+        return AuditResult(
+            audit=audit,
+            model=snapshot.model,
+            count=count,
+            query=query,
+        )
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
@@ -597,6 +638,7 @@ class EvaluationStrategy(abc.ABC):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
+        model: Model,
     ) -> None:
         """Updates the target view to point to the target table.
 
@@ -604,6 +646,7 @@ class EvaluationStrategy(abc.ABC):
             view_name: The name of the target view.
             environment_naming_info: The naming information for the target environment
             table_name: The name of the target table.
+            model: The target model. Not currently used but can be used by others if needed.
         """
 
     @abc.abstractmethod
@@ -668,6 +711,7 @@ class SymbolicStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
+        model: Model,
     ) -> None:
         pass
 
@@ -685,6 +729,7 @@ class EmbeddedStrategy(SymbolicStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
+        model: Model,
     ) -> None:
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Dropping view '%s' for non-materialized table", target_name)
@@ -697,6 +742,7 @@ class PromotableStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
+        model: Model,
     ) -> None:
         schema = view_name.schema_for_environment(environment_naming_info=environment_naming_info)
         if schema is not None:
@@ -885,6 +931,7 @@ class ViewStrategy(PromotableStrategy):
             isinstance(query_or_df, exp.Expression)
             and model.render_query(snapshots=snapshots, is_dev=is_dev, engine_adapter=self.adapter)
             == query_or_df
+            and self.adapter.table_exists(name)
         ):
             logger.info("Skipping creation of the view '%s'", name)
             return
@@ -895,6 +942,7 @@ class ViewStrategy(PromotableStrategy):
             query_or_df,
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
+            table_properties=model.table_properties,
         )
 
     def append(
@@ -922,6 +970,7 @@ class ViewStrategy(PromotableStrategy):
             name,
             model.render_query_or_raise(**render_kwargs),
             materialized=self._is_materialized_view(model),
+            table_properties=model.table_properties,
         )
 
     def migrate(
@@ -939,6 +988,7 @@ class ViewStrategy(PromotableStrategy):
             ),
             model.columns_to_types,
             materialized=self._is_materialized_view(model),
+            table_properties=model.table_properties,
         )
 
     def delete(self, name: str) -> None:

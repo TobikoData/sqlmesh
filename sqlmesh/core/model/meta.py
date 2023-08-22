@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import Field, root_validator, validator
+from pydantic import Field
 from sqlglot import exp
-from sqlglot.helper import ensure_list
+from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
@@ -14,42 +14,48 @@ from sqlmesh.core.model.kind import (
     TimeColumn,
     ViewKind,
     _Incremental,
+    model_kind_validator,
 )
 from sqlmesh.core.node import Node, str_or_exp_to_str
+from sqlmesh.core.reference import Reference
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.pydantic import (
+    field_validator,
+    field_validator_v1_args,
+    model_validator,
+    model_validator_v1_args,
+)
 
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
-class ModelMeta(Node):
+class ModelMeta(Node, extra="allow"):
     """Metadata for models which can be defined in SQL."""
 
     dialect: str = ""
     name: str
     kind: ModelKind = ViewKind()
-    retention: t.Optional[int]  # not implemented yet
-    storage_format: t.Optional[str]
+    retention: t.Optional[int] = None  # not implemented yet
+    storage_format: t.Optional[str] = None
     partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
     clustered_by: t.List[str] = []
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
-    column_descriptions_: t.Optional[t.Dict[str, str]]
+    column_descriptions_: t.Optional[t.Dict[str, str]] = None
     audits: t.List[AuditReference] = []
     tags: t.List[str] = []
-    grain: t.List[str] = []
+    grains: t.List[exp.Expression] = []
+    references: t.List[exp.Expression] = []
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
-    table_properties_: t.Optional[t.Dict[str, exp.Expression]] = Field(
-        default=None, alias="table_properties"
-    )
+    table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
+    _table_properties: t.Dict[str, exp.Expression] = {}
 
-    _model_kind_validator = ModelKind.field_validator()
+    _model_kind_validator = model_kind_validator
 
-    class Config(Node.Config):
-        extra = "allow"
-
-    @validator("audits", pre=True)
+    @field_validator("audits", mode="before")
+    @classmethod
     def _audits_validator(cls, v: t.Any) -> t.Any:
         def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, str]]:
             kwargs = {}
@@ -90,17 +96,19 @@ class ModelMeta(Node):
             ]
         return v
 
-    @validator("tags", pre=True)
+    @field_validator("tags", mode="before")
+    @field_validator_v1_args
     def _value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
         return cls._validate_value_or_tuple(v, values)
 
-    @validator("clustered_by", "grain", pre=True)
+    @field_validator("clustered_by", mode="before")
+    @field_validator_v1_args
     def _normalized_value_or_tuple_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
         return cls._validate_value_or_tuple(v, values, normalize=True)
 
     @classmethod
     def _validate_value_or_tuple(
-        cls, v: t.Any, values: t.Dict[str, t.Any], normalize: bool = False
+        cls, v: t.Dict[str, t.Any], values: t.Dict[str, t.Any], normalize: bool = False
     ) -> t.Any:
         dialect = values.get("dialect")
         _normalize = lambda v: normalize_identifiers(v, dialect=dialect) if normalize else v
@@ -115,11 +123,13 @@ class ModelMeta(Node):
 
         return v
 
-    @validator("dialect", "storage_format", pre=True)
+    @field_validator("dialect", "storage_format", mode="before")
+    @classmethod
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
 
-    @validator("partitioned_by_", pre=True)
+    @field_validator("partitioned_by_", mode="before")
+    @field_validator_v1_args
     def _partition_by_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.List[exp.Expression]:
@@ -157,7 +167,8 @@ class ModelMeta(Node):
 
         return partitions
 
-    @validator("columns_to_types_", pre=True)
+    @field_validator("columns_to_types_", mode="before")
+    @field_validator_v1_args
     def _columns_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -182,45 +193,40 @@ class ModelMeta(Node):
 
         return v
 
-    @validator("table_properties_", pre=True)
-    def _properties_validator(
-        cls, v: t.Any, values: t.Dict[str, t.Any]
-    ) -> t.Optional[t.Dict[str, exp.Expression]]:
+    @field_validator("table_properties_", mode="before")
+    @field_validator_v1_args
+    def _properties_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[exp.Tuple]:
         if v is None:
             return v
-
         dialect = values.get("dialect")
-
-        table_properties = {}
-        if isinstance(v, exp.Expression):
-            if isinstance(v, (exp.Tuple, exp.Array)):
-                eq_expressions: t.List[exp.Expression] = v.expressions
-            elif isinstance(v, exp.Paren):
-                eq_expressions = [v.unnest()]
-            else:
-                eq_expressions = [v]
-
+        if isinstance(v, str):
+            v = d.parse_one(v, dialect=dialect)
+        if isinstance(v, (exp.Array, exp.Paren, exp.Tuple)):
+            eq_expressions: t.List[exp.Expression] = (
+                [v.unnest()] if isinstance(v, exp.Paren) else v.expressions
+            )
             for eq_expr in eq_expressions:
                 if not isinstance(eq_expr, exp.EQ):
                     raise ConfigError(
                         f"Invalid table property '{eq_expr.sql(dialect=dialect)}'. "
                         "Table properties must be specified as key-value pairs <key> = <value>. "
                     )
-
-                value_expr = eq_expr.expression.copy()
-                value_expr.meta["dialect"] = dialect
-                table_properties[eq_expr.this.name] = value_expr
+            properties = (
+                exp.Tuple(expressions=eq_expressions)
+                if isinstance(v, (exp.Paren, exp.Array))
+                else v
+            )
         elif isinstance(v, dict):
-            for key, value in v.items():
-                value_expr = exp.convert(value, copy=True)
-                value_expr.meta["dialect"] = dialect
-                table_properties[key] = value_expr
+            properties = exp.Tuple(
+                expressions=[exp.Literal.string(key).eq(value) for key, value in v.items()]
+            )
         else:
-            raise ConfigError(f"Unexpected table properties '{v}'")
+            raise SQLMeshError(f"Unexpected table properties '{v}'")
+        properties.meta["dialect"] = dialect
+        return properties
 
-        return table_properties
-
-    @validator("depends_on_", pre=True)
+    @field_validator("depends_on_", mode="before")
+    @field_validator_v1_args
     def _depends_on_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
         dialect = values.get("dialect")
 
@@ -238,11 +244,48 @@ class ModelMeta(Node):
 
         return v
 
-    @root_validator
+    @field_validator("grains", "references", mode="before")
+    @field_validator_v1_args
+    def _refs_validator(cls, vs: t.Any, values: t.Dict[str, t.Any]) -> t.List[exp.Expression]:
+        dialect = values.get("dialect")
+
+        if isinstance(vs, exp.Paren):
+            vs = vs.unnest()
+
+        if isinstance(vs, (exp.Tuple, exp.Array)):
+            vs = vs.expressions
+        else:
+            vs = [
+                d.parse_one(v, dialect=dialect) if isinstance(v, str) else v
+                for v in ensure_collection(vs)
+            ]
+
+        refs = []
+
+        for v in vs:
+            v = exp.column(v) if isinstance(v, exp.Identifier) else v
+            v.meta["dialect"] = dialect
+            refs.append(v)
+
+        return refs
+
+    @model_validator(mode="before")
+    def _pre_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        grain = values.pop("grain", None)
+        if grain:
+            grains = values.get("grains")
+            if grains:
+                raise ConfigError(
+                    f"Cannot use argument 'grain' ({grain}) with 'grains' ({grains}), use only grains"
+                )
+            values["grains"] = ensure_list(grain)
+        return values
+
+    @model_validator(mode="after")
+    @model_validator_v1_args
     def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values = cls._kind_validator(values)
         values = cls._normalize_name(values)
-        values = cls._set_physical_schema_override(values)
         return values
 
     @classmethod
@@ -263,14 +306,6 @@ class ModelMeta(Node):
     @classmethod
     def _normalize_name(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values["name"] = d.normalize_model_name(values["name"], dialect=values.get("dialect"))
-        return values
-
-    @classmethod
-    def _set_physical_schema_override(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        physical_schema_override_map = values.get("physical_schema_override_map") or {}
-        values["physical_schema_override"] = physical_schema_override_map.get(
-            exp.to_table(values["name"]).db, values.get("physical_schema_override")
-        )
         return values
 
     @property
@@ -318,7 +353,17 @@ class ModelMeta(Node):
     @property
     def table_properties(self) -> t.Dict[str, exp.Expression]:
         """A dictionary of table properties."""
-        return self.table_properties_ or {}
+        if not self._table_properties and self.table_properties_:
+            for expression in self.table_properties_.expressions:
+                self._table_properties[expression.this.name] = expression.expression
+        return self._table_properties
+
+    @property
+    def all_references(self) -> t.List[Reference]:
+        """All references including grains."""
+        return [Reference(model_name=self.name, expression=e, unique=True) for e in self.grains] + [
+            Reference(model_name=self.name, expression=e, unique=True) for e in self.references
+        ]
 
     @property
     def _partition_by_columns(self) -> t.List[exp.Column]:

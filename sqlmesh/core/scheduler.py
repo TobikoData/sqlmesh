@@ -19,6 +19,7 @@ from sqlmesh.core.snapshot import (
     earliest_start_date,
     missing_intervals,
 )
+from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag
@@ -75,7 +76,7 @@ class Scheduler:
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         is_dev: bool = False,
-        restatements: t.Optional[t.Set[str]] = None,
+        restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
         ignore_cron: bool = False,
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
@@ -97,7 +98,7 @@ class Scheduler:
             restatements: A set of snapshot names being restated.
             ignore_cron: Whether to ignore the model's cron schedule.
         """
-        restatements = restatements or set()
+        restatements = restatements or {}
         validate_date_range(start, end)
 
         snapshots = self.snapshot_per_version.values()
@@ -178,7 +179,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        restatements: t.Optional[t.Set[str]] = None,
+        restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
         ignore_cron: bool = False,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
@@ -190,13 +191,13 @@ class Scheduler:
             start: The start of the run. Defaults to the min model start date.
             end: The end of the run. Defaults to now.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
-            restatements: A set of snapshots to restate.
+            restatements: A dict of snapshots to restate and their intervals.
             ignore_cron: Whether to ignore the model's cron schedule.
 
         Returns:
             True if the execution was successful and False otherwise.
         """
-        restatements = restatements or set()
+        restatements = restatements or {}
         validate_date_range(start, end)
         if isinstance(environment, str):
             env = self.state_sync.get_environment(environment)
@@ -209,7 +210,7 @@ class Scheduler:
         else:
             environment_naming_info = environment
 
-        is_dev = environment != c.PROD
+        is_dev = environment_naming_info.name != c.PROD
         execution_time = execution_time or now()
         batches = self.batches(
             start,
@@ -219,6 +220,10 @@ class Scheduler:
             restatements=restatements,
             ignore_cron=ignore_cron,
         )
+        if not batches:
+            self.console.log_success("No models scheduled to run at this time.")
+            return True
+
         dag = self._dag(batches)
 
         visited = set()
@@ -313,7 +318,7 @@ def compute_interval_params(
     end: TimeLike,
     is_dev: bool,
     execution_time: t.Optional[TimeLike] = None,
-    restatements: t.Optional[t.Set[str]] = None,
+    restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
     ignore_cron: bool = False,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
@@ -333,7 +338,7 @@ def compute_interval_params(
         end: End of the interval.
         is_dev: Whether or not these intervals are for development.
         execution_time: The date/time time reference to use for execution time.
-        restatements: A set of snapshot names being restated.
+        restatements: A dict of snapshot names being restated and their intervals.
         ignore_cron: Whether to ignore the model's cron schedule.
 
     Returns:

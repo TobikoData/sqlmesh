@@ -10,6 +10,14 @@ METRIC (
   expression COUNT(sushi.orders.id)
 );
 
+
+METRIC (
+  name total_orders_from_active_customers,
+  owner jen,
+  expression COUNT(IF(sushi.customers.status = 'ACTIVE', sushi.orders.id, NULL))
+);
+
+
 METRIC (
   name items_per_order,
   owner jen,

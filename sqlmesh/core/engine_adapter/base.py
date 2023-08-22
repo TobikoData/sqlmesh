@@ -52,6 +52,7 @@ MERGE_SOURCE_ALIAS = "__MERGE_SOURCE__"
 class InsertOverwriteStrategy(Enum):
     DELETE_INSERT = 1
     INSERT_OVERWRITE = 2
+    # Note: Replace where on Databricks requires that `spark.sql.sources.partitionOverwriteMode` be set to `static`
     REPLACE_WHERE = 3
 
     @property
@@ -443,6 +444,13 @@ class EngineAdapter:
         if materialized and self.SUPPORTS_MATERIALIZED_VIEWS:
             properties.append("expressions", exp.MaterializedProperty())
 
+        create_view_properties = self._create_view_properties(
+            create_kwargs.pop("table_properties", None)
+        )
+        if create_view_properties:
+            for view_property in create_view_properties.expressions:
+                properties.append("expressions", view_property)
+
         if properties.expressions:
             create_kwargs["properties"] = properties
 
@@ -694,7 +702,10 @@ class EngineAdapter:
             insert_exp = exp.insert(
                 query,
                 table,
-                columns=list(columns_to_types or []),
+                # Change once Databricks supports REPLACE WHERE with columns
+                columns=list(columns_to_types or [])
+                if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where
+                else None,
                 overwrite=self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite,
             )
             if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
@@ -954,6 +965,13 @@ class EngineAdapter:
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
+        return None
+
+    def _create_view_properties(
+        self,
+        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+    ) -> t.Optional[exp.Properties]:
+        """Creates a SQLGlot table properties expression for view"""
         return None
 
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:

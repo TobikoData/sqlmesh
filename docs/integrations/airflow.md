@@ -50,9 +50,8 @@ default_scheduler:
 ## Engine support
 SQLMesh supports a variety of engines in Airflow. Support for each engine is provided by a custom Airflow operator implementation. Below is a list of links to operators supported out of the box with information on how to configure them.
 
-* [BigQuery](engines.md#bigquery-airflow-scheduler)
-* [Databricks](engines.md#databricks-airflow-scheduler)
-* [Redshift](engines.md#redshift-airflow-scheduler)
-* [Snowflake](engines.md#snowflake-airflow-scheduler)
-* [Spark](engines.md#spark-airflow-scheduler)
-
+* [BigQuery](engines/bigquery.md#airflow-scheduler)
+* [Databricks](engines/databricks.md#airflow-scheduler)
+* [Redshift](engines/redshift.md#airflow-scheduler)
+* [Snowflake](engines/snowflake.md#airflow-scheduler)
+* [Spark](engines/spark.md#airflow-scheduler)

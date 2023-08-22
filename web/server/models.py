@@ -4,7 +4,8 @@ import enum
 import pathlib
 import typing as t
 
-from pydantic import BaseModel, validator
+import pydantic
+from pydantic import BaseModel
 from sqlglot import exp
 from watchfiles import Change
 
@@ -12,6 +13,11 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.pydantic import (
+    PYDANTIC_MAJOR_VERSION,
+    field_validator,
+    field_validator_v1_args,
+)
 
 SUPPORTED_EXTENSIONS = {".py", ".sql", ".yaml", ".yml", ".csv"}
 
@@ -40,13 +46,18 @@ class File(BaseModel):
     content: t.Optional[str] = None
     type: t.Optional[FileType] = None
 
-    @validator("extension", always=True)
+    if PYDANTIC_MAJOR_VERSION >= 2:
+        model_config = pydantic.ConfigDict(validate_default=True)  # type: ignore
+
+    @field_validator("extension", always=True, mode="before")
+    @field_validator_v1_args
     def default_extension(cls, v: str, values: t.Dict[str, t.Any]) -> str:
         if "name" in values:
             return pathlib.Path(values["name"]).suffix
         return v
 
-    @validator("is_supported", always=True)
+    @field_validator("is_supported", always=True, mode="before")
+    @field_validator_v1_args
     def default_is_supported(cls, v: bool, values: t.Dict[str, t.Any]) -> bool:
         if "extension" in values:
             return values["extension"] in SUPPORTED_EXTENSIONS
@@ -177,6 +188,12 @@ class Column(BaseModel):
     description: t.Optional[str]
 
 
+class Reference(BaseModel):
+    name: str
+    expression: str
+    unique: bool
+
+
 class ModelDetails(BaseModel):
     owner: t.Optional[str] = None
     kind: t.Optional[str] = None
@@ -188,7 +205,7 @@ class ModelDetails(BaseModel):
     storage_format: t.Optional[str] = None
     time_column: t.Optional[str] = None
     tags: t.Optional[str] = None
-    grain: t.Optional[str] = None
+    references: t.List[Reference] = []
     partitioned_by: t.Optional[str] = None
     clustered_by: t.Optional[str] = None
     lookback: t.Optional[int] = None
@@ -234,7 +251,8 @@ class PlanOptions(BaseModel):
     create_from: t.Optional[str] = None
     restate_models: t.Optional[str] = None
 
-    @validator("restate_models")
+    @field_validator("restate_models")
+    @classmethod
     def validate_restate_models(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             return v.split(",")
@@ -276,7 +294,10 @@ class SchemaDiff(BaseModel):
     removed: t.Dict[str, str]
     modified: t.Dict[str, str]
 
-    @validator("source_schema", "target_schema", "added", "removed", "modified", pre=True)
+    @field_validator(
+        "source_schema", "target_schema", "added", "removed", "modified", mode="before"
+    )
+    @classmethod
     def validate_schema(
         cls,
         v: t.Union[t.Dict[str, exp.DataType], t.List[t.Tuple[str, exp.DataType]], t.Dict[str, str]],

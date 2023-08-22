@@ -196,7 +196,7 @@ To delete a model:
         The target environment has been updated successfully
 
 
-        Virtual Update executed successfully 
+        Virtual Update executed successfully
         ```
 
     **Note:** If you have other files that reference the model you wish to delete (such as tests), an error message will note the file(s) containing the reference. You must also delete these files to apply the change.
@@ -204,7 +204,7 @@ To delete a model:
 3. Plan and apply your changes to production, and enter `y` for the Virtual Update. By default, the `sqlmesh plan` command targets your production environment:
 
         ```
-        $ sqlmesh plan    
+        $ sqlmesh plan
         ======================================================================
         Successfully Ran 0 tests against duckdb
         ----------------------------------------------------------------------

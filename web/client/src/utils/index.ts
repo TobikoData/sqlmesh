@@ -10,8 +10,16 @@ export function isFalseOrNil(value: unknown): boolean {
   return isNil(value) || isFalse(value)
 }
 
-export function isString(value: unknown): boolean {
+export function isString(value: unknown): value is string {
   return typeof value === 'string'
+}
+
+export function isNumber(value: unknown): value is number {
+  return typeof value === 'number'
+}
+
+export function isPrimitive(value: unknown): value is Primitive {
+  return isString(value) || isNumber(value) || typeof value === 'boolean'
 }
 
 export function isStringEmptyOrNil(
@@ -21,10 +29,10 @@ export function isStringEmptyOrNil(
 }
 
 export function isStringNotEmpty(value: unknown): boolean {
-  return isString(value) && (value as string).trim() !== ''
+  return isString(value) && value.trim() !== ''
 }
 
-export function isArrayNotEmpty(value: unknown): boolean {
+export function isArrayNotEmpty<T = any>(value: unknown): value is T[] {
   return Array.isArray(value) && value.length > 0
 }
 
@@ -46,22 +54,12 @@ export function isObject(value: unknown): boolean {
   )
 }
 
-export function isObjectLike(value: unknown): boolean {
-  return isNotNil(value) && typeof value === 'object'
-}
-
 export function isNil(value: unknown): value is undefined | null {
   return value == null
 }
 
 export function isNotNil<T>(value: T | null | undefined): value is T {
   return value != null
-}
-
-export async function delay(time: number = 1000): Promise<void> {
-  await new Promise(resolve => {
-    setTimeout(resolve, time)
-  })
 }
 
 export function isDate(value: unknown): boolean {
@@ -159,67 +157,6 @@ export function debounceSync(
       fn(...args)
     }
   }
-}
-
-export type CallbackDebounce<TData = any, TArgs = any> = (
-  ...args: TArgs[]
-) => Promise<TData>
-
-export function debounceAsync<
-  TData = any,
-  TArgs = any,
-  Fn extends CallbackDebounce<TData, TArgs> = CallbackDebounce<TData, TArgs>,
->(
-  fn: Fn,
-  delay: number = 0,
-  immediate: boolean = false,
-): CallbackDebounce<TData, TArgs> & { cancel: () => void } {
-  let timeoutIdLeading: ReturnType<typeof setTimeout> | undefined
-  let timeoutIdTrailing: ReturnType<typeof setTimeout> | undefined
-
-  clearTimeout(timeoutIdLeading)
-
-  const callback: CallbackDebounce<TData, TArgs> & { cancel: () => void } =
-    async function callback(...args) {
-      const callNow = immediate && timeoutIdLeading == null
-
-      clearTimeout(timeoutIdTrailing)
-
-      const promise = new Promise<TData>((resolve, reject) => {
-        if (callNow) {
-          timeoutIdLeading = setTimeout(() => {
-            fn(...args)
-              .then(resolve)
-              .catch(reject)
-          })
-        }
-
-        timeoutIdTrailing = setTimeout(() => {
-          if (isFalse(immediate)) {
-            fn(...args)
-              .then(resolve)
-              .catch(reject)
-              .finally(() => {
-                timeoutIdTrailing = undefined
-              })
-          } else {
-            timeoutIdLeading = undefined
-            timeoutIdTrailing = undefined
-          }
-        }, delay)
-      })
-
-      return await promise
-    }
-
-  callback.cancel = () => {
-    clearTimeout(timeoutIdLeading)
-    clearTimeout(timeoutIdTrailing)
-    timeoutIdLeading = undefined
-    timeoutIdTrailing = undefined
-  }
-
-  return callback
 }
 
 export function uid(): string {

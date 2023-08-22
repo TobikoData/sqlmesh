@@ -1,7 +1,7 @@
 # Auditing
-Audits are one of the tools SQLMesh provides to validate your models. Along with [tests](tests.md), they are a great way to ensure the quality of your data and to build trust in it across your organization. 
+Audits are one of the tools SQLMesh provides to validate your models. Along with [tests](tests.md), they are a great way to ensure the quality of your data and to build trust in it across your organization.
 
-Unlike tests, audits are used to validate the output of a model after every run. When you apply a [plan](./plans.md), SQLMesh will automatically run each model's audits. 
+Unlike tests, audits are used to validate the output of a model after every run. When you apply a [plan](./plans.md), SQLMesh will automatically run each model's audits.
 
 By default, SQLMesh will halt plan application when an audit fails so potentially invalid data does not propagate further downstream. This behavior can be changed for individual audits - refer to [Non-blocking audits](#non-blocking-audits).
 
@@ -10,9 +10,9 @@ A comprehensive suite of audits can identify data issues upstream, whether they 
 **NOTE**: For incremental models, audits are only applied to intervals being processed - not for the entire underlying table.
 
 ## User-Defined Audits
-In SQLMesh, user-defined audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking. 
+In SQLMesh, user-defined audits are defined in `.sql` files in an `audit` directory in your SQLMesh project. Multiple audits can be defined in a single file, so you can organize them to your liking.
 
-Audits are SQL queries that should not return any rows; in other words, they query for bad data, so returned rows indicates that something is wrong. 
+Audits are SQL queries that should not return any rows; in other words, they query for bad data, so returned rows indicates that something is wrong.
 
 In its simplest form, an audit is defined with the `AUDIT` statement along with a query, as in the following example:
 
@@ -22,8 +22,8 @@ AUDIT (
   dialect spark
 );
 SELECT * from sushi.items
-WHERE 
-  ds BETWEEN @start_ds AND @end_ds 
+WHERE
+  ds BETWEEN @start_ds AND @end_ds
   AND price IS NULL;
 ```
 
@@ -55,7 +55,7 @@ SELECT * FROM @this_model
 WHERE @column >= @threshold;
 ```
 
-This example utilizes [macros](./macros/overview.md) to parameterize the audit. `@this_model` is a special macro which refers to the model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected. 
+This example utilizes [macros](./macros/overview.md) to parameterize the audit. `@this_model` is a special macro which refers to the model that is being audited. For incremental models, this macro also ensures that only relevant data intervals are affected.
 
 `@column` and `@threshold` are parameters whose values are specified in a model definition's `MODEL` statement.
 
@@ -120,7 +120,7 @@ MODEL (
 These audits concern row counts and presence of `NULL` values.
 
 #### number_of_rows
-Ensures that the number of rows in the model's table exceeds the threshold. 
+Ensures that the number of rows in the model's table exceeds the threshold.
 
 This example asserts that the model has more than 10 rows:
 
@@ -222,7 +222,7 @@ MODEL (
 ```
 
 #### accepted_values
-Ensures that all rows of the specified column contain one of the accepted values. 
+Ensures that all rows of the specified column contain one of the accepted values.
 
 NOTE: rows with `NULL` values for the column will pass this audit in most databases/engines. Use the [`not_null` audit](#not_null) to ensure there are no `NULL` values present in a column.
 
@@ -258,7 +258,7 @@ MODEL (
 These audits concern the distribution of values in numeric columns.
 
 #### sequential_values
-Ensures that each of an ordered numeric column's values contains the previous row's value plus `interval`. 
+Ensures that each of an ordered numeric column's values contains the previous row's value plus `interval`.
 
 For example, with a column having minimum value 1 and maximum value 4 and `interval=1`, it ensures that the rows contain values `[1, 2, 3, 4]`.
 
@@ -299,7 +299,7 @@ MODEL (
 ```
 
 #### mutually_exclusive_ranges
-Ensures that each row's numeric range does not overlap with any other row's range. 
+Ensures that each row's numeric range does not overlap with any other row's range.
 
 This example asserts that each row's range [min_price, max_price] does not overlap with any other row's range:
 
@@ -371,7 +371,7 @@ MODEL (
 ```
 
 #### valid_uuid
-Ensures that all non-NULL rows of a column contain a string with the UUID structure. 
+Ensures that all non-NULL rows of a column contain a string with the UUID structure.
 
 UUID structure determined by matching regular expression `'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`.
 
@@ -386,7 +386,7 @@ MODEL (
 ```
 
 #### valid_email
-Ensures that all non-NULL rows of a column contain a string with the email address structure. 
+Ensures that all non-NULL rows of a column contain a string with the email address structure.
 
 Email address structure determined by matching regular expression `'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'`.
 
@@ -401,7 +401,7 @@ MODEL (
 ```
 
 #### valid_url
-Ensures that all non-NULL rows of a column contain a string with the URL structure. 
+Ensures that all non-NULL rows of a column contain a string with the URL structure.
 
 URL structure determined by matching regular expression `'^(https?|ftp)://[^\s/$.?#].[^\s]*$'`.
 
@@ -564,7 +564,7 @@ MODEL (
 ```
 
 #### chi_square
-Ensures that the [chi-square](https://en.wikipedia.org/wiki/Chi-squared_test) statistic for two categorical columns does not exceed a critical value. 
+Ensures that the [chi-square](https://en.wikipedia.org/wiki/Chi-squared_test) statistic for two categorical columns does not exceed a critical value.
 
 You can look up the critical value corresponding to a p-value with a table (such as [this one](https://www.medcalc.org/manual/chi-square-table.php)) or by using the Python [scipy library](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.chi2.html):
 
@@ -572,8 +572,8 @@ You can look up the critical value corresponding to a p-value with a table (such
 from scipy.stats import chi2
 
 # critical value for p-value = 0.95 and degrees of freedom = 1
-chi2.ppf(0.95, 1) 
-``` 
+chi2.ppf(0.95, 1)
+```
 This example asserts that the chi-square statistic0 for columns `user_state` and `user_type` does not exceed 6.635:
 
 ```sql linenums="1"
@@ -603,7 +603,7 @@ Done.
 ```
 
 ### Automated auditing
-When you apply a plan, SQLMesh will automatically run each model's audits. 
+When you apply a plan, SQLMesh will automatically run each model's audits.
 
 By default, SQLMesh will halt the pipeline when an audit fails to prevent potentially invalid data from propagating further downstream. This behavior can be changed for individual audits - see [Non-blocking audits](#non-blocking-audits).
 
@@ -622,7 +622,7 @@ WHERE ds BETWEEN @start_ds AND @end_ds AND
 ```
 
 ### Non-blocking audits
-By default, audits that fail will stop the execution of the pipeline to prevent bad data from propagating further. 
+By default, audits that fail will stop the execution of the pipeline to prevent bad data from propagating further.
 
 An audit can be configured to notify you without blocking the execution of the pipeline when it fails, as in this example:
 

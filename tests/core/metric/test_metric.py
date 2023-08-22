@@ -2,6 +2,7 @@ import pytest
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.metric import expand_metrics, load_metric_ddl
+from sqlmesh.core.metric.definition import _get_measure_and_dim_tables
 from sqlmesh.utils.errors import ConfigError
 
 
@@ -85,7 +86,6 @@ def test_expand_metrics():
     )
 
     metas = {}
-
     for expr in expressions:
         meta = load_metric_ddl(expr, dialect="")
         metas[meta.name] = meta
@@ -118,6 +118,38 @@ def test_expand_metrics():
     assert metric_d.formula.sql() == "a / b + 1 AS d"
 
     assert metric_d.aggs == {
-        d.parse_one("SUM(model.x) AS a"): {"model"},
-        d.parse_one("COUNT(DISTINCT model.y) AS b"): {"model"},
+        d.parse_one("SUM(model.x) AS a"): ("model", ()),
+        d.parse_one("COUNT(DISTINCT model.y) AS b"): ("model", ()),
     }
+
+    metas = {}
+    for expr in expressions:
+        meta = load_metric_ddl(expr, dialect="snowflake")
+        metas[meta.name] = meta
+
+    # Checks that metric names are not normalized according to the target dialect
+    snowflake_metrics = expand_metrics(metas)
+    assert all(metric_name.islower() for metric_name in snowflake_metrics)
+
+    metric_c = snowflake_metrics["c"]
+    assert metric_c.name == "c"
+    assert metric_c.expression.sql() == "a / b"
+    assert metric_c.expanded.sql() == "SUM(model.x) AS a / COUNT(DISTINCT model.y) AS b"
+    assert metric_c.formula.sql() == "a / b AS c"
+
+
+def test_get_measure_and_dim_tables():
+    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x)"), "") == ("a", ())
+    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x + a.y)"), "") == ("a", ())
+    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x + b.y)"), "") == ("a", ("b",))
+    assert _get_measure_and_dim_tables(d.parse_one("c.z + SUM(a.x)"), "") == ("a", ("c",))
+    assert _get_measure_and_dim_tables(d.parse_one("SUM(IF(c.z = 'dim', a.x, 0))"), "") == (
+        "a",
+        ("c",),
+    )
+    assert _get_measure_and_dim_tables(
+        d.parse_one("SUM(IF(c.z = 'dim' AND b.y > 0, (a.x + a.x) + 3, 0))"), ""
+    ) == ("a", ("c", "b"))
+    assert _get_measure_and_dim_tables(
+        d.parse_one("SUM(CASE b.y WHEN 1 THEN a.x ELSE 0 END)"), ""
+    ) == ("a", ("b",))

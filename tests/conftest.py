@@ -149,7 +149,6 @@ def sushi_context_fixed_date(mocker: MockerFixture) -> Context:
             context.upsert_model(model.name, start="2022-01-01")
 
     plan = context.plan("prod")
-    plan.set_start("1 week ago")
     push_plan(context, plan)
     return context
 
@@ -163,7 +162,7 @@ def sushi_context(mocker: MockerFixture) -> Context:
 
 @pytest.fixture()
 def sushi_dbt_context(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_context("examples/sushi_dbt", mocker, "Jan 1 2022")
+    context, plan = init_and_plan_context("examples/sushi_dbt", mocker)
 
     context.apply(plan)
     return context
@@ -173,7 +172,7 @@ def sushi_dbt_context(mocker: MockerFixture) -> Context:
 def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
     from tests.fixtures.dbt.sushi_test.seed_sources import init_raw_schema
 
-    context, plan = init_and_plan_context("tests/fixtures/dbt/sushi_test", mocker, "Jan 1 2022")
+    context, plan = init_and_plan_context("tests/fixtures/dbt/sushi_test", mocker)
     init_raw_schema(context.engine_adapter)
 
     context.apply(plan)
@@ -183,7 +182,6 @@ def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
 def init_and_plan_context(
     paths: str | t.List[str],
     mocker: MockerFixture,
-    start: TimeLike = "1 week ago",
     config="test_config",
 ) -> t.Tuple[Context, Plan]:
     delete_cache(paths)
@@ -192,7 +190,6 @@ def init_and_plan_context(
     confirm.ask.return_value = False
 
     plan = sushi_context.plan("prod")
-    plan.set_start(start)
 
     return (sushi_context, plan)
 

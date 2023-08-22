@@ -13,7 +13,7 @@ from sqlmesh.core.config import Config
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.macros import macro
+from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
@@ -53,6 +53,10 @@ def test_load(assert_exp_eq):
             ),
             tags [tag_foo, tag_bar],
             grain [a, b],
+            references (
+                f,
+                g
+            ),
         );
 
         @DEF(x, 1);
@@ -124,7 +128,11 @@ def test_load(assert_exp_eq):
     """,
     )
     assert model.tags == ["tag_foo", "tag_bar"]
-    assert model.grain == ["a", "b"]
+    assert [r.dict() for r in model.all_references] == [
+        {"model_name": "db.table", "expression": d.parse_one("[a, b]"), "unique": True},
+        {"model_name": "db.table", "expression": d.parse_one("f"), "unique": True},
+        {"model_name": "db.table", "expression": d.parse_one("g"), "unique": True},
+    ]
 
 
 def test_model_multiple_select_statements():
@@ -391,6 +399,12 @@ def test_json_serde():
             cron '@daily',
             storage_format parquet,
             partitioned_by a,
+            table_properties (
+                key_a = 'value_a',
+                'key_b' = 1,
+                key_c = true,
+                "key_d" = 2.0,
+            ),
         );
 
         @DEF(key, 'value');
@@ -774,6 +788,14 @@ def test_render_definition():
             ),
             storage_format iceberg,
             partitioned_by a,
+            grains (
+                [a, b],
+                c
+            ),
+            references (
+                [a, b],
+                c
+            ),
         );
 
         @DEF(x, 1);
@@ -1193,6 +1215,63 @@ def test_python_model_deps() -> None:
     ).depends_on == {"foo", "bar.baz"}
 
 
+def test_python_models_returning_sql(assert_exp_eq) -> None:
+    config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
+    context = Context(config=config)
+
+    @model(
+        name="model1",
+        is_sql=True,
+        description="A dummy model.",
+        kind="full",
+        dialect="snowflake",
+    )
+    def model1_entrypoint(evaluator: MacroEvaluator) -> exp.Select:
+        return exp.select("x", "y").from_(exp.values([("1", 2), ("2", 3)], "_v", ["x", "y"]))
+
+    @model(name="model2", is_sql=True, kind="full", dialect="snowflake")
+    def model2_entrypoint(evaluator: MacroEvaluator) -> str:
+        return "select * from model1"
+
+    model1 = model.get_registry()["model1"].model(module_path=Path("."), path=Path("."))
+    model2 = model.get_registry()["model2"].model(module_path=Path("."), path=Path("."))
+
+    context.upsert_model(model1)
+    context.upsert_model(model2)
+
+    assert isinstance(model1, SqlModel)
+    assert isinstance(model1.query, d.MacroFunc)
+    assert model1.description == "A dummy model."
+    assert model1.depends_on == set()
+    assert_exp_eq(
+        context.render("model1"),
+        """
+        SELECT
+          "_V"."X" AS "X",
+          "_V"."Y" AS "Y"
+        FROM (VALUES ('1', 2), ('2', 3)) AS "_V"("X", "Y")
+        """,
+    )
+
+    assert isinstance(model2, SqlModel)
+    assert isinstance(model2.query, d.MacroFunc)
+    assert model2.depends_on == {"MODEL1"}
+    assert_exp_eq(
+        context.render("model2"),
+        """
+        SELECT
+          "MODEL1"."X" AS "X",
+          "MODEL1"."Y" AS "Y"
+        FROM (
+          SELECT
+            "_V"."X" AS "X",
+            "_V"."Y" AS "Y"
+          FROM (VALUES ('1', 2), ('2', 3)) AS "_V"("X", "Y")
+        ) AS "MODEL1"
+        """,
+    )
+
+
 def test_star_expansion(assert_exp_eq) -> None:
     context = Context(config=Config())
 
@@ -1413,14 +1492,14 @@ def test_model_cache(tmp_path: Path, mocker: MockerFixture):
 
     loader = mocker.Mock(return_value=model)
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
-    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_b", loader) == model
-    assert cache.get_or_load("test_model", "test_entry_b", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_b", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_b", loader).dict() == model.dict()
 
-    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
-    assert cache.get_or_load("test_model", "test_entry_a", loader) == model
+    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
+    assert cache.get_or_load("test_model", "test_entry_a", loader).dict() == model.dict()
 
     assert loader.call_count == 3
 
@@ -1452,16 +1531,16 @@ def test_model_ctas_query():
 
 
 def test_is_breaking_change():
-    model = create_external_model("a", columns={"a": "int", "b": "int"})
+    model = create_external_model("a", columns={"a": "int", "limit": "int"})
     assert model.is_breaking_change(create_external_model("a", columns={"a": "int"})) is False
     assert model.is_breaking_change(create_external_model("a", columns={"a": "text"})) is None
     assert (
-        model.is_breaking_change(create_external_model("a", columns={"a": "int", "b": "int"}))
+        model.is_breaking_change(create_external_model("a", columns={"a": "int", "limit": "int"}))
         is False
     )
     assert (
         model.is_breaking_change(
-            create_external_model("a", columns={"a": "int", "b": "int", "c": "int"})
+            create_external_model("a", columns={"a": "int", "limit": "int", "c": "int"})
         )
         is None
     )
@@ -1472,7 +1551,7 @@ def test_parse_expression_list_with_jinja():
         "JINJA_STATEMENT_BEGIN;\n{{ log('log message') }}\nJINJA_END;",
         "GRANT SELECT ON TABLE foo TO DEV",
     ]
-    assert input == [val.sql() for val in parse_expression(input, {})]
+    assert input == [val.sql() for val in parse_expression(SqlModel, input, {})]
 
 
 def test_no_depends_on_runtime_jinja_query():
@@ -1620,7 +1699,6 @@ def test_model_normalization():
     assert model.name == '"project-1".db.tbl'
     assert model.columns_to_types["a"].sql(dialect="bigquery") == "STRUCT<`a` INT64>"
     assert model.partitioned_by[0].sql(dialect="bigquery") == "foo(`ds`)"
-    assert model.grain == ["id", "ds"]
     assert model.depends_on == {'"project-1".db.raw', '"project-2".db.raw'}
 
     expr = d.parse(
@@ -1647,7 +1725,6 @@ def test_model_normalization():
     assert model.columns_to_types["A"].sql(dialect="snowflake") == "INT"
     assert model.partitioned_by[0].sql(dialect="snowflake") == "A"
     assert model.partitioned_by[1].sql(dialect="snowflake") == 'FOO("ds")'
-    assert model.grain == ["ID", "DS"]
     assert model.tags == ["pii", "fact"]
     assert model.clustered_by == ["A"]
     assert model.depends_on == {"BLA"}
@@ -1673,7 +1750,7 @@ def test_incremental_unmanaged_validation():
 def test_custom_interval_unit():
     assert (
         load_sql_based_model(
-            d.parse("MODEL (name db.table, interval_unit minute); SELECT a FROM tbl;")
+            d.parse("MODEL (name db.table, interval_unit MINUTE); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.MINUTE
     )
@@ -1687,7 +1764,7 @@ def test_custom_interval_unit():
 
     assert (
         load_sql_based_model(
-            d.parse("MODEL (name db.table, interval_unit hour, cron '@daily'); SELECT a FROM tbl;")
+            d.parse("MODEL (name db.table, interval_unit Hour, cron '@daily'); SELECT a FROM tbl;")
         ).interval_unit
         == IntervalUnit.HOUR
     )
@@ -1715,8 +1792,29 @@ def test_custom_interval_unit():
         == IntervalUnit.MINUTE
     )
 
+    with pytest.raises(
+        ConfigError, match=r"Interval unit of '.*' is larger than cron period of '@daily'"
+    ):
+        load_sql_based_model(
+            d.parse("MODEL (name db.table, interval_unit month); SELECT a FROM tbl;")
+        )
 
-def test_model_table_properties():
+    with pytest.raises(
+        ConfigError, match=r"Interval unit of '.*' is larger than cron period of '@hourly'"
+    ):
+        load_sql_based_model(
+            d.parse("MODEL (name db.table, interval_unit Day, cron '@hourly'); SELECT a FROM tbl;")
+        )
+
+
+def test_model_table_properties(sushi_context):
+    # # Validate python model table properties
+    assert sushi_context.models["sushi.items"].table_properties == {
+        "string_prop": exp.Literal.string("some_value"),
+        "int_prop": exp.Literal.number(1),
+        "float_prop": exp.Literal.number(1.0),
+        "bool_prop": exp.true(),
+    }
     # Validate a tuple.
     model = load_sql_based_model(
         d.parse(
@@ -1740,98 +1838,100 @@ def test_model_table_properties():
         "key_c": exp.convert(True),
         "key_d": exp.convert(2.0),
     }
-    assert (
-        "table_properties ('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"
-        in model.render_definition()[0].sql()
+    assert model.table_properties_ == d.parse_one(
+        """(key_a = 'value_a', 'key_b' = 1, key_c = TRUE, "key_d" = 2.0)"""
     )
 
     # Validate a tuple with one item.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
+    model = load_sql_based_model(
+        d.parse(
+            """
             MODEL (
                 name test_schema.test_model,
                 table_properties (key_a = 'value_a')
             );
             SELECT a FROM tbl;
             """
-            )
-        ).table_properties
-        == {"key_a": exp.convert("value_a")}
+        )
+    )
+    assert model.table_properties == {"key_a": exp.convert("value_a")}
+    assert (
+        model.table_properties_.sql()
+        == exp.Tuple(expressions=[d.parse_one("key_a = 'value_a'")]).sql()
     )
 
     # Validate an array.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
-            MODEL (
-                name test_schema.test_model,
-                table_properties [
-                    key_a = 'value_a',
-                    'key_b' = 1,
-                ]
-            );
-            SELECT a FROM tbl;
+    model = load_sql_based_model(
+        d.parse(
             """
-            )
-        ).table_properties
-        == {
-            "key_a": exp.convert("value_a"),
-            "key_b": exp.convert(1),
-        }
+        MODEL (
+            name test_schema.test_model,
+            table_properties [
+                key_a = 'value_a',
+                'key_b' = 1,
+            ]
+        );
+        SELECT a FROM tbl;
+        """
+        )
     )
+    assert model.table_properties == {
+        "key_a": exp.convert("value_a"),
+        "key_b": exp.convert(1),
+    }
+    assert model.table_properties_ == d.parse_one("""(key_a = 'value_a', 'key_b' = 1)""")
 
     # Validate empty.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
-            MODEL (
-                name test_schema.test_model
-            );
-            SELECT a FROM tbl;
+    model = load_sql_based_model(
+        d.parse(
             """
-            )
-        ).table_properties
-        == {}
+        MODEL (
+            name test_schema.test_model
+        );
+        SELECT a FROM tbl;
+        """
+        )
     )
+    assert model.table_properties == {}
+    assert model.table_properties_ is None
 
     # Validate sql expression.
-    assert (
-        load_sql_based_model(
-            d.parse(
-                """
-            MODEL (
-                name test_schema.test_model,
-                table_properties [
-                    key = ['value']
-                ]
-            );
-            SELECT a FROM tbl;
+    model = load_sql_based_model(
+        d.parse(
             """
-            )
-        ).table_properties
-        == {"key": d.parse_one("['value']")}
+        MODEL (
+            name test_schema.test_model,
+            table_properties [
+                key = ['value']
+            ]
+        );
+        SELECT a FROM tbl;
+        """
+        )
     )
+    assert model.table_properties == {"key": d.parse_one("['value']")}
+    assert model.table_properties_ == exp.Tuple(expressions=[d.parse_one("key = ['value']")])
 
     # Validate dict parsing.
-    assert create_sql_model(
+    model = create_sql_model(
         name="test_schema.test_model",
         query=d.parse_one("SELECT a FROM tbl"),
         table_properties={
-            "key_a": "value_a",
-            "key_b": 1,
-            "key_c": True,
-            "key_d": 2.0,
+            "key_a": exp.Literal.string("value_a"),
+            "key_b": exp.Literal.number(1),
+            "key_c": exp.true(),
+            "key_d": exp.Literal.number(2.0),
         },
-    ).table_properties == {
+    )
+    assert model.table_properties == {
         "key_a": exp.convert("value_a"),
         "key_b": exp.convert(1),
         "key_c": exp.convert(True),
         "key_d": exp.convert(2.0),
     }
+    assert model.table_properties_ == d.parse_one(
+        """('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"""
+    )
 
     with pytest.raises(ConfigError, match=r"Invalid table property 'invalid'.*"):
         load_sql_based_model(

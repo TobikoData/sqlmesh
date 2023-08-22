@@ -166,24 +166,24 @@ class _Model(ModelMeta, frozen=True):
         """
         expressions = []
         comment = None
-        for field in ModelMeta.__fields__.values():
-            field_value = getattr(self, field.name)
+        for field_name, field_info in ModelMeta.all_field_infos().items():
+            field_value = getattr(self, field_name)
 
-            if field_value != field.default:
-                if field.name == "description":
+            if field_value != field_info.default:
+                if field_name == "description":
                     comment = field_value
-                elif field.name == "kind":
+                elif field_name == "kind":
                     expressions.append(
                         exp.Property(
                             this="kind",
                             value=field_value.to_expression(dialect=self.dialect),
                         )
                     )
-                elif field.name != "column_descriptions_":
+                elif field_name != "column_descriptions_":
                     expressions.append(
                         exp.Property(
-                            this=field.alias or field.name,
-                            value=META_FIELD_CONVERTER.get(field.name, exp.to_identifier)(
+                            this=field_info.alias or field_name,
+                            value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(
                                 field_value
                             ),
                         )
@@ -685,7 +685,7 @@ class _Model(ModelMeta, frozen=True):
             data.append(column_name)
             data.append(column_type.sql())
 
-        for key, value in (self.table_properties_ or {}).items():
+        for key, value in (self.table_properties or {}).items():
             data.append(key)
             data.append(value.sql())
 
@@ -718,7 +718,7 @@ class _Model(ModelMeta, frozen=True):
             str(self.batch_size) if self.batch_size is not None else None,
             json.dumps(self.mapping_schema, sort_keys=True),
             *sorted(self.tags),
-            *sorted(self.grain),
+            *sorted(ref.json(sort_keys=True) for ref in self.all_references),
             str(self.forward_only),
             str(self.disable_restatement),
             str(self.interval_unit_) if self.interval_unit_ is not None else None,
@@ -906,7 +906,7 @@ class SqlModel(_SqlBasedModel):
         post_statements: The list of SQL statements that follow after the model's query.
     """
 
-    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    query: t.Union[exp.Subqueryable, d.JinjaQuery, d.MacroFunc]
     source_type: Literal["sql"] = "sql"
 
     _columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -1515,7 +1515,10 @@ def create_sql_model(
         dialect: The default dialect if no model dialect is configured.
             The format must adhere to Python's strftime codes.
     """
-    if not isinstance(query, (exp.Subqueryable, d.JinjaQuery)):
+    if not isinstance(query, (exp.Subqueryable, d.JinjaQuery, d.MacroFunc)):
+        # Users are not expected to pass in a single MacroFunc instance for a model's query;
+        # this is an implementation detail which allows us to create python models that return
+        # SQL, either in the form of SQLGlot expressions or just plain strings.
         raise_config_error(
             "A query is required and must be a SELECT statement, a UNION statement, or a JINJA_QUERY block",
             path,
@@ -1700,7 +1703,7 @@ def _create_model(
     **kwargs: t.Any,
 ) -> Model:
 
-    _validate_model_fields(klass, {"name", "physical_schema_override", *kwargs}, path)
+    _validate_model_fields(klass, {"name", *kwargs} - {"grain"}, path)
 
     dialect = dialect or ""
     physical_schema_override = physical_schema_override or {}
@@ -1717,7 +1720,7 @@ def _create_model(
                 "jinja_macros": jinja_macros,
                 "dialect": dialect,
                 "depends_on": depends_on,
-                "physical_schema_override_map": physical_schema_override,
+                "physical_schema_override": physical_schema_override.get(exp.to_table(name).db),
                 **kwargs,
             },
         )
@@ -1788,6 +1791,7 @@ def _python_env(
     python_env: t.Dict[str, Executable] = {}
 
     used_macros = {}
+    serialized_env = {}
 
     expressions = ensure_list(expressions)
     for expression in expressions:
@@ -1802,15 +1806,13 @@ def _python_env(
             used_macros[macro_ref.name] = macros[macro_ref.name]
 
     for name, macro in used_macros.items():
-        if not macro.func.__module__.startswith("sqlmesh."):
-            build_env(
-                macro.func,
-                env=python_env,
-                name=name,
-                path=module_path,
-            )
+        if isinstance(macro, Executable):
+            serialized_env[name] = macro
+        elif not macro.func.__module__.startswith("sqlmesh."):
+            build_env(macro.func, env=python_env, name=name, path=module_path)
 
-    return serialize_env(python_env, path=module_path)
+    serialized_env.update(serialize_env(python_env, path=module_path))
+    return serialized_env
 
 
 def _parse_depends_on(model_func: str, python_env: t.Dict[str, Executable]) -> t.Set[str]:
@@ -1889,6 +1891,10 @@ def _single_expr_or_tuple(values: t.Sequence[exp.Expression]) -> exp.Expression 
     return values[0] if len(values) == 1 else exp.Tuple(expressions=values)
 
 
+def _refs_to_sql(values: t.Any) -> exp.Expression:
+    return exp.Tuple(expressions=values)
+
+
 META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "name": lambda value: exp.to_table(value),
     "start": lambda value: exp.Literal.string(value),
@@ -1904,9 +1910,8 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
         expressions=[exp.ColumnDef(this=exp.to_column(c), kind=t) for c, t in value.items()]
     ),
     "tags": _single_value_or_tuple,
-    "grain": _single_value_or_tuple,
+    "grains": _refs_to_sql,
+    "references": _refs_to_sql,
     "hash_raw_query": exp.convert,
-    "table_properties_": lambda value: exp.Tuple(
-        expressions=[exp.Literal.string(k).eq(v) for k, v in (value or {}).items()]
-    ),
+    "table_properties_": lambda value: value,
 }

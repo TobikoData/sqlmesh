@@ -150,8 +150,9 @@ export default function EditorPreview({
                 )}
               >
                 <ModelLineage
-                  model={model}
+                  key={tab.file.fingerprint}
                   fingerprint={tab.file.fingerprint}
+                  model={model}
                 />
               </Tab.Panel>
             )}
@@ -162,7 +163,10 @@ export default function EditorPreview({
                   'w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
                 )}
               >
-                <TableDiff diff={previewDiff} />
+                <TableDiff
+                  key={tab.id}
+                  diff={previewDiff}
+                />
               </Tab.Panel>
             )}
           </Tab.Panels>

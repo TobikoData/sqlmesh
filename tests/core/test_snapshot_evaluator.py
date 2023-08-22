@@ -11,10 +11,9 @@ from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import (
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalUnmanagedKind,
-    ModelKind,
-    ModelKindName,
     PythonModel,
     SqlModel,
     TimeColumn,
@@ -22,13 +21,7 @@ from sqlmesh.core.model import (
     load_sql_based_model,
 )
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotChangeCategory,
-    SnapshotEvaluator,
-    SnapshotFingerprint,
-    SnapshotTableInfo,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotEvaluator
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
 
@@ -39,7 +32,7 @@ def snapshot(duck_conn, make_snapshot) -> Snapshot:
 
     model = SqlModel(
         name="db.model",
-        kind=ModelKind(name=ModelKindName.FULL),
+        kind=FullKind(),
         query=parse_one("SELECT a::int FROM tbl"),
     )
 
@@ -198,7 +191,45 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
-def test_evaluate_materialized_view(mocker: MockerFixture, adapter_mock, make_snapshot):
+def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    def create_and_cleanup(name):
+        model = SqlModel(
+            name=name,
+            kind=IncrementalByTimeRangeKind(time_column="a"),
+            storage_format="parquet",
+            query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+        )
+
+        snapshot = make_snapshot(model)
+        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+        evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+        evaluator.cleanup([snapshot])
+        return snapshot
+
+    snapshot = create_and_cleanup("catalog.test_schema.test_model")
+    adapter_mock.drop_table.assert_called_once_with(
+        f"catalog.sqlmesh__test_schema.catalog__test_schema__test_model__{snapshot.version}"
+    )
+    adapter_mock.reset_mock()
+    snapshot = create_and_cleanup("test_schema.test_model")
+    adapter_mock.drop_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
+    )
+    adapter_mock.reset_mock()
+    snapshot = create_and_cleanup("test_model")
+    adapter_mock.drop_table.assert_called_once_with(
+        f"sqlmesh__default.test_model__{snapshot.version}"
+    )
+
+
+@pytest.mark.parametrize("view_exists", [True, False])
+def test_evaluate_materialized_view(
+    mocker: MockerFixture, adapter_mock, make_snapshot, view_exists: bool
+):
+    adapter_mock.table_exists.return_value = view_exists
     evaluator = SnapshotEvaluator(adapter_mock)
 
     model = load_sql_based_model(
@@ -227,9 +258,22 @@ def test_evaluate_materialized_view(mocker: MockerFixture, adapter_mock, make_sn
         snapshots={},
     )
 
-    # Evaluation shouldn't take place because the rendered query hasn't changed
-    # since the last view creation.
-    assert not adapter_mock.create_view.called
+    adapter_mock.table_exists.assert_called_once_with(snapshot.table_name())
+
+    if view_exists:
+        # Evaluation shouldn't take place because the rendered query hasn't changed
+        # since the last view creation.
+        assert not adapter_mock.create_view.called
+    else:
+        # If the view doesn't exist, it should be created even if the rendered query
+        # hasn't changed since the last view creation.
+        adapter_mock.create_view.assert_called_once_with(
+            snapshot.table_name(),
+            model.render_query(),
+            model.columns_to_types,
+            materialized=True,
+            table_properties={},
+        )
 
 
 def test_evaluate_materialized_view_with_execution_time_macro(
@@ -268,6 +312,7 @@ def test_evaluate_materialized_view_with_execution_time_macro(
         model.render_query(execution_time="2020-01-02"),
         model.columns_to_types,
         materialized=True,
+        table_properties={},
     )
 
 
@@ -335,34 +380,68 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
         snapshot.table_name(),
         model.render_query(),
         materialized=True,
+        table_properties={},
     )
 
 
-def test_promote_model_info(mocker: MockerFixture):
+def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind VIEW (
+                    materialized true
+                ),
+                table_properties (
+                    "key" = 'value'
+                )
+            );
+
+            SELECT a::int FROM tbl;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.create_view.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        materialized=True,
+        table_properties={
+            "key": exp.convert("value"),
+        },
+    )
+
+
+def test_promote_model_info(mocker: MockerFixture, make_snapshot):
     adapter_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter")
     adapter_mock.dialect = "duckdb"
 
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    evaluator.promote(
-        [
-            SnapshotTableInfo(
-                physical_schema="physical_schema",
-                name="test_schema.test_model",
-                fingerprint=SnapshotFingerprint(data_hash="1", metadata_hash="1"),
-                version="1",
-                change_category=SnapshotChangeCategory.BREAKING,
-                parents=[],
-                kind_name=ModelKindName.FULL,
-            )
-        ],
-        EnvironmentNamingInfo(name="test_env"),
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=FullKind(),
+        query=parse_one("SELECT a FROM tbl"),
     )
+
+    snapshot = make_snapshot(model, version="1")
+    snapshot.physical_schema_ = "physical_schema"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
     adapter_mock.create_schema.assert_called_once_with("test_schema__test_env", catalog_name=None)
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
-        parse_one("SELECT * FROM physical_schema.test_schema__test_model__1"),
+        parse_one("SELECT * FROM physical_schema.test_schema__test_model__3512709882"),
     )
 
 
@@ -411,7 +490,13 @@ def test_migrate(mocker: MockerFixture, make_snapshot):
     )
 
 
-def test_migrate_view(mocker: MockerFixture, make_snapshot):
+@pytest.mark.parametrize(
+    "change_category",
+    [SnapshotChangeCategory.FORWARD_ONLY, SnapshotChangeCategory.INDIRECT_NON_BREAKING],
+)
+def test_migrate_view(
+    mocker: MockerFixture, make_snapshot, change_category: SnapshotChangeCategory
+):
     connection_mock = mocker.NonCallableMock()
     cursor_mock = mocker.Mock()
     connection_mock.cursor.return_value = cursor_mock
@@ -426,7 +511,7 @@ def test_migrate_view(mocker: MockerFixture, make_snapshot):
         query=parse_one("SELECT c, a FROM tbl"),
     )
     snapshot = make_snapshot(model, version="1")
-    snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot.change_category = change_category
 
     evaluator.migrate([snapshot], {})
 
@@ -513,7 +598,7 @@ def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):
     snapshot = make_snapshot(
         SqlModel(
             name="db.model",
-            kind=ModelKind(name=ModelKindName.FULL),
+            kind=FullKind(),
             query=parse_one("SELECT a::int FROM tbl"),
         )
     )

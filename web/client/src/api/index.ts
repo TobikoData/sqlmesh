@@ -53,18 +53,13 @@ import {
   EnumErrorKey,
   type ErrorKey,
 } from '~/library/pages/ide/context'
-import { debounceAsync, isNotNil } from '@utils/index'
 import { useState } from 'react'
+import { isNotNil } from '@utils/index'
 
 export interface ApiOptions {
   delay?: number
   trigger?: string
   removeTimeoutErrorAfter?: number
-  withDebounce?: boolean
-  debounceDelay?: number
-  debounceImmediate?: boolean
-  callbackCancel?: <TData = any>() => Promise<TData | undefined>
-  callbackError?: (error: ErrorIDE) => void
 }
 
 export interface ApiQueryMeta extends QueryMeta {
@@ -78,7 +73,7 @@ export type UseQueryWithTimeoutOptions<
   TData = any,
   TError extends ApiExceptionPayload = ApiExceptionPayload,
 > = UseQueryResult<TData, TError> & {
-  cancel: <TData = any>() => Promise<TData | undefined>
+  cancel: () => Promise<void>
   isTimeout: boolean
 }
 
@@ -360,9 +355,14 @@ export function useMutationApiSaveFile(
   { path: string; body: BodyWriteFileApiFilesPathPost },
   void
 > {
+  const { addError } = useIDE()
+
   return useMutation({
     mutationFn: async ({ path, body }) =>
       await writeFileApiFilesPathPost(path, body),
+    onError(error: ErrorIDE) {
+      addError(EnumErrorKey.SaveFile, error)
+    },
     async onMutate({ path }) {
       await client.cancelQueries({
         queryKey: ['/api/files', path],
@@ -386,11 +386,6 @@ function useQueryWithTimeout<
     removeTimeoutErrorAfter,
     errorKey = EnumErrorKey.API,
     trigger,
-    withDebounce = true,
-    debounceDelay = 1000,
-    debounceImmediate = false,
-    callbackCancel,
-    callbackError,
   }: ApiOptions & { errorKey: ErrorKey },
 ): UseQueryWithTimeoutOptions<TData, TError> {
   const key = options.queryKey.join(' -> ')
@@ -401,22 +396,12 @@ function useQueryWithTimeout<
 
   let timeoutId: ReturnType<typeof setTimeout>
 
-  const debounced = debounceAsync<TQueryFnData>(
-    queryFn,
-    debounceDelay,
-    debounceImmediate,
-  )
-
-  async function cancel<TData = any>(
-    withCallback: boolean = true,
-  ): Promise<TData | undefined> {
+  async function cancel(): Promise<void> {
     console.log(`[REQUEST CANCELED] ${key} at ${Date.now()}`)
 
-    debounced?.cancel()
-    void callbackCancel?.()
-    void queryClient.cancelQueries({ queryKey: options.queryKey })
+    clearTimeout(timeoutId)
 
-    return withCallback ? callbackCancel?.() : undefined
+    void queryClient.cancelQueries({ queryKey: options.queryKey })
   }
 
   function timeout(): void {
@@ -432,7 +417,7 @@ function useQueryWithTimeout<
 
       setIsTimeout(true)
 
-      void cancel(false)
+      void cancel()
 
       if (isNotNil(removeTimeoutErrorAfter)) {
         setTimeout(() => removeError(), removeTimeoutErrorAfter)
@@ -449,9 +434,8 @@ function useQueryWithTimeout<
       )
     } else {
       console.log(`[REQUEST FAILED] ${key} failed at ${Date.now()}`)
-      const { error } = addError(errorKey, err)
 
-      callbackError?.(error)
+      addError(errorKey, err)
     }
   }
 
@@ -472,7 +456,7 @@ function useQueryWithTimeout<
       cacheTime: 0,
       enabled: false,
       queryKey: options.queryKey,
-      queryFn: withDebounce ? debounced : queryFn,
+      queryFn,
       meta: {
         ...options.meta,
         onError,

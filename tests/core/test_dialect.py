@@ -14,7 +14,14 @@ def test_format_model_expressions():
     x = format_model_expressions(
         parse(
             """
-    MODEL(name a.b, kind full)
+    MODEL(
+    name a.b,
+    kind full,
+    references (
+     a,
+     (b, c) as d,
+     )
+    )
     ;
 
     @DEF(x
@@ -45,7 +52,8 @@ def test_format_model_expressions():
         x
         == """MODEL (
   name a.b,
-  kind FULL
+  kind FULL,
+  references (a, (b, c) AS d)
 );
 
 @DEF(x, 1);

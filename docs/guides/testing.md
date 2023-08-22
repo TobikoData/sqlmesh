@@ -20,7 +20,7 @@ To run a specific model test, pass in the suite file name followed by `::` and t
 
 ### Run a subset of tests
 
-To run a test that matches a pattern or substring, use the following syntax: `sqlmesh test tests/test_example*`. 
+To run a test that matches a pattern or substring, use the following syntax: `sqlmesh test tests/test_example*`.
 
 Running the above command will run our `test_example_full_model` test that we ran earlier using `sqlmesh test`:
 

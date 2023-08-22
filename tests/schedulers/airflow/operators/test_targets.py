@@ -52,6 +52,8 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     )
     target.execute(context, lambda: mocker.Mock(), "spark")
 
+    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
+
     evaluator_evaluate_mock.assert_called_once_with(
         snapshot,
         interval_ds,
@@ -60,8 +62,6 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
         snapshots=parent_snapshots,
         is_dev=False,
     )
-
-    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
 
 
 @pytest.mark.airflow
@@ -103,6 +103,10 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
     target = targets.SnapshotEvaluationTarget(snapshot=snapshot, parent_snapshots={}, is_dev=False)
     target.execute(context, lambda: mocker.Mock(), "spark")
 
+    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
+
+    get_snapshots_mock.assert_called_once_with([snapshot], hydrate_seeds=True)
+
     evaluator_evaluate_mock.assert_called_once_with(
         snapshot,
         interval_ds,
@@ -111,10 +115,6 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
         snapshots={snapshot.name: snapshot},
         is_dev=False,
     )
-
-    add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
-
-    get_snapshots_mock.assert_called_once_with([snapshot], hydrate_seeds=True)
 
 
 @pytest.mark.airflow

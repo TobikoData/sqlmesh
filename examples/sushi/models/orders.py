@@ -17,8 +17,15 @@ WAITERS = list(range(0, 10))
     "sushi.orders",
     description="Table of sushi orders.",
     kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
-    start="3 months ago",
+    start="1 week ago",
     cron="@daily",
+    grains=[
+        "id AS order_id",
+    ],
+    references=[
+        "customer_id",
+        "waiter_id",
+    ],
     columns={
         "id": "int",
         "customer_id": "int",

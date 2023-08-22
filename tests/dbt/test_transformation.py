@@ -11,11 +11,11 @@ from sqlglot import exp, parse_one
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import (
+    EmbeddedKind,
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
-    ModelKind,
-    ModelKindName,
     SqlModel,
     ViewKind,
 )
@@ -41,46 +41,46 @@ def test_model_name():
 def test_model_kind():
     target = DuckDbConfig(name="target", schema="foo")
 
-    assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == ModelKind(
-        name=ModelKindName.FULL
-    )
+    assert ModelConfig(materialized=Materialization.TABLE).model_kind(target) == FullKind()
     assert ModelConfig(materialized=Materialization.VIEW).model_kind(target) == ViewKind()
-    assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(target) == ModelKind(
-        name=ModelKindName.EMBEDDED
-    )
+    assert ModelConfig(materialized=Materialization.EPHEMERAL).model_kind(target) == EmbeddedKind()
 
     assert ModelConfig(materialized=Materialization.INCREMENTAL, time_column="foo").model_kind(
         target
-    ) == IncrementalByTimeRangeKind(time_column="foo")
+    ) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="delete+insert",
+        forward_only=False,
     ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL,
         time_column="foo",
         incremental_strategy="insert_overwrite",
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", unique_key=["bar"]
-    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
+    ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo", forward_only=True)
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, unique_key=["bar"], incremental_strategy="merge"
-    ).model_kind(target) == IncrementalByUniqueKeyKind(unique_key=["bar"])
+    ).model_kind(target) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
     assert ModelConfig(materialized=Materialization.INCREMENTAL, unique_key=["bar"]).model_kind(
         target
-    ) == IncrementalByUniqueKeyKind(unique_key=["bar"])
+    ) == IncrementalByUniqueKeyKind(unique_key=["bar"], forward_only=True)
 
     assert ModelConfig(
         materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="merge"
     ).model_kind(target) == IncrementalByTimeRangeKind(
-        time_column="foo", forward_only=True, disable_restatement=True
+        time_column="foo", forward_only=True, disable_restatement=False
     )
 
     assert ModelConfig(
-        materialized=Materialization.INCREMENTAL, time_column="foo", incremental_strategy="append"
+        materialized=Materialization.INCREMENTAL,
+        time_column="foo",
+        incremental_strategy="append",
+        disable_restatement=True,
     ).model_kind(target) == IncrementalByTimeRangeKind(
         time_column="foo", forward_only=True, disable_restatement=True
     )
@@ -90,6 +90,7 @@ def test_model_kind():
         time_column="foo",
         incremental_strategy="insert_overwrite",
         partition_by={"field": "bar"},
+        forward_only=False,
     ).model_kind(target) == IncrementalByTimeRangeKind(time_column="foo")
 
     assert ModelConfig(

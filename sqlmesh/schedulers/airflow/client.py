@@ -11,6 +11,7 @@ from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.snapshot import Snapshot, SnapshotId
+from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
@@ -52,7 +53,7 @@ class AirflowClient:
         request_id: str,
         no_gaps: bool = False,
         skip_backfill: bool = False,
-        restatements: t.Optional[t.Iterable[str]] = None,
+        restatements: t.Optional[t.Dict[str, Interval]] = None,
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         backfill_concurrent_tasks: int = 1,
         ddl_concurrent_tasks: int = 1,
@@ -66,7 +67,7 @@ class AirflowClient:
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
             request_id=request_id,
-            restatements=set(restatements or []),
+            restatements=restatements or {},
             notification_targets=notification_targets or [],
             backfill_concurrent_tasks=backfill_concurrent_tasks,
             ddl_concurrent_tasks=ddl_concurrent_tasks,

@@ -24,7 +24,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
+from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, start_date
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
 from sqlmesh.utils.date import to_date, yesterday_ds
@@ -111,7 +111,10 @@ class Console(abc.ABC):
 
     @abc.abstractmethod
     def show_model_difference_summary(
-        self, context_diff: ContextDiff, detailed: bool = False
+        self,
+        context_diff: ContextDiff,
+        detailed: bool = False,
+        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Displays a summary of differences for the given models."""
 
@@ -386,14 +389,19 @@ class TerminalConsole(Console):
                 self.log_success("The migration has been completed successfully")
 
     def show_model_difference_summary(
-        self, context_diff: ContextDiff, detailed: bool = False
+        self,
+        context_diff: ContextDiff,
+        detailed: bool = False,
+        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
         Args:
             context_diff: The context diff to use to print the summary
             detailed: Show the actual SQL differences if True.
+            ignored_snapshot_names: A set of snapshot names that are ignored
         """
+        ignored_snapshot_names = ignored_snapshot_names or set()
         if context_diff.is_new_environment:
             self._print(
                 Tree(
@@ -408,40 +416,44 @@ class TerminalConsole(Console):
             return
 
         tree = Tree(f"[bold]Summary of differences against `{context_diff.environment}`:")
-
-        if context_diff.added:
+        added_model_names = context_diff.added - ignored_snapshot_names
+        if added_model_names:
             added_tree = Tree(f"[bold][added]Added Models:")
-            for model in context_diff.added:
-                added_tree.add(f"[added]{model}")
+            for model_name in added_model_names:
+                added_tree.add(f"[added]{model_name}")
             tree.add(added_tree)
 
-        if context_diff.removed:
+        removed_model_names = context_diff.removed - ignored_snapshot_names
+        if removed_model_names:
             removed_tree = Tree(f"[bold][removed]Removed Models:")
-            for model in context_diff.removed:
-                removed_tree.add(f"[removed]{model}")
+            for model_name in removed_model_names:
+                removed_tree.add(f"[removed]{model_name}")
             tree.add(removed_tree)
 
-        if context_diff.modified_snapshots:
+        modified_model_names = context_diff.modified_snapshots.keys() - ignored_snapshot_names
+        if modified_model_names:
             direct = Tree(f"[bold][direct]Directly Modified:")
             indirect = Tree(f"[bold][indirect]Indirectly Modified:")
             metadata = Tree(f"[bold][metadata]Metadata Updated:")
-            for model in context_diff.modified_snapshots:
-                if context_diff.directly_modified(model):
+            for model_name in modified_model_names:
+                if context_diff.directly_modified(model_name):
                     direct.add(
-                        Syntax(f"{model}\n{context_diff.text_diff(model)}", "sql")
+                        Syntax(f"{model_name}\n{context_diff.text_diff(model_name)}", "sql")
                         if detailed
-                        else f"[direct]{model}"
+                        else f"[direct]{model_name}"
                     )
-                elif context_diff.indirectly_modified(model):
-                    indirect.add(f"[indirect]{model}")
-                elif context_diff.metadata_updated(model):
-                    metadata.add(f"[metadata]{model}")
+                elif context_diff.indirectly_modified(model_name):
+                    indirect.add(f"[indirect]{model_name}")
+                elif context_diff.metadata_updated(model_name):
+                    metadata.add(f"[metadata]{model_name}")
             if direct.children:
                 tree.add(direct)
             if indirect.children:
                 tree.add(indirect)
             if metadata.children:
                 tree.add(metadata)
+        if ignored_snapshot_names:
+            tree.add(self._get_ignored_tree(ignored_snapshot_names, context_diff.snapshots))
         self._print(tree)
 
     def plan(self, plan: Plan, auto_apply: bool) -> None:
@@ -460,6 +472,17 @@ class TerminalConsole(Console):
         if auto_apply:
             plan.apply()
 
+    def _get_ignored_tree(
+        self, ignored_snapshot_names: t.Set[str], snapshots: t.Dict[str, Snapshot]
+    ) -> Tree:
+        ignored = Tree(f"[bold][ignored]Ignored Models (Expected Plan Start):")
+        for model in ignored_snapshot_names:
+            snapshot = snapshots[model]
+            ignored.add(
+                f"[ignored]{model} ({snapshot.get_latest(start_date(snapshot, snapshots.values()))})"
+            )
+        return ignored
+
     def _show_options_after_categorization(self, plan: Plan, auto_apply: bool) -> None:
         if plan.forward_only and plan.new_snapshots:
             self._prompt_effective_from(plan, auto_apply)
@@ -467,12 +490,17 @@ class TerminalConsole(Console):
         if plan.requires_backfill:
             self._show_missing_dates(plan)
             self._prompt_backfill(plan, auto_apply)
-        elif plan.context_diff.has_changes and not auto_apply:
+        elif plan.has_changes and not auto_apply:
+            self._prompt_promote(plan)
+        elif plan.has_unmodified_unpromoted and not auto_apply:
+            self.log_status_update("\n[bold]Virtually updating unmodified models\n")
             self._prompt_promote(plan)
 
     def _prompt_categorize(self, plan: Plan, auto_apply: bool) -> None:
         """Get the user's change category for the directly modified models."""
-        self.show_model_difference_summary(plan.context_diff)
+        self.show_model_difference_summary(
+            plan.context_diff, ignored_snapshot_names=plan.ignored_snapshot_names
+        )
 
         self._show_categorized_snapshots(plan)
 
@@ -562,7 +590,10 @@ class TerminalConsole(Console):
                 )
                 if end:
                     plan.end = end
-
+        if plan.ignored_snapshot_names:
+            self._print(
+                self._get_ignored_tree(plan.ignored_snapshot_names, plan.context_diff.snapshots)
+            )
         if not auto_apply and self._confirm(f"Apply - {backfill_or_preview.capitalize()} Tables"):
             plan.apply()
 
@@ -665,17 +696,32 @@ class TerminalConsole(Console):
         if row_diff.target_alias:
             target_name = row_diff.target_alias.upper()
 
-        self.console.print("\n[b]Row Count:[/b]")
-        self.console.print(f" [yellow]{source_name}[/yellow]: {row_diff.source_count} rows")
-        self.console.print(f" [green]{target_name}[/green]: {row_diff.target_count} rows")
-        self.console.print(f" Change: {row_diff.count_pct_change:.1f}%")
-        if row_diff.sample.shape[0] > 0 and show_sample:
-            self.console.print("\n[b]Sample Rows:[/b]")
-            self.console.print(row_diff.sample.to_string(index=False), end="\n\n")
+        tree = Tree("[b]Row Counts:[/b]")
+        tree.add(f" [b][blue]COMMON[/blue]:[/b] {row_diff.join_count} rows")
+        tree.add(f" [b][yellow]{source_name} ONLY[/yellow]:[/b] {row_diff.s_only_count} rows")
+        tree.add(f" [b][green]{target_name} ONLY[/green]:[/b] {row_diff.t_only_count} rows")
+        self.console.print("\n", tree)
+
+        self.console.print("\n[b][blue]COMMON ROWS[/blue] column comparison stats:[/b]")
+        if row_diff.column_stats.shape[0] > 0:
+            self.console.print(row_diff.column_stats.to_string(index=True), end="\n\n")
         else:
-            self.console.print("\n[b]No added/removed rows![/b]")
-        self.console.print("\n[b]Column Stats:[/b]")
-        self.console.print(row_diff.column_stats.to_string(index=True), end="\n\n")
+            self.console.print("  No columns with same name and data type in both tables")
+
+        if show_sample:
+            self.console.print("\n[b][blue]COMMON ROWS[/blue] sample data differences:[/b]")
+            if row_diff.joined_sample.shape[0] > 0:
+                self.console.print(row_diff.joined_sample.to_string(index=False), end="\n\n")
+            else:
+                self.console.print("  All joined rows match")
+
+            if row_diff.s_sample.shape[0] > 0:
+                self.console.print(f"\n[b][yellow]{source_name} ONLY[/yellow] sample rows:[/b]")
+                self.console.print(row_diff.s_sample.to_string(index=False), end="\n\n")
+
+            if row_diff.t_sample.shape[0] > 0:
+                self.console.print(f"\n[b][green]{target_name} ONLY[/green] sample rows:[/b]")
+                self.console.print(row_diff.t_sample.to_string(index=False), end="\n\n")
 
     def _get_snapshot_change_category(
         self, snapshot: Snapshot, plan: Plan, auto_apply: bool
@@ -1022,14 +1068,19 @@ class MarkdownConsole(CaptureTerminalConsole):
     """
 
     def show_model_difference_summary(
-        self, context_diff: ContextDiff, detailed: bool = False
+        self,
+        context_diff: ContextDiff,
+        detailed: bool = False,
+        ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
         Args:
             context_diff: The context diff to use to print the summary.
             detailed: Show the actual SQL differences if True.
+            ignored_snapshot_names: A set of snapshot names that are ignored
         """
+        ignored_snapshot_names = ignored_snapshot_names or set()
         if context_diff.is_new_environment:
             self._print(
                 f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n\n"
@@ -1043,46 +1094,57 @@ class MarkdownConsole(CaptureTerminalConsole):
 
         self._print(f"**Summary of differences against `{context_diff.environment}`:**\n\n")
 
-        if context_diff.added:
+        added_model_names = context_diff.added - ignored_snapshot_names
+        if added_model_names:
             self._print(f"**Added Models:**\n")
-            for model in context_diff.added:
-                self._print(f"- {model}\n")
+            for model_name in added_model_names:
+                self._print(f"- {model_name}\n")
             self._print("\n")
 
-        if context_diff.removed:
+        removed_model_names = context_diff.removed - ignored_snapshot_names
+        if removed_model_names:
             self._print(f"**Removed Models:**\n")
-            for model in context_diff.removed:
-                self._print(f"- {model}\n")
+            for model_name in removed_model_names:
+                self._print(f"- {model_name}\n")
             self._print("\n")
 
-        if context_diff.modified_snapshots:
+        modified_model_names = context_diff.modified_snapshots.keys() - ignored_snapshot_names
+        if modified_model_names:
             directly_modified = []
             indirectly_modified = []
             metadata_modified = []
-            for model in context_diff.modified_snapshots:
-                if context_diff.directly_modified(model):
-                    directly_modified.append(model)
-                elif context_diff.indirectly_modified(model):
-                    indirectly_modified.append(model)
-                elif context_diff.metadata_updated(model):
-                    metadata_modified.append(model)
+            for model_name in modified_model_names:
+                if context_diff.directly_modified(model_name):
+                    directly_modified.append(model_name)
+                elif context_diff.indirectly_modified(model_name):
+                    indirectly_modified.append(model_name)
+                elif context_diff.metadata_updated(model_name):
+                    metadata_modified.append(model_name)
             if directly_modified:
                 self._print(f"**Directly Modified:**\n")
-                for model in directly_modified:
-                    self._print(f"- `{model}`\n")
+                for model_name in directly_modified:
+                    self._print(f"- `{model_name}`\n")
                     if detailed:
-                        self._print(f"```diff\n{context_diff.text_diff(model)}\n```\n")
+                        self._print(f"```diff\n{context_diff.text_diff(model_name)}\n```\n")
                 self._print("\n")
             if indirectly_modified:
                 self._print(f"**Indirectly Modified:**\n")
-                for model in indirectly_modified:
-                    self._print(f"- `{model}`\n")
+                for model_name in indirectly_modified:
+                    self._print(f"- `{model_name}`\n")
                 self._print("\n")
             if metadata_modified:
                 self._print(f"**Metadata Updated:**\n")
-                for model in metadata_modified:
-                    self._print(f"- `{model}`\n")
+                for model_name in metadata_modified:
+                    self._print(f"- `{model_name}`\n")
                 self._print("\n")
+        if ignored_snapshot_names:
+            self._print(f"**Ignored Models (Expected Plan Start):**\n")
+            for model_name in ignored_snapshot_names:
+                snapshot = context_diff.snapshots[model_name]
+                self._print(
+                    f"- `{model_name}` ({snapshot.get_latest(start_date(snapshot, context_diff.snapshots.values()))})\n"
+                )
+            self._print("\n")
 
     def _show_missing_dates(self, plan: Plan) -> None:
         """Displays the models with missing dates."""

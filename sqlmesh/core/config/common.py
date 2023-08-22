@@ -3,10 +3,9 @@ from __future__ import annotations
 import typing as t
 from enum import Enum
 
-from pydantic import validator
-
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import field_validator
 
 
 class EnvironmentSuffixTarget(str, Enum):
@@ -36,12 +35,11 @@ def _concurrent_tasks_validator(v: t.Any) -> int:
     return v
 
 
-concurrent_tasks_validator = validator(
+concurrent_tasks_validator = field_validator(
     "backfill_concurrent_tasks",
     "ddl_concurrent_tasks",
     "concurrent_tasks",
-    pre=True,
-    allow_reuse=True,
+    mode="before",
     check_fields=False,
 )(_concurrent_tasks_validator)
 
@@ -52,9 +50,8 @@ def _http_headers_validator(v: t.Any) -> t.Any:
     return v
 
 
-http_headers_validator = validator(
+http_headers_validator = field_validator(
     "http_headers",
-    pre=True,
-    allow_reuse=True,
+    mode="before",
     check_fields=False,
 )(_http_headers_validator)

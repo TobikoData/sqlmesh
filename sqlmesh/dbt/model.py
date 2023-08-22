@@ -3,26 +3,27 @@ from __future__ import annotations
 import logging
 import typing as t
 
-from pydantic import validator
 from sqlglot import exp
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.core.model import (
+    EmbeddedKind,
+    FullKind,
     IncrementalByTimeRangeKind,
     IncrementalByUniqueKeyKind,
     IncrementalUnmanagedKind,
     Model,
     ModelKind,
-    ModelKindName,
     ViewKind,
     create_sql_model,
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
-from sqlmesh.dbt.common import SqlStr, extract_jinja_config
+from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
+from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
@@ -51,6 +52,7 @@ class ModelConfig(BaseModelConfig):
         time_column: The name of the time column
         cron: A cron string specifying how often the model should be refreshed, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
+        interval_unit: The duration of an interval for the model. By default, it is computed from the cron expression.
         batch_size: The maximum number of incremental intervals that can be run per backfill job. If this is None,
             then backfilling this model will do all of history in one job. If this is set, a model's backfill
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
@@ -67,9 +69,10 @@ class ModelConfig(BaseModelConfig):
     sql: SqlStr = SqlStr("")
     time_column: t.Optional[str] = None
     cron: t.Optional[str] = None
+    interval_unit: t.Optional[str] = None
     batch_size: t.Optional[int] = None
     lookback: t.Optional[int] = None
-    forward_only: t.Optional[bool] = None
+    forward_only: bool = True
     disable_restatement: t.Optional[bool] = None
 
     # DBT configuration fields
@@ -91,19 +94,25 @@ class ModelConfig(BaseModelConfig):
     _sql_embedded_config: t.Optional[SqlStr] = None
     _sql_no_config: t.Optional[SqlStr] = None
 
-    @validator(
+    _sql_validator = sql_str_validator
+
+    @field_validator(
         "unique_key",
         "cluster_by",
-        pre=True,
+        "tags",
+        mode="before",
     )
+    @classmethod
     def _validate_list(cls, v: t.Union[str, t.List[str]]) -> t.List[str]:
         return ensure_list(v)
 
-    @validator("sql", pre=True)
+    @field_validator("sql", mode="before")
+    @classmethod
     def _validate_sql(cls, v: t.Union[str, SqlStr]) -> SqlStr:
         return SqlStr(v)
 
-    @validator("partition_by", pre=True)
+    @field_validator("partition_by", mode="before")
+    @classmethod
     def _validate_partition_by(cls, v: t.Any) -> t.Union[t.List[str], t.Dict[str, t.Any]]:
         if isinstance(v, str):
             return [v]
@@ -138,12 +147,12 @@ class ModelConfig(BaseModelConfig):
         """
         materialization = self.model_materialization
         if materialization == Materialization.TABLE:
-            return ModelKind(name=ModelKindName.FULL)
+            return FullKind()
         if materialization == Materialization.VIEW:
             return ViewKind()
         if materialization == Materialization.INCREMENTAL:
             incremental_kwargs = {}
-            for field in ("batch_size", "lookback"):
+            for field in ("batch_size", "lookback", "forward_only", "disable_restatement"):
                 field_val = getattr(self, field, None) or self.meta.get(field, None)
                 if field_val:
                     incremental_kwargs[field] = field_val
@@ -153,7 +162,6 @@ class ModelConfig(BaseModelConfig):
                     IncrementalByTimeRangeKind
                 )
 
-                is_supported = True
                 if strategy not in INCREMENTAL_BY_TIME_STRATEGIES:
                     logger.warning(
                         "SQLMesh incremental by time strategy is not compatible with '%s' incremental strategy in model '%s'. Supported strategies include %s.",
@@ -161,13 +169,10 @@ class ModelConfig(BaseModelConfig):
                         self.sql_name,
                         collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
                     )
-                    is_supported = False
 
                 return IncrementalByTimeRangeKind(
                     time_column=self.time_column,
                     **incremental_kwargs,
-                    forward_only=not is_supported,
-                    disable_restatement=not is_supported,
                 )
 
             if self.unique_key:
@@ -194,10 +199,11 @@ class ModelConfig(BaseModelConfig):
                 IncrementalUnmanagedKind
             )
             return IncrementalUnmanagedKind(
-                insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES
+                insert_overwrite=strategy in INCREMENTAL_BY_TIME_STRATEGIES,
+                forward_only=incremental_kwargs.get("forward_only", True),
             )
         if materialization == Materialization.EPHEMERAL:
-            return ModelKind(name=ModelKindName.EMBEDDED)
+            return EmbeddedKind()
         raise ConfigError(f"{materialization.value} materialization not supported.")
 
     @property
@@ -269,7 +275,7 @@ class ModelConfig(BaseModelConfig):
                 d.parse_one(c, dialect=dialect).name for c in self.cluster_by
             ]
 
-        for field in ["cron", "forward_only", "disable_restatement"]:
+        for field in ["cron", "interval_unit"]:
             field_val = getattr(self, field, None) or self.meta.get(field, None)
             if field_val:
                 optional_kwargs[field] = field_val

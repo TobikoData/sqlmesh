@@ -3,6 +3,7 @@ from collections import Counter
 
 import pytest
 from pytest_mock.plugin import MockerFixture
+from sqlglot import exp
 from sqlglot.expressions import DataType
 
 from sqlmesh.core import constants as c
@@ -19,6 +20,7 @@ from sqlmesh.core.model import (
     SqlModel,
     TimeColumn,
 )
+from sqlmesh.core.model.kind import model_kind_type_from_name
 from sqlmesh.core.plan import Plan, SnapshotIntervals
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -232,7 +234,7 @@ def change_model_kind(context: Context, kind: ModelKindName):
             partitioned_by=[],
             audits=[],
         )
-    context.upsert_model("sushi.items", kind=ModelKind(name=kind))
+    context.upsert_model("sushi.items", kind=model_kind_type_from_name(kind)())  # type: ignore
 
 
 def validate_model_kind_change(
@@ -257,7 +259,7 @@ def validate_model_kind_change(
     elif kind_name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
         kind = IncrementalByUniqueKeyKind(unique_key="id")
     else:
-        kind = ModelKind(name=kind_name)
+        kind = model_kind_type_from_name(kind_name)()  # type: ignore
 
     def _validate_plan(context, plan):
         validate_plan_changes(plan, modified=directly_modified + indirectly_modified)
@@ -381,7 +383,6 @@ def test_no_override(sushi_context: Context) -> None:
         DataType.Type.BIGINT,
     )
     plan = sushi_context.plan("prod")
-    plan.set_start(start(sushi_context))
 
     items = plan.context_diff.snapshots["sushi.items"]
     order_items = plan.context_diff.snapshots["sushi.order_items"]
@@ -451,7 +452,6 @@ def setup_rebase(
         DataType.Type.FLOAT,
     )
     plan = context.plan("prod")
-    plan.set_start(start(context))
 
     plan_choice(plan, remote_choice)
     remote_versions = {snapshot.name: snapshot.version for snapshot in plan.snapshots}
@@ -620,8 +620,8 @@ def test_auto_categorization(sushi_context: Context):
     version = sushi_context.snapshots["sushi.waiter_as_customer_by_day"].version
     fingerprint = sushi_context.snapshots["sushi.waiter_as_customer_by_day"].fingerprint
 
-    model = t.cast(SqlModel, sushi_context.models["sushi.waiters"])
-    sushi_context.upsert_model("sushi.waiters", query=model.query.select("'foo' AS foo"))  # type: ignore
+    model = t.cast(SqlModel, sushi_context.models["sushi.customers"])
+    sushi_context.upsert_model("sushi.customers", query=model.query.select("'foo' AS foo"))  # type: ignore
     apply_to_environment(sushi_context, environment)
 
     assert (
@@ -676,21 +676,20 @@ def test_incremental_time_self_reference(
             SnapshotIntervals(
                 snapshot_name="sushi.customer_revenue_lifetime",
                 intervals=[
-                    (
-                        to_timestamp(to_date(f"{x + 1} days ago")),
-                        to_timestamp(to_date(f"{x} days ago")),
-                    )
-                    for x in reversed(range(7))
+                    (to_timestamp(to_date("1 week ago")), to_timestamp(to_date("6 days ago"))),
+                    (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
+                    (to_timestamp(to_date("5 days ago")), to_timestamp(to_date("4 days ago"))),
+                    (to_timestamp(to_date("4 days ago")), to_timestamp(to_date("3 days ago"))),
+                    (to_timestamp(to_date("3 days ago")), to_timestamp(to_date("2 days ago"))),
+                    (to_timestamp(to_date("2 days ago")), to_timestamp(to_date("1 days ago"))),
+                    (to_timestamp(to_date("1 day ago")), to_timestamp(to_date("today"))),
                 ],
             ),
             SnapshotIntervals(
                 snapshot_name="sushi.customer_revenue_by_day",
                 intervals=[
-                    (
-                        to_timestamp(to_date(f"{x + 1} days ago")),
-                        to_timestamp(to_date(f"{x} days ago")),
-                    )
-                    for x in reversed(range(5, 7))
+                    (to_timestamp(to_date("1 week ago")), to_timestamp(to_date("6 days ago"))),
+                    (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
                 ],
             ),
         ],
@@ -774,6 +773,29 @@ def test_environment_suffix_target_table(mocker: MockerFixture):
     } == set()
 
 
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_ignored_snapshots(sushi_context: Context):
+    environment = "dev"
+    apply_to_environment(sushi_context, environment)
+    # Make breaking change to model upstream of a depends_on_past model
+    sushi_context.upsert_model("sushi.order_items", stamp="1")
+    # Apply the change starting at a date later then the beginning of the downstream depends_on_past model
+    plan = apply_to_environment(
+        sushi_context, environment, choice=SnapshotChangeCategory.BREAKING, plan_start="2 days ago"
+    )
+    # Validate that the depends_on_past model is ignored
+    assert plan.ignored_snapshot_names == {"sushi.customer_revenue_lifetime"}
+    # Validate that the table was really ignored
+    metadata = DuckDBMetadata.from_context(sushi_context)
+    # Make sure prod view exists
+    assert exp.to_table("sushi.customer_revenue_lifetime") in metadata.qualified_views
+    # Make sure dev view doesn't exist since it was ignored
+    assert exp.to_table("sushi__dev.customer_revenue_lifetime") not in metadata.qualified_views
+    # Make sure that dev view for order items was created
+    assert exp.to_table("sushi__dev.order_items") in metadata.qualified_views
+
+
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
@@ -790,17 +812,20 @@ def apply_to_environment(
     choice: t.Optional[SnapshotChangeCategory] = None,
     plan_validators: t.Optional[t.Iterable[t.Callable]] = None,
     apply_validators: t.Optional[t.Iterable[t.Callable]] = None,
+    plan_start: t.Optional[TimeLike] = None,
 ):
     plan_validators = plan_validators or []
     apply_validators = apply_validators or []
 
     plan = context.plan(
         environment,
+        start=plan_start or start(context) if environment != c.PROD else None,
         forward_only=choice == SnapshotChangeCategory.FORWARD_ONLY,
         no_prompts=True,
         include_unmodified=True,
     )
-    plan.set_start(start(context))
+    if environment != c.PROD:
+        plan.set_start(plan_start or start(context))
 
     if choice:
         plan_choice(plan, choice)
@@ -811,6 +836,7 @@ def apply_to_environment(
     validate_apply_basics(context, environment, plan.snapshots)
     for validator in apply_validators:
         validator(context)
+    return plan
 
 
 def change_data_type(

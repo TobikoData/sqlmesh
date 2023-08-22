@@ -359,7 +359,7 @@ class Context(BaseContext):
             if self._state_sync.get_versions(validate=False).schema_version == 0:
                 self._state_sync.migrate()
             self._state_sync.get_versions()
-            self._state_sync = CachingStateSync(self._state_sync)
+            self._state_sync = CachingStateSync(self._state_sync)  # type: ignore
         return self._state_sync
 
     @property
@@ -818,7 +818,11 @@ class Context(BaseContext):
         Args:
             plan: The plan to apply.
         """
-        if not plan.context_diff.has_changes and not plan.requires_backfill:
+        if (
+            not plan.context_diff.has_changes
+            and not plan.requires_backfill
+            and not plan.has_unmodified_unpromoted
+        ):
             return
         if plan.uncategorized:
             raise PlanError("Can't apply a plan with uncategorized changes.")
@@ -903,8 +907,10 @@ class Context(BaseContext):
             source_alias = source_env.name
             target_alias = target_env.name
 
-            if not on and model.grain:
-                on = model.grain
+            if not on:
+                for ref in model.all_references:
+                    if ref.unique:
+                        on = ref.columns
 
         if not on:
             raise SQLMeshError("Missing join condition 'on'")

@@ -6,7 +6,6 @@ import logging
 import pkgutil
 import typing as t
 
-from pydantic import validator
 from sqlglot import __version__ as SQLGLOT_VERSION
 
 from sqlmesh import migrations
@@ -18,10 +17,15 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
+from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.utils import major_minor
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.pydantic import PydanticModel
+from sqlmesh.utils.pydantic import (
+    PydanticModel,
+    field_validator,
+    field_validator_v1_args,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +53,10 @@ class PromotionResult(PydanticModel):
     removed: t.List[SnapshotTableInfo]
     removed_environment_naming_info: t.Optional[EnvironmentNamingInfo]
 
-    @validator("removed_environment_naming_info")
+    @field_validator("removed_environment_naming_info")
+    @field_validator_v1_args
     def _validate_removed_environment_naming_info(
-        cls, v: t.Optional[EnvironmentNamingInfo], values: t.Dict
+        cls, v: t.Optional[EnvironmentNamingInfo], values: t.Any
     ) -> t.Optional[EnvironmentNamingInfo]:
         if v and not values["removed"]:
             raise ValueError("removed_environment_naming_info must be None if removed is empty")
@@ -243,10 +248,9 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def remove_interval(
         self,
-        snapshots: t.Iterable[SnapshotInfoLike],
-        start: TimeLike,
-        end: TimeLike,
-        all_snapshots: t.Optional[t.Iterable[Snapshot]] = None,
+        snapshot_intervals: t.Sequence[t.Tuple[SnapshotInfoLike, Interval]],
+        execution_time: t.Optional[TimeLike] = None,
+        remove_shared_versions: bool = False,
     ) -> None:
         """Remove an interval from a list of snapshots and sync it to the store.
 
@@ -325,3 +329,20 @@ class StateSync(StateReader, abc.ABC):
     @abc.abstractmethod
     def rollback(self) -> None:
         """Rollback to previous backed up state."""
+
+
+class DelegatingStateSync(StateSync):
+    def __init__(self, state_sync: StateSync) -> None:
+        self.state_sync = state_sync
+
+
+def _create_delegate_method(name: str) -> t.Callable:
+    def delegate(self: t.Any, *args: t.Any, **kwargs: t.Any) -> t.Any:
+        return getattr(self.state_sync, name)(*args, **kwargs)
+
+    return delegate
+
+
+DelegatingStateSync.__abstractmethods__ = frozenset()
+for name in StateSync.__abstractmethods__:
+    setattr(DelegatingStateSync, name, _create_delegate_method(name))

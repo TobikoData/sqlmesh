@@ -1,3 +1,4 @@
+import typing as t
 from datetime import timedelta
 
 import pytest
@@ -13,6 +14,7 @@ from sqlmesh.core.snapshot import (
     SnapshotDataVersion,
     SnapshotFingerprint,
 )
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import now, to_date, to_ds, to_timestamp
 from sqlmesh.utils.errors import PlanError
 
@@ -62,6 +64,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
 
     expected_start = to_date("2022-01-01")
     expected_end = to_date("2022-01-02")
+    expected_interval_end = to_timestamp(to_date("2022-01-03"))
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
@@ -79,7 +82,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
 
     plan = Plan(context_diff_mock, forward_only=True, is_dev=True)
 
-    assert plan.restatements == {"a"}
+    assert plan.restatements == {"a": (to_timestamp(expected_start), expected_interval_end)}
     assert plan.start == expected_start
     assert plan.end == expected_end
 
@@ -145,7 +148,10 @@ def test_restate_models(sushi_context_pre_scheduling: Context):
     plan = sushi_context_pre_scheduling.plan(
         restate_models=["sushi.waiter_revenue_by_day"], no_prompts=True
     )
-    assert plan.restatements == {"sushi.waiter_revenue_by_day"}
+    assert plan.restatements == {
+        "sushi.waiter_revenue_by_day": (plan.start, to_timestamp(to_date("today"))),
+        "sushi.top_waiters": (plan.start, to_timestamp(to_date("today"))),
+    }
     assert plan.requires_backfill
 
     with pytest.raises(PlanError, match=r"Cannot restate from 'unknown_model'.*"):
@@ -157,7 +163,7 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
         SqlModel(
             name="a",
             query=parse_one("select 1, key"),
-            kind="VIEW",
+            kind="EMBEDDED",
         )
     )
 
@@ -235,6 +241,7 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     context_diff_mock.new_snapshots = {}
     restatement_prod_plan = Plan(
         context_diff_mock,
+        start="2022-01-01",
         end="2022-01-03",
         restate_models=["a"],
     )
@@ -435,11 +442,11 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
 
 
 def test_effective_from(make_snapshot, mocker: MockerFixture):
-    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM a")))
+    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM b")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.add_interval("2023-01-01", "2023-03-01")
 
-    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds FROM a")))
+    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds FROM b")))
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
@@ -456,6 +463,8 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
         plan = Plan(context_diff_mock)
         plan.effective_from = "2023-02-01"
 
+    # The snapshot gets categorized as breaking in previous step so we want to reset that back to None
+    updated_snapshot.change_category = None
     plan = Plan(
         context_diff_mock, forward_only=True, start="2023-01-01", end="2023-03-01", is_dev=True
     )
@@ -614,7 +623,7 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
     context_diff_mock.environment = "test_dev"
     context_diff_mock.previous_plan_id = "previous_plan_id"
 
-    with pytest.raises(PlanError, match="Restatement is disabled for models: 'a'.*"):
+    with pytest.raises(PlanError, match="Cannot restate from 'a'.*"):
         Plan(context_diff_mock, restate_models=["a"])
 
     # Effective from doesn't apply to snapshots for which restatements are disabled.
@@ -624,7 +633,7 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
 
     # Restatements should still be supported when in dev.
     plan = Plan(context_diff_mock, is_dev=True, restate_models=["a"])
-    assert plan.restatements == {"a"}
+    assert plan.restatements == {"a": (plan.start, to_timestamp(to_date("today")))}
 
 
 def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
@@ -661,3 +670,272 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
     plan.set_choice(snapshot_a, SnapshotChangeCategory.BREAKING)
     # Make sure it does not get assigned INDIRECT_BREAKING
     assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+
+test_add_restatement_fixtures = [
+    (
+        "No dependencies single depends on past",
+        {
+            "a": {},
+            "b": {},
+        },
+        set("b"),
+        {"a", "b"},
+        "1 week ago",
+        "1 week ago",
+        "1 day ago",
+        {
+            "a": ("1 week ago", "6 days ago"),
+            "b": ("1 week ago", "today"),
+        },
+    ),
+    (
+        "Simple dependency with leaf depends on past",
+        {
+            "a": {},
+            "b": {"a"},
+        },
+        set("b"),
+        {"a", "b"},
+        "1 week ago",
+        "1 week ago",
+        "1 day ago",
+        {
+            "a": ("1 week ago", "6 days ago"),
+            "b": ("1 week ago", "today"),
+        },
+    ),
+    (
+        "Simple dependency with root depends on past",
+        {
+            "a": {},
+            "b": {"a"},
+        },
+        set("a"),
+        {"a", "b"},
+        "1 week ago",
+        "1 week ago",
+        "1 day ago",
+        {
+            "a": ("1 week ago", "today"),
+            "b": ("1 week ago", "today"),
+        },
+    ),
+    (
+        "Two unrelated subgraphs with root depends on past",
+        {
+            "a": {},
+            "b": {},
+            "c": {"a"},
+            "d": {"b"},
+        },
+        set("a"),
+        {"a", "b"},
+        "1 week ago",
+        "1 week ago",
+        "1 day ago",
+        {
+            "a": ("1 week ago", "today"),
+            "b": ("1 week ago", "6 days ago"),
+            "c": ("1 week ago", "today"),
+            "d": ("1 week ago", "6 days ago"),
+        },
+    ),
+    (
+        "Simple root depends on past with adjusted execution time",
+        {
+            "a": {},
+            "b": {"a"},
+        },
+        set("a"),
+        {"a", "b"},
+        "1 week ago",
+        "1 week ago",
+        "3 day ago",
+        {
+            "a": ("1 week ago", "2 days ago"),
+            "b": ("1 week ago", "2 days ago"),
+        },
+    ),
+    (
+        """
+        a -> c -> d
+        b -> c -> e -> g
+        b -> f -> g
+        c depends on past
+        restate a and b
+        """,
+        {
+            "a": {},
+            "b": {},
+            "c": {"a", "b"},
+            "d": {"c"},
+            "e": {"c"},
+            "f": {"b"},
+            "g": {"f", "e"},
+        },
+        set("c"),
+        {"a", "b"},
+        "1 week ago",
+        "1 week ago",
+        "1 day ago",
+        {
+            "a": ("1 week ago", "6 days ago"),
+            "b": ("1 week ago", "6 days ago"),
+            "c": ("1 week ago", "today"),
+            "d": ("1 week ago", "today"),
+            "e": ("1 week ago", "today"),
+            "f": ("1 week ago", "6 days ago"),
+            "g": ("1 week ago", "today"),
+        },
+    ),
+    (
+        """
+        a -> c -> d
+        b -> c -> e -> g
+        b -> f -> g
+        c depends on past
+        restate e
+        """,
+        {
+            "a": {},
+            "b": {},
+            "c": {"a", "b"},
+            "d": {"c"},
+            "e": {"c"},
+            "f": {"b"},
+            "g": {"f", "e"},
+        },
+        set("c"),
+        {"e"},
+        "1 week ago",
+        "1 week ago",
+        "1 day ago",
+        {
+            "e": ("1 week ago", "6 days ago"),
+            "g": ("1 week ago", "6 days ago"),
+        },
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "graph,depends_on_past_names,restatement_names,start,end,execution_time,expected",
+    [test[1:] for test in test_add_restatement_fixtures],
+    ids=[test[0] for test in test_add_restatement_fixtures],
+)
+def test_add_restatements(
+    graph: t.Dict[str, t.Set[str]],
+    depends_on_past_names: t.Set[str],
+    restatement_names: t.Set[str],
+    start: str,
+    end: str,
+    execution_time: str,
+    expected: t.Dict[str, t.Tuple[str, str]],
+    make_snapshot,
+    mocker,
+):
+    dag = DAG(graph)
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {
+        snapshot_name: make_snapshot(
+            SqlModel(
+                name=snapshot_name,
+                kind=IncrementalByTimeRangeKind(time_column="ds"),
+                cron="@daily",
+                start="1 week ago",
+                query=parse_one(
+                    f"SELECT 1 FROM {snapshot_name}"
+                    if snapshot_name in depends_on_past_names
+                    else "SELECT 1"
+                ),
+                depends_on=dag.upstream(snapshot_name),
+            )
+        )
+        for snapshot_name in dag
+    }
+    context_diff_mock.removed = set()
+    context_diff_mock.added = set()
+    context_diff_mock.added_materialized_models = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {}
+    context_diff_mock.has_snapshot_changes = False
+    context_diff_mock.is_new_environment = False
+    context_diff_mock.environment = "test_dev"
+    context_diff_mock.previous_plan_id = "previous_plan_id"
+    plan = Plan(
+        context_diff_mock,
+        start=to_date(start),
+        end=to_date(end),
+        execution_time=to_date(execution_time),
+        restate_models=restatement_names,
+    )
+    assert plan.restatements == {
+        name: (to_timestamp(to_date(start)), to_timestamp(to_date(end)))
+        for name, (start, end) in expected.items()
+    }
+
+
+def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            # self reference query so it depends_on_past
+            query=parse_one("select 1, ds FROM a"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_child = make_snapshot(
+        SqlModel(
+            name="a_child",
+            query=parse_one("select 1, ds FROM a"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    snapshot_child.categorize_as(SnapshotChangeCategory.BREAKING)
+    unrelated_snapshot = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select 1, ds"),
+            start="2023-01-01",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+        ),
+    )
+    unrelated_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert snapshot.depends_on_past
+    assert not snapshot_child.depends_on_past
+    assert not unrelated_snapshot.depends_on_past
+    assert snapshot_child.model.depends_on == {"a"}
+    assert unrelated_snapshot.model.depends_on == set()
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {
+        "a": snapshot,
+        "a_child": snapshot_child,
+        "b": unrelated_snapshot,
+    }
+    context_diff_mock.added = set()
+    context_diff_mock.removed = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {
+        snapshot.snapshot_id: snapshot,
+        snapshot_child.snapshot_id: snapshot_child,
+        unrelated_snapshot.snapshot_id: unrelated_snapshot,
+    }
+    context_diff_mock.environment = "dev"
+
+    dev_plan_start_aligned = Plan(
+        context_diff_mock, start="2023-01-01", end="2023-01-10", is_dev=True
+    )
+    assert len(dev_plan_start_aligned.new_snapshots) == 3
+    assert sorted([x.name for x in dev_plan_start_aligned.new_snapshots]) == ["a", "a_child", "b"]
+    dev_plan_start_ahead_of_model = Plan(
+        context_diff_mock, start="2023-01-02", end="2023-01-10", is_dev=True
+    )
+    assert len(dev_plan_start_ahead_of_model.new_snapshots) == 1
+    assert [x.name for x in dev_plan_start_ahead_of_model.new_snapshots] == ["b"]
+    assert len(dev_plan_start_ahead_of_model.ignored_snapshot_names) == 2
+    assert sorted(list(dev_plan_start_ahead_of_model.ignored_snapshot_names)) == ["a", "a_child"]
