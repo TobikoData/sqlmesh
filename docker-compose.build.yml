@@ -3,4 +3,3 @@ services:
   app:
     command: bash -c "npm --prefix /app ci && npm --prefix /app run build"
     networks: []
-    depends_on: []
