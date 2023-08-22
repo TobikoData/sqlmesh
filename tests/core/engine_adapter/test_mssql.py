@@ -58,16 +58,12 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         ],
         ['DROP TABLE IF EXISTS "__temp_test_table_'],
     ]
-    call_list: t.List[call] = [
-        c.args[0]
-        for c in adapter.cursor.execute.mock_calls
-    ]
+    call_list: t.List[call] = [c.args[0] for c in adapter.cursor.execute.mock_calls]
     test_results: t.List[bool] = [
         # any call can match one of the expected queries
         any(
-            [   # all pieces of the query should be found in the call
-                all([q in c for q in e])
-                for e in expected_queries
+            [  # all pieces of the query should be found in the call
+                all([q in c for q in e]) for e in expected_queries
             ]
         )
         for c in call_list
@@ -106,16 +102,12 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
         ],
         ['DROP TABLE IF EXISTS "__temp_test_table_'],
     ]
-    call_list: t.List[call] = [
-        c.args[0]
-        for c in adapter.cursor.execute.mock_calls
-    ]
+    call_list: t.List[call] = [c.args[0] for c in adapter.cursor.execute.mock_calls]
     test_results: t.List[bool] = [
         # any call can match one of the expected queries
         any(
-            [   # all pieces of the query should be found in the call
-                all([q in c for q in e])
-                for e in expected_queries
+            [  # all pieces of the query should be found in the call
+                all([q in c for q in e]) for e in expected_queries
             ]
         )
         for c in call_list
