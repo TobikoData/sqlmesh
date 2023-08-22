@@ -42,9 +42,38 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT * FROM (SELECT CAST("a" AS INTEGER) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
-    )
+    # Check for the important parts of these queries
+    expected_queries: t.List[t.List[str]] = [
+        [
+            'CREATE TABLE IF NOT EXISTS "__temp_test_table_',
+            '" ("a" BIGINT, "ds" TEXT)',
+        ],
+        [
+            'INSERT INTO "__temp_test_table_',
+            """" ("a", "ds") SELECT CAST("a" AS BIGINT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")""",
+        ],
+        [
+            'MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_',
+            """") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1=2 WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
+        ],
+        ['DROP TABLE IF EXISTS "__temp_test_table_'],
+    ]
+    call_list: t.List[call] = [
+        c.args[0]
+        for c in adapter.cursor.execute.mock_calls
+    ]
+    test_results: t.List[bool] = [
+        # any call can match one of the expected queries
+        any(
+            [   # all pieces of the query should be found in the call
+                all([q in c for q in e])
+                for e in expected_queries
+            ]
+        )
+        for c in call_list
+    ]
+
+    assert all(test_results)
 
 
 def test_insert_overwrite_by_time_partition_replace_where_pandas(
@@ -57,13 +86,42 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     adapter._insert_overwrite_by_condition(
         "test_table",
         df,
-        where=parse_one("ds BETWEEN '2022-01-01' and '2022-01-02'"),
-        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
+        where=parse_one("CAST(CAST(ds AS VARCHAR) AS DATE) BETWEEN '2022-01-01' and '2022-01-02'"),
+        columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("TEXT")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        """INSERT INTO "test_table" ("a", "ds") REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST("a" AS INTEGER) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
-    )
+    # Check for the important parts of these queries
+    expected_queries: t.List[t.List[str]] = [
+        [
+            'CREATE TABLE IF NOT EXISTS "__temp_test_table_',
+            '" ("a" BIGINT, "ds" TEXT)',
+        ],
+        [
+            'INSERT INTO "__temp_test_table_',
+            """" ("a", "ds") SELECT CAST("a" AS BIGINT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")""",
+        ],
+        [
+            'MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_',
+            """") AS "_subquery" WHERE CAST(CAST("ds" AS VARCHAR) AS DATE) BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1=2 WHEN NOT MATCHED BY SOURCE AND CAST(CAST("ds" AS VARCHAR) AS DATE) BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
+        ],
+        ['DROP TABLE IF EXISTS "__temp_test_table_'],
+    ]
+    call_list: t.List[call] = [
+        c.args[0]
+        for c in adapter.cursor.execute.mock_calls
+    ]
+    test_results: t.List[bool] = [
+        # any call can match one of the expected queries
+        any(
+            [   # all pieces of the query should be found in the call
+                all([q in c for q in e])
+                for e in expected_queries
+            ]
+        )
+        for c in call_list
+    ]
+
+    assert all(test_results)
 
 
 def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):

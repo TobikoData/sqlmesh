@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import typing as t
 
 import pandas as pd
+import pymssql
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
@@ -14,9 +16,11 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
+    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
 
 
 class MSSQLEngineAdapter(
@@ -61,6 +65,84 @@ class MSSQLEngineAdapter(
         result = self.cursor.fetchone()
 
         return result[0] == 1 if result is not None else False
+
+    @property
+    def connection(self) -> pymssql.Connection:
+        return self.cursor.connection
+
+    @contextlib.contextmanager
+    def __try_load_pandas_to_temp_table(
+        self,
+        reference_table_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+    ) -> t.Generator[Query, None, None]:
+        reference_table = exp.to_table(reference_table_name)
+        df = self.try_get_pandas_df(query_or_df)
+        if df is None:
+            yield t.cast("Query", query_or_df)
+            return
+        if columns_to_types is None:
+            raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
+        if reference_table.db is None:
+            raise SQLMeshError("table must be qualified when using Pandas DataFrames")
+        with self.temp_table(query_or_df, reference_table) as temp_table:
+            rows: t.List[t.Tuple[t.Any]] = list(df.itertuples(False, None))
+
+            conn = self._connection_pool.get()
+            conn.bulk_copy(temp_table.name, rows)
+
+            yield exp.select(*columns_to_types).from_(temp_table)
+
+    def _insert_overwrite_by_condition(
+        self,
+        table_name: TableName,
+        query_or_df: QueryOrDF,
+        where: t.Optional[exp.Condition] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> None:
+        """
+        SQL Server does not directly support `INSERT OVERWRITE` but it does
+        support `MERGE` with a `False` condition and delete that mimics an
+        `INSERT OVERWRITE`. Based on documentation this should have the same
+        runtime performance as `INSERT OVERWRITE`.
+
+        If a Pandas DataFrame is provided, it will be loaded into a temporary
+        table and then merged with the target table. This temporary table is
+        deleted after the merge is complete or after it's expiration time has
+        passed.
+        """
+        with self.__try_load_pandas_to_temp_table(
+            table_name,
+            query_or_df,
+            columns_to_types,
+        ) as source_table:
+            query = self._add_where_to_query(source_table, where)
+
+            columns = [
+                exp.to_column(col)
+                for col in (columns_to_types or [col.alias_or_name for col in query.expressions])
+            ]
+            when_not_matched_by_source = exp.When(
+                matched=False,
+                source=True,
+                condition=where,
+                then=exp.Delete(),
+            )
+            when_not_matched_by_target = exp.When(
+                matched=False,
+                source=False,
+                then=exp.Insert(
+                    this=exp.Tuple(expressions=columns),
+                    expression=exp.Tuple(expressions=columns),
+                ),
+            )
+            self._merge(
+                target_table=table_name,
+                source_table=query,
+                on="1=2",
+                match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
+            )
 
     def _get_data_objects(
         self,
