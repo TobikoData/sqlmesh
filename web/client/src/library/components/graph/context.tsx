@@ -18,7 +18,6 @@ import {
 import { type ErrorIDE } from '~/library/pages/ide/context'
 import { EnumSide } from '~/types/enum'
 import { isFalse, isNil } from '@utils/index'
-import { type Edge, type Node } from 'reactflow'
 
 export interface Connections {
   left: string[]
@@ -33,8 +32,6 @@ export type HighlightedNodes = Record<string, string[]>
 interface LineageFlow {
   lineage?: Record<string, Lineage>
   mainNode?: string
-  nodes: Node[]
-  edges: Edge[]
   connectedNodes: Set<string>
   activeEdges: ActiveEdges
   activeNodes: ActiveNodes
@@ -48,8 +45,6 @@ interface LineageFlow {
   highlightedNodes: HighlightedNodes
   setHighlightedNodes: React.Dispatch<React.SetStateAction<HighlightedNodes>>
   setActiveNodes: React.Dispatch<React.SetStateAction<ActiveNodes>>
-  setNodes: React.Dispatch<React.SetStateAction<Node[]>>
-  setEdges: React.Dispatch<React.SetStateAction<Edge[]>>
   setWithConnected: React.Dispatch<React.SetStateAction<boolean>>
   setMainNode: React.Dispatch<React.SetStateAction<string | undefined>>
   setSelectedNodes: React.Dispatch<React.SetStateAction<SelectedNodes>>
@@ -83,8 +78,6 @@ export const LineageFlowContext = createContext<LineageFlow>({
   connections: new Map(),
   selectedNodes: new Set(),
   connectedNodes: new Set(),
-  nodes: [],
-  edges: [],
   highlightedNodes: {},
   setHighlightedNodes: () => {},
   setWithColumns: () => {},
@@ -101,8 +94,8 @@ export const LineageFlowContext = createContext<LineageFlow>({
   setConnections: () => {},
   setSelectedNodes: () => {},
   setMainNode: () => {},
-  setNodes: () => {},
-  setEdges: () => {},
+  // setNodes: () => {},
+  // setEdges: () => {},
   setActiveNodes: () => {},
 })
 
@@ -122,8 +115,6 @@ export default function LineageFlowProvider({
   const [lineage, setLineage] = useState<Record<string, Lineage> | undefined>()
   const [hasColumns, setWithColumns] = useState(withColumns)
   const [mainNode, setMainNode] = useState<string>()
-  const [nodes, setNodes] = useState<Node[]>([])
-  const [edges, setEdges] = useState<Edge[]>([])
   const [manuallySelectedColumn, setManuallySelectedColumn] =
     useState<[ModelSQLMeshModel, Column]>()
   const [activeEdges, setActiveEdges] = useState<ActiveEdges>(new Map())
@@ -276,8 +267,6 @@ export default function LineageFlowProvider({
       value={{
         highlightedNodes,
         setHighlightedNodes,
-        nodes,
-        edges,
         connectedNodes,
         activeEdges,
         selectedEdges,
@@ -292,8 +281,6 @@ export default function LineageFlowProvider({
         withColumns: hasColumns,
         withConnected,
         setWithConnected,
-        setNodes,
-        setEdges,
         setSelectedNodes,
         setMainNode,
         setConnections,
