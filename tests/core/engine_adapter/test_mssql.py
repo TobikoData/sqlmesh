@@ -54,7 +54,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         ],
         [
             'MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_',
-            """") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1=2 WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
+            """") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1 = 2 WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
         ],
         ['DROP TABLE IF EXISTS "__temp_test_table_'],
     ]
@@ -98,7 +98,7 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
         ],
         [
             'MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_',
-            """") AS "_subquery" WHERE CAST(CAST("ds" AS VARCHAR) AS DATE) BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1=2 WHEN NOT MATCHED BY SOURCE AND CAST(CAST("ds" AS VARCHAR) AS DATE) BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
+            """") AS "_subquery" WHERE CAST(CAST("ds" AS VARCHAR) AS DATE) BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1 = 2 WHEN NOT MATCHED BY SOURCE AND CAST(CAST("ds" AS VARCHAR) AS DATE) BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
         ],
         ['DROP TABLE IF EXISTS "__temp_test_table_'],
     ]

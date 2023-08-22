@@ -143,7 +143,7 @@ class MSSQLEngineAdapter(
             self._merge(
                 target_table=table_name,
                 source_table=query,
-                on="1=2",
+                on=exp.condition("1=2"),
                 match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
             )
 
