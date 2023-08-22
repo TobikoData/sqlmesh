@@ -46,7 +46,7 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.config import Config, load_config_from_paths, load_config_from_yaml
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
@@ -244,6 +244,9 @@ class Context(BaseContext):
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
+        self._standalone_audits: UniqueKeyDict[str, StandaloneAudit] = UniqueKeyDict(
+            "standaloneaudits"
+        )
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
@@ -379,8 +382,12 @@ class Context(BaseContext):
             project = self._loader.load(self, update_schemas)
             self._macros = project.macros
             self._models = project.models
-            self._audits = project.audits
             self._metrics = project.metrics
+            for name, audit in project.audits.items():
+                if isinstance(audit, StandaloneAudit):
+                    self._standalone_audits[name] = audit
+                else:
+                    self._audits[name] = audit
             self.dag = project.dag
             gc.enable()
 

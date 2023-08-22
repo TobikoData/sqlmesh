@@ -5,16 +5,16 @@ import sys
 import typing as t
 from collections import defaultdict
 from datetime import datetime, timedelta
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, StandaloneAudit, is_audit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
-from sqlmesh.core.model.definition import _Model
+from sqlmesh.core.model.definition import _Model, is_model
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
@@ -43,7 +43,8 @@ if t.TYPE_CHECKING:
 
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
-SnapshotNode = Annotated[Model, Field(discriminator="source_type")]
+NodeClasses = t.Union[Model, StandaloneAudit]
+SnapshotNode = Annotated[NodeClasses, Field(discriminator="source_type")]
 
 
 class SnapshotChangeCategory(IntEnum):
@@ -158,6 +159,11 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         return self.fingerprint.to_version() == self.version
+
+
+class SnapshotNodeType(str, Enum):
+    MODEL = "model"
+    AUDIT = "audit"
 
 
 class QualifiedViewName(PydanticModel, frozen=True):
@@ -281,6 +287,18 @@ class SnapshotInfoMixin(ModelKindMixin):
             is_temp=is_temp,
         )
 
+    @property
+    def node_type(self) -> SnapshotNodeType:
+        raise NotImplementedError
+
+    @property
+    def is_model(self) -> bool:
+        return self.node_type == SnapshotNodeType.MODEL
+
+    @property
+    def is_audit(self) -> bool:
+        return self.node_type == SnapshotNodeType.AUDIT
+
 
 class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     name: str
@@ -292,6 +310,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory] = None
     kind_name: ModelKindName
+    node_type_: SnapshotNodeType = Field(default=SnapshotNodeType.MODEL, alias="node_type")
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -332,6 +351,10 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     @property
     def model_kind_name(self) -> ModelKindName:
         return self.kind_name
+
+    @property
+    def node_type(self) -> SnapshotNodeType:
+        return self.node_type_
 
     @property
     def name_version(self) -> SnapshotNameVersion:
@@ -464,9 +487,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return result
 
     @classmethod
-    def from_model(
+    def from_node(
         cls,
-        model: Model,
+        node: SnapshotNode,
         *,
         nodes: t.Dict[str, SnapshotNode],
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
@@ -477,7 +500,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """Creates a new snapshot for a model.
 
         Args:
-            model: Model to snapshot.
+            Node: Node to snapshot.
             nodes: Dictionary of all nodes in the graph to make the fingerprint dependent on parent changes.
                 If no dictionary is passed in the fingerprint will not be dependent on a node's parents.
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
@@ -489,17 +512,19 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             The newly created snapshot.
         """
         created_ts = now_timestamp()
+        node_audits = (
+            tuple(t.cast(_Model, node).referenced_audits(audits or {})) if is_model(node) else ()
+        )
 
-        audits = audits or {}
         return cls(
-            name=model.name,
+            name=node.name,
             fingerprint=fingerprint_from_node(
-                model,
+                node,
                 nodes=nodes,
                 audits=audits,
                 cache=cache,
             ),
-            node=model,
+            node=node,
             parents=tuple(
                 SnapshotId(
                     name=name,
@@ -510,9 +535,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                         cache=cache,
                     ).to_identifier(),
                 )
-                for name in _parents_from_node(model, nodes)
+                for name in _parents_from_node(node, nodes)
             ),
-            audits=tuple(model.referenced_audits(audits)),
+            audits=node_audits,
             intervals=[],
             dev_intervals=[],
             created_ts=created_ts,
@@ -854,6 +879,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             previous_versions=self.previous_versions,
             change_category=self.change_category,
             kind_name=self.model_kind_name,
+            node_type=self.node_type,
         )
 
     @property
@@ -910,15 +936,42 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.model.kind.name
 
     @property
+    def node_type(self) -> SnapshotNodeType:
+        if is_model(self.node):
+            return SnapshotNodeType.MODEL
+        elif is_audit(self.node):
+            return SnapshotNodeType.AUDIT
+        raise SQLMeshError(f"Snapshot {self.snapshot_id} has an unknown node type.")
+
+    @property
     def model(self) -> Model:
-        if isinstance(self.node, _Model):
+        if self.is_model:
             return t.cast(Model, self.node)
         raise SQLMeshError(f"Snapshot {self.snapshot_id} is not a model snapshot.")
+
+    @property
+    def audit(self) -> StandaloneAudit:
+        if self.is_audit:
+            return t.cast(StandaloneAudit, self.node)
+        raise SQLMeshError(f"Snapshot {self.snapshot_id} is not an audit snapshot.")
 
     @property
     def depends_on_past(self) -> bool:
         """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
         return self.model.depends_on_past
+
+    @property
+    def audits_with_args(self) -> t.List[t.Tuple[Audit, t.Dict[str, exp.Expression]]]:
+        if self.is_model:
+            audits_by_name = {**BUILT_IN_AUDITS, **{a.name: a for a in self.audits}}
+            return [
+                (audits_by_name[audit_name], audit_args)
+                for audit_name, audit_args in self.model.audits
+            ]
+        elif self.is_audit:
+            return [(self.audit.audit, {})]
+
+        return []
 
     @property
     def name_version(self) -> SnapshotNameVersion:
@@ -1012,7 +1065,7 @@ def _parents_from_node(
     for parent in node.depends_on:
         if parent in nodes:
             parent_nodes.add(parent)
-            if nodes[parent].kind.is_embedded:
+            if is_model(nodes[parent]) and t.cast(_Model, nodes[parent]).kind.is_embedded:
                 parent_nodes.update(_parents_from_node(nodes[parent], nodes))
 
     return parent_nodes

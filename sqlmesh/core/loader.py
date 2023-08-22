@@ -15,7 +15,7 @@ from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import Audit, AuditType
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
@@ -66,7 +66,7 @@ class LoadedProject:
     macros: MacroRegistry
     jinja_macros: JinjaMacroRegistry
     models: UniqueKeyDict[str, Model]
-    audits: UniqueKeyDict[str, Audit]
+    audits: UniqueKeyDict[str, AuditType]
     metrics: UniqueKeyDict[str, Metric]
     dag: DAG[str]
 
@@ -154,7 +154,7 @@ class Loader(abc.ABC):
         """Loads all models."""
 
     @abc.abstractmethod
-    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+    def _load_audits(self) -> UniqueKeyDict[str, AuditType]:
         """Loads all audits."""
 
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
@@ -318,9 +318,9 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+    def _load_audits(self) -> UniqueKeyDict[str, AuditType]:
         """Loads all the model audits."""
-        audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
+        audits_by_name: UniqueKeyDict[str, AuditType] = UniqueKeyDict("audits")
         for context_path, config in self._context.configs.items():
             for path in self._glob_paths(context_path / c.AUDITS, config=config, extension=".sql"):
                 self._track_file(path)

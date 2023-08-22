@@ -240,6 +240,10 @@ class Node(PydanticModel):
             return self.interval_unit_
         return self._inferred_interval_unit()
 
+    @property
+    def depends_on(self) -> t.Set[str]:
+        return set()
+
     def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
         """
         Computes the metadata hash for the node.

@@ -32,6 +32,7 @@ from sqlmesh.core.model.kind import (
 )
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
+from sqlmesh.core.node import Node
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
@@ -1932,3 +1933,7 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "hash_raw_query": exp.convert,
     "table_properties_": lambda value: value,
 }
+
+
+def is_model(node: Node) -> bool:
+    return isinstance(node, _Model)

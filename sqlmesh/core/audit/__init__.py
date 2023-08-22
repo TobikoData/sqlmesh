@@ -3,7 +3,15 @@ import typing as t
 from types import ModuleType
 
 from sqlmesh.core.audit import builtin
-from sqlmesh.core.audit.definition import Audit, AuditResult
+from sqlmesh.core.audit.definition import (
+    Audit,
+    AuditResult,
+    StandaloneAudit,
+    create_standalone_audit,
+    is_audit,
+)
+
+AuditType = t.Union[Audit, StandaloneAudit]
 
 
 def _discover_audits(modules: t.Iterable[ModuleType]) -> t.Dict[str, Audit]:

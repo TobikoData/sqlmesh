@@ -20,6 +20,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotIntervals,
+    SnapshotNodeType,
     SnapshotTableInfo,
 )
 from sqlmesh.schedulers.airflow import common
@@ -119,6 +120,7 @@ def test_create_plan_dag_spec(
         parents=[],
         change_category=SnapshotChangeCategory.BREAKING,
         kind_name=ModelKindName.FULL,
+        node_type=SnapshotNodeType.MODEL,
     )
     old_environment = Environment(
         name=environment_name,

@@ -5,7 +5,7 @@ import typing as t
 from pathlib import Path
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import AuditType
 from sqlmesh.core.config import (
     Config,
     ConnectionConfig,
@@ -100,7 +100,7 @@ class DbtLoader(Loader):
 
         return models
 
-    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+    def _load_audits(self) -> UniqueKeyDict[str, AuditType]:
         audits: UniqueKeyDict = UniqueKeyDict("audits")
 
         project = self._load_project()

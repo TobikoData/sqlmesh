@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import Field
 
 import sqlmesh.core.dialect as d
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import Audit, AuditType, create_standalone_audit
 from sqlmesh.dbt.common import (
     Dependencies,
     GeneralConfig,
@@ -59,7 +59,7 @@ class TestConfig(GeneralConfig):
     name: str
     sql: SqlStr
     test_kwargs: t.Dict[str, t.Any] = {}
-    owner: str
+    owner: t.Optional[str] = None
     column_name: t.Optional[str] = None
     dependencies: Dependencies = Dependencies()
 
@@ -90,7 +90,11 @@ class TestConfig(GeneralConfig):
     def _lowercase_name(cls, v: str) -> str:
         return v.lower()
 
-    def to_sqlmesh(self, context: DbtContext) -> Audit:
+    @property
+    def is_standalone(self) -> bool:
+        return not self.owner
+
+    def to_sqlmesh(self, context: DbtContext) -> AuditType:
         """Convert dbt Test to SQLMesh Audit
 
         Args:
@@ -126,7 +130,19 @@ class TestConfig(GeneralConfig):
             jinja_macros=jinja_macros,
         )
         audit._path = self.path
-        return audit
+
+        if self.owner:
+            return audit
+
+        return create_standalone_audit(
+            self.name,
+            audit,
+            path=self.path,
+            depends_on={model.sql_name for model in test_context.refs.values()}.union(
+                {source.sql_name for source in test_context.sources.values()}
+            ),
+            tags=self.tags,
+        )
 
     def _kwargs(self) -> str:
         kwargs = {}

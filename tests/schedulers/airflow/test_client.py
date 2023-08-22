@@ -16,7 +16,7 @@ from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
 
 @pytest.fixture
 def snapshot() -> Snapshot:
-    snapshot = Snapshot.from_model(
+    snapshot = Snapshot.from_node(
         SqlModel(
             name="test_model",
             kind=IncrementalByTimeRangeKind(time_column="ds"),

@@ -215,7 +215,7 @@ def assert_exp_eq() -> t.Callable:
 @pytest.fixture
 def make_snapshot() -> t.Callable:
     def _make_function(model: Model, version: t.Optional[str] = None, **kwargs) -> Snapshot:
-        return Snapshot.from_model(
+        return Snapshot.from_node(
             model,
             **{  # type: ignore
                 "nodes": {},

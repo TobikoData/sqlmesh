@@ -212,9 +212,21 @@ class BaseModelConfig(GeneralConfig):
     def model_function(self) -> AttributeDict[str, t.Any]:
         return AttributeDict({"config": self.config_attribute_dict})
 
+    @property
+    def tests_ref_source_dependencies(self) -> Dependencies:
+        dependencies = Dependencies()
+        for test in self.tests:
+            dependencies = dependencies.union(test.dependencies)
+        if self.name in dependencies.refs:
+            dependencies.refs.remove(self.name)
+        dependencies.macros = []
+        return dependencies
+
     def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
-        model_context = context.context_for_dependencies(self.dependencies)
+        model_context = context.context_for_dependencies(
+            self.dependencies.union(self.tests_ref_source_dependencies)
+        )
         jinja_macros = model_context.jinja_macros.trim(
             self.dependencies.macros, package=self.package_name
         )
