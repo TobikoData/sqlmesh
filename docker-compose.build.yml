@@ -1,0 +1,5 @@
+version: "3.11"
+services:
+  app:
+    command: bash -c "npm --prefix /app ci && npm --prefix /app run build"
+    networks: []

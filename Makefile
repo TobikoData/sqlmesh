@@ -82,3 +82,11 @@ ui-up:
 
 ui-down:
 	docker-compose down
+
+ui-build:
+	docker-compose -f docker-compose.yml -f docker-compose.build.yml run app
+
+clean-build:
+	rm -rf build/ && rm -rf dist/ && rm -rf *.egg-info
+
+dev-publish: clean-build ui-build publish
