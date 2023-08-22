@@ -7,7 +7,6 @@ import contextlib
 import typing as t
 
 import pandas as pd
-import pymssql
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
@@ -19,6 +18,8 @@ from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    import pymssql
+
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import Query, QueryOrDF
 
@@ -68,6 +69,8 @@ class MSSQLEngineAdapter(
 
     @property
     def connection(self) -> pymssql.Connection:
+        pass
+
         return self.cursor.connection
 
     @contextlib.contextmanager
