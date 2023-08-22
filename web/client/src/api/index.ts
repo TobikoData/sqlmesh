@@ -106,6 +106,7 @@ export function useApiModels(
       ...options,
       errorKey: EnumErrorKey.Models,
       trigger: 'API -> useApiModels',
+      delay: DELAY * 2, // With many models this can take a while
     },
   )
 }
@@ -240,6 +241,7 @@ export function useApiPlanRun(
       ...options,
       errorKey: EnumErrorKey.RunPlan,
       trigger: 'API -> useApiPlanRun',
+      delay: DELAY * 4, // With many models this can take a while
     },
   )
 }

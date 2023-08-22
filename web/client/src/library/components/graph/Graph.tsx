@@ -252,6 +252,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
   isDraggable = false,
   label,
   type,
+  count,
   handleClick,
   handleSelect,
 }: {
@@ -280,54 +281,59 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           <ArrowRightCircleIcon className="w-5 bg-secondary-500 dark:bg-primary-900 text-secondary-100" />
         </Handle>
       )}
-      {isNotNil(handleSelect) && (
-        <span
-          onClick={handleSelect}
-          className={clsx(
-            'ml-5 flex justify-center items-center min-w-[1rem] h-4 rounded-full cursor-pointer',
-            isSelected
-              ? 'border-2 border-secondary-500 dark:border-primary-500'
-              : 'border-2 border-neutral-500 dark:border-neutral-200',
-          )}
-        >
+      <div className="w-full flex items-center">
+        {isNotNil(handleSelect) && (
           <span
+            onClick={handleSelect}
             className={clsx(
-              'flex w-2 h-2 rounded-full',
+              'ml-5 w-4 h-4 rounded-full cursor-pointer p-0.5',
               isSelected
-                ? 'bg-secondary-500 dark:bg-primary-500'
-                : 'bg-neutral-30',
+                ? 'border-2 border-secondary-500 dark:border-primary-500'
+                : 'border-2 border-neutral-500 dark:border-neutral-200',
             )}
-          ></span>
-        </span>
-      )}
-      <span
-        className={clsx(
-          'flex w-full overflow-hidden px-3 py-2',
-          isDraggable && 'drag-handle',
-        )}
-      >
-        {type != null && (
-          <span
-            title={
-              type === EnumLineageNodeModelType.python
-                ? `Column lineage disabled for  ${type} models`
-                : 'Column lineage'
-            }
-            className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
           >
-            {getModelNodeTypeTitle(type)}
+            <span
+              className={clsx(
+                'flex w-2 h-2 rounded-full',
+                isSelected
+                  ? 'bg-secondary-500 dark:bg-primary-500'
+                  : 'bg-neutral-30',
+              )}
+            ></span>
           </span>
         )}
         <span
           className={clsx(
-            'inline-block whitespace-nowrap overflow-hidden overflow-ellipsis pr-2',
-            isNotNil(handleClick) && 'cursor-pointer hover:underline',
+            'flex w-full overflow-hidden px-3 py-2',
+            isDraggable && 'drag-handle',
           )}
-          onClick={handleClick}
         >
-          {label}
+          {isNotNil(type) && (
+            <span
+              title={
+                type === EnumLineageNodeModelType.python
+                  ? `Column lineage disabled for  ${type} models`
+                  : 'Column lineage'
+              }
+              className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
+            >
+              {getModelNodeTypeTitle(type)}
+            </span>
+          )}
+          <span
+            className={clsx(
+              'inline-block whitespace-nowrap overflow-hidden overflow-ellipsis pr-2',
+              isNotNil(handleClick) && 'cursor-pointer hover:underline',
+            )}
+            onClick={handleClick}
+          >
+            {label}
+          </span>
+          <span className="flex justify-between mx-2 px-2 rounded-full bg-neutral-10">
+            {count}
+          </span>
         </span>
-      </span>
+      </div>
       {hasRight && (
         <Handle
           type="source"
@@ -750,6 +756,9 @@ function ModelColumnLineage({
     selectedEdges,
     selectedNodes,
     withConnected,
+    withImpacted,
+    withSecondary,
+    hasBackground,
     activeNodes,
     activeEdges,
     connectedNodes,
@@ -759,13 +768,13 @@ function ModelColumnLineage({
     handleError,
     setWithConnected,
     setActiveNodes,
+    setWithImpact,
+    setWithSecondary,
+    setHasBackground,
   } = useLineageFlow()
   const { setCenter } = useReactFlow()
 
   const [isBuildingLayout, setIsBuildingLayout] = useState(true)
-  const [hasBackground, setHasBackground] = useState(true)
-  const [withImpacted, setWithImpact] = useState(true)
-  const [withSecondary, setWithSecondary] = useState(true)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
   const nodesMap = useMemo(
