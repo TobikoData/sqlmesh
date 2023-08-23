@@ -62,7 +62,8 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     # we're after the nested tuple, which contains call args
     # https://docs.python.org/3.7/library/unittest.mock.html#calls-as-tuples
     call_list: t.List[str] = [
-        c[0][0] if isinstance(c[0], tuple) else c[1][0] for c in adapter.cursor.execute.call_args_list
+        c[0][0] if isinstance(c[0], tuple) else c[1][0]
+        for c in adapter.cursor.execute.call_args_list
     ]
     test_results: t.List[bool] = [
         # any call can match one of the expected queries
@@ -111,7 +112,8 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     # we're after the nested tuple, which contains call args
     # https://docs.python.org/3.7/library/unittest.mock.html#calls-as-tuples
     call_list: t.List[str] = [
-        c[0][0] if isinstance(c[0], tuple) else c[1][0] for c in adapter.cursor.execute.call_args_list
+        c[0][0] if isinstance(c[0], tuple) else c[1][0]
+        for c in adapter.cursor.execute.call_args_list
     ]
     test_results: t.List[bool] = [
         # any call can match one of the expected queries

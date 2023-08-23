@@ -1,7 +1,3 @@
-tests/project/
-launch.json
-base.py
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
