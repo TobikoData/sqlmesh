@@ -16,7 +16,7 @@ import {
   ChevronUpDownIcon,
   ChevronUpIcon,
 } from '@heroicons/react/24/solid'
-import { useVirtual } from '@tanstack/react-virtual'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import Input from '@components/input/Input'
 import { EnumSize } from '~/types/enum'
 import { isArrayNotEmpty } from '@utils/index'
@@ -66,17 +66,14 @@ export default function Table({
   })
 
   const { rows } = table.getRowModel()
-  const { virtualItems: virtualRows, totalSize } = useVirtual({
-    parentRef: elTableContainer,
-    size: rows.length,
+  const rowVirtualizer = useVirtualizer({
+    getScrollElement: () => elTableContainer.current,
+    estimateSize: () => MIN_HEIGHT_ROW,
+    count: rows.length,
     overscan: 10,
   })
-
-  const paddingTop = virtualRows.length > 0 ? virtualRows?.[0]?.start ?? 0 : 0
-  const paddingBottom =
-    virtualRows.length > 0
-      ? totalSize - (virtualRows?.[virtualRows.length - 1]?.end ?? 0)
-      : 0
+  const virtualRows = rowVirtualizer.getVirtualItems()
+  const totalSize = rowVirtualizer.getTotalSize()
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -87,80 +84,87 @@ export default function Table({
         />
       )}
       <div
-        ref={elTableContainer}
-        className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
+        className={clsx(
+          'w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical',
+        )}
       >
-        <table
-          cellPadding={0}
-          cellSpacing={0}
-          className={clsx(
-            'w-full slashed-zero tabular-nums',
-            'text-neutral-700 dark:text-neutral-300 text-xs font-medium whitespace-nowrap text-left',
-          )}
+        <div
+          ref={elTableContainer}
+          style={{
+            height: `${totalSize}px`,
+          }}
         >
-          {isArrayNotEmpty(columns) && (
-            <thead className="sticky top-0">
-              {table.getHeaderGroups().map(headerGroup => (
-                <tr
-                  key={headerGroup.id}
-                  className="bg-primary-10 dark:bg-secondary-10 backdrop-blur-lg"
-                  style={{ height: `${MIN_HEIGHT_ROW}px` }}
-                >
-                  {headerGroup.headers.map(header => (
-                    <th
-                      key={header.id}
-                      className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark"
-                    >
-                      {header.isPlaceholder ? (
-                        <></>
-                      ) : (
-                        <div
-                          className={clsx(
-                            header.column.getCanSort()
-                              ? 'flex cursor-pointer select-none'
-                              : '',
-                            ['int', 'float'].includes(
-                              header.column.columnDef.meta!.type,
-                            ) && 'justify-end',
-                          )}
-                          onClick={header.column.getToggleSortingHandler()}
-                        >
-                          {header.column.getCanSort() && (
-                            <ChevronUpDownIcon className="mr-1 w-4" />
-                          )}
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                          {{
-                            asc: <ChevronDownIcon className="ml-1 w-4" />,
-                            desc: <ChevronUpIcon className="ml-1 w-4" />,
-                          }[header.column.getIsSorted() as string] ?? null}
-                        </div>
-                      )}
+          <table
+            cellPadding={0}
+            cellSpacing={0}
+            className={clsx(
+              'w-full slashed-zero tabular-nums',
+              'text-neutral-700 dark:text-neutral-300 text-xs font-medium whitespace-nowrap text-left',
+            )}
+          >
+            {isArrayNotEmpty(columns) && (
+              <thead className="sticky top-0">
+                {table.getHeaderGroups().map(headerGroup => (
+                  <tr
+                    key={headerGroup.id}
+                    className="bg-primary-10 dark:bg-secondary-10 backdrop-blur-lg"
+                    style={{ height: `${MIN_HEIGHT_ROW}px` }}
+                  >
+                    <th className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark">
+                      Row #
                     </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-          )}
-          <tbody>
-            {isArrayNotEmpty(virtualRows) ? (
-              <>
-                {paddingTop > 0 && (
-                  <tr style={{ height: `${MIN_HEIGHT_ROW}px` }}>
-                    <td style={{ minHeight: `${paddingTop}px` }} />
+                    {headerGroup.headers.map(header => (
+                      <th
+                        key={header.id}
+                        className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark"
+                      >
+                        {header.isPlaceholder ? (
+                          <></>
+                        ) : (
+                          <div
+                            className={clsx(
+                              header.column.getCanSort()
+                                ? 'flex cursor-pointer select-none'
+                                : '',
+                              ['int', 'float'].includes(
+                                header.column.columnDef.meta!.type,
+                              ) && 'justify-end',
+                            )}
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            {header.column.getCanSort() && (
+                              <ChevronUpDownIcon className="mr-1 w-4" />
+                            )}
+                            {flexRender(
+                              header.column.columnDef.header,
+                              header.getContext(),
+                            )}
+                            {{
+                              asc: <ChevronDownIcon className="ml-1 w-4" />,
+                              desc: <ChevronUpIcon className="ml-1 w-4" />,
+                            }[header.column.getIsSorted() as string] ?? null}
+                          </div>
+                        )}
+                      </th>
+                    ))}
                   </tr>
-                )}
-                {virtualRows.map(({ index }) => {
-                  const row = rows[index]!
+                ))}
+              </thead>
+            )}
+            <tbody>
+              {isArrayNotEmpty(virtualRows) ? (
+                virtualRows.map(virtualRow => {
+                  const row = rows[virtualRow.index]!
 
                   return (
                     <tr
                       key={row.id}
                       className="even:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
-                      style={{ height: `${MIN_HEIGHT_ROW}px` }}
+                      style={{ height: `${virtualRow.size}px` }}
                     >
+                      <td className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark">
+                        {row.index + 1}
+                      </td>
                       {row.getVisibleCells().map(cell => (
                         <td
                           key={cell.id}
@@ -179,20 +183,15 @@ export default function Table({
                       ))}
                     </tr>
                   )
-                })}
-                {paddingBottom > 0 && (
-                  <tr style={{ height: `${MIN_HEIGHT_ROW}px` }}>
-                    <td style={{ minHeight: `${paddingBottom}px` }} />
-                  </tr>
-                )}
-              </>
-            ) : (
-              <GhostRows
-                columns={columns.length > 0 ? columns.length : undefined}
-              />
-            )}
-          </tbody>
-        </table>
+                })
+              ) : (
+                <GhostRows
+                  columns={columns.length > 0 ? columns.length : undefined}
+                />
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
       <Footer count={rows.length} />
     </div>
