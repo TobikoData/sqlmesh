@@ -91,7 +91,31 @@ def test_select_models(mocker: MockerFixture, make_snapshot):
         },
     )
     _assert_models_equal(
+        selector.select_models(["+modified_model"], env_name),
+        {
+            added_model.name: added_model,
+            modified_model_v2.name: modified_model_v2.copy(
+                update={"mapping_schema": added_model_schema}
+            ),
+            removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
+        },
+    )
+    _assert_models_equal(
+        selector.select_models(["added_model+"], env_name),
+        {
+            added_model.name: added_model,
+            modified_model_v2.name: modified_model_v2.copy(
+                update={"mapping_schema": added_model_schema}
+            ),
+            removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
+        },
+    )
+    _assert_models_equal(
         selector.select_models(["added_model", "modified_model", "removed_model"], env_name),
+        local_models,
+    )
+    _assert_models_equal(
+        selector.select_models(["*_model", "removed_model"], env_name),
         local_models,
     )
 
