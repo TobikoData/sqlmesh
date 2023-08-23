@@ -61,7 +61,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     # c.args[0] does not work in python 3.7, so we use c[1][0] when args not available
     # https://docs.python.org/3.7/library/unittest.mock.html#calls-as-tuples
     call_list: t.List[str] = [
-        c.args[0] if hasattr(c, "args") else c[1][0] for c in adapter.cursor.execute.call_args_list
+        c[0][0] if isinstance(c[0], tuple) else c[1][0] for c in adapter.cursor.execute.call_args_list
     ]
     test_results: t.List[bool] = [
         # any call can match one of the expected queries
@@ -109,7 +109,7 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     # c.args[0] does not work in python 3.7, so we use c[1][0] when args not available
     # https://docs.python.org/3.7/library/unittest.mock.html#calls-as-tuples
     call_list: t.List[str] = [
-        c.args[0] if hasattr(c, "args") else c[1][0] for c in adapter.cursor.execute.call_args_list
+        c[0][0] if isinstance(c[0], tuple) else c[1][0] for c in adapter.cursor.execute.call_args_list
     ]
     test_results: t.List[bool] = [
         # any call can match one of the expected queries
