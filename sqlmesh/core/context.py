@@ -71,7 +71,7 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_schema_file
-from sqlmesh.core.selector import ModelSelector
+from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
@@ -678,7 +678,7 @@ class Context(BaseContext):
         no_auto_categorization: t.Optional[bool] = None,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
-        model_selections: t.Optional[t.Iterable[str]] = None,
+        select_models: t.Optional[t.Collection[str]] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -736,9 +736,9 @@ class Context(BaseContext):
             include_unmodified = self.config.include_unmodified
 
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
-        if model_selections:
-            models_override = ModelSelector(self.state_reader, self._models, self.path).select(
-                model_selections, environment, fallback_env_name=create_from or c.PROD
+        if select_models:
+            models_override = Selector(self.state_reader, self._models, self.path).select_models(
+                select_models, environment, fallback_env_name=create_from or c.PROD
             )
 
         plan = Plan(

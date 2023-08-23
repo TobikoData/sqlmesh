@@ -1,20 +1,28 @@
 from __future__ import annotations
 
+from unittest.mock import call
+
+import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
-from sqlmesh.core.selector import ModelSelector
+from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.errors import SQLMeshError
 
 
-def test_model_selection(mocker: MockerFixture, make_snapshot):
-    added_model = SqlModel(name="added_model", query=d.parse_one("SELECT 1"))
-    modified_model_v1 = SqlModel(name="modified_model", query=d.parse_one("SELECT 1"))
-    modified_model_v2 = SqlModel(name="modified_model", query=d.parse_one("SELECT 2"))
-    removed_model = SqlModel(name="removed_model", query=d.parse_one("SELECT 1"))
+def test_select_models(mocker: MockerFixture, make_snapshot):
+    added_model = SqlModel(name="added_model", query=d.parse_one("SELECT 1 AS a"))
+    modified_model_v1 = SqlModel(
+        name="modified_model", query=d.parse_one("SELECT a + 1 FROM added_model")
+    )
+    modified_model_v2 = SqlModel(
+        name="modified_model", query=d.parse_one("SELECT a + 2 FROM added_model")
+    )
+    removed_model = SqlModel(name="removed_model", query=d.parse_one("SELECT a FROM added_model"))
 
     modified_model_v1_snapshot = make_snapshot(modified_model_v1)
     modified_model_v1_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -36,30 +44,68 @@ def test_model_selection(mocker: MockerFixture, make_snapshot):
         removed_model_snapshot.snapshot_id: removed_model_snapshot,
     }
 
+    added_model_schema = {"added_model": {"a": "INT"}}
+
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
     local_models[added_model.name] = added_model
-    local_models[modified_model_v2.name] = modified_model_v2
+    local_models[modified_model_v2.name] = modified_model_v2.copy(
+        update={"mapping_schema": added_model_schema}
+    )
 
-    selector = ModelSelector(state_reader_mock, local_models)
+    selector = Selector(state_reader_mock, local_models)
 
-    assert selector.select(["added_model"], env_name) == {
+    assert selector.select_models(["added_model"], env_name) == {
         added_model.name: added_model,
-        modified_model_v1.name: modified_model_v1,
-        removed_model.name: removed_model,
+        modified_model_v1.name: modified_model_v1.copy(
+            update={"mapping_schema": added_model_schema}
+        ),
+        removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
     }
-    assert selector.select(["modified_model"], env_name) == {
+    assert selector.select_models(
+        ["modified_model"], "missing_env", fallback_env_name=env_name
+    ) == {
         modified_model_v2.name: modified_model_v2,
         removed_model.name: removed_model,
     }
-    assert selector.select(["removed_model"], env_name) == {
+    assert selector.select_models(["removed_model"], env_name) == {
         modified_model_v1.name: modified_model_v1,
     }
-    assert selector.select(["added_model", "modified_model"], env_name) == {
+    assert selector.select_models(
+        ["added_model", "modified_model"], "missing_env", fallback_env_name=env_name
+    ) == {
         added_model.name: added_model,
-        modified_model_v2.name: modified_model_v2,
-        removed_model.name: removed_model,
+        modified_model_v2.name: modified_model_v2.copy(
+            update={"mapping_schema": added_model_schema}
+        ),
+        removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
     }
     assert (
-        selector.select(["added_model", "modified_model", "removed_model"], env_name)
+        selector.select_models(["added_model", "modified_model", "removed_model"], env_name)
         == local_models
+    )
+
+
+def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
+    model = SqlModel(name="test_model", query=d.parse_one("SELECT 1 AS a"))
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.get_environment.return_value = None
+
+    local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
+    local_models[model.name] = model
+
+    selector = Selector(state_reader_mock, local_models)
+
+    with pytest.raises(SQLMeshError):
+        selector.select_models([model.name], "missing_env")
+
+    with pytest.raises(SQLMeshError):
+        selector.select_models([model.name], "missing_env", fallback_env_name="another_missing_env")
+
+    state_reader_mock.get_environment.assert_has_calls(
+        [
+            call("missing_env"),
+            call("missing_env"),
+            call("another_missing_env"),
+        ]
     )

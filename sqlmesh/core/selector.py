@@ -12,7 +12,7 @@ from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import SQLMeshError
 
 
-class ModelSelector:
+class Selector:
     def __init__(
         self,
         state_reader: StateReader,
@@ -23,7 +23,7 @@ class ModelSelector:
         self._models = models
         self._context_path = context_path
 
-    def select(
+    def select_models(
         self,
         model_selections: t.Iterable[str],
         target_env_name: str,
@@ -33,8 +33,10 @@ class ModelSelector:
         selection while sourcing the remaining models from the target environment.
 
         Args:
-            selected_models: A set of selections.
+            model_selections: A set of selections.
             target_env_name: The name of the target environment.
+            fallback_env_name: The name of the fallback environment that will be used if the target
+                environment doesn't exist.
 
         Returns:
             A dictionary of models.

@@ -307,7 +307,7 @@ class SQLMeshMagics(Magics):
         default=None,
     )
     @argument(
-        "--select",
+        "--select-model",
         type=str,
         nargs="*",
         help="Select specific model changes that should be included in the plan.",
@@ -338,7 +338,7 @@ class SQLMeshMagics(Magics):
             no_auto_categorization=args.no_auto_categorization,
             effective_from=args.effective_from,
             include_unmodified=args.include_unmodified,
-            model_selections=args.select,
+            select_models=args.select_model,
         )
         self._context.console = console
 

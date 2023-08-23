@@ -276,7 +276,7 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     default=None,
 )
 @click.option(
-    "--select",
+    "--select-model",
     type=str,
     multiple=True,
     help="Select specific model changes that should be included in the plan.",
@@ -287,10 +287,8 @@ def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.An
     """Plan a migration of the current context's models with the given environment."""
     context = ctx.obj
     restate_models = kwargs.pop("restate_model", None)
-    model_selections = kwargs.pop("select", None)
-    context.plan(
-        environment, restate_models=restate_models, model_selections=model_selections, **kwargs
-    )
+    select_models = kwargs.pop("select_model", None)
+    context.plan(environment, restate_models=restate_models, select_models=select_models, **kwargs)
 
 
 @cli.command("run")
