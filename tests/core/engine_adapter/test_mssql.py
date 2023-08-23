@@ -58,7 +58,8 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         ],
         ['DROP TABLE IF EXISTS "__temp_test_table_'],
     ]
-    # c.args[0] does not work in python 3.7, so we use c[1][0] when args not available
+    # call can be Tuple[Tuple, Dict] or Tuple[str, Tuple, Dict], per docs
+    # we're after the nested tuple, which contains call args
     # https://docs.python.org/3.7/library/unittest.mock.html#calls-as-tuples
     call_list: t.List[str] = [
         c[0][0] if isinstance(c[0], tuple) else c[1][0] for c in adapter.cursor.execute.call_args_list
@@ -106,7 +107,8 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
         ],
         ['DROP TABLE IF EXISTS "__temp_test_table_'],
     ]
-    # c.args[0] does not work in python 3.7, so we use c[1][0] when args not available
+    # call can be Tuple[Tuple, Dict] or Tuple[str, Tuple, Dict], per docs
+    # we're after the nested tuple, which contains call args
     # https://docs.python.org/3.7/library/unittest.mock.html#calls-as-tuples
     call_list: t.List[str] = [
         c[0][0] if isinstance(c[0], tuple) else c[1][0] for c in adapter.cursor.execute.call_args_list
