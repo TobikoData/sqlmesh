@@ -142,8 +142,8 @@ class Plan:
         return self._start or (
             min(
                 start
-                for intervals_per_model in self._missing_intervals.values()
-                for start, _ in intervals_per_model
+                for intervals_per_node in self._missing_intervals.values()
+                for start, _ in intervals_per_node
             )
             if self._missing_intervals
             else yesterday_ds()
@@ -177,7 +177,7 @@ class Plan:
             if self._missing_intervals:
                 return self._get_end_date(
                     [
-                        (end, snapshot.model.interval_unit)
+                        (end, snapshot.node.interval_unit)
                         for snapshot in self.snapshots
                         if (snapshot.name, snapshot.version_get_or_generate())
                         in self._missing_intervals
@@ -188,7 +188,7 @@ class Plan:
                 )
             return self._get_end_date(
                 [
-                    (snapshot.intervals[-1][1], snapshot.model.interval_unit)
+                    (snapshot.intervals[-1][1], snapshot.node.interval_unit)
                     for snapshot in self.snapshots
                     if snapshot.intervals
                 ]
@@ -410,7 +410,7 @@ class Plan:
         self._effective_from = effective_from
 
         for snapshot in self.new_snapshots:
-            if not snapshot.model.disable_restatement:
+            if snapshot.is_model and not snapshot.model.disable_restatement:
                 snapshot.effective_from = effective_from
 
     @property
@@ -460,7 +460,7 @@ class Plan:
 
     def _add_restatements(self) -> None:
         def is_restateable_snapshot(snapshot: Snapshot) -> bool:
-            if not self.is_dev and snapshot.model.disable_restatement:
+            if not self.is_dev and snapshot.is_model and snapshot.model.disable_restatement:
                 logger.debug("Restatement is disabled for model '%s'.", snapshot.name)
                 return False
             return not snapshot.is_symbolic and not snapshot.is_seed
@@ -501,7 +501,7 @@ class Plan:
             )
             # Since we are traversing the graph in topological order and the largest interval range is pushed down
             # the graph we just have to check our immediate parents in the graph and not the whole upstream graph.
-            snapshot_dependencies = snapshot.model.depends_on
+            snapshot_dependencies = snapshot.node.depends_on
             possible_intervals = [
                 restatements.get(s, dummy_interval) for s in snapshot_dependencies
             ] + [interval]
@@ -520,13 +520,13 @@ class Plan:
         directly_modified = []
         all_indirectly_modified = set()
 
-        for model_name, snapshot in self._snapshot_mapping.items():
-            if model_name in self.context_diff.modified_snapshots:
-                if self.context_diff.directly_modified(model_name):
+        for name, snapshot in self._snapshot_mapping.items():
+            if name in self.context_diff.modified_snapshots:
+                if self.context_diff.directly_modified(name):
                     directly_modified.append(snapshot)
                 else:
-                    all_indirectly_modified.add(model_name)
-            elif model_name in self.context_diff.added:
+                    all_indirectly_modified.add(name)
+            elif name in self.context_diff.added:
                 directly_modified.append(snapshot)
 
         indirectly_modified: SnapshotMapping = defaultdict(set)
@@ -548,13 +548,14 @@ class Plan:
 
         # Iterating in DAG order since a category for a snapshot may depend on the categories
         # assigned to its upstream dependencies.
-        for model_name in self._dag:
-            snapshot = self._snapshot_mapping.get(model_name)
+        for name in self._dag:
+            snapshot = self._snapshot_mapping.get(name)
             if not snapshot or snapshot.change_category:
                 continue
+            upstream_model_names = self._dag.upstream(name)
 
-            if model_name in self.context_diff.modified_snapshots:
-                is_directly_modified = self.context_diff.directly_modified(model_name)
+            if name in self.context_diff.modified_snapshots:
+                is_directly_modified = self.context_diff.directly_modified(name)
                 if self.is_new_snapshot(snapshot):
                     if self.forward_only:
                         # In case of the forward only plan any modifications result in reuse of the
@@ -564,19 +565,23 @@ class Plan:
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
-                    elif self._is_forward_only_model(model_name) and is_directly_modified:
+                    elif self._is_forward_only_model(name) and is_directly_modified:
                         self.set_choice(snapshot, SnapshotChangeCategory.FORWARD_ONLY)
                     elif self.auto_categorization_enabled and is_directly_modified:
                         model_with_missing_columns: t.Optional[str] = None
-                        this_model_with_downstream = self.indirectly_modified.get(
-                            model_name, set()
-                        ) | {model_name}
-                        for downstream in this_model_with_downstream:
-                            if self._snapshot_mapping[downstream].model.columns_to_types is None:
+                        this_node_with_downstream = self.indirectly_modified.get(name, set()) | {
+                            name
+                        }
+                        for downstream in this_node_with_downstream:
+                            downstream_snapshot = self._snapshot_mapping[downstream]
+                            if (
+                                downstream_snapshot.is_model
+                                and downstream_snapshot.model.columns_to_types is None
+                            ):
                                 model_with_missing_columns = downstream
                                 break
 
-                        new, old = self.context_diff.modified_snapshots[model_name]
+                        new, old = self.context_diff.modified_snapshots[name]
                         if model_with_missing_columns is None:
                             change_category = categorize_change(
                                 new, old, config=self.categorizer_config
@@ -599,15 +604,15 @@ class Plan:
                     and not any(
                         self.context_diff.directly_modified(upstream)
                         and not self._snapshot_mapping[upstream].version
-                        for upstream in self._dag.upstream(model_name)
+                        for upstream in self._dag.upstream(name)
                     )
                 ):
                     snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
 
-            elif model_name in self.context_diff.added and self.is_new_snapshot(snapshot):
+            elif name in self.context_diff.added and self.is_new_snapshot(snapshot):
                 snapshot.categorize_as(
                     SnapshotChangeCategory.FORWARD_ONLY
-                    if self._is_forward_only_model(model_name)
+                    if self._is_forward_only_model(name)
                     else SnapshotChangeCategory.BREAKING
                 )
 
@@ -644,10 +649,10 @@ class Plan:
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self.context_diff.snapshots.values():
-            broken_references = self.context_diff.removed & snapshot.model.depends_on
+            broken_references = self.context_diff.removed & snapshot.node.depends_on
             if broken_references:
                 raise PlanError(
-                    f"Removed models {broken_references} are referenced in model '{snapshot.name}'. Please remove broken references before proceeding."
+                    f"Removed models {broken_references} are referenced in '{snapshot.name}'. Please remove broken references before proceeding."
                 )
 
     def _ensure_new_env_with_changes(self) -> None:
@@ -706,7 +711,7 @@ class Plan:
         filtered_snapshot_mapping = {}
         cache: t.Optional[t.Dict[str, datetime]] = {}
         for name, context_snapshot in self.context_diff.snapshots.items():
-            full_dag.add(name, context_snapshot.model.depends_on)
+            full_dag.add(name, context_snapshot.node.depends_on)
         for snapshot_name in full_dag:
             snapshot = self.context_diff.snapshots.get(snapshot_name)
             # If the snapshot doesn't exist then it must be an external model
@@ -714,8 +719,8 @@ class Plan:
                 continue
             if snapshot.is_valid_start(
                 self._start, start_date(snapshot, self.context_diff.snapshots.values(), cache)
-            ) and snapshot.model.depends_on.isdisjoint(ignored_snapshot_names):
-                filtered_dag.add(snapshot_name, snapshot.model.depends_on)
+            ) and snapshot.node.depends_on.isdisjoint(ignored_snapshot_names):
+                filtered_dag.add(snapshot_name, snapshot.node.depends_on)
                 filtered_snapshots.append(snapshot)
                 filtered_snapshot_mapping[snapshot_name] = snapshot
                 if snapshot.snapshot_id in self.context_diff.new_snapshots:
@@ -791,8 +796,8 @@ class SnapshotIntervals(PydanticModel, frozen=True):
 
 class LoadedSnapshotIntervals(SnapshotIntervals):
     interval_unit: t.Optional[IntervalUnit]
-    model_name: str
-    view_name: str
+    node_name: str
+    view_name: t.Optional[str] = None
     change_category: SnapshotChangeCategory
 
     @classmethod
@@ -803,9 +808,9 @@ class LoadedSnapshotIntervals(SnapshotIntervals):
             intervals=snapshot.dev_intervals
             if snapshot.change_category.is_forward_only
             else snapshot.intervals,
-            interval_unit=snapshot.model.interval_unit,
-            model_name=snapshot.model.name,
-            view_name=snapshot.model.view_name,
+            interval_unit=snapshot.node.interval_unit,
+            node_name=snapshot.node.name,
+            view_name=snapshot.model.view_name if snapshot.is_model else None,
             change_category=snapshot.change_category,
         )
 

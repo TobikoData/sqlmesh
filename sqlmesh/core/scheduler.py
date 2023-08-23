@@ -144,7 +144,10 @@ class Scheduler:
             snapshot.name: snapshot,
         }
 
-        if isinstance(snapshot.model, SeedModel) and not snapshot.model.is_hydrated:
+        if (
+            isinstance(snapshot.node, SeedModel)
+            and not t.cast(SeedModel, snapshot.node).is_hydrated
+        ):
             snapshot = self.state_sync.get_snapshots([snapshot], hydrate_seeds=True)[
                 snapshot.snapshot_id
             ]
@@ -170,9 +173,9 @@ class Scheduler:
             )
         except AuditError as e:
             self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, e)
-            if not is_dev and snapshot.model.owner:
+            if not is_dev and snapshot.node.owner:
                 self.notification_target_manager.notify_user(
-                    NotificationEvent.AUDIT_FAILURE, snapshot.model.owner, e
+                    NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, e
                 )
             raise e
         self.state_sync.add_interval(snapshot, start, end, is_dev=is_dev)
@@ -362,7 +365,7 @@ def compute_interval_params(
         ignore_cron=ignore_cron,
     ).items():
         batches = []
-        batch_size = snapshot.model.batch_size
+        batch_size = snapshot.node.batch_size
         next_batch: t.List[t.Tuple[int, int]] = []
 
         for interval in intervals:

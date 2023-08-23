@@ -390,7 +390,7 @@ def create_standalone_audit(
 class AuditResult(PydanticModel):
     audit: Audit
     """The audit this result is for."""
-    model: _Model
+    model: t.Optional[_Model] = None
     """The model this audit is for."""
     count: t.Optional[int] = None
     """The number of records returned by the audit query. This could be None if the audit was skipped."""

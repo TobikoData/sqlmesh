@@ -62,7 +62,6 @@ from sqlmesh.core.loader import Loader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.metric import Metric
 from sqlmesh.core.model import Model
-from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTarget,
@@ -105,6 +104,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
+    NodeOrSnapshot = t.Union[str, Model, StandaloneAudit, Snapshot]
 
 
 class BaseContext(abc.ABC):
@@ -487,18 +487,18 @@ class Context(BaseContext):
 
     @t.overload
     def get_snapshot(
-        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True]
+        self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[True]
     ) -> Snapshot:
         ...
 
     @t.overload
     def get_snapshot(
-        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[False]
+        self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[False]
     ) -> t.Optional[Snapshot]:
         ...
 
     def get_snapshot(
-        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: bool = False
+        self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: bool = False
     ) -> t.Optional[Snapshot]:
         """Returns a snapshot with the given name or None if a snapshot with such name doesn't exist.
 
@@ -509,16 +509,16 @@ class Context(BaseContext):
         Returns:
             The expected snapshot.
         """
-        if isinstance(model_or_snapshot, str):
-            normalized_name = normalize_model_name(model_or_snapshot, dialect=self.config.dialect)
+        if isinstance(node_or_snapshot, str):
+            normalized_name = normalize_model_name(node_or_snapshot, dialect=self.config.dialect)
             snapshot = self.snapshots.get(normalized_name)
-        elif isinstance(model_or_snapshot, Snapshot):
-            snapshot = model_or_snapshot
+        elif isinstance(node_or_snapshot, Snapshot):
+            snapshot = node_or_snapshot
         else:
-            snapshot = self.snapshots.get(model_or_snapshot.name)
+            snapshot = self.snapshots.get(node_or_snapshot.name)
 
         if raise_if_missing and not snapshot:
-            raise SQLMeshError(f"Cannot find snapshot for '{model_or_snapshot}'")
+            raise SQLMeshError(f"Cannot find snapshot for '{node_or_snapshot}'")
 
         return snapshot
 
@@ -531,9 +531,13 @@ class Context(BaseContext):
                 pass
         return self.config
 
-    def config_for_model(self, model: str | Model) -> Config:
+    def config_for_node(self, node: str | Model | StandaloneAudit) -> Config:
         return self.config_for_path(
-            (model if isinstance(model, _Model) else self._models[model])._path
+            (
+                self._models.get(node, None) or self._standalone_audits.get(node, None)
+                if isinstance(node, str)
+                else node
+            )._path
         )
 
     @property
@@ -545,6 +549,11 @@ class Context(BaseContext):
     def metrics(self) -> MappingProxyType[str, Metric]:
         """Returns all registered metrics in this context."""
         return MappingProxyType(self._metrics)
+
+    @property
+    def standalone_audits(self) -> MappingProxyType[str, StandaloneAudit]:
+        """Returns all registered standalone audits in this context."""
+        return MappingProxyType(self._standalone_audits)
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
@@ -639,7 +648,7 @@ class Context(BaseContext):
         )
 
         if df is None:
-            raise RuntimeError(f"Error evaluating {snapshot.model.name}")
+            raise RuntimeError(f"Error evaluating {snapshot.name}")
 
         return df
 
@@ -650,7 +659,7 @@ class Context(BaseContext):
                 continue
             with open(model._path, "r+", encoding="utf-8") as file:
                 expressions = parse(
-                    file.read(), default_dialect=self.config_for_model(model).dialect
+                    file.read(), default_dialect=self.config_for_node(model).dialect
                 )
                 if transpile:
                     for prop in expressions[0].expressions:
@@ -1023,7 +1032,7 @@ class Context(BaseContext):
             else self.snapshots.values()
         )
 
-        num_audits = sum(len(snapshot.model.audits) for snapshot in snapshots)
+        num_audits = sum(len(snapshot.audits) for snapshot in snapshots)
         self.console.log_status_update(f"Found {num_audits} audit(s).")
         errors = []
         skipped_count = 0
@@ -1086,7 +1095,7 @@ class Context(BaseContext):
                 models={
                     name: model
                     for name, model in self._models.items()
-                    if self.config_for_model(model) is config
+                    if self.config_for_node(model) is config
                 },
                 adapter=self._engine_adapter,
                 state_reader=self.state_reader,

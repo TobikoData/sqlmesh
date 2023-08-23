@@ -155,6 +155,9 @@ class SnapshotEvaluator:
             **common_render_kwargs,
         )
 
+        if not snapshot.is_model:
+            return None
+
         model = snapshot.model
 
         with self.adapter.transaction(
@@ -227,9 +230,7 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._promote_snapshot(
-                    s, environment_naming_info, is_dev, on_complete, s.model
-                ),
+                lambda s: self._promote_snapshot(s, environment_naming_info, is_dev, on_complete),
                 self.ddl_concurrent_tasks,
             )
 
@@ -435,8 +436,6 @@ class SnapshotEvaluator:
             else:
                 evaluation_strategy.create(snapshot, target_table_name, **render_kwargs)
 
-            self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
-
         if on_complete is not None:
             on_complete(snapshot)
 
@@ -462,15 +461,14 @@ class SnapshotEvaluator:
 
     def _promote_snapshot(
         self,
-        snapshot: SnapshotInfoLike,
+        snapshot: Snapshot,
         environment_naming_info: EnvironmentNamingInfo,
         is_dev: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
-        model: Model,
     ) -> None:
         table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
         _evaluation_strategy(snapshot, self.adapter).promote(
-            snapshot.qualified_view_name, environment_naming_info, table_name, model
+            snapshot.qualified_view_name, environment_naming_info, table_name, snapshot
         )
 
         if on_complete is not None:
@@ -534,7 +532,7 @@ class SnapshotEvaluator:
         if audit.skip:
             return AuditResult(
                 audit=audit,
-                model=snapshot.model,
+                model=snapshot.model if snapshot.is_model else None,
                 skipped=True,
             )
         query = audit.render_query(
@@ -564,7 +562,7 @@ class SnapshotEvaluator:
                 logger.warning(f"{audit_error}\nAudit is warn only so proceeding with execution.")
         return AuditResult(
             audit=audit,
-            model=snapshot.model,
+            model=snapshot.model if snapshot.is_model else None,
             count=count,
             query=query,
         )
@@ -684,7 +682,7 @@ class EvaluationStrategy(abc.ABC):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        model: Model,
+        snapshot: Snapshot,
     ) -> None:
         """Updates the target view to point to the target table.
 
@@ -757,7 +755,7 @@ class SymbolicStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        model: Model,
+        snapshot: Snapshot,
     ) -> None:
         pass
 
@@ -775,7 +773,7 @@ class EmbeddedStrategy(SymbolicStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        model: Model,
+        snapshot: Snapshot,
     ) -> None:
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Dropping view '%s' for non-materialized table", target_name)
@@ -788,7 +786,7 @@ class PromotableStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        model: Model,
+        snapshot: Snapshot,
     ) -> None:
         schema = view_name.schema_for_environment(environment_naming_info=environment_naming_info)
         if schema is not None:
@@ -830,6 +828,8 @@ class MaterializableStrategy(PromotableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         model = snapshot.model
+        self.adapter.execute(model.render_pre_statements(**render_kwargs))
+
         table = exp.to_table(name)
         self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
@@ -860,6 +860,8 @@ class MaterializableStrategy(PromotableStrategy):
                 clustered_by=model.clustered_by,
                 table_properties=model.table_properties,
             )
+
+        self.adapter.execute(model.render_post_statements(**render_kwargs))
 
     def migrate(
         self,
@@ -1112,6 +1114,8 @@ class ViewStrategy(PromotableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         model = snapshot.model
+        self.adapter.execute(model.render_pre_statements(**render_kwargs))
+
         table = exp.to_table(name)
         self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
@@ -1122,6 +1126,8 @@ class ViewStrategy(PromotableStrategy):
             materialized=self._is_materialized_view(model),
             table_properties=model.table_properties,
         )
+
+        self.adapter.execute(model.render_post_statements(**render_kwargs))
 
     def migrate(
         self,

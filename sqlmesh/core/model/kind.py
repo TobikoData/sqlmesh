@@ -93,6 +93,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
     EMBEDDED = "EMBEDDED"
     SEED = "SEED"
     EXTERNAL = "EXTERNAL"
+    NONE = "NONE"
 
     @property
     def model_kind_name(self) -> ModelKindName:
