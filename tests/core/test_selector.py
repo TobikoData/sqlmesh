@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing as t
 from unittest.mock import call
 
 import pytest
@@ -54,34 +55,44 @@ def test_select_models(mocker: MockerFixture, make_snapshot):
 
     selector = Selector(state_reader_mock, local_models)
 
-    assert selector.select_models(["added_model"], env_name) == {
-        added_model.name: added_model,
-        modified_model_v1.name: modified_model_v1.copy(
-            update={"mapping_schema": added_model_schema}
+    _assert_models_equal(
+        selector.select_models(["added_model"], env_name),
+        {
+            added_model.name: added_model,
+            modified_model_v1.name: modified_model_v1.copy(
+                update={"mapping_schema": added_model_schema}
+            ),
+            removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
+        },
+    )
+    _assert_models_equal(
+        selector.select_models(["modified_model"], "missing_env", fallback_env_name=env_name),
+        {
+            modified_model_v2.name: modified_model_v2,
+            removed_model.name: removed_model,
+        },
+    )
+    _assert_models_equal(
+        selector.select_models(["removed_model"], env_name),
+        {
+            modified_model_v1.name: modified_model_v1,
+        },
+    )
+    _assert_models_equal(
+        selector.select_models(
+            ["added_model", "modified_model"], "missing_env", fallback_env_name=env_name
         ),
-        removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
-    }
-    assert selector.select_models(
-        ["modified_model"], "missing_env", fallback_env_name=env_name
-    ) == {
-        modified_model_v2.name: modified_model_v2,
-        removed_model.name: removed_model,
-    }
-    assert selector.select_models(["removed_model"], env_name) == {
-        modified_model_v1.name: modified_model_v1,
-    }
-    assert selector.select_models(
-        ["added_model", "modified_model"], "missing_env", fallback_env_name=env_name
-    ) == {
-        added_model.name: added_model,
-        modified_model_v2.name: modified_model_v2.copy(
-            update={"mapping_schema": added_model_schema}
-        ),
-        removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
-    }
-    assert (
-        selector.select_models(["added_model", "modified_model", "removed_model"], env_name)
-        == local_models
+        {
+            added_model.name: added_model,
+            modified_model_v2.name: modified_model_v2.copy(
+                update={"mapping_schema": added_model_schema}
+            ),
+            removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
+        },
+    )
+    _assert_models_equal(
+        selector.select_models(["added_model", "modified_model", "removed_model"], env_name),
+        local_models,
     )
 
 
@@ -109,3 +120,10 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
             call("another_missing_env"),
         ]
     )
+
+
+def _assert_models_equal(actual: t.Dict[str, Model], expected: t.Dict[str, Model]) -> None:
+    assert set(actual) == set(expected)
+    for name, model in actual.items():
+        # Use dict() to make Pydantic V2 happy.
+        assert model.dict() == expected[name].dict()
