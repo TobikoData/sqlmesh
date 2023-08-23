@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends
+from sse_starlette import ServerSentEvent
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model.definition import Model
 from sqlmesh.utils.pydantic import PYDANTIC_MAJOR_VERSION
+from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.models import FileType
 
@@ -96,10 +99,12 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Cont
                 None, _get_loaded_context, settings.project_path, settings.config
             )
     except Exception:
-        raise ApiException(
+        error = ApiException(
             message="Unable to create a loaded context",
             origin="API -> settings -> get_loaded_context",
-        )
+        ).to_dict()
+        api_console.queue.put_nowait(ServerSentEvent(event="errors", data=json.dumps(error)))
+        return await get_context(settings)
 
 
 async def get_context(settings: Settings = Depends(get_settings)) -> Context:
