@@ -65,12 +65,10 @@ class MSSQLEngineAdapter(
 
         result = self.cursor.fetchone()
 
-        return result[0] == 1 if result is not None else False
+        return result[0] == 1 if result else False
 
     @property
     def connection(self) -> pymssql.Connection:
-        pass
-
         return self.cursor.connection
 
     @contextlib.contextmanager
