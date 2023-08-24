@@ -224,7 +224,7 @@ function Section({
               </div>
             </Disclosure.Button>
             <Disclosure.Panel className="pb-2 overflow-hidden">
-              <div className="px-2 mb-2 text-xs">{children}</div>
+              <div className="px-3 mb-2 text-xs">{children}</div>
             </Disclosure.Panel>
           </>
         )}

@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { isArrayNotEmpty, isNil, isNotNil } from '@utils/index'
+import { isArrayNotEmpty, isNil } from '@utils/index'
 import { useStoreContext } from '@context/context'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import Container from '@components/container/Container'
@@ -18,21 +18,29 @@ export default function PageDocs(): JSX.Element {
   const models = useStoreContext(s => s.models)
   const lastActiveModel = useStoreContext(s => s.lastActiveModel)
 
-  const model = isNil(modelName)
-    ? undefined
-    : models.get(ModelSQLMeshModel.decodeName(modelName))
-
   const [filter, setFilter] = useState('')
 
   useEffect(() => {
-    if (isNil(model) && isNotNil(lastActiveModel)) {
-      navigate(
-        EnumRoutes.IdeDocsModels +
-          '/' +
-          ModelSQLMeshModel.encodeName(lastActiveModel.name),
-      )
+    const model = isNil(modelName)
+      ? undefined
+      : models.get(ModelSQLMeshModel.decodeName(modelName))
+
+    let route
+
+    if (isNil(model)) {
+      if (isNil(lastActiveModel)) return
+
+      route = `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(
+        lastActiveModel.name,
+      )}`
+    } else {
+      route = `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(
+        model.name,
+      )}`
     }
-  }, [model])
+
+    navigate(route)
+  }, [])
 
   const filtered = Array.from(models.entries()).reduce(
     (acc: ModelSQLMeshModel[], [key, model]) => {

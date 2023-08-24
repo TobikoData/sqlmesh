@@ -8,24 +8,33 @@ import { EnumRoutes } from '~/routes'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import LineageFlowProvider from '@components/graph/context'
 import { type ErrorIDE } from '../ide/context'
-import { isNil } from '@utils/index'
+import { isNil, isNotNil } from '@utils/index'
 import { useEffect } from 'react'
+import { useStoreProject } from '@context/project'
 
 export default function Content(): JSX.Element {
   const { modelName } = useParams()
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
-  const lastActiveModel = useStoreContext(s => s.lastActiveModel)
   const setLastActiveModel = useStoreContext(s => s.setLastActiveModel)
+
+  const files = useStoreProject(s => s.files)
+  const setSelectedFile = useStoreProject(s => s.setSelectedFile)
 
   const model = isNil(modelName)
     ? undefined
     : models.get(ModelSQLMeshModel.decodeName(modelName))
 
   useEffect(() => {
-    if (isNil(lastActiveModel) || model !== lastActiveModel) {
+    if (isNotNil(model)) {
       setLastActiveModel(model)
+
+      const file = files.get(model.path)
+
+      if (isNil(file)) return
+
+      setSelectedFile(file)
     }
   }, [model])
 
@@ -64,7 +73,7 @@ export default function Content(): JSX.Element {
             minSize={0}
             snapOffset={0}
           >
-            <div className="flex flex-col h-full dark:bg-theme-lighter round">
+            <div className="flex flex-col h-full round">
               <Documentation
                 model={model}
                 withQuery={model.type === 'sql'}

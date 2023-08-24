@@ -5,6 +5,7 @@ import { EnumErrorKey, useIDE, type ErrorIDE } from '../ide/context'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import Page from '../root/Page'
+import { isNil } from '@utils/index'
 
 const FileExplorer = lazy(() => import('@components/fileExplorer/FileExplorer'))
 const FileExplorerProvider = lazy(
@@ -24,7 +25,7 @@ export default function PageEditor(): JSX.Element {
     function handleClickModel(modelName: string): void {
       const model = models.get(modelName)
 
-      if (model == null) return
+      if (isNil(model)) return
 
       setSelectedFile(files.get(model.path))
     },

@@ -98,12 +98,11 @@ export default function Page({
                 'mx-0.5 py-1 flex items-center rounded-full',
                 errors.size === 0
                   ? 'opacity-50 cursor-not-allowed'
-                  : 'px-2 bg-danger-10',
+                  : 'px-2 bg-danger-10 text-danger-500',
               )}
             >
               {({ isActive }) => (
                 <>
-                  {isActive}
                   {isActive ? (
                     <ExclamationTriangleIcon className="w-4" />
                   ) : (
@@ -159,8 +158,8 @@ export default function Page({
         <Divider />
         <div className="h-full">{sidebar}</div>
         <Divider />
-        <div className="flex h-8 items-center">
-          <h3 className="px-2 font-bold text-primary-500 text-sm">
+        <div className="flex items-center border-b-2 border-neutral-200 dark:border-dark-lighter">
+          <h3 className="flex items-center px-2 h-8 font-bold text-primary-500 text-sm">
             <span className="inline-block">/</span>
             {project?.name}
           </h3>

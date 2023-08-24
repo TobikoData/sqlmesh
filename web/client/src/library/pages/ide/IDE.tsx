@@ -63,6 +63,7 @@ export default function PageIDE(): JSX.Element {
   const setState = useStorePlan(s => s.setState)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
+  const selectedFile = useStoreProject(s => s.selectedFile)
   const setProject = useStoreProject(s => s.setProject)
   const setFiles = useStoreProject(s => s.setFiles)
   const refreshFiles = useStoreProject(s => s.refreshFiles)
@@ -317,7 +318,7 @@ export default function PageIDE(): JSX.Element {
 
     addTabs(tabs)
 
-    if (isNotNil(tab)) {
+    if (isNotNil(tab) && isNil(selectedFile)) {
       selectTab(tab)
     }
   }

@@ -88,26 +88,18 @@ export default function FileExplorerProvider({
   const [artifactRename, setArtifactRename] = useState<ModelArtifact>()
 
   useEffect(() => {
-    setSelectedFile(tab?.file)
-  }, [tab?.id])
-
-  useEffect(() => {
-    if (isNil(lastActiveModel)) return
-
-    const file = files.get(lastActiveModel.path)
-
-    if (isNotNil(file) && selectedFile !== file) {
-      setSelectedFile(file)
-    }
-  }, [lastActiveModel])
-
-  useEffect(() => {
-    if (isNil(selectedFile) || isFalse(selectedFile.isModel)) {
+    if (
+      isNil(selectedFile) ||
+      (isFalse(selectedFile.isSQLMeshModel) &&
+        isFalse(selectedFile.isSQLMeshSchema))
+    ) {
       setLastActiveModel(undefined)
     } else {
       const model = models.get(selectedFile.path)
 
-      if (isNil(lastActiveModel) || model !== lastActiveModel) {
+      if (isNil(model)) return
+
+      if (isNil(lastActiveModel) || lastActiveModel !== model) {
         setLastActiveModel(model)
       }
     }
@@ -194,7 +186,7 @@ export default function FileExplorerProvider({
         .finally(() => {
           setIsLoading(false)
 
-          if (tab != null && artifact.hasFile(tab.file)) {
+          if (isNotNil(tab) && artifact.hasFile(tab.file)) {
             setSelectedFile(tab.file)
           }
 

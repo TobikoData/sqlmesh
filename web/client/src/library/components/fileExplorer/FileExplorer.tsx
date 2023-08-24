@@ -56,7 +56,7 @@ const FileExplorer = function FileExplorer({
     <div
       tabIndex={0}
       className={clsx(
-        'flex flex-col h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
+        'py-1 flex flex-col h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
         className,
       )}
       onKeyDown={handleKeyDown}

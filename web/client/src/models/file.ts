@@ -77,6 +77,15 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     return this.is_supported && this.type === 'model'
   }
 
+  get isSQLMeshSchema(): boolean {
+    return (
+      this.is_supported &&
+      this.name === 'schema' &&
+      (this.extension === EnumFileExtensions.YAML ||
+        this.extension === EnumFileExtensions.YML)
+    )
+  }
+
   get fingerprint(): string {
     return this._content + this.name + this.path
   }
