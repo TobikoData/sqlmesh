@@ -81,6 +81,7 @@ default_gateway: local_db
 * [Databricks](../integrations/engines/databricks.md)
 * [DuckDB](../integrations/engines/duckdb.md)
 * [MySQL](../integrations/engines/mysql.md)
+* [MSSQL](../integrations/engines/mssql.md)
 * [Postgres](../integrations/engines/postgres.md)
 * [GCP Postgres](../integrations/engines/gcp-postgres.md)
 * [Redshift](../integrations/engines/redshift.md)

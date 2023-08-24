@@ -681,7 +681,6 @@ class MSSQLConnectionConfig(_ConnectionConfig):
     timeout: t.Optional[int] = 0
     login_timeout: t.Optional[int] = 60
     charset: t.Optional[str] = "UTF-8"
-    as_dict: t.Optional[bool] = False
     appname: t.Optional[str] = None
     port: t.Optional[int] = 1433
     conn_properties: t.Optional[t.Union[t.Iterable[str], str]] = None
@@ -702,7 +701,6 @@ class MSSQLConnectionConfig(_ConnectionConfig):
             "timeout",
             "login_timeout",
             "charset",
-            "as_dict",
             "appname",
             "port",
             "conn_properties",
