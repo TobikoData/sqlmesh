@@ -645,6 +645,7 @@ def test_multi(mocker):
         paths=["examples/multi/repo_1"], engine_adapter=context.engine_adapter, gateway="memory"
     )
     model = context.models["bronze.a"]
+    assert model.project == "repo_1"
     context.upsert_model(model.copy(update={"query": model.query.select("'c' AS c")}))
     plan = context.plan()
     assert set(snapshot.name for snapshot in plan.directly_modified) == {"bronze.a", "bronze.b"}

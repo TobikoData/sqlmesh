@@ -141,6 +141,7 @@ class Node(PydanticModel):
 
     Args:
         name: The name of the node.
+        description: The name of the project this node belongs to, used in multi-repo deployments.
         description: The optional node description.
         owner: The owner of the node.
         start: The earliest date that the node will be executed for. If this is None,
@@ -154,6 +155,7 @@ class Node(PydanticModel):
     """
 
     name: str
+    project: str = ""
     description: t.Optional[str] = None
     owner: t.Optional[str] = None
     start: t.Optional[TimeLike] = None
