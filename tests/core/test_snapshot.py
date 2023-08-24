@@ -100,6 +100,7 @@ def test_json(snapshot: Snapshot):
             "dialect": "spark",
             "name": "name",
             "partitioned_by": [],
+            "project": "",
             "owner": "owner",
             "query": "SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl",
             "jinja_macros": {
@@ -118,7 +119,6 @@ def test_json(snapshot: Snapshot):
         "name": "name",
         "parents": [{"name": "parent.tbl", "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
-        "project": "",
         "indirect_versions": {},
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
@@ -393,7 +393,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="1116890341",
-        metadata_hash="1237394431",
+        metadata_hash="1312958471",
     )
 
     assert fingerprint == original_fingerprint
@@ -440,7 +440,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="1421766360",
-        metadata_hash="3585221762",
+        metadata_hash="1617581697",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -480,7 +480,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="4053778362",
-        metadata_hash="1237394431",
+        metadata_hash="1312958471",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
