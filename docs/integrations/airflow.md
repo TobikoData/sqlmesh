@@ -5,7 +5,7 @@ SQLMesh provides first-class support for Airflow with the following capabilities
 * A Directed Acyclic Graph (DAG) generated dynamically for each model version. Each DAG accounts for all its upstream dependencies defined within SQLMesh, and only runs after upstream DAGs succeed for the time period being processed.
 * Each plan application leads to the creation of a dynamically-generated DAG dedicated specifically to that Plan.
 * The Airflow [Database Backend](https://airflow.apache.org/docs/apache-airflow/stable/howto/set-up-database.html) is used for persistence of the SQLMesh state, meaning no external storage or additional configuration is required for SQLMesh to work.
-* The janitor DAG runs periodically and automatically to clean up DAGs and other SQLMesh artifacts no longer needed.
+* The janitor DAG runs periodically and automatically to clean up DAGs and other SQLMesh artifacts that are no longer needed.
 * Support for any SQL engine can be added by providing a custom Airflow Operator.
 
 SQLMesh provides [partial support for AWS MWAA](#aws-mwaa) (Amazon Managed Workflows for Apache Airflow) because MWAA does not expose the standard Airflow API.
@@ -79,6 +79,8 @@ In this approach, `sqlmesh plan` and `sqlmesh run` behave differently:
 
 - The `sqlmesh plan` command is issued by users. When they issue the command and choose to backfill, the built-in scheduler executes the project's models in the data warehouse.
 - The `sqlmesh run` command is issued by the MWAA Airflow instance on an appropriate cadence - users do not run the command themselves. MWAA then runs the DAG and executes the models in the data warehouse.
+
+The SQLMesh janitor process will also run automatically to clean up DAGs and other SQLMesh artifacts that are no longer needed.
 
 To implement this approach:
 
