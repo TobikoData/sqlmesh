@@ -6,13 +6,14 @@ import Spinner from '@components/logo/Spinner'
 import IDE from './library/pages/ide/IDE'
 
 const Editor = lazy(() => import('./library/pages/editor/Editor'))
-const Errors = lazy(() => import('./library/pages/errors/Errors'))
 const Plan = lazy(() => import('./library/pages/plan/Plan'))
 const Docs = lazy(() => import('./library/pages/docs/Docs'))
 const Tests = lazy(() => import('./library/pages/tests/Tests'))
 const Audits = lazy(() => import('./library/pages/audits/Audits'))
 const DocsContent = lazy(() => import('./library/pages/docs/Content'))
-const DocsWelcome = lazy(() => import('./library/pages/docs/Welcome'))
+const Errors = lazy(() => import('./library/pages/errors/Errors'))
+const ErrorContent = lazy(() => import('./library/pages/errors/Content'))
+const Welcome = lazy(() => import('./library/components/banner/Welcome'))
 
 export const EnumRoutes = {
   Ide: '/',
@@ -42,7 +43,12 @@ export const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <DocsWelcome />,
+            element: (
+              <Welcome
+                headline="Welcome to the documentation"
+                tagline="Here you can find all the information about the models and their fields."
+              />
+            ),
           },
           {
             path: '*',
@@ -58,7 +64,12 @@ export const router = createBrowserRouter([
             children: [
               {
                 index: true,
-                element: <DocsWelcome />,
+                element: (
+                  <Welcome
+                    headline="Welcome to the documentation"
+                    tagline="Here you can find all the information about the models and their fields."
+                  />
+                ),
               },
               {
                 path: '*',
@@ -93,6 +104,43 @@ export const router = createBrowserRouter([
       {
         path: 'errors',
         element: <Errors />,
+        children: [
+          {
+            index: true,
+            element: (
+              <Welcome
+                headline="Welcome to errors report"
+                tagline="Here you can see all the errors that occurred."
+              />
+            ),
+          },
+          {
+            path: '*',
+            element: (
+              <NotFound
+                link={EnumRoutes.Errors}
+                message="Back To Errors"
+              />
+            ),
+          },
+          {
+            path: ':id',
+            element: (
+              <Suspense
+                fallback={
+                  <div className="flex justify-center items-center w-full h-full">
+                    <Loading className="inline-block">
+                      <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                      <h3 className="text-md">Loading Content...</h3>
+                    </Loading>
+                  </div>
+                }
+              >
+                <ErrorContent />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: 'plan',
@@ -101,10 +149,50 @@ export const router = createBrowserRouter([
       {
         path: 'tests',
         element: <Tests />,
+        children: [
+          {
+            index: true,
+            element: (
+              <Welcome
+                headline="Welcome to tests report"
+                tagline="Here you can run tests and see the results."
+              />
+            ),
+          },
+          {
+            path: '*',
+            element: (
+              <NotFound
+                link={EnumRoutes.Tests}
+                message="Back To Tests"
+              />
+            ),
+          },
+        ],
       },
       {
         path: 'audits',
         element: <Audits />,
+        children: [
+          {
+            index: true,
+            element: (
+              <Welcome
+                headline="Welcome to audits report"
+                tagline="Here you can run audits and see the results."
+              />
+            ),
+          },
+          {
+            path: '*',
+            element: (
+              <NotFound
+                link={EnumRoutes.Audits}
+                message="Back To Audits"
+              />
+            ),
+          },
+        ],
       },
     ],
   },

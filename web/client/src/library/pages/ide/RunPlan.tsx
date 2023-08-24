@@ -116,7 +116,7 @@ export default function RunPlan(): JSX.Element {
       className={clsx(
         'flex items-center',
         environment == null &&
-          'opacity-50 pointer-events-none cursor-not-allowed',
+        'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
       <div className="flex items-center relative">
@@ -124,7 +124,7 @@ export default function RunPlan(): JSX.Element {
           className={clsx(
             'mx-0',
             isFalse(environment.isInitial && environment.isDefault) &&
-              'rounded-none rounded-l-lg border-r',
+            'rounded-none rounded-l-lg border-r',
           )}
           disabled={shouldDisableActions}
           variant={EnumVariant.Alternative}
@@ -143,9 +143,8 @@ export default function RunPlan(): JSX.Element {
                 },
                 children: (
                   <div className="mt-5 pt-4">
-                    <h4 className="mb-2">{`${
-                      environments.size > 1 ? 'Select or ' : ''
-                    }Add Environment`}</h4>
+                    <h4 className="mb-2">{`${environments.size > 1 ? 'Select or ' : ''
+                      }Add Environment`}</h4>
                     <div className="flex items-center relative">
                       {environments.size > 1 && (
                         <SelectEnvironemnt
@@ -284,7 +283,7 @@ export function PlanChanges({
   )
 }
 
-function SelectEnvironemnt({
+export function SelectEnvironemnt({
   onSelect,
   environment,
   disabled,
@@ -334,7 +333,8 @@ function SelectEnvironemnt({
             <span
               className={clsx(
                 'block overflow-hidden truncate',
-                (environment.isLocal || disabled) && 'text-neutral-500',
+                (environment.isLocal || disabled) &&
+                'text-neutral-600 dark:text-neutral-300',
                 environment.isSynchronized && 'text-primary-500',
               )}
             >
@@ -342,7 +342,7 @@ function SelectEnvironemnt({
             </span>
             <span className="pointer-events-none inset-y-0 right-0 flex items-center pl-2">
               <ChevronDownIcon
-                className="h-4 w-4"
+                className="h-4 w-4 text-secondary-500 dark:text-primary-500"
                 aria-hidden="true"
               />
             </span>
@@ -355,9 +355,9 @@ function SelectEnvironemnt({
           >
             <div
               className={clsx(
-                'absolute top-9 overflow-hidden shadow-xl bg-theme border-2 border-primary-20 rounded-md flex flex-col z-10',
-                side === EnumSide.Left && 'left-0',
-                side === EnumSide.Right && 'right-0',
+                'absolute max-w-full top-10 overflow-hidden shadow-xl bg-theme border-2 border-primary-20 rounded-md flex flex-col z-10',
+                side === EnumSide.Left && 'left-1',
+                side === EnumSide.Right && 'right-1',
               )}
             >
               <Menu.Items className="overflow-auto max-h-80 py-2 hover:scrollbar scrollbar--vertical">
@@ -376,7 +376,7 @@ function SelectEnvironemnt({
                           'flex justify-between items-center pl-2 pr-1 py-1 cursor-pointer overflow-auto',
                           active && 'bg-primary-10',
                           env === environment &&
-                            'pointer-events-none cursor-default bg-secondary-10',
+                          'pointer-events-none cursor-default bg-secondary-10',
                         )}
                       >
                         <div className="flex items-start">
@@ -559,13 +559,13 @@ function ChangesPreview({
             className={clsx(
               'inline-block ml-1 px-2 rounded-full text-xs font-bold text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
-                'bg-success-500 border-success-500',
+              'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&
-                'bg-danger-500 border-danger-500',
+              'bg-danger-500 border-danger-500',
               type === EnumPlanChangeType.Direct &&
-                'bg-secondary-500 border-secondary-500',
+              'bg-secondary-500 border-secondary-500',
               type === EnumPlanChangeType.Indirect &&
-                'bg-warning-500 border-warning-500',
+              'bg-warning-500 border-warning-500',
               type === 'metadata' && 'bg-neutral-500 border-neutral-500',
             )}
           >

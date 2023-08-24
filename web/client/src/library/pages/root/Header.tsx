@@ -10,7 +10,7 @@ export default function Header(): JSX.Element {
   const IconMoonOrSun = mode === EnumColorScheme.Light ? MoonIcon : SunIcon
 
   return (
-    <header className="min-h-[2rem] px-2 flex justify-between items-center">
+    <header className="min-h-[2.5rem] px-2 flex justify-between items-center">
       <div className="flex h-full items-center">
         <a
           href="/"

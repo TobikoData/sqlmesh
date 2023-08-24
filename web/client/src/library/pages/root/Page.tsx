@@ -1,5 +1,5 @@
 import React from 'react'
-import { isArrayNotEmpty } from '~/utils'
+import { isArrayNotEmpty, isFalse } from '~/utils'
 import {
   FolderIcon,
   DocumentTextIcon,
@@ -23,9 +23,11 @@ import { Divider } from '@components/divider/Divider'
 import SplitPane from '@components/splitPane/SplitPane'
 import { useStoreContext } from '@context/context'
 import { useIDE } from '../ide/context'
-import { PlanChanges } from '../ide/RunPlan'
+import { PlanChanges, SelectEnvironemnt } from '../ide/RunPlan'
 import { useApiPlanRun } from '@api/index'
 import clsx from 'clsx'
+import { EnumPlanAction, EnumPlanState, useStorePlan } from '@context/plan'
+import { EnumSize } from '~/types/enum'
 
 export default function Page({
   sidebar,
@@ -37,10 +39,16 @@ export default function Page({
   const location = useLocation()
   const { errors } = useIDE()
 
+  const planState = useStorePlan(s => s.state)
+  const planAction = useStorePlan(s => s.action)
+
   const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
   const splitPaneSizes = useStoreContext(s => s.splitPaneSizes)
   const setSplitPaneSizes = useStoreContext(s => s.setSplitPaneSizes)
+  const hasSynchronizedEnvironments = useStoreContext(
+    s => s.hasSynchronizedEnvironments,
+  )
 
   const project = useStoreProject(s => s.project)
 
@@ -57,6 +65,19 @@ export default function Page({
     dataPlan?.changes?.modified?.metadata,
   ].some(isArrayNotEmpty)
 
+  const showRunButton =
+    isFalse(environment.isDefault) || hasSynchronizedEnvironments()
+  const showSelectEnvironmentButton =
+    showRunButton &&
+    (isFalse(environment.isDefault) || isFalse(environment.isInitial))
+
+  const shouldDisableActions =
+    isFetching ||
+    planAction === EnumPlanAction.Apply ||
+    planState === EnumPlanState.Applying ||
+    planState === EnumPlanState.Running ||
+    planState === EnumPlanState.Cancelling
+
   return (
     <SplitPane
       sizes={splitPaneSizes}
@@ -66,8 +87,8 @@ export default function Page({
       onDragEnd={setSplitPaneSizes}
     >
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="px-2 flex max-h-8 justify-center w-full">
-          <div className="h-8 flex items-center px-1 py-0.5 text-neutral-500">
+        <div className="px-1 flex max-h-8 w-full items-center relative">
+          <div className="h-8 flex w-full items-center justify-center px-1 py-0.5 text-neutral-500">
             <Link
               title="File Explorer"
               to={EnumRoutes.Editor}
@@ -139,12 +160,12 @@ export default function Page({
             <Link
               title="Plan"
               to={EnumRoutes.Plan}
-              className="mx-0.5 py-1 px-2 flex items-center rounded-full bg-success-10"
+              className="mx-0.5 py-0.5 px-2 flex items-center rounded-full bg-success-10"
             >
               {location.pathname.startsWith(EnumRoutes.Plan) ? (
-                <PlayCircleIcon className="text-success-500 w-4" />
+                <PlayCircleIcon className="text-success-500 w-5" />
               ) : (
-                <OutlinePlayCircleIcon className="text-success-500 w-4" />
+                <OutlinePlayCircleIcon className="text-success-500 w-5" />
               )}
               <PlanChanges
                 environment={environment}
@@ -154,18 +175,26 @@ export default function Page({
               />
             </Link>
           </div>
+          {showSelectEnvironmentButton && (
+            <SelectEnvironemnt
+              environment={environment}
+              disabled={shouldDisableActions}
+              className="border-none h-6 !m-0"
+              size={EnumSize.sm}
+            />
+          )}
         </div>
         <Divider />
-        <div className="h-full">{sidebar}</div>
+        <div className="w-full h-full">{sidebar}</div>
         <Divider />
-        <div className="flex items-center border-b-2 border-neutral-200 dark:border-dark-lighter">
-          <h3 className="flex items-center px-2 h-8 font-bold text-primary-500 text-sm">
+        <div className="flex px-2 items-center border-b-2 border-neutral-200 dark:border-dark-lighter">
+          <h3 className="flex items-center h-8 font-bold text-primary-500 text-sm">
             <span className="inline-block">/</span>
             {project?.name}
           </h3>
         </div>
       </div>
-      <div className="h-full">{content}</div>
+      <div className="w-full h-full">{content}</div>
     </SplitPane>
   )
 }

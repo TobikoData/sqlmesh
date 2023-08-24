@@ -1,14 +1,16 @@
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { isArrayNotEmpty, isNil } from '@utils/index'
 import { useStoreContext } from '@context/context'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import Container from '@components/container/Container'
-import SourceList from './SourceList'
 import SearchList from '@components/search/SearchList'
-import { EnumSize } from '~/types/enum'
+import { EnumSize, EnumVariant } from '~/types/enum'
 import { EnumRoutes } from '~/routes'
 import Page from '../root/Page'
+import SourceList from '@components/sourceList/SourceList'
+import { type LineageNodeModelType } from '@components/graph/Graph'
+import { getModelNodeTypeTitle } from '@components/graph/help'
 
 export default function PageDocs(): JSX.Element {
   const location = useLocation()
@@ -17,8 +19,6 @@ export default function PageDocs(): JSX.Element {
 
   const models = useStoreContext(s => s.models)
   const lastActiveModel = useStoreContext(s => s.lastActiveModel)
-
-  const [filter, setFilter] = useState('')
 
   useEffect(() => {
     const model = isNil(modelName)
@@ -57,17 +57,25 @@ export default function PageDocs(): JSX.Element {
     [],
   )
 
-  useEffect(() => {
-    setFilter('')
-  }, [location.pathname])
-
   return (
     <Page
       sidebar={
         <SourceList
-          models={models}
-          filter={filter}
-          setFilter={setFilter}
+          key={location.pathname}
+          by="name"
+          byName="name"
+          variant={EnumVariant.Primary}
+          to={EnumRoutes.IdeDocsModels}
+          items={Array.from(new Set(models.values()))}
+          types={Array.from(new Set(models.values())).reduce(
+            (acc: Record<string, string>, it) =>
+              Object.assign(acc, {
+                [it.name]: getModelNodeTypeTitle(
+                  it.type as LineageNodeModelType,
+                ),
+              }),
+            {},
+          )}
         />
       }
       content={

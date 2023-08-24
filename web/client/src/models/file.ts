@@ -57,6 +57,10 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     this._type = newType ?? getFileType(this.path)
   }
 
+  get shortName(): string {
+    return this.name.replace(this.extension, '')
+  }
+
   get isSynced(): boolean {
     return isFalse(isStringEmptyOrNil(this._content))
   }
@@ -83,6 +87,20 @@ export class ModelFile extends ModelArtifact<InitialFile> {
       this.name === 'schema' &&
       (this.extension === EnumFileExtensions.YAML ||
         this.extension === EnumFileExtensions.YML)
+    )
+  }
+
+  get isSQLMeshAudit(): boolean {
+    return (
+      this.is_supported &&
+      (this.type === 'audit' || this.path.startsWith('audits'))
+    )
+  }
+
+  get isSQLMeshTest(): boolean {
+    return (
+      this.is_supported &&
+      (this.type === 'tests' || this.path.startsWith('tests'))
     )
   }
 

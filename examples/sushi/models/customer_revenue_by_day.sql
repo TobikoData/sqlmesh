@@ -3,7 +3,7 @@ MODEL (
   name sushi.customer_revenue_by_day,
   kind incremental_by_time_range (
     time_column (ds, 'YYYY-MM-dd'),
-    batch_size 10,
+    batch_s ize 10,
   ),
   owner jen,
   cron '@daily',
