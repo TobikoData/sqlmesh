@@ -8,6 +8,8 @@ SQLMesh provides first-class support for Airflow with the following capabilities
 * The janitor DAG runs periodically and automatically to clean up DAGs and other SQLMesh artifacts no longer needed.
 * Support for any SQL engine can be added by providing a custom Airflow Operator.
 
+NOTE: SQLMesh does not support AWS MWAA (Amazon Managed Workflows for Apache Airflow) because MWAA does not expose the standard Airflow API.
+
 ## Airflow cluster configuration
 To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed on that cluster. Ensure it is installed with the extras for your engine if needed; for example: `sqlmesh[databricks]` for Databricks. Check [setup.py](https://github.com/TobikoData/sqlmesh/blob/main/setup.py) for a list of extras.
 
@@ -52,6 +54,7 @@ SQLMesh supports a variety of engines in Airflow. Support for each engine is pro
 
 * [BigQuery](engines/bigquery.md#airflow-scheduler)
 * [Databricks](engines/databricks.md#airflow-scheduler)
+* [Postgres](engines/postgres.md#airflow-scheduler)
 * [Redshift](engines/redshift.md#airflow-scheduler)
 * [Snowflake](engines/snowflake.md#airflow-scheduler)
 * [Spark](engines/spark.md#airflow-scheduler)
