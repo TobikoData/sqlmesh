@@ -61,7 +61,7 @@ const FileExplorer = function FileExplorer({
     <div
       tabIndex={0}
       className={clsx(
-        'flex flex-col h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
+        'py-1 flex flex-col h-full overflow-hidden text-sm text-neutral-500 dark:text-neutral-400 font-regular select-none',
         className,
       )}
       onKeyDown={handleKeyDown}
@@ -75,13 +75,6 @@ const FileExplorer = function FileExplorer({
         </div>
       ) : (
         <>
-          <SearchList<ModelFile>
-            list={project.allFiles}
-            searchBy="path"
-            displayBy="name"
-            size={EnumSize.sm}
-            onSelect={setSelectedFile}
-          />
           <FileExplorer.ContextMenu
             key={project.id}
             trigger={
@@ -122,6 +115,14 @@ const FileExplorer = function FileExplorer({
               <div className="ml-auto pl-5"></div>
             </ContextMenu.Item>
           </FileExplorer.ContextMenu>
+          <SearchList<ModelFile>
+            list={project.allFiles}
+            searchBy="path"
+            displayBy="name"
+            size={EnumSize.sm}
+            onSelect={setSelectedFile}
+            direction="bottom"
+          />
         </>
       )}
     </div>

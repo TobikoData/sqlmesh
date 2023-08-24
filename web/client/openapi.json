@@ -1252,6 +1252,12 @@
             "type": "boolean",
             "title": "Has Running Task",
             "default": false
+          },
+          "modules": {
+            "items": { "$ref": "#/components/schemas/Modules" },
+            "type": "array",
+            "title": "Modules",
+            "default": []
           }
         },
         "type": "object",
@@ -1447,6 +1453,19 @@
         },
         "type": "object",
         "title": "ModelsDiff"
+      },
+      "Modules": {
+        "type": "string",
+        "enum": [
+          "editor",
+          "docs",
+          "plans",
+          "plan-active",
+          "tests",
+          "audits",
+          "errors"
+        ],
+        "title": "Modules"
       },
       "NodeType": {
         "type": "string",

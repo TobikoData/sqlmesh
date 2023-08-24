@@ -22,4 +22,5 @@ def get_api_meta(
     return models.Meta(
         version=_sqlmesh_version(),
         has_running_task=hasattr(request.app.state, "task") and not request.app.state.task.done(),
+        modules=[models.Modules.EDITOR, models.Modules.PLANS],
     )

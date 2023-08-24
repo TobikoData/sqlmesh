@@ -13,15 +13,17 @@ import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 import { isNotNil } from './utils'
 
 export default function App(): JSX.Element {
+  const modules = useStoreContext(s => s.modules)
   const setVersion = useStoreContext(s => s.setVersion)
   const setPlanAction = useStorePlan(s => s.setPlanAction)
+  const setModules = useStoreContext(s => s.setModules)
 
   const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta()
 
   useEffect(() => {
     void getMeta().then(({ data }) => {
       setVersion(data?.version)
-
+      setModules(Array.from(new Set(modules.concat(data?.modules ?? []))))
       if (isNotNil(data) && Boolean(data.has_running_task)) {
         setPlanAction(
           new ModelPlanAction({ value: EnumPlanAction.RunningTask }),
@@ -49,7 +51,7 @@ export default function App(): JSX.Element {
             </div>
           }
         >
-          <RouterProvider router={router} />
+          <RouterProvider router={router(modules)} />
         </Suspense>
       </main>
       <Divider />

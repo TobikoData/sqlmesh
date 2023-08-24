@@ -61,12 +61,7 @@ export default function ReportErrors(): JSX.Element {
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel
-              className={clsx(
-                'absolute top-20 right-2 z-[1000] rounded-md bg-light transform text-danger-700 shadow-2xl',
-                'w-[90vw] max-h-[80vh]',
-              )}
-            >
+            <Popover.Panel className="absolute top-20 right-2 z-[1000] flex flex-col rounded-md bg-light transform text-danger-700 shadow-2xl w-[90vw] max-h-[80vh]">
               <div className="flex justify-end mx-1 mt-2">
                 <Button
                   size={EnumSize.sm}
@@ -76,12 +71,7 @@ export default function ReportErrors(): JSX.Element {
                   Clear
                 </Button>
               </div>
-              <ul
-                className={clsx(
-                  'w-full p-2 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
-                  'max-w-[90vw] max-h-[80vh]',
-                )}
-              >
+              <ul className="w-full h-full p-2 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
                 {Array.from(errors)
                   .reverse()
                   .map(error => (
@@ -116,8 +106,8 @@ export function DisplayError({
   const version = useStoreContext(s => s.version)
 
   return (
-    <div className="flex flex-col w-full h-full">
-      <div className="flex w-full h-full">
+    <div className="flex flex-col w-full h-full overflow-hidden">
+      <div className="flex w-full">
         <div className="w-[20rem]">
           <div className="flex aline-center mb-2">
             <small className="block mr-3">
@@ -163,10 +153,10 @@ export function DisplayError({
           <p className="text-sm my-4">{error.description}</p>
         </div>
       </div>
-      {error.traceback != null && (
+      {isNotNil(error.traceback) && (
         <>
-          <div className="'w-full mb-4 mt-6">
-            <Disclosure>
+          <div className="w-full h-full mb-4 overflow-hidden">
+            <Disclosure defaultOpen={true}>
               {({ open }) => (
                 <>
                   <Disclosure.Button
@@ -185,8 +175,8 @@ export function DisplayError({
                       )}
                     </div>
                   </Disclosure.Button>
-                  <Disclosure.Panel className="px-2 pb-2 overflow-hidden">
-                    <pre className="font-mono w-full bg-dark-lighter text-danger-500 rounded-lg p-4 overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal max-h-[35vh] text-sm">
+                  <Disclosure.Panel className="w-full h-full px-2 pb-2 overflow-hidden">
+                    <pre className="font-mono w-full h-full bg-dark-lighter text-danger-500 rounded-lg p-4 overflow-scroll hover:scrollbar scrollbar--vertical scrollbar--horizontal text-sm">
                       <code>{error.traceback ?? error.message}</code>
                     </pre>
                   </Disclosure.Panel>
@@ -194,10 +184,10 @@ export function DisplayError({
               )}
             </Disclosure>
           </div>
-          <Divider className="!border-danger-10" />
+          <Divider />
         </>
       )}
-      <div className="flex justify-end">
+      <div className="flex justify-end mt-2">
         <Button
           variant={EnumVariant.Neutral}
           size={EnumSize.sm}

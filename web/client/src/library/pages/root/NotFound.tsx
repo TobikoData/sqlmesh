@@ -5,11 +5,11 @@ import { EnumVariant } from '~/types/enum'
 
 export default function NotFound({
   message,
-  descritpion,
+  description,
   link,
 }: {
   message: string
-  descritpion?: string
+  description?: string
   link: string
 }): JSX.Element {
   return (
@@ -19,9 +19,9 @@ export default function NotFound({
           <h1 className="text-[4rem] md:text-[6rem] lg:text-[9rem] text-secondary-10 dark:text-primary-10 mb-4">
             Not Found
           </h1>
-          {descritpion != null && (
+          {description != null && (
             <p className="mb-10 text-neutral-70 dark:text-primary-70 w-full bg-primary-10 py-5 rounded-md">
-              {descritpion}
+              {description}
             </p>
           )}
           <div className="inline-block">
