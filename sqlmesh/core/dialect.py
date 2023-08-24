@@ -76,6 +76,12 @@ class DColonCast(exp.Cast):
     pass
 
 
+class MetricAgg(exp.AggFunc):
+    """Used for computing metrics."""
+
+    arg_types = {"this": True}
+
+
 def _scan_var(self: Tokenizer) -> None:
     param = False
     bracket = False
@@ -283,10 +289,13 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
 
 
 def _parse_types(
-    self: Parser, check_func: bool = False, schema: bool = False
+    self: Parser,
+    check_func: bool = False,
+    schema: bool = False,
+    allow_identifiers: bool = True,
 ) -> t.Optional[exp.Expression]:
     start = self._curr
-    parsed_type = self.__parse_types(check_func=check_func, schema=schema)  # type: ignore
+    parsed_type = self.__parse_types(check_func=check_func, schema=schema, allow_identifiers=allow_identifiers)  # type: ignore
 
     if schema and parsed_type:
         parsed_type.meta["sql"] = self._find_sql(start, self._prev)
@@ -602,7 +611,7 @@ def extend_sqlglot() -> None:
         tokenizer.VAR_SINGLE_TOKENS.update("@")
 
     for parser in parsers:
-        parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list})
+        parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list, "METRIC": MetricAgg.from_arg_list})
         parser.PLACEHOLDER_PARSERS.update({TokenType.PARAMETER: _parse_macro})
         parser.QUERY_MODIFIER_PARSERS.update(
             {TokenType.PARAMETER: lambda self: _parse_body_macro(self)}

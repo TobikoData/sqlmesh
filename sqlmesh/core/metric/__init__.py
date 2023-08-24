@@ -4,4 +4,4 @@ from sqlmesh.core.metric.definition import (
     expand_metrics,
     load_metric_ddl,
 )
-from sqlmesh.core.metric.renderer import Renderer
+from sqlmesh.core.metric.rewriter import rewrite
