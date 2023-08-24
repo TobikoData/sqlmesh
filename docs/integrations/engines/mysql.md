@@ -15,6 +15,6 @@ pip install "sqlmesh[mysql]"
 | `host`         | The hostname of the MysQL server                             | string | Y        |
 | `user`         | The username to use for authentication with the MySQL server | string | Y        |
 | `password`     | The password to use for authentication with the MySQL server | string | Y        |
-| `port`         | The port number of the MySQL server                          | int    | Y        |
+| `port`         | The port number of the MySQL server                          | int    | N        |
 | `charset`      | The character set used for the connection                    | string | N        |
 | `ssl_disabled` | Is SSL disabled                                              | bool   | N        |
