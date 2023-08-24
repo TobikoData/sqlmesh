@@ -206,7 +206,7 @@ export default function RunPlan(): JSX.Element {
   )
 }
 
-function PlanChanges({
+export function PlanChanges({
   isLoading,
   hasChanges,
   environment,
@@ -218,7 +218,7 @@ function PlanChanges({
   hasChanges: boolean
 }): JSX.Element {
   return (
-    <span className="flex align-center h-full w-full">
+    <span className="flex align-center h-full">
       <>
         {isLoading ? (
           <span className="flex items-center ml-2">
@@ -581,7 +581,7 @@ function ChangesPreview({
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel className="absolute right-1 z-10 mt-8 transform flex p-2 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg ">
+            <Popover.Panel className="fixed z-10 mt-8 transform flex p-2 bg-theme-lighter shadow-xl focus:ring-2 ring-opacity-5 rounded-lg ">
               <PlanChangePreview
                 headline={headline}
                 type={type}

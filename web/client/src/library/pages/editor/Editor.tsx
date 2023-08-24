@@ -2,9 +2,9 @@ import { Suspense, lazy, useCallback } from 'react'
 import { useStoreContext } from '@context/context'
 import { useStoreProject } from '@context/project'
 import { EnumErrorKey, useIDE, type ErrorIDE } from '../ide/context'
-import SplitPane from '@components/splitPane/SplitPane'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
+import Page from '../root/Page'
 
 const FileExplorer = lazy(() => import('@components/fileExplorer/FileExplorer'))
 const FileExplorerProvider = lazy(
@@ -36,13 +36,8 @@ export default function PageEditor(): JSX.Element {
   }, [])
 
   return (
-    <SplitPane
-      sizes={[20, 80]}
-      minSize={[8, 8]}
-      snapOffset={0}
-      className="flex w-full h-full overflow-hidden"
-    >
-      <div className="h-full">
+    <Page
+      sidebar={
         <Suspense
           fallback={
             <div className="flex justify-center items-center w-full h-full">
@@ -57,8 +52,8 @@ export default function PageEditor(): JSX.Element {
             <FileExplorer />
           </FileExplorerProvider>
         </Suspense>
-      </div>
-      <div className="h-full">
+      }
+      content={
         <Suspense
           fallback={
             <div className="flex justify-center items-center w-full h-full">
@@ -76,7 +71,49 @@ export default function PageEditor(): JSX.Element {
             <Editor />
           </LineageFlowProvider>
         </Suspense>
-      </div>
-    </SplitPane>
+      }
+    />
+    // <SplitPane
+    //   sizes={[20, 80]}
+    //   minSize={[8, 8]}
+    //   snapOffset={0}
+    //   className="flex w-full h-full overflow-hidden"
+    // >
+    //   <div className="h-full">
+    //     <Suspense
+    //       fallback={
+    //         <div className="flex justify-center items-center w-full h-full">
+    //           <Loading className="inline-block">
+    //             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+    //             <h3 className="text-md">Getting Files...</h3>
+    //           </Loading>
+    //         </div>
+    //       }
+    //     >
+    //       <FileExplorerProvider>
+    //         <FileExplorer />
+    //       </FileExplorerProvider>
+    //     </Suspense>
+    //   </div>
+    //   <div className="h-full">
+    //     <Suspense
+    //       fallback={
+    //         <div className="flex justify-center items-center w-full h-full">
+    //           <Loading className="inline-block">
+    //             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+    //             <h3 className="text-md">Getting Editor Ready...</h3>
+    //           </Loading>
+    //         </div>
+    //       }
+    //     >
+    //       <LineageFlowProvider
+    //         handleClickModel={handleClickModel}
+    //         handleError={handleError}
+    //       >
+    //         <Editor />
+    //       </LineageFlowProvider>
+    //     </Suspense>
+    //   </div>
+    // </SplitPane>
   )
 }

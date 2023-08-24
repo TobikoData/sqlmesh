@@ -68,6 +68,7 @@ export default function FileExplorerProvider({
 }): JSX.Element {
   const { addError } = useIDE()
 
+  const selectedFile = useStoreProject(s => s.selectedFile)
   const activeRange = useStoreProject(s => s.activeRange)
   const project = useStoreProject(s => s.project)
   const files = useStoreProject(s => s.files)
@@ -76,6 +77,9 @@ export default function FileExplorerProvider({
   const setFiles = useStoreProject(s => s.setFiles)
   const inActiveRange = useStoreProject(s => s.inActiveRange)
 
+  const models = useStoreContext(s => s.models)
+  const lastActiveModel = useStoreContext(s => s.lastActiveModel)
+  const setLastActiveModel = useStoreContext(s => s.setLastActiveModel)
   const addConfirmation = useStoreContext(s => s.addConfirmation)
 
   const tab = useStoreEditor(s => s.tab)
@@ -86,6 +90,28 @@ export default function FileExplorerProvider({
   useEffect(() => {
     setSelectedFile(tab?.file)
   }, [tab?.id])
+
+  useEffect(() => {
+    if (isNil(lastActiveModel)) return
+
+    const file = files.get(lastActiveModel.path)
+
+    if (isNotNil(file) && selectedFile !== file) {
+      setSelectedFile(file)
+    }
+  }, [lastActiveModel])
+
+  useEffect(() => {
+    if (isNil(selectedFile) || isFalse(selectedFile.isModel)) {
+      setLastActiveModel(undefined)
+    } else {
+      const model = models.get(selectedFile.path)
+
+      if (isNil(lastActiveModel) || model !== lastActiveModel) {
+        setLastActiveModel(model)
+      }
+    }
+  }, [selectedFile])
 
   function selectArtifactsInRange(to: ModelArtifact): void {
     const IDX_FIRST = 0

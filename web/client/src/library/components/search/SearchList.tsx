@@ -63,7 +63,8 @@ export default function SearchList<
   onSelect,
   to,
   autoFocus = false,
-  isFullWidth = false,
+  direction = 'bottom',
+  className,
 }: {
   list: T[]
   searchBy: string
@@ -72,7 +73,8 @@ export default function SearchList<
   autoFocus?: boolean
   to?: (item: T) => string
   size?: Size
-  isFullWidth?: boolean
+  direction?: 'top' | 'bottom'
+  className?: string
 }): JSX.Element {
   const navigate = useNavigate()
 
@@ -116,7 +118,7 @@ export default function SearchList<
 
   return (
     <div
-      className="px-2 py-1 relative"
+      className={clsx('px-2 py-1 relative', className)}
       ref={ref}
       onKeyDown={(e: React.KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -156,12 +158,12 @@ export default function SearchList<
             static
             focus
             className={clsx(
-              'absolute z-10  transform cursor-pointer rounded-lg bg-theme border-4 border-primary-20',
-              'p-2 bg-theme dark:bg-theme-lighter max-h-[25vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
+              'absolute  w-full max-h-[40vh] z-10 transform cursor-pointer rounded-lg bg-theme border-4 border-secondary-20',
+              'p-2 bg-theme dark:bg-theme-lighter overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
+              direction === 'top' ? 'top-0' : 'bottom-10',
               size === EnumSize.sm && 'mt-10',
               size === EnumSize.md && 'mt-12',
               size === EnumSize.lg && 'mt-14',
-              isFullWidth ? 'w-full' : 'w-full max-w-[20rem]',
             )}
             ref={elList}
             onKeyDown={(e: React.KeyboardEvent) => {
@@ -213,7 +215,7 @@ export default function SearchList<
                   data-index={idx}
                   className={clsx(
                     'cursor-pointer rounded-lg',
-                    activeIndex === idx && 'bg-primary-20',
+                    activeIndex === idx && 'bg-secondary-10',
                   )}
                 >
                   <SearchResult<T>

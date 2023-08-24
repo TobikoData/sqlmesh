@@ -136,7 +136,7 @@ function CodeEditorDefault({
       <CodeMirror
         height="100%"
         width="100%"
-        className={clsx('flex w-full h-full font-mono text-sm', className)}
+        className={clsx('flex w-full h-full font-mono text-xs', className)}
         value={content}
         extensions={extensionsAll}
         onChange={onChange}

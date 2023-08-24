@@ -1,4 +1,4 @@
-import React, { useEffect, lazy, Suspense } from 'react'
+import React, { useEffect } from 'react'
 import {
   useApiModels,
   useApiFiles,
@@ -21,15 +21,12 @@ import {
   isObjectEmpty,
 } from '~/utils'
 import { useStoreContext } from '~/context/context'
-import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
-import { EnumSize, EnumVariant } from '~/types/enum'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
 import { type Directory, type Model } from '@api/client'
 import { Button } from '@components/button/Button'
-import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
 import { useStoreEditor, createLocalFile } from '@context/editor'
 import { ModelFile } from '@models/file'
@@ -41,13 +38,6 @@ import {
   EnumFileExplorerChange,
   type FileExplorerChange,
 } from '@components/fileExplorer/context'
-
-const ReportErrors = lazy(
-  async () => await import('../../components/report/ReportErrors'),
-)
-const RunPlan = lazy(async () => await import('./RunPlan'))
-const ActivePlan = lazy(async () => await import('./ActivePlan'))
-const PlanSidebar = lazy(async () => await import('./PlanSidebar'))
 
 export default function PageIDE(): JSX.Element {
   const location = useLocation()
@@ -70,11 +60,9 @@ export default function PageIDE(): JSX.Element {
   )
 
   const planState = useStorePlan(s => s.state)
-  const activePlan = useStorePlan(s => s.activePlan)
   const setState = useStorePlan(s => s.setState)
   const setActivePlan = useStorePlan(s => s.setActivePlan)
 
-  const project = useStoreProject(s => s.project)
   const setProject = useStoreProject(s => s.setProject)
   const setFiles = useStoreProject(s => s.setFiles)
   const refreshFiles = useStoreProject(s => s.refreshFiles)
@@ -340,39 +328,10 @@ export default function PageIDE(): JSX.Element {
     setShowConfirmation(false)
   }
 
-  const isActivePageEditor = location.pathname === EnumRoutes.IdeEditor
   const confirmation = confirmations[0]
 
   return (
     <Container.Page>
-      <PlanSidebar />
-      <div className="w-full flex justify-between items-center min-h-[2rem] z-50">
-        <div className="px-3 flex items-center whitespace-nowrap">
-          <h3 className="font-bold text-primary-500">
-            <span className="inline-block">/</span>
-            {project?.name}
-          </h3>
-          <ArrowLongRightIcon className="w-8 mx-4 text-neutral-50" />
-          <Button
-            size={EnumSize.sm}
-            variant={EnumVariant.Neutral}
-          >
-            {isActivePageEditor ? (
-              <Link to={EnumRoutes.IdeDocs}>Docs</Link>
-            ) : (
-              <Link to={EnumRoutes.IdeEditor}>Editor</Link>
-            )}
-          </Button>
-        </div>
-        <div className="px-3 flex items-center min-w-[10rem] justify-end">
-          <RunPlan />
-          <Suspense>
-            {activePlan != null && <ActivePlan plan={activePlan} />}
-          </Suspense>
-          <ReportErrors />
-        </div>
-      </div>
-      <Divider />
       <Outlet />
       <ModalConfirmation
         show={showConfirmation}

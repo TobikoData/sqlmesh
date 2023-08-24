@@ -25,6 +25,8 @@ interface ContextStore {
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
   models: Map<string, ModelSQLMeshModel>
+  lastActiveModel?: ModelSQLMeshModel
+  setLastActiveModel: (lastActiveModel?: ModelSQLMeshModel) => void
   setVersion: (version?: string) => void
   setShowConfirmation: (showConfirmation: boolean) => void
   addConfirmation: (confirmation: Confirmation) => void
@@ -50,6 +52,8 @@ interface ContextStore {
     initialStartDate?: ContextEnvironmentStart,
     initialEndDate?: ContextEnvironmentEnd,
   ) => void
+  splitPaneSizes: number[]
+  setSplitPaneSizes: (splitPaneSizes: number[]) => void
 }
 
 const environments = new Set(ModelEnvironment.getDefaultEnvironments())
@@ -66,6 +70,18 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
+  lastActiveModel: undefined,
+  splitPaneSizes: [30, 70],
+  setSplitPaneSizes(splitPaneSizes) {
+    set(() => ({
+      splitPaneSizes,
+    }))
+  },
+  setLastActiveModel(lastActiveModel) {
+    set(() => ({
+      lastActiveModel,
+    }))
+  },
   setVersion(version) {
     set(() => ({
       version,
@@ -101,7 +117,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       models: models.reduce((acc: Map<string, ModelSQLMeshModel>, model) => {
         let tempModel = s.models.get(model.path) ?? s.models.get(model.name)
 
-        if (tempModel == null) {
+        if (isNil(tempModel)) {
           tempModel = new ModelSQLMeshModel(model)
         } else {
           tempModel.update(model)

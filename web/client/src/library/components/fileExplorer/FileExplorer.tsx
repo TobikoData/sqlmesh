@@ -61,19 +61,12 @@ const FileExplorer = function FileExplorer({
       )}
       onKeyDown={handleKeyDown}
     >
-      <SearchList<ModelFile>
-        list={project.allFiles}
-        searchBy="path"
-        displayBy="name"
-        size={EnumSize.sm}
-        onSelect={setSelectedFile}
-      />
       <FileExplorer.ContextMenu
         key={project.id}
         trigger={
           <FileExplorer.ContextMenuTrigger className="h-full pb-2">
             <DndProvider backend={HTML5Backend}>
-              <div className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
+              <div className="w-full relative h-full px-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
                 <DragLayer />
                 <Directory
                   key={project.id}
@@ -108,6 +101,14 @@ const FileExplorer = function FileExplorer({
           <div className="ml-auto pl-5"></div>
         </ContextMenu.Item>
       </FileExplorer.ContextMenu>
+      <SearchList<ModelFile>
+        list={project.allFiles}
+        searchBy="path"
+        displayBy="name"
+        size={EnumSize.sm}
+        onSelect={setSelectedFile}
+        direction="bottom"
+      />
     </div>
   )
 }

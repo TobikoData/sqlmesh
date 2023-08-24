@@ -24,28 +24,8 @@ export default function SourceList({
     filter === '' ? true : model.name.includes(filter),
   )
   return (
-    <div className="flex flex-col w-full h-full">
-      <div className="px-2 w-full flex justify-between">
-        <Input
-          className="w-full !m-0"
-          size={EnumSize.sm}
-        >
-          {({ className }) => (
-            <Input.Textfield
-              className={clsx(className, 'w-full')}
-              value={filter}
-              placeholder="Filter models"
-              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                setFilter(e.target.value)
-              }}
-            />
-          )}
-        </Input>
-        <div className="ml-3 px-3 bg-primary-10 text-primary-500 rounded-full text-xs flex items-center">
-          {modelsFiltered.length}
-        </div>
-      </div>
-      <ul className="p-2 overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
+    <div className="flex flex-col w-full h-full py-1">
+      <ul className="p-1 h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
         {isArrayEmpty(modelsFiltered) && (
           <li
             key="not-found"
@@ -69,7 +49,7 @@ export default function SourceList({
                 )}`}
                 className={({ isActive }) =>
                   clsx(
-                    'block px-2 overflow-hidden whitespace-nowrap overflow-ellipsis py-1 rounded-md w-full hover:bg-primary-10',
+                    'block px-2 overflow-hidden whitespace-nowrap overflow-ellipsis py-1 rounded-md w-full hover:bg-neutral-10',
                     isActive
                       ? 'text-primary-500 bg-primary-10'
                       : 'text-neutral-500 dark:text-neutral-100',
@@ -91,6 +71,26 @@ export default function SourceList({
             </li>
           ))}
       </ul>
+      <div className="px-2 w-full flex justify-between">
+        <Input
+          className="w-full !m-0"
+          size={EnumSize.sm}
+        >
+          {({ className }) => (
+            <Input.Textfield
+              className={clsx(className, 'w-full')}
+              value={filter}
+              placeholder="Filter models"
+              onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFilter(e.target.value)
+              }}
+            />
+          )}
+        </Input>
+        <div className="ml-1 px-3 bg-primary-10 text-primary-500 rounded-full text-xs flex items-center">
+          {modelsFiltered.length}
+        </div>
+      </div>
     </div>
   )
 }

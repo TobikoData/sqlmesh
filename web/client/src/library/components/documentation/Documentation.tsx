@@ -48,7 +48,7 @@ const Documentation = function Documentation({
           headline="Model"
           defaultOpen={true}
         >
-          <ul className="px-2 w-full">
+          <ul className="w-full">
             <DetailsItem
               name="Path"
               value={model.path.split('/').slice(0, -1).join('/')}
@@ -156,7 +156,7 @@ const Documentation = function Documentation({
 function Headline({ headline }: { headline: string }): JSX.Element {
   return (
     <div
-      className="text-lg font-bold whitespace-nowrap w-full"
+      className="text-md font-bold whitespace-nowrap w-full"
       id={headline}
     >
       <h3 className="py-2">{headline}</h3>
@@ -183,8 +183,8 @@ function Container({
 }): JSX.Element {
   return (
     <div className={clsx('w-full h-full rounded-xl', className)}>
-      <div className="w-full h-full py-4 rounded-xl">
-        <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
+      <div className="w-full h-full rounded-xl">
+        <div className="w-full h-full overflow-scroll scrollbar scrollbar--vertical scrollbar--horizontal">
           {children}
         </div>
       </div>
@@ -204,27 +204,27 @@ function Section({
   defaultOpen?: boolean
 }): JSX.Element {
   return (
-    <div className="px-4">
+    <div className="px-2">
       <Disclosure defaultOpen={defaultOpen}>
         {({ open }) => (
           <>
             <Disclosure.Button
               className={clsx(
-                'flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 mb-2',
+                'flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 mb-1',
                 className,
               )}
             >
               <Headline headline={headline} />
               <div>
                 {open ? (
-                  <MinusCircleIcon className="h-6 w-6 text-neutral-50" />
+                  <MinusCircleIcon className="w-4 text-neutral-50" />
                 ) : (
-                  <PlusCircleIcon className="h-6 w-6 text-neutral-50" />
+                  <PlusCircleIcon className="w-4 text-neutral-50" />
                 )}
               </div>
             </Disclosure.Button>
             <Disclosure.Panel className="pb-2 overflow-hidden">
-              <div className="px-4 mb-2 text-xs">{children}</div>
+              <div className="px-2 mb-2 text-xs">{children}</div>
             </Disclosure.Panel>
           </>
         )}

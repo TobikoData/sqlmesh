@@ -9,15 +9,25 @@ import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import LineageFlowProvider from '@components/graph/context'
 import { type ErrorIDE } from '../ide/context'
 import { isNil } from '@utils/index'
+import { useEffect } from 'react'
 
 export default function Content(): JSX.Element {
   const { modelName } = useParams()
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
+  const lastActiveModel = useStoreContext(s => s.lastActiveModel)
+  const setLastActiveModel = useStoreContext(s => s.setLastActiveModel)
+
   const model = isNil(modelName)
     ? undefined
     : models.get(ModelSQLMeshModel.decodeName(modelName))
+
+  useEffect(() => {
+    if (isNil(lastActiveModel) || model !== lastActiveModel) {
+      setLastActiveModel(model)
+    }
+  }, [model])
 
   function handleClickModel(modelName: string): void {
     const model = models.get(modelName)
