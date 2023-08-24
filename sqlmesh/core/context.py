@@ -737,9 +737,9 @@ class Context(BaseContext):
 
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:
-            models_override = Selector(self.state_reader, self._models, self.path).select_models(
-                select_models, environment, fallback_env_name=create_from or c.PROD
-            )
+            models_override = Selector(
+                self.state_reader, self._models, self.path, dag=self.dag
+            ).select_models(select_models, environment, fallback_env_name=create_from or c.PROD)
 
         plan = Plan(
             context_diff=self._context_diff(

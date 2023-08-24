@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import typing as t
 from pathlib import Path
 
@@ -18,10 +19,18 @@ class Selector:
         state_reader: StateReader,
         models: UniqueKeyDict[str, Model],
         context_path: Path = Path("."),
+        dag: t.Optional[DAG[str]] = None,
     ):
         self._state_reader = state_reader
         self._models = models
         self._context_path = context_path
+
+        if dag is None:
+            self._dag: DAG[str] = DAG()
+            for model in models.values():
+                self._dag.add(model.name, model.depends_on)
+        else:
+            self._dag = dag
 
     def select_models(
         self,
@@ -58,8 +67,7 @@ class Selector:
             ).values()
         }
 
-        # TODO: Support selection expressions.
-        all_selected_models = set(model_selections)
+        all_selected_models = self._expand_model_selections(model_selections)
 
         dag: DAG[str] = DAG()
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -82,3 +90,35 @@ class Selector:
         update_model_schemas(dag, models, self._context_path)
 
         return models
+
+    def _expand_model_selections(self, model_selections: t.Iterable[str]) -> t.Set[str]:
+        result: t.Set[str] = set()
+
+        def _add_model(model_name: str, include_upstream: bool, include_downstream: bool) -> None:
+            result.add(model_name)
+            if include_upstream:
+                result.update(self._dag.upstream(model_name))
+            if include_downstream:
+                result.update(self._dag.downstream(model_name))
+
+        for selection in model_selections:
+            if not selection:
+                continue
+
+            include_upstream = False
+            include_downstream = False
+            if selection[0] == "+":
+                selection = selection[1:]
+                include_upstream = True
+            if selection[-1] == "+":
+                selection = selection[:-1]
+                include_downstream = True
+
+            if "*" in selection:
+                for name in self._models:
+                    if fnmatch.fnmatch(name, selection):
+                        _add_model(name, include_upstream, include_downstream)
+            else:
+                _add_model(selection, include_upstream, include_downstream)
+
+        return result

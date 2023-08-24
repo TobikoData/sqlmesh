@@ -6,6 +6,7 @@ from sqlmesh.core.config.connection import (
     DatabricksConnectionConfig,
     DuckDBConnectionConfig,
     GCPPostgresConnectionConfig,
+    MSSQLConnectionConfig,
     MySQLConnectionConfig,
     PostgresConnectionConfig,
     RedshiftConnectionConfig,
