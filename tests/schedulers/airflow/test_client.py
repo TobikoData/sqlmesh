@@ -88,6 +88,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "partitioned_by": ["a"],
                     "query": "SELECT a, ds FROM tbl",
                     "references": [],
+                    "project": "",
                     "storage_format": "parquet",
                     "jinja_macros": {
                         "global_objs": {},
@@ -104,7 +105,6 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "name": "test_model",
                 "parents": [],
                 "previous_versions": [],
-                "project": "",
                 "updated_ts": 1665014400000,
                 "version": snapshot.version,
                 "change_category": snapshot.change_category,
@@ -131,7 +131,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "promoted_snapshot_ids": [
                 {
                     "name": "test_model",
-                    "identifier": "3192766394",
+                    "identifier": "3474928511",
                 }
             ],
             "suffix_target": "schema",

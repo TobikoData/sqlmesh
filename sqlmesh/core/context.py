@@ -1159,7 +1159,7 @@ class Context(BaseContext):
         projects = {config.project for config in self.configs.values()}
 
         for name, snapshot in remote_snapshots.items():
-            if name not in models and snapshot.project not in projects:
+            if name not in models and snapshot.model.project not in projects:
                 models[name] = snapshot.model
 
                 for audit in snapshot.audits:
@@ -1172,11 +1172,9 @@ class Context(BaseContext):
             if model.name not in self._models and model.name in remote_snapshots:
                 snapshot = remote_snapshots[model.name]
                 ttl = snapshot.ttl
-                project = snapshot.project
             else:
                 config = self.config_for_model(model)
                 ttl = config.snapshot_ttl
-                project = config.project
 
             snapshot = Snapshot.from_model(
                 model,
@@ -1184,7 +1182,6 @@ class Context(BaseContext):
                 audits=audits,
                 cache=fingerprint_cache,
                 ttl=ttl,
-                project=project,
             )
             snapshots[model.name] = snapshot
 

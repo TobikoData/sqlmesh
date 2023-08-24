@@ -174,6 +174,7 @@ class Loader(abc.ABC):
                             **row,
                             dialect=config.model_defaults.dialect,
                             path=path,
+                            project=config.project,
                         )
                         models[model.name] = model
         return models
@@ -275,6 +276,7 @@ class SqlMeshLoader(Loader):
                         dialect=config.model_defaults.dialect,
                         time_column_format=config.time_column_format,
                         physical_schema_override=config.physical_schema_override,
+                        project=config.project,
                     )
 
                 model = cache.get_or_load_model(path, _load)
@@ -310,6 +312,7 @@ class SqlMeshLoader(Loader):
                         dialect=config.model_defaults.dialect,
                         time_column_format=config.time_column_format,
                         physical_schema_override=config.physical_schema_override,
+                        project=config.project,
                     )
                     models[model.name] = model
 
