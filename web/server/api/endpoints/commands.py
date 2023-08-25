@@ -79,6 +79,7 @@ async def apply(
                 message=str(e),
                 origin="API -> commands -> apply",
             )
+
     return models.ApplyResponse(
         type=models.ApplyType.backfill if plan.requires_backfill else models.ApplyType.virtual
     )
