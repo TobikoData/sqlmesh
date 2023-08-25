@@ -1170,36 +1170,38 @@ class Context(BaseContext):
         )
 
         fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
-        models = (models_override or self._models).copy()
+        local_nodes = {**(models_override or self._models), **self._standalone_audits}
+        nodes = local_nodes.copy()
         audits = self._audits.copy()
         projects = {config.project for config in self.configs.values()}
 
         for name, snapshot in remote_snapshots.items():
-            if name not in models and snapshot.model.project not in projects:
-                models[name] = snapshot.model
+            if name not in nodes and snapshot.node.project not in projects:
+                nodes[name] = snapshot.node
 
-                for audit in snapshot.audits:
-                    if name not in audits:
-                        audits[name] = audit
+                if snapshot.is_model:
+                    for audit in snapshot.audits:
+                        if name not in audits:
+                            audits[name] = audit
 
         snapshots = {}
 
-        for model in models.values():
-            if model.name not in self._models and model.name in remote_snapshots:
-                snapshot = remote_snapshots[model.name]
+        for node in nodes.values():
+            if node.name not in local_nodes and node.name in remote_snapshots:
+                snapshot = remote_snapshots[node.name]
                 ttl = snapshot.ttl
             else:
-                config = self.config_for_model(model)
+                config = self.config_for_node(node)
                 ttl = config.snapshot_ttl
 
-            snapshot = Snapshot.from_model(
-                model,
-                nodes=models,
+            snapshot = Snapshot.from_node(
+                node,
+                nodes=nodes,
                 audits=audits,
                 cache=fingerprint_cache,
                 ttl=ttl,
             )
-            snapshots[model.name] = snapshot
+            snapshots[node.name] = snapshot
 
         stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
 

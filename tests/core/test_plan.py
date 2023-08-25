@@ -434,7 +434,7 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
 
     with pytest.raises(
         PlanError,
-        match=r"Removed models {'a'} are referenced in model 'b'.*",
+        match=r"Removed models {'a'} are referenced in 'b'.*",
     ):
         Plan(context_diff_mock)
 

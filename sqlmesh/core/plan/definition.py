@@ -649,7 +649,7 @@ class Plan:
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self.context_diff.snapshots.values():
-            broken_references = self.context_diff.removed & snapshot.node.depends_on
+            broken_references = set(self.context_diff.removed) & snapshot.node.depends_on
             if broken_references:
                 raise PlanError(
                     f"Removed models {broken_references} are referenced in '{snapshot.name}'. Please remove broken references before proceeding."

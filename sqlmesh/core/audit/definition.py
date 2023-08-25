@@ -360,6 +360,17 @@ class StandaloneAudit(Node):
         """
         return hash_data([self.owner, self.description, *sorted(self.tags)])
 
+    def text_diff(self, other: StandaloneAudit) -> str:
+        """Produce a text diff against another model.
+
+        Args:
+            other: The model to diff against.
+
+        Returns:
+            A unified text diff showing additions and deletions.
+        """
+        return d.text_diff(self.audit.query, other.audit.query, self.dialect)
+
 
 def create_standalone_audit(
     name: str,

@@ -41,9 +41,9 @@ class ContextDiff(PydanticModel):
     """Whether the currently stored environment record is in unfinalized state."""
     create_from: str
     """The name of the environment the target environment will be created from if new."""
-    added: t.Set[str]
+    added: t.Dict[str, Snapshot]
     """New models."""
-    removed: t.Set[str]
+    removed: t.Dict[str, Snapshot]
     """Deleted models."""
     modified_snapshots: t.Dict[str, t.Tuple[Snapshot, Snapshot]]
     """Modified snapshots."""
@@ -88,10 +88,10 @@ class ContextDiff(PydanticModel):
             previously_promoted_model_names = {s.name for s in env.promoted_snapshots}
 
         existing_info = {info.name: info for info in (env.snapshots if env else [])}
-        existing_models = set(existing_info)
-        current_models = set(snapshots)
-        removed = existing_models - current_models
-        added = current_models - existing_models
+        existing_nodes = set(existing_info)
+        current_nodes = set(snapshots)
+        removed = existing_nodes - current_nodes
+        added = current_nodes - existing_nodes
         modified_info = {
             name: existing_info[name]
             for name, snapshot in snapshots.items()
@@ -102,6 +102,9 @@ class ContextDiff(PydanticModel):
             s.snapshot_id for s in snapshots.values() if s.is_seed and s.name in modified_info
         }
         modified_remote_snapshot_ids = {s.snapshot_id for s in modified_info.values()}
+        removed_remote_snapshot_ids = {
+            s.snapshot_id for name, s in existing_info.items() if name in removed
+        }
 
         stored = {
             **state_reader.get_snapshots(
@@ -112,7 +115,10 @@ class ContextDiff(PydanticModel):
                 ]
             ),
             **state_reader.get_snapshots(
-                modified_remote_snapshot_ids | modified_local_seed_snapshot_ids, hydrate_seeds=True
+                modified_remote_snapshot_ids
+                | removed_remote_snapshot_ids
+                | modified_local_seed_snapshot_ids,
+                hydrate_seeds=True,
             ),
         }
 
@@ -125,7 +131,10 @@ class ContextDiff(PydanticModel):
             modified = modified_info.get(name)
             existing = stored.get(snapshot.snapshot_id)
 
-            if existing:
+            if modified and snapshot.node_type != modified.node_type:
+                added.add(snapshot.name)
+                removed.add(modified.name)
+            elif existing:
                 # Keep the original model instance to preserve the query cache.
                 existing.node = snapshot.node
 
@@ -171,8 +180,10 @@ class ContextDiff(PydanticModel):
             is_new_environment=is_new_environment,
             is_unfinalized_environment=bool(env and not env.finalized_ts),
             create_from=create_from,
-            added=added,
-            removed=removed,
+            added={name: snapshot for name, snapshot in snapshots.items() if name in added},
+            removed={
+                info.name: snapshot for info, snapshot in stored.items() if info.name in removed
+            },
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
@@ -202,7 +213,7 @@ class ContextDiff(PydanticModel):
             *self.previously_promoted_model_names,
             *self.added,
             *self.modified_snapshots,
-        } - self.removed
+        } - set(self.removed)
 
     @property
     def unpromoted_models(self) -> t.Set[str]:
@@ -260,19 +271,23 @@ class ContextDiff(PydanticModel):
         current, previous = self.modified_snapshots[model_name]
         return current.fingerprint.metadata_hash != previous.fingerprint.metadata_hash
 
-    def text_diff(self, model: str) -> str:
+    def text_diff(self, node: str) -> str:
         """Finds the difference of a model between the current and remote environment.
 
         Args:
-            model: The model name.
+            node: The node name.
 
         Returns:
-            A unified text diff of the model.
+            A unified text diff of the node.
         """
-        if model not in self.snapshots:
-            raise SQLMeshError(f"`{model}` does not exist.")
-        if model not in self.modified_snapshots:
+        if node not in self.snapshots:
+            raise SQLMeshError(f"`{node}` does not exist.")
+        if node not in self.modified_snapshots:
             return ""
 
-        new, old = self.modified_snapshots[model]
-        return old.model.text_diff(new.model)
+        new, old = self.modified_snapshots[node]
+        if new.is_model:
+            return old.model.text_diff(new.model)
+        elif new.is_audit:
+            return old.audit.text_diff(new.audit)
+        return ""

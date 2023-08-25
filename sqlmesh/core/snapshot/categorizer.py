@@ -24,6 +24,9 @@ def categorize_change(
         The change category or None if the category can't be determined automatically.
 
     """
+    if not new.is_model:
+        return SnapshotChangeCategory.NON_BREAKING
+
     old_model = old.model
     new_model = new.model
 

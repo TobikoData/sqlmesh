@@ -967,7 +967,7 @@ def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
     plan = context.plan(environment, start=start(context), create_from="nonexistent_env")
-    validate_plan_changes(plan, added=context.models)
+    validate_plan_changes(plan, added=set(context.models) | set(context.standalone_audits))
 
     context.apply(plan)
     validate_apply_basics(context, environment, plan.snapshots)
@@ -1088,6 +1088,8 @@ def validate_state_sync_environment(
 def validate_tables(snapshots: t.Iterable[Snapshot], context: Context) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
+        if not snapshot.is_model:
+            continue
         table_should_exist = not snapshot.is_symbolic
         assert adapter.table_exists(snapshot.table_name()) == table_should_exist
         if table_should_exist:
@@ -1099,7 +1101,7 @@ def validate_environment_views(
 ) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
-        if snapshot.is_symbolic:
+        if not snapshot.is_model or snapshot.is_symbolic:
             continue
         view_name = snapshot.qualified_view_name.for_environment(
             EnvironmentNamingInfo(
