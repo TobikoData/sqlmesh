@@ -20,6 +20,8 @@ import ReactFlow, {
   useUpdateNodeInternals,
   useReactFlow,
   Panel,
+  type Edge,
+  type Node,
 } from 'reactflow'
 import { Button } from '../button/Button'
 import 'reactflow/dist/base.css'
@@ -747,8 +749,6 @@ function ModelColumnLineage({
     mainNode,
     selectedEdges,
     selectedNodes,
-    nodes,
-    edges,
     withConnected,
     activeNodes,
     activeEdges,
@@ -757,8 +757,6 @@ function ModelColumnLineage({
     highlightedNodes,
     setWithColumns,
     handleError,
-    setNodes,
-    setEdges,
     setWithConnected,
     setActiveNodes,
   } = useLineageFlow()
@@ -770,7 +768,6 @@ function ModelColumnLineage({
   const [withSecondary, setWithSecondary] = useState(true)
 
   const nodeTypes = useMemo(() => ({ model: ModelNode }), [])
-
   const nodesMap = useMemo(
     () =>
       getNodeMap({
@@ -782,6 +779,9 @@ function ModelColumnLineage({
   )
   const allEdges = useMemo(() => getEdges(lineage), [lineage])
   const lineageIndex = useMemo(() => getLineageIndex(lineage), [lineage])
+
+  const [nodes, setNodes] = useState<Node[]>([])
+  const [edges, setEdges] = useState<Edge[]>([])
 
   useEffect(() => {
     const WITH_COLUMNS_LIMIT = 30
