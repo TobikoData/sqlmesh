@@ -70,9 +70,15 @@ async def apply(
             if plan.is_new_snapshot(new) and new.name in categories:
                 plan.set_choice(new, categories[new.name])
 
-    if plan.requires_backfill or not plan_options.skip_backfill:
-        request.app.state.task = asyncio.create_task(run_in_executor(context.apply, plan))
-
+    request.app.state.task = apply_task = asyncio.create_task(run_in_executor(context.apply, plan))
+    if not plan.requires_backfill or plan_options.skip_backfill:
+        try:
+            await apply_task
+        except PlanError as e:
+            raise ApiException(
+                message=str(e),
+                origin="API -> commands -> apply",
+            )
     return models.ApplyResponse(
         type=models.ApplyType.backfill if plan.requires_backfill else models.ApplyType.virtual
     )

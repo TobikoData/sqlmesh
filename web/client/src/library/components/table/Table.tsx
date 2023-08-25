@@ -83,11 +83,7 @@ export default function Table({
           setFilter={setFilter}
         />
       )}
-      <div
-        className={clsx(
-          'w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical',
-        )}
-      >
+      <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
         <div
           ref={elTableContainer}
           style={{
@@ -97,10 +93,7 @@ export default function Table({
           <table
             cellPadding={0}
             cellSpacing={0}
-            className={clsx(
-              'w-full slashed-zero tabular-nums',
-              'text-neutral-700 dark:text-neutral-300 text-xs font-medium whitespace-nowrap text-left',
-            )}
+            className="w-full slashed-zero tabular-nums text-neutral-700 dark:text-neutral-300 text-xs font-medium whitespace-nowrap text-left"
           >
             {isArrayNotEmpty(columns) && (
               <thead className="sticky top-0">
