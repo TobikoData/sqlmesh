@@ -29,7 +29,7 @@
     "@radix-ui/react-select": "^1.2.2",
     "@tanstack/react-query": "^4.29.12",
     "@tanstack/react-table": "^8.9.2",
-    "@tanstack/react-virtual": "^3.0.0-alpha.0",
+    "@tanstack/react-virtual": "^3.0.0-beta.54",
     "@uidotdev/usehooks": "^2.0.1",
     "@uiw/react-codemirror": "^4.21.3",
     "apache-arrow": "^12.0.1",

@@ -233,7 +233,7 @@ export default function PageIDE(): JSX.Element {
   }, [location])
 
   useEffect(() => {
-    if (dataEnvironments == null || isObjectEmpty(dataEnvironments)) return
+    if (isNil(dataEnvironments) || isObjectEmpty(dataEnvironments)) return
 
     addSynchronizedEnvironments(Object.values(dataEnvironments))
 
@@ -266,7 +266,7 @@ export default function PageIDE(): JSX.Element {
   }
 
   function updateTasks(data?: PlanProgress): void {
-    if (data == null) return
+    if (isNil(data)) return
 
     if (isFalse(isObject(data.tasks))) {
       setState(EnumPlanState.Init)
