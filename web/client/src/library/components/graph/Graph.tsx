@@ -312,7 +312,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
             <span
               title={
                 type === EnumLineageNodeModelType.python
-                  ? `Column lineage disabled for  ${type} models`
+                  ? `Column lineage disabled for ${type} models`
                   : 'Column lineage'
               }
               className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
@@ -340,7 +340,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           id={toNodeOrEdgeId(EnumSide.Right, id)}
           position={Position.Right}
           isConnectable={false}
-          className="!bg-transparent -mr-2 text-neutral-100 border border-secondary-500 rounded-full overflow-hidden "
+          className="!bg-transparent -mr-2 text-neutral-100 border border-secondary-500 rounded-full overflow-hidden"
         >
           <ArrowRightCircleIcon className="w-5 bg-secondary-500 dark:bg-primary-900 text-secondary-100" />
         </Handle>
@@ -768,7 +768,7 @@ function ModelColumnLineage({
     handleError,
     setWithConnected,
     setActiveNodes,
-    setWithImpact,
+    setWithImpacted,
     setWithSecondary,
     setHasBackground,
   } = useLineageFlow()
@@ -1033,7 +1033,7 @@ function ModelColumnLineage({
                     ? undefined
                     : setWithColumns,
                 Connected: activeNodes.size > 0 ? undefined : setWithConnected,
-                Impact: activeNodes.size > 0 ? undefined : setWithImpact,
+                Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
                 Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
               }}
               value={
