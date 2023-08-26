@@ -88,27 +88,27 @@ export const LineageFlowContext = createContext<LineageFlow>({
   selectedNodes: new Set(),
   connectedNodes: new Set(),
   highlightedNodes: {},
-  setHighlightedNodes: () => { },
+  setHighlightedNodes: () => {},
   setWithColumns: () => false,
   setHasBackground: () => false,
   setWithImpacted: () => false,
   setWithSecondary: () => false,
   setWithConnected: () => false,
   hasActiveEdge: () => false,
-  addActiveEdges: () => { },
-  removeActiveEdges: () => { },
-  setActiveEdges: () => { },
-  handleClickModel: () => { },
-  setManuallySelectedColumn: () => { },
-  handleError: () => { },
-  setLineage: () => { },
+  addActiveEdges: () => {},
+  removeActiveEdges: () => {},
+  setActiveEdges: () => {},
+  handleClickModel: () => {},
+  setManuallySelectedColumn: () => {},
+  handleError: () => {},
+  setLineage: () => {},
   isActiveColumn: () => false,
-  setConnections: () => { },
-  setSelectedNodes: () => { },
-  setMainNode: () => { },
+  setConnections: () => {},
+  setSelectedNodes: () => {},
+  setMainNode: () => {},
   // setNodes: () => {},
   // setEdges: () => {},
-  setActiveNodes: () => { },
+  setActiveNodes: () => {},
 })
 
 export default function LineageFlowProvider({
@@ -234,19 +234,19 @@ export default function LineageFlowProvider({
       isNil(lineage) || isNil(mainNode)
         ? {}
         : Object.keys(lineage).reduce(
-          (
-            acc: Record<string, Array<{ source: string; target: string }>>,
-            id,
-          ) => {
-            acc[id] = [
-              getNodesBetween(id, mainNode, lineage),
-              getNodesBetween(mainNode, id, lineage),
-            ].flat()
+            (
+              acc: Record<string, Array<{ source: string; target: string }>>,
+              id,
+            ) => {
+              acc[id] = [
+                getNodesBetween(id, mainNode, lineage),
+                getNodesBetween(mainNode, id, lineage),
+              ].flat()
 
-            return acc
-          },
-          {},
-        ),
+              return acc
+            },
+            {},
+          ),
     [lineage, mainNode],
   )
 
