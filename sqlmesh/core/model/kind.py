@@ -63,6 +63,10 @@ class ModelKindMixin:
         return self.model_kind_name == ModelKindName.EXTERNAL
 
     @property
+    def is_scd_type_2(self) -> bool:
+        return self.model_kind_name == ModelKindName.SCD_TYPE_2
+
+    @property
     def is_symbolic(self) -> bool:
         """A symbolic model is one that doesn't execute at all."""
         return self.model_kind_name in (ModelKindName.EMBEDDED, ModelKindName.EXTERNAL)
@@ -74,7 +78,7 @@ class ModelKindMixin:
     @property
     def only_execution_time(self) -> bool:
         """Whether or not this model only cares about execution time to render."""
-        return self.is_view or self.is_full or self.is_incremental_unmanaged
+        return self.is_view or self.is_full or self.is_incremental_unmanaged or self.is_scd_type_2
 
 
 class ModelKindName(str, ModelKindMixin, Enum):
@@ -84,6 +88,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
     INCREMENTAL_BY_UNIQUE_KEY = "INCREMENTAL_BY_UNIQUE_KEY"
     INCREMENTAL_UNMANAGED = "INCREMENTAL_UNMANAGED"
     FULL = "FULL"
+    SCD_TYPE_2 = "SCD_TYPE_2"
     VIEW = "VIEW"
     EMBEDDED = "EMBEDDED"
     SEED = "SEED"
@@ -92,6 +97,17 @@ class ModelKindName(str, ModelKindMixin, Enum):
     @property
     def model_kind_name(self) -> ModelKindName:
         return self
+
+
+def _unique_key_validator(v: t.Any) -> t.List[str]:
+    if isinstance(v, exp.Identifier):
+        return [v.this]
+    if isinstance(v, exp.Tuple):
+        return [e.this for e in v.expressions]
+    return [i.this if isinstance(i, exp.Identifier) else str(i) for i in v]
+
+
+unique_key_validator = field_validator("unique_key", mode="before")(_unique_key_validator)
 
 
 class _ModelKind(PydanticModel, ModelKindMixin):
@@ -206,14 +222,7 @@ class IncrementalByUniqueKeyKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
     unique_key: t.List[str]
 
-    @field_validator("unique_key", mode="before")
-    @classmethod
-    def _parse_unique_key(cls, v: t.Any) -> t.List[str]:
-        if isinstance(v, exp.Identifier):
-            return [v.this]
-        if isinstance(v, exp.Tuple):
-            return [e.this for e in v.expressions]
-        return [i.this if isinstance(i, exp.Identifier) else str(i) for i in v]
+    _unique_key_validator = unique_key_validator
 
 
 class IncrementalUnmanagedKind(_ModelKind):
@@ -277,6 +286,26 @@ class FullKind(_ModelKind):
     name: Literal[ModelKindName.FULL] = ModelKindName.FULL
 
 
+class SCDType2Kind(_ModelKind):
+    name: Literal[ModelKindName.SCD_TYPE_2] = ModelKindName.SCD_TYPE_2
+    unique_key: t.List[str]
+    valid_from_name: str = "valid_from"
+    valid_to_name: str = "valid_to"
+    updated_at_name: str = "updated_at"
+
+    forward_only: bool = True
+    disable_restatement: bool = True
+
+    _unique_key_validator = unique_key_validator
+
+    @property
+    def _managed_columns(self) -> t.Dict[str, exp.DataType]:
+        return {
+            self.valid_from_name: exp.DataType.build("TIMESTAMP"),
+            self.valid_to_name: exp.DataType.build("TIMESTAMP"),
+        }
+
+
 class EmbeddedKind(_ModelKind):
     name: Literal[ModelKindName.EMBEDDED] = ModelKindName.EMBEDDED
 
@@ -295,6 +324,7 @@ ModelKind = Annotated[
         IncrementalUnmanagedKind,
         SeedKind,
         ViewKind,
+        SCDType2Kind,
     ],
     Field(discriminator="name"),
 ]
@@ -308,6 +338,7 @@ MODEL_KIND_NAME_TO_TYPE: t.Dict[str, t.Type[ModelKind]] = {
     ModelKindName.INCREMENTAL_UNMANAGED: IncrementalUnmanagedKind,
     ModelKindName.SEED: SeedKind,
     ModelKindName.VIEW: ViewKind,
+    ModelKindName.SCD_TYPE_2: SCDType2Kind,
 }
 
 

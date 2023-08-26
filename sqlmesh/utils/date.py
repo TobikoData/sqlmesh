@@ -212,7 +212,11 @@ def date_dict(
 
 def to_ds(obj: TimeLike) -> str:
     """Converts a TimeLike object into YYYY-MM-DD formatted string."""
-    return to_datetime(obj).isoformat()[0:10]
+    return to_ts(obj)[0:10]
+
+
+def to_ts(obj: TimeLike) -> str:
+    return to_datetime(obj).isoformat()
 
 
 def is_date(obj: TimeLike) -> bool:
@@ -276,4 +280,4 @@ def time_like_to_str(time_like: TimeLike) -> str:
         return time_like
     if is_date(time_like):
         return to_ds(time_like)
-    return to_datetime(time_like).isoformat()
+    return to_ts(time_like)

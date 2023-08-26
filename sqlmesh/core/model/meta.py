@@ -11,6 +11,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
+    SCDType2Kind,
     TimeColumn,
     ViewKind,
     _Incremental,
@@ -315,7 +316,7 @@ class ModelMeta(Node, extra="allow"):
 
     @property
     def unique_key(self) -> t.List[str]:
-        if isinstance(self.kind, IncrementalByUniqueKeyKind):
+        if isinstance(self.kind, (IncrementalByUniqueKeyKind, SCDType2Kind)):
             return self.kind.unique_key
         return []
 
@@ -368,3 +369,7 @@ class ModelMeta(Node, extra="allow"):
     @property
     def _partition_by_columns(self) -> t.List[exp.Column]:
         return [col for expr in self.partitioned_by_ for col in expr.find_all(exp.Column)]
+
+    @property
+    def managed_columns(self) -> t.Dict[str, exp.DataType]:
+        return getattr(self.kind, "_managed_columns", {})
