@@ -45,8 +45,9 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     # Check for the important parts of these queries
     expected_queries: t.List[t.List[str]] = [
         [
-            'CREATE TABLE IF NOT EXISTS "__temp_test_table_',
-            '" ("a" BIGINT, "ds" TEXT)',
+            "IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table",
+            """EXEC('CREATE TABLE "__temp_test_table""",
+            """("a" BIGINT, "ds" TEXT)""",
         ],
         [
             'INSERT INTO "__temp_test_table_',
@@ -95,8 +96,9 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     # Check for the important parts of these queries
     expected_queries: t.List[t.List[str]] = [
         [
-            'CREATE TABLE IF NOT EXISTS "__temp_test_table_',
-            '" ("a" BIGINT, "ds" TEXT)',
+            "IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table",
+            """EXEC('CREATE TABLE "__temp_test_table""",
+            """("a" BIGINT, "ds" TEXT)""",
         ],
         [
             'INSERT INTO "__temp_test_table_',
@@ -163,7 +165,7 @@ def test_create_table(make_mocked_engine_adapter: t.Callable):
     adapter.create_table("test_table", columns_to_types)
 
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" TEXT)'
+        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT)')"""
     )
 
 
@@ -182,7 +184,7 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
     )
 
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" TEXT)'
+        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT)')"""
     )
 
 
@@ -645,7 +647,7 @@ def test_create_table_primary_key(make_mocked_engine_adapter: t.Callable):
     adapter.create_table("test_table", columns_to_types, primary_key=("cola", "colb"))
 
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE TABLE IF NOT EXISTS "test_table" ("cola" INTEGER, "colb" TEXT, PRIMARY KEY ("cola", "colb"))'
+        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT, PRIMARY KEY ("cola", "colb"))')"""
     )
 
 
@@ -655,5 +657,5 @@ def test_create_index(make_mocked_engine_adapter: t.Callable):
 
     adapter.create_index("test_table", "test_index", ("cola", "colb"))
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE INDEX IF NOT EXISTS "test_index" ON "test_table" ("cola", "colb")'
+        """IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = object_id('test_table') AND name = 'test_index') EXEC('CREATE INDEX "test_index" ON "test_table"("cola", "colb")')"""
     )

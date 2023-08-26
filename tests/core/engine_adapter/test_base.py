@@ -759,7 +759,7 @@ def test_create_index(make_mocked_engine_adapter: t.Callable):
 
     adapter.create_index("test_table", "test_index", ("cola", "colb"))
     adapter.cursor.execute.assert_called_once_with(
-        'CREATE INDEX IF NOT EXISTS "test_index" ON "test_table" ("cola", "colb")'
+        'CREATE INDEX IF NOT EXISTS "test_index" ON "test_table"("cola", "colb")'
     )
 
 
