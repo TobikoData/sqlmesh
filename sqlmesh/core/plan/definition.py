@@ -222,6 +222,7 @@ class Plan:
                 or [],
             )
             for snapshot in self.snapshots
+            if snapshot.is_model
         )
 
         return [interval for interval in missing_intervals if interval.intervals]

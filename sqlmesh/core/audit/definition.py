@@ -337,16 +337,8 @@ class StandaloneAudit(Node):
         Returns:
             The data hash for the node.
         """
-        data = [str(self.sorted_python_env), self.stamp]
-
-        query = (
-            self.audit.query
-            if self.hash_raw_query
-            else self.audit.render_query(self) or self.audit.query
-        )
-        data.append(query.sql(comments=False))
-
-        return hash_data(data)
+        # StandaloneAudits do not have a data hash
+        return ""
 
     def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
         """
@@ -358,7 +350,22 @@ class StandaloneAudit(Node):
         Returns:
             The metadata hash for the node.
         """
-        return hash_data([self.owner, self.description, *sorted(self.tags)])
+        data = [
+            self.owner,
+            self.description,
+            *sorted(self.tags),
+            str(self.sorted_python_env),
+            self.stamp,
+        ]
+
+        query = (
+            self.audit.query
+            if self.hash_raw_query
+            else self.audit.render_query(self) or self.audit.query
+        )
+        data.append(query.sql(comments=False))
+
+        return hash_data(data)
 
     def text_diff(self, other: StandaloneAudit) -> str:
         """Produce a text diff against another model.

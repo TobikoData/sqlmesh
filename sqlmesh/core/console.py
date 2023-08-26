@@ -388,6 +388,75 @@ class TerminalConsole(Console):
             if success:
                 self.log_success("The migration has been completed successfully")
 
+    def _show_summary_tree_for(
+        self,
+        context_diff: ContextDiff,
+        header: str,
+        filter: t.Callable,
+        detailed: bool = False,
+        ignored_names: t.Optional[t.Set[str]] = None,
+    ) -> None:
+        ignored_names = ignored_names or set()
+        filtered_snapshots = {
+            name: snapshot for name, snapshot in context_diff.snapshots.items() if filter(snapshot)
+        }
+        filtered_ignored_names = {name for name in filtered_snapshots if name in ignored_names}
+        added_names = {
+            name for name, snapshot in context_diff.added.items() if filter(snapshot)
+        } - filtered_ignored_names
+        removed_names = {
+            name for name, snapshot in context_diff.removed.items() if filter(snapshot)
+        } - filtered_ignored_names
+        modified_names = {
+            name
+            for name, snapshots in context_diff.modified_snapshots.items()
+            if filter(snapshots[0])
+        } - filtered_ignored_names
+
+        if (
+            not added_names
+            and not removed_names
+            and not modified_names
+            and not filtered_ignored_names
+        ):
+            return
+
+        tree = Tree(f"[bold]{header}:")
+        if added_names:
+            added_tree = Tree(f"[bold][added]Added:")
+            for model_name in added_names:
+                added_tree.add(f"[added]{model_name}")
+            tree.add(added_tree)
+        if removed_names:
+            removed_tree = Tree(f"[bold][removed]Removed:")
+            for model_name in removed_names:
+                removed_tree.add(f"[removed]{model_name}")
+            tree.add(removed_tree)
+        if modified_names:
+            direct = Tree(f"[bold][direct]Directly Modified:")
+            indirect = Tree(f"[bold][indirect]Indirectly Modified:")
+            metadata = Tree(f"[bold][metadata]Metadata Updated:")
+            for model_name in modified_names:
+                if context_diff.directly_modified(model_name):
+                    direct.add(
+                        Syntax(f"{model_name}\n{context_diff.text_diff(model_name)}", "sql")
+                        if detailed
+                        else f"[direct]{model_name}"
+                    )
+                elif context_diff.indirectly_modified(model_name):
+                    indirect.add(f"[indirect]{model_name}")
+                elif context_diff.metadata_updated(model_name):
+                    metadata.add(f"[metadata]{model_name}")
+            if direct.children:
+                tree.add(direct)
+            if indirect.children:
+                tree.add(indirect)
+            if metadata.children:
+                tree.add(metadata)
+        if filtered_ignored_names:
+            tree.add(self._get_ignored_tree(filtered_ignored_names, filtered_snapshots))
+        self._print(tree)
+
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
@@ -415,68 +484,21 @@ class TerminalConsole(Console):
             self._print(Tree(f"[bold]No differences when compared to `{context_diff.environment}`"))
             return
 
-        tree = Tree(f"[bold]Summary of differences against `{context_diff.environment}`:")
-        added_model_names = {
-            name for name, snapshot in context_diff.added.items() if snapshot.is_model
-        } - ignored_snapshot_names
-        if added_model_names:
-            added_tree = Tree(f"[bold][added]Added Models:")
-            for model_name in added_model_names:
-                added_tree.add(f"[added]{model_name}")
-            tree.add(added_tree)
-
-        added_audit_names = {
-            name for name, snapshot in context_diff.added.items() if snapshot.is_audit
-        } - ignored_snapshot_names
-        if added_audit_names:
-            added_tree = Tree(f"[bold][added]Added Standalone Audits:")
-            for audit_name in added_audit_names:
-                added_tree.add(f"[added]{audit_name}")
-            tree.add(added_tree)
-
-        removed_model_names = {
-            name for name, snapshot in context_diff.removed.items() if snapshot.is_model
-        } - ignored_snapshot_names
-        if removed_model_names:
-            removed_tree = Tree(f"[bold][removed]Removed Models:")
-            for model_name in removed_model_names:
-                removed_tree.add(f"[removed]{model_name}")
-            tree.add(removed_tree)
-
-        removed_audit_names = {
-            name for name, snapshot in context_diff.removed.items() if snapshot.is_audit
-        } - ignored_snapshot_names
-        if removed_audit_names:
-            removed_tree = Tree(f"[bold][removed]Removed Standalone Audits:")
-            for audit_name in removed_audit_names:
-                removed_tree.add(f"[removed]{audit_name}")
-            tree.add(removed_tree)
-
-        modified_names = context_diff.modified_snapshots.keys() - ignored_snapshot_names
-        if modified_names:
-            direct = Tree(f"[bold][direct]Directly Modified:")
-            indirect = Tree(f"[bold][indirect]Indirectly Modified:")
-            metadata = Tree(f"[bold][metadata]Metadata Updated:")
-            for model_name in modified_names:
-                if context_diff.directly_modified(model_name):
-                    direct.add(
-                        Syntax(f"{model_name}\n{context_diff.text_diff(model_name)}", "sql")
-                        if detailed
-                        else f"[direct]{model_name}"
-                    )
-                elif context_diff.indirectly_modified(model_name):
-                    indirect.add(f"[indirect]{model_name}")
-                elif context_diff.metadata_updated(model_name):
-                    metadata.add(f"[metadata]{model_name}")
-            if direct.children:
-                tree.add(direct)
-            if indirect.children:
-                tree.add(indirect)
-            if metadata.children:
-                tree.add(metadata)
-        if ignored_snapshot_names:
-            tree.add(self._get_ignored_tree(ignored_snapshot_names, context_diff.snapshots))
-        self._print(tree)
+        self._print(Tree(f"[bold]Summary of differences against `{context_diff.environment}`:"))
+        self._show_summary_tree_for(
+            context_diff,
+            "Models",
+            lambda x: x.is_model,
+            detailed=detailed,
+            ignored_names=ignored_snapshot_names,
+        )
+        self._show_summary_tree_for(
+            context_diff,
+            "Standalone Audits",
+            lambda x: x.is_audit,
+            detailed=detailed,
+            ignored_names=ignored_snapshot_names,
+        )
 
     def plan(self, plan: Plan, auto_apply: bool) -> None:
         """The main plan flow.
