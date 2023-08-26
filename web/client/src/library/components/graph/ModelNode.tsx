@@ -156,6 +156,7 @@ export default function ModelNode({
             ? undefined
             : handleSelect
         }
+        count={columns.length}
       />
       {showColumns && isArrayNotEmpty(columns) && (
         <>

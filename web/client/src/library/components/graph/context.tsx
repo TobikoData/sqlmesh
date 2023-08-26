@@ -41,6 +41,9 @@ interface LineageFlow {
   connections: Map<string, Connections>
   withConnected: boolean
   withColumns: boolean
+  hasBackground: boolean
+  withImpacted: boolean
+  withSecondary: boolean
   manuallySelectedColumn?: [ModelSQLMeshModel, Column]
   highlightedNodes: HighlightedNodes
   setHighlightedNodes: React.Dispatch<React.SetStateAction<HighlightedNodes>>
@@ -49,6 +52,9 @@ interface LineageFlow {
   setMainNode: React.Dispatch<React.SetStateAction<string | undefined>>
   setSelectedNodes: React.Dispatch<React.SetStateAction<SelectedNodes>>
   setWithColumns: React.Dispatch<React.SetStateAction<boolean>>
+  setHasBackground: React.Dispatch<React.SetStateAction<boolean>>
+  setWithImpacted: React.Dispatch<React.SetStateAction<boolean>>
+  setWithSecondary: React.Dispatch<React.SetStateAction<boolean>>
   setConnections: React.Dispatch<React.SetStateAction<Map<string, Connections>>>
   hasActiveEdge: (edge: [Maybe<string>, Maybe<string>]) => boolean
   addActiveEdges: (edges: Array<[string, string]>) => void
@@ -69,10 +75,13 @@ export const LineageFlowContext = createContext<LineageFlow>({
   selectedEdges: new Set(),
   lineage: {},
   withColumns: true,
+  withConnected: false,
+  withImpacted: true,
+  withSecondary: true,
+  hasBackground: true,
   mainNode: undefined,
   activeEdges: new Map(),
   activeNodes: new Set(),
-  withConnected: false,
   models: new Map(),
   manuallySelectedColumn: undefined,
   connections: new Map(),
@@ -80,7 +89,10 @@ export const LineageFlowContext = createContext<LineageFlow>({
   connectedNodes: new Set(),
   highlightedNodes: {},
   setHighlightedNodes: () => {},
-  setWithColumns: () => {},
+  setWithColumns: () => false,
+  setHasBackground: () => false,
+  setWithImpacted: () => false,
+  setWithSecondary: () => false,
   setWithConnected: () => false,
   hasActiveEdge: () => false,
   addActiveEdges: () => {},
@@ -125,6 +137,9 @@ export default function LineageFlowProvider({
   const [selectedNodes, setSelectedNodes] = useState<SelectedNodes>(new Set())
   const [activeNodes, setActiveNodes] = useState<ActiveNodes>(new Set())
   const [highlightedNodes, setHighlightedNodes] = useState<HighlightedNodes>({})
+  const [hasBackground, setHasBackground] = useState(true)
+  const [withImpacted, setWithImpacted] = useState(true)
+  const [withSecondary, setWithSecondary] = useState(true)
 
   const checkActiveEdge = useCallback(
     function checkActiveEdge(edge: [Maybe<string>, Maybe<string>]): boolean {
@@ -280,7 +295,13 @@ export default function LineageFlowProvider({
         manuallySelectedColumn,
         withColumns: hasColumns,
         withConnected,
+        withImpacted,
+        withSecondary,
+        hasBackground,
         setWithConnected,
+        setWithImpacted,
+        setWithSecondary,
+        setHasBackground,
         setSelectedNodes,
         setMainNode,
         setConnections,
