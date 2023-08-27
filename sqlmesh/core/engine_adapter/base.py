@@ -851,7 +851,7 @@ class EngineAdapter:
                 "joined",
                 exp.select(
                     *(f"latest.{col} AS t_{col}" for col in columns_to_types),
-                    *(f"source.{col} as s_{col}" for col in unmanaged_columns),
+                    *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
                 )
                 .from_("latest")
                 .join("source", using=unique_key, join_type="full"),

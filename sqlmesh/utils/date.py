@@ -216,6 +216,7 @@ def to_ds(obj: TimeLike) -> str:
 
 
 def to_ts(obj: TimeLike) -> str:
+    """Converts a TimeLike object into YYYY-MM-DD HH:MM:SS formatted string."""
     return to_datetime(obj).isoformat()
 
 
