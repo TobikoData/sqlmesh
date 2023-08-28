@@ -8,6 +8,7 @@ from pytest_lazyfixture import lazy_fixture
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
+from sqlmesh.core import NodeType
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.model import (
@@ -20,7 +21,6 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotFingerprint,
     SnapshotIntervals,
-    SnapshotNodeType,
     SnapshotTableInfo,
 )
 from sqlmesh.schedulers.airflow import common
@@ -120,7 +120,7 @@ def test_create_plan_dag_spec(
         parents=[],
         change_category=SnapshotChangeCategory.BREAKING,
         kind_name=ModelKindName.FULL,
-        node_type=SnapshotNodeType.MODEL,
+        node_type=NodeType.MODEL,
     )
     old_environment = Environment(
         name=environment_name,

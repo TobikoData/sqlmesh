@@ -5,12 +5,13 @@ import sys
 import typing as t
 from collections import defaultdict
 from datetime import datetime, timedelta
-from enum import Enum, IntEnum
+from enum import IntEnum
 
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
+from sqlmesh.core import Node, NodeType
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, StandaloneAudit, is_audit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
@@ -33,18 +34,11 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
-if sys.version_info >= (3, 9):
-    from typing import Annotated
-else:
-    from typing_extensions import Annotated
-
 if t.TYPE_CHECKING:
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
-NodeClasses = t.Union[Model, StandaloneAudit]
-SnapshotNode = Annotated[NodeClasses, Field(discriminator="source_type")]
 
 
 class SnapshotChangeCategory(IntEnum):
@@ -159,11 +153,6 @@ class SnapshotDataVersion(PydanticModel, frozen=True):
     def is_new_version(self) -> bool:
         """Returns whether or not this version is new and requires a backfill."""
         return self.fingerprint.to_version() == self.version
-
-
-class SnapshotNodeType(str, Enum):
-    MODEL = "model"
-    AUDIT = "audit"
 
 
 class QualifiedViewName(PydanticModel, frozen=True):
@@ -288,16 +277,16 @@ class SnapshotInfoMixin(ModelKindMixin):
         )
 
     @property
-    def node_type(self) -> SnapshotNodeType:
+    def node_type(self) -> NodeType:
         raise NotImplementedError
 
     @property
     def is_model(self) -> bool:
-        return self.node_type == SnapshotNodeType.MODEL
+        return self.node_type == NodeType.MODEL
 
     @property
     def is_audit(self) -> bool:
-        return self.node_type == SnapshotNodeType.AUDIT
+        return self.node_type == NodeType.AUDIT
 
 
 class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
@@ -310,7 +299,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory] = None
     kind_name: ModelKindName = ModelKindName.NONE
-    node_type_: SnapshotNodeType = Field(default=SnapshotNodeType.MODEL, alias="node_type")
+    node_type_: NodeType = Field(default=NodeType.MODEL, alias="node_type")
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -353,7 +342,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         return self.kind_name
 
     @property
-    def node_type(self) -> SnapshotNodeType:
+    def node_type(self) -> NodeType:
         return self.node_type_
 
     @property
@@ -401,7 +390,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     name: str
     fingerprint: SnapshotFingerprint
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
-    node: SnapshotNode
+    node: Node
     parents: t.Tuple[SnapshotId, ...]
     audits: t.Tuple[Audit, ...]
     intervals: Intervals = []
@@ -489,9 +478,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @classmethod
     def from_node(
         cls,
-        node: SnapshotNode,
+        node: Node,
         *,
-        nodes: t.Dict[str, SnapshotNode],
+        nodes: t.Dict[str, Node],
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
         audits: t.Optional[t.Dict[str, Audit]] = None,
@@ -940,11 +929,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.model.kind.name if self.is_model else ModelKindName.NONE
 
     @property
-    def node_type(self) -> SnapshotNodeType:
+    def node_type(self) -> NodeType:
         if is_model(self.node):
-            return SnapshotNodeType.MODEL
+            return NodeType.MODEL
         elif is_audit(self.node):
-            return SnapshotNodeType.AUDIT
+            return NodeType.AUDIT
         raise SQLMeshError(f"Snapshot {self.snapshot_id} has an unknown node type.")
 
     @property
@@ -1009,9 +998,9 @@ def table_name(physical_schema: str, name: str, version: str, is_temp: bool = Fa
 
 
 def fingerprint_from_node(
-    node: SnapshotNode,
+    node: Node,
     *,
-    nodes: t.Dict[str, SnapshotNode],
+    nodes: t.Dict[str, Node],
     audits: t.Optional[t.Dict[str, Audit]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
@@ -1062,8 +1051,8 @@ def fingerprint_from_node(
 
 
 def _parents_from_node(
-    node: SnapshotNode,
-    nodes: t.Dict[str, SnapshotNode],
+    node: Node,
+    nodes: t.Dict[str, Node],
 ) -> t.Set[str]:
     parent_nodes = set()
     for parent in node.depends_on:

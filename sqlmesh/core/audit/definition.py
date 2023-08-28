@@ -13,7 +13,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.model.common import bool_validator, expression_validator
 from sqlmesh.core.model.definition import _Model
-from sqlmesh.core.node import Node
+from sqlmesh.core.node import _Node
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
@@ -199,7 +199,7 @@ class Audit(AuditMeta, frozen=True):
         """
         from sqlmesh.core.snapshot import Snapshot
 
-        node = snapshot_or_node if isinstance(snapshot_or_node, Node) else snapshot_or_node.node
+        node = snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node
         query_renderer = self._create_query_renderer(node)
         extra_kwargs = {}
 
@@ -279,7 +279,7 @@ class Audit(AuditMeta, frozen=True):
         )
 
 
-class StandaloneAudit(Node):
+class StandaloneAudit(_Node):
     """
     Args:
         name: The name of the model, which is of the form [catalog].[db].table.
@@ -430,5 +430,5 @@ def _maybe_parse_arg_pair(e: exp.Expression) -> t.Tuple[str, exp.Expression]:
     raise_config_error(f"Invalid defaults expression: {e}", error_type=AuditConfigError)
 
 
-def is_audit(node: Node) -> bool:
+def is_audit(node: _Node) -> bool:
     return isinstance(node, StandaloneAudit)

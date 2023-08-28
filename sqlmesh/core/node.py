@@ -135,7 +135,7 @@ INTERVAL_SECONDS = {
 }
 
 
-class Node(PydanticModel):
+class _Node(PydanticModel):
     """
     Node is the core abstraction for entity that can be executed within the scheduler.
 
@@ -313,6 +313,11 @@ class Node(PydanticModel):
         if not self.__inferred_interval_unit:
             self.__inferred_interval_unit = IntervalUnit.from_cron(self.cron, sample_size)
         return self.__inferred_interval_unit
+
+
+class NodeType(str, Enum):
+    MODEL = "model"
+    AUDIT = "audit"
 
 
 def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:

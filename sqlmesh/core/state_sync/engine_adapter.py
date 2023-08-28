@@ -26,6 +26,7 @@ import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
+from sqlmesh.core import Node
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.console import Console, get_console
@@ -43,7 +44,6 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotIntervals,
     SnapshotNameVersionLike,
-    SnapshotNode,
     fingerprint_from_node,
 )
 from sqlmesh.core.snapshot.definition import (
@@ -719,7 +719,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             seen = set()
             queue = {snapshot.snapshot_id}
             node = snapshot.node
-            nodes: t.Dict[str, SnapshotNode] = {}
+            nodes: t.Dict[str, Node] = {}
             audits: t.Dict[str, Audit] = {}
 
             while queue:
