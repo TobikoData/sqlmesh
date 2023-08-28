@@ -1,6 +1,6 @@
 # Configuration
 
-This page lists SQLMesh configuration options and their parameters. Learn more about SQLMesh configuration at the [configuration concepts page](../concepts/configuration/overview.md)
+This page lists SQLMesh configuration options and their parameters. Learn more about SQLMesh configuration at the [configuration concepts page](../guides/configuration.md).
 
 ## Root configurations
 
@@ -29,17 +29,17 @@ Configuration options for SQLMesh environment creation and promotion.
 | `pinned_environments`        | The list of development environments that are exempt from deletion due to expiration                                                                                                                                                                                                               | list[string]         | N        |
 | `include_unmodified`         | Indicates whether to create views for all models in the target development environment or only for modified ones                                                                                                                                                                                   | boolean              | N        |
 | `time_column_format`         | The default format to use for all model time columns. This time format uses [python format codes](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) (Default: `%Y-%m-%d`)                                                                                        | string               | N        |
-| `auto_categorize_changes`    | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([additional details](../concepts/configuration/overview.md#auto-categorize-changes))                                                                      | dict[string, string] | N        |
+| `auto_categorize_changes`    | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([additional details](../guides/configuration.md#auto-categorize-changes))                                                                      | dict[string, string] | N        |
 | `default_target_environment` | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   | string               | N        |
-| `physical_schema_override`   | The name of the schema where SQLMesh should place physical tables - [addition details](../concepts/configuration/overview.md#physical-schema-override). (Default: `sqlmesh__[model schema]`)                                                                                                                                                                   | string               | N        |
-| `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../concepts/configuration/overview.md#view-schema-override). (Default: `schema`)                                                                                                                                                                   | string               | N        |
+| `physical_schema_override`   | The name of the schema where SQLMesh should place physical tables - [addition details](../guides/configuration.md#physical-schema-override). (Default: `sqlmesh__[model schema]`)                                                                                                                                                                   | string               | N        |
+| `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                                                                   | string               | N        |
 
 
 ## Gateways
 
 The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler. A gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
 
-Find additional information about gateways in the configuration overview page [gateways section](../concepts/configuration/overview.md#gateways).
+Find additional information about gateways in the configuration overview page [gateways section](../guides/configuration.md#gateways).
 
 ### Gateway
 
@@ -87,7 +87,7 @@ Identifies which scheduler backend to use. The scheduler backend is used both fo
 
 By default, the scheduler type is set to `builtin` and uses the gateway's connection to store metadata. Use the `airflow` type to integrate with Airflow.
 
-Below is the list of configuration options specific to each corresponding scheduler type. Find additional details in the [configuration overview scheduler section](../concepts/configuration/overview.md#scheduler).
+Below is the list of configuration options specific to each corresponding scheduler type. Find additional details in the [configuration overview scheduler section](../guides/configuration.md#scheduler).
 
 #### Builtin
 
@@ -115,7 +115,7 @@ The Google Cloud Composer scheduler type shares the same configuration options a
 
 ## Gateway/connection defaults
 
-The default gateway and connection keys specify what should happen when gateways or connections are not explicitly specified. Find additional details in the configuration overview page [gateway/connection defaults section](../concepts/configuration/overview.md#gatewayconnection-defaults).
+The default gateway and connection keys specify what should happen when gateways or connections are not explicitly specified. Find additional details in the configuration overview page [gateway/connection defaults section](../guides/configuration.md#gatewayconnection-defaults).
 
 ### Default gateway
 
@@ -143,7 +143,7 @@ Configuration options for SQLMesh models.
 
 The `model_defaults` configuration is **required** and must contain a value for the `dialect` key. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
-Other values are set automatically unless explicitly overridden in the model definition. Find additional details in the [configuration overview page models section](../concepts/configuration/overview.md#models).
+Other values are set automatically unless explicitly overridden in the model definition. Find additional details in the [configuration overview page models section](../guides/configuration.md#models).
 
 | Option           | Description                                                                                                                                                                                                                                                                                                    |      Type      | Required |
 |------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------:|:--------:|
