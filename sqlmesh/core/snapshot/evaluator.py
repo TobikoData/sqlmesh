@@ -382,6 +382,7 @@ class SnapshotEvaluator:
         parent_snapshots_by_name = {
             snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
         }
+        parent_snapshots_by_name[snapshot.name] = snapshot
 
         render_kwargs: t.Dict[str, t.Any] = dict(
             engine_adapter=self.adapter,
@@ -413,6 +414,7 @@ class SnapshotEvaluator:
         parent_snapshots_by_name = {
             snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
         }
+        parent_snapshots_by_name[snapshot.name] = snapshot
 
         tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
@@ -785,6 +787,8 @@ class MaterializableStrategy(PromotableStrategy):
         table = exp.to_table(name)
         self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
+        ctas_query = model.ctas_query(**render_kwargs)
+
         logger.info("Creating table '%s'", name)
         if model.annotated:
             self.adapter.create_table(
@@ -796,10 +800,13 @@ class MaterializableStrategy(PromotableStrategy):
                 clustered_by=model.clustered_by,
                 table_properties=model.table_properties,
             )
+
+            logger.info("Dry running model '%s'", model.name)
+            self.adapter.fetchall(ctas_query)
         else:
             self.adapter.ctas(
                 name,
-                model.ctas_query(**render_kwargs),
+                ctas_query,
                 model.columns_to_types,
                 storage_format=model.storage_format,
                 partitioned_by=model.partitioned_by,

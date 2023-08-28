@@ -78,6 +78,7 @@ class Scheduler:
         is_dev: bool = False,
         restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
         ignore_cron: bool = False,
+        selected_snapshots: t.Optional[t.Set[str]] = None,
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -97,11 +98,14 @@ class Scheduler:
                 tables / table clones should be used where applicable.
             restatements: A set of snapshot names being restated.
             ignore_cron: Whether to ignore the model's cron schedule.
+            selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
         """
         restatements = restatements or {}
         validate_date_range(start, end)
 
-        snapshots = self.snapshot_per_version.values()
+        snapshots: t.Collection[Snapshot] = self.snapshot_per_version.values()
+        if selected_snapshots is not None:
+            snapshots = [s for s in snapshots if s.name in selected_snapshots]
 
         return compute_interval_params(
             snapshots,
@@ -181,6 +185,7 @@ class Scheduler:
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
         ignore_cron: bool = False,
+        selected_snapshots: t.Optional[t.Set[str]] = None,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
@@ -193,6 +198,7 @@ class Scheduler:
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A dict of snapshots to restate and their intervals.
             ignore_cron: Whether to ignore the model's cron schedule.
+            selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
 
         Returns:
             True if the execution was successful and False otherwise.
@@ -219,9 +225,9 @@ class Scheduler:
             is_dev=is_dev,
             restatements=restatements,
             ignore_cron=ignore_cron,
+            selected_snapshots=selected_snapshots,
         )
         if not batches:
-            self.console.log_success("No models scheduled to run at this time.")
             return True
 
         dag = self._dag(batches)

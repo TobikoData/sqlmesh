@@ -531,7 +531,10 @@ class TerminalConsole(Console):
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
-                indirect_tree.add(f"[indirect]{child}")
+                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
+                    plan.context_diff.snapshots[child].change_category
+                ]
+                indirect_tree.add(f"[indirect]{child} ({child_category_str})")
             self._print(syntax_dff)
             self._print(tree)
 
@@ -1172,7 +1175,10 @@ class MarkdownConsole(CaptureTerminalConsole):
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
-                indirect_tree.add(f"[indirect]{child}")
+                child_category_str = SNAPSHOT_CHANGE_CATEGORY_STR[
+                    plan.context_diff.snapshots[child].change_category
+                ]
+                indirect_tree.add(f"[indirect]{child} ({child_category_str})")
             self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
             self._print("```\n")
             self._print(tree)

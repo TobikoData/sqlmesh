@@ -57,6 +57,7 @@ class PlanApplicationRequest(PydanticModel):
 class BackfillIntervalsPerSnapshot(PydanticModel):
     snapshot_id: SnapshotId
     intervals: t.List[Interval]
+    before_promote: bool = True
 
 
 class PlanDagSpec(PydanticModel):
