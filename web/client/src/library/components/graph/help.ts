@@ -182,7 +182,7 @@ function getNodeMap({
     )
     const maxHeight = getNodeMaxHeight(columnsCount)
 
-    node.data.width = maxWidth + NODE_BALANCE_SPACE * 2
+    node.data.width = maxWidth + NODE_BALANCE_SPACE * 3
     node.data.height = withColumns
       ? maxHeight + NODE_BALANCE_SPACE * 2
       : NODE_BALANCE_SPACE

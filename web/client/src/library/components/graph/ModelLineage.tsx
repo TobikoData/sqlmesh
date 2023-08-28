@@ -28,7 +28,6 @@ export default function ModelLineage({
     setSelectedNodes,
     setMainNode,
     setHighlightedNodes,
-    setWithColumns,
   } = useLineageFlow()
 
   const {
@@ -55,7 +54,6 @@ export default function ModelLineage({
         setSelectedNodes(new Set())
         setMainNode(model.name)
         setHighlightedNodes(highlightedNodes)
-        setWithColumns(true)
       })
 
     return () => {
