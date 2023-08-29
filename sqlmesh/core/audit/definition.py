@@ -69,7 +69,7 @@ class AuditMeta(PydanticModel):
 
 
 class Audit(AuditMeta, frozen=True):
-    """Audit is an assertion made about your SQLMesh models.
+    """Audit is an assertion made about your tables.
 
     An audit is a SQL query that returns bad records.
     """
@@ -184,11 +184,11 @@ class Audit(AuditMeta, frozen=True):
         """Renders the audit's query.
 
         Args:
-            snapshot_or_model: The snapshot or model which is being audited.
+            snapshot_or_node: The snapshot or node which is being audited.
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             execution_time: The date/time time reference to use for execution time.
-            snapshots: All snapshots (by model name) to use for mapping of physical locations.
+            snapshots: All snapshots (by name) to use for mapping of physical locations.
             audit_name: The name of audit if the query to render is for an audit.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
                 tables / table clones should be used where applicable.
@@ -247,7 +247,7 @@ class Audit(AuditMeta, frozen=True):
 
         if rendered_query is None:
             raise SQLMeshError(
-                f"Failed to render query for audit '{self.name}', model '{node.name}'."
+                f"Failed to render query for audit '{self.name}', node '{node.name}'."
             )
 
         return rendered_query
@@ -290,11 +290,10 @@ class Audit(AuditMeta, frozen=True):
 class StandaloneAudit(_Node):
     """
     Args:
-        name: The name of the model, which is of the form [catalog].[db].table.
-            The catalog and db are optional.
-        owner: The owner of the model.
-        description: The optional model description.
-        stamp: An optional arbitrary string sequence used to create new model versions without making
+        name: The unique name of the standalone audit.
+        owner: The owner of the standalone audit.
+        description: The optional standalone audit description.
+        stamp: An optional arbitrary string sequence used to create new standalone audit versions without making
             changes to any of the functional components of the definition.
         tags:
         hash_raw_query:
@@ -376,10 +375,10 @@ class StandaloneAudit(_Node):
         return hash_data(data)
 
     def text_diff(self, other: StandaloneAudit) -> str:
-        """Produce a text diff against another model.
+        """Produce a text diff against another standalone audit.
 
         Args:
-            other: The model to diff against.
+            other: The standalone audit to diff against.
 
         Returns:
             A unified text diff showing additions and deletions.

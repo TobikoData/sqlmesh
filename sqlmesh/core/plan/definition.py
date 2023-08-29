@@ -48,7 +48,7 @@ SnapshotMapping = t.Dict[str, t.Set[str]]
 
 
 class Plan:
-    """Plan is the main class to represent user choices on how they want to backfill and version their models.
+    """Plan is the main class to represent user choices on how they want to backfill and version their nodes.
 
     Args:
         context_diff: The context diff that the plan is based on.
@@ -59,9 +59,9 @@ class Plan:
         restate_models: A list of models for which the data should be restated for the time range
             specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
             of the restatement.
-        no_gaps:  Whether to ensure that new snapshots for models that are already a
+        no_gaps:  Whether to ensure that new snapshots for nodes that are already a
             part of the target environment have no data gaps when compared against previous
-            snapshots for same models.
+            snapshots for same nodes.
         skip_backfill: Whether to skip the backfill step.
         is_dev: Whether this plan is for development purposes.
         forward_only: Whether the purpose of the plan is to make forward only changes.
@@ -69,7 +69,7 @@ class Plan:
         categorizer_config: Auto categorization settings.
         auto_categorization_enabled: Whether to apply auto categorization.
         effective_from: The effective date from which to apply forward-only changes on production.
-        include_unmodified: Indicates whether to include unmodified models in the target development environment.
+        include_unmodified: Indicates whether to include unmodified nodes in the target development environment.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
     """
 
@@ -330,7 +330,7 @@ class Plan:
             raise PlanError("Choice setting is not supported by a forward-only plan.")
         if not self.is_new_snapshot(snapshot):
             raise SQLMeshError(
-                f"A choice can't be changed for the existing version of model '{snapshot.name}'."
+                f"A choice can't be changed for the existing version of '{snapshot.name}'."
             )
 
         snapshot.categorize_as(choice)
@@ -451,7 +451,7 @@ class Plan:
 
     @property
     def has_unmodified_unpromoted(self) -> bool:
-        """Is the plan for an existing dev environment, has the include unmodified flag, and contains unmodified models that have not been promoted."""
+        """Is the plan for an existing dev environment, has the include unmodified flag, and contains unmodified nodes that have not been promoted."""
         return (
             self.is_dev
             and not self.context_diff.is_new_environment
@@ -653,7 +653,7 @@ class Plan:
             broken_references = set(self.context_diff.removed) & snapshot.node.depends_on
             if broken_references:
                 raise PlanError(
-                    f"Removed models {broken_references} are referenced in '{snapshot.name}'. Please remove broken references before proceeding."
+                    f"Removed {broken_references} are referenced in '{snapshot.name}'. Please remove broken references before proceeding."
                 )
 
     def _ensure_new_env_with_changes(self) -> None:

@@ -3,11 +3,11 @@
 
 ContextDiff encapsulates the differences between two environments. The two environments can be the local
 environment and a remote environment, or two remote environments. ContextDiff is an important part of
-SQLMesh. SQLMesh plans use ContextDiff to determine what models were changed between two environments.
+SQLMesh. SQLMesh plans use ContextDiff to determine what nodes were changed between two environments.
 The SQLMesh CLI diff command uses ContextDiff to determine what to visualize.
 
 When creating a ContextDiff object, SQLMesh will compare the snapshots from one environment with those of
-another remote environment and determine if models have been added, removed, or modified.
+another remote environment and determine if nodes have been added, removed, or modified.
 """
 from __future__ import annotations
 
@@ -42,9 +42,9 @@ class ContextDiff(PydanticModel):
     create_from: str
     """The name of the environment the target environment will be created from if new."""
     added: t.Dict[str, Snapshot]
-    """New models."""
+    """New nodes."""
     removed: t.Dict[str, Snapshot]
-    """Deleted models."""
+    """Deleted nodes."""
     modified_snapshots: t.Dict[str, t.Tuple[Snapshot, Snapshot]]
     """Modified snapshots."""
     snapshots: t.Dict[str, Snapshot]
@@ -135,7 +135,7 @@ class ContextDiff(PydanticModel):
                 added.add(snapshot.name)
                 removed.add(modified.name)
             elif existing:
-                # Keep the original model instance to preserve the query cache.
+                # Keep the original node instance to preserve the query cache.
                 existing.node = snapshot.node
 
                 merged_snapshots[name] = existing.copy()
@@ -220,59 +220,59 @@ class ContextDiff(PydanticModel):
         """The set of model names that have not yet been promoted in the target environment."""
         return set(self.snapshots) - self.previously_promoted_model_names
 
-    def directly_modified(self, model_name: str) -> bool:
-        """Returns whether or not a model was directly modified in this context.
+    def directly_modified(self, name: str) -> bool:
+        """Returns whether or not a node was directly modified in this context.
 
         Args:
-            model_name: The model name to check.
+            name: The node name to check.
 
         Returns:
-            Whether or not the model was directly modified.
+            Whether or not the node was directly modified.
         """
 
-        if model_name not in self.modified_snapshots:
+        if name not in self.modified_snapshots:
             return False
 
-        current, previous = self.modified_snapshots[model_name]
+        current, previous = self.modified_snapshots[name]
         return current.fingerprint.data_hash != previous.fingerprint.data_hash
 
-    def indirectly_modified(self, model_name: str) -> bool:
-        """Returns whether or not a model was indirectly modified in this context.
+    def indirectly_modified(self, name: str) -> bool:
+        """Returns whether or not a node was indirectly modified in this context.
 
         Args:
-            model_name: The model name to check.
+            name: The node name to check.
 
         Returns:
-            Whether or not the model was indirectly modified.
+            Whether or not the node was indirectly modified.
         """
 
-        if model_name not in self.modified_snapshots:
+        if name not in self.modified_snapshots:
             return False
 
-        current, previous = self.modified_snapshots[model_name]
+        current, previous = self.modified_snapshots[name]
         return (
             current.fingerprint.data_hash == previous.fingerprint.data_hash
             and current.fingerprint.parent_data_hash != previous.fingerprint.parent_data_hash
         )
 
-    def metadata_updated(self, model_name: str) -> bool:
-        """Returns whether or not the given model's metadata has been updated.
+    def metadata_updated(self, name: str) -> bool:
+        """Returns whether or not the given node's metadata has been updated.
 
         Args:
-            model_name: The model name to check.
+            name: The node name to check.
 
         Returns:
-            Whether or not the model's metadata has been updated.
+            Whether or not the node's metadata has been updated.
         """
 
-        if model_name not in self.modified_snapshots:
+        if name not in self.modified_snapshots:
             return False
 
-        current, previous = self.modified_snapshots[model_name]
+        current, previous = self.modified_snapshots[name]
         return current.fingerprint.metadata_hash != previous.fingerprint.metadata_hash
 
     def text_diff(self, node: str) -> str:
-        """Finds the difference of a model between the current and remote environment.
+        """Finds the difference of a node between the current and remote environment.
 
         Args:
             node: The node name.

@@ -82,22 +82,22 @@ class Scheduler:
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
-        For each model name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
+        For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
         calculate the missing intervals that need to be processed given the passed in start and end intervals.
 
-        If a snapshot's model specifies a batch size, consecutive intervals are merged into batches of a size that is less than
-        or equal to the configured one. If no batch size is specified, then it uses the intervals that correspond to the model's cron expression.
-        For example, if a model is supposed to run daily and has 70 days to backfill with a batch size set to 30, there would be 2 jobs
+        If a snapshot's node specifies a batch size, consecutive intervals are merged into batches of a size that is less than
+        or equal to the configured one. If no batch size is specified, then it uses the intervals that correspond to the node's cron expression.
+        For example, if a node is supposed to run daily and has 70 days to backfill with a batch size set to 30, there would be 2 jobs
         with 30 days and 1 job with 10.
 
         Args:
-            start: The start of the run. Defaults to the min model start date.
+            start: The start of the run. Defaults to the min node start date.
             end: The end of the run. Defaults to now.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             restatements: A set of snapshot names being restated.
-            ignore_cron: Whether to ignore the model's cron schedule.
+            ignore_cron: Whether to ignore the node's cron schedule.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
         """
         restatements = restatements or {}
@@ -193,11 +193,11 @@ class Scheduler:
             environment: The environment naming info the user is targeting when applying their change.
                 Can just be the environment name if the user is targeting a remote environment and wants to get the remote
                 naming info
-            start: The start of the run. Defaults to the min model start date.
+            start: The start of the run. Defaults to the min node start date.
             end: The end of the run. Defaults to now.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A dict of snapshots to restate and their intervals.
-            ignore_cron: Whether to ignore the model's cron schedule.
+            ignore_cron: Whether to ignore the node's cron schedule.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
 
         Returns:
@@ -329,12 +329,12 @@ def compute_interval_params(
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
-    For each model name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
+    For each node name, find all dependencies and look for a stored snapshot from the metastore. If a snapshot is found,
     calculate the missing intervals that need to be processed given the passed in start and end intervals.
 
-    If a snapshot's model specifies a batch size, consecutive intervals are merged into batches of a size that is less than
-    or equal to the configured one. If no batch size is specified, then it uses the intervals that correspond to the model's cron expression.
-    For example, if a model is supposed to run daily and has 70 days to backfill with a batch size set to 30, there would be 2 jobs
+    If a snapshot's node specifies a batch size, consecutive intervals are merged into batches of a size that is less than
+    or equal to the configured one. If no batch size is specified, then it uses the intervals that correspond to the node's cron expression.
+    For example, if a node is supposed to run daily and has 70 days to backfill with a batch size set to 30, there would be 2 jobs
     with 30 days and 1 job with 10.
 
     Args:
@@ -345,7 +345,7 @@ def compute_interval_params(
         is_dev: Whether or not these intervals are for development.
         execution_time: The date/time time reference to use for execution time.
         restatements: A dict of snapshot names being restated and their intervals.
-        ignore_cron: Whether to ignore the model's cron schedule.
+        ignore_cron: Whether to ignore the node's cron schedule.
 
     Returns:
         A dict containing all snapshots needing to be run with their associated interval params.

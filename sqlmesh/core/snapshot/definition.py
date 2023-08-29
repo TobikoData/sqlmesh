@@ -358,24 +358,24 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
 
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
-    """A snapshot represents a model at a certain point in time.
+    """A snapshot represents a node at a certain point in time.
 
-    Snapshots are used to encapsulate everything needed to evaluate a model.
+    Snapshots are used to encapsulate everything needed to evaluate a node.
     They are standalone objects that hold all state and dynamic content necessary
-    to render a model's query including things like macros. Snapshots also store intervals
+    to render a node's query including things like macros. Snapshots also store intervals
     (timestamp ranges for what data we've processed).
 
-    Models can be dynamically rendered due to macros. Rendering a model to its full extent
+    Nodes can be dynamically rendered due to macros. Rendering a node to its full extent
     requires storing variables and macro definitions. We store all of the macro definitions and
     global variable references in `python_env` in raw text to avoid pickling. The helper methods
     to achieve this are defined in utils.metaprogramming.
 
     Args:
-        name: The snapshot name which is the same as the model name and should be unique per model.
-        fingerprint: A unique hash of the model definition so that models can be reused across environments.
+        name: The snapshot name which is the same as the node name and should be unique per node.
+        fingerprint: A unique hash of the node definition so that nodes can be reused across environments.
         node: Node object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
-        audits: The list of audits used by the model.
+        audits: The list of audits used by the node.
         intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
         dev_intervals: List of [start, end) intervals showing development intervals (forward-only).
         created_ts: Epoch millis timestamp when a snapshot was first created.
@@ -384,9 +384,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             in any environment.
         previous: The snapshot data version that this snapshot was based on. If this snapshot is new, then previous will be None.
         version: User specified version for a snapshot that is used for physical storage.
-            By default, the version is the fingerprint, but not all changes to models require a backfill.
+            By default, the version is the fingerprint, but not all changes to nodes require a backfill.
             If a user passes a previous version, that will be used instead and no backfill will be required.
-        change_category: User specified change category indicating which models require backfill from model changes made in this snapshot.
+        change_category: User specified change category indicating which nodes require backfill from node changes made in this snapshot.
         unpaused_ts: The timestamp which indicates when this snapshot was unpaused. Unpaused means that
             this snapshot is evaluated on a recurring basis. None indicates that this snapshot is paused.
         effective_from: The timestamp which indicates when this snapshot should be considered effective.
@@ -669,7 +669,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A set of snapshot names being restated
             is_dev: Indicates whether missing intervals are computed for the development environment.
-            ignore_cron: Whether to ignore the model's cron schedule.
+            ignore_cron: Whether to ignore the node's cron schedule.
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -1033,7 +1033,7 @@ def fingerprint_from_node(
         nodes: Dictionary of all nodes in the graph to make the fingerprint dependent on parent changes.
             If no dictionary is passed in the fingerprint will not be dependent on a node's parents.
         audits: Available audits by name.
-        cache: Cache of model name to fingerprints.
+        cache: Cache of node name to fingerprints.
 
     Returns:
         The fingerprint.
@@ -1243,7 +1243,7 @@ def start_date(
 ) -> t.Optional[datetime]:
     """Get the effective/inferred start date for a snapshot.
 
-    Not all snapshots define a start date. In those cases, the model's start date
+    Not all snapshots define a start date. In those cases, the node's start date
     can be inferred from its parent's start date.
 
     Args:

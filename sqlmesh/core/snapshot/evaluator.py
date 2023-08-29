@@ -14,7 +14,7 @@ A snapshot evaluator also promotes and demotes snapshots to a given environment.
 
 # Audits
 
-A snapshot evaluator can also run the audits for a snapshot's model. This is often done after a snapshot
+A snapshot evaluator can also run the audits for a snapshot's node. This is often done after a snapshot
 has been evaluated to check for data quality issues.
 
 For more information about audits, see `sqlmesh.core.audit`.
@@ -98,7 +98,7 @@ class SnapshotEvaluator:
             start: The start datetime to render.
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
             limit: If limit is > 0, the query will not be persisted but evaluated and returned as a dataframe.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
@@ -316,11 +316,11 @@ class SnapshotEvaluator:
         is_dev: bool = False,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
-        """Execute a snapshot's model's audit queries.
+        """Execute a snapshot's node's audit queries.
 
         Args:
             snapshot: Snapshot to evaluate.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
             start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
             execution_time: The date/time time reference to use for execution time.
@@ -614,7 +614,7 @@ class EvaluationStrategy(abc.ABC):
         """Inserts the given query or a DataFrame into the target table or replaces a view.
 
         Args:
-            model: The target model.
+            snapshot: The target snapshot.
             name: The name of the target table or view.
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
@@ -634,7 +634,7 @@ class EvaluationStrategy(abc.ABC):
         """Appends the given query or a DataFrame to the existing table.
 
         Args:
-            model: The target model.
+            snapshot: The target snapshot.
             table_name: The target table name.
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
@@ -651,9 +651,9 @@ class EvaluationStrategy(abc.ABC):
         """Creates the target table or view.
 
         Args:
-            model: The target model.
+            snapshot: The target snapshot.
             name: The name of a table or a view.
-            render_kwargs: Additional kwargs for model rendering.
+            render_kwargs: Additional kwargs for node rendering.
         """
 
     @abc.abstractmethod
@@ -667,7 +667,7 @@ class EvaluationStrategy(abc.ABC):
         """Migrates the target table schema so that it corresponds to the source table schema.
 
         Args:
-            model: The target model.
+            snapshot: The target snapshot.
             snapshots: Parent snapshots.
             target_table_name: The target table name.
             source_table_name: The source table name.
@@ -695,7 +695,7 @@ class EvaluationStrategy(abc.ABC):
             view_name: The name of the target view.
             environment_naming_info: The naming information for the target environment
             table_name: The name of the target table.
-            model: The target model. Not currently used but can be used by others if needed.
+            snapshot: The target snapshot. Not ucrrently used but can be used by others if needed.
         """
 
     @abc.abstractmethod
