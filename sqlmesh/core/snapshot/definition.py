@@ -166,14 +166,12 @@ class QualifiedViewName(PydanticModel, frozen=True):
     table: str
 
     def for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
-        return ".".join(
-            p
-            for p in (
-                self.catalog,
-                self.schema_for_environment(environment_naming_info),
+        return exp.table_name(
+            exp.table_(
                 self.table_for_environment(environment_naming_info),
+                db=self.schema_for_environment(environment_naming_info),
+                catalog=self.catalog,
             )
-            if p is not None
         )
 
     def schema_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
