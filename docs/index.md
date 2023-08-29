@@ -60,13 +60,13 @@ SQLMesh was built on three core principles:
 * Notebook / CLI
     * Interact with SQLMesh with whatever tool you’re comfortable with.
 
-* Web based IDE (in development)
+* Web based IDE
     * Edit, run, and visualize queries in your browser.
 
-* Github CI/CD bot (in development)
+* Github CI/CD bot
     * A bot to tie your code directly to your data.
 
-* Table/Column level lineage visualizations (in development)
+* Table/Column level lineage visualizations
     * Quickly understand the full lineage and sequence of transformation of any column.
 
 ## Next steps
