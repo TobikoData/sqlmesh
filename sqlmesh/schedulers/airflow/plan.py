@@ -61,6 +61,7 @@ def create_plan_dag_spec(
         common.BackfillIntervalsPerSnapshot(
             snapshot_id=snapshot.snapshot_id,
             intervals=intervals,
+            before_promote=request.is_dev or not snapshot.is_paused_forward_only,
         )
         for snapshot, intervals in backfill_batches.items()
     ]

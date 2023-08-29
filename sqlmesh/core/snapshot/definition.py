@@ -894,6 +894,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return self.unpaused_ts is None
 
     @property
+    def is_paused_forward_only(self) -> bool:
+        return self.is_paused and self.is_forward_only
+
+    @property
     def normalized_effective_from_ts(self) -> t.Optional[int]:
         return (
             to_timestamp(self.model.interval_unit.cron_floor(self.effective_from))
@@ -1099,7 +1103,7 @@ def has_paused_forward_only(
         snapshots = {s.snapshot_id: s for s in snapshots}
     for target in targets:
         target_snapshot = snapshots[target.snapshot_id]
-        if target_snapshot.is_paused and target_snapshot.is_forward_only:
+        if target_snapshot.is_paused_forward_only:
             return True
     return False
 

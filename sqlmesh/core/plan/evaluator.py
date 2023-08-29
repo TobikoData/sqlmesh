@@ -28,7 +28,6 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotId,
     SnapshotInfoLike,
-    has_paused_forward_only,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.user import User
@@ -72,25 +71,31 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
     def evaluate(self, plan: Plan) -> None:
-        tasks = (
-            [self._push, self._restate, self._backfill, self._promote]
-            if not has_paused_forward_only(plan.snapshots, plan.snapshots) or plan.is_dev
-            else [self._push, self._restate, self._promote, self._backfill]
-        )
+        snapshots = plan.snapshots
+        if plan.is_dev:
+            before_promote_snapshots = {s.name for s in snapshots}
+            after_promote_snapshots = set()
+        else:
+            before_promote_snapshots = {s.name for s in snapshots if not s.is_paused_forward_only}
+            after_promote_snapshots = {s.name for s in snapshots if s.is_paused_forward_only}
 
-        for task in tasks:
-            task(plan)
+        self._push(plan)
+        self._restate(plan)
+        self._backfill(plan, before_promote_snapshots)
+        self._promote(plan)
+        self._backfill(plan, after_promote_snapshots)
 
         if not plan.requires_backfill:
             self.console.log_success("Virtual Update executed successfully")
 
-    def _backfill(self, plan: Plan) -> None:
+    def _backfill(self, plan: Plan, selected_snapshots: t.Set[str]) -> None:
         """Backfill missing intervals for snapshots that are part of the given plan.
 
         Args:
             plan: The plan to source snapshots from.
+            selected_snapshots: The snapshots to backfill.
         """
-        if not plan.requires_backfill:
+        if not plan.requires_backfill or not selected_snapshots:
             return
 
         snapshots = plan.snapshots
@@ -108,6 +113,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan.end,
             restatements=plan.restatements,
             ignore_cron=True,
+            selected_snapshots=selected_snapshots,
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")

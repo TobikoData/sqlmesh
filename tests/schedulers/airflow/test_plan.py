@@ -57,9 +57,10 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
 
 @pytest.mark.airflow
 @pytest.mark.parametrize(
-    "the_snapshot, expected_intervals",
+    "the_snapshot, expected_intervals, paused_forward_only",
     [
-        (lazy_fixture("snapshot"), [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))]),
+        (lazy_fixture("snapshot"), [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], False),
+        (lazy_fixture("snapshot"), [(to_datetime("2022-01-01"), to_datetime("2022-01-05"))], True),
         (
             lazy_fixture("depends_on_past_snapshot"),
             [
@@ -68,6 +69,7 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
                 (to_datetime("2022-01-03"), to_datetime("2022-01-04")),
                 (to_datetime("2022-01-04"), to_datetime("2022-01-05")),
             ],
+            False,
         ),
     ],
 )
@@ -75,8 +77,15 @@ def test_create_plan_dag_spec(
     mocker: MockerFixture,
     the_snapshot: Snapshot,
     expected_intervals: t.List[t.Tuple[datetime, datetime]],
+    paused_forward_only: bool,
     random_name,
 ):
+    the_snapshot.categorize_as(
+        SnapshotChangeCategory.FORWARD_ONLY
+        if paused_forward_only
+        else SnapshotChangeCategory.BREAKING
+    )
+
     environment_name = random_name()
     new_environment = Environment(
         name=environment_name,
@@ -140,6 +149,7 @@ def test_create_plan_dag_spec(
             common.BackfillIntervalsPerSnapshot(
                 snapshot_id=the_snapshot.snapshot_id,
                 intervals=expected_intervals,
+                before_promote=not paused_forward_only,
             )
         ],
         promoted_snapshots=[the_snapshot.table_info],
