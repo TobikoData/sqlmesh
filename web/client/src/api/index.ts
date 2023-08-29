@@ -46,6 +46,7 @@ import {
   getApiMetaApiMetaGet,
   type GetModelsApiModelsGet200,
   type ApiExceptionPayload,
+  deleteEnvironmentApiEnvironmentsEnvironmentDelete as apiDeleteEnvironment,
 } from './client'
 import {
   useIDE,
@@ -200,12 +201,14 @@ export function useApiEnvironments(
   )
 }
 
+export { apiDeleteEnvironment }
+
 export function useApiCancelPlan(
   options?: ApiOptions,
 ): UseQueryWithTimeoutOptions {
   return useQueryWithTimeout(
     {
-      queryKey: ['/api/commands/evaluate'],
+      queryKey: ['/api/commands/apply'],
       queryFn: cancelPlanApiPlanCancelPost,
     },
     {

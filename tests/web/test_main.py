@@ -470,12 +470,38 @@ def test_get_environments(project_context: Context) -> None:
     response = client.get("/api/environments")
     assert response.status_code == 200
     response_json = response.json()
-    assert len(response_json) == 1
+    assert len(response_json["environments"]) == 1
 
-    environment = Environment.parse_obj(response_json["prod"])
+    environment = Environment.parse_obj(response_json["environments"]["prod"])
     assert environment == Environment(
         name="prod", snapshots=[], start_at="1970-01-01", plan_id="", suffix_target="schema"
     )
+    assert response_json["pinned_environments"] == list(project_context.config.pinned_environments)
+    assert (
+        response_json["default_target_environment"]
+        == project_context.config.default_target_environment
+    )
+
+
+async def test_delete_environment_success(project_context: Context):
+    response = client.delete(f"/api/environments/test")
+
+    assert response.status_code == 200
+    assert response.json() == True
+
+
+async def test_delete_environment_failure(project_context: Context, mocker):
+    mocker.patch(
+        "app.Context.state_sync.invalidate_environment", side_effect=Exception("Some error")
+    )
+
+    response = client.delete(f"/api/environments/test")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "message": "Unable to delete environments",
+        "origin": "API -> environments -> delete_environment",
+    }
 
 
 def test_get_lineage(web_sushi_context: Context) -> None:
