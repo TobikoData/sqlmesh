@@ -13,12 +13,7 @@ from airflow.operators.python import PythonOperator
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.plan import PlanStatus
-from sqlmesh.core.snapshot import (
-    Snapshot,
-    SnapshotId,
-    SnapshotTableInfo,
-    has_paused_forward_only,
-)
+from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
@@ -156,10 +151,24 @@ class SnapshotDagGenerator:
                 plan_dag_spec.new_snapshots, plan_dag_spec.ddl_concurrent_tasks
             )
 
-            (backfill_start_task, backfill_end_task) = self._create_backfill_tasks(
-                plan_dag_spec.backfill_intervals_per_snapshot,
+            (
+                backfill_before_promote_start_task,
+                backfill_before_promote_end_task,
+            ) = self._create_backfill_tasks(
+                [i for i in plan_dag_spec.backfill_intervals_per_snapshot if i.before_promote],
                 all_snapshots,
                 plan_dag_spec.is_dev,
+                "before_promote",
+            )
+
+            (
+                backfill_after_promote_start_task,
+                backfill_after_promote_end_task,
+            ) = self._create_backfill_tasks(
+                [i for i in plan_dag_spec.backfill_intervals_per_snapshot if not i.before_promote],
+                all_snapshots,
+                plan_dag_spec.is_dev,
+                "after_promote",
             )
 
             (
@@ -168,20 +177,12 @@ class SnapshotDagGenerator:
             ) = self._create_promotion_demotion_tasks(plan_dag_spec, all_snapshots)
 
             start_task >> create_start_task
-            if (
-                not has_paused_forward_only(plan_dag_spec.promoted_snapshots, all_snapshots)
-                or plan_dag_spec.is_dev
-            ):
-                create_end_task >> backfill_start_task
-                backfill_end_task >> promote_start_task
-                latest_end_task = promote_end_task
-            else:
-                create_end_task >> promote_start_task
-                promote_end_task >> backfill_start_task
-                latest_end_task = backfill_end_task
+            create_end_task >> backfill_before_promote_start_task
+            backfill_before_promote_end_task >> promote_start_task
+            promote_end_task >> backfill_after_promote_start_task
 
             self._add_notification_target_tasks(
-                plan_dag_spec, start_task, end_task, latest_end_task
+                plan_dag_spec, start_task, end_task, backfill_after_promote_end_task
             )
             return dag
 
@@ -338,6 +339,7 @@ class SnapshotDagGenerator:
         backfill_intervals: t.List[common.BackfillIntervalsPerSnapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
         is_dev: bool,
+        task_id_suffix: str,
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         snapshot_to_tasks = {}
         for intervals_per_snapshot in backfill_intervals:
@@ -376,8 +378,8 @@ class SnapshotDagGenerator:
                 snapshot_end_task,
             )
 
-        backfill_start_task = EmptyOperator(task_id="snapshot_backfill_start")
-        backfill_end_task = EmptyOperator(task_id="snapshot_backfill_end")
+        backfill_start_task = EmptyOperator(task_id=f"snapshot_backfill_{task_id_suffix}_start")
+        backfill_end_task = EmptyOperator(task_id=f"snapshot_backfill_{task_id_suffix}_end")
 
         if not snapshot_to_tasks:
             backfill_start_task >> backfill_end_task

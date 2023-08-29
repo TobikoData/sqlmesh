@@ -330,6 +330,11 @@ class Plan:
 
         snapshot.categorize_as(choice)
 
+        is_breaking_choice = choice in (
+            SnapshotChangeCategory.BREAKING,
+            SnapshotChangeCategory.INDIRECT_BREAKING,
+        )
+
         for child in self.indirectly_modified[snapshot.name]:
             child_snapshot = self._snapshot_mapping[child]
             # If the snapshot isn't new then we are reverting to a previously existing snapshot
@@ -337,13 +342,19 @@ class Plan:
             if not self.is_new_snapshot(child_snapshot):
                 continue
 
-            if choice in (
-                SnapshotChangeCategory.BREAKING,
-                SnapshotChangeCategory.INDIRECT_BREAKING,
-            ):
-                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+            is_forward_only_child = self._is_forward_only_model(child)
+
+            if is_breaking_choice:
+                child_snapshot.categorize_as(
+                    SnapshotChangeCategory.FORWARD_ONLY
+                    if is_forward_only_child
+                    else SnapshotChangeCategory.INDIRECT_BREAKING
+                )
+            elif choice == SnapshotChangeCategory.FORWARD_ONLY:
+                child_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
             else:
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
+
             snapshot.indirect_versions[child] = child_snapshot.all_versions
 
             # If any other snapshot specified breaking this child, then that child
@@ -352,7 +363,11 @@ class Plan:
                 if child in upstream.indirect_versions:
                     data_version = upstream.indirect_versions[child][-1]
                     if data_version.is_new_version:
-                        child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+                        child_snapshot.categorize_as(
+                            SnapshotChangeCategory.FORWARD_ONLY
+                            if is_forward_only_child
+                            else SnapshotChangeCategory.INDIRECT_BREAKING
+                        )
                         break
 
         # Invalidate caches.
@@ -535,11 +550,6 @@ class Plan:
                 is_directly_modified = self.context_diff.directly_modified(model_name)
 
                 if self.is_new_snapshot(snapshot):
-                    if not self.forward_only:
-                        self._ensure_no_paused_forward_only_upstream(
-                            model_name, upstream_model_names
-                        )
-
                     if self.forward_only:
                         # In case of the forward only plan any modifications result in reuse of the
                         # previous version for non-seed models.
@@ -548,6 +558,8 @@ class Plan:
                             snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
                         else:
                             snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
+                    elif self._is_forward_only_model(model_name) and is_directly_modified:
+                        self.set_choice(snapshot, SnapshotChangeCategory.FORWARD_ONLY)
                     elif self.auto_categorization_enabled and is_directly_modified:
                         model_with_missing_columns: t.Optional[str] = None
                         this_model_with_downstream = self.indirectly_modified.get(
@@ -588,25 +600,6 @@ class Plan:
 
             elif model_name in self.context_diff.added and self.is_new_snapshot(snapshot):
                 snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-
-    def _ensure_no_paused_forward_only_upstream(
-        self, model_name: str, upstream_model_names: t.Iterable[str]
-    ) -> None:
-        for upstream in upstream_model_names:
-            upstream_snapshot = self._snapshot_mapping.get(upstream)
-            if (
-                upstream_snapshot
-                and upstream_snapshot.version
-                and upstream_snapshot.is_forward_only
-                and upstream_snapshot.is_paused
-            ):
-                raise PlanError(
-                    f"Model '{model_name}' depends on a paused version of model '{upstream}'. "
-                    "Possible remedies: "
-                    "1) make sure your codebase is up-to-date; "
-                    f"2) promote the current version of model '{upstream}' in the production environment; "
-                    "3) recreate this plan in a forward-only mode."
-                )
 
     def _ensure_valid_date_range(
         self, start: t.Optional[TimeLike], end: t.Optional[TimeLike]
@@ -653,14 +646,6 @@ class Plan:
                     f"Removed models {broken_references} are referenced in model '{snapshot.name}'. Please remove broken references before proceeding."
                 )
 
-    def _ensure_forward_only_models_compatibility(self) -> None:
-        if not self.forward_only:
-            for new in self.context_diff.new_snapshots.values():
-                if new.model.forward_only and new.name in self.context_diff.modified_snapshots:
-                    raise PlanError(
-                        f"Model '{new.name}' can only be changed as part of a forward-only plan. Please run this plan with --forward-only flag."
-                    )
-
     def _ensure_new_env_with_changes(self) -> None:
         if (
             self.is_dev
@@ -694,7 +679,6 @@ class Plan:
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range(self._start, self._end)
         self._ensure_no_forward_only_revert()
-        self._ensure_forward_only_models_compatibility()
         self._ensure_no_forward_only_new_models()
         self._ensure_no_broken_references()
 
@@ -742,6 +726,21 @@ class Plan:
             filtered_snapshot_mapping,
             ignored_snapshot_names,
         )
+
+    def _is_forward_only_model(self, model_name: str) -> bool:
+        snapshot = self._snapshot_mapping.get(model_name)
+        if snapshot and snapshot.model.forward_only:
+            return True
+
+        for upstream in self._dag.upstream(model_name):
+            upstream_snapshot = self._snapshot_mapping.get(upstream)
+            if (
+                upstream_snapshot
+                and upstream_snapshot.is_paused
+                and (upstream_snapshot.is_forward_only or upstream_snapshot.model.forward_only)
+            ):
+                return True
+        return False
 
 
 class PlanStatus(str, Enum):

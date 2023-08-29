@@ -137,11 +137,8 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
     context_diff_mock.added_materialized_models = set()
 
-    with pytest.raises(
-        PlanError,
-        match=r"Model 'b' depends on a paused version of model 'a'.*",
-    ):
-        Plan(context_diff_mock, forward_only=False)
+    Plan(context_diff_mock, forward_only=False)
+    assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
 def test_restate_models(sushi_context_pre_scheduling: Context):
@@ -592,13 +589,75 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
     context_diff_mock.environment = "test_dev"
     context_diff_mock.previous_plan_id = "previous_plan_id"
 
-    with pytest.raises(
-        PlanError, match="Model 'a' can only be changed as part of a forward-only plan.*"
-    ):
-        Plan(context_diff_mock, is_dev=True)
+    Plan(context_diff_mock, is_dev=True)
+    assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
+    updated_snapshot.change_category = None
+    updated_snapshot.version = None
     Plan(context_diff_mock, is_dev=True, forward_only=True)
+    assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+    updated_snapshot.change_category = None
+    updated_snapshot.version = None
     Plan(context_diff_mock, forward_only=True)
+    assert updated_snapshot.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+
+def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 2 as a, ds")))
+
+    snapshot_b = make_snapshot(
+        SqlModel(
+            name="b",
+            query=parse_one("select a, ds from a"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        ),
+        nodes={"a": snapshot_a.model},
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    updated_snapshot_b = make_snapshot(snapshot_b.model, nodes={"a": updated_snapshot_a.model})
+
+    snapshot_c = make_snapshot(
+        SqlModel(name="c", query=parse_one("select a, ds from b")), nodes={"b": snapshot_b.model}
+    )
+    snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
+    updated_snapshot_c = make_snapshot(snapshot_c.model, nodes={"b": updated_snapshot_b.model})
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {
+        "a": updated_snapshot_a,
+        "b": updated_snapshot_b,
+        "c": updated_snapshot_c,
+    }
+    context_diff_mock.removed = set()
+    context_diff_mock.added = set()
+    context_diff_mock.added_materialized_models = set()
+    context_diff_mock.modified_snapshots = {
+        "a": (updated_snapshot_a, snapshot_a),
+        "b": (updated_snapshot_b, snapshot_b),
+        "c": (updated_snapshot_c, snapshot_c),
+    }
+    context_diff_mock.new_snapshots = {
+        updated_snapshot_a.snapshot_id: updated_snapshot_a,
+        updated_snapshot_b.snapshot_id: updated_snapshot_b,
+        updated_snapshot_c.snapshot_id: updated_snapshot_c,
+    }
+    context_diff_mock.has_snapshot_changes = True
+    context_diff_mock.environment = "test_dev"
+    context_diff_mock.previous_plan_id = "previous_plan_id"
+    context_diff_mock.directly_modified.side_effect = lambda name: name == "a"
+
+    plan = Plan(context_diff_mock, is_dev=True)
+    assert plan.indirectly_modified == {"a": {"b", "c"}}
+
+    assert len(plan.directly_modified) == 1
+    assert plan.directly_modified[0].snapshot_id == updated_snapshot_a.snapshot_id
+
+    assert updated_snapshot_a.change_category == SnapshotChangeCategory.BREAKING
+    assert updated_snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert updated_snapshot_c.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
 def test_disable_restatement(make_snapshot, mocker: MockerFixture):
