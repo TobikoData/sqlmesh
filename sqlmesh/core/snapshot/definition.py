@@ -936,9 +936,10 @@ SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapsh
 
 def table_name(physical_schema: str, name: str, version: str, is_temp: bool = False) -> str:
     temp_suffx = "__temp" if is_temp else ""
+    legal_name = name.replace("-", "").replace('"', "").replace("'", "")
     parts = [
         physical_schema,
-        f"{name.replace('.', '__')}__{version}{temp_suffx}",
+        f"{legal_name.replace('.', '__')}__{version}{temp_suffx}",
     ]
     catalog = exp.to_table(name).catalog
     if catalog:

@@ -579,12 +579,12 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     assert snapshot.table_name_for_mapping(is_dev=True) == "private.name__3078928823"
 
     fully_qualified_snapshot = make_snapshot(
-        SqlModel(name="catalog.db.table", query=parse_one("select 1, ds"))
+        SqlModel(name='"my-catalog".db.table', query=parse_one("select 1, ds"))
     )
     fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     assert (
         fully_qualified_snapshot.table_name(is_dev=False, for_read=False)
-        == "catalog.sqlmesh__db.catalog__db__table__2528031000"
+        == "my-catalog.sqlmesh__db.mycatalog__db__table__2528031000"
     )
 
 
