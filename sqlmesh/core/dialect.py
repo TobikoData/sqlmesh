@@ -677,7 +677,7 @@ def select_from_values(
     batch = []
     for row in values:
         batch.append(row)
-        if batch_size > 0 and len(batch) > batch_size:
+        if batch_size > 0 and len(batch) >= batch_size:
             values_exp = exp.values(batch, alias=alias, columns=columns_to_types)
             yield exp.select(*casted_columns).from_(values_exp)
             batch.clear()

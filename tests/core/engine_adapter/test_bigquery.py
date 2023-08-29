@@ -210,7 +210,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
 
     get_bq_table = mocker.Mock()
     get_bq_table.return_value = AttributeDict(
-        {"project": "project", "dataset_id": "dataset", "table_id": "test_table"}
+        {"project": "project", "dataset_id": "dataset", "table_id": "temp_table"}
     )
     adapter._BigQueryEngineAdapter__get_bq_table = get_bq_table
     db_call_mock = mocker.patch(
@@ -225,6 +225,15 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     retry_resp_call.errors = None
     retry_mock.return_value = retry_resp
     db_call_mock.return_value = AttributeDict({"errors": None})
+
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
+    temp_table_uuid = uuid.uuid4()
+    uuid4_mock = mocker.patch("uuid.uuid4")
+    uuid4_mock.return_value = temp_table_uuid
+
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
         "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
@@ -239,7 +248,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
         load_table.kwargs = load_table[1]
     assert create_table.kwargs == {
         "table": get_bq_table.return_value,
-        "exists_ok": True,
+        "exists_ok": False,
     }
     assert sorted(load_table.kwargs) == [
         "df",
@@ -248,13 +257,15 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     ]
     assert load_table.kwargs["df"].equals(df)
     assert load_table.kwargs["table"] == get_bq_table.return_value
-    assert (
-        load_table.kwargs["job_config"].write_disposition
-        == bigquery.WriteDisposition.WRITE_TRUNCATE
-    )
+    assert load_table.kwargs["job_config"].write_disposition is None
     assert load_table.kwargs["job_config"].schema == [
         bigquery.SchemaField("a", "INT64"),
         bigquery.SchemaField("b", "INT64"),
+    ]
+    sql_calls = _to_sql_calls(execute_mock)
+    assert sql_calls == [
+        "CREATE OR REPLACE TABLE `test_table` AS SELECT `a`, `b` FROM `project`.`dataset`.`temp_table`",
+        "DROP TABLE IF EXISTS `project`.`dataset`.`temp_table`",
     ]
 
 
@@ -388,7 +399,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     )
     adapter.merge(
         target_table="target",
-        source_table="SELECT id, ts, val FROM source",
+        source_table=parse_one("SELECT id, ts, val FROM source"),
         columns_to_types={
             "id": exp.DataType.Type.INT,
             "ts": exp.DataType.Type.TIMESTAMP,

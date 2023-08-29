@@ -12,6 +12,8 @@ from sqlglot import parse_one
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
+from sqlmesh.utils.date import to_ds
+from tests.core.engine_adapter import to_sql_calls
 
 
 def test_create_view(make_mocked_engine_adapter: t.Callable):
@@ -26,13 +28,27 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
         table_properties={"a": exp.convert(1)},
     )
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
-            call('CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
-            call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
-        ]
+    assert to_sql_calls(adapter) == [
+        'CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"',
+        'CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"',
+        'CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"',
+    ]
+
+
+def test_create_view_pandas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.create_view("test_view", pd.DataFrame({"a": [1, 2, 3]}), replace=False)
+    adapter.create_view(
+        "test_view",
+        pd.DataFrame({"a": [1, 2, 3]}),
+        replace=True,
+        table_properties={"a": exp.convert(1)},
     )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE VIEW "test_view" ("a") AS SELECT CAST("a" AS BIGINT) AS "a" FROM (VALUES (1), (2), (3)) AS "t"("a")',
+        'CREATE OR REPLACE VIEW "test_view" ("a") AS SELECT CAST("a" AS BIGINT) AS "a" FROM (VALUES (1), (2), (3)) AS "t"("a")',
+    ]
 
 
 def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
@@ -101,22 +117,23 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
 def test_insert_overwrite_by_time_partition(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter._insert_overwrite_by_condition(
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     adapter.cursor.begin.assert_called_once()
     adapter.cursor.commit.assert_called_once()
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call("""DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""),
-            call('INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        """DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
+        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"',
+    ]
 
 
 def test_insert_overwrite_by_time_partition_supports_insert_overwrite(
@@ -125,10 +142,14 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite(
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
-    adapter._insert_overwrite_by_condition(
+
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         parse_one("SELECT a, b FROM tbl"),
-        where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
@@ -143,31 +164,39 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
-    adapter._insert_overwrite_by_condition(
+
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         df,
-        where=parse_one("ds BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="ds",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
-    )
+    assert to_sql_calls(adapter) == [
+        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
+    ]
 
 
 def test_insert_overwrite_by_time_partition_replace_where(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
-    adapter._insert_overwrite_by_condition(
+
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         parse_one("SELECT a, b FROM tbl"),
-        where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
+    assert to_sql_calls(adapter) == [
         """INSERT INTO "test_table" REPLACE WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
-    )
+    ]
 
 
 def test_insert_overwrite_by_time_partition_replace_where_pandas(
@@ -177,16 +206,20 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
 
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
-    adapter._insert_overwrite_by_condition(
+
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         df,
-        where=parse_one("ds BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="ds",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
-    )
+    assert to_sql_calls(adapter) == [
+        """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
+    ]
 
 
 def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
@@ -198,9 +231,9 @@ def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'
-    )
+    assert to_sql_calls(adapter) == [
+        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"',
+    ]
 
 
 def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):
@@ -216,16 +249,33 @@ def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):
         },
     )
 
+    assert to_sql_calls(adapter) == [
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")',
+    ]
+
+
+def test_insert_append_pandas_batches(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.DEFAULT_BATCH_SIZE = 1
+
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    adapter.insert_append(
+        "test_table",
+        df,
+        columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("INT"),
+        },
+    )
+
     adapter.cursor.begin.assert_called_once()
     adapter.cursor.commit.assert_called_once()
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call(
-                'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")',
-            ),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")',
+    ]
 
 
 def test_create_table(make_mocked_engine_adapter: t.Callable):
@@ -1020,26 +1070,26 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
-    adapter.cursor.execute.assert_called_once_with(
+    # TODO: Shouldn't we enforce that `a` is casted to an int?
+    assert to_sql_calls(adapter) == [
         'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"'
-    )
+    ]
 
 
 def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.DEFAULT_BATCH_SIZE = 1
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call('DROP TABLE IF EXISTS "test_table"'),
-            call('CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)'),
-            call(
-                'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
-            ),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        'DROP TABLE IF EXISTS "test_table"',
+        'CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")',
+    ]
 
 
 def test_create_table_like(make_mocked_engine_adapter: t.Callable):
@@ -1095,3 +1145,25 @@ def test_clone_table(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE `target_table` CLONE `source_table`"
     )
+
+
+def test_ctas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.ctas("new_table", parse_one("SELECT * FROM old_table"))
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "new_table" AS SELECT * FROM "old_table"'
+    ]
+
+
+def test_ctas_pandas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    # Inferring the types from the dataframe
+    adapter.ctas("new_table", df)
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "new_table" AS SELECT CAST("a" AS BIGINT) AS "a", CAST("b" AS BIGINT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
+    ]

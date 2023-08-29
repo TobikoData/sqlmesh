@@ -11,7 +11,7 @@ from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import Query, QueryOrDF
+    from sqlmesh.core.engine_adapter.base import QueryOrDF, SourceQuery
 
 
 class RedshiftEngineAdapter(BasePostgresEngineAdapter):
@@ -47,7 +47,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         underlying table without dropping the view first. This is a problem for us since we want to be able to
         swap tables out from under views. Therefore we create the view as non-binding.
         """
-        if self.is_df(query_or_df):
+        if self.is_pandas_df(query_or_df):
             raise NotImplementedError(
                 "DataFrames are not supported for Redshift views because Redshift doesn't"
                 "support using `VALUES` in a `CREATE VIEW` statement."
@@ -55,9 +55,8 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         return super().create_view(
             view_name,
             query_or_df,
-            columns_to_types,
-            replace,
-            materialized,
+            replace=replace,
+            materialized=materialized,
             no_schema_binding=True,
             **create_kwargs,
         )
@@ -69,10 +68,10 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         self.execute(query, quote_identifiers=quote_identifiers)
         return self.cursor.fetch_dataframe()
 
-    def _create_table_from_query(
+    def _create_table_from_source_query(
         self,
         table_name: TableName,
-        query: Query,
+        source_query: SourceQuery,
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -85,10 +84,12 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         then we run the query with exists set to False since we just confirmed it doesn't exist.
         """
         if not exists:
-            return super()._create_table_from_query(table_name, query, exists, **kwargs)
+            return super()._create_table_from_source_query(
+                table_name, source_query, exists, **kwargs
+            )
         if self.table_exists(table_name):
             return
-        super()._create_table_from_query(table_name, query, exists=False, **kwargs)
+        super()._create_table_from_source_query(table_name, source_query, exists=False, **kwargs)
 
     @classmethod
     def _pandas_to_sql(
@@ -125,13 +126,14 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         If it does exist then we need to do the:
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
-        df = self.try_get_pandas_df(query_or_df)
-        if df is None:
+        source_query = self._ensure_source_query(
+            query_or_df, columns_to_types, target_table=table_name
+        )
+        if not source_query.is_from_df:
             with self.transaction():
                 self.drop_table(table_name, exists=True)
-                return self.ctas(table_name, query_or_df, columns_to_types, **kwargs)
-        if not columns_to_types:
-            raise ValueError("columns_to_types must be provided for dataframes")
+                return self._create_table_from_source_query(table_name, source_query, exists=True)
+        columns_to_types = source_query.columns_to_types or self.columns(table_name)
         target_table = exp.to_table(table_name)
         target_exists = self.table_exists(target_table)
         if target_exists:
@@ -143,17 +145,13 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
                 old_table = target_table.copy()
                 old_table.set("this", exp.to_identifier(old_table_name))
                 self.create_table(temp_table, columns_to_types, exists=False, **kwargs)
-                for expression in self._pandas_to_sql(
-                    df, columns_to_types, self.DEFAULT_BATCH_SIZE
-                ):
-                    self._insert_append_query(temp_table, expression, columns_to_types)
+                self._insert_append_source_query(temp_table, source_query)
                 self.rename_table(target_table, old_table)
                 self.rename_table(temp_table, target_table)
                 self.drop_table(old_table)
         else:
             self.create_table(target_table, columns_to_types, exists=False, **kwargs)
-            for expression in self._pandas_to_sql(df, columns_to_types, self.DEFAULT_BATCH_SIZE):
-                self._insert_append_query(target_table, expression, columns_to_types)
+            self._insert_append_source_query(target_table, source_query)
 
     def _short_hash(self) -> str:
         return uuid.uuid4().hex[:8]

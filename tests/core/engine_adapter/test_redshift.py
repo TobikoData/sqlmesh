@@ -9,6 +9,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import RedshiftEngineAdapter
+from tests.core.engine_adapter import to_sql_calls
 
 
 def test_columns(make_mocked_engine_adapter: t.Callable):
@@ -122,14 +123,17 @@ def test_replace_query_with_query(make_mocked_engine_adapter: t.Callable, mocker
         "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.table_exists",
         return_value=False,
     )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.redshift.RedshiftEngineAdapter.columns",
+        return_value={"cola": exp.DataType(this=exp.DataType.Type.INT)},
+    )
+
     adapter.replace_query(table_name="test_table", query_or_df=parse_one("SELECT cola FROM table"))
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            mocker.call('DROP TABLE IF EXISTS "test_table"'),
-            mocker.call('CREATE TABLE "test_table" AS SELECT "cola" FROM "table"'),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        'DROP TABLE IF EXISTS "test_table"',
+        'CREATE TABLE "test_table" AS SELECT "cola" FROM "table"',
+    ]
 
 
 def test_replace_query_with_df_table_exists(

@@ -9,6 +9,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
 )
+from tests.core.engine_adapter import to_sql_calls
 
 
 def test_logical_replace_query_already_exists(
@@ -16,18 +17,22 @@ def test_logical_replace_query_already_exists(
 ):
     adapter = make_mocked_engine_adapter(LogicalReplaceQueryMixin, "postgres")
     adapter.cursor.fetchone.return_value = (1,)
+
     mocker.patch(
         "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.table_exists",
         return_value=True,
     )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.columns",
+        return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
+    )
 
     adapter.replace_query("db.table", parse_one("SELECT col FROM db.other_table"))
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call('TRUNCATE "db"."table"'),
-            call('INSERT INTO "db"."table" SELECT "col" FROM "db"."other_table"'),
-        ]
-    )
+
+    assert to_sql_calls(adapter) == [
+        'TRUNCATE "db"."table"',
+        'INSERT INTO "db"."table" ("col") SELECT "col" FROM "db"."other_table"',
+    ]
 
 
 def test_logical_replace_query_does_not_exist(

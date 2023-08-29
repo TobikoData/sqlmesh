@@ -3,28 +3,12 @@ from __future__ import annotations
 import math
 import typing as t
 
-import pandas as pd
-from sqlglot import exp
-
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-
-if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
 
 
 class DuckDBEngineAdapter(LogicalMergeMixin):
     DIALECT = "duckdb"
-
-    def _insert_append_pandas_df(
-        self,
-        table_name: TableName,
-        df: pd.DataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        contains_json: bool = False,
-    ) -> None:
-        column_names = list(columns_to_types or [])
-        self.execute(exp.insert("SELECT * FROM df", table_name, columns=column_names))
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None

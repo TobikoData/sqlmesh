@@ -14,7 +14,7 @@ from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 
 class BasePostgresEngineAdapter(CommitOnExecuteMixin):
@@ -90,7 +90,6 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
             super().create_view(
                 view_name,
                 query_or_df,
-                columns_to_types=columns_to_types,
                 replace=False,
                 materialized=materialized,
                 **create_kwargs,

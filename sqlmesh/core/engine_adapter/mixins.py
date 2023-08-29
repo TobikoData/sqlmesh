@@ -6,11 +6,12 @@ import typing as t
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter, TransactionType
+from sqlmesh.core.engine_adapter.base import EngineAdapter, SourceQuery, TransactionType
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
 
@@ -120,3 +121,43 @@ class CommitOnExecuteMixin(EngineAdapter):
         )
         if not self._connection_pool.is_transaction_active:
             self._connection_pool.commit()
+
+
+class InsertOverwriteWithMergeMixin(EngineAdapter):
+    FALSE_PREDICATE: exp.Condition = exp.FALSE
+
+    def _insert_overwrite_by_condition(
+        self,
+        table_name: TableName,
+        source_query: SourceQuery,
+        where: t.Optional[exp.Condition] = None,
+    ) -> None:
+        """
+        Some engines do not support `INSERT OVERWRITE` but instead support
+        doing an "INSERT OVERWRITE" using a Merge expression but with the
+        predicate being `False`.
+        """
+        columns_to_types = source_query.columns_to_types or self.columns(table_name)
+        for query in source_query.single_query:
+            query = self._add_where_to_query(query, where)
+            columns = [exp.to_column(col) for col in columns_to_types]
+            when_not_matched_by_source = exp.When(
+                matched=False,
+                source=True,
+                condition=where,
+                then=exp.Delete(),
+            )
+            when_not_matched_by_target = exp.When(
+                matched=False,
+                source=False,
+                then=exp.Insert(
+                    this=exp.Tuple(expressions=columns),
+                    expression=exp.Tuple(expressions=columns),
+                ),
+            )
+            self._merge(
+                target_table=table_name,
+                query=query,
+                on=self.FALSE_PREDICATE,
+                match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
+            )

@@ -13,6 +13,7 @@ import itertools
 import logging
 import typing as t
 import uuid
+from dataclasses import dataclass
 from enum import Enum
 
 import pandas as pd
@@ -25,7 +26,7 @@ from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import double_escape, optional_import
+from sqlmesh.utils import double_escape
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
 from sqlmesh.utils.errors import SQLMeshError
@@ -67,6 +68,23 @@ class InsertOverwriteStrategy(Enum):
     def is_replace_where(self) -> bool:
         return self == InsertOverwriteStrategy.REPLACE_WHERE
 
+    @property
+    def requires_condition(self) -> bool:
+        return self.is_replace_where or self.is_delete_insert
+
+
+@dataclass
+class SourceQuery:
+    generator: t.Iterator[Query]
+    columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    batched: bool = False
+    is_from_df: bool = False
+
+    @property
+    def single_query(self) -> t.Iterator[Query]:
+        assert not self.batched
+        yield from self.generator
+
 
 class EngineAdapter:
     """Base class wrapping a Database API compliant connection.
@@ -107,36 +125,6 @@ class EngineAdapter:
         self.sql_gen_kwargs = sql_gen_kwargs or {}
         self._extra_config = kwargs
 
-    @classmethod
-    def is_pandas_df(cls, value: t.Any) -> bool:
-        return isinstance(value, pd.DataFrame)
-
-    @classmethod
-    def is_pyspark_df(cls, value: t.Any) -> bool:
-        return hasattr(value, "sparkSession")
-
-    @classmethod
-    def is_df(self, value: t.Any) -> bool:
-        return self.is_pandas_df(value) or self.is_pyspark_df(value)
-
-    @classmethod
-    def try_get_df(cls, value: t.Any) -> t.Optional[DF]:
-        if cls.is_df(value):
-            return value
-        return None
-
-    @classmethod
-    def try_get_pyspark_df(cls, value: t.Any) -> t.Optional[PySparkDataFrame]:
-        if cls.is_pyspark_df(value):
-            return value
-        return None
-
-    @classmethod
-    def try_get_pandas_df(cls, value: t.Any) -> t.Optional[pd.DataFrame]:
-        if cls.is_pandas_df(value):
-            return value
-        return None
-
     @property
     def cursor(self) -> t.Any:
         return self._connection_pool.get_cursor()
@@ -144,6 +132,43 @@ class EngineAdapter:
     @property
     def spark(self) -> t.Optional[PySparkSession]:
         return None
+
+    @classmethod
+    def is_pandas_df(cls, value: t.Any) -> bool:
+        return isinstance(value, pd.DataFrame)
+
+    def _ensure_source_query(
+        self,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        *,
+        target_table: t.Optional[TableName] = None,
+        batch_size: t.Optional[int] = None,
+    ) -> SourceQuery:
+        if isinstance(query_or_df, SourceQuery):
+            return query_or_df
+        batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
+        if isinstance(query_or_df, (exp.Subqueryable, exp.DerivedTable)):
+            return SourceQuery(generator=iter([query_or_df]), columns_to_types=columns_to_types)
+        else:
+            return self._df_to_source_query(
+                query_or_df, columns_to_types, batch_size, target_table=target_table
+            )
+
+    def _df_to_source_query(
+        self,
+        df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        batch_size: int,
+        target_table: t.Optional[TableName] = None,
+    ) -> SourceQuery:
+        assert isinstance(df, pd.DataFrame)
+        return SourceQuery(
+            generator=self._pandas_to_sql(df, columns_to_types, batch_size),
+            columns_to_types=columns_to_types or columns_to_types_from_df(df),
+            batched=0 < batch_size < len(df.index),
+            is_from_df=True,
+        )
 
     def recycle(self) -> None:
         """Closes all open connections and releases all allocated resources associated with any thread
@@ -173,14 +198,10 @@ class EngineAdapter:
             kwargs: Optional create table properties.
         """
         table = exp.to_table(table_name)
-        df = self.try_get_pandas_df(query_or_df)
-        if df is not None:
-            return self._create_table_from_df(table, df, columns_to_types, replace=True, **kwargs)
-        else:
-            query_or_df = t.cast("Query", query_or_df)
-            return self._create_table_from_query(
-                table, query_or_df, replace=True, columns_to_types=columns_to_types, **kwargs
-            )
+        source_query = self._ensure_source_query(
+            query_or_df, columns_to_types, target_table=table_name
+        )
+        return self._create_table_from_source_query(table, source_query, replace=True, **kwargs)
 
     def create_index(
         self,
@@ -247,14 +268,8 @@ class EngineAdapter:
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
-        df = self.try_get_pandas_df(query_or_df)
-        if df is not None:
-            self._create_table_from_df(table_name, df, columns_to_types, exists, **kwargs)
-        else:
-            query_or_df = t.cast("Query", query_or_df)
-            self._create_table_from_query(
-                table_name, query_or_df, exists=exists, columns_to_types=columns_to_types, **kwargs
-            )
+        source_query = self._ensure_source_query(query_or_df, columns_to_types)
+        return self._create_table_from_source_query(table_name, source_query, exists, **kwargs)
 
     def create_state_table(
         self,
@@ -308,42 +323,29 @@ class EngineAdapter:
         )
         self._create_table(schema, None, exists=exists, columns_to_types=columns_to_types, **kwargs)
 
-    def _create_table_from_query(
+    def _create_table_from_source_query(
         self,
         table_name: TableName,
-        query: Query,
+        source_query: SourceQuery,
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
-        self._create_table(
-            table,
-            query,
-            exists=exists,
-            replace=replace,
-            columns_to_types=columns_to_types,
-            **kwargs,
-        )
-
-    def _create_table_from_df(
-        self,
-        table_name: TableName,
-        df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        exists: bool = True,
-        replace: bool = False,
-        **kwargs: t.Any,
-    ) -> None:
-        if not isinstance(df, pd.DataFrame):
-            raise ValueError("df must be a pandas DataFrame")
-        columns_to_types = columns_to_types or columns_to_types_from_df(df)
-        with self.transaction():
-            if replace:
-                self.drop_table(table_name)
-            self._create_table_from_columns(table_name, columns_to_types, **kwargs)
-            self._insert_append_pandas_df(table_name, df, columns_to_types)
+        if source_query.batched:
+            with self.transaction():
+                if replace:
+                    self.drop_table(table_name)
+                self._create_table_from_columns(
+                    table_name,
+                    source_query.columns_to_types or self.columns(table_name),
+                    **kwargs,
+                )
+                self._insert_append_source_query(table_name, source_query)
+        else:
+            for query in source_query.single_query:
+                self._create_table(table, query, exists=exists, replace=replace, **kwargs)
 
     def _create_table(
         self,
@@ -470,18 +472,13 @@ class EngineAdapter:
             materialized: Whether to create a a materialized view. Only used for engines that support this feature.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
-        schema: t.Optional[exp.Table | exp.Schema] = exp.to_table(view_name)
-        df = self.try_get_pandas_df(query_or_df)
-        if df is not None:
-            if columns_to_types is None:
-                columns_to_types = columns_to_types_from_df(df)
-
+        source_query = self._ensure_source_query(query_or_df, columns_to_types, batch_size=0)
+        schema: t.Union[exp.Table, exp.Schema] = exp.to_table(view_name)
+        if source_query.columns_to_types:
             schema = exp.Schema(
-                this=schema,
-                expressions=[exp.column(column) for column in columns_to_types],
+                this=exp.to_table(view_name),
+                expressions=[exp.column(column) for column in source_query.columns_to_types],
             )
-            query_or_df = next(self._pandas_to_sql(df, columns_to_types=columns_to_types))
-
         properties = create_kwargs.pop("properties", None)
         if not properties:
             properties = exp.Properties(expressions=[])
@@ -498,16 +495,16 @@ class EngineAdapter:
 
         if properties.expressions:
             create_kwargs["properties"] = properties
-
-        self.execute(
-            exp.Create(
-                this=schema,
-                kind="VIEW",
-                replace=replace,
-                expression=query_or_df,
-                **create_kwargs,
+        for query in source_query.single_query:
+            self.execute(
+                exp.Create(
+                    this=schema,
+                    kind="VIEW",
+                    replace=replace,
+                    expression=query,
+                    **create_kwargs,
+                )
             )
-        )
 
     def create_schema(
         self,
@@ -581,16 +578,10 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         contains_json: bool = False,
     ) -> None:
-        df = self.try_get_pandas_df(query_or_df)
-        if df is not None:
-            self._insert_append_pandas_df(
-                table_name, df, columns_to_types, contains_json=contains_json
-            )
-        else:
-            query = t.cast("Query", query_or_df)
-            if contains_json:
-                query = self._escape_json(query)
-            self._insert_append_query(table_name, query, columns_to_types)
+        source_query = self._ensure_source_query(
+            query_or_df, columns_to_types, target_table=table_name
+        )
+        self._insert_append_source_query(table_name, source_query, contains_json)
 
     @t.overload
     @classmethod
@@ -618,45 +609,18 @@ class EngineAdapter:
             )
         return value
 
-    def _insert_append_query(
+    def _insert_append_source_query(
         self,
         table_name: TableName,
-        query: Query,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ) -> None:
-        column_names = list(columns_to_types or [])
-        self.execute(exp.insert(query, table_name, columns=column_names))
-
-    def _insert_append_pandas_df(
-        self,
-        table_name: TableName,
-        df: pd.DataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        source_query: SourceQuery,
         contains_json: bool = False,
     ) -> None:
-        connection = self._connection_pool.get()
-        table = exp.to_table(table_name)
-
-        sqlalchemy = optional_import("sqlalchemy")
-        # pandas to_sql doesn't support insert overwrite, it only supports deleting the table or appending
-        if sqlalchemy and isinstance(connection, sqlalchemy.engine.Connectable):
-            df.to_sql(
-                table.sql(dialect=self.dialect),
-                connection,
-                if_exists="append",
-                index=False,
-                chunksize=self.DEFAULT_BATCH_SIZE,
-                method="multi",
-            )
-        else:
-            column_names = list(columns_to_types or [])
-            with self.transaction():
-                for i, expression in enumerate(
-                    self._pandas_to_sql(
-                        df, columns_to_types, self.DEFAULT_BATCH_SIZE, contains_json=contains_json
-                    )
-                ):
-                    self.execute(exp.insert(expression, table_name, columns=column_names))
+        with self.transaction(condition=source_query.batched):
+            columns_to_types = source_query.columns_to_types or self.columns(table_name)
+            for query in source_query.generator:
+                if contains_json:
+                    query = self._escape_json(query)
+                self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
         self,
@@ -665,9 +629,10 @@ class EngineAdapter:
         partitioned_by: t.List[exp.Expression],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        self._insert_overwrite_by_condition(
-            table_name, query_or_df, columns_to_types=columns_to_types
+        source_query = self._ensure_source_query(
+            query_or_df, columns_to_types, target_table=table_name
         )
+        self._insert_overwrite_by_condition(table_name, source_query)
 
     def insert_overwrite_by_time_partition(
         self,
@@ -682,9 +647,10 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
-        if columns_to_types is None:
-            columns_to_types = self.columns(table_name)
-
+        source_query = self._ensure_source_query(
+            query_or_df, columns_to_types, target_table=table_name
+        )
+        columns_to_types = source_query.columns_to_types or self.columns(table_name)
         low, high = [time_formatter(dt, columns_to_types) for dt in make_inclusive(start, end)]
         if isinstance(time_column, TimeColumn):
             time_column = time_column.column
@@ -693,7 +659,7 @@ class EngineAdapter:
             low=low,
             high=high,
         )
-        return self._insert_overwrite_by_condition(table_name, query_or_df, where, columns_to_types)
+        self._insert_overwrite_by_condition(table_name, source_query, where)
 
     @classmethod
     def _pandas_to_sql(
@@ -712,49 +678,38 @@ class EngineAdapter:
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
-        query_or_df: QueryOrDF,
+        source_query: SourceQuery,
         where: t.Optional[exp.Condition] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
         table = exp.to_table(table_name)
-        if (
-            self.INSERT_OVERWRITE_STRATEGY
-            in (InsertOverwriteStrategy.DELETE_INSERT, InsertOverwriteStrategy.REPLACE_WHERE)
-            and not where
-        ):
+        if self.INSERT_OVERWRITE_STRATEGY.requires_condition and not where:
             raise SQLMeshError(
                 "Where condition is required when doing a delete/insert or replace/where for insert/overwrite"
             )
-        if self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
-            with self.transaction():
-                assert where is not None
-                self.delete_from(table_name, where=where)
-                self.insert_append(table_name, query_or_df, columns_to_types=columns_to_types)
-        else:
-            df = self.try_get_pandas_df(query_or_df)
-            if df is not None:
-                query_or_df = next(
-                    pandas_to_sql(
-                        df,
-                        alias=table.alias_or_name,
-                        columns_to_types=columns_to_types,
+        with self.transaction(
+            condition=source_query.batched or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert
+        ):
+            columns_to_types = source_query.columns_to_types or self.columns(table_name)
+            for i, query in enumerate(source_query.generator):
+                if i > 0 or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
+                    if i == 0:
+                        assert where is not None
+                        self.delete_from(table_name, where=where)
+                    self.insert_append(table_name, query, columns_to_types=columns_to_types)
+                else:
+                    query = self._add_where_to_query(query, where)
+                    insert_exp = exp.insert(
+                        query,
+                        table,
+                        # Change once Databricks supports REPLACE WHERE with columns
+                        columns=list(columns_to_types)
+                        if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where
+                        else None,
+                        overwrite=self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite,
                     )
-                )
-
-            query = self._add_where_to_query(t.cast("Query", query_or_df), where)
-
-            insert_exp = exp.insert(
-                query,
-                table,
-                # Change once Databricks supports REPLACE WHERE with columns
-                columns=list(columns_to_types or [])
-                if not self.INSERT_OVERWRITE_STRATEGY.is_replace_where
-                else None,
-                overwrite=self.INSERT_OVERWRITE_STRATEGY.is_insert_overwrite,
-            )
-            if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
-                insert_exp.set("where", where)
-            self.execute(insert_exp)
+                    if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
+                        insert_exp.set("where", where)
+                    self.execute(insert_exp)
 
     def update_table(
         self,
@@ -775,13 +730,13 @@ class EngineAdapter:
     def _merge(
         self,
         target_table: TableName,
-        source_table: QueryOrDF,
+        query: Query,
         on: exp.Expression,
         match_expressions: t.List[exp.When],
     ) -> None:
         this = exp.alias_(exp.to_table(target_table), alias=MERGE_TARGET_ALIAS, table=True)
         using = exp.alias_(
-            exp.Subquery(this=source_table), alias=MERGE_SOURCE_ALIAS, copy=False, table=True
+            exp.Subquery(this=query), alias=MERGE_SOURCE_ALIAS, copy=False, table=True
         )
         self.execute(
             exp.Merge(
@@ -943,57 +898,51 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[str],
     ) -> None:
-        if columns_to_types is None:
-            columns_to_types = self.columns(target_table)
-
-        df = self.try_get_pandas_df(source_table)
-        if df is not None:
-            source_table = next(
-                pandas_to_sql(
-                    df,
-                    columns_to_types=columns_to_types,
-                )
-            )
-
-        column_names = list(columns_to_types or [])
-        on = exp.and_(
-            *(
-                exp.EQ(
-                    this=exp.column(part, MERGE_TARGET_ALIAS),
-                    expression=exp.column(part, MERGE_SOURCE_ALIAS),
-                )
-                for part in unique_key
-            )
+        source_query = self._ensure_source_query(
+            source_table, columns_to_types, target_table=target_table
         )
-        when_matched = exp.When(
-            matched=True,
-            source=False,
-            then=exp.Update(
-                expressions=[
+        for query in source_query.generator:
+            columns_to_types = source_query.columns_to_types or self.columns(target_table)
+            on = exp.and_(
+                *(
                     exp.EQ(
-                        this=exp.column(col, MERGE_TARGET_ALIAS),
-                        expression=exp.column(col, MERGE_SOURCE_ALIAS),
+                        this=exp.column(part, MERGE_TARGET_ALIAS),
+                        expression=exp.column(part, MERGE_SOURCE_ALIAS),
                     )
-                    for col in column_names
-                ],
-            ),
-        )
-        when_not_matched = exp.When(
-            matched=False,
-            source=False,
-            then=exp.Insert(
-                this=exp.Tuple(expressions=[exp.column(col) for col in column_names]),
-                expression=exp.Tuple(
-                    expressions=[exp.column(col, MERGE_SOURCE_ALIAS) for col in column_names]
+                    for part in unique_key
+                )
+            )
+            when_matched = exp.When(
+                matched=True,
+                source=False,
+                then=exp.Update(
+                    expressions=[
+                        exp.EQ(
+                            this=exp.column(col, MERGE_TARGET_ALIAS),
+                            expression=exp.column(col, MERGE_SOURCE_ALIAS),
+                        )
+                        for col in columns_to_types
+                    ],
                 ),
-            ),
-        )
-        return self._merge(
-            target_table=target_table,
-            source_table=source_table,
-            on=on,
-            match_expressions=[when_matched, when_not_matched],
-        )
+            )
+            when_not_matched = exp.When(
+                matched=False,
+                source=False,
+                then=exp.Insert(
+                    this=exp.Tuple(expressions=[exp.column(col) for col in columns_to_types]),
+                    expression=exp.Tuple(
+                        expressions=[
+                            exp.column(col, MERGE_SOURCE_ALIAS) for col in columns_to_types
+                        ]
+                    ),
+                ),
+            )
+            return self._merge(
+                target_table=target_table,
+                query=query,
+                on=on,
+                match_expressions=[when_matched, when_not_matched],
+            )
 
     def rename_table(
         self,
@@ -1054,11 +1003,15 @@ class EngineAdapter:
 
     @contextlib.contextmanager
     def transaction(
-        self, transaction_type: TransactionType = TransactionType.DML
+        self,
+        transaction_type: TransactionType = TransactionType.DML,
+        condition: t.Optional[bool] = None,
     ) -> t.Iterator[None]:
         """A transaction context manager."""
-        if self._connection_pool.is_transaction_active or not self.supports_transactions(
-            transaction_type
+        if (
+            self._connection_pool.is_transaction_active
+            or not self.supports_transactions(transaction_type)
+            or (condition is not None and not condition)
         ):
             yield
             return
@@ -1120,7 +1073,12 @@ class EngineAdapter:
             self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager
-    def temp_table(self, query_or_df: QueryOrDF, name: TableName = "diff") -> t.Iterator[exp.Table]:
+    def temp_table(
+        self,
+        query_or_df: QueryOrDF,
+        name: TableName = "diff",
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    ) -> t.Iterator[exp.Table]:
         """A context manager for working a temp table.
 
         The table will be created with a random guid and cleaned up after the block.
@@ -1128,16 +1086,19 @@ class EngineAdapter:
         Args:
             query_or_df: The query or df to create a temp table for.
             name: The base name of the temp table.
+            columns_to_types: A mapping between the column name and its data type.
 
         Yields:
             The table expression
         """
-
+        source_query = self._ensure_source_query(
+            query_or_df, columns_to_types=columns_to_types, target_table=name
+        )
         with self.transaction(TransactionType.DDL):
             table = self._get_temp_table(name)
             if table.db:
                 self.create_schema(table.db)
-            self.ctas(table, query_or_df)
+            self._create_table_from_source_query(table, source_query, True)
 
             try:
                 yield table
