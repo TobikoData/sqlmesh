@@ -1,6 +1,6 @@
 # Configuration
 
-This page lists SQLMesh configuration options and their parameters. Learn more about SQLMesh configuration at the [configuration concepts page](../guides/configuration.md).
+This page lists SQLMesh configuration options and their parameters. Learn more about SQLMesh configuration in the [configuration guide](../guides/configuration.md).
 
 ## Root configurations
 
