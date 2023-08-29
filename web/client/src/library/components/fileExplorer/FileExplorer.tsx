@@ -223,6 +223,7 @@ function FileExplorerArtifactContainer({
   className,
   style,
   handleSelect,
+  onDoubleClick,
 }: {
   artifact: ModelArtifact
   children: React.ReactNode
@@ -230,6 +231,7 @@ function FileExplorerArtifactContainer({
   className?: string
   style?: React.CSSProperties
   handleSelect?: (e: React.MouseEvent | React.KeyboardEvent) => void
+  onDoubleClick?: (e: React.MouseEvent) => void
 }): JSX.Element {
   const {
     setArtifactRename,
@@ -266,6 +268,7 @@ function FileExplorerArtifactContainer({
       )}
       style={style}
       onClick={handleSelect}
+      onDoubleClick={onDoubleClick}
       onKeyDown={(e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
           e.stopPropagation()

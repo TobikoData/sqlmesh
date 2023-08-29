@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Divider } from '../divider/Divider'
 import { useStoreProject } from '../../../context/project'
 import SplitPane from '../splitPane/SplitPane'
-import { isFalse, isNil, isStringEmptyOrNil } from '../../../utils'
+import {
+  debounceSync,
+  isFalse,
+  isNil,
+  isStringEmptyOrNil,
+} from '../../../utils'
 import EditorFooter from './EditorFooter'
 import EditorTabs from './EditorTabs'
 import EditorInspector from './EditorInspector'
@@ -16,6 +21,10 @@ import { EnumFileExtensions } from '@models/file'
 import { useLineageFlow } from '@components/graph/context'
 import { CodeEditorRemoteFile, CodeEditorDefault } from './EditorCode'
 import { useDefaultKeymapsEditorTab, useSQLMeshModelExtensions } from './hooks'
+import { useApiFetchdf } from '@api/index'
+import { getTableDataFromArrowStreamResult } from '@components/table/help'
+import { type Table } from 'apache-arrow'
+import { type KeyBinding } from '@codemirror/view'
 
 function Editor(): JSX.Element {
   const tab = useStoreEditor(s => s.tab)
@@ -110,6 +119,21 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     },
   )
 
+  const customSQLKeymaps = useMemo(() => {
+    return [
+      ...defaultKeymapsEditorTab,
+      {
+        key: 'Shift-Enter',
+        preventDefault: true,
+        run: debounceSync(() => {
+          sendQuery()
+
+          return true
+        }),
+      },
+    ] as KeyBinding[]
+  }, [defaultKeymapsEditorTab])
+
   const handleEngineWorkerMessage = useCallback(
     (e: MessageEvent): void => {
       if (e.data.topic === 'dialects') {
@@ -193,6 +217,19 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     setPreviewDiff(undefined)
   }, [tab.id, tab.file.fingerprint])
 
+  const { refetch: getFetchdf } = useApiFetchdf({
+    sql: tab.file.content,
+  })
+
+  function sendQuery(): void {
+    setPreviewTable(undefined)
+    setPreviewQuery(tab.file.content)
+
+    void getFetchdf().then(({ data }) => {
+      setPreviewTable(getTableDataFromArrowStreamResult(data as Table<any>))
+    })
+  }
+
   return (
     <SplitPane
       key={direction}
@@ -226,7 +263,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
                   type={EnumFileExtensions.SQL}
                   dialect={tab.dialect}
                   content={tab.file.content}
-                  keymaps={defaultKeymapsEditorTab}
+                  keymaps={customSQLKeymaps}
                   onChange={updateFileContent}
                 />
               )}

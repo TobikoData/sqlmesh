@@ -10,6 +10,8 @@ import { useDrag } from 'react-dnd'
 import { getEmptyImage } from 'react-dnd-html5-backend'
 import { useLongPress } from '@uidotdev/usehooks'
 import { type ModelArtifact } from '@models/artifact'
+import { useStoreEditor } from '@context/editor'
+import { debounceSync } from '@utils/index'
 
 function File({
   file,
@@ -25,6 +27,10 @@ function File({
   const activeRange = useStoreProject(s => s.activeRange)
   const setActiveRange = useStoreProject(s => s.setActiveRange)
   const inActiveRange = useStoreProject(s => s.inActiveRange)
+
+  const addTab = useStoreEditor(s => s.addTab)
+  const selectTab = useStoreEditor(s => s.selectTab)
+  const createTab = useStoreEditor(s => s.createTab)
 
   const [isDraggable, setIsDraggable] = useState(false)
 
@@ -101,6 +107,13 @@ function File({
     }
   }
 
+  function openFileInNewTab(): void {
+    const tab = createTab(file)
+
+    addTab(tab)
+    selectTab(tab)
+  }
+
   const disabled = activeRange.length > 1 && inActiveRange(file)
 
   return (
@@ -120,7 +133,12 @@ function File({
           className,
         )}
         style={style}
-        handleSelect={handleSelect}
+        onDoubleClick={debounceSync(e => {
+          e.stopPropagation()
+
+          openFileInNewTab()
+        }, 100)}
+        handleSelect={debounceSync(handleSelect, 200)}
       >
         <File.Icons />
         {artifactRename === file ? (
@@ -138,6 +156,26 @@ function File({
             }
             onOpenChange={setIsOpenContextMenu}
           >
+            <ContextMenu.Item
+              className={clsx(
+                'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
+                disabled
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'hover:bg-accent-500 hover:text-light',
+              )}
+              disabled={disabled}
+              onClick={(e: MouseEvent) => {
+                e.stopPropagation()
+              }}
+              onSelect={(e: Event) => {
+                e.stopPropagation()
+
+                openFileInNewTab()
+              }}
+            >
+              Open in new tab
+              <div className="ml-auto pl-5"></div>
+            </ContextMenu.Item>
             <ContextMenu.Item
               className={clsx(
                 'py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 ',
