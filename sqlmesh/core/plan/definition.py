@@ -411,7 +411,7 @@ class Plan:
         self._effective_from = effective_from
 
         for snapshot in self.new_snapshots:
-            if snapshot.is_model and not snapshot.model.disable_restatement:
+            if not snapshot.disable_restatement:
                 snapshot.effective_from = effective_from
 
     @property
@@ -461,7 +461,7 @@ class Plan:
 
     def _add_restatements(self) -> None:
         def is_restateable_snapshot(snapshot: Snapshot) -> bool:
-            if not self.is_dev and snapshot.is_model and snapshot.model.disable_restatement:
+            if not self.is_dev and snapshot.disable_restatement:
                 logger.debug("Restatement is disabled for model '%s'.", snapshot.name)
                 return False
             return not snapshot.is_symbolic and not snapshot.is_seed

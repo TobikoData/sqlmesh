@@ -314,6 +314,16 @@ class _Node(PydanticModel):
             self.__inferred_interval_unit = IntervalUnit.from_cron(self.cron, sample_size)
         return self.__inferred_interval_unit
 
+    @property
+    def is_model(self) -> bool:
+        """Return True if this is a model node"""
+        return False
+
+    @property
+    def is_audit(self) -> bool:
+        """Return True if this is an audit node"""
+        return False
+
 
 class NodeType(str, Enum):
     MODEL = "model"

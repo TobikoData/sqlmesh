@@ -8,7 +8,6 @@ from sqlmesh.core.audit.definition import (
     AuditResult,
     StandaloneAudit,
     create_standalone_audit,
-    is_audit,
 )
 
 AuditType = t.Union[Audit, StandaloneAudit]

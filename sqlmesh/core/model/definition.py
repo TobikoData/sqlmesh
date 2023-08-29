@@ -32,7 +32,6 @@ from sqlmesh.core.model.kind import (
 )
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
-from sqlmesh.core.node import _Node
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
@@ -798,6 +797,11 @@ class _Model(ModelMeta, frozen=True):
                 output.append(d.jinja_statement(macro_info.definition))
 
         return output
+
+    @property
+    def is_model(self) -> bool:
+        """Return True if this is a model node"""
+        return True
 
 
 class _SqlBasedModel(_Model):
@@ -1933,7 +1937,3 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "hash_raw_query": exp.convert,
     "table_properties_": lambda value: value,
 }
-
-
-def is_model(node: _Node) -> bool:
-    return isinstance(node, _Model)

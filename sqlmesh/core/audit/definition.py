@@ -172,7 +172,7 @@ class Audit(AuditMeta, frozen=True):
 
     def render_query(
         self,
-        snapshot_or_node: t.Union[Snapshot, _Model, StandaloneAudit],
+        snapshot_or_node: t.Union[Snapshot, _Node],
         *,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
@@ -203,11 +203,10 @@ class Audit(AuditMeta, frozen=True):
         query_renderer = self._create_query_renderer(node)
         extra_kwargs = {}
 
-        if isinstance(node, _Model):
-            model: _Model = node
+        if node.is_model:
             this_model = (
-                model.name
-                if isinstance(snapshot_or_node, _Model)
+                node.name
+                if isinstance(snapshot_or_node, _Node)
                 else t.cast(Snapshot, snapshot_or_node).table_name(is_dev=is_dev, for_read=True)
             )
 
@@ -218,10 +217,11 @@ class Audit(AuditMeta, frozen=True):
                 except Exception:
                     pass
 
-            if model.time_column:
-                where = exp.column(model.time_column.column).between(
-                    model.convert_to_time_column(start or c.EPOCH, columns_to_types),
-                    model.convert_to_time_column(end or c.EPOCH, columns_to_types),
+            node = t.cast(_Model, node)
+            if node.time_column:
+                where = exp.column(node.time_column.column).between(
+                    node.convert_to_time_column(start or c.EPOCH, columns_to_types),
+                    node.convert_to_time_column(end or c.EPOCH, columns_to_types),
                 )
             else:
                 where = None
@@ -247,7 +247,7 @@ class Audit(AuditMeta, frozen=True):
 
         if rendered_query is None:
             raise SQLMeshError(
-                f"Failed to render query for audit '{self.name}', model '{model.name}'."
+                f"Failed to render query for audit '{self.name}', model '{node.name}'."
             )
 
         return rendered_query
@@ -261,20 +261,28 @@ class Audit(AuditMeta, frozen=True):
         """All macro definitions from the list of expressions."""
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
-    def _create_query_renderer(
-        self, model_or_audit: t.Union[_Model, StandaloneAudit]
-    ) -> QueryRenderer:
+    def _create_query_renderer(self, node: _Node) -> QueryRenderer:
         kwargs: t.Dict[str, t.Any] = {}
-        if isinstance(model_or_audit, _Model):
-            kwargs["only_execution_time"] = model_or_audit.kind.only_execution_time
+
+        node_dialect = ""
+        if node.is_model:
+            node = t.cast(_Model, node)
+            node_dialect = node.dialect
+            kwargs = {
+                "only_execution_time": node.kind.only_execution_time,
+                "python_env": node.python_env,
+            }
+        elif node.is_audit:
+            node = t.cast(StandaloneAudit, node)
+            node_dialect = node.dialect
+            kwargs = {"python_env": node.python_env}
 
         return QueryRenderer(
             self.query,
-            self.dialect or model_or_audit.dialect,
+            self.dialect or node_dialect,
             self.macro_definitions,
             path=self._path or Path(),
             jinja_macro_registry=self.jinja_macros,
-            python_env=model_or_audit.python_env,
             **kwargs,
         )
 
@@ -309,7 +317,7 @@ class StandaloneAudit(_Node):
         if self._depends_on is None:
             self._depends_on = self.depends_on_ or set()
 
-            query = exp.select("*").from_("table")  # self.render_query(optimize=False)
+            query = self.audit.render_query(self)
             if query is not None:
                 self._depends_on |= d.find_tables(query, dialect=self.dialect)
 
@@ -378,6 +386,11 @@ class StandaloneAudit(_Node):
         """
         return d.text_diff(self.audit.query, other.audit.query, self.dialect)
 
+    @property
+    def is_audit(self) -> bool:
+        """Return True if this is an audit node"""
+        return True
+
 
 def create_standalone_audit(
     name: str,
@@ -428,7 +441,3 @@ def _maybe_parse_arg_pair(e: exp.Expression) -> t.Tuple[str, exp.Expression]:
     if isinstance(e, exp.EQ):
         return e.left.name, e.right
     raise_config_error(f"Invalid defaults expression: {e}", error_type=AuditConfigError)
-
-
-def is_audit(node: _Node) -> bool:
-    return isinstance(node, StandaloneAudit)

@@ -144,10 +144,7 @@ class Scheduler:
             snapshot.name: snapshot,
         }
 
-        if (
-            isinstance(snapshot.node, SeedModel)
-            and not t.cast(SeedModel, snapshot.node).is_hydrated
-        ):
+        if isinstance(snapshot.node, SeedModel) and not snapshot.node.is_hydrated:
             snapshot = self.state_sync.get_snapshots([snapshot], hydrate_seeds=True)[
                 snapshot.snapshot_id
             ]

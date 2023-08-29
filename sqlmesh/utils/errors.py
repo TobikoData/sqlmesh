@@ -66,13 +66,17 @@ class AuditError(SQLMeshError):
         model: t.Optional[Model] = None,
     ) -> None:
         self.audit_name = audit_name
-        self.model_name = model.name if model else None
+        self.model = model
         self.count = count
         self.query = query
 
     def __str__(self) -> str:
         model_str = f" for model '{self.model_name}'" if self.model_name else ""
         return f"Audit '{self.audit_name}'{model_str} failed.\nGot {self.count} results, expected 0.\n{self.query}"
+
+    @property
+    def model_name(self) -> t.Optional[str]:
+        return self.model.name if self.model else None
 
 
 class NotificationTargetError(SQLMeshError):

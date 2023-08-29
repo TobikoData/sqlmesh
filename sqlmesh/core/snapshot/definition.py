@@ -12,9 +12,9 @@ from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, StandaloneAudit, is_audit
+from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, StandaloneAudit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
-from sqlmesh.core.model.definition import _Model, is_model
+from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.utils.date import (
     TimeLike,
@@ -509,7 +509,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         created_ts = now_timestamp()
         node_audits = (
             tuple(t.cast(_Model, node).referenced_audits(audits or {}))
-            if is_model(node)
+            if node.is_model
             else tuple([t.cast(StandaloneAudit, node).audit])
         )
 
@@ -936,17 +936,24 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def node_type(self) -> NodeType:
-        if is_model(self.node):
+        if self.node.is_model:
             return NodeType.MODEL
-        elif is_audit(self.node):
+        elif self.node.is_audit:
             return NodeType.AUDIT
         raise SQLMeshError(f"Snapshot {self.snapshot_id} has an unknown node type.")
 
     @property
     def model(self) -> Model:
+        model = self.model_or_none
+        if model:
+            return model
+        raise SQLMeshError(f"Snapshot {self.snapshot_id} is not a model snapshot.")
+
+    @property
+    def model_or_none(self) -> t.Optional[Model]:
         if self.is_model:
             return t.cast(Model, self.node)
-        raise SQLMeshError(f"Snapshot {self.snapshot_id} is not a model snapshot.")
+        return None
 
     @property
     def audit(self) -> StandaloneAudit:
@@ -976,6 +983,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def name_version(self) -> SnapshotNameVersion:
         """Returns the name and version of the snapshot."""
         return SnapshotNameVersion(name=self.name, version=self.version)
+
+    @property
+    def disable_restatement(self) -> bool:
+        """Is restatement disabled for the node"""
+        return self.is_model and self.model.disable_restatement
 
     def _ensure_categorized(self) -> None:
         if not self.change_category:
@@ -1064,7 +1076,7 @@ def _parents_from_node(
     for parent in node.depends_on:
         if parent in nodes:
             parent_nodes.add(parent)
-            if is_model(nodes[parent]) and t.cast(_Model, nodes[parent]).kind.is_embedded:
+            if nodes[parent].is_model and t.cast(_Model, nodes[parent]).kind.is_embedded:
                 parent_nodes.update(_parents_from_node(nodes[parent], nodes))
 
     return parent_nodes

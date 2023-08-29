@@ -69,7 +69,7 @@ class CachingStateSync(DelegatingStateSync):
                 if (
                     hydrate_seeds
                     and isinstance(snapshot.node, SeedModel)
-                    and not t.cast(SeedModel, snapshot.model).is_hydrated
+                    and not snapshot.node.is_hydrated
                 ):
                     missing.add(snapshot_id)
                 else:

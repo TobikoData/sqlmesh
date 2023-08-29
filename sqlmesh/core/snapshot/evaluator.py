@@ -104,6 +104,11 @@ class SnapshotEvaluator:
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
+        if not snapshot.is_model:
+            return None
+
+        model = snapshot.model
+
         if not limit and not snapshot.is_forward_only:
             self._ensure_no_paused_forward_only_upstream(snapshot, snapshots)
 
@@ -154,11 +159,6 @@ class SnapshotEvaluator:
             is_dev=is_dev,
             **common_render_kwargs,
         )
-
-        if not snapshot.is_model:
-            return None
-
-        model = snapshot.model
 
         with self.adapter.transaction(
             transaction_type=TransactionType.DDL
@@ -387,6 +387,9 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
+        if not snapshot.is_model:
+            return
+
         # If a snapshot reuses an existing version we assume that the table for that version
         # has already been created, so we only need to create a temporary table or a clone.
         is_dev = snapshot.is_forward_only or snapshot.is_indirect_non_breaking
@@ -435,6 +438,8 @@ class SnapshotEvaluator:
                     self.adapter.drop_table(tmp_table_name)
             else:
                 evaluation_strategy.create(snapshot, target_table_name, **render_kwargs)
+
+            self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
         if on_complete is not None:
             on_complete(snapshot)
@@ -532,7 +537,7 @@ class SnapshotEvaluator:
         if audit.skip:
             return AuditResult(
                 audit=audit,
-                model=snapshot.model if snapshot.is_model else None,
+                model=snapshot.model_or_none,
                 skipped=True,
             )
         query = audit.render_query(
@@ -552,7 +557,7 @@ class SnapshotEvaluator:
         if count and raise_exception:
             audit_error = AuditError(
                 audit_name=audit.name,
-                model=snapshot.model if snapshot.is_model else None,
+                model=snapshot.model_or_none,
                 count=count,
                 query=query,
             )
@@ -562,7 +567,7 @@ class SnapshotEvaluator:
                 logger.warning(f"{audit_error}\nAudit is warn only so proceeding with execution.")
         return AuditResult(
             audit=audit,
-            model=snapshot.model if snapshot.is_model else None,
+            model=snapshot.model_or_none,
             count=count,
             query=query,
         )
@@ -828,8 +833,6 @@ class MaterializableStrategy(PromotableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        self.adapter.execute(model.render_pre_statements(**render_kwargs))
-
         table = exp.to_table(name)
         self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
@@ -860,8 +863,6 @@ class MaterializableStrategy(PromotableStrategy):
                 clustered_by=model.clustered_by,
                 table_properties=model.table_properties,
             )
-
-        self.adapter.execute(model.render_post_statements(**render_kwargs))
 
     def migrate(
         self,
