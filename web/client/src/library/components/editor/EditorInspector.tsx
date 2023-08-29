@@ -37,10 +37,6 @@ interface FormModel {
   limit: number
 }
 
-interface FormArbitrarySql {
-  limit: number
-}
-
 const DAY = 24 * 60 * 60 * 1000
 const LIMIT = 1000
 const LIMIT_DIFF = 50
@@ -184,7 +180,7 @@ function FormFieldset({
 function InspectorForm({
   children,
 }: {
-  children: React.ReactNode
+  children?: React.ReactNode
 }): JSX.Element {
   return (
     <div className="flex w-full h-full py-1 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
@@ -206,15 +202,9 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
   const engine = useStoreEditor(s => s.engine)
 
-  const [form, setForm] = useState<FormArbitrarySql>({
-    limit: LIMIT,
-  })
-
   const { refetch: getFetchdf, isFetching } = useApiFetchdf({
     sql: tab.file.content,
-    limit: form.limit,
   })
-  const shouldSendQuery = Object.values(form).every(Boolean)
 
   function sendQuery(): void {
     setPreviewTable(undefined)
@@ -227,42 +217,7 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
 
   return (
     <>
-      <InspectorForm>
-        <form className="my-3 w-full px-2">
-          {isFalse(shouldSendQuery) && (
-            <FormFieldset>
-              <Banner variant={EnumVariant.Warning}>
-                <Banner.Description className="w-full mr-2 text-sm">
-                  Please fill out all fields to <b>run the query</b>.
-                </Banner.Description>
-              </Banner>
-            </FormFieldset>
-          )}
-          <fieldset className="mb-4 w-full">
-            <Input
-              className="w-full mx-0"
-              label="Limit"
-            >
-              {({ className }) => (
-                <Input.Textfield
-                  className={clsx(className, 'w-full')}
-                  type="number"
-                  placeholder={String(LIMIT)}
-                  value={form.limit}
-                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    e.stopPropagation()
-
-                    setForm({
-                      ...form,
-                      limit: e.target.valueAsNumber ?? LIMIT,
-                    })
-                  }}
-                />
-              )}
-            </Input>
-          </fieldset>
-        </form>
-      </InspectorForm>
+      <InspectorForm />
       <Divider />
       <InspectorActions>
         <Button
@@ -284,14 +239,14 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
         <Button
           size={EnumSize.sm}
           variant={EnumVariant.Alternative}
-          disabled={isFalse(shouldSendQuery) || isFetching}
+          disabled={isFetching}
           onClick={e => {
             e.stopPropagation()
 
             sendQuery()
           }}
         >
-          Run Query
+          {isFetching ? 'Running Query...' : 'Run Query'}
         </Button>
       </InspectorActions>
     </>
@@ -318,7 +273,7 @@ function FormActionsModel({
   const { refetch: getRender } = useApiRender(
     Object.assign(form, { model: model.name }),
   )
-  const { refetch: getEvaluate } = useApiEvaluate(
+  const { refetch: getEvaluate, isFetching } = useApiEvaluate(
     Object.assign(form, { model: model.name }),
   )
 
@@ -443,14 +398,14 @@ function FormActionsModel({
             <Button
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEvaluate)}
+              disabled={isFalse(shouldEvaluate) || isFetching}
               onClick={e => {
                 e.stopPropagation()
 
                 evaluateModel()
               }}
             >
-              Evaluate
+              {isFetching ? 'Evaluating...' : 'Evaluate'}
             </Button>
           )}
         </div>
@@ -477,7 +432,7 @@ function FormDiffModel({
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff({
+  const { refetch: getDiff, isFetching } = useApiTableDiff({
     source: selectedSource,
     target: target.value,
     model_or_snapshot: model.name,
@@ -595,14 +550,14 @@ function FormDiffModel({
               className="ml-2"
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEnableAction)}
+              disabled={isFalse(shouldEnableAction) || isFetching}
               onClick={e => {
                 e.stopPropagation()
 
                 getTableDiff()
               }}
             >
-              Get Diff
+              {isFetching ? 'Getting Diff...' : 'Get Diff'}
             </Button>
           )}
         </div>
@@ -620,13 +575,14 @@ function FormDiff(): JSX.Element {
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff({
+  const { refetch: getDiff, isFetching } = useApiTableDiff({
     source,
     target,
     limit,
     on,
     where,
   })
+
   function getTableDiff(): void {
     setPreviewDiff(undefined)
 
@@ -737,14 +693,14 @@ function FormDiff(): JSX.Element {
           className="ml-2"
           size={EnumSize.sm}
           variant={EnumVariant.Alternative}
-          disabled={isFalse(shouldEnableAction)}
+          disabled={isFalse(shouldEnableAction) || isFetching}
           onClick={e => {
             e.stopPropagation()
 
             getTableDiff()
           }}
         >
-          Get Diff
+          {isFetching ? 'Getting Diff...' : 'Get Diff'}
         </Button>
       </InspectorActions>
     </>
