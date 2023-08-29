@@ -26,7 +26,6 @@ import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
-from sqlmesh.core import Node
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit
 from sqlmesh.core.console import Console, get_console
@@ -35,6 +34,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
     Intervals,
+    Node,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotDataVersion,

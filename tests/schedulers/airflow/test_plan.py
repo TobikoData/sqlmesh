@@ -8,7 +8,6 @@ from pytest_lazyfixture import lazy_fixture
 from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
-from sqlmesh.core import NodeType
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.model import (
@@ -16,6 +15,7 @@ from sqlmesh.core.model import (
     ModelKindName,
     create_sql_model,
 )
+from sqlmesh.core.node import NodeType
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,

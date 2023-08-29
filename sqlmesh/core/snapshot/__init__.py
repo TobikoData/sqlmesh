@@ -1,6 +1,7 @@
 from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import (
     Intervals,
+    Node,
     QualifiedViewName,
     Snapshot,
     SnapshotChangeCategory,

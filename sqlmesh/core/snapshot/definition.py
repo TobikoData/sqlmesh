@@ -11,12 +11,11 @@ from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import seq_get
 
-from sqlmesh.core import Node, NodeType
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, StandaloneAudit, is_audit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model, is_model
-from sqlmesh.core.node import IntervalUnit
+from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -34,11 +33,18 @@ from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
+if sys.version_info >= (3, 9):
+    from typing import Annotated
+else:
+    from typing_extensions import Annotated
+
 if t.TYPE_CHECKING:
     from sqlmesh.core.environment import EnvironmentNamingInfo
 
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
+
+Node = Annotated[t.Union[Model, StandaloneAudit], Field(descriminator="source_type")]
 
 
 class SnapshotChangeCategory(IntEnum):
