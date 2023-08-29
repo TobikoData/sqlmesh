@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import typing as t
 from collections import defaultdict
@@ -933,17 +934,19 @@ SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]
 
+ALNUM = re.compile(r"[^a-zA-Z0-9_]")
+
 
 def table_name(physical_schema: str, name: str, version: str, is_temp: bool = False) -> str:
-    temp_suffx = "__temp" if is_temp else ""
-    parts = [
-        physical_schema,
-        f"{name.replace('.', '__')}__{version}{temp_suffx}",
-    ]
-    catalog = exp.to_table(name).catalog
-    if catalog:
-        parts.insert(0, catalog)
-    return ".".join(parts)
+    table = exp.to_table(name)
+
+    # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
+    name = "__".join(ALNUM.sub("_", part.name) for part in table.parts)
+    temp_suffix = "__temp" if is_temp else ""
+
+    table.set("this", exp.to_identifier(f"{name}__{version}{temp_suffix}"))
+    table.set("db", exp.to_identifier(physical_schema))
+    return exp.table_name(table)
 
 
 def fingerprint_from_node(
