@@ -472,12 +472,10 @@ class EngineAdapter:
         warn_on_error: bool = True,
     ) -> None:
         """Create a schema from a name or qualified table name."""
-        if catalog_name:
-            schema_name = f"{catalog_name}.{schema_name}"
         try:
             self.execute(
                 exp.Create(
-                    this=exp.to_table(schema_name),
+                    this=exp.table_(schema_name, catalog_name),
                     kind="SCHEMA",
                     exists=ignore_if_exists,
                 )
