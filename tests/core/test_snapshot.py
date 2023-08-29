@@ -11,6 +11,7 @@ from sqlglot import exp, to_column
 
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.dialect import parse, parse_one
+from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
     Model,
@@ -23,6 +24,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.snapshot import (
+    QualifiedViewName,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotFingerprint,
@@ -1132,3 +1134,11 @@ def test_is_valid_start(make_snapshot):
     assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
     assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
     assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")
+
+
+def test_qualified_view_name():
+    env = EnvironmentNamingInfo()
+    assert (
+        QualifiedViewName(catalog="a-b", schema_name="c", table="d").for_environment(env)
+        == '"a-b".c.d'
+    )
