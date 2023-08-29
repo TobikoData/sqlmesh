@@ -30,7 +30,6 @@ class Config(BaseConfig):
         default_scheduler: The default scheduler configuration to use if one is not specified in a gateway.
         default_gateway: The default gateway.
         notification_targets: The notification targets to use.
-        dialect: The default sql dialect of model queries. Default: same as engine dialect.
         project: The project name of this config. Used for multi-repo setups.
         snapshot_ttl: The period of time that a model snapshot that is not a part of any environment should exist before being deleted.
         environment_ttl: The period of time that a development environment should exist before being deleted.
@@ -40,9 +39,13 @@ class Config(BaseConfig):
         auto_categorize_changes: Indicates whether SQLMesh should attempt to automatically categorize model changes (breaking / non-breaking)
             during plan creation.
         users: A list of users that can be used for approvals/notifications.
+        username: Name of a single user who should receive approvals/notification, instead of all users in the `users` list.
         pinned_environments: A list of development environment names that should not be deleted by the janitor task.
+        loader: Loader class used for loading project files.
+        env_vars: A dictionary of environmental variable names and values.
         model_defaults: Default values for model definitions.
         include_unmodified: Indicates whether to include unmodified models in the target development environment.
+        physical_schema_override: A mapping from model schema names to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
     """

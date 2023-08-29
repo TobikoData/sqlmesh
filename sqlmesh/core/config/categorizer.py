@@ -22,6 +22,7 @@ class CategorizerConfig(BaseConfig):
     """Configuration for the automatic categorizer of snapshot changes.
 
     Args:
+        external: the auto categorization mode for External models.
         python: the auto categorization mode for Python models.
         sql: the auto categorization mode for SQL models.
         seed: the auto categorization mode for Seed models.
