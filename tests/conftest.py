@@ -218,7 +218,7 @@ def make_snapshot() -> t.Callable:
         return Snapshot.from_model(
             model,
             **{  # type: ignore
-                "nodes": kwargs.get("nodes", {}),
+                "nodes": {},
                 "ttl": "in 1 week",
                 **kwargs,
             },
