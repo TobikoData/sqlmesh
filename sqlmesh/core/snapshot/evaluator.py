@@ -783,7 +783,8 @@ class MaterializableStrategy(PromotableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         table = exp.to_table(name)
-        self.adapter.create_schema(table.db, catalog_name=table.catalog)
+        catg = str(table.parts[0]) if table.catalog else None
+        self.adapter.create_schema(table.db, catalog_name=catg)
 
         logger.info("Creating table '%s'", name)
         if model.annotated:
