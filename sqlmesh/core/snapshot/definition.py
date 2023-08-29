@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import typing as t
 from collections import defaultdict
@@ -936,15 +937,12 @@ SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapsh
 
 def table_name(physical_schema: str, name: str, version: str, is_temp: bool = False) -> str:
     temp_suffx = "__temp" if is_temp else ""
-    legal_name = name.replace("-", "").replace('"', "").replace("'", "")
-    parts = [
-        physical_schema,
-        f"{legal_name.replace('.', '__')}__{version}{temp_suffx}",
-    ]
-    catalog = exp.to_table(name).catalog
-    if catalog:
-        parts.insert(0, catalog)
-    return ".".join(parts)
+    model_t = exp.to_table(name)
+    parts = ([str(p) for p in reversed(model_t.parts)] + [None, None])[:3]
+    prefix = "__".join(re.sub(r"[^a-zA-Z0-9_]", "_", p.name) for p in model_t.parts)
+    parts[0] = f"{prefix}__{version}{temp_suffx}"
+    parts[1] = physical_schema
+    return ".".join(p for p in reversed(parts) if p)
 
 
 def fingerprint_from_node(

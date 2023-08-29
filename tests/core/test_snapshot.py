@@ -584,7 +584,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     assert (
         fully_qualified_snapshot.table_name(is_dev=False, for_read=False)
-        == "my-catalog.sqlmesh__db.mycatalog__db__table__2528031000"
+        == '"my-catalog".sqlmesh__db.my_catalog__db__table__2528031000'
     )
 
 
