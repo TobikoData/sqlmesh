@@ -41,11 +41,11 @@ class Config(BaseConfig):
         users: A list of users that can be used for approvals/notifications.
         username: Name of a single user who should receive approvals/notification, instead of all users in the `users` list.
         pinned_environments: A list of development environment names that should not be deleted by the janitor task.
-        loader: Loader class used create a SQLMesh context from project files.
+        loader: Loader class used for loading project files.
         env_vars: A dictionary of environmental variable names and values.
         model_defaults: Default values for model definitions.
         include_unmodified: Indicates whether to include unmodified models in the target development environment.
-        physical_schema_override: A dictionary of model schema names and the physical schemas SQLMesh should use for the models' physical tables.
+        physical_schema_override: A mapping from model schema names to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
     """
