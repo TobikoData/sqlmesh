@@ -18,6 +18,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotId,
+    SnapshotTableInfo,
 )
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -41,9 +42,9 @@ class ContextDiff(PydanticModel):
     """Whether the currently stored environment record is in unfinalized state."""
     create_from: str
     """The name of the environment the target environment will be created from if new."""
-    added: t.Dict[str, Snapshot]
+    added: t.Set[str]
     """New nodes."""
-    removed: t.Dict[str, Snapshot]
+    removed_snapshots: t.Dict[str, SnapshotTableInfo]
     """Deleted nodes."""
     modified_snapshots: t.Dict[str, t.Tuple[Snapshot, Snapshot]]
     """Modified snapshots."""
@@ -102,9 +103,6 @@ class ContextDiff(PydanticModel):
             s.snapshot_id for s in snapshots.values() if s.is_seed and s.name in modified_info
         }
         modified_remote_snapshot_ids = {s.snapshot_id for s in modified_info.values()}
-        removed_remote_snapshot_ids = {
-            s.snapshot_id for name, s in existing_info.items() if name in removed
-        }
 
         stored = {
             **state_reader.get_snapshots(
@@ -115,9 +113,7 @@ class ContextDiff(PydanticModel):
                 ]
             ),
             **state_reader.get_snapshots(
-                modified_remote_snapshot_ids
-                | removed_remote_snapshot_ids
-                | modified_local_seed_snapshot_ids,
+                modified_remote_snapshot_ids | modified_local_seed_snapshot_ids,
                 hydrate_seeds=True,
             ),
         }
@@ -180,9 +176,9 @@ class ContextDiff(PydanticModel):
             is_new_environment=is_new_environment,
             is_unfinalized_environment=bool(env and not env.finalized_ts),
             create_from=create_from,
-            added={name: snapshot for name, snapshot in snapshots.items() if name in added},
-            removed={
-                info.name: snapshot for info, snapshot in stored.items() if info.name in removed
+            added=added,
+            removed_snapshots={
+                name: info for name, info in existing_info.items() if name in removed
             },
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
@@ -199,12 +195,17 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_snapshot_changes(self) -> bool:
-        return bool(self.added or self.removed or self.modified_snapshots)
+        return bool(self.added or self.removed_snapshots or self.modified_snapshots)
 
     @property
     def added_materialized_models(self) -> t.Set[str]:
         """Returns the set of added internal models."""
-        return {name for name in self.added if self.snapshots[name].model_kind_name.is_materialized}
+        return {
+            name
+            for name in self.added
+            if self.snapshots[name].model_kind_name
+            and self.snapshots[name].model_kind_name.is_materialized  # type: ignore
+        }
 
     @property
     def promotable_models(self) -> t.Set[str]:
@@ -213,7 +214,7 @@ class ContextDiff(PydanticModel):
             *self.previously_promoted_model_names,
             *self.added,
             *self.modified_snapshots,
-        } - set(self.removed)
+        } - set(self.removed_snapshots)
 
     @property
     def unpromoted_models(self) -> t.Set[str]:

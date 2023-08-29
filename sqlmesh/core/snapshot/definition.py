@@ -304,7 +304,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory] = None
-    kind_name: ModelKindName = ModelKindName.NONE
+    kind_name: t.Optional[ModelKindName] = None
     node_type_: NodeType = Field(default=NodeType.MODEL, alias="node_type")
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
@@ -344,7 +344,7 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         return self.fingerprint.to_version() == self.version
 
     @property
-    def model_kind_name(self) -> ModelKindName:
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self.kind_name
 
     @property
@@ -931,7 +931,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         )
 
     @property
-    def model_kind_name(self) -> ModelKindName:
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self.model.kind.name if self.is_model else ModelKindName.NONE
 
     @property

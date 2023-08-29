@@ -299,7 +299,7 @@ class Plan:
     def has_changes(self) -> bool:
         modified_names = {
             *self.context_diff.added,
-            *self.context_diff.removed,
+            *self.context_diff.removed_snapshots,
             *self.context_diff.modified_snapshots,
         } - self.ignored_snapshot_names
         return (
@@ -650,7 +650,7 @@ class Plan:
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self.context_diff.snapshots.values():
-            broken_references = set(self.context_diff.removed) & snapshot.node.depends_on
+            broken_references = set(self.context_diff.removed_snapshots) & snapshot.node.depends_on
             if broken_references:
                 raise PlanError(
                     f"Removed {broken_references} are referenced in '{snapshot.name}'. Please remove broken references before proceeding."

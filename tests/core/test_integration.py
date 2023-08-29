@@ -1035,9 +1035,9 @@ def validate_plan_changes(
     added = added or []
     modified = modified or []
     removed = removed or []
-    assert set(added) == set(plan.context_diff.added)
+    assert set(added) == plan.context_diff.added
     assert set(modified) == set(plan.context_diff.modified_snapshots)
-    assert set(removed) == set(plan.context_diff.removed)
+    assert set(removed) == set(plan.context_diff.removed_snapshots)
 
 
 def validate_versions_same(

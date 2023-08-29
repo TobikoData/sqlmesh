@@ -402,10 +402,10 @@ class TerminalConsole(Console):
         }
         filtered_ignored_names = {name for name in filtered_snapshots if name in ignored_names}
         added_names = {
-            name for name, snapshot in context_diff.added.items() if filter(snapshot)
+            name for name in context_diff.added if filter(context_diff.snapshots[name])
         } - filtered_ignored_names
         removed_names = {
-            name for name, snapshot in context_diff.removed.items() if filter(snapshot)
+            name for name, snapshot in context_diff.removed_snapshots.items() if filter(snapshot)
         } - filtered_ignored_names
         modified_names = {
             name
@@ -1144,7 +1144,7 @@ class MarkdownConsole(CaptureTerminalConsole):
         self._print(f"**Summary of differences against `{context_diff.environment}`:**\n\n")
 
         added_model_names = {
-            name for name, snapshot in context_diff.added.items() if snapshot.is_model
+            name for name in context_diff.added if context_diff.snapshots[name].is_model
         } - ignored_snapshot_names
         if added_model_names:
             self._print(f"**Added Models:**\n")
@@ -1153,7 +1153,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n")
 
         added_audit_names = {
-            name for name, snapshot in context_diff.added.items() if snapshot.is_audit
+            name for name in context_diff.added if context_diff.snapshots[name].is_audit
         } - ignored_snapshot_names
         if added_audit_names:
             self._print(f"**Added Standalone Audits:**\n")
@@ -1162,7 +1162,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n")
 
         removed_model_names = {
-            name for name, snapshot in context_diff.removed.items() if snapshot.is_model
+            name for name, snapshot in context_diff.removed_snapshots.items() if snapshot.is_model
         } - ignored_snapshot_names
         if removed_model_names:
             self._print(f"**Removed Models:**\n")
@@ -1171,7 +1171,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print("\n")
 
         removed_audit_names = {
-            name for name, snapshot in context_diff.removed.items() if snapshot.is_audit
+            name for name, snapshot in context_diff.removed_snapshots.items() if snapshot.is_audit
         } - ignored_snapshot_names
         if removed_audit_names:
             self._print(f"**Removed Standalone Audits:**\n")
