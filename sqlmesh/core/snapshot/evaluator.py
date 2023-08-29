@@ -783,7 +783,7 @@ class MaterializableStrategy(PromotableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         table = exp.to_table(name)
-        catg = str(table.parts[0]) if table.catalog else ''
+        catg = str(table.parts[0]) if table.catalog else ""
         self.adapter.create_schema(table.db, catalog_name=catg)
 
         logger.info("Creating table '%s'", name)
