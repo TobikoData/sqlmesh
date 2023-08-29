@@ -74,6 +74,11 @@ export default function Table({
   })
   const virtualRows = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
+  const paddingTop = virtualRows.length > 0 ? virtualRows?.[0]?.start ?? 0 : 0
+  const paddingBottom =
+    virtualRows.length > 0
+      ? totalSize - (virtualRows?.[virtualRows.length - 1]?.end ?? 0)
+      : 0
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -83,108 +88,118 @@ export default function Table({
           setFilter={setFilter}
         />
       )}
-      <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical">
-        <div
-          ref={elTableContainer}
-          style={{
-            height: `${totalSize}px`,
-          }}
+      <div
+        ref={elTableContainer}
+        className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"
+      >
+        <table
+          cellPadding={0}
+          cellSpacing={0}
+          className="w-full slashed-zero tabular-nums text-neutral-700 dark:text-neutral-300 text-xs font-medium whitespace-nowrap text-left"
         >
-          <table
-            cellPadding={0}
-            cellSpacing={0}
-            className="w-full slashed-zero tabular-nums text-neutral-700 dark:text-neutral-300 text-xs font-medium whitespace-nowrap text-left"
-          >
-            {isArrayNotEmpty(columns) && (
-              <thead className="sticky top-0">
-                {table.getHeaderGroups().map(headerGroup => (
-                  <tr
-                    key={headerGroup.id}
-                    className="bg-primary-10 dark:bg-secondary-10 backdrop-blur-lg"
-                    style={{ height: `${MIN_HEIGHT_ROW}px` }}
-                  >
-                    <th className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark">
-                      Row #
+          {isArrayNotEmpty(columns) && (
+            <thead className="sticky top-0">
+              {table.getHeaderGroups().map(headerGroup => (
+                <tr
+                  key={headerGroup.id}
+                  className="bg-primary-10 dark:bg-secondary-10 backdrop-blur-lg"
+                  style={{ height: `${MIN_HEIGHT_ROW}px` }}
+                >
+                  <th className="pl-2 pr-4 pt-1 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark">
+                    Row #
+                  </th>
+                  {headerGroup.headers.map(header => (
+                    <th
+                      key={header.id}
+                      className="pl-2 pr-4 pt-1 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark"
+                    >
+                      {header.isPlaceholder ? (
+                        <></>
+                      ) : (
+                        <div
+                          className={clsx(
+                            header.column.getCanSort()
+                              ? 'flex cursor-pointer select-none'
+                              : '',
+                            ['int', 'float'].includes(
+                              header.column.columnDef.meta!.type,
+                            ) && 'justify-end',
+                          )}
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {header.column.getCanSort() && (
+                            <ChevronUpDownIcon className="mr-1 w-4" />
+                          )}
+                          {flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                          {{
+                            asc: <ChevronDownIcon className="ml-1 w-4" />,
+                            desc: <ChevronUpIcon className="ml-1 w-4" />,
+                          }[header.column.getIsSorted() as string] ?? null}
+                        </div>
+                      )}
                     </th>
-                    {headerGroup.headers.map(header => (
-                      <th
-                        key={header.id}
-                        className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark"
-                      >
-                        {header.isPlaceholder ? (
-                          <></>
-                        ) : (
-                          <div
-                            className={clsx(
-                              header.column.getCanSort()
-                                ? 'flex cursor-pointer select-none'
-                                : '',
-                              ['int', 'float'].includes(
-                                header.column.columnDef.meta!.type,
-                              ) && 'justify-end',
-                            )}
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            {header.column.getCanSort() && (
-                              <ChevronUpDownIcon className="mr-1 w-4" />
-                            )}
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                            {{
-                              asc: <ChevronDownIcon className="ml-1 w-4" />,
-                              desc: <ChevronUpIcon className="ml-1 w-4" />,
-                            }[header.column.getIsSorted() as string] ?? null}
-                          </div>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+          )}
+          <tbody>
+            {paddingTop > 0 && (
+              <tr>
+                <td style={{ height: `${paddingTop}px` }} />
+              </tr>
+            )}
+            {isArrayNotEmpty(virtualRows) ? (
+              virtualRows.map(virtualRow => {
+                const row = rows[virtualRow.index]!
+
+                return (
+                  <tr
+                    key={row.id}
+                    className="even:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
+                    style={{ maxHeight: `${virtualRow.size}px` }}
+                  >
+                    <td
+                      style={{ maxHeight: `${virtualRow.size}px` }}
+                      className="pl-2 pr-4 text-sm border-r-2 last:border-r-0 border-light dark:border-dark"
+                    >
+                      {row.index + 1}
+                    </td>
+                    {row.getVisibleCells().map(cell => (
+                      <td
+                        key={cell.id}
+                        style={{ maxHeight: `${virtualRow.size}px` }}
+                        className={clsx(
+                          'p-4 py-1 border-r-2 last:border-r-0 border-light dark:border-dark',
+                          ['int', 'float'].includes(
+                            cell.column.columnDef.meta!.type,
+                          ) && 'text-right',
                         )}
-                      </th>
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </td>
                     ))}
                   </tr>
-                ))}
-              </thead>
+                )
+              })
+            ) : (
+              <GhostRows
+                columns={columns.length > 0 ? columns.length : undefined}
+              />
             )}
-            <tbody>
-              {isArrayNotEmpty(virtualRows) ? (
-                virtualRows.map(virtualRow => {
-                  const row = rows[virtualRow.index]!
-
-                  return (
-                    <tr
-                      key={row.id}
-                      className="even:bg-neutral-10 hover:text-neutral-900 hover:bg-secondary-10 dark:hover:text-neutral-100"
-                      style={{ height: `${virtualRow.size}px` }}
-                    >
-                      <td className="pl-2 pr-4 pt-2 text-sm pb-1 border-r-2 last:border-r-0 border-light dark:border-dark">
-                        {row.index + 1}
-                      </td>
-                      {row.getVisibleCells().map(cell => (
-                        <td
-                          key={cell.id}
-                          className={clsx(
-                            'p-4 py-1 border-r-2 last:border-r-0 border-light dark:border-dark',
-                            ['int', 'float'].includes(
-                              cell.column.columnDef.meta!.type,
-                            ) && 'text-right',
-                          )}
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  )
-                })
-              ) : (
-                <GhostRows
-                  columns={columns.length > 0 ? columns.length : undefined}
-                />
-              )}
-            </tbody>
-          </table>
-        </div>
+            {paddingBottom > 0 && (
+              <tr>
+                <td style={{ height: `${paddingBottom}px` }} />
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
       <Footer count={rows.length} />
     </div>
