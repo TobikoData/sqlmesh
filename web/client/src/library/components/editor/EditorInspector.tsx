@@ -246,7 +246,7 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
             sendQuery()
           }}
         >
-          Run Query
+          {isFetching ? 'Running Query...' : 'Run Query'}
         </Button>
       </InspectorActions>
     </>
@@ -273,7 +273,7 @@ function FormActionsModel({
   const { refetch: getRender } = useApiRender(
     Object.assign(form, { model: model.name }),
   )
-  const { refetch: getEvaluate } = useApiEvaluate(
+  const { refetch: getEvaluate, isFetching } = useApiEvaluate(
     Object.assign(form, { model: model.name }),
   )
 
@@ -398,14 +398,14 @@ function FormActionsModel({
             <Button
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEvaluate)}
+              disabled={isFalse(shouldEvaluate) || isFetching}
               onClick={e => {
                 e.stopPropagation()
 
                 evaluateModel()
               }}
             >
-              Evaluate
+              {isFetching ? 'Evaluating...' : 'Evaluate'}
             </Button>
           )}
         </div>
@@ -432,7 +432,7 @@ function FormDiffModel({
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff({
+  const { refetch: getDiff, isFetching } = useApiTableDiff({
     source: selectedSource,
     target: target.value,
     model_or_snapshot: model.name,
@@ -550,14 +550,14 @@ function FormDiffModel({
               className="ml-2"
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
-              disabled={isFalse(shouldEnableAction)}
+              disabled={isFalse(shouldEnableAction) || isFetching}
               onClick={e => {
                 e.stopPropagation()
 
                 getTableDiff()
               }}
             >
-              Get Diff
+              {isFetching ? 'Getting Diff...' : 'Get Diff'}
             </Button>
           )}
         </div>
@@ -575,13 +575,14 @@ function FormDiff(): JSX.Element {
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff } = useApiTableDiff({
+  const { refetch: getDiff, isFetching } = useApiTableDiff({
     source,
     target,
     limit,
     on,
     where,
   })
+
   function getTableDiff(): void {
     setPreviewDiff(undefined)
 
@@ -692,14 +693,14 @@ function FormDiff(): JSX.Element {
           className="ml-2"
           size={EnumSize.sm}
           variant={EnumVariant.Alternative}
-          disabled={isFalse(shouldEnableAction)}
+          disabled={isFalse(shouldEnableAction) || isFetching}
           onClick={e => {
             e.stopPropagation()
 
             getTableDiff()
           }}
         >
-          Get Diff
+          {isFetching ? 'Getting Diff...' : 'Get Diff'}
         </Button>
       </InspectorActions>
     </>
