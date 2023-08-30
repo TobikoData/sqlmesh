@@ -702,3 +702,53 @@ def python_func(**kwargs):
     )
 
     assert adapter_mock.insert_overwrite_by_time_partition.call_args[0][1].to_dict() == output_dict
+
+
+def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.SUPPORTS_CLONING = True
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds
+                )
+            );
+
+            SELECT 1::INT as a, ds::DATE FROM a;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.create_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
+        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        storage_format=None,
+        partitioned_by=[exp.to_column("ds")],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+    )
+
+    adapter_mock.clone_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
+        replace=True,
+    )
+
+    adapter_mock.alter_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
+    )
+
+    adapter_mock.drop_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source"
+    )
