@@ -39,6 +39,30 @@ class MSSQLEngineAdapter(
     """
 
     DIALECT: str = "tsql"
+    COLUMNS_TABLE = "information_schema.columns"
+
+    def columns(
+        self, table_name: TableName, include_pseudo_columns: bool = False
+    ) -> t.Dict[str, exp.DataType]:
+        """
+        Fetches column names and types for the target table.
+
+        MsSql doesn't support describe, using approach in base Postgres adapter.
+        """
+        table = exp.to_table(table_name)
+        sql = (
+            exp.select("column_name", "data_type")
+            .from_(self.COLUMNS_TABLE)
+            .where(f"table_name = '{table.alias_or_name}' AND table_schema = '{table.args['db']}'")
+        )
+        self.execute(sql)
+        resp = self.cursor.fetchall()
+        if not resp:
+            SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
+        return {
+            column_name: exp.DataType.build(data_type, dialect=self.dialect)
+            for column_name, data_type in resp
+        }
 
     def table_exists(self, table_name: TableName) -> bool:
         """
