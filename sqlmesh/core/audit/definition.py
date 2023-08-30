@@ -20,7 +20,7 @@ from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_er
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable
-from sqlmesh.utils.pydantic import PydanticModel, field_validator
+from sqlmesh.utils.pydantic import PydanticModel, field_validator, model_validator
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
@@ -311,6 +311,15 @@ class StandaloneAudit(_Node):
     _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def validate_fields(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        if not "name" in values and "audit" in values:
+            values["name"] = t.cast(Audit, values["audit"]).name
+        return values
+
     @property
     def depends_on(self) -> t.Set[str]:
         if self._depends_on is None:
@@ -392,7 +401,6 @@ class StandaloneAudit(_Node):
 
 
 def create_standalone_audit(
-    name: str,
     audit: Audit,
     *,
     path: Path = Path(),
@@ -401,7 +409,6 @@ def create_standalone_audit(
 ) -> StandaloneAudit:
     try:
         standalone = StandaloneAudit(
-            name=name,
             audit=audit,
             **{
                 "depends_on": depends_on,

@@ -135,7 +135,6 @@ class TestConfig(GeneralConfig):
             return audit
 
         return create_standalone_audit(
-            self.name,
             audit,
             path=self.path,
             depends_on={model.sql_name for model in test_context.refs.values()}.union(

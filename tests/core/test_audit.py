@@ -1,7 +1,7 @@
 import pytest
 from sqlglot import exp, parse, parse_one
 
-from sqlmesh.core.audit import Audit, builtin
+from sqlmesh.core.audit import Audit, builtin, create_standalone_audit
 from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, create_sql_model
 from sqlmesh.utils.errors import AuditConfigError
 
@@ -343,4 +343,18 @@ def test_chi_square_audit(model: Model):
     assert (
         rendered_query.sql()
         == 'WITH "samples" AS (SELECT "a" AS "x_a", "b" AS "x_b" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE NOT "a" IS NULL AND NOT "b" IS NULL), "contingency_table" AS (SELECT "x_a", "x_b", COUNT(*) AS "observed", (SELECT COUNT(*) FROM "samples" AS "t" WHERE "r"."x_a" = "t"."x_a") AS "tot_a", (SELECT COUNT(*) FROM "samples" AS "t" WHERE "r"."x_b" = "t"."x_b") AS "tot_b", (SELECT COUNT(*) FROM "samples") AS "g_t" /* g_t is the grand total */ FROM "samples" AS "r" GROUP BY "x_a", "x_b") SELECT ((SELECT COUNT(DISTINCT "x_a") FROM "contingency_table") - 1) * ((SELECT COUNT(DISTINCT "x_b") FROM "contingency_table") - 1) AS "degrees_of_freedom", SUM(("observed" - ("tot_a" * "tot_b" / "g_t")) * ("observed" - ("tot_a" * "tot_b" / "g_t")) / ("tot_a" * "tot_b" / "g_t")) AS "chi_square" FROM "contingency_table" HAVING NOT "chi_square" > 9.48773'
+    )
+
+
+def test_standalone_audit(model: Model, assert_exp_eq):
+    audit = Audit(
+        name="test_audit", query=parse_one(f"SELECT * FROM {model.name} WHERE col IS NULL")
+    )
+    standalone_audit = create_standalone_audit(audit)
+
+    assert standalone_audit.depends_on == {model.name}
+
+    rendered_query = audit.render_query(standalone_audit)
+    assert_exp_eq(
+        rendered_query, """SELECT * FROM "db"."test_model" AS "test_model" WHERE "col" IS NULL"""
     )

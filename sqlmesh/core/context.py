@@ -391,6 +391,12 @@ class Context(BaseContext):
             self.dag = project.dag
             gc.enable()
 
+            duplicates = set(self._models) & set(self._standalone_audits)
+            if duplicates:
+                raise ConfigError(
+                    f"Models and Standalone audits cannot have the same name: {duplicates}"
+                )
+
         return self
 
     def run(
