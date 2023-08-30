@@ -383,6 +383,7 @@ class EngineAdapter:
         target_table_name: TableName,
         source_table_name: TableName,
         replace: bool = False,
+        clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         **kwargs: t.Any,
     ) -> None:
         """Creates a table with the target name by cloning the source table.
@@ -399,7 +400,7 @@ class EngineAdapter:
                 this=exp.to_table(target_table_name),
                 kind="TABLE",
                 replace=replace,
-                clone=exp.Clone(this=exp.to_table(source_table_name)),
+                clone=exp.Clone(this=exp.to_table(source_table_name), **(clone_kwargs or {})),
                 **kwargs,
             )
         )

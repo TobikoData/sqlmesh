@@ -13,6 +13,7 @@ from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter._typing import DF, PySparkSession
 
 logger = logging.getLogger(__name__)
@@ -143,3 +144,21 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         if not isinstance(df, pd.DataFrame):
             return df.toPandas()
         return df
+
+    def clone_table(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        replace: bool = False,
+        clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        clone_kwargs = clone_kwargs or {}
+        clone_kwargs["shallow"] = True
+        super().clone_table(
+            target_table_name,
+            source_table_name,
+            replace=replace,
+            clone_kwargs=clone_kwargs,
+            **kwargs,
+        )
