@@ -377,7 +377,7 @@ class SnapshotEvaluator:
         # If a snapshot reuses an existing version we assume that the table for that version
         # has already been created, so we only need to create a temporary table or a clone.
         is_dev = snapshot.is_forward_only or snapshot.is_indirect_non_breaking
-        table_name = snapshot.table_name(is_dev=is_dev)
+        target_table_name = snapshot.table_name(is_dev=is_dev)
 
         parent_snapshots_by_name = {
             snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
@@ -390,12 +390,25 @@ class SnapshotEvaluator:
             is_dev=is_dev,
         )
 
+        evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
+
         with self.adapter.transaction(TransactionType.DDL), self.adapter.session():
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
-            _evaluation_strategy(snapshot, self.adapter).create(
-                snapshot.model, table_name, **render_kwargs
-            )
+            if is_dev and snapshot.is_materialized and self.adapter.SUPPORTS_CLONING:
+                tmp_table_name = f"{target_table_name}__schema_migration_source"
+                source_table_name = snapshot.table_name()
+
+                logger.info(f"Cloning table '{source_table_name}' into '{target_table_name}'")
+
+                evaluation_strategy.create(snapshot.model, tmp_table_name, **render_kwargs)
+                try:
+                    self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
+                    self.adapter.alter_table(target_table_name, tmp_table_name)
+                finally:
+                    self.adapter.drop_table(tmp_table_name)
+            else:
+                evaluation_strategy.create(snapshot.model, target_table_name, **render_kwargs)
 
             self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
