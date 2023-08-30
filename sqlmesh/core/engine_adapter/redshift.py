@@ -6,11 +6,11 @@ import uuid
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.dialect import pandas_to_sql
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
+    from sqlmesh.core.engine_adapter._typing import Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF, SourceQuery
 
 
@@ -68,10 +68,11 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         self.execute(query, quote_identifiers=quote_identifiers)
         return self.cursor.fetch_dataframe()
 
-    def _create_table_from_source_query(
+    def _create_table_from_source_queries(
         self,
         table_name: TableName,
-        source_query: SourceQuery,
+        source_queries: t.List[SourceQuery],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
@@ -84,32 +85,35 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         then we run the query with exists set to False since we just confirmed it doesn't exist.
         """
         if not exists:
-            return super()._create_table_from_source_query(
-                table_name, source_query, exists, **kwargs
+            return super()._create_table_from_source_queries(
+                table_name, source_queries, columns_to_types, exists, **kwargs
             )
         if self.table_exists(table_name):
             return
-        super()._create_table_from_source_query(table_name, source_query, exists=False, **kwargs)
+        super()._create_table_from_source_queries(
+            table_name, source_queries, exists=False, **kwargs
+        )
 
     @classmethod
-    def _pandas_to_sql(
+    def _values_to_sql(
         cls,
-        df: pd.DataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        batch_size: int = 0,
+        values: t.List[t.Tuple[t.Any, ...]],
+        columns_to_types: t.Dict[str, exp.DataType],
+        batch_start: int,
+        batch_end: int,
         alias: str = "t",
         contains_json: bool = False,
-    ) -> t.Generator[exp.Select, None, None]:
+    ) -> Query:
         """
         Extracts the `VALUES` expression from the SELECT statement and also removes the alias.
         """
-        for expression in pandas_to_sql(df, columns_to_types, batch_size, alias):
-            values_expression = t.cast(exp.Select, expression.find(exp.Values))
-            if contains_json:
-                values_expression = t.cast(exp.Select, cls._escape_json(values_expression))
-            values_expression.parent = None
-            values_expression.set("alias", None)
-            yield values_expression
+        query = super()._values_to_sql(
+            values, columns_to_types, batch_start, batch_end, alias, contains_json
+        )
+        values_expression = t.cast(exp.Select, query.find(exp.Values))
+        values_expression.parent = None
+        values_expression.set("alias", None)
+        return values_expression
 
     def replace_query(
         self,
@@ -126,14 +130,16 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         If it does exist then we need to do the:
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
-        source_query = self._ensure_source_query(
+        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
-        if not source_query.is_from_df:
+        if not isinstance(query_or_df, pd.DataFrame):
             with self.transaction():
                 self.drop_table(table_name, exists=True)
-                return self._create_table_from_source_query(table_name, source_query, exists=True)
-        columns_to_types = source_query.columns_to_types or self.columns(table_name)
+                return self._create_table_from_source_queries(
+                    table_name, source_queries, exists=True
+                )
+        columns_to_types = columns_to_types or self.columns(table_name)
         target_table = exp.to_table(table_name)
         target_exists = self.table_exists(target_table)
         if target_exists:
@@ -145,13 +151,13 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
                 old_table = target_table.copy()
                 old_table.set("this", exp.to_identifier(old_table_name))
                 self.create_table(temp_table, columns_to_types, exists=False, **kwargs)
-                self._insert_append_source_query(temp_table, source_query)
+                self._insert_append_source_queries(temp_table, source_queries, columns_to_types)
                 self.rename_table(target_table, old_table)
                 self.rename_table(temp_table, target_table)
                 self.drop_table(old_table)
         else:
             self.create_table(target_table, columns_to_types, exists=False, **kwargs)
-            self._insert_append_source_query(target_table, source_query)
+            self._insert_append_source_queries(target_table, source_queries, columns_to_types)
 
     def _short_hash(self) -> str:
         return uuid.uuid4().hex[:8]

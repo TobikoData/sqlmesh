@@ -15,7 +15,6 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
     import pymssql
@@ -73,36 +72,31 @@ class MSSQLEngineAdapter(
     def connection(self) -> pymssql.Connection:
         return self.cursor.connection
 
-    def _df_to_source_query(
+    def _df_to_source_queries(
         self,
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
         target_table: t.Optional[TableName] = None,
-    ) -> SourceQuery:
-        def generator(
-            df: pd.DataFrame,
-            columns_to_types: t.Dict[str, exp.DataType],
-            target_table: t.Optional[TableName] = None,
-        ) -> t.Generator[Query, None, None]:
-            temp_table = self._get_temp_table(target_table or "pandas")
-            self.create_table(temp_table, columns_to_types)
-            rows: t.List[t.Iterable[t.Any]] = list(df.itertuples(False, None))
+    ) -> t.List[SourceQuery]:
+        assert isinstance(df, pd.DataFrame)
+        assert columns_to_types
+        full_columns_to_types = columns_to_types
+        temp_table = self._get_temp_table(target_table or "pandas")
+
+        def query_factory() -> Query:
+            self.create_table(temp_table, full_columns_to_types)
+            rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
             conn.bulk_copy(temp_table.name, rows)
-            try:
-                yield exp.select(*columns_to_types).from_(temp_table)
-            finally:
-                self.drop_table(temp_table)
+            return exp.select(*full_columns_to_types).from_(temp_table)
 
-        assert isinstance(df, pd.DataFrame)
-        columns_to_types = columns_to_types or columns_to_types_from_df(df)
-        return SourceQuery(
-            generator=generator(df, columns_to_types, target_table),
-            columns_to_types=columns_to_types,
-            batched=False,
-            is_from_df=True,
-        )
+        return [
+            SourceQuery(
+                query_factory=query_factory,
+                cleanup_func=lambda: self.drop_table(temp_table),
+            )
+        ]
 
     def _get_data_objects(
         self,

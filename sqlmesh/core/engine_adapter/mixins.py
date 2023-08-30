@@ -129,7 +129,8 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
-        source_query: SourceQuery,
+        source_queries: t.List[SourceQuery],
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         where: t.Optional[exp.Condition] = None,
     ) -> None:
         """
@@ -137,27 +138,28 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         doing an "INSERT OVERWRITE" using a Merge expression but with the
         predicate being `False`.
         """
-        columns_to_types = source_query.columns_to_types or self.columns(table_name)
-        for query in source_query.single_query:
-            query = self._add_where_to_query(query, where)
-            columns = [exp.to_column(col) for col in columns_to_types]
-            when_not_matched_by_source = exp.When(
-                matched=False,
-                source=True,
-                condition=where,
-                then=exp.Delete(),
-            )
-            when_not_matched_by_target = exp.When(
-                matched=False,
-                source=False,
-                then=exp.Insert(
-                    this=exp.Tuple(expressions=columns),
-                    expression=exp.Tuple(expressions=columns),
-                ),
-            )
-            self._merge(
-                target_table=table_name,
-                query=query,
-                on=self.FALSE_PREDICATE,
-                match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
-            )
+        columns_to_types = columns_to_types or self.columns(table_name)
+        for source_query in source_queries:
+            with source_query as query:
+                query = self._add_where_to_query(query, where)
+                columns = [exp.to_column(col) for col in columns_to_types]
+                when_not_matched_by_source = exp.When(
+                    matched=False,
+                    source=True,
+                    condition=where,
+                    then=exp.Delete(),
+                )
+                when_not_matched_by_target = exp.When(
+                    matched=False,
+                    source=False,
+                    then=exp.Insert(
+                        this=exp.Tuple(expressions=columns),
+                        expression=exp.Tuple(expressions=columns),
+                    ),
+                )
+                self._merge(
+                    target_table=table_name,
+                    query=query,
+                    on=self.FALSE_PREDICATE,
+                    match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
+                )

@@ -1084,9 +1084,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
     assert to_sql_calls(adapter) == [
-        'DROP TABLE IF EXISTS "test_table"',
-        'CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)',
-        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
         'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")',
         'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")',
     ]

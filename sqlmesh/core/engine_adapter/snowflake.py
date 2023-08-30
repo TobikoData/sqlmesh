@@ -23,21 +23,22 @@ class SnowflakeEngineAdapter(EngineAdapter):
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
 
-    def _df_to_source_query(
+    def _df_to_source_queries(
         self,
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
         target_table: t.Optional[TableName] = None,
-    ) -> SourceQuery:
-        def generator(
-            df: pd.DataFrame,
-            columns_to_types: t.Dict[str, exp.DataType],
-            target_table: t.Optional[TableName] = None,
-        ) -> t.Generator[Query, None, None]:
+    ) -> t.List[SourceQuery]:
+        assert isinstance(df, pd.DataFrame)
+        full_columns_to_types: t.Dict[
+            str, exp.DataType
+        ] = columns_to_types or columns_to_types_from_df(df)
+        temp_table = self._get_temp_table(target_table or "pandas")
+
+        def query_factory() -> Query:
             from snowflake.connector.pandas_tools import write_pandas
 
-            temp_table = self._get_temp_table(target_table or "pandas")
             # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
             #
             # The above issue has already been fixed upstream, but we keep the following
@@ -45,9 +46,9 @@ class SnowflakeEngineAdapter(EngineAdapter):
             self.cursor.execute(f'USE SCHEMA "{temp_table.db}"')
 
             # See: https://stackoverflow.com/a/75627721
-            for column, kind in (columns_to_types or {}).items():
-                if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):
-                    df[column] = pd.to_datetime(df[column]).dt.date
+            for column, kind in (full_columns_to_types or {}).items():
+                if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):  # type: ignore
+                    df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
 
             write_pandas(
                 self._connection_pool.get(),
@@ -56,19 +57,14 @@ class SnowflakeEngineAdapter(EngineAdapter):
                 schema=temp_table.db,
                 chunk_size=self.DEFAULT_BATCH_SIZE,
             )
-            try:
-                yield exp.select(*columns_to_types).from_(temp_table)
-            finally:
-                self.drop_table(temp_table)
+            return exp.select(*full_columns_to_types).from_(temp_table)
 
-        assert isinstance(df, pd.DataFrame)
-        columns_to_types = columns_to_types or columns_to_types_from_df(df)
-        return SourceQuery(
-            generator=generator(df, columns_to_types, target_table),
-            columns_to_types=columns_to_types,
-            batched=False,
-            is_from_df=True,
-        )
+        return [
+            SourceQuery(
+                query_factory=query_factory,
+                cleanup_func=lambda: self.drop_table(temp_table),
+            )
+        ]
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

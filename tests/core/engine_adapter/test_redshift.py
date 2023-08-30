@@ -109,12 +109,17 @@ def test_create_table_from_query_not_exists_no_if_not_exists(
     )
 
 
-def test_pandas_to_sql(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+def test_values_to_sql(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    results = list(adapter._pandas_to_sql(df=df, columns_to_types={"a": "int", "b": "int"}))
-    assert len(results) == 1
-    assert results[0].sql(dialect="redshift") == "VALUES (1, 4), (2, 5), (3, 6)"
+    result = adapter._values_to_sql(
+        values=list(df.itertuples(index=False, name=None)),
+        columns_to_types={"a": "int", "b": "int"},
+        batch_start=0,
+        batch_end=2,
+    )
+    # 3,6 is missing since the batch range excluded it
+    assert result.sql(dialect="redshift") == "VALUES (1, 4), (2, 5)"
 
 
 def test_replace_query_with_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):

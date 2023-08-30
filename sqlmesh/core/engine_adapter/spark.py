@@ -23,7 +23,12 @@ if t.TYPE_CHECKING:
     from pyspark.sql import types as spark_types
 
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
+    from sqlmesh.core.engine_adapter._typing import (
+        DF,
+        PySparkDataFrame,
+        PySparkSession,
+        Query,
+    )
     from sqlmesh.core.engine_adapter.base import QueryOrDF
     from sqlmesh.core.node import IntervalUnit
 
@@ -93,33 +98,24 @@ class SparkEngineAdapter(EngineAdapter):
             return value
         return None
 
-    def _df_to_source_query(
+    def _df_to_source_queries(
         self,
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
         target_table: t.Optional[TableName] = None,
-    ) -> SourceQuery:
-        def generator(
-            df: DF,
-            columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-            target_table: t.Optional[TableName] = None,
-        ) -> t.Generator[exp.Select, None, None]:
+    ) -> t.List[SourceQuery]:
+        def query_factory() -> Query:
             df = self._ensure_pyspark_df(df, columns_to_types)
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
             df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
             temp_table.set("db", "global_temp")
-            yield exp.select("*").from_(temp_table)
+            return exp.select("*").from_(temp_table)
 
         if self._use_spark_session:
-            return SourceQuery(
-                generator=generator(df, columns_to_types, target_table),
-                columns_to_types=columns_to_types,
-                batched=False,
-                is_from_df=True,
-            )
+            return [SourceQuery(query_factory=query_factory)]
         else:
-            return super()._df_to_source_query(df, columns_to_types, batch_size, target_table)
+            return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
 
     def _ensure_pyspark_df(
         self, generic_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -180,11 +176,11 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> None:
         # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
         # currently check for storage formats we will just do an insert/overwrite.
-        source_query = self._ensure_source_query(
+        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
         return self._insert_overwrite_by_condition(
-            table_name, source_query, where=exp.condition("1=1")
+            table_name, source_queries, columns_to_types, where=exp.condition("1=1")
         )
 
     def create_state_table(

@@ -20,7 +20,6 @@ from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
     from google.api_core.retry import Retry
@@ -88,43 +87,39 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
         return params
 
-    def _df_to_source_query(
+    def _df_to_source_queries(
         self,
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
         target_table: t.Optional[TableName] = None,
-    ) -> SourceQuery:
-        def generator(
-            df: pd.DataFrame,
-            columns_to_types: t.Dict[str, exp.DataType],
-            target_table: t.Optional[TableName] = None,
-        ) -> t.Generator[Query, None, None]:
-            temp_table = self._get_temp_table(target_table or "pandas")
-            temp_bq_table = self.__get_temp_bq_table(temp_table, columns_to_types)
+    ) -> t.List[SourceQuery]:
+        assert columns_to_types
+        temp_bq_table = self.__get_temp_bq_table(
+            self._get_temp_table(target_table or "pandas"), columns_to_types
+        )
+        temp_table = exp.table_(
+            temp_bq_table.table_id,
+            db=temp_bq_table.dataset_id,
+            catalog=temp_bq_table.project,
+        )
+
+        def query_factory() -> Query:
+            # Make mypy happy
+            assert isinstance(df, pd.DataFrame)
+            assert columns_to_types
             self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
             result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
             if result.errors:
                 raise SQLMeshError(result.errors)
+            return exp.select(*columns_to_types).from_(temp_table)
 
-            temp_table = exp.table_(
-                temp_bq_table.table_id,
-                db=temp_bq_table.dataset_id,
-                catalog=temp_bq_table.project,
+        return [
+            SourceQuery(
+                query_factory=query_factory,
+                cleanup_func=lambda: self.drop_table(temp_table),
             )
-            try:
-                yield exp.select(*columns_to_types).from_(temp_table)
-            finally:
-                self.drop_table(temp_table)
-
-        assert isinstance(df, pd.DataFrame)
-        columns_to_types = columns_to_types or columns_to_types_from_df(df)
-        return SourceQuery(
-            generator=generator(df, columns_to_types, target_table),
-            columns_to_types=columns_to_types,
-            batched=False,
-            is_from_df=True,
-        )
+        ]
 
     def _begin_session(self) -> None:
         from google.cloud.bigquery import QueryJobConfig
@@ -367,12 +362,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
             self._insert_overwrite_by_condition(
                 table_name,
-                SourceQuery(
-                    generator=iter([exp.select("*").from_(temp_table_name)]),
-                    columns_to_types=columns_to_types,
-                    batched=False,
-                    is_from_df=False,
-                ),
+                [SourceQuery(query_factory=lambda: exp.select("*").from_(temp_table_name))],
+                columns_to_types,
                 where=where,
             )
 
