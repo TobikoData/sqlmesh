@@ -37,7 +37,7 @@ repos:
         files: *files
         require_serial: true
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: "efd8b1e"
+    rev: "fc26039"
     hooks:
       - id: prettier
         name: prettier
@@ -47,7 +47,7 @@ repos:
         require_serial: true
         language: node
   - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: "4f87a8d"
+    rev: "4620ec5"
     hooks:
       - id: eslint
         name: eslint
@@ -56,15 +56,15 @@ repos:
         entry: eslint --fix
         additional_dependencies:
           [
-            "@typescript-eslint/eslint-plugin@5.50.0",
-            "@typescript-eslint/parser@5.50.0",
-            eslint@8.44.0,
-            eslint-config-prettier@8.8.0,
-            eslint-config-standard-with-typescript@36.0.0,
-            eslint-plugin-import@2.27.4,
-            eslint-plugin-n@15.0.0,
+            "@typescript-eslint/eslint-plugin@6.5.0",
+            "@typescript-eslint/parser@6.5.0",
+            eslint@8.48.0,
+            eslint-config-prettier@9.0.0,
+            eslint-config-standard-with-typescript@39.0.0,
+            eslint-plugin-import@2.28.1,
+            eslint-plugin-n@16.0.2,
             eslint-plugin-promise@6.1.1,
-            eslint-plugin-react@7.32.2,
+            eslint-plugin-react@7.33.2,
           ]
         require_serial: true
         language: node

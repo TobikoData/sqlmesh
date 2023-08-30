@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest'
 import { ModelArtifact } from './artifact'
 
 describe('Model Artifact', () => {
