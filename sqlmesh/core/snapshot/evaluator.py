@@ -430,7 +430,7 @@ class SnapshotEvaluator:
 
                 logger.info(f"Cloning table '{source_table_name}' into '{target_table_name}'")
 
-                evaluation_strategy.create(snapshot.model, tmp_table_name, **render_kwargs)
+                evaluation_strategy.create(snapshot, tmp_table_name, **render_kwargs)
                 try:
                     self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
                     self.adapter.alter_table(target_table_name, tmp_table_name)
