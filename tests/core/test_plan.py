@@ -636,7 +636,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         "b": updated_snapshot_b,
         "c": updated_snapshot_c,
     }
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = set()
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {
