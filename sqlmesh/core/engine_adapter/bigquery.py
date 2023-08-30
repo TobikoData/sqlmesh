@@ -47,6 +47,7 @@ class BigQueryEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_CLONING = True
 
     # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
     # Can explore doing this with the API in the future

@@ -88,6 +88,7 @@ class EngineAdapter:
     SUPPORTS_INDEXES = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
+    SUPPORTS_CLONING = False
     SCHEMA_DIFFER = SchemaDiffer()
 
     def __init__(
@@ -376,6 +377,33 @@ class EngineAdapter:
             ),
         )
         self.execute(create_expression)
+
+    def clone_table(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        replace: bool = False,
+        clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Creates a table with the target name by cloning the source table.
+
+        Args:
+            target_table_name: The name of the table that should be created.
+            source_table_name: The name of the source table that should be cloned.
+            replace: Whether or not to replace an existing table.
+        """
+        if not self.SUPPORTS_CLONING:
+            raise NotImplementedError(f"Engine does not support cloning: {type(self)}")
+        self.execute(
+            exp.Create(
+                this=exp.to_table(target_table_name),
+                kind="TABLE",
+                replace=replace,
+                clone=exp.Clone(this=exp.to_table(source_table_name), **(clone_kwargs or {})),
+                **kwargs,
+            )
+        )
 
     def drop_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a table.

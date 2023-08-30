@@ -768,3 +768,18 @@ def test_rename_table(make_mocked_engine_adapter: t.Callable):
 
     adapter.rename_table("old_table", "new_table")
     adapter.cursor.execute.assert_called_once_with('ALTER TABLE "old_table" RENAME TO "new_table"')
+
+
+def test_clone_table(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter, dialect="bigquery")
+
+    with pytest.raises(NotImplementedError):
+        adapter.clone_table("target_table", "source_table")
+
+    adapter.SUPPORTS_CLONING = True
+
+    adapter.clone_table("target_table", "source_table")
+
+    adapter.cursor.execute.assert_called_once_with(
+        "CREATE TABLE `target_table` CLONE `source_table`"
+    )
