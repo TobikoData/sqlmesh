@@ -173,7 +173,7 @@ function File({
                 openFileInNewTab()
               }}
             >
-              Open in new tab
+              Open in New Tab
               <div className="ml-auto pl-5"></div>
             </ContextMenu.Item>
             <ContextMenu.Item
