@@ -11,6 +11,7 @@ const Docs = lazy(() => import('./library/pages/docs/Docs'))
 const Tests = lazy(() => import('./library/pages/tests/Tests'))
 const Audits = lazy(() => import('./library/pages/audits/Audits'))
 const DocsContent = lazy(() => import('./library/pages/docs/Content'))
+const PlanContent = lazy(() => import('./library/pages/plan/Content'))
 const Errors = lazy(() => import('./library/pages/errors/Errors'))
 const ErrorContent = lazy(() => import('./library/pages/errors/Content'))
 const Welcome = lazy(() => import('./library/components/banner/Welcome'))
@@ -145,6 +146,66 @@ export const router = createBrowserRouter([
       {
         path: 'plan',
         element: <Plan />,
+        children: [
+          {
+            index: true,
+            element: (
+              <Welcome
+                headline="Welcome to plan"
+                tagline="Here you can run the plan and apply the changes."
+              />
+            ),
+          },
+          {
+            path: '*',
+            element: (
+              <NotFound
+                link={EnumRoutes.Plan}
+                message="Back To Plan"
+              />
+            ),
+          },
+          {
+            path: 'environments',
+            children: [
+              {
+                index: true,
+                element: (
+                  <Welcome
+                    headline="Welcome to plan"
+                    tagline="Here you can run the plan and apply the changes."
+                  />
+                ),
+              },
+              {
+                path: '*',
+                element: (
+                  <NotFound
+                    link={EnumRoutes.Plan}
+                    message="Back To Plan"
+                  />
+                ),
+              },
+              {
+                path: ':environmentName',
+                element: (
+                  <Suspense
+                    fallback={
+                      <div className="flex justify-center items-center w-full h-full">
+                        <Loading className="inline-block">
+                          <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
+                          <h3 className="text-md">Loading Content...</h3>
+                        </Loading>
+                      </div>
+                    }
+                  >
+                    <PlanContent />
+                  </Suspense>
+                ),
+              },
+            ],
+          },
+        ],
       },
       {
         path: 'tests',

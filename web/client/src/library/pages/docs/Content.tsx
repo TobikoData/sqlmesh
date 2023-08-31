@@ -58,7 +58,7 @@ export default function Content(): JSX.Element {
         <NotFound
           link={EnumRoutes.IdeDocs}
           descritpion={
-            modelName == null ? undefined : `Model ${modelName} Does Not Exist`
+            isNil(modelName) ? undefined : `Model ${modelName} Does Not Exist`
           }
           message="Back To Docs"
         />

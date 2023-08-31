@@ -1,5 +1,4 @@
 import Banner from '@components/banner/Banner'
-import { useStoreContext } from '~/context/context'
 import { EnumVariant } from '~/types/enum'
 import { usePlan } from './context'
 import { isObjectNotEmpty } from '@utils/index'
@@ -7,26 +6,29 @@ import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import ReportTestsErrors from '@components/report/ReportTestsErrors'
 import ReportErrors from '@components/report/ReportErrors'
+import { type ModelEnvironment } from '@models/environment'
 
-export default function PlanHeader(): JSX.Element {
-  const environment = useStoreContext(s => s.environment)
-
-  const { testsReportErrors } = usePlan()
+export default function PlanHeader({
+  environment,
+}: {
+  environment: ModelEnvironment
+}): JSX.Element {
+  // const { testsReportErrors } = usePlan()
 
   return (
-    <div className="flex flex-col py-2 w-full">
-      <div className="flex justify-between">
-        <h4 className="text-xl pb-2 px-6">
+    <div className="flex flex-col w-full">
+      <div className="flex justify-center items-center h-[65px]">
+        <h4 className="text-xl px-6">
           <span className="font-bold">Target Environment is</span>
           <b className="ml-2 px-2 py-1 font-sm rounded-md bg-primary-10 text-primary-500">
             {environment.name}
           </b>
         </h4>
-        <div className="px-6">
+        {/* <div className="px-6">
           <ReportErrors />
-        </div>
+        </div> */}
       </div>
-      <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--vertical px-6 ">
+      {/* <div className="w-full h-full overflow-auto hover:scrollbar scrollbar--vertical px-6 ">
         {environment.isInitial && environment.isDefault && (
           <Banner variant={EnumVariant.Warning}>
             <Disclosure defaultOpen={true}>
@@ -82,7 +84,7 @@ export default function PlanHeader(): JSX.Element {
             </Disclosure>
           </Banner>
         )}
-      </div>
+      </div> */}
     </div>
   )
 }

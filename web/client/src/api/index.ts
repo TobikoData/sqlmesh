@@ -346,6 +346,7 @@ export function useApiEvaluate(
       ...options,
       errorKey: EnumErrorKey.EvaluateModel,
       trigger: 'API -> useApiEvaluate',
+      delay: DELAY * 10, // With many models this can take a while
     },
   )
 }

@@ -3,7 +3,6 @@ import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { type RefObject, Suspense, useCallback, useMemo } from 'react'
 import { type ContextEnvironmentBackfill } from '~/api/client'
-import { useStoreContext } from '~/context/context'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -27,10 +26,13 @@ import { EnumVariant } from '~/types/enum'
 import Banner from '@components/banner/Banner'
 import TasksOverview from '../tasksOverview/TasksOverview'
 import ReportTestsErrors from '@components/report/ReportTestsErrors'
+import { type ModelEnvironment } from '@models/environment'
 
 export default function PlanWizard({
+  environment,
   setRefTasksOverview,
 }: {
+  environment: ModelEnvironment
   setRefTasksOverview: RefObject<HTMLDivElement>
 }): JSX.Element {
   const {
@@ -49,8 +51,6 @@ export default function PlanWizard({
     testsReportErrors,
     testsReportMessages,
   } = usePlan()
-
-  const environment = useStoreContext(s => s.environment)
 
   const planState = useStorePlan(s => s.state)
   const planAction = useStorePlan(s => s.action)
@@ -153,7 +153,7 @@ export default function PlanWizard({
   })
 
   return (
-    <div className="w-full h-full overflow-hidden overflow-y-auto p-4 hover:scrollbar scrollbar--vertical">
+    <div className="w-full h-full overflow-hidden overflow-y-scroll p-4 scrollbar scrollbar--vertical">
       <ul className="w-full">
         {planAction === EnumPlanAction.Run ? (
           <Plan.StepOptions className="w-full" />

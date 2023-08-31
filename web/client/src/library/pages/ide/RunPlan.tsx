@@ -342,7 +342,12 @@ export function SelectEnvironemnt({
             </span>
             <span className="pointer-events-none inset-y-0 right-0 flex items-center pl-2">
               <ChevronDownIcon
-                className="h-4 w-4 text-secondary-500 dark:text-primary-500"
+                className={clsx(
+                  'h-4 w-4',
+                  disabled
+                    ? 'text-neutral-600 dark:text-neutral-300'
+                    : 'text-secondary-500 dark:text-primary-500',
+                )}
                 aria-hidden="true"
               />
             </span>

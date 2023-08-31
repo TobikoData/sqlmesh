@@ -1,3 +1,4 @@
+import { type PlanProgress } from '@context/plan'
 import { type Environment } from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import { isArrayEmpty, isFalse, isNotNil, isStringEmptyOrNil } from '~/utils'
@@ -36,6 +37,7 @@ export class ModelEnvironment {
   private _initial: InitialEnvironmemt
   private _type: RelativeLocation
   private _createFrom: EnvironmentName
+  private _plan: Optional<PlanProgress>
 
   isModel = true
 
@@ -61,6 +63,10 @@ export class ModelEnvironment {
 
   get type(): string {
     return this._type
+  }
+
+  get plan(): Optional<PlanProgress> {
+    return this._plan
   }
 
   get createFrom(): string {
@@ -93,6 +99,10 @@ export class ModelEnvironment {
 
   update(initial: InitialEnvironmemt): void {
     this._initial = initial
+  }
+
+  setPlan(plan: Optional<PlanProgress>): void {
+    this._plan = plan
   }
 
   static save({

@@ -88,11 +88,42 @@ export default function Page({
     >
       <div className="flex flex-col h-full overflow-hidden">
         <div className="px-1 flex max-h-8 w-full items-center relative">
+          <div className="px-2">
+            <h3 className="flex items-center h-8 font-bold text-primary-500 text-sm">
+              <span className="inline-block">/</span>
+              {project?.name}
+            </h3>
+          </div>
+          <div className="h-8 flex w-full items-center justify-end py-0.5 text-neutral-500">
+            <div className="px-2">
+              <PlanChanges
+                environment={environment}
+                plan={dataPlan}
+                isLoading={isFetching}
+                hasChanges={hasChanges}
+              />
+            </div>
+            {showSelectEnvironmentButton && (
+              <SelectEnvironemnt
+                environment={environment}
+                disabled={shouldDisableActions}
+                className="border-none h-6 !m-0"
+                size={EnumSize.sm}
+              />
+            )}
+          </div>
+        </div>
+        <Divider />
+        <div className="px-1 flex max-h-8 w-full items-center relative">
           <div className="h-8 flex w-full items-center justify-center px-1 py-0.5 text-neutral-500">
             <Link
               title="File Explorer"
               to={EnumRoutes.Editor}
-              className="mx-0.5 py-1 flex items-center rounded-full"
+              className={clsx(
+                'mx-1 py-1 flex items-center rounded-full',
+                location.pathname.startsWith(EnumRoutes.Editor) &&
+                  'px-2 bg-neutral-10',
+              )}
             >
               {location.pathname.startsWith(EnumRoutes.Editor) ? (
                 <FolderIcon className="w-4" />
@@ -103,7 +134,11 @@ export default function Page({
             <Link
               title="Docs"
               to={EnumRoutes.Docs}
-              className="mx-0.5 py-1 px-2 flex items-center rounded-full bg-neutral-10"
+              className={clsx(
+                'mx-1 py-1 flex items-center rounded-full',
+                location.pathname.startsWith(EnumRoutes.Docs) &&
+                  'px-2 bg-neutral-10',
+              )}
             >
               {location.pathname.startsWith(EnumRoutes.Docs) ? (
                 <DocumentTextIcon className="w-4" />
@@ -116,7 +151,7 @@ export default function Page({
               title="Errors"
               to={errors.size === 0 ? '' : EnumRoutes.Errors}
               className={clsx(
-                'mx-0.5 py-1 flex items-center rounded-full',
+                'mx-1 py-1 flex items-center rounded-full',
                 errors.size === 0
                   ? 'opacity-50 cursor-not-allowed'
                   : 'px-2 bg-danger-10 text-danger-500',
@@ -138,7 +173,11 @@ export default function Page({
             <Link
               title="Tests"
               to={EnumRoutes.Tests}
-              className="px-1"
+              className={clsx(
+                'mx-0.5 py-1 flex items-center rounded-full',
+                location.pathname.startsWith(EnumRoutes.Tests) &&
+                  'px-2 bg-neutral-10',
+              )}
             >
               {location.pathname.startsWith(EnumRoutes.Tests) ? (
                 <DocumentCheckIcon className="w-4" />
@@ -149,7 +188,11 @@ export default function Page({
             <Link
               title="Audits"
               to={EnumRoutes.Audits}
-              className="px-1"
+              className={clsx(
+                'mx-1 py-1 flex items-center rounded-full',
+                location.pathname.startsWith(EnumRoutes.Audits) &&
+                  'px-2 bg-neutral-10',
+              )}
             >
               {location.pathname.startsWith(EnumRoutes.Audits) ? (
                 <ShieldCheckIcon className="w-4" />
@@ -160,39 +203,19 @@ export default function Page({
             <Link
               title="Plan"
               to={EnumRoutes.Plan}
-              className="mx-0.5 py-0.5 px-2 flex items-center rounded-full bg-success-10"
+              className="mx-1 py-0.5 px-2 flex items-center rounded-full bg-success-10"
             >
+              <b className="block mx-1 text-xs text-success-500">Plan</b>
               {location.pathname.startsWith(EnumRoutes.Plan) ? (
                 <PlayCircleIcon className="text-success-500 w-5" />
               ) : (
                 <OutlinePlayCircleIcon className="text-success-500 w-5" />
               )}
-              <PlanChanges
-                environment={environment}
-                plan={dataPlan}
-                isLoading={isFetching}
-                hasChanges={hasChanges}
-              />
             </Link>
           </div>
-          {showSelectEnvironmentButton && (
-            <SelectEnvironemnt
-              environment={environment}
-              disabled={shouldDisableActions}
-              className="border-none h-6 !m-0"
-              size={EnumSize.sm}
-            />
-          )}
         </div>
         <Divider />
         <div className="w-full h-full">{sidebar}</div>
-        <Divider />
-        <div className="flex px-2 items-center border-b-2 border-neutral-200 dark:border-dark-lighter">
-          <h3 className="flex items-center h-8 font-bold text-primary-500 text-sm">
-            <span className="inline-block">/</span>
-            {project?.name}
-          </h3>
-        </div>
       </div>
       <div className="w-full h-full">{content}</div>
     </SplitPane>
