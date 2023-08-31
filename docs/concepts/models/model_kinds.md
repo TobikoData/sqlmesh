@@ -267,7 +267,7 @@ SCD Type 2 is a model kind that supports [slowly changing dimensions](https://en
 
 SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your model. The `valid_from` column is the timestamp that the record became valid (inclusive) and the `valid_to` column is the timestamp that the record became invalid (exclusive). The `valid_to` column is set to `NULL` for the latest record.
 
-Therefore you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large.
+Therefore you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large. Also because this history is not available in the source table this model kind is considered [forward-only](../plans.md#forward-only-plans) and [restatements](../plans.md#restatement-plans) cannot be issued against them. 
 
 Currently SCD Type 2 only supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given was last updated. Soon we will also be supporting checking column values in cases where an update column is not available.
 
