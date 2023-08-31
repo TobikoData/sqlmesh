@@ -148,7 +148,7 @@ class StateReader(abc.ABC):
         def raise_error(lib: str, local: str | int, remote: str | int, ahead: bool = False) -> None:
             if ahead:
                 raise SQLMeshError(
-                    f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). Please run a migration."
+                    f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). Please run a migration ('sqlmesh migrate' command)."
                 )
             raise SQLMeshError(
                 f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote). Please upgrade {lib}."
