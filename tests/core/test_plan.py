@@ -364,7 +364,7 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
 def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds")))
+    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, 2, ds")))
 
     downstream_snapshot = make_snapshot(
         SqlModel(name="b", query=parse_one("select * from tbl"), depends_on={"a"}),
@@ -389,8 +389,8 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
 
     Plan(context_diff_mock)
 
-    assert updated_snapshot.version is None
-    assert updated_snapshot.change_category is None
+    assert updated_snapshot.version
+    assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
 
 
 def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):

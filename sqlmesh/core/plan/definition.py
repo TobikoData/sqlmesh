@@ -7,7 +7,11 @@ from collections import defaultdict
 from datetime import datetime
 from enum import Enum
 
-from sqlmesh.core.config import CategorizerConfig, EnvironmentSuffixTarget
+from sqlmesh.core.config import (
+    AutoCategorizationMode,
+    CategorizerConfig,
+    EnvironmentSuffixTarget,
+)
 from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
@@ -570,19 +574,19 @@ class Plan:
                                 model_with_missing_columns = downstream
                                 break
 
+                        new, old = self.context_diff.modified_snapshots[model_name]
                         if model_with_missing_columns is None:
-                            new, old = self.context_diff.modified_snapshots[model_name]
                             change_category = categorize_change(
                                 new, old, config=self.categorizer_config
                             )
                             if change_category is not None:
                                 self.set_choice(new, change_category)
                         else:
-                            logger.warning(
-                                "Changes to model '%s' cannot be automatically categorized due to missing schema for model '%s'",
-                                model_name,
-                                model_with_missing_columns,
+                            mode = self.categorizer_config.dict().get(
+                                new.model.source_type, AutoCategorizationMode.OFF
                             )
+                            if mode == AutoCategorizationMode.FULL:
+                                self.set_choice(new, SnapshotChangeCategory.BREAKING)
 
                 # set to breaking if an indirect child has no directly modified parents
                 # that need a decision. this can happen when a revert to a parent causes
