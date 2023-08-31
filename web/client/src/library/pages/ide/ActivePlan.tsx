@@ -48,13 +48,13 @@ export default function ActivePlan({
       onMouseLeave={() => {
         setIsShowing(false)
       }}
-      className="relative flex px-2"
+      className="relative flex"
     >
       {() => (
         <>
           <span
             className={clsx(
-              'inline-block ml-1 px-2 py-[3px] rounded-[4px] text-xs font-bold cursor-default',
+              'inline-block px-2 py-[3px] rounded-[4px] text-xs font-bold cursor-default',
               getTriggerBgColor(planState),
             )}
           >
@@ -70,7 +70,7 @@ export default function ActivePlan({
             leaveFrom="opacity-100 translate-y-0"
             leaveTo="opacity-0 translate-y-1"
           >
-            <Popover.Panel className="absolute right-1 z-10 mt-8 transform">
+            <Popover.Panel className="fixed z-10 mt-8 transform">
               <div className="overflow-hidden rounded-lg bg-theme shadow-lg ring-1 ring-black ring-opacity-5">
                 <TasksOverview tasks={plan.tasks}>
                   {({

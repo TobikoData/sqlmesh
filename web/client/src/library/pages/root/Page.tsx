@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { isArrayNotEmpty, isFalse, isNil } from '~/utils'
+import { isArrayNotEmpty, isFalse, isNil, isNotNil } from '~/utils'
 import {
   FolderIcon,
   DocumentTextIcon,
@@ -30,6 +30,7 @@ import { EnumPlanState, type PlanState, useStorePlan } from '@context/plan'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { type ContextEnvironment } from '@api/client'
 import Spinner from '@components/logo/Spinner'
+import ActivePlan from '../ide/ActivePlan'
 
 export default function Page({
   sidebar,
@@ -179,6 +180,7 @@ export default function Page({
 function EnvironmentDetails(): JSX.Element {
   const environment = useStoreContext(s => s.environment)
 
+  const activePlan = useStorePlan(s => s.activePlan)
   const planState = useStorePlan(s => s.state)
 
   const setInitialDates = useStoreContext(s => s.setInitialDates)
@@ -226,12 +228,17 @@ function EnvironmentDetails(): JSX.Element {
           isLoading={isFetching}
           className="mr-2"
         />
-        <PlanChanges
-          environment={environment}
-          plan={plan}
-          hasChanges={hasChanges}
-          isLoading={isFetching}
-        />
+        {planState === EnumPlanState.Applying && isNotNil(activePlan) && (
+          <ActivePlan plan={activePlan} />
+        )}
+        {planState !== EnumPlanState.Applying && (
+          <PlanChanges
+            environment={environment}
+            plan={plan}
+            hasChanges={hasChanges}
+            isLoading={isFetching}
+          />
+        )}
       </div>
       {showSelectEnvironmentButton && (
         <SelectEnvironemnt
