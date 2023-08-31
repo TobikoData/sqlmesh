@@ -762,9 +762,7 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
             MODEL (
                 name test_schema.test_model,
                 kind SCD_TYPE_2 (
-                    unique_key (
-                        id
-                    ),
+                    unique_key id,
                 )
             );
             
@@ -804,9 +802,7 @@ def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
             MODEL (
                 name test_schema.test_model,
                 kind SCD_TYPE_2 (
-                    unique_key (
-                        id
-                    ),
+                    unique_key id,
                 )
             );
 
