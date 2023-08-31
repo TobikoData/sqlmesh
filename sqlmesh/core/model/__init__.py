@@ -21,6 +21,7 @@ from sqlmesh.core.model.kind import (
     ModelKind,
     ModelKindMixin,
     ModelKindName,
+    SCDType2Kind,
     SeedKind,
     TimeColumn,
     ViewKind,

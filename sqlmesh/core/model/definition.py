@@ -380,7 +380,16 @@ class _Model(ModelMeta, frozen=True):
         for select in query.find_all(exp.Select):
             if select.args.get("from"):
                 select.where(exp.false(), copy=False)
-
+        if self.managed_columns:
+            query.select(
+                *[
+                    exp.alias_(exp.cast(exp.Null(), to=col_type), col)
+                    for col, col_type in self.managed_columns.items()
+                    if col not in query.named_selects
+                ],
+                append=True,
+                copy=False,
+            )
         return query
 
     def referenced_audits(self, audits: t.Dict[str, Audit]) -> t.List[Audit]:
@@ -517,7 +526,9 @@ class _Model(ModelMeta, frozen=True):
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         """Returns the mapping of column names to types of this model."""
-        return self.columns_to_types_
+        if self.columns_to_types_ is None:
+            return None
+        return {**self.columns_to_types_, **self.managed_columns}
 
     @property
     def columns_to_types_or_raise(self) -> t.Dict[str, exp.DataType]:
@@ -530,8 +541,12 @@ class _Model(ModelMeta, frozen=True):
     @property
     def annotated(self) -> bool:
         """Checks if all column projection types of this model are known."""
-        columns_to_types = self.columns_to_types
-        if columns_to_types is None:
+        if self.columns_to_types is None:
+            return False
+        columns_to_types = {
+            k: v for k, v in self.columns_to_types.items() if k not in self.managed_columns
+        }
+        if not columns_to_types:
             return False
         return all(
             column_type.this != exp.DataType.Type.UNKNOWN
@@ -976,9 +991,8 @@ class SqlModel(_SqlBasedModel):
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
-            return self.columns_to_types_
-
-        if self._columns_to_types is None:
+            self._columns_to_types = self.columns_to_types_
+        elif self._columns_to_types is None:
             query = self._query_renderer.render()
             if query is None:
                 return None
@@ -986,7 +1000,8 @@ class SqlModel(_SqlBasedModel):
 
         if "*" in self._columns_to_types:
             return None
-        return self._columns_to_types
+
+        return {**self._columns_to_types, **self.managed_columns}
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
@@ -1645,8 +1660,9 @@ def create_python_model(
         depends_on: The custom set of model's upstream dependencies.
     """
     # Find dependencies for python models by parsing code if they are not explicitly defined
+    # Also remove self-references that are found
     depends_on = (
-        _parse_depends_on(entrypoint, python_env)
+        _parse_depends_on(entrypoint, python_env) - {name}
         if depends_on is None and python_env is not None
         else None
     )

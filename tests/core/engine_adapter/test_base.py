@@ -1,5 +1,6 @@
 # type: ignore
 import typing as t
+from datetime import datetime
 from unittest.mock import call
 
 import pandas as pd
@@ -629,7 +630,7 @@ def test_alter_table(
     adapter.cursor.execute.assert_has_calls([call(x) for x in expected])
 
 
-def test_merge(make_mocked_engine_adapter: t.Callable):
+def test_merge_upsert(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
     adapter.merge(
@@ -666,7 +667,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable):
     )
 
 
-def test_merge_pandas(make_mocked_engine_adapter: t.Callable):
+def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
@@ -701,6 +702,317 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable):
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
         'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
         'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
+    )
+
+
+def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.scd_type_2(
+        target_table="target",
+        source_table=t.cast(
+            exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM source")
+        ),
+        unique_key=["id"],
+        valid_from_name="test_valid_from",
+        valid_to_name="test_valid_to",
+        updated_at_name="test_updated_at",
+        columns_to_types={
+            "id": exp.DataType.Type.INT,
+            "name": exp.DataType.Type.VARCHAR,
+            "price": exp.DataType.Type.DOUBLE,
+            "test_updated_at": exp.DataType.Type.TIMESTAMP,
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+    )
+
+    assert (
+        adapter.cursor.execute.call_args[0][0]
+        == parse_one(
+            """
+CREATE OR REPLACE TABLE "target" AS
+WITH "source" AS (
+  SELECT DISTINCT ON ("id")
+    "id",
+    "name",
+    "price",
+    "test_updated_at"
+  FROM (
+    SELECT
+      "id",
+      "name",
+      "price",
+      "test_updated_at"
+    FROM "source"
+  ) AS "raw_source"
+), "static" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_updated_at"
+  FROM "target"
+  WHERE
+    NOT "test_valid_to" IS NULL
+), "latest" AS (
+  SELECT
+    "id",
+    "name",
+    "price",
+    "test_updated_at"
+  FROM "target"
+  WHERE
+    "test_valid_to" IS NULL
+), "deleted" AS (
+  SELECT
+    "static"."id",
+    "static"."name",
+    "static"."price",
+    "static"."test_updated_at"
+  FROM "static"
+  LEFT JOIN "latest"
+    USING ("id")
+  WHERE
+    "latest"."test_valid_to" IS NULL
+), "latest_deleted" AS (
+  SELECT
+    "id",
+    MAX("test_valid_to") AS "test_valid_to"
+  FROM "deleted"
+  GROUP BY
+    "id"
+), "joined" AS (
+  SELECT
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_updated_at" AS "t_test_updated_at",
+    "source"."id" AS "s_id",
+    "source"."name" AS "s_name",
+    "source"."price" AS "s_price",
+    "source"."test_updated_at" AS "s_test_updated_at"
+  FROM "latest"
+  FULL JOIN "source"
+    USING ("id")
+), "updated_rows" AS (
+  SELECT
+    COALESCE("t_id", "s_id") AS "id",
+    COALESCE("t_name", "s_name") AS "name",
+    COALESCE("t_price", "s_price") AS "price",
+    COALESCE("t_test_updated_at", "s_test_updated_at") AS "test_updated_at",
+    CASE
+      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."id" IS NULL
+      THEN CASE
+        WHEN "latest_deleted"."test_valid_to" > "s_test_updated_at"
+        THEN "latest_deleted"."test_valid_to"
+        ELSE "s_test_updated_at"
+      END
+      WHEN "t_test_valid_from" IS NULL
+      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_from"
+    END AS "test_valid_from",
+    CASE
+      WHEN "s_test_updated_at" > "t_test_updated_at"
+      THEN "s_test_updated_at"
+      WHEN "s_id" IS NULL
+      THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_to"
+    END AS "test_valid_to"
+  FROM "joined"
+  LEFT JOIN "latest_deleted"
+    ON "joined"."s_id" = "latest_deleted"."id"
+), "inserted_rows" AS (
+  SELECT
+    "s_id" AS "id",
+    "s_name" AS "name",
+    "s_price" AS "price",
+    "s_test_updated_at" AS "test_updated_at",
+    "s_test_updated_at" AS "test_valid_from",
+    NULL AS "test_valid_to"
+  FROM "joined"
+  WHERE
+    NOT "t_id" IS NULL AND NOT "s_id" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
+)
+SELECT
+  *
+FROM "static"
+UNION ALL
+SELECT
+  *
+FROM "updated_rows"
+UNION ALL
+SELECT
+  *
+FROM "inserted_rows"
+    """
+        ).sql()
+    )
+
+
+def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    df = pd.DataFrame(
+        {
+            "id1": [1, 2, 3],
+            "id2": [4, 5, 6],
+            "name": ["muffins", "chips", "soda"],
+            "price": [4.0, 5.0, 6.0],
+            "updated_at": ["2020-01-01 10:00:00", "2020-01-02 15:00:00", "2020-01-03 12:00:00"],
+        }
+    )
+    adapter.scd_type_2(
+        target_table="target",
+        source_table=df,
+        unique_key=["id1", "id2"],
+        valid_from_name="test_valid_from",
+        valid_to_name="test_valid_to",
+        updated_at_name="test_updated_at",
+        columns_to_types={
+            "id1": exp.DataType.Type.INT,
+            "id2": exp.DataType.Type.INT,
+            "name": exp.DataType.Type.VARCHAR,
+            "price": exp.DataType.Type.DOUBLE,
+            "test_updated_at": exp.DataType.Type.TIMESTAMP,
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+    )
+
+    assert (
+        adapter.cursor.execute.call_args[0][0]
+        == parse_one(
+            """
+CREATE OR REPLACE TABLE "target" AS
+WITH "source" AS (
+  SELECT DISTINCT ON ("id1", "id2")
+    "id1",
+    "id2",
+    "name",
+    "price",
+    "test_updated_at"
+  FROM (
+    SELECT
+      CAST("id1" AS INT) AS "id1",
+      CAST("id2" AS INT) AS "id2",
+      CAST("name" AS VARCHAR) AS "name",
+      CAST("price" AS DOUBLE) AS "price",
+      CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at"
+    FROM (VALUES
+      (1, 4, 'muffins', 4.0, '2020-01-01 10:00:00'),
+      (2, 5, 'chips', 5.0, '2020-01-02 15:00:00'),
+      (3, 6, 'soda', 6.0, '2020-01-03 12:00:00')) AS "t"("id1", "id2", "name", "price", "test_updated_at")
+  ) AS "raw_source"
+), "static" AS (
+  SELECT
+    "id1",
+    "id2",
+    "name",
+    "price",
+    "test_updated_at"
+  FROM "target"
+  WHERE
+    NOT "test_valid_to" IS NULL
+), "latest" AS (
+  SELECT
+    "id1",
+    "id2",
+    "name",
+    "price",
+    "test_updated_at"
+  FROM "target"
+  WHERE
+    "test_valid_to" IS NULL
+), "deleted" AS (
+  SELECT
+    "static"."id1",
+    "static"."id2",
+    "static"."name",
+    "static"."price",
+    "static"."test_updated_at"
+  FROM "static"
+  LEFT JOIN "latest"
+    USING ("id1", "id2")
+  WHERE
+    "latest"."test_valid_to" IS NULL
+), "latest_deleted" AS (
+  SELECT
+    "id1",
+    "id2",
+    MAX("test_valid_to") AS "test_valid_to"
+  FROM "deleted"
+  GROUP BY
+    "id1",
+    "id2"
+), "joined" AS (
+  SELECT
+    "latest"."id1" AS "t_id1",
+    "latest"."id2" AS "t_id2",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_updated_at" AS "t_test_updated_at",
+    "source"."id1" AS "s_id1",
+    "source"."id2" AS "s_id2",
+    "source"."name" AS "s_name",
+    "source"."price" AS "s_price",
+    "source"."test_updated_at" AS "s_test_updated_at"
+  FROM "latest"
+  FULL JOIN "source"
+    USING ("id1", "id2")
+), "updated_rows" AS (
+  SELECT
+    COALESCE("t_id1", "s_id1") AS "id1",
+    COALESCE("t_id2", "s_id2") AS "id2",
+    COALESCE("t_name", "s_name") AS "name",
+    COALESCE("t_price", "s_price") AS "price",
+    COALESCE("t_test_updated_at", "s_test_updated_at") AS "test_updated_at",
+    CASE
+      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."id1" IS NULL
+      THEN CASE
+        WHEN "latest_deleted"."test_valid_to" > "s_test_updated_at"
+        THEN "latest_deleted"."test_valid_to"
+        ELSE "s_test_updated_at"
+      END
+      WHEN "t_test_valid_from" IS NULL
+      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_from"
+    END AS "test_valid_from",
+    CASE
+      WHEN "s_test_updated_at" > "t_test_updated_at"
+      THEN "s_test_updated_at"
+      WHEN "s_id1" IS NULL
+      THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
+      ELSE "t_test_valid_to"
+    END AS "test_valid_to"
+  FROM "joined"
+  LEFT JOIN "latest_deleted"
+    ON "joined"."s_id1" = "latest_deleted"."id1"
+    AND "joined"."s_id2" = "latest_deleted"."id2"
+), "inserted_rows" AS (
+  SELECT
+    "s_id1" AS "id1",
+    "s_id2" AS "id2",
+    "s_name" AS "name",
+    "s_price" AS "price",
+    "s_test_updated_at" AS "test_updated_at",
+    "s_test_updated_at" AS "test_valid_from",
+    NULL AS "test_valid_to"
+  FROM "joined"
+  WHERE
+    NOT "t_id1" IS NULL AND NOT "s_id1" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
+)
+SELECT
+  *
+FROM "static"
+UNION ALL
+SELECT
+  *
+FROM "updated_rows"
+UNION ALL
+SELECT
+  *
+FROM "inserted_rows"
+"""
+        ).sql()
     )
 
 
