@@ -495,7 +495,7 @@ async def test_delete_environment_failure(project_context: Context, mocker):
         "app.Context.state_sync.invalidate_environment", side_effect=Exception("Some error")
     )
 
-    response = client.delete(f"/api/environments/test")
+    response = client.delete("/api/environments/test")
 
     assert response.status_code == 500
     assert response.json() == {
