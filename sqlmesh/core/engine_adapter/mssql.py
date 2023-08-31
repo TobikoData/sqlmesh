@@ -50,9 +50,11 @@ class MSSQLEngineAdapter(
         MsSql doesn't support describe, using approach in base Postgres adapter.
         """
         table = exp.to_table(table_name)
+
+        catalog_name = table.args.get("catalog") or "master"
         sql = (
             exp.select("column_name", "data_type")
-            .from_(self.COLUMNS_TABLE)
+            .from_(f"{catalog_name}.{self.COLUMNS_TABLE}")
             .where(f"table_name = '{table.alias_or_name}' AND table_schema = '{table.args['db']}'")
         )
         self.execute(sql)
