@@ -13,7 +13,6 @@ from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSup
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.utils.date import to_ds
-from sqlmesh.utils.errors import SQLMeshError
 from tests.core.engine_adapter import to_sql_calls
 
 
@@ -38,10 +37,18 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
 
 def test_create_view_pandas(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
-    with pytest.raises(
-        SQLMeshError, match=r"Creating views from Pandas Dataframes is not supported.*"
-    ):
-        adapter.create_view("test_view", pd.DataFrame({"a": [1, 2, 3]}))
+    adapter.create_view("test_view", pd.DataFrame({"a": [1, 2, 3]}), replace=False)
+    adapter.create_view(
+        "test_view",
+        pd.DataFrame({"a": [1, 2, 3]}),
+        replace=True,
+        table_properties={"a": exp.convert(1)},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE VIEW "test_view" ("a") AS SELECT CAST("a" AS BIGINT) AS "a" FROM (VALUES (1), (2), (3)) AS "t"("a")',
+        'CREATE OR REPLACE VIEW "test_view" ("a") AS SELECT CAST("a" AS BIGINT) AS "a" FROM (VALUES (1), (2), (3)) AS "t"("a")',
+    ]
 
 
 def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):

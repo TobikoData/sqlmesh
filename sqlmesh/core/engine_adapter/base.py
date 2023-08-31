@@ -519,8 +519,14 @@ class EngineAdapter:
             create_kwargs: Additional kwargs to pass into the Create expression
         """
         if self.is_pandas_df(query_or_df):
-            raise SQLMeshError(
-                "Creating views from Pandas Dataframes is not supported. Use `FULL` instead."
+            values = list(t.cast(pd.DataFrame, query_or_df).itertuples(index=False, name=None))
+            columns_to_types = columns_to_types or self._columns_to_types(query_or_df)
+            assert columns_to_types
+            query_or_df = self._values_to_sql(
+                values,
+                columns_to_types,
+                batch_start=0,
+                batch_end=len(values),
             )
         source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
             query_or_df, columns_to_types, batch_size=0
