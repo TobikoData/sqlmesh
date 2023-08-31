@@ -19,7 +19,7 @@
 * The ability to sync your code and your data to ensure what is in your main branch is in production
 
 ## Getting Started
-1. Make sure SQLMesh is added to your project's dependencies and it includes the github extra (.
+1. Make sure SQLMesh is added to your project's dependencies and it includes the github extra (`pip install sqlmesh[github]`).
 2. Create a new file in `.github/workflows/sqlmesh.yml` with the following contents:
 ```yaml
 name: SQLMesh Bot
@@ -187,7 +187,7 @@ jobs:
           credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
       - name: Run CI/CD Bot
         run: |
-          sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all --merge_method squash --delete
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all --merge_method squash --delete
 ```
 
 ## Future Improvements
