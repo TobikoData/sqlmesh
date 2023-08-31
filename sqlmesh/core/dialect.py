@@ -337,6 +337,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         ModelKindName.INCREMENTAL_BY_UNIQUE_KEY,
                         ModelKindName.SEED,
                         ModelKindName.VIEW,
+                        ModelKindName.SCD_TYPE_2,
                     ) and self._match(TokenType.L_PAREN):
                         self._retreat(index)
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))

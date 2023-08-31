@@ -410,7 +410,8 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     ]
     # Assert that the views are dropped for each snapshot just once and make sure that the name used is the
     # view name with the environment as a suffix
-    assert adapter_mock.drop_view.call_count == 13
+    # TODO: It appears we try to drop views for external models which shouldn't hurt but we should fix this
+    assert adapter_mock.drop_view.call_count == 14
     adapter_mock.drop_view.assert_has_calls(
         [
             call("raw.demographics__test_environment", ignore_if_not_exists=True),

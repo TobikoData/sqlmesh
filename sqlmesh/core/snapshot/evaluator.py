@@ -34,7 +34,7 @@ from sqlglot.executor import execute
 from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
-from sqlmesh.core.model import IncrementalUnmanagedKind, Model, ViewKind
+from sqlmesh.core.model import IncrementalUnmanagedKind, Model, SCDType2Kind, ViewKind
 from sqlmesh.core.snapshot import (
     QualifiedViewName,
     Snapshot,
@@ -117,12 +117,26 @@ class SnapshotEvaluator:
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
             if index > 0:
                 evaluation_strategy.append(
-                    model, table_name, query_or_df, snapshots, is_dev, start=start, end=end
+                    model,
+                    table_name,
+                    query_or_df,
+                    snapshots,
+                    is_dev,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
                 )
             else:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
                 evaluation_strategy.insert(
-                    model, table_name, query_or_df, snapshots, is_dev, start=start, end=end
+                    model,
+                    table_name,
+                    query_or_df,
+                    snapshots,
+                    is_dev,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
                 )
 
         from sqlmesh.core.context import ExecutionContext
@@ -557,6 +571,8 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         klass = IncrementalUnmanagedStrategy
     elif snapshot.is_view:
         klass = ViewStrategy
+    elif snapshot.is_scd_type_2:
+        klass = SCDType2Strategy
     else:
         raise SQLMeshError(f"Unexpected snapshot: {snapshot}")
 
@@ -934,6 +950,50 @@ class FullRefreshStrategy(MaterializableStrategy):
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.interval_unit,
             clustered_by=model.clustered_by,
+        )
+
+
+class SCDType2Strategy(MaterializableStrategy):
+    def insert(
+        self,
+        model: Model,
+        name: str,
+        query_or_df: QueryOrDF,
+        snapshots: t.Dict[str, Snapshot],
+        is_dev: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        assert isinstance(model.kind, SCDType2Kind)
+        self.adapter.scd_type_2(
+            target_table=name,
+            source_table=query_or_df,
+            unique_key=model.unique_key,
+            valid_from_name=model.kind.valid_from_name,
+            valid_to_name=model.kind.valid_to_name,
+            updated_at_name=model.kind.updated_at_name,
+            columns_to_types=model.columns_to_types,
+            **kwargs,
+        )
+
+    def append(
+        self,
+        model: Model,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        snapshots: t.Dict[str, Snapshot],
+        is_dev: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        assert isinstance(model.kind, SCDType2Kind)
+        self.adapter.scd_type_2(
+            target_table=table_name,
+            source_table=query_or_df,
+            unique_key=model.unique_key,
+            valid_from_name=model.kind.valid_from_name,
+            valid_to_name=model.kind.valid_to_name,
+            updated_at_name=model.kind.updated_at_name,
+            columns_to_types=model.columns_to_types,
+            **kwargs,
         )
 
 
