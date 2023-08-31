@@ -518,6 +518,10 @@ class EngineAdapter:
             materialized: Whether to create a a materialized view. Only used for engines that support this feature.
             create_kwargs: Additional kwargs to pass into the Create expression
         """
+        if self.is_pandas_df(query_or_df):
+            raise SQLMeshError(
+                "Creating views from Pandas Dataframes is not supported. Use `FULL` instead."
+            )
         source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
             query_or_df, columns_to_types, batch_size=0
         )

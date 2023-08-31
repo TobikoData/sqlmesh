@@ -3,12 +3,34 @@ from __future__ import annotations
 import math
 import typing as t
 
+from sqlglot import exp
+
+from sqlmesh.core.engine_adapter.base import SourceQuery
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+
+if t.TYPE_CHECKING:
+
+    from sqlmesh.core._typing import TableName
+    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 
 
 class DuckDBEngineAdapter(LogicalMergeMixin):
     DIALECT = "duckdb"
+
+    def _df_to_source_queries(
+        self,
+        df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        batch_size: int,
+        target_table: t.Optional[TableName] = None,
+    ) -> t.List[SourceQuery]:
+        assert columns_to_types
+        return [
+            SourceQuery(
+                query_factory=lambda: exp.select(*columns_to_types).from_("df"),  # type: ignore
+            )
+        ]
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
