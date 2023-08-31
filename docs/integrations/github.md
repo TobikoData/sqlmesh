@@ -68,7 +68,7 @@ jobs:
         shell: bash
       - name: Run CI/CD Bot
         run: |
-          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all --merge_method merge --delete
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all --merge-method merge --delete
 ```
 3. (Optional) If you want to designate users as required approvers, update your SQLMesh config file to represent this. YAML Example:
 ```yaml
@@ -84,7 +84,7 @@ users:
 Commands can be issued to the bot to have it run specific actions. Below are the currently supported commands:
 * `/deploy` - Deploys the changes in the PR to Production. It will run all the same checks as if you just pushed a commit except for the required approvals check since we assume we can to skip that check if you are manually deploying.
 
-See [Run All Configuration](#run-all-configuration) for the `--command_namespace` option if you want SQLMesh's commands to have a different prefix to avoid them from clashing with other bots.
+See [Run All Configuration](#run-all-configuration) for the `--command-namespace` option if you want SQLMesh's commands to have a different prefix to avoid them from clashing with other bots.
 
 ## Configuration
 ### SQLMesh Configuration
@@ -100,12 +100,12 @@ See [Run All Configuration](#run-all-configuration) for the `--command_namespace
 The `run-all` config command will run all of the actions in a single step.
 This means it checks for approvers, runs unit tests, creates PR environment, and then deploys to prod.
 It has two boolean flags that can be passed in to enable additional functionality:
-* `--merge_method` - Providing this option will result in merging the PR after deploying to production in order to keep your main branch in-sync with your data.
+* `--merge-method` - Providing this option will result in merging the PR after deploying to production in order to keep your main branch in-sync with your data.
   * Options: `merge`, `squash`, `rebase`.
 * `--delete` - This will delete the PR environment after deploying to production.
     * Note: If using `--delete` then the runner will need a connection to the engine even if you are using Airflow. This is because the delete is done outside of Airflow.
     * Eventually want the SQLMesh Janitor to automatically do this cleanup which would remove the need for this flag.
-* `--command_namespace` - Namespace to use for SQLMesh commands. For example if you provide `#SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`.
+* `--command-namespace` - Namespace to use for SQLMesh commands. For example if you provide `#SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`.
 
 ### Custom Workflow Configuration
 You can configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
@@ -187,7 +187,7 @@ jobs:
           credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
       - name: Run CI/CD Bot
         run: |
-          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all --merge_method squash --delete
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all --merge-method squash --delete
 ```
 
 ## Future Improvements
