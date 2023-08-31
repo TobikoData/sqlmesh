@@ -10,7 +10,7 @@ In this scenario, the project's metadata format needs to be migrated.
 
 ```bash
 > sqlmesh plan my_dev
-Error: SQLMesh (local) is using version '2' which is ahead of '1' (remote). Please run a migration.
+Error: SQLMesh (local) is using version '2' which is ahead of '1' (remote). Please run a migration ('sqlmesh migrate' command).
 ```
 
 ### Installed version is older than metadata format
