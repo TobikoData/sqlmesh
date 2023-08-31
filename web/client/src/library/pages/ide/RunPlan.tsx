@@ -31,6 +31,7 @@ import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { EnumErrorKey, useIDE } from './context'
 
 export default function RunPlan(): JSX.Element {
+  console.log('RunPlan')
   const { setIsPlanOpen } = useIDE()
 
   const planState = useStorePlan(s => s.state)
@@ -150,7 +151,6 @@ export default function RunPlan(): JSX.Element {
                         <SelectEnvironemnt
                           className="mr-2"
                           side="left"
-                          environment={environment}
                           showAddEnvironment={false}
                           onSelect={() => {
                             setShouldStartPlanAutomatically(true)
@@ -190,7 +190,6 @@ export default function RunPlan(): JSX.Element {
         {showSelectEnvironmentButton && (
           <SelectEnvironemnt
             className="rounded-none rounded-r-lg border-l mx-0"
-            environment={environment}
             disabled={shouldDisableActions}
           />
         )}
@@ -198,7 +197,6 @@ export default function RunPlan(): JSX.Element {
       <PlanChanges
         environment={environment}
         plan={plan}
-        isLoading={isFetching}
         hasChanges={hasChanges}
       />
     </div>
@@ -206,102 +204,86 @@ export default function RunPlan(): JSX.Element {
 }
 
 export function PlanChanges({
-  isLoading,
   hasChanges,
   environment,
   plan,
+  isLoading,
 }: {
   environment: ModelEnvironment
   plan?: ContextEnvironment
-  isLoading: boolean
   hasChanges: boolean
+  isLoading?: boolean
 }): JSX.Element {
   return (
     <span className="flex align-center h-full">
-      <>
-        {isLoading ? (
-          <span className="flex items-center ml-2">
-            <Spinner className="w-3 h-3 mr-1" />
-            <span className="inline-block text-xs text-neutral-500">
-              Checking...
-            </span>
-          </span>
-        ) : (
-          <>
-            {environment.isInitial && environment.isLocal && (
-              <span
-                title="New"
-                className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
-              >
-                New
-              </span>
-            )}
-            {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
-              <span
-                title="Latest"
-                className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
-              >
-                <span>Latest</span>
-              </span>
-            )}
-            {isArrayNotEmpty(plan?.changes?.added) && (
-              <ChangesPreview
-                headline="Added Models"
-                type={EnumPlanChangeType.Add}
-                changes={plan!.changes!.added}
-              />
-            )}
-            {isArrayNotEmpty(plan?.changes?.modified.direct) && (
-              <ChangesPreview
-                headline="Direct Changes"
-                type={EnumPlanChangeType.Direct}
-                changes={plan!.changes!.modified.direct.map(
-                  ({ model_name }) => model_name,
-                )}
-              />
-            )}
-            {isArrayNotEmpty(plan?.changes?.modified.indirect) && (
-              <ChangesPreview
-                headline="Indirectly Modified"
-                type={EnumPlanChangeType.Indirect}
-                changes={plan!.changes!.modified.indirect.map(
-                  ci => ci.model_name,
-                )}
-              />
-            )}
-            {isArrayNotEmpty(plan?.changes?.removed) && (
-              <ChangesPreview
-                headline="Removed Models"
-                type={EnumPlanChangeType.Remove}
-                changes={plan!.changes!.removed}
-              />
-            )}
-          </>
-        )}
-      </>
+      {isArrayNotEmpty(plan?.changes?.added) && (
+        <ChangesPreview
+          headline="Added Models"
+          type={EnumPlanChangeType.Add}
+          changes={plan!.changes!.added}
+        />
+      )}
+      {isArrayNotEmpty(plan?.changes?.modified.direct) && (
+        <ChangesPreview
+          headline="Direct Changes"
+          type={EnumPlanChangeType.Direct}
+          changes={plan!.changes!.modified.direct.map(
+            ({ model_name }) => model_name,
+          )}
+        />
+      )}
+      {isArrayNotEmpty(plan?.changes?.modified.indirect) && (
+        <ChangesPreview
+          headline="Indirectly Modified"
+          type={EnumPlanChangeType.Indirect}
+          changes={plan!.changes!.modified.indirect.map(ci => ci.model_name)}
+        />
+      )}
+      {isArrayNotEmpty(plan?.changes?.removed) && (
+        <ChangesPreview
+          headline="Removed Models"
+          type={EnumPlanChangeType.Remove}
+          changes={plan!.changes!.removed}
+        />
+      )}
+      {environment.isInitial && environment.isLocal && (
+        <span
+          title="New"
+          className="py-0.5 ml-2 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
+        >
+          New
+        </span>
+      )}
+      {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
+        <span
+          title="Latest"
+          className="ml-2 py-0.5 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
+        >
+          <span>Latest</span>
+        </span>
+      )}
     </span>
   )
 }
 
 export function SelectEnvironemnt({
   onSelect,
-  environment,
-  disabled,
+  disabled = false,
   side = EnumSide.Right,
   className,
   showAddEnvironment = true,
   size = EnumSize.sm,
 }: {
-  environment: ModelEnvironment
-  disabled: boolean
+  disabled?: boolean
   className?: string
   size?: ButtonSize
   side?: Side
-  onSelect?: () => void
+  onSelect?: (environment: ModelEnvironment) => void
   showAddEnvironment?: boolean
 }): JSX.Element {
   const { addError } = useIDE()
 
+  const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const pinnedEnvironments = useStoreContext(s => s.pinnedEnvironments)
   const defaultEnvironment = useStoreContext(s => s.defaultEnvironment)
@@ -375,7 +357,7 @@ export function SelectEnvironemnt({
 
                           setEnvironment(env)
 
-                          onSelect?.()
+                          onSelect?.(env)
                         }}
                         className={clsx(
                           'flex justify-between items-center pl-2 pr-1 py-1 cursor-pointer overflow-auto',
@@ -562,7 +544,7 @@ function ChangesPreview({
         <>
           <span
             className={clsx(
-              'inline-block ml-1 px-2 rounded-full text-xs font-bold text-neutral-100 cursor-default border border-inherit',
+              'flex items-center ml-1 px-2 rounded-full text-xs font-bold text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
               'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&

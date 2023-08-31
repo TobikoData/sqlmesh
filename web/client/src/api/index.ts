@@ -63,6 +63,10 @@ export interface ApiOptions {
   removeTimeoutErrorAfter?: number
 }
 
+export interface ApiQueryOptions {
+  enabled?: boolean
+}
+
 export interface ApiQueryMeta extends QueryMeta {
   onError: (error: ApiExceptionPayload) => void
   onSuccess: () => void
@@ -225,6 +229,7 @@ export function useApiPlanRun(
     planOptions?: PlanOptions
   },
   options?: ApiOptions,
+  queryOptions?: ApiQueryOptions,
 ): UseQueryWithTimeoutOptions<ContextEnvironment> {
   return useQueryWithTimeout(
     {
@@ -238,6 +243,7 @@ export function useApiPlanRun(
           },
           { signal },
         ),
+      enabled: queryOptions?.enabled,
     },
     {
       ...options,

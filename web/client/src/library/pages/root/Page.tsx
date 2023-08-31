@@ -1,5 +1,5 @@
-import React from 'react'
-import { isArrayNotEmpty, isFalse } from '~/utils'
+import React, { useEffect, useState } from 'react'
+import { isArrayNotEmpty, isFalse, isNil } from '~/utils'
 import {
   FolderIcon,
   DocumentTextIcon,
@@ -26,8 +26,10 @@ import { useIDE } from '../ide/context'
 import { PlanChanges, SelectEnvironemnt } from '../ide/RunPlan'
 import { useApiPlanRun } from '@api/index'
 import clsx from 'clsx'
-import { EnumPlanAction, EnumPlanState, useStorePlan } from '@context/plan'
-import { EnumSize } from '~/types/enum'
+import { EnumPlanState, type PlanState, useStorePlan } from '@context/plan'
+import { EnumSize, EnumVariant } from '~/types/enum'
+import { type ContextEnvironment } from '@api/client'
+import Spinner from '@components/logo/Spinner'
 
 export default function Page({
   sidebar,
@@ -39,44 +41,13 @@ export default function Page({
   const location = useLocation()
   const { errors } = useIDE()
 
-  const planState = useStorePlan(s => s.state)
-  const planAction = useStorePlan(s => s.action)
-
   const models = useStoreContext(s => s.models)
-  const environment = useStoreContext(s => s.environment)
   const splitPaneSizes = useStoreContext(s => s.splitPaneSizes)
   const setSplitPaneSizes = useStoreContext(s => s.setSplitPaneSizes)
-  const hasSynchronizedEnvironments = useStoreContext(
-    s => s.hasSynchronizedEnvironments,
-  )
 
   const project = useStoreProject(s => s.project)
 
-  const { data: dataPlan, isFetching } = useApiPlanRun(environment.name, {
-    planOptions: { skip_tests: true, include_unmodified: true },
-  })
-
   const modelsCount = Array.from(new Set(models.values())).length
-  const hasChanges = [
-    dataPlan?.changes?.added,
-    dataPlan?.changes?.removed,
-    dataPlan?.changes?.modified?.direct,
-    dataPlan?.changes?.modified?.indirect,
-    dataPlan?.changes?.modified?.metadata,
-  ].some(isArrayNotEmpty)
-
-  const showRunButton =
-    isFalse(environment.isDefault) || hasSynchronizedEnvironments()
-  const showSelectEnvironmentButton =
-    showRunButton &&
-    (isFalse(environment.isDefault) || isFalse(environment.isInitial))
-
-  const shouldDisableActions =
-    isFetching ||
-    planAction === EnumPlanAction.Apply ||
-    planState === EnumPlanState.Applying ||
-    planState === EnumPlanState.Running ||
-    planState === EnumPlanState.Cancelling
 
   return (
     <SplitPane
@@ -94,24 +65,7 @@ export default function Page({
               {project?.name}
             </h3>
           </div>
-          <div className="h-8 flex w-full items-center justify-end py-0.5 text-neutral-500">
-            <div className="px-2">
-              <PlanChanges
-                environment={environment}
-                plan={dataPlan}
-                isLoading={isFetching}
-                hasChanges={hasChanges}
-              />
-            </div>
-            {showSelectEnvironmentButton && (
-              <SelectEnvironemnt
-                environment={environment}
-                disabled={shouldDisableActions}
-                className="border-none h-6 !m-0"
-                size={EnumSize.sm}
-              />
-            )}
-          </div>
+          <EnvironmentDetails />
         </div>
         <Divider />
         <div className="px-1 flex max-h-8 w-full items-center relative">
@@ -200,7 +154,7 @@ export default function Page({
                 <OutlineShieldCheckIcon className="w-4" />
               )}
             </Link>
-            <Link
+            <NavLink
               title="Plan"
               to={EnumRoutes.Plan}
               className="mx-1 py-0.5 px-2 flex items-center rounded-full bg-success-10"
@@ -211,7 +165,7 @@ export default function Page({
               ) : (
                 <OutlinePlayCircleIcon className="text-success-500 w-5" />
               )}
-            </Link>
+            </NavLink>
           </div>
         </div>
         <Divider />
@@ -220,4 +174,124 @@ export default function Page({
       <div className="w-full h-full">{content}</div>
     </SplitPane>
   )
+}
+
+function EnvironmentDetails(): JSX.Element {
+  const environment = useStoreContext(s => s.environment)
+
+  const planState = useStorePlan(s => s.state)
+
+  const setInitialDates = useStoreContext(s => s.setInitialDates)
+  const hasSynchronizedEnvironments = useStoreContext(
+    s => s.hasSynchronizedEnvironments,
+  )
+
+  const [hasChanges, setHasChanges] = useState(false)
+  const [plan, setPlan] = useState<ContextEnvironment | undefined>()
+
+  const { data: dataPlan, isFetching } = useApiPlanRun(
+    environment.name,
+    {
+      planOptions: { skip_tests: true, include_unmodified: true },
+    },
+    undefined,
+    { enabled: true },
+  )
+
+  useEffect(() => {
+    if (isNil(dataPlan)) return
+
+    setPlan(dataPlan)
+    setInitialDates(dataPlan.start, dataPlan.end)
+    setHasChanges(
+      [
+        dataPlan.changes?.added,
+        dataPlan.changes?.removed,
+        dataPlan.changes?.modified?.direct,
+        dataPlan.changes?.modified?.indirect,
+        dataPlan.changes?.modified?.metadata,
+      ].some(isArrayNotEmpty),
+    )
+  }, [dataPlan])
+
+  const showSelectEnvironmentButton =
+    (isFalse(environment.isDefault) || hasSynchronizedEnvironments()) &&
+    (isFalse(environment.isDefault) || isFalse(environment.isInitial))
+
+  return (
+    <div className="h-8 flex w-full items-center justify-end py-0.5 text-neutral-500">
+      <div className="px-2 flex items-center">
+        <PlanStatus
+          planState={planState}
+          isLoading={isFetching}
+          className="mr-2"
+        />
+        <PlanChanges
+          environment={environment}
+          plan={plan}
+          hasChanges={hasChanges}
+          isLoading={isFetching}
+        />
+      </div>
+      {showSelectEnvironmentButton && (
+        <SelectEnvironemnt
+          className="border-none h-6 !m-0"
+          size={EnumSize.sm}
+          onSelect={env => {
+            setPlan(undefined)
+            setHasChanges(false)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function PlanStatus({
+  planState,
+  isLoading,
+  className,
+}: {
+  isLoading: boolean
+  planState: PlanState
+  className?: string
+}): JSX.Element {
+  const shouldSkip =
+    planState === EnumPlanState.Init || planState === EnumPlanState.Finished
+  const isRunning =
+    planState === EnumPlanState.Running ||
+    planState === EnumPlanState.Applying ||
+    planState === EnumPlanState.Cancelling
+
+  return shouldSkip && isFalse(isLoading) ? (
+    <></>
+  ) : (
+    <span
+      className={clsx(
+        'flex items-center ml-2 py-0.5 px-3 bg-neutral-10 rounded-full',
+        className,
+      )}
+    >
+      {isRunning && (
+        <Spinner
+          className="w-3 h-3 mr-2 !fill-neutral-50"
+          variant={EnumVariant.Neutral}
+        />
+      )}
+      <span className="inline-block whitespace-nowrap text-xs text-neutral-500">
+        {getPlanStatus(planState, isLoading)}
+      </span>
+    </span>
+  )
+}
+
+function getPlanStatus(planState: PlanState, isLoading: boolean): string {
+  if (isLoading) return 'Getting Changes...'
+  if (planState === EnumPlanState.Running) return 'Running Plan...'
+  if (planState === EnumPlanState.Applying) return 'Applying Plan...'
+  if (planState === EnumPlanState.Cancelling) return 'Cancelling Plan...'
+  if (planState === EnumPlanState.Failed) return 'Last Plan Failed'
+  if (planState === EnumPlanState.Cancelled) return 'Last Plan Cancelled'
+
+  return ''
 }

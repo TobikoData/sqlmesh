@@ -2,11 +2,19 @@ import { useIDE } from '../ide/context'
 import Page from '../root/Page'
 import SourceList from '@components/sourceList/SourceList'
 import { EnumRoutes } from '~/routes'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { EnumVariant } from '~/types/enum'
+import { useEffect } from 'react'
 
 export default function PageErrors(): JSX.Element {
+  const navigaete = useNavigate()
   const { errors } = useIDE()
+
+  useEffect(() => {
+    if (errors.size === 0) {
+      navigaete(EnumRoutes.Editor)
+    }
+  }, [errors])
 
   return (
     <Page

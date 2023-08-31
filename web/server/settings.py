@@ -19,7 +19,7 @@ if PYDANTIC_MAJOR_VERSION >= 2:
 else:
     from pydantic import BaseSettings  # type: ignore
 
-project_path = os.environ.get("PROJECT_PATH") or "example/sushi"
+project_path = os.environ.get("PROJECT_PATH") or ""
 
 logger = logging.getLogger(__name__)
 get_context_lock = asyncio.Lock()

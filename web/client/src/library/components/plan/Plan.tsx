@@ -83,8 +83,6 @@ function Plan({
     ])
 
     return () => {
-      void cancelRequestPlanRun()
-
       unsubscribeTests?.()
     }
   }, [])
@@ -261,6 +259,7 @@ function Plan({
   }
 
   function run(): void {
+    console.log('RUN')
     dispatch([
       {
         type: EnumPlanActions.ResetTestsReport,

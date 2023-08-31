@@ -73,7 +73,6 @@ export default function SourceList<
             const description = isNil(byDescription)
               ? undefined
               : (item as Record<string, string>)?.[byDescription] ?? undefined
-            console.log('name', item, description, byDescription)
             return (
               <li
                 key={id}

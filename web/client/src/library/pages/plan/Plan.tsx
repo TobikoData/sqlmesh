@@ -2,12 +2,28 @@ import Page from '../root/Page'
 import { useStoreContext } from '@context/context'
 import SourceList from '@components/sourceList/SourceList'
 import { EnumRoutes } from '~/routes'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 
 export default function PagePlan(): JSX.Element {
+  const navigaete = useNavigate()
+  const location = useLocation()
+
+  const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
 
-  console.log(Array.from(environments))
+  useEffect(() => {
+    if (
+      location.pathname === EnumRoutes.Plan ||
+      location.pathname === `${EnumRoutes.Plan}/environments`
+    ) {
+      navigaete(`${EnumRoutes.Plan}/environments/${environment.name}`)
+    }
+  }, [location])
+
+  useEffect(() => {
+    navigaete(`${EnumRoutes.Plan}/environments/${environment.name}`)
+  }, [environment])
 
   return (
     <Page
