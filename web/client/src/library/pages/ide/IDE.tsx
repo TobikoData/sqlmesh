@@ -246,7 +246,6 @@ export default function PageIDE(): JSX.Element {
 
     addSynchronizedEnvironments(
       Object.values(environments),
-      environment.name,
       default_target_environment,
       pinned_environments,
     )

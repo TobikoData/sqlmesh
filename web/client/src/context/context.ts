@@ -42,7 +42,6 @@ interface ContextStore {
   removeLocalEnvironment: (environments: ModelEnvironment) => void
   addSynchronizedEnvironments: (
     environments: Environment[],
-    environment?: string,
     defaultEnvironment?: string,
     pinnedEnvironments?: string[],
   ) => void
@@ -189,12 +188,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addSynchronizedEnvironments(
-    envs = [],
-    currentEnvironment,
-    defaultEnvironment,
-    pinnedEnvs = [],
-  ) {
+  addSynchronizedEnvironments(envs = [], defaultEnvironment, pinnedEnvs = []) {
     set(s => {
       const environments = Array.from(s.environments)
 
@@ -226,9 +220,13 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
       ModelEnvironment.sort(environments)
 
+      const prodEnv = environments.find(({ name }) => name === 'prod')
+      const defaultEnv =
+        environments.find(({ name }) => name === defaultEnvironment) ??
+        s.environment
+
       return {
-        environment:
-          environments.find(({ name }) => name === env) ?? s.environment,
+        environment: isStringEmptyOrNil(prodEnv?.id) ? prodEnv : defaultEnv,
         defaultEnvironment: environments.find(
           ({ name }) => name === defaultEnvironment,
         ),
