@@ -265,7 +265,7 @@ The `SEED` model kind is used to specify [seed models](./seed_models.md) for usi
 
 SCD Type 2 is a model kind that supports [slowly changing dimensions](https://en.wikipedia.org/wiki/Slowly_changing_dimension#Type_2:_add_new_row) (SCDs) in your SQLMesh project. SCDs are a common pattern in data warehousing that allow you to track changes to records over time. 
 
-SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your model. The `valid_from` column is the date that the record became valid (inclusive) and the `valid_to` column is the date that the record became invalid (exclusive). The `valid_to` column is set to `NULL` for the latest record.
+SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your model. The `valid_from` column is the timestamp that the record became valid (inclusive) and the `valid_to` column is the timestamp that the record became invalid (exclusive). The `valid_to` column is set to `NULL` for the latest record.
 
 Therefore you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large.
 
@@ -435,7 +435,7 @@ Note: `Cheeseburger` was deleted from `2020-01-02 02:00:00` to `2020-01-03 00:00
 
 #### Querying the current version of a record
 
-Although SCD Type 2 models support history, it is still very easy to querying just the latest version of a record. Simply query the model as you would any other table. For example, if you wanted to query the latest version of the `menu_items` table you would simply run:
+Although SCD Type 2 models support history, it is still very easy to query for just the latest version of a record. Simply query the model as you would any other table. For example, if you wanted to query the latest version of the `menu_items` table you would simply run:
 
 ```sql linenums="1" hl_lines="3"
 SELECT 
@@ -468,7 +468,7 @@ FROM
 WHERE
     id = 1
     AND '2020-01-02 01:00:00' >= valid_from
-    AND '2020-01-02 01:00:00' < COALESCE(valid_to, '2199-12-31 23:59:59');
+    AND '2020-01-02 01:00:00' < COALESCE(valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP));
 ```
 
 Example in a join:
@@ -482,7 +482,7 @@ FROM
     menu_items
     ON orders.menu_item_id = menu_items.id
     AND orders.created_at >= menu_items.valid_from
-    AND orders.created_at < COALESCE(menu_items.valid_to, '2199-12-31 23:59:59');
+    AND orders.created_at < COALESCE(menu_items.valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP));
 ```
 
 A view can be created to do the `COALESCE` automatically. This, combined with the `is_current` flag, makes it easier to query for a specific version of a record.
@@ -494,7 +494,7 @@ SELECT
     price,
     updated_at,
     valid_from,
-    COALESCE(valid_to, '2199-12-31 23:59:59') AS valid_to
+    COALESCE(valid_to, CAST('2199-12-31 23:59:59+00:00' AS TIMESTAMP)) AS valid_to
     valid_to IS NULL AS is_current,
 FROM
     menu_items;
@@ -508,7 +508,7 @@ SELECT
     price,
     updated_at,
     valid_from,
-    COALESCE(valid_to, '2200-01-01 00:00:00') - INTERVAL 1 SECOND AS valid_to
+    COALESCE(valid_to, CAST('2200-01-01 00:00:00+00:00' AS TIMESTAMP)) - INTERVAL 1 SECOND AS valid_to
     valid_to IS NULL AS is_current,
 ```
 

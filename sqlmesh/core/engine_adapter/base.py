@@ -818,9 +818,8 @@ class EngineAdapter:
             # Historical Records that Do Not Change
             .with_(
                 "static",
-                exp.Select()
+                exp.select(*columns_to_types)
                 .from_(target_table)
-                .select(*columns_to_types)
                 .where(f"{valid_to_name} IS NOT NULL"),
             )
             # Latest Records that can be updated
@@ -886,9 +885,7 @@ class EngineAdapter:
                 .from_("joined")
                 .join(
                     "latest_deleted",
-                    on=" AND ".join(
-                        [f"joined.s_{col} = latest_deleted.{col}" for col in unique_key]
-                    ),
+                    on=" AND ".join(f"joined.s_{col} = latest_deleted.{col}" for col in unique_key),
                     join_type="left",
                 ),
             )

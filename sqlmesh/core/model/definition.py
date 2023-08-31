@@ -1660,8 +1660,9 @@ def create_python_model(
         depends_on: The custom set of model's upstream dependencies.
     """
     # Find dependencies for python models by parsing code if they are not explicitly defined
+    # Also remove self-references that are found
     depends_on = (
-        _parse_depends_on(entrypoint, python_env)
+        _parse_depends_on(entrypoint, python_env) - {name}
         if depends_on is None and python_env is not None
         else None
     )

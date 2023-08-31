@@ -808,7 +808,7 @@ WITH "source" AS (
         ELSE "s_test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
@@ -864,7 +864,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.scd_type_2(
         target_table="target",
         source_table=df,
-        unique_key=["id"],
+        unique_key=["id1", "id2"],
         valid_from_name="test_valid_from",
         valid_to_name="test_valid_to",
         updated_at_name="test_updated_at",
@@ -884,7 +884,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             """
 CREATE OR REPLACE TABLE "target" AS
 WITH "source" AS (
-  SELECT DISTINCT ON ("id")
+  SELECT DISTINCT ON ("id1", "id2")
     "id1",
     "id2",
     "name",
@@ -931,16 +931,18 @@ WITH "source" AS (
     "static"."test_updated_at"
   FROM "static"
   LEFT JOIN "latest"
-    USING ("id")
+    USING ("id1", "id2")
   WHERE
     "latest"."test_valid_to" IS NULL
 ), "latest_deleted" AS (
   SELECT
-    "id",
+    "id1",
+    "id2",
     MAX("test_valid_to") AS "test_valid_to"
   FROM "deleted"
   GROUP BY
-    "id"
+    "id1",
+    "id2"
 ), "joined" AS (
   SELECT
     "latest"."id1" AS "t_id1",
@@ -955,8 +957,8 @@ WITH "source" AS (
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
   FULL JOIN "source"
-    USING ("id")
-), "non_updated_rows" AS (
+    USING ("id1", "id2")
+), "updated_rows" AS (
   SELECT
     COALESCE("t_id1", "s_id1") AS "id1",
     COALESCE("t_id2", "s_id2") AS "id2",
@@ -964,27 +966,28 @@ WITH "source" AS (
     COALESCE("t_price", "s_price") AS "price",
     COALESCE("t_test_updated_at", "s_test_updated_at") AS "test_updated_at",
     CASE
-      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."id" IS NULL
+      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."id1" IS NULL
       THEN CASE
         WHEN "latest_deleted"."test_valid_to" > "s_test_updated_at"
         THEN "latest_deleted"."test_valid_to"
         ELSE "s_test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "s_test_updated_at" > "t_test_updated_at"
       THEN "s_test_updated_at"
-      WHEN "s_id" IS NULL
+      WHEN "s_id1" IS NULL
       THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
   LEFT JOIN "latest_deleted"
-    ON "joined"."s_id" = "latest_deleted"."id"
-), "updated_rows" AS (
+    ON "joined"."s_id1" = "latest_deleted"."id1"
+    AND "joined"."s_id2" = "latest_deleted"."id2"
+), "inserted_rows" AS (
   SELECT
     "s_id1" AS "id1",
     "s_id2" AS "id2",
@@ -995,7 +998,7 @@ WITH "source" AS (
     NULL AS "test_valid_to"
   FROM "joined"
   WHERE
-    NOT "t_id" IS NULL AND NOT "s_id" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
+    NOT "t_id1" IS NULL AND NOT "s_id1" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
 )
 SELECT
   *
@@ -1003,11 +1006,11 @@ FROM "static"
 UNION ALL
 SELECT
   *
-FROM "non_updated_rows"
+FROM "updated_rows"
 UNION ALL
 SELECT
   *
-FROM "updated_rows"
+FROM "inserted_rows"
 """
         ).sql()
     )
