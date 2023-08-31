@@ -427,9 +427,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiEnvironmentsPayload"
-                }
+                "schema": { "$ref": "#/components/schemas/ApiEnvironments" }
               }
             }
           }
@@ -452,14 +450,7 @@
         "responses": {
           "200": {
             "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "boolean",
-                  "title": "Response Delete Environment Api Environments  Environment  Delete"
-                }
-              }
-            }
+            "content": { "application/json": { "schema": {} } }
           },
           "422": {
             "description": "Validation Error",
@@ -730,7 +721,7 @@
   },
   "components": {
     "schemas": {
-      "ApiEnvironmentsPayload": {
+      "ApiEnvironments": {
         "properties": {
           "environments": {
             "additionalProperties": {
@@ -754,7 +745,7 @@
           }
         },
         "type": "object",
-        "title": "ApiEnvironmentsPayload"
+        "title": "ApiEnvironments"
       },
       "ApiExceptionPayload": {
         "properties": {

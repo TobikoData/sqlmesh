@@ -191,7 +191,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   },
   addSynchronizedEnvironments(
     envs = [],
-    env,
+    currentEnvironment,
     defaultEnvironment,
     pinnedEnvs = [],
   ) {

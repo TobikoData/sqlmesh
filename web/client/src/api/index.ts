@@ -46,7 +46,7 @@ import {
   type GetModelsApiModelsGet200,
   type ApiExceptionPayload,
   deleteEnvironmentApiEnvironmentsEnvironmentDelete as apiDeleteEnvironment,
-  type ApiEnvironmentsPayload,
+  type ApiEnvironments,
 } from './client'
 import {
   useIDE,
@@ -187,8 +187,8 @@ export function useApiColumnLineage(
 
 export function useApiEnvironments(
   options?: ApiOptions,
-): UseQueryWithTimeoutOptions<ApiEnvironmentsPayload> {
-  return useQueryWithTimeout<ApiEnvironmentsPayload, ErrorIDE>(
+): UseQueryWithTimeoutOptions<ApiEnvironments> {
+  return useQueryWithTimeout<ApiEnvironments, ErrorIDE>(
     {
       queryKey: ['/api/environments'],
       queryFn: getEnvironmentsApiEnvironmentsGet,

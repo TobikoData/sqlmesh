@@ -1,19 +1,20 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
+from starlette.status import HTTP_204_NO_CONTENT
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from web.server.exceptions import ApiException
-from web.server.models import ApiEnvironmentsPayload
+from web.server.models import ApiEnvironments
 from web.server.settings import get_loaded_context
 
 router = APIRouter()
 
 
-@router.get("", response_model=ApiEnvironmentsPayload)
+@router.get("", response_model=ApiEnvironments)
 async def get_environments(
     context: Context = Depends(get_loaded_context),
-) -> ApiEnvironmentsPayload:
+) -> ApiEnvironments:
     """Get the environments"""
     try:
         environments = {env.name: env for env in context.state_reader.get_environments()}
@@ -37,7 +38,7 @@ async def get_environments(
             start_at=c.EPOCH,
             plan_id="",
         )
-    return ApiEnvironmentsPayload(
+    return ApiEnvironments(
         environments=environments,
         pinned_environments=context.config.pinned_environments,
         default_target_environment=context.config.default_target_environment,
@@ -46,14 +47,15 @@ async def get_environments(
 
 @router.delete("/{environment:str}")
 async def delete_environment(
+    response: Response,
+    environment: str,
     context: Context = Depends(get_loaded_context),
-    environment: str = "",
-) -> bool:
+) -> None:
     """Invalidate and delete an environment"""
     try:
         context.state_sync.invalidate_environment(environment)
         context.state_sync.delete_expired_environments()
-        return True
+        response.status_code = HTTP_204_NO_CONTENT
     except Exception:
         raise ApiException(
             message="Unable to delete environments",

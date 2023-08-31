@@ -484,7 +484,7 @@ def test_get_environments(project_context: Context) -> None:
 
 
 async def test_delete_environment_success(project_context: Context):
-    response = client.delete(f"/api/environments/test")
+    response = client.delete("/api/environments/test")
 
     assert response.status_code == 200
     assert response.json() == True
