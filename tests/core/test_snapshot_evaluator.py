@@ -835,7 +835,7 @@ def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
     )
 
 
-def test_insert_into_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
+def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -843,9 +843,7 @@ def test_insert_into_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
             MODEL (
                 name test_schema.test_model,
                 kind SCD_TYPE_2 (
-                    unique_key (
-                        id
-                    ),
+                    unique_key id,
                 )
             );
 

@@ -372,4 +372,4 @@ class ModelMeta(Node, extra="allow"):
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
-        return getattr(self.kind, "_managed_columns", {})
+        return getattr(self.kind, "managed_columns", {})

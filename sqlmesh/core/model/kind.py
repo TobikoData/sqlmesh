@@ -101,10 +101,10 @@ class ModelKindName(str, ModelKindMixin, Enum):
 
 def _unique_key_validator(v: t.Any) -> t.List[str]:
     if isinstance(v, exp.Identifier):
-        return [v.this]
+        return [v.name]
     if isinstance(v, exp.Tuple):
-        return [e.this for e in v.expressions]
-    return [i.this if isinstance(i, exp.Identifier) else str(i) for i in v]
+        return [e.name for e in v.expressions]
+    return [i.name if isinstance(i, exp.Identifier) else str(i) for i in v]
 
 
 unique_key_validator = field_validator("unique_key", mode="before")(_unique_key_validator)
@@ -299,7 +299,7 @@ class SCDType2Kind(_ModelKind):
     _unique_key_validator = unique_key_validator
 
     @property
-    def _managed_columns(self) -> t.Dict[str, exp.DataType]:
+    def managed_columns(self) -> t.Dict[str, exp.DataType]:
         return {
             self.valid_from_name: exp.DataType.build("TIMESTAMP"),
             self.valid_to_name: exp.DataType.build("TIMESTAMP"),

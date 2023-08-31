@@ -267,14 +267,16 @@ SCD Type 2 is a model kind that supports [slowly changing dimensions](https://en
 
 SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your model. The `valid_from` column is the date that the record became valid (inclusive) and the `valid_to` column is the date that the record became invalid (exclusive). The `valid_to` column is set to `NULL` for the latest record.
 
-Therefore you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large. 
+Therefore you can use these models to not only tell you what the latest value is for a given record but also what the values were anytime in the past. Note that maintaining this history does come at a cost of increased storage and compute and this may not be a good fit for sources that change frequently since the history could get very large.
+
+Currently SCD Type 2 only supports sourcing from tables that have an "Updated At" timestamp defined in the table that tells you when a given was last updated. Soon we will also be supporting checking column values in cases where an update column is not available.
 
 This example specifies a `SCD_TYPE_2` model kind:
 ```sql linenums="1" hl_lines="3"
 MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
-    unique_key (id),
+    unique_key id,
   )
 );
 
@@ -305,7 +307,7 @@ SQLMesh will automatically add the `valid_from` and `valid_to` columns to your t
 MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
-    unique_key (id),
+    unique_key id,
     valid_from_name my_valid_from,
     valid_to_name my_valid_to
   )
@@ -329,7 +331,7 @@ The `updated_at` column name can also be changed by adding the following to your
 MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
-    unique_key (id),
+    unique_key id,
     updated_at_name my_updated_at
   )
 );

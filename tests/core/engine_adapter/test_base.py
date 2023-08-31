@@ -711,7 +711,7 @@ def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
     adapter.scd_type_2(
         target_table="target",
         source_table=t.cast(
-            exp.Select, parse_one("SELECT id, name, price, updated_at FROM source")
+            exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM source")
         ),
         unique_key=["id"],
         valid_from_name="test_valid_from",
@@ -742,7 +742,7 @@ WITH "source" AS (
       "id",
       "name",
       "price",
-      "updated_at"
+      "test_updated_at"
     FROM "source"
   ) AS "raw_source"
 ), "static" AS (
@@ -794,7 +794,7 @@ WITH "source" AS (
   FROM "latest"
   FULL JOIN "source"
     USING ("id")
-), "non_updated_rows" AS (
+), "updated_rows" AS (
   SELECT
     COALESCE("t_id", "s_id") AS "id",
     COALESCE("t_name", "s_name") AS "name",
@@ -808,20 +808,20 @@ WITH "source" AS (
         ELSE "s_test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST(\'1970-01-01 00:00:00\' AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "s_test_updated_at" > "t_test_updated_at"
       THEN "s_test_updated_at"
       WHEN "s_id" IS NULL
-      THEN CAST(\'2020-01-01T00:00:00+00:00\' AS TIMESTAMP)
+      THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
   LEFT JOIN "latest_deleted"
     ON "joined"."s_id" = "latest_deleted"."id"
-), "updated_rows" AS (
+), "inserted_rows" AS (
   SELECT
     "s_id" AS "id",
     "s_name" AS "name",
@@ -839,11 +839,11 @@ FROM "static"
 UNION ALL
 SELECT
   *
-FROM "non_updated_rows"
+FROM "updated_rows"
 UNION ALL
 SELECT
   *
-FROM "updated_rows"
+FROM "inserted_rows"
     """
         ).sql()
     )
@@ -898,9 +898,9 @@ WITH "source" AS (
       CAST("price" AS DOUBLE) AS "price",
       CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at"
     FROM (VALUES
-      (1, 4, \'muffins\', 4.0, \'2020-01-01 10:00:00\'),
-      (2, 5, \'chips\', 5.0, \'2020-01-02 15:00:00\'),
-      (3, 6, \'soda\', 6.0, \'2020-01-03 12:00:00\')) AS "t"("id1", "id2", "name", "price", "test_updated_at")
+      (1, 4, 'muffins', 4.0, '2020-01-01 10:00:00'),
+      (2, 5, 'chips', 5.0, '2020-01-02 15:00:00'),
+      (3, 6, 'soda', 6.0, '2020-01-03 12:00:00')) AS "t"("id1", "id2", "name", "price", "test_updated_at")
   ) AS "raw_source"
 ), "static" AS (
   SELECT
@@ -971,14 +971,14 @@ WITH "source" AS (
         ELSE "s_test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST(\'1970-01-01 00:00:00\' AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "s_test_updated_at" > "t_test_updated_at"
       THEN "s_test_updated_at"
       WHEN "s_id" IS NULL
-      THEN CAST(\'2020-01-01T00:00:00+00:00\' AS TIMESTAMP)
+      THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"

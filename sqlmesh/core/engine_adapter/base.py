@@ -858,7 +858,7 @@ class EngineAdapter:
             )
             # Get deleted, new, no longer current, or unchanged records
             .with_(
-                "non_updated_rows",
+                "updated_rows",
                 exp.select(
                     *(f"COALESCE(t_{col}, s_{col}) as {col}" for col in unmanaged_columns),
                     f"""
@@ -894,7 +894,7 @@ class EngineAdapter:
             )
             # Get records that have been "updated" which means inserting a new record with previous `valid_from`
             .with_(
-                "updated_rows",
+                "inserted_rows",
                 exp.select(
                     *(f"s_{col} as {col}" for col in unmanaged_columns),
                     f"s_{updated_at_name} as {valid_from_name}",
@@ -908,11 +908,11 @@ class EngineAdapter:
             .select("*")
             .from_("static")
             .union(
-                "SELECT * FROM non_updated_rows",
+                "SELECT * FROM updated_rows",
                 distinct=False,
             )
             .union(
-                "SELECT * FROM updated_rows",
+                "SELECT * FROM inserted_rows",
                 distinct=False,
             )
         )
