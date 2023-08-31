@@ -26,27 +26,27 @@ Some SQLMesh functionality requires additional Python libraries. `pip` will auto
 
 Some extras add features:
 
-| Feature        | `pip` command                |
-|----------------|------------------------------|
-| Browser UI     | `pip install "sqlmesh[web]"` |
-| dbt projects | `pip install "sqlmesh[dbt]"` |
-| Github CI/CD bot | `pip install "sqlmesh[github]"` |
-| Slack notifications | `pip install "sqlmesh[slack]"` |
-| Development setup | `pip install "sqlmesh[dev]"` |
-| LLM SQL prompt | `pip install "sqlmesh[llm]"` |
+| Feature             | `pip` command                   |
+|---------------------|---------------------------------|
+| Browser UI          | `pip install "sqlmesh[web]"`    |
+| dbt projects        | `pip install "sqlmesh[dbt]"`    |
+| Github CI/CD bot    | `pip install "sqlmesh[github]"` |
+| Slack notifications | `pip install "sqlmesh[slack]"`  |
+| Development setup   | `pip install "sqlmesh[dev]"`    |
+| LLM SQL prompt      | `pip install "sqlmesh[llm]"`    |
 
 Other extras are required to use specific SQL engines:
 
-| SQL engine     | `pip` command                |
-|----------------|------------------------------|
-| Bigquery       | `pip install "sqlmesh[bigquery]"` |
-| Databricks | `pip install "sqlmesh[databricks]"` |
-| GCP Postgres | `pip install "sqlmesh[gcppostgres]"` |
-| MS SQL Server | `pip install "sqlmesh[mssql]"` |
-| MySQL | `pip install "sqlmesh[mysql]"` |
-| Postgres | `pip install "sqlmesh[postgres]"` |
-| Redshift | `pip install "sqlmesh[redshift]"` |
-| Snowflake | `pip install "sqlmesh[snowflake]"` |
+| SQL engine    | `pip` command                        |
+|---------------|--------------------------------------|
+| Bigquery      | `pip install "sqlmesh[bigquery]"`    |
+| Databricks    | `pip install "sqlmesh[databricks]"`  |
+| GCP Postgres  | `pip install "sqlmesh[gcppostgres]"` |
+| MS SQL Server | `pip install "sqlmesh[mssql]"`       |
+| MySQL         | `pip install "sqlmesh[mysql]"`       |
+| Postgres      | `pip install "sqlmesh[postgres]"`    |
+| Redshift      | `pip install "sqlmesh[redshift]"`    |
+| Snowflake     | `pip install "sqlmesh[snowflake]"`   |
 
 Multiple extras can be installed at once, as in `pip install "sqlmesh[web,slack]"`.
 
