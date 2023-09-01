@@ -17,7 +17,7 @@ from sqlmesh.core.model.kind import (
     _Incremental,
     model_kind_validator,
 )
-from sqlmesh.core.node import Node, str_or_exp_to_str
+from sqlmesh.core.node import _Node, str_or_exp_to_str
 from sqlmesh.core.reference import Reference
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
@@ -31,7 +31,7 @@ from sqlmesh.utils.pydantic import (
 AuditReference = t.Tuple[str, t.Dict[str, exp.Expression]]
 
 
-class ModelMeta(Node, extra="allow"):
+class ModelMeta(_Node, extra="allow"):
     """Metadata for models which can be defined in SQL."""
 
     dialect: str = ""
@@ -45,7 +45,6 @@ class ModelMeta(Node, extra="allow"):
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]] = None
     audits: t.List[AuditReference] = []
-    tags: t.List[str] = []
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
     hash_raw_query: bool = False

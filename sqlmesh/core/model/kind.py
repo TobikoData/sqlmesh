@@ -26,7 +26,7 @@ else:
 
 class ModelKindMixin:
     @property
-    def model_kind_name(self) -> ModelKindName:
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
         """Returns the model kind name."""
         raise NotImplementedError
 
@@ -95,7 +95,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
     EXTERNAL = "EXTERNAL"
 
     @property
-    def model_kind_name(self) -> ModelKindName:
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self
 
 
@@ -114,7 +114,7 @@ class _ModelKind(PydanticModel, ModelKindMixin):
     name: ModelKindName
 
     @property
-    def model_kind_name(self) -> ModelKindName:
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self.name
 
     def to_expression(self, **kwargs: t.Any) -> d.ModelKind:

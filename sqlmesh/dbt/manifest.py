@@ -168,27 +168,6 @@ class ManifestHelper:
             dependencies.macros.append(MacroReference(package="dbt", name="should_store_failures"))
 
             test_owner = _test_owner(node)
-            if not test_owner:
-                if not dependencies.refs and not dependencies.sources:
-                    raise ConfigError(
-                        f"Audit '%s' is not associated with any models or sources", node.name
-                    )
-
-                test_owner = (
-                    list(dependencies.refs)[0]
-                    if dependencies.refs
-                    else list(dependencies.sources)[0]
-                )
-
-            if test_owner in dependencies.sources:
-                logger.debug("Skipping audit '%s'. Source audits not supported yet", node.name)
-                continue
-
-            if len(dependencies.refs) > 1:
-                logger.debug(
-                    "Skipping audit '%s'. Multi-owner audits not supported yet.", node.name
-                )
-                continue
 
             test = TestConfig(
                 sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
@@ -198,7 +177,8 @@ class ManifestHelper:
                 **_node_base_config(node),
             )
             self._tests_per_package[node.package_name][node.name.lower()] = test
-            self._tests_by_owner[test_owner].append(test)
+            if test_owner:
+                self._tests_by_owner[test_owner].append(test)
 
     def _load_models_and_seeds(self) -> None:
         for node in self._manifest.nodes.values():
@@ -317,23 +297,15 @@ def _model_node_id(model_name: str, package: str) -> str:
 def _test_owner(node: ManifestNode) -> t.Optional[str]:
     attached_node = getattr(node, "attached_node", None)
     if attached_node:
-        return attached_node.split(".")[-1]
+        pieces = attached_node.split(".")
+        return pieces[-1] if pieces[0] in ["model", "seed"] else None
 
-    if not hasattr(node, "test_metadata"):
-        return None
+    key_name = getattr(node, "file_key_name", None)
+    if key_name:
+        pieces = key_name.split(".")
+        return pieces[-1] if pieces[0] in ["models", "seeds"] else None
 
-    model_kwarg = node.test_metadata.kwargs.get("model")
-    if not model_kwarg:
-        return None
-
-    return next((ref for ref in _refs(node) if f"'{ref}'" in model_kwarg), None) or next(
-        (
-            ".".join(source)
-            for source in node.sources or []
-            if f"'{source[0]}'" in model_kwarg and f"'{source[1]}'" in model_kwarg
-        ),
-        None,
-    )
+    return None
 
 
 def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:

@@ -580,7 +580,7 @@ class GithubController:
                     body_rows: List[Element | List[Element]] = []
                     for affected_model in pr_affected_models:
                         model_rows = [
-                            h("td", affected_model.model_name),
+                            h("td", affected_model.node_name),
                             h("td", affected_model.change_category_str),
                         ]
                         if affected_model.intervals:

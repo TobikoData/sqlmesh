@@ -47,11 +47,11 @@ from sqlmesh.utils.metaprogramming import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.audit import Audit
+    from sqlmesh.core.audit import ModelAudit
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
-    from sqlmesh.core.snapshot import Snapshot
+    from sqlmesh.core.snapshot import Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
@@ -392,7 +392,7 @@ class _Model(ModelMeta, frozen=True):
             )
         return query
 
-    def referenced_audits(self, audits: t.Dict[str, Audit]) -> t.List[Audit]:
+    def referenced_audits(self, audits: t.Dict[str, ModelAudit]) -> t.List[ModelAudit]:
         """Returns audits referenced in this model.
 
         Args:
@@ -411,15 +411,20 @@ class _Model(ModelMeta, frozen=True):
                 )
         return referenced_audits
 
-    def text_diff(self, other: Model) -> str:
-        """Produce a text diff against another model.
+    def text_diff(self, other: Node) -> str:
+        """Produce a text diff against another node.
 
         Args:
-            other: The model to diff against.
+            other: The node to diff against.
 
         Returns:
             A unified text diff showing additions and deletions.
         """
+        if not isinstance(other, _Model):
+            raise SQLMeshError(
+                f"Cannot diff model '{self.name} against a non-model node '{other.name}'"
+            )
+
         meta_a, *statements_a = self.render_definition()
         meta_b, *statements_b = other.render_definition()
 
@@ -712,7 +717,7 @@ class _Model(ModelMeta, frozen=True):
 
         return data  # type: ignore
 
-    def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+    def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
         """
         Computes the metadata hash for the node.
 
@@ -797,6 +802,11 @@ class _Model(ModelMeta, frozen=True):
                 output.append(d.jinja_statement(macro_info.definition))
 
         return output
+
+    @property
+    def is_model(self) -> bool:
+        """Return True if this is a model node"""
+        return True
 
 
 class _SqlBasedModel(_Model):
@@ -1174,7 +1184,7 @@ class SeedModel(_SqlBasedModel):
             df[string_columns] = df[string_columns].astype(str)
             yield df
 
-    def text_diff(self, other: Model) -> str:
+    def text_diff(self, other: Node) -> str:
         if not isinstance(other, SeedModel):
             return super().text_diff(other)
 

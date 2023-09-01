@@ -9,6 +9,7 @@ from sqlglot import parse_one
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import IncrementalByTimeRangeKind, SqlModel
+from sqlmesh.core.node import NodeType
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
@@ -16,7 +17,7 @@ from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
 
 @pytest.fixture
 def snapshot() -> Snapshot:
-    snapshot = Snapshot.from_model(
+    snapshot = Snapshot.from_node(
         SqlModel(
             name="test_model",
             kind=IncrementalByTimeRangeKind(time_column="ds"),
@@ -116,6 +117,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 {
                     "fingerprint": snapshot.fingerprint.dict(),
                     "name": "test_model",
+                    "node_type": NodeType.MODEL,
                     "previous_versions": [],
                     "version": snapshot.version,
                     "physical_schema": "sqlmesh__default",

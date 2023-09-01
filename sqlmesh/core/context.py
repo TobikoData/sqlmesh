@@ -46,7 +46,7 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import Audit, StandaloneAudit
 from sqlmesh.core.config import Config, load_config_from_paths, load_config_from_yaml
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
@@ -62,7 +62,6 @@ from sqlmesh.core.loader import Loader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
 from sqlmesh.core.metric import Metric
 from sqlmesh.core.model import Model
-from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.notification_target import (
     NotificationEvent,
     NotificationTarget,
@@ -105,6 +104,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
+    NodeOrSnapshot = t.Union[str, Model, StandaloneAudit, Snapshot]
 
 
 class BaseContext(abc.ABC):
@@ -244,6 +244,9 @@ class Context(BaseContext):
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
+        self._standalone_audits: UniqueKeyDict[str, StandaloneAudit] = UniqueKeyDict(
+            "standaloneaudits"
+        )
         self._macros: UniqueKeyDict[str, ExecutableOrMacro] = UniqueKeyDict("macros")
         self._metrics: UniqueKeyDict[str, Metric] = UniqueKeyDict("metrics")
         self._jinja_macros = JinjaMacroRegistry()
@@ -379,10 +382,20 @@ class Context(BaseContext):
             project = self._loader.load(self, update_schemas)
             self._macros = project.macros
             self._models = project.models
-            self._audits = project.audits
             self._metrics = project.metrics
+            for name, audit in project.audits.items():
+                if isinstance(audit, StandaloneAudit):
+                    self._standalone_audits[name] = audit
+                else:
+                    self._audits[name] = audit
             self.dag = project.dag
             gc.enable()
+
+            duplicates = set(self._models) & set(self._standalone_audits)
+            if duplicates:
+                raise ConfigError(
+                    f"Models and Standalone audits cannot have the same name: {duplicates}"
+                )
 
         return self
 
@@ -480,18 +493,18 @@ class Context(BaseContext):
 
     @t.overload
     def get_snapshot(
-        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[True]
+        self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[True]
     ) -> Snapshot:
         ...
 
     @t.overload
     def get_snapshot(
-        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: Literal[False]
+        self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: Literal[False]
     ) -> t.Optional[Snapshot]:
         ...
 
     def get_snapshot(
-        self, model_or_snapshot: ModelOrSnapshot, raise_if_missing: bool = False
+        self, node_or_snapshot: NodeOrSnapshot, raise_if_missing: bool = False
     ) -> t.Optional[Snapshot]:
         """Returns a snapshot with the given name or None if a snapshot with such name doesn't exist.
 
@@ -502,16 +515,16 @@ class Context(BaseContext):
         Returns:
             The expected snapshot.
         """
-        if isinstance(model_or_snapshot, str):
-            normalized_name = normalize_model_name(model_or_snapshot, dialect=self.config.dialect)
+        if isinstance(node_or_snapshot, str):
+            normalized_name = normalize_model_name(node_or_snapshot, dialect=self.config.dialect)
             snapshot = self.snapshots.get(normalized_name)
-        elif isinstance(model_or_snapshot, Snapshot):
-            snapshot = model_or_snapshot
+        elif isinstance(node_or_snapshot, Snapshot):
+            snapshot = node_or_snapshot
         else:
-            snapshot = self.snapshots.get(model_or_snapshot.name)
+            snapshot = self.snapshots.get(node_or_snapshot.name)
 
         if raise_if_missing and not snapshot:
-            raise SQLMeshError(f"Cannot find snapshot for '{model_or_snapshot}'")
+            raise SQLMeshError(f"Cannot find snapshot for '{node_or_snapshot}'")
 
         return snapshot
 
@@ -524,9 +537,13 @@ class Context(BaseContext):
                 pass
         return self.config
 
-    def config_for_model(self, model: str | Model) -> Config:
+    def config_for_node(self, node: str | Model | StandaloneAudit) -> Config:
         return self.config_for_path(
-            (model if isinstance(model, _Model) else self._models[model])._path
+            (
+                self._models.get(node, None) or self._standalone_audits.get(node, None)
+                if isinstance(node, str)
+                else node
+            )._path
         )
 
     @property
@@ -538,6 +555,11 @@ class Context(BaseContext):
     def metrics(self) -> MappingProxyType[str, Metric]:
         """Returns all registered metrics in this context."""
         return MappingProxyType(self._metrics)
+
+    @property
+    def standalone_audits(self) -> MappingProxyType[str, StandaloneAudit]:
+        """Returns all registered standalone audits in this context."""
+        return MappingProxyType(self._standalone_audits)
 
     @property
     def snapshots(self) -> t.Dict[str, Snapshot]:
@@ -632,7 +654,7 @@ class Context(BaseContext):
         )
 
         if df is None:
-            raise RuntimeError(f"Error evaluating {snapshot.model.name}")
+            raise RuntimeError(f"Error evaluating {snapshot.name}")
 
         return df
 
@@ -643,7 +665,7 @@ class Context(BaseContext):
                 continue
             with open(model._path, "r+", encoding="utf-8") as file:
                 expressions = parse(
-                    file.read(), default_dialect=self.config_for_model(model).dialect
+                    file.read(), default_dialect=self.config_for_node(model).dialect
                 )
                 if transpile:
                     for prop in expressions[0].expressions:
@@ -1016,7 +1038,7 @@ class Context(BaseContext):
             else self.snapshots.values()
         )
 
-        num_audits = sum(len(snapshot.model.audits) for snapshot in snapshots)
+        num_audits = sum(len(snapshot.audits) for snapshot in snapshots)
         self.console.log_status_update(f"Found {num_audits} audit(s).")
         errors = []
         skipped_count = 0
@@ -1079,7 +1101,7 @@ class Context(BaseContext):
                 models={
                     name: model
                     for name, model in self._models.items()
-                    if self.config_for_model(model) is config
+                    if self.config_for_node(model) is config
                 },
                 adapter=self._engine_adapter,
                 state_reader=self.state_reader,
@@ -1154,36 +1176,38 @@ class Context(BaseContext):
         )
 
         fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
-        models = (models_override or self._models).copy()
+        local_nodes = {**(models_override or self._models), **self._standalone_audits}
+        nodes = local_nodes.copy()
         audits = self._audits.copy()
         projects = {config.project for config in self.configs.values()}
 
         for name, snapshot in remote_snapshots.items():
-            if name not in models and snapshot.model.project not in projects:
-                models[name] = snapshot.model
+            if name not in nodes and snapshot.node.project not in projects:
+                nodes[name] = snapshot.node
 
-                for audit in snapshot.audits:
-                    if name not in audits:
-                        audits[name] = audit
+                if snapshot.is_model:
+                    for audit in snapshot.audits:
+                        if name not in audits:
+                            audits[name] = audit
 
         snapshots = {}
 
-        for model in models.values():
-            if model.name not in self._models and model.name in remote_snapshots:
-                snapshot = remote_snapshots[model.name]
+        for node in nodes.values():
+            if node.name not in local_nodes and node.name in remote_snapshots:
+                snapshot = remote_snapshots[node.name]
                 ttl = snapshot.ttl
             else:
-                config = self.config_for_model(model)
+                config = self.config_for_node(node)
                 ttl = config.snapshot_ttl
 
-            snapshot = Snapshot.from_model(
-                model,
-                nodes=models,
+            snapshot = Snapshot.from_node(
+                node,
+                nodes=nodes,
                 audits=audits,
                 cache=fingerprint_cache,
                 ttl=ttl,
             )
-            snapshots[model.name] = snapshot
+            snapshots[node.name] = snapshot
 
         stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
 

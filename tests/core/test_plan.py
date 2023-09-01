@@ -39,7 +39,7 @@ def test_forward_only_plan_sets_version(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {"b": (snapshot_b, snapshot_b)}
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
     context_diff_mock.added_materialized_models = set()
@@ -69,7 +69,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
     context_diff_mock.added_materialized_models = set()
@@ -100,7 +100,7 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = {"b"}
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {"a": (snapshot_a, snapshot_a)}
     context_diff_mock.new_snapshots = {
         snapshot_a.snapshot_id: snapshot_a,
@@ -133,7 +133,7 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {"b": (snapshot_b, snapshot_b)}
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
     context_diff_mock.added_materialized_models = set()
@@ -168,7 +168,7 @@ def test_restate_model_with_merge_strategy(make_snapshot, mocker: MockerFixture)
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {}
     context_diff_mock.added_materialized_models = set()
@@ -186,7 +186,7 @@ def test_new_snapshots_with_restatements(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
 
@@ -209,7 +209,7 @@ def test_end_validation(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
 
@@ -261,7 +261,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {"a": (snapshot, forward_only_snapshot)}
     context_diff_mock.new_snapshots = {}
     context_diff_mock.added_materialized_models = set()
@@ -309,7 +309,7 @@ def test_forward_only_plan_seed_models(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a_updated}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {"a": (snapshot_a_updated, snapshot_a)}
     context_diff_mock.new_snapshots = {snapshot_a_updated.snapshot_id: snapshot_a_updated}
     context_diff_mock.added_materialized_models = set()
@@ -331,7 +331,7 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
 
@@ -352,7 +352,7 @@ def test_auto_categorization(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {"a": (updated_snapshot, snapshot)}
     context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
 
@@ -380,7 +380,7 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot, "b": downstream_snapshot}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {
         "a": (updated_snapshot, snapshot),
         "b": (updated_downstream_snapshot, downstream_snapshot),
@@ -406,7 +406,7 @@ def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
 
@@ -428,13 +428,13 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"b": snapshot_b}
     context_diff_mock.added = set()
-    context_diff_mock.removed = {"a"}
+    context_diff_mock.removed_snapshots = {"a"}
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {}
 
     with pytest.raises(
         PlanError,
-        match=r"Removed models {'a'} are referenced in model 'b'.*",
+        match=r"Removed {'a'} are referenced in 'b'.*",
     ):
         Plan(context_diff_mock)
 
@@ -449,7 +449,7 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {"a": (updated_snapshot, snapshot)}
     context_diff_mock.new_snapshots = {updated_snapshot.snapshot_id: updated_snapshot}
     context_diff_mock.added_materialized_models = set()
@@ -499,7 +499,7 @@ def test_new_environment_no_changes(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.promotable_models = set()
     context_diff_mock.new_snapshots = {}
@@ -531,7 +531,7 @@ def test_new_environment_with_changes(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot_a, "b": snapshot_b}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {"a": (updated_snapshot_a, snapshot_a)}
     context_diff_mock.promotable_models = {"a"}
     context_diff_mock.new_snapshots = {updated_snapshot_a.snapshot_id: updated_snapshot_a}
@@ -582,7 +582,7 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = set()
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {"a": (updated_snapshot, snapshot)}
@@ -636,7 +636,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         "b": updated_snapshot_b,
         "c": updated_snapshot_c,
     }
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = set()
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {
@@ -676,7 +676,7 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
         "a": snapshot_a,
         "b": snapshot_b,
     }
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = {"b"}
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {}
@@ -707,7 +707,7 @@ def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
         "a": snapshot_a,
         "b": snapshot_b,
     }
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = {"a", "b"}
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {}
@@ -736,7 +736,7 @@ def test_disable_restatement(make_snapshot, mocker: MockerFixture):
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot}
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = set()
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {}
@@ -780,7 +780,7 @@ def test_revert_to_previous_value(make_snapshot, mocker: MockerFixture):
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.directly_modified.side_effect = lambda x: x == "a"
     context_diff_mock.modified_snapshots = {
         "a": (snapshot_a, old_snapshot_a),
@@ -977,7 +977,7 @@ def test_add_restatements(
         )
         for snapshot_name in dag
     }
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = set()
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {}
@@ -1041,7 +1041,7 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
         "b": unrelated_snapshot,
     }
     context_diff_mock.added = set()
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
     context_diff_mock.new_snapshots = {
         snapshot.snapshot_id: snapshot,

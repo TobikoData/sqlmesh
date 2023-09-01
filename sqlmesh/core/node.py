@@ -17,15 +17,16 @@ from sqlmesh.utils.pydantic import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.audit import Audit
+    from sqlmesh.core.audit import ModelAudit
+    from sqlmesh.core.snapshot import Node
 
 
 class IntervalUnit(str, Enum):
-    """IntervalUnit is the inferred granularity of an incremental model.
+    """IntervalUnit is the inferred granularity of an incremental node.
 
     IntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred
-    based on the cron schedule of a model. The minimum time delta between a sample set of dates
-    is used to determine which unit a model's schedule is.
+    based on the cron schedule of a node. The minimum time delta between a sample set of dates
+    is used to determine which unit a node's schedule is.
     """
 
     YEAR = "year"
@@ -135,7 +136,7 @@ INTERVAL_SECONDS = {
 }
 
 
-class Node(PydanticModel):
+class _Node(PydanticModel):
     """
     Node is the core abstraction for entity that can be executed within the scheduler.
 
@@ -149,9 +150,10 @@ class Node(PydanticModel):
             The start date can be a static datetime or a relative datetime like "1 year ago"
         cron: A cron string specifying how often the node should be run, leveraging the
             [croniter](https://github.com/kiorky/croniter) library.
-        interval_unit: The duration of an interval for the model. By default, it is computed from the cron expression.
+        interval_unit: The duration of an interval for the node. By default, it is computed from the cron expression.
         stamp: An optional arbitrary string sequence used to create new node versions without making
             changes to any of the functional components of the definition.
+        tags: A list of tags that can be used to filter nodes.
     """
 
     name: str
@@ -161,6 +163,7 @@ class Node(PydanticModel):
     start: t.Optional[TimeLike] = None
     cron: str = "@daily"
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
+    tags: t.List[str] = []
     stamp: t.Optional[str] = None
 
     _croniter: t.Optional[CroniterCache] = None
@@ -240,7 +243,11 @@ class Node(PydanticModel):
             return self.interval_unit_
         return self._inferred_interval_unit()
 
-    def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+    @property
+    def depends_on(self) -> t.Set[str]:
+        return set()
+
+    def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
         """
         Computes the metadata hash for the node.
 
@@ -261,7 +268,7 @@ class Node(PydanticModel):
 
     def cron_next(self, value: TimeLike) -> TimeLike:
         """
-        Get the next timestamp given a time-like value and the model's cron.
+        Get the next timestamp given a time-like value and the node's cron.
 
         Args:
             value: A variety of date formats.
@@ -273,7 +280,7 @@ class Node(PydanticModel):
 
     def cron_prev(self, value: TimeLike) -> TimeLike:
         """
-        Get the previous timestamp given a time-like value and the model's cron.
+        Get the previous timestamp given a time-like value and the node's cron.
 
         Args:
             value: A variety of date formats.
@@ -285,7 +292,7 @@ class Node(PydanticModel):
 
     def cron_floor(self, value: TimeLike) -> TimeLike:
         """
-        Get the floor timestamp given a time-like value and the model's cron.
+        Get the floor timestamp given a time-like value and the node's cron.
 
         Args:
             value: A variety of date formats.
@@ -295,10 +302,21 @@ class Node(PydanticModel):
         """
         return self.croniter(self.cron_next(value)).get_prev()
 
+    def text_diff(self, other: Node) -> str:
+        """Produce a text diff against another node.
+
+        Args:
+            other: The node to diff against. Must be of the same type.
+
+        Returns:
+            A unified text diff showing additions and deletions.
+        """
+        raise NotImplementedError
+
     def _inferred_interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Infers the interval unit from the cron expression.
 
-        The interval unit is used to determine the lag applied to start_date and end_date for model rendering and intervals.
+        The interval unit is used to determine the lag applied to start_date and end_date for node rendering and intervals.
 
         Args:
             sample_size: The number of samples to take from the cron to infer the unit.
@@ -309,6 +327,21 @@ class Node(PydanticModel):
         if not self.__inferred_interval_unit:
             self.__inferred_interval_unit = IntervalUnit.from_cron(self.cron, sample_size)
         return self.__inferred_interval_unit
+
+    @property
+    def is_model(self) -> bool:
+        """Return True if this is a model node"""
+        return False
+
+    @property
+    def is_audit(self) -> bool:
+        """Return True if this is an audit node"""
+        return False
+
+
+class NodeType(str, Enum):
+    MODEL = "model"
+    AUDIT = "audit"
 
 
 def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:

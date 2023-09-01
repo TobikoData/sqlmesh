@@ -15,6 +15,7 @@ from sqlmesh.core.model import (
     ModelKindName,
     create_sql_model,
 )
+from sqlmesh.core.node import NodeType
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
@@ -119,6 +120,7 @@ def test_create_plan_dag_spec(
         parents=[],
         change_category=SnapshotChangeCategory.BREAKING,
         kind_name=ModelKindName.FULL,
+        node_type=NodeType.MODEL,
     )
     old_environment = Environment(
         name=environment_name,

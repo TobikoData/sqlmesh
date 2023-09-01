@@ -27,13 +27,14 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
     Intervals,
+    Node,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotDataVersion,
@@ -43,7 +44,6 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotIntervals,
     SnapshotNameVersionLike,
-    SnapshotNode,
     fingerprint_from_node,
 )
 from sqlmesh.core.snapshot.definition import (
@@ -719,8 +719,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             seen = set()
             queue = {snapshot.snapshot_id}
             node = snapshot.node
-            nodes: t.Dict[str, SnapshotNode] = {}
-            audits: t.Dict[str, Audit] = {}
+            nodes: t.Dict[str, Node] = {}
+            audits: t.Dict[str, ModelAudit] = {}
 
             while queue:
                 snapshot_id = queue.pop()
@@ -919,7 +919,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
                 "snapshot": snapshot.json(exclude={"intervals", "dev_intervals"}),
-                "kind_name": snapshot.model_kind_name.value,
+                "kind_name": snapshot.model_kind_name,
             }
             for snapshot in snapshots
         ]

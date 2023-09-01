@@ -68,8 +68,8 @@ class CachingStateSync(DelegatingStateSync):
             elif snapshot:
                 if (
                     hydrate_seeds
-                    and isinstance(snapshot.model, SeedModel)
-                    and not snapshot.model.is_hydrated
+                    and isinstance(snapshot.node, SeedModel)
+                    and not snapshot.node.is_hydrated
                 ):
                     missing.add(snapshot_id)
                 else:
@@ -80,7 +80,7 @@ class CachingStateSync(DelegatingStateSync):
 
         for snapshot_id, snapshot in existing.items():
             cached = self._from_cache(snapshot_id, now)
-            if cached and (not isinstance(cached.model, SeedModel) or cached.model.is_hydrated):
+            if cached and (not isinstance(cached.node, SeedModel) or cached.node.is_hydrated):
                 continue
             self.snapshot_cache[snapshot_id] = (snapshot, expire_at)
 

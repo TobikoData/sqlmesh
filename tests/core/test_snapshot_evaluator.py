@@ -4,8 +4,9 @@ from unittest.mock import call
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
-from sqlglot import parse, parse_one
+from sqlglot import parse, parse_one, select
 
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -925,3 +926,69 @@ def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
         end="2020-01-02",
         execution_time="2020-01-02",
     )
+
+
+def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    audit = StandaloneAudit(name="test_standalone_audit", query=parse_one("SELECT NULL LIMIT 0"))
+
+    snapshot = make_snapshot(audit)
+    snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
+
+    # Create
+    evaluator.create([snapshot], {})
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+
+    # Evaluate
+    payload = {"calls": 0}
+    evaluator.evaluate(
+        snapshot, "2020-01-01", "2020-01-02", "2020-01-02", snapshots={}, payload=payload
+    )
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+    assert payload["calls"] == 0
+
+    # Audit
+    adapter_mock.fetchone.return_value = (0,)
+    evaluator.audit(snapshot=snapshot, snapshots={})
+
+    query = audit.render_query(snapshot)
+    adapter_mock.fetchone.assert_called_once_with(
+        select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
+    )
+
+    # Promote
+    adapter_mock.reset_mock()
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+
+    # Migrate
+    evaluator.migrate([snapshot], snapshots={})
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+
+    # Demote
+    evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+
+    # Cleanup
+    evaluator.cleanup([snapshot])
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
