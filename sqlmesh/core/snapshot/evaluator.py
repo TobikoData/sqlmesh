@@ -407,22 +407,17 @@ class SnapshotEvaluator:
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
         with self.adapter.transaction(TransactionType.DDL), self.adapter.session():
+            self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
+
             if is_dev and not snapshot.previous_versions:
                 # This is a FORWARD_ONLY snapshot which represents an added model. This means
                 # that the physical table associated with it doesn't exist yet.
                 logger.info(
                     f"Detected a forward-only snapshot without previous versions: {snapshot.snapshot_id}"
                 )
-                non_dev_render_kwargs: t.Dict[str, t.Any] = {**render_kwargs, "is_dev": False}
-                self.adapter.execute(snapshot.model.render_pre_statements(**non_dev_render_kwargs))
-                evaluation_strategy.create(
-                    snapshot.model, snapshot.table_name(), **non_dev_render_kwargs
-                )
-                self.adapter.execute(snapshot.model.render_post_statements(**non_dev_render_kwargs))
-
-            self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
-
-            if is_dev and snapshot.is_materialized and self.adapter.SUPPORTS_CLONING:
+                evaluation_strategy.create(snapshot.model, target_table_name, **render_kwargs)
+                evaluation_strategy.create(snapshot.model, snapshot.table_name(), **render_kwargs)
+            elif is_dev and snapshot.is_materialized and self.adapter.SUPPORTS_CLONING:
                 tmp_table_name = f"{target_table_name}__schema_migration_source"
                 source_table_name = snapshot.table_name()
 
