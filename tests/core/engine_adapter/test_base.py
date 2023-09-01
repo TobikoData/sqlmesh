@@ -732,7 +732,7 @@ def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
             """
 CREATE OR REPLACE TABLE "target" AS
 WITH "source" AS (
-  SELECT DISTINCT ON ("id")
+  SELECT
     "id",
     "name",
     "price",
@@ -884,7 +884,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             """
 CREATE OR REPLACE TABLE "target" AS
 WITH "source" AS (
-  SELECT DISTINCT ON ("id1", "id2")
+  SELECT
     "id1",
     "id2",
     "name",

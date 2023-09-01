@@ -811,9 +811,9 @@ class EngineAdapter:
             exp.Select()  # type: ignore
             .with_(
                 "source",
-                exp.select(*unmanaged_columns)
-                .distinct(*unique_key)
-                .from_(source_table.subquery("raw_source")),  # type: ignore
+                exp.select(*unmanaged_columns).from_(
+                    source_table.subquery("raw_source")  # type: ignore
+                ),
             )
             # Historical Records that Do Not Change
             .with_(
@@ -1099,6 +1099,8 @@ class EngineAdapter:
                 if isinstance(e, exp.Expression)
                 else e
             )
+            logger.error("THE SQL: %s", sql)
+            print(sql)
             logger.debug(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
 
