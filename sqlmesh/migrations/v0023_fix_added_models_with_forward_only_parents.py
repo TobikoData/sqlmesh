@@ -37,7 +37,7 @@ def migrate(state_sync: t.Any) -> None:
 
     for snapshot_id in dag:
         parsed_snapshot = snapshot_mapping[snapshot_id]
-        is_breaking = parsed_snapshot.get("change_category") == "BREAKING"
+        is_breaking = parsed_snapshot.get("change_category") == 1
         has_previous_versions = bool(parsed_snapshot.get("previous_versions", []))
 
         has_paused_forward_only_parent = False
@@ -45,9 +45,8 @@ def migrate(state_sync: t.Any) -> None:
             for upstream_id in dag.upstream(snapshot_id):
                 upstream_snapshot = snapshot_mapping[upstream_id]
                 upstream_change_category = upstream_snapshot.get("change_category")
-                if upstream_change_category == "FORWARD_ONLY" and not upstream_snapshot.get(
-                    "unpaused_ts"
-                ):
+                is_forward_only_upstream = upstream_change_category == 3
+                if is_forward_only_upstream and not upstream_snapshot.get("unpaused_ts"):
                     has_paused_forward_only_parent = True
                     break
 
