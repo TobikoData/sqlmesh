@@ -90,26 +90,27 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     now_ds_mock.call_count == 2
 
 
-def test_forward_only_plan_new_models_not_allowed(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
-    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
+
+    snapshot_b = make_snapshot(
+        SqlModel(name="b", query=parse_one("select a, ds from a")), nodes={"a": snapshot_a.node}
+    )
 
     context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {"a": snapshot_a}
-    context_diff_mock.added = {"a"}
+    context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
+    context_diff_mock.added = {"b"}
     context_diff_mock.removed = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {}
-    context_diff_mock.added_materialized_models = {"a"}
+    context_diff_mock.modified_snapshots = {"a": (snapshot_a, snapshot_a)}
+    context_diff_mock.new_snapshots = {
+        snapshot_a.snapshot_id: snapshot_a,
+        snapshot_b.snapshot_id: snapshot_b,
+    }
+    context_diff_mock.added_materialized_models = {"b"}
 
-    with pytest.raises(
-        PlanError,
-        match="New models that require materialization can't be added as part of the forward-only plan.",
-    ):
-        Plan(context_diff_mock, forward_only=True)
-
-    context_diff_mock.added_materialized_models = set()
     Plan(context_diff_mock, forward_only=True)
+    assert snapshot_a.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
 def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
@@ -577,6 +578,7 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
             kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
         )
     )
+    updated_snapshot.previous_versions = snapshot.all_versions
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
@@ -607,6 +609,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 2 as a, ds")))
+    updated_snapshot_a.previous_versions = snapshot_a.all_versions
 
     snapshot_b = make_snapshot(
         SqlModel(
@@ -618,12 +621,14 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     )
     snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     updated_snapshot_b = make_snapshot(snapshot_b.model, nodes={"a": updated_snapshot_a.model})
+    updated_snapshot_b.previous_versions = snapshot_b.all_versions
 
     snapshot_c = make_snapshot(
         SqlModel(name="c", query=parse_one("select a, ds from b")), nodes={"b": snapshot_b.model}
     )
     snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot_c = make_snapshot(snapshot_c.model, nodes={"b": updated_snapshot_b.model})
+    updated_snapshot_c.previous_versions = snapshot_c.all_versions
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {
@@ -658,6 +663,65 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     assert updated_snapshot_a.change_category == SnapshotChangeCategory.BREAKING
     assert updated_snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
     assert updated_snapshot_c.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+
+def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select a, ds from a")))
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {
+        "a": snapshot_a,
+        "b": snapshot_b,
+    }
+    context_diff_mock.removed = set()
+    context_diff_mock.added = {"b"}
+    context_diff_mock.added_materialized_models = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {
+        snapshot_b.snapshot_id: snapshot_b,
+    }
+    context_diff_mock.has_snapshot_changes = True
+    context_diff_mock.environment = "test_dev"
+    context_diff_mock.previous_plan_id = "previous_plan_id"
+
+    Plan(context_diff_mock)
+    assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
+
+
+def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select 1 as a, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+        )
+    )
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select a, ds from a")))
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {
+        "a": snapshot_a,
+        "b": snapshot_b,
+    }
+    context_diff_mock.removed = set()
+    context_diff_mock.added = {"a", "b"}
+    context_diff_mock.added_materialized_models = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {
+        snapshot_a.snapshot_id: snapshot_a,
+        snapshot_b.snapshot_id: snapshot_b,
+    }
+    context_diff_mock.has_snapshot_changes = True
+    context_diff_mock.environment = "test_dev"
+    context_diff_mock.previous_plan_id = "previous_plan_id"
+
+    Plan(context_diff_mock)
+    assert snapshot_a.change_category == SnapshotChangeCategory.BREAKING
+    assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
 def test_disable_restatement(make_snapshot, mocker: MockerFixture):

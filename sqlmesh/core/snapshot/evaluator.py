@@ -407,6 +407,19 @@ class SnapshotEvaluator:
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
         with self.adapter.transaction(TransactionType.DDL), self.adapter.session():
+            if is_dev and not snapshot.previous_versions:
+                # This is a FORWARD_ONLY snapshot which represents an added model. This means
+                # that the physical table associated with it doesn't exist yet.
+                logger.info(
+                    f"Detected a forward-only snapshot without previous versions: {snapshot.snapshot_id}"
+                )
+                non_dev_render_kwargs: t.Dict[str, t.Any] = {**render_kwargs, "is_dev": False}
+                self.adapter.execute(snapshot.model.render_pre_statements(**non_dev_render_kwargs))
+                evaluation_strategy.create(
+                    snapshot.model, snapshot.table_name(), **non_dev_render_kwargs
+                )
+                self.adapter.execute(snapshot.model.render_post_statements(**non_dev_render_kwargs))
+
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
             if is_dev and snapshot.is_materialized and self.adapter.SUPPORTS_CLONING:
@@ -480,9 +493,13 @@ class SnapshotEvaluator:
 
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         snapshot = snapshot.table_info
-        table_names = [snapshot.table_name()]
-        if snapshot.version != snapshot.fingerprint.to_version():
-            table_names.append(snapshot.table_name(is_dev=True))
+
+        table_name = snapshot.table_name()
+        dev_table_name = snapshot.table_name(is_dev=True)
+
+        table_names = [table_name]
+        if table_name != dev_table_name:
+            table_names.append(dev_table_name)
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 

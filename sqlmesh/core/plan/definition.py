@@ -545,14 +545,16 @@ class Plan:
         returns a list of added and directly modified snapshots as well as the mapping of
         indirectly modified snapshots.
         """
-        for model_name, snapshot in self._snapshot_mapping.items():
-            if snapshot.change_category:
+
+        # Iterating in DAG order since a category for a snapshot may depend on the categories
+        # assigned to its upstream dependencies.
+        for model_name in self._dag:
+            snapshot = self._snapshot_mapping.get(model_name)
+            if not snapshot or snapshot.change_category:
                 continue
-            upstream_model_names = self._dag.upstream(model_name)
 
             if model_name in self.context_diff.modified_snapshots:
                 is_directly_modified = self.context_diff.directly_modified(model_name)
-
                 if self.is_new_snapshot(snapshot):
                     if self.forward_only:
                         # In case of the forward only plan any modifications result in reuse of the
@@ -597,13 +599,17 @@ class Plan:
                     and not any(
                         self.context_diff.directly_modified(upstream)
                         and not self._snapshot_mapping[upstream].version
-                        for upstream in upstream_model_names
+                        for upstream in self._dag.upstream(model_name)
                     )
                 ):
                     snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
 
             elif model_name in self.context_diff.added and self.is_new_snapshot(snapshot):
-                snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+                snapshot.categorize_as(
+                    SnapshotChangeCategory.FORWARD_ONLY
+                    if self._is_forward_only_model(model_name)
+                    else SnapshotChangeCategory.BREAKING
+                )
 
     def _ensure_valid_date_range(
         self, start: t.Optional[TimeLike], end: t.Optional[TimeLike]
@@ -635,12 +641,6 @@ class Plan:
                     f"Detected an existing version of model '{name}' that has been previously superseded by a forward-only change. "
                     "To proceed with the change, restamp this model's definition to produce a new version."
                 )
-
-    def _ensure_no_forward_only_new_models(self) -> None:
-        if self.forward_only and self.context_diff.added_materialized_models:
-            raise PlanError(
-                "New models that require materialization can't be added as part of the forward-only plan."
-            )
 
     def _ensure_no_broken_references(self) -> None:
         for snapshot in self.context_diff.snapshots.values():
@@ -683,7 +683,6 @@ class Plan:
         self._ensure_new_env_with_changes()
         self._ensure_valid_date_range(self._start, self._end)
         self._ensure_no_forward_only_revert()
-        self._ensure_no_forward_only_new_models()
         self._ensure_no_broken_references()
 
         (
@@ -732,8 +731,18 @@ class Plan:
         )
 
     def _is_forward_only_model(self, model_name: str) -> bool:
-        snapshot = self._snapshot_mapping.get(model_name)
-        if snapshot and snapshot.model.forward_only:
+        def _is_forward_only_expected(snapshot: Snapshot) -> bool:
+            # Returns True if the snapshot is not categorized yet but is expected
+            # to be categorized as forward-only. Checking the previous versions to make
+            # sure that the snapshot doesn't represent a newly added model.
+            return (
+                snapshot.model.forward_only
+                and not snapshot.change_category
+                and bool(snapshot.previous_versions)
+            )
+
+        snapshot = self._snapshot_mapping[model_name]
+        if _is_forward_only_expected(snapshot):
             return True
 
         for upstream in self._dag.upstream(model_name):
@@ -741,7 +750,10 @@ class Plan:
             if (
                 upstream_snapshot
                 and upstream_snapshot.is_paused
-                and (upstream_snapshot.is_forward_only or upstream_snapshot.model.forward_only)
+                and (
+                    upstream_snapshot.is_forward_only
+                    or _is_forward_only_expected(upstream_snapshot)
+                )
             ):
                 return True
         return False
