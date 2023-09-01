@@ -450,10 +450,10 @@ function useQueryWithTimeout<
     console.log(`[REQUEST CANCELED] ${key} at ${Date.now()}`)
   }
 
-  function onError(err: TError): void {
+  function onError(err: TError & { name?: string }): void {
     timeoutClear()
 
-    if (isCancelledError(err)) {
+    if (isCancelledError(err) || err.name === 'AbortError') {
       console.log(
         `[REQUEST ABORTED] ${key} aborted by React Query at ${Date.now()}`,
       )
