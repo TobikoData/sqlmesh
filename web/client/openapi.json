@@ -721,32 +721,6 @@
   },
   "components": {
     "schemas": {
-      "Environments": {
-        "properties": {
-          "environments": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Environment"
-            },
-            "type": "object",
-            "title": "Environments",
-            "default": {}
-          },
-          "pinned_environments": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
-            "title": "Pinned Environments",
-            "default": []
-          },
-          "default_target_environment": {
-            "type": "string",
-            "title": "Default Target Environment",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "title": "Environments"
-      },
       "ApiExceptionPayload": {
         "properties": {
           "timestamp": { "type": "integer", "title": "Timestamp" },
@@ -1032,6 +1006,32 @@
         "enum": ["schema", "table"],
         "title": "EnvironmentSuffixTarget",
         "description": "An enumeration."
+      },
+      "Environments": {
+        "properties": {
+          "environments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Environment"
+            },
+            "type": "object",
+            "title": "Environments",
+            "default": {}
+          },
+          "pinned_environments": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Pinned Environments",
+            "default": []
+          },
+          "default_target_environment": {
+            "type": "string",
+            "title": "Default Target Environment",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "Environments"
       },
       "EvaluateInput": {
         "properties": {
