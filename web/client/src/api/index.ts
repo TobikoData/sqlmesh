@@ -12,7 +12,6 @@ import {
 } from '@tanstack/react-query'
 import {
   type ContextEnvironment,
-  type GetEnvironmentsApiEnvironmentsGet200,
   type BodyWriteFileApiFilesPathPost,
   type PlanDates,
   type File,
@@ -46,6 +45,8 @@ import {
   getApiMetaApiMetaGet,
   type GetModelsApiModelsGet200,
   type ApiExceptionPayload,
+  deleteEnvironmentApiEnvironmentsEnvironmentDelete as apiDeleteEnvironment,
+  type Environments,
 } from './client'
 import {
   useIDE,
@@ -185,8 +186,8 @@ export function useApiColumnLineage(
 
 export function useApiEnvironments(
   options?: ApiOptions,
-): UseQueryWithTimeoutOptions<GetEnvironmentsApiEnvironmentsGet200> {
-  return useQueryWithTimeout<GetEnvironmentsApiEnvironmentsGet200, ErrorIDE>(
+): UseQueryWithTimeoutOptions<Environments> {
+  return useQueryWithTimeout<Environments, ErrorIDE>(
     {
       queryKey: ['/api/environments'],
       queryFn: getEnvironmentsApiEnvironmentsGet,
@@ -199,12 +200,14 @@ export function useApiEnvironments(
   )
 }
 
+export { apiDeleteEnvironment }
+
 export function useApiCancelPlan(
   options?: ApiOptions,
 ): UseQueryWithTimeoutOptions {
   return useQueryWithTimeout(
     {
-      queryKey: ['/api/commands/evaluate'],
+      queryKey: ['/api/commands/apply'],
       queryFn: cancelPlanApiPlanCancelPost,
     },
     {
