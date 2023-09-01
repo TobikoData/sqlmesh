@@ -742,10 +742,6 @@ class Plan:
             )
 
         snapshot = self._snapshot_mapping[model_name]
-        assert (
-            not snapshot.change_category
-        ), f"Snapshot {snapshot.snapshot_id} has already been categorized"
-
         if _is_forward_only_expected(snapshot):
             return True
 
