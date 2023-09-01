@@ -5,7 +5,6 @@ import typing as t
 from sqlglot import exp
 
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.hashing import hash_data
 
 
 def migrate(state_sync: t.Any) -> None:
@@ -60,34 +59,3 @@ def migrate(state_sync: t.Any) -> None:
             *snapshots_to_delete
         )
         engine_adapter.delete_from(snapshots_table, where)
-
-    # Update environments
-    for name, snapshots in engine_adapter.fetchall(
-        exp.select("name", "snapshots").from_(environments_table),
-        quote_identifiers=True,
-    ):
-        parsed_snapshots = json.loads(snapshots)
-        new_parsed_snapshots = [
-            s
-            for s in parsed_snapshots
-            if (s["name"], _table_info_to_identifier(s)) not in snapshots_to_delete
-        ]
-
-        if len(new_parsed_snapshots) != len(parsed_snapshots):
-            engine_adapter.update_table(
-                environments_table,
-                {"snapshots": json.dumps(new_parsed_snapshots)},
-                where=exp.column("name") == name,
-            )
-
-
-def _table_info_to_identifier(info: t.Dict[str, t.Any]) -> str:
-    fingerprint = info["fingerprint"]
-    return hash_data(
-        [
-            fingerprint["data_hash"],
-            fingerprint["metadata_hash"],
-            fingerprint["parent_data_hash"],
-            fingerprint["parent_metadata_hash"],
-        ]
-    )
