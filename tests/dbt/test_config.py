@@ -170,9 +170,8 @@ def test_singular_test_to_standalone_audit():
     standalone_audit = test_config.to_sqlmesh(context)
 
     assert standalone_audit.name == "foo_test"
-    assert standalone_audit.audit.name == "foo_test"
-    assert standalone_audit.audit.dialect == "duckdb"
-    assert standalone_audit.audit.query == jinja_query(sql)
+    assert standalone_audit.dialect == "duckdb"
+    assert standalone_audit.query == jinja_query(sql)
     assert standalone_audit.depends_on == {"foo"}
 
 

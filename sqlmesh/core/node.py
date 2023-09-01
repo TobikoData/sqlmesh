@@ -17,7 +17,7 @@ from sqlmesh.utils.pydantic import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.audit import Audit
+    from sqlmesh.core.audit import ModelAudit
 
 
 class IntervalUnit(str, Enum):
@@ -152,6 +152,7 @@ class _Node(PydanticModel):
         interval_unit: The duration of an interval for the node. By default, it is computed from the cron expression.
         stamp: An optional arbitrary string sequence used to create new node versions without making
             changes to any of the functional components of the definition.
+        tags: A list of tags that can be used to filter nodes.
     """
 
     name: str
@@ -161,6 +162,7 @@ class _Node(PydanticModel):
     start: t.Optional[TimeLike] = None
     cron: str = "@daily"
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
+    tags: t.List[str] = []
     stamp: t.Optional[str] = None
 
     _croniter: t.Optional[CroniterCache] = None
@@ -244,7 +246,7 @@ class _Node(PydanticModel):
     def depends_on(self) -> t.Set[str]:
         return set()
 
-    def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+    def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
         """
         Computes the metadata hash for the node.
 
@@ -298,6 +300,17 @@ class _Node(PydanticModel):
             The timestamp floor.
         """
         return self.croniter(self.cron_next(value)).get_prev()
+
+    def text_diff(self, other: _Node) -> str:
+        """Produce a text diff against another node.
+
+        Args:
+            other: The node to diff against. Must be of the same type.
+
+        Returns:
+            A unified text diff showing additions and deletions.
+        """
+        raise NotImplementedError
 
     def _inferred_interval_unit(self, sample_size: int = 10) -> IntervalUnit:
         """Infers the interval unit from the cron expression.

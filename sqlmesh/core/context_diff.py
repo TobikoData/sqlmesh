@@ -130,6 +130,7 @@ class ContextDiff(PydanticModel):
             if modified and snapshot.node_type != modified.node_type:
                 added.add(snapshot.name)
                 removed.add(modified.name)
+                modified_info.pop(name)
             elif existing:
                 # Keep the original node instance to preserve the query cache.
                 existing.node = snapshot.node
@@ -177,9 +178,7 @@ class ContextDiff(PydanticModel):
             is_unfinalized_environment=bool(env and not env.finalized_ts),
             create_from=create_from,
             added=added,
-            removed_snapshots={
-                name: info for name, info in existing_info.items() if name in removed
-            },
+            removed_snapshots={name: existing_info[name] for name in removed},
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
@@ -287,8 +286,4 @@ class ContextDiff(PydanticModel):
             return ""
 
         new, old = self.modified_snapshots[node]
-        if new.is_model:
-            return old.model.text_diff(new.model)
-        elif new.is_audit:
-            return old.audit.text_diff(new.audit)
-        return ""
+        return old.node.text_diff(new.node)

@@ -6,7 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse, parse_one, select
 
-from sqlmesh.core.audit import Audit, create_standalone_audit
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -931,10 +931,9 @@ def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
 def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    audit = Audit(name="test_standalone_audit", query=parse_one("SELECT NULL LIMIT 0"))
-    standalone_audit = create_standalone_audit(audit)
+    audit = StandaloneAudit(name="test_standalone_audit", query=parse_one("SELECT NULL LIMIT 0"))
 
-    snapshot = make_snapshot(standalone_audit)
+    snapshot = make_snapshot(audit)
     snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
 
     # Create

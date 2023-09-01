@@ -45,7 +45,6 @@ class ModelMeta(_Node, extra="allow"):
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]] = None
     audits: t.List[AuditReference] = []
-    tags: t.List[str] = []
     grains: t.List[exp.Expression] = []
     references: t.List[exp.Expression] = []
     hash_raw_query: bool = False

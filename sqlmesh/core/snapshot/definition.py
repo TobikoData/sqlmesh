@@ -12,7 +12,7 @@ from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, StandaloneAudit
+from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, ModelAudit, StandaloneAudit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
@@ -398,7 +398,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
     node: Node
     parents: t.Tuple[SnapshotId, ...]
-    audits: t.Tuple[Audit, ...]
+    audits: t.Tuple[ModelAudit, ...]
     intervals: Intervals = []
     dev_intervals: Intervals = []
     created_ts: int
@@ -489,7 +489,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         nodes: t.Dict[str, Node],
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
-        audits: t.Optional[t.Dict[str, Audit]] = None,
+        audits: t.Optional[t.Dict[str, ModelAudit]] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
     ) -> Snapshot:
         """Creates a new snapshot for a node.
@@ -510,7 +510,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         node_audits = (
             tuple(t.cast(_Model, node).referenced_audits(audits or {}))
             if node.is_model
-            else tuple([t.cast(StandaloneAudit, node).audit])
+            else tuple()
         )
 
         return cls(
@@ -932,7 +932,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
     @property
     def model_kind_name(self) -> t.Optional[ModelKindName]:
-        return self.model.kind.name if self.is_model else ModelKindName.NONE
+        return self.model.kind.name if self.is_model else None
 
     @property
     def node_type(self) -> NodeType:
@@ -975,7 +975,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 for audit_name, audit_args in self.model.audits
             ]
         elif self.is_audit:
-            return [(self.audit.audit, {})]
+            return [(self.audit, {})]
 
         return []
 
@@ -1019,7 +1019,7 @@ def fingerprint_from_node(
     node: Node,
     *,
     nodes: t.Dict[str, Node],
-    audits: t.Optional[t.Dict[str, Audit]] = None,
+    audits: t.Optional[t.Dict[str, ModelAudit]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
     """Helper function to generate a fingerprint based on the data and metadata of the node and its parents.

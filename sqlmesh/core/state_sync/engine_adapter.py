@@ -27,7 +27,7 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.environment import Environment
@@ -720,7 +720,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             queue = {snapshot.snapshot_id}
             node = snapshot.node
             nodes: t.Dict[str, Node] = {}
-            audits: t.Dict[str, Audit] = {}
+            audits: t.Dict[str, ModelAudit] = {}
 
             while queue:
                 snapshot_id = queue.pop()

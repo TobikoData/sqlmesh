@@ -1115,7 +1115,6 @@ class ViewStrategy(PromotableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        self.adapter.execute(model.render_pre_statements(**render_kwargs))
 
         table = exp.to_table(name)
         self.adapter.create_schema(table.db, catalog_name=table.catalog)
@@ -1127,8 +1126,6 @@ class ViewStrategy(PromotableStrategy):
             materialized=self._is_materialized_view(model),
             table_properties=model.table_properties,
         )
-
-        self.adapter.execute(model.render_post_statements(**render_kwargs))
 
     def migrate(
         self,

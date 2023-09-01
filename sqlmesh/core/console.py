@@ -24,7 +24,12 @@ from rich.table import Table
 from rich.tree import Tree
 
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, start_date
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotInfoLike,
+    start_date,
+)
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils import rich as srich
 from sqlmesh.utils.date import to_date, yesterday_ds
@@ -462,33 +467,33 @@ class TerminalConsole(Console):
         self,
         context_diff: ContextDiff,
         header: str,
-        filter: t.Callable,
+        snapshot_selector: t.Callable[[SnapshotInfoLike], bool],
         detailed: bool = False,
         ignored_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         ignored_names = ignored_names or set()
-        filtered_snapshots = {
-            name: snapshot for name, snapshot in context_diff.snapshots.items() if filter(snapshot)
+        selected_snapshots = {
+            name: snapshot
+            for name, snapshot in context_diff.snapshots.items()
+            if snapshot_selector(snapshot)
         }
-        filtered_ignored_names = {name for name in filtered_snapshots if name in ignored_names}
+        selected_ignored_names = {name for name in selected_snapshots if name in ignored_names}
         added_names = {
-            name for name in context_diff.added if filter(context_diff.snapshots[name])
-        } - filtered_ignored_names
+            name for name in context_diff.added if snapshot_selector(context_diff.snapshots[name])
+        } - selected_ignored_names
         removed_names = {
-            name for name, snapshot in context_diff.removed_snapshots.items() if filter(snapshot)
-        } - filtered_ignored_names
+            name
+            for name, snapshot in context_diff.removed_snapshots.items()
+            if snapshot_selector(snapshot)
+        } - selected_ignored_names
         modified_names = {
             name
             for name, snapshots in context_diff.modified_snapshots.items()
-            if filter(snapshots[0])
-        } - filtered_ignored_names
+            if snapshot_selector(snapshots[0])
+        } - selected_ignored_names
 
-        if (
-            not added_names
-            and not removed_names
-            and not modified_names
-            and not filtered_ignored_names
-        ):
+        tree_sets = (added_names, removed_names, modified_names, selected_ignored_names)
+        if all(not names for names in tree_sets):
             return
 
         tree = Tree(f"[bold]{header}:")
@@ -523,8 +528,8 @@ class TerminalConsole(Console):
                 tree.add(indirect)
             if metadata.children:
                 tree.add(metadata)
-        if filtered_ignored_names:
-            tree.add(self._get_ignored_tree(filtered_ignored_names, filtered_snapshots))
+        if selected_ignored_names:
+            tree.add(self._get_ignored_tree(selected_ignored_names, selected_snapshots))
         self._print(tree)
 
     def _show_options_after_categorization(self, plan: Plan, auto_apply: bool) -> None:

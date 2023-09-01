@@ -20,7 +20,12 @@ from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_er
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 from sqlmesh.utils.metaprogramming import Executable
-from sqlmesh.utils.pydantic import PydanticModel, field_validator, model_validator
+from sqlmesh.utils.pydantic import (
+    PydanticModel,
+    field_validator,
+    model_validator,
+    model_validator_v1_args,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Snapshot
@@ -31,144 +36,31 @@ else:
     from typing_extensions import Literal
 
 
-class AuditMeta(PydanticModel):
-    """Metadata for audits which can be defined in SQL."""
+class AuditMixin:
+    """
+    Mixin for common Audit functionality
 
-    name: str
-    """The name of this audit."""
-    dialect: str = ""
-    """The dialect of the audit query."""
-    skip: bool = False
-    """Setting this to `true` will cause this audit to be skipped. Defaults to `false`."""
-    blocking: bool = True
-    """Setting this to `true` will cause the pipeline execution to stop if this audit fails. Defaults to `true`."""
-    defaults: t.Dict[str, exp.Expression] = {}
-    """Default values for the audit query."""
-
-    _bool_validator = bool_validator
-
-    @field_validator("name", "dialect", mode="before")
-    @classmethod
-    def _string_validator(cls, v: t.Any) -> t.Optional[str]:
-        if isinstance(v, exp.Expression):
-            return v.name.lower()
-        return str(v).lower() if v is not None else None
-
-    @field_validator("defaults", mode="before")
-    @classmethod
-    def _map_validator(cls, v: t.Any) -> t.Dict[str, t.Any]:
-        if isinstance(v, (exp.Tuple, exp.Array)):
-            return dict(map(_maybe_parse_arg_pair, v.expressions))
-        elif isinstance(v, dict):
-            return v
-        else:
-            raise_config_error(
-                "Defaults must be a tuple of exp.EQ or a dict", error_type=AuditConfigError
-            )
-        return {}
-
-
-class Audit(AuditMeta, frozen=True):
-    """Audit is an assertion made about your tables.
-
-    An audit is a SQL query that returns bad records.
+    Args:
+        name: The unique name of the audit.
+        dialect: The dialect of the audit query.
+        skip: Setting this to `true` will cause this audit to be skipped. Defaults to `false`.
+        blocking: Setting this to `true` will cause the pipeline execution to stop if this audit fails.
+        query: The audit query.
+        defaults: Default values for the audit query.
+        expressions: Additional sql statements to execute alongside the audit.
+        jinja_macros: A registry of jinja macros to use when rendering the audit query.
     """
 
+    name: str
+    dialect: str
+    skip: bool
+    blocking: bool
     query: t.Union[exp.Subqueryable, d.JinjaQuery]
-    expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
-    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
+    defaults: t.Dict[str, exp.Expression]
+    expressions_: t.Optional[t.List[exp.Expression]]
+    jinja_macros: JinjaMacroRegistry
 
-    _path: t.Optional[pathlib.Path] = None
-
-    _query_validator = expression_validator
-
-    @classmethod
-    def load(
-        cls,
-        expressions: t.List[exp.Expression],
-        *,
-        path: pathlib.Path,
-        dialect: t.Optional[str] = None,
-    ) -> Audit:
-        """Load an audit from a parsed SQLMesh audit file.
-
-        Args:
-            expressions: Audit, *Statements, Query
-            path: An optional path of the file.
-            dialect: The default dialect if no audit dialect is configured.
-        """
-        if len(expressions) < 2:
-            _raise_config_error("Incomplete audit definition, missing AUDIT or QUERY", path)
-
-        meta, *statements, query = expressions
-
-        if not isinstance(meta, d.Audit):
-            _raise_config_error(
-                "AUDIT statement is required as the first statement in the definition",
-                path,
-            )
-            raise
-
-        provided_meta_fields = {p.name for p in meta.expressions}
-
-        missing_required_fields = AuditMeta.missing_required_fields(provided_meta_fields)
-        if missing_required_fields:
-            _raise_config_error(
-                f"Missing required fields {missing_required_fields} in the audit definition",
-                path,
-            )
-
-        extra_fields = AuditMeta.extra_fields(provided_meta_fields)
-        if extra_fields:
-            _raise_config_error(
-                f"Invalid extra fields {extra_fields} in the audit definition", path
-            )
-
-        if not isinstance(query, exp.Subqueryable):
-            _raise_config_error("Missing SELECT query in the audit definition", path)
-            raise
-
-        try:
-            audit = cls(
-                query=query,
-                expressions=statements,
-                **{
-                    "dialect": dialect or "",
-                    **AuditMeta(
-                        **{prop.name: prop.args.get("value") for prop in meta.expressions if prop},
-                    ).dict(),
-                },
-            )
-        except Exception as ex:
-            _raise_config_error(str(ex), path)
-
-        audit._path = path
-        return audit
-
-    @classmethod
-    def load_multiple(
-        cls,
-        expressions: t.List[exp.Expression],
-        *,
-        path: pathlib.Path,
-        dialect: t.Optional[str] = None,
-    ) -> t.Generator[Audit, None, None]:
-        audit_block: t.List[exp.Expression] = []
-        for expression in expressions:
-            if isinstance(expression, d.Audit):
-                if audit_block:
-                    yield Audit.load(
-                        expressions=audit_block,
-                        path=path,
-                        dialect=dialect,
-                    )
-                    audit_block.clear()
-            audit_block.append(expression)
-        yield Audit.load(
-            expressions=audit_block,
-            path=path,
-            dialect=dialect,
-        )
+    _path: t.Optional[pathlib.Path]
 
     def render_query(
         self,
@@ -287,37 +179,176 @@ class Audit(AuditMeta, frozen=True):
         )
 
 
-class StandaloneAudit(_Node):
+@field_validator("name", "dialect", mode="before", check_fields=False)
+def audit_string_validator(v: t.Any) -> t.Optional[str]:
+    if isinstance(v, exp.Expression):
+        return v.name.lower()
+    return str(v).lower() if v is not None else None
+
+
+@field_validator("defaults", mode="before", check_fields=False)
+def audit_map_validator(v: t.Any) -> t.Dict[str, t.Any]:
+    if isinstance(v, (exp.Tuple, exp.Array)):
+        return dict(map(_maybe_parse_arg_pair, v.expressions))
+    elif isinstance(v, dict):
+        return v
+    else:
+        raise_config_error(
+            "Defaults must be a tuple of exp.EQ or a dict", error_type=AuditConfigError
+        )
+    return {}
+
+
+class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     """
-    Args:
-        name: The unique name of the standalone audit.
-        owner: The owner of the standalone audit.
-        description: The optional standalone audit description.
-        stamp: An optional arbitrary string sequence used to create new standalone audit versions without making
-            changes to any of the functional components of the definition.
-        tags:
-        hash_raw_query:
+    Audit is an assertion made about your tables.
+
+    An audit is a SQL query that returns bad records.
     """
 
     name: str
-    depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
-    audit: Audit
-    tags: t.List[str] = []
-    hash_raw_query: bool = False
+    dialect: str = ""
+    skip: bool = False
+    blocking: bool = True
+    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    defaults: t.Dict[str, exp.Expression] = {}
+    expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
+    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
 
+    _path: t.Optional[pathlib.Path] = None
+
+    # Validators
+    _query_validator = expression_validator
+    _bool_validator = bool_validator
+    _string_validator = audit_string_validator
+    _map_validator = audit_map_validator
+
+    @classmethod
+    def load(
+        cls,
+        expressions: t.List[exp.Expression],
+        *,
+        path: pathlib.Path,
+        dialect: t.Optional[str] = None,
+    ) -> ModelAudit:
+        """Load an audit from a parsed SQLMesh audit file.
+
+        Args:
+            expressions: Audit, *Statements, Query
+            path: An optional path of the file.
+            dialect: The default dialect if no audit dialect is configured.
+        """
+        if len(expressions) < 2:
+            _raise_config_error("Incomplete audit definition, missing AUDIT or QUERY", path)
+
+        meta, *statements, query = expressions
+
+        if not isinstance(meta, d.Audit):
+            _raise_config_error(
+                "AUDIT statement is required as the first statement in the definition",
+                path,
+            )
+            raise
+
+        provided_meta_fields = {p.name for p in meta.expressions}
+        provided_meta_fields.add("query")
+
+        missing_required_fields = cls.missing_required_fields(provided_meta_fields)
+        if missing_required_fields:
+            breakpoint()
+            _raise_config_error(
+                f"Missing required fields {missing_required_fields} in the audit definition",
+                path,
+            )
+
+        extra_fields = cls.extra_fields(provided_meta_fields)
+        if extra_fields:
+            _raise_config_error(
+                f"Invalid extra fields {extra_fields} in the audit definition", path
+            )
+
+        if not isinstance(query, exp.Subqueryable):
+            _raise_config_error("Missing SELECT query in the audit definition", path)
+            raise
+
+        try:
+            audit = cls(
+                query=query,
+                expressions=statements,
+                **{
+                    "dialect": dialect or "",
+                    **{prop.name: prop.args.get("value") for prop in meta.expressions if prop},
+                },
+            )
+        except Exception as ex:
+            _raise_config_error(str(ex), path)
+
+        audit._path = path
+        return audit
+
+    @classmethod
+    def load_multiple(
+        cls,
+        expressions: t.List[exp.Expression],
+        *,
+        path: pathlib.Path,
+        dialect: t.Optional[str] = None,
+    ) -> t.Generator[ModelAudit, None, None]:
+        audit_block: t.List[exp.Expression] = []
+        for expression in expressions:
+            if isinstance(expression, d.Audit):
+                if audit_block:
+                    yield cls.load(
+                        expressions=audit_block,
+                        path=path,
+                        dialect=dialect,
+                    )
+                    audit_block.clear()
+            audit_block.append(expression)
+        yield cls.load(
+            expressions=audit_block,
+            path=path,
+            dialect=dialect,
+        )
+
+
+class StandaloneAudit(_Node, AuditMixin):
+    """
+    Args:
+        depends_on: A list of tables this audit depends on.
+        hash_raw_query: Whether to hash the raw query or the rendered query.
+        python_env: Dictionary containing all global variables needed to render the audit's macros.
+    """
+
+    name: str
+    dialect: str = ""
+    skip: bool = False
+    blocking: bool = False
+    query: t.Union[exp.Subqueryable, d.JinjaQuery]
+    defaults: t.Dict[str, exp.Expression] = {}
+    expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
+    jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
+    depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
+    hash_raw_query: bool = False
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
+
     source_type: Literal["audit"] = "audit"
 
-    _path: Path = Path()
+    _path: t.Optional[pathlib.Path] = None
     _depends_on: t.Optional[t.Set[str]] = None
 
-    @model_validator(mode="before")
-    @classmethod
-    def validate_fields(
-        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
-    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
-        if not "name" in values and "audit" in values:
-            values["name"] = t.cast(Audit, values["audit"]).name
+    # Validators
+    _query_validator = expression_validator
+    _bool_validator = bool_validator
+    _string_validator = audit_string_validator
+    _map_validator = audit_map_validator
+
+    @model_validator(mode="after")
+    @model_validator_v1_args
+    def _node_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        if values.get("blocking"):
+            name = values.get("name")
+            raise AuditConfigError(f"Standalone audits cannot be blocking: '{name}'.")
         return values
 
     @property
@@ -325,7 +356,7 @@ class StandaloneAudit(_Node):
         if self._depends_on is None:
             self._depends_on = self.depends_on_ or set()
 
-            query = self.audit.render_query(self)
+            query = self.render_query(self)
             if query is not None:
                 self._depends_on |= d.find_tables(query, dialect=self.dialect)
 
@@ -342,10 +373,6 @@ class StandaloneAudit(_Node):
         return sorted(self.python_env.items(), key=lambda x: (x[1].kind, x[0]))
 
     @property
-    def dialect(self) -> str:
-        return self.audit.dialect
-
-    @property
     def data_hash(self) -> str:
         """
         Computes the data hash for the node.
@@ -354,9 +381,9 @@ class StandaloneAudit(_Node):
             The data hash for the node.
         """
         # StandaloneAudits do not have a data hash
-        return ""
+        return hash_data("")
 
-    def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+    def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
         """
         Computes the metadata hash for the node.
 
@@ -374,25 +401,26 @@ class StandaloneAudit(_Node):
             self.stamp,
         ]
 
-        query = (
-            self.audit.query
-            if self.hash_raw_query
-            else self.audit.render_query(self) or self.audit.query
-        )
+        query = self.query if self.hash_raw_query else self.render_query(self) or self.query
         data.append(query.sql(comments=False))
 
         return hash_data(data)
 
-    def text_diff(self, other: StandaloneAudit) -> str:
-        """Produce a text diff against another standalone audit.
+    def text_diff(self, other: _Node) -> str:
+        """Produce a text diff against another node.
 
         Args:
-            other: The standalone audit to diff against.
+            other: The node to diff against.
 
         Returns:
             A unified text diff showing additions and deletions.
         """
-        return d.text_diff(self.audit.query, other.audit.query, self.dialect)
+        if not isinstance(other, StandaloneAudit):
+            raise SQLMeshError(
+                f"Cannot diff audit '{self.name} against a non-audit node '{other.name}'"
+            )
+
+        return d.text_diff(self.query, other.query, self.dialect)
 
     @property
     def is_audit(self) -> bool:
@@ -400,28 +428,7 @@ class StandaloneAudit(_Node):
         return True
 
 
-def create_standalone_audit(
-    audit: Audit,
-    *,
-    path: Path = Path(),
-    depends_on: t.Optional[t.Set[str]] = None,
-    **kwargs: t.Any,
-) -> StandaloneAudit:
-    try:
-        standalone = StandaloneAudit(
-            audit=audit,
-            **{
-                "depends_on": depends_on,
-                **kwargs,
-            },
-        )
-    except Exception as ex:
-        raise_config_error(str(ex), location=path)
-        raise
-
-    standalone._path = path
-
-    return standalone
+Audit = t.Union[ModelAudit, StandaloneAudit]
 
 
 class AuditResult(PydanticModel):

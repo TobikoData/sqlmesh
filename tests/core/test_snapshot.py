@@ -9,7 +9,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, to_column
 
-from sqlmesh.core.audit import Audit, create_standalone_audit
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
 from sqlmesh.core.dialect import parse, parse_one
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -508,21 +508,17 @@ def test_fingerprint_builtin_audits(model: Model, parent_model: Model):
 
 
 def test_fingerprint_standalone_audits(parent_model: Model):
-    audit = Audit(
+    audit = StandaloneAudit(
         name="test_standalone_audit",
         query=parse_one(f"SELECT cola FROM {parent_model.name} WHERE cola IS NULL"),
     )
-    standalone_audit = create_standalone_audit(audit)
-    fingerprint = fingerprint_from_node(standalone_audit, nodes={parent_model.name: parent_model})
+    fingerprint = fingerprint_from_node(audit, nodes={parent_model.name: parent_model})
 
-    new_audit = Audit(
+    new_audit = StandaloneAudit(
         name="test_standalone_audit",
         query=parse_one(f"SELECT colb FROM {parent_model.name} WHERE colb IS NULL"),
     )
-    standalone_audit.audit = new_audit
-    new_fingerprint = fingerprint_from_node(
-        standalone_audit, nodes={parent_model.name: parent_model}
-    )
+    new_fingerprint = fingerprint_from_node(new_audit, nodes={parent_model.name: parent_model})
 
     assert new_fingerprint != fingerprint
     assert new_fingerprint.data_hash == fingerprint.data_hash

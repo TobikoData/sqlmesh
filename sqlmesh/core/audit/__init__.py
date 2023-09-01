@@ -6,18 +6,16 @@ from sqlmesh.core.audit import builtin
 from sqlmesh.core.audit.definition import (
     Audit,
     AuditResult,
+    ModelAudit,
     StandaloneAudit,
-    create_standalone_audit,
 )
-
-AuditType = t.Union[Audit, StandaloneAudit]
 
 
 def _discover_audits(modules: t.Iterable[ModuleType]) -> t.Dict[str, Audit]:
     return {
         audit.name: audit
         for module in modules
-        for _, audit in inspect.getmembers(module, lambda v: isinstance(v, Audit))
+        for _, audit in inspect.getmembers(module, lambda v: isinstance(v, ModelAudit))
     }
 
 
