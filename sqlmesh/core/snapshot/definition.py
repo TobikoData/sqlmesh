@@ -375,7 +375,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         fingerprint: A unique hash of the node definition so that nodes can be reused across environments.
         node: Node object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
-        audits: The list of audits used by the node.
+        audits: The list of generic audits used by the node.
         intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
         dev_intervals: List of [start, end) intervals showing development intervals (forward-only).
         created_ts: Epoch millis timestamp when a snapshot was first created.
@@ -398,7 +398,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
     node: Node
     parents: t.Tuple[SnapshotId, ...]
-    audits: t.Tuple[ModelAudit, ...]
+    audits: t.Tuple[ModelAudit, ...] = tuple()
     intervals: Intervals = []
     dev_intervals: Intervals = []
     created_ts: int
@@ -507,11 +507,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             The newly created snapshot.
         """
         created_ts = now_timestamp()
-        node_audits = (
-            tuple(t.cast(_Model, node).referenced_audits(audits or {}))
-            if node.is_model
-            else tuple()
-        )
+        kwargs = {}
+        if node.is_model:
+            kwargs["audits"] = tuple(t.cast(_Model, node).referenced_audits(audits or {}))
 
         return cls(
             name=node.name,
@@ -534,13 +532,13 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 )
                 for name in _parents_from_node(node, nodes)
             ),
-            audits=node_audits,
             intervals=[],
             dev_intervals=[],
             created_ts=created_ts,
             updated_ts=created_ts,
             ttl=ttl,
             version=version,
+            **kwargs,
         )
 
     def __eq__(self, other: t.Any) -> bool:

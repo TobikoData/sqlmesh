@@ -133,7 +133,6 @@ class TestConfig(GeneralConfig):
                     {source.sql_name for source in test_context.sources.values()}
                 ),
                 tags=self.tags,
-                # TODO node values
             )
         else:
             audit = ModelAudit(

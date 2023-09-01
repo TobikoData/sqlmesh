@@ -28,7 +28,7 @@ from sqlmesh.utils.pydantic import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.snapshot import Snapshot
+    from sqlmesh.core.snapshot import Node, Snapshot
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -89,44 +89,8 @@ class AuditMixin:
         Returns:
             The rendered expression.
         """
-        from sqlmesh.core.snapshot import Snapshot
-
         node = snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node
         query_renderer = self._create_query_renderer(node)
-        extra_kwargs = {}
-
-        if node.is_model:
-            this_model = (
-                node.name
-                if isinstance(snapshot_or_node, _Node)
-                else t.cast(Snapshot, snapshot_or_node).table_name(is_dev=is_dev, for_read=True)
-            )
-
-            columns_to_types: t.Optional[t.Dict[str, t.Any]] = None
-            if "engine_adapter" in kwargs:
-                try:
-                    columns_to_types = kwargs["engine_adapter"].columns(this_model)
-                except Exception:
-                    pass
-
-            node = t.cast(_Model, node)
-            if node.time_column:
-                where = exp.column(node.time_column.column).between(
-                    node.convert_to_time_column(start or c.EPOCH, columns_to_types),
-                    node.convert_to_time_column(end or c.EPOCH, columns_to_types),
-                )
-            else:
-                where = None
-
-            # The model's name is already normalized, but in case of snapshots we also prepend a
-            # case-sensitive physical schema name, so we quote here to ensure that we won't have
-            # a broken schema reference after the resulting query is normalized in `render`.
-            quoted_model_name = quote_identifiers(
-                exp.to_table(this_model, dialect=self.dialect), dialect=self.dialect
-            )
-            extra_kwargs["this_model"] = (
-                exp.select("*").from_(quoted_model_name).where(where).subquery()
-            )
 
         rendered_query = query_renderer.render(
             start=start,
@@ -134,7 +98,7 @@ class AuditMixin:
             execution_time=execution_time,
             snapshots=snapshots,
             is_dev=is_dev,
-            **{**self.defaults, **extra_kwargs, **kwargs},  # type: ignore
+            **{**self.defaults, **kwargs},  # type: ignore
         )
 
         if rendered_query is None:
@@ -154,40 +118,18 @@ class AuditMixin:
         return [s for s in self.expressions if isinstance(s, d.MacroDef)]
 
     def _create_query_renderer(self, node: _Node) -> QueryRenderer:
-        kwargs: t.Dict[str, t.Any] = {}
-
-        node_dialect = ""
-        if node.is_model:
-            node = t.cast(_Model, node)
-            node_dialect = node.dialect
-            kwargs = {
-                "only_execution_time": node.kind.only_execution_time,
-                "python_env": node.python_env,
-            }
-        elif node.is_audit:
-            node = t.cast(StandaloneAudit, node)
-            node_dialect = node.dialect
-            kwargs = {"python_env": node.python_env}
-
-        return QueryRenderer(
-            self.query,
-            self.dialect or node_dialect,
-            self.macro_definitions,
-            path=self._path or Path(),
-            jinja_macro_registry=self.jinja_macros,
-            **kwargs,
-        )
+        raise NotImplementedError
 
 
 @field_validator("name", "dialect", mode="before", check_fields=False)
-def audit_string_validator(v: t.Any) -> t.Optional[str]:
+def audit_string_validator(cls: t.Type, v: t.Any) -> t.Optional[str]:
     if isinstance(v, exp.Expression):
         return v.name.lower()
     return str(v).lower() if v is not None else None
 
 
 @field_validator("defaults", mode="before", check_fields=False)
-def audit_map_validator(v: t.Any) -> t.Dict[str, t.Any]:
+def audit_map_validator(cls: t.Type, v: t.Any) -> t.Dict[str, t.Any]:
     if isinstance(v, (exp.Tuple, exp.Array)):
         return dict(map(_maybe_parse_arg_pair, v.expressions))
     elif isinstance(v, dict):
@@ -222,6 +164,76 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     _bool_validator = bool_validator
     _string_validator = audit_string_validator
     _map_validator = audit_map_validator
+
+    def render_query(
+        self,
+        snapshot_or_node: t.Union[Snapshot, _Node],
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        is_dev: bool = False,
+        **kwargs: t.Any,
+    ) -> exp.Subqueryable:
+        from sqlmesh.core.snapshot import Snapshot
+
+        extra_kwargs = {}
+
+        node = snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node
+        this_model = (
+            node.name
+            if isinstance(snapshot_or_node, _Node)
+            else t.cast(Snapshot, snapshot_or_node).table_name(is_dev=is_dev, for_read=True)
+        )
+
+        columns_to_types: t.Optional[t.Dict[str, t.Any]] = None
+        if "engine_adapter" in kwargs:
+            try:
+                columns_to_types = kwargs["engine_adapter"].columns(this_model)
+            except Exception:
+                pass
+
+        node = t.cast(_Model, node)
+        if node.time_column:
+            where = exp.column(node.time_column.column).between(
+                node.convert_to_time_column(start or c.EPOCH, columns_to_types),
+                node.convert_to_time_column(end or c.EPOCH, columns_to_types),
+            )
+        else:
+            where = None
+
+        # The model's name is already normalized, but in case of snapshots we also prepend a
+        # case-sensitive physical schema name, so we quote here to ensure that we won't have
+        # a broken schema reference after the resulting query is normalized in `render`.
+        quoted_model_name = quote_identifiers(
+            exp.to_table(this_model, dialect=self.dialect), dialect=self.dialect
+        )
+        extra_kwargs["this_model"] = (
+            exp.select("*").from_(quoted_model_name).where(where).subquery()
+        )
+
+        return super().render_query(
+            snapshot_or_node,
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshots=snapshots,
+            is_dev=is_dev,
+            **{**extra_kwargs, **kwargs},
+        )
+
+    def _create_query_renderer(self, node: _Node) -> QueryRenderer:
+        model = t.cast(_Model, node)
+        return QueryRenderer(
+            self.query,
+            self.dialect or model.dialect,
+            self.macro_definitions,
+            path=self._path or Path(),
+            jinja_macro_registry=self.jinja_macros,
+            python_env=model.python_env,
+            only_execution_time=model.kind.only_execution_time,
+        )
 
     @classmethod
     def load(
@@ -406,7 +418,7 @@ class StandaloneAudit(_Node, AuditMixin):
 
         return hash_data(data)
 
-    def text_diff(self, other: _Node) -> str:
+    def text_diff(self, other: Node) -> str:
         """Produce a text diff against another node.
 
         Args:
@@ -426,6 +438,17 @@ class StandaloneAudit(_Node, AuditMixin):
     def is_audit(self) -> bool:
         """Return True if this is an audit node"""
         return True
+
+    def _create_query_renderer(self, node: _Node) -> QueryRenderer:
+        audit = t.cast(StandaloneAudit, node)
+        return QueryRenderer(
+            self.query,
+            self.dialect,
+            self.macro_definitions,
+            path=self._path or Path(),
+            jinja_macro_registry=self.jinja_macros,
+            python_env=audit.python_env,
+        )
 
 
 Audit = t.Union[ModelAudit, StandaloneAudit]

@@ -18,6 +18,7 @@ from sqlmesh.utils.pydantic import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.audit import ModelAudit
+    from sqlmesh.core.snapshot import Node
 
 
 class IntervalUnit(str, Enum):
@@ -301,7 +302,7 @@ class _Node(PydanticModel):
         """
         return self.croniter(self.cron_next(value)).get_prev()
 
-    def text_diff(self, other: _Node) -> str:
+    def text_diff(self, other: Node) -> str:
         """Produce a text diff against another node.
 
         Args:

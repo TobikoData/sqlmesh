@@ -32,7 +32,6 @@ from sqlmesh.core.model.kind import (
 )
 from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import Seed, create_seed
-from sqlmesh.core.node import _Node
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
@@ -52,7 +51,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
-    from sqlmesh.core.snapshot import Snapshot
+    from sqlmesh.core.snapshot import Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
@@ -412,7 +411,7 @@ class _Model(ModelMeta, frozen=True):
                 )
         return referenced_audits
 
-    def text_diff(self, other: _Node) -> str:
+    def text_diff(self, other: Node) -> str:
         """Produce a text diff against another node.
 
         Args:
@@ -1185,7 +1184,7 @@ class SeedModel(_SqlBasedModel):
             df[string_columns] = df[string_columns].astype(str)
             yield df
 
-    def text_diff(self, other: _Node) -> str:
+    def text_diff(self, other: Node) -> str:
         if not isinstance(other, SeedModel):
             return super().text_diff(other)
 
