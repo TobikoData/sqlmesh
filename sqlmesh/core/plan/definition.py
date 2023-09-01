@@ -731,20 +731,32 @@ class Plan:
         )
 
     def _is_forward_only_model(self, model_name: str) -> bool:
-        is_added_model = model_name in self.context_diff.added
-        snapshot = self._snapshot_mapping.get(model_name)
-        if snapshot and snapshot.model.forward_only and not is_added_model:
+        def _is_forward_only_expected(snapshot: Snapshot) -> bool:
+            # Returns True if the snapshot is not categorized yet but is expected
+            # to be categorized as forward-only. Checking the previous versions to make
+            # sure that the snapshot doesn't represent a newly added model.
+            return (
+                snapshot.model.forward_only
+                and not snapshot.change_category
+                and bool(snapshot.previous_versions)
+            )
+
+        snapshot = self._snapshot_mapping[model_name]
+        assert (
+            not snapshot.change_category
+        ), f"Snapshot {snapshot.snapshot_id} has already been categorized"
+
+        if _is_forward_only_expected(snapshot):
             return True
 
         for upstream in self._dag.upstream(model_name):
             upstream_snapshot = self._snapshot_mapping.get(upstream)
-            is_upstream_added = upstream in self.context_diff.added
             if (
                 upstream_snapshot
                 and upstream_snapshot.is_paused
                 and (
                     upstream_snapshot.is_forward_only
-                    or (upstream_snapshot.model.forward_only and not is_upstream_added)
+                    or _is_forward_only_expected(upstream_snapshot)
                 )
             ):
                 return True

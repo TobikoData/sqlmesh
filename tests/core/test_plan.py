@@ -578,6 +578,7 @@ def test_forward_only_models(make_snapshot, mocker: MockerFixture):
             kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
         )
     )
+    updated_snapshot.previous_versions = snapshot.all_versions
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
@@ -608,6 +609,7 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as a, ds")))
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 2 as a, ds")))
+    updated_snapshot_a.previous_versions = snapshot_a.all_versions
 
     snapshot_b = make_snapshot(
         SqlModel(
@@ -619,12 +621,14 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     )
     snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     updated_snapshot_b = make_snapshot(snapshot_b.model, nodes={"a": updated_snapshot_a.model})
+    updated_snapshot_b.previous_versions = snapshot_b.all_versions
 
     snapshot_c = make_snapshot(
         SqlModel(name="c", query=parse_one("select a, ds from b")), nodes={"b": snapshot_b.model}
     )
     snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
     updated_snapshot_c = make_snapshot(snapshot_c.model, nodes={"b": updated_snapshot_b.model})
+    updated_snapshot_c.previous_versions = snapshot_c.all_versions
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {
