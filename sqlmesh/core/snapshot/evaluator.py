@@ -1003,58 +1003,14 @@ class SCDType2Strategy(MaterializableStrategy):
 
     def append(
         self,
-        model: Model,
-        table_name: str,
-        query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
-        **kwargs: t.Any,
-    ) -> None:
-        assert isinstance(model.kind, SCDType2Kind)
-        self.adapter.scd_type_2(
-            target_table=table_name,
-            source_table=query_or_df,
-            unique_key=model.unique_key,
-            valid_from_name=model.kind.valid_from_name,
-            valid_to_name=model.kind.valid_to_name,
-            updated_at_name=model.kind.updated_at_name,
-            columns_to_types=model.columns_to_types,
-            **kwargs,
-        )
-
-
-class SCDType2Strategy(MaterializableStrategy):
-    def insert(
-        self,
         snapshot: Snapshot,
-        name: str,
+        table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        assert isinstance(model.kind, SCDType2Kind)
-        self.adapter.scd_type_2(
-            target_table=name,
-            source_table=query_or_df,
-            unique_key=model.unique_key,
-            valid_from_name=model.kind.valid_from_name,
-            valid_to_name=model.kind.valid_to_name,
-            updated_at_name=model.kind.updated_at_name,
-            columns_to_types=model.columns_to_types,
-            **kwargs,
-        )
-
-    def append(
-        self,
-        model: Model,
-        table_name: str,
-        query_or_df: QueryOrDF,
-        snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
-        **kwargs: t.Any,
-    ) -> None:
         assert isinstance(model.kind, SCDType2Kind)
         self.adapter.scd_type_2(
             target_table=table_name,
