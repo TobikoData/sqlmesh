@@ -608,11 +608,85 @@ The three default connection types are used when some gateways in the `gateways`
 
 If a configuration contains multiple gateways, SQLMesh will use the first one in the `gateways` dictionary by default. The `default_gateway` key is used to specify a different gateway name as the SQLMesh default.
 
+Example configuration:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+        my_gateway:
+            <gateway specification>
+    default_gateway: my_gateway
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        gateways={
+            "my_gateway": GatewayConfig(
+                <gateway specification>
+            ),
+        },
+        default_gateway="my_gateway",
+    )
+    ```
+
 #### Default connections/scheduler
 
 The `default_connection`, `default_test_connection`, and `default_scheduler` keys are used to specify shared defaults across multiple gateways.
 
 For example, you might have a specific connection where your tests should run regardless of which gateway is being used. Instead of duplicating the test connection information in each gateway specification, specify it once in the `default_test_connection` key.
+
+Example configuration specifying a Postgres default connection, in-memory DuckDB default test connection, and builtin default scheduler:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    default_connection:
+        type: postgres
+        host: <host>
+        port: <port>
+        user: <username>
+        password: <password>
+        database: <database>
+    default_test_connection:
+        type: duckdb
+    default_scheduler:
+        type: builtin
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        PostgresConnectionConfig,
+        DuckDBConnectionConfig,
+        BuiltInSchedulerConfig
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        default_connection=PostgresConnectionConfig(
+            host=<host>,
+            port=<port>,
+            user=<username>,
+            password=<password>,
+            database=<database>,
+        ),
+        default_test_connection=DuckDBConnectionConfig(),
+        default_scheduler=BuiltInSchedulerConfig(),
+    )
+    ```
 
 ### Models
 
@@ -688,14 +762,15 @@ If a kind requires additional parameters it can be provided as an object:
 === "Python"
 
     The Python `model_defaults` `kind` argument takes a model kind object with a value of:
-        - EmbeddedKind
-        - ExternalKind
-        - FullKind
-        - IncrementalByTimeRangeKind
-        - IncrementalByUniqueKeyKind
-        - IncrementalUnmanagedKind
-        - SeedKind
-        - ViewKind
+
+    - EmbeddedKind
+    - ExternalKind
+    - FullKind
+    - IncrementalByTimeRangeKind
+    - IncrementalByUniqueKeyKind
+    - IncrementalUnmanagedKind
+    - SeedKind
+    - ViewKind
 
     ```python linenums="1"
     from sqlmesh.core.config import (
@@ -716,7 +791,9 @@ If a kind requires additional parameters it can be provided as an object:
 
 ### Debug mode
 
-To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y". Enabling this mode ensures that full backtraces are printed when using CLI. Additionally the default log level is set to `DEBUG` when this mode is enabled.
+To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: `1`, `true`, `t`, `yes` or `y`.
+
+Enabling this mode ensures that full backtraces are printed when using CLI. Additionally, the default log level is set to `DEBUG` when this mode is enabled.
 
 Example enabling debug mode for the CLI command `sqlmesh plan`:
 
