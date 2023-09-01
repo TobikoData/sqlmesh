@@ -791,11 +791,11 @@ def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mo
     adapter_mock.create_table.assert_has_calls(
         [
             call(
-                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
                 **common_create_args,
             ),
             call(
-                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
                 **common_create_args,
             ),
         ]
