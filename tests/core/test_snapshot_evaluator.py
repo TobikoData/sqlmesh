@@ -725,6 +725,7 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
 
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.previous_versions = snapshot.all_versions
 
     evaluator.create([snapshot], {})
 
@@ -754,6 +755,52 @@ def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot)
     )
 
 
+def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.SUPPORTS_CLONING = False
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds
+                )
+            );
+
+            SELECT 1::INT as a, ds::DATE FROM a;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    evaluator.create([snapshot], {})
+
+    common_create_args: t.Dict[str, t.Any] = dict(
+        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        storage_format=None,
+        partitioned_by=[exp.to_column("ds")],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+    )
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
+                **common_create_args,
+            ),
+            call(
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+                **common_create_args,
+            ),
+        ]
+    )
+
+
 def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
     model = load_sql_based_model(
@@ -765,7 +812,7 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
                     unique_key id,
                 )
             );
-            
+
             SELECT id::int, name::string, updated_at::timestamp FROM tbl;
             """
         )
