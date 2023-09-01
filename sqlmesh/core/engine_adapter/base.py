@@ -1099,8 +1099,6 @@ class EngineAdapter:
                 if isinstance(e, exp.Expression)
                 else e
             )
-            logger.error("THE SQL: %s", sql)
-            print(sql)
             logger.debug(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
 
