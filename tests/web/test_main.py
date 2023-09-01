@@ -483,25 +483,21 @@ def test_get_environments(project_context: Context) -> None:
     )
 
 
-async def test_delete_environment_success(project_context: Context):
+def test_delete_environment_success(web_sushi_context: Context):
     response = client.delete("/api/environments/test")
 
-    assert response.status_code == 200
-    assert response.json() == True
+    assert response.status_code == 204
 
 
-async def test_delete_environment_failure(project_context: Context, mocker):
-    mocker.patch(
-        "app.Context.state_sync.invalidate_environment", side_effect=Exception("Some error")
+def test_delete_environment_failure(web_sushi_context: Context, mocker: MockerFixture):
+    mocker.patch.object(
+        web_sushi_context.state_sync, "invalidate_environment", side_effect=Exception("Some error")
     )
 
     response = client.delete("/api/environments/test")
 
-    assert response.status_code == 500
-    assert response.json() == {
-        "message": "Unable to delete environments",
-        "origin": "API -> environments -> delete_environment",
-    }
+    assert response.status_code == 422
+    assert response.json()["message"] == "Unable to delete environments"
 
 
 def test_get_lineage(web_sushi_context: Context) -> None:

@@ -170,7 +170,7 @@ class ContextEnvironment(BaseModel):
     backfills: t.List[ContextEnvironmentBackfill] = []
 
 
-class ApiEnvironments(BaseModel):
+class Environments(BaseModel):
     environments: t.Dict[str, Environment] = {}
     pinned_environments: t.Set[str] = set()
     default_target_environment: str = ""

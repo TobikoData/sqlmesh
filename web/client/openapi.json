@@ -427,7 +427,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ApiEnvironments" }
+                "schema": { "$ref": "#/components/schemas/Environments" }
               }
             }
           }
@@ -721,7 +721,7 @@
   },
   "components": {
     "schemas": {
-      "ApiEnvironments": {
+      "Environments": {
         "properties": {
           "environments": {
             "additionalProperties": {
@@ -745,7 +745,7 @@
           }
         },
         "type": "object",
-        "title": "ApiEnvironments"
+        "title": "Environments"
       },
       "ApiExceptionPayload": {
         "properties": {
