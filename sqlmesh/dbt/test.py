@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import Field
 
 import sqlmesh.core.dialect as d
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
 from sqlmesh.dbt.common import (
     Dependencies,
     GeneralConfig,
@@ -59,7 +59,7 @@ class TestConfig(GeneralConfig):
     name: str
     sql: SqlStr
     test_kwargs: t.Dict[str, t.Any] = {}
-    owner: str
+    owner: t.Optional[str] = None
     column_name: t.Optional[str] = None
     dependencies: Dependencies = Dependencies()
 
@@ -90,6 +90,10 @@ class TestConfig(GeneralConfig):
     def _lowercase_name(cls, v: str) -> str:
         return v.lower()
 
+    @property
+    def is_standalone(self) -> bool:
+        return not self.owner
+
     def to_sqlmesh(self, context: DbtContext) -> Audit:
         """Convert dbt Test to SQLMesh Audit
 
@@ -117,14 +121,29 @@ class TestConfig(GeneralConfig):
         skip = not self.enabled
         blocking = self.severity == Severity.ERROR
 
-        audit = Audit(
-            name=self.name,
-            dialect=context.dialect,
-            skip=skip,
-            blocking=blocking,
-            query=query,
-            jinja_macros=jinja_macros,
-        )
+        audit: Audit
+        if self.is_standalone:
+            audit = StandaloneAudit(
+                name=self.name,
+                dialect=context.dialect,
+                skip=skip,
+                query=query,
+                jinja_macros=jinja_macros,
+                depends_on={model.sql_name for model in test_context.refs.values()}.union(
+                    {source.sql_name for source in test_context.sources.values()}
+                ),
+                tags=self.tags,
+            )
+        else:
+            audit = ModelAudit(
+                name=self.name,
+                dialect=context.dialect,
+                skip=skip,
+                blocking=blocking,
+                query=query,
+                jinja_macros=jinja_macros,
+            )
+
         audit._path = self.path
         return audit
 

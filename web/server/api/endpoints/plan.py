@@ -82,7 +82,7 @@ async def run_plan(
         ]
 
         payload.changes = models.ContextEnvironmentChanges(
-            removed=plan.context_diff.removed,
+            removed=set(plan.context_diff.removed_snapshots),
             added=plan.context_diff.added,
             modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
         )

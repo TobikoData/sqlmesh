@@ -1,7 +1,7 @@
 import pytest
 from sqlglot import exp, parse, parse_one
 
-from sqlmesh.core.audit import Audit, builtin
+from sqlmesh.core.audit import ModelAudit, StandaloneAudit, builtin
 from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, create_sql_model
 from sqlmesh.utils.errors import AuditConfigError
 
@@ -33,7 +33,7 @@ def test_load(assert_exp_eq):
     """
     )
 
-    audit = Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
+    audit = ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
     assert audit.dialect == "spark"
     assert audit.blocking is False
     assert audit.skip is False
@@ -74,7 +74,7 @@ def test_load_multiple(assert_exp_eq):
     """
     )
 
-    first_audit, second_audit = Audit.load_multiple(expressions, path="/path/to/audit")
+    first_audit, second_audit = ModelAudit.load_multiple(expressions, path="/path/to/audit")
     assert first_audit.dialect == "spark"
     assert first_audit.blocking is True
     assert first_audit.skip is False
@@ -107,7 +107,7 @@ def test_no_audit_statement():
     """
     )
     with pytest.raises(AuditConfigError) as ex:
-        Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
+        ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
     assert "Incomplete audit definition" in str(ex.value)
 
 
@@ -123,7 +123,7 @@ def test_unordered_audit_statements():
     )
 
     with pytest.raises(AuditConfigError) as ex:
-        Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
+        ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
     assert "AUDIT statement is required as the first statement" in str(ex.value)
 
 
@@ -139,19 +139,19 @@ def test_no_query():
     )
 
     with pytest.raises(AuditConfigError) as ex:
-        Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
+        ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
     assert "Missing SELECT query" in str(ex.value)
 
 
 def test_macro(model: Model):
     expected_query = """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL"""
 
-    audit = Audit(
+    audit = ModelAudit(
         name="test_audit",
         query="SELECT * FROM @this_model WHERE a IS NULL",
     )
 
-    audit_jinja = Audit(
+    audit_jinja = ModelAudit(
         name="test_audit",
         query="JINJA_QUERY_BEGIN; SELECT * FROM {{ this_model }} WHERE a IS NULL; JINJA_END;",
     )
@@ -183,7 +183,7 @@ def test_load_with_defaults(model, assert_exp_eq):
             AND @field3 != @field4
     """
     )
-    audit = Audit.load(expressions, path="/path/to/audit", dialect="duckdb")
+    audit = ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
     assert audit.defaults == {
         "field1": exp.to_column("some_column"),
         "field2": exp.Literal.number(3),
@@ -343,4 +343,17 @@ def test_chi_square_audit(model: Model):
     assert (
         rendered_query.sql()
         == 'WITH "samples" AS (SELECT "a" AS "x_a", "b" AS "x_b" FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN \'1970-01-01\' AND \'1970-01-01\') AS "_q_0" WHERE NOT "a" IS NULL AND NOT "b" IS NULL), "contingency_table" AS (SELECT "x_a", "x_b", COUNT(*) AS "observed", (SELECT COUNT(*) FROM "samples" AS "t" WHERE "r"."x_a" = "t"."x_a") AS "tot_a", (SELECT COUNT(*) FROM "samples" AS "t" WHERE "r"."x_b" = "t"."x_b") AS "tot_b", (SELECT COUNT(*) FROM "samples") AS "g_t" /* g_t is the grand total */ FROM "samples" AS "r" GROUP BY "x_a", "x_b") SELECT ((SELECT COUNT(DISTINCT "x_a") FROM "contingency_table") - 1) * ((SELECT COUNT(DISTINCT "x_b") FROM "contingency_table") - 1) AS "degrees_of_freedom", SUM(("observed" - ("tot_a" * "tot_b" / "g_t")) * ("observed" - ("tot_a" * "tot_b" / "g_t")) / ("tot_a" * "tot_b" / "g_t")) AS "chi_square" FROM "contingency_table" HAVING NOT "chi_square" > 9.48773'
+    )
+
+
+def test_standalone_audit(model: Model, assert_exp_eq):
+    audit = StandaloneAudit(
+        name="test_audit", query=parse_one(f"SELECT * FROM {model.name} WHERE col IS NULL")
+    )
+
+    assert audit.depends_on == {model.name}
+
+    rendered_query = audit.render_query(audit)
+    assert_exp_eq(
+        rendered_query, """SELECT * FROM "db"."test_model" AS "test_model" WHERE "col" IS NULL"""
     )

@@ -12,7 +12,7 @@ import {
   type EnvironmentName,
   ModelEnvironment,
 } from '~/models/environment'
-import { isStringEmptyOrNil } from '~/utils'
+import { isNil, isStringEmptyOrNil } from '~/utils'
 
 interface ContextStore {
   version?: string
@@ -20,6 +20,8 @@ interface ContextStore {
   confirmations: Confirmation[]
   environment: ModelEnvironment
   environments: Set<ModelEnvironment>
+  defaultEnvironment?: ModelEnvironment
+  pinnedEnvironments: ModelEnvironment[]
   initialStartDate?: ContextEnvironmentStart
   initialEndDate?: ContextEnvironmentEnd
   models: Map<string, ModelSQLMeshModel>
@@ -38,7 +40,11 @@ interface ContextStore {
     created_from: EnvironmentName,
   ) => void
   removeLocalEnvironment: (environments: ModelEnvironment) => void
-  addSynchronizedEnvironments: (environments: Environment[]) => void
+  addSynchronizedEnvironments: (
+    environments: Environment[],
+    defaultEnvironment?: string,
+    pinnedEnvironments?: string[],
+  ) => void
   hasSynchronizedEnvironments: () => boolean
   setInitialDates: (
     initialStartDate?: ContextEnvironmentStart,
@@ -55,6 +61,8 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   confirmations: [],
   environment,
   environments,
+  defaultEnvironment: undefined,
+  pinnedEnvironments: [],
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
@@ -180,7 +188,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
       }
     })
   },
-  addSynchronizedEnvironments(envs = []) {
+  addSynchronizedEnvironments(envs = [], defaultEnvironment, pinnedEnvs = []) {
     set(s => {
       const environments = Array.from(s.environments)
 
@@ -189,7 +197,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
           ({ name: envNameLocal }) => env.name === envNameLocal,
         )
 
-        if (environment == null) {
+        if (isNil(environment)) {
           environment = new ModelEnvironment(
             env,
             EnumRelativeLocation.Synchronized,
@@ -212,7 +220,19 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
       ModelEnvironment.sort(environments)
 
+      const prodEnv = environments.find(({ name }) => name === 'prod')
+      const defaultEnv =
+        environments.find(({ name }) => name === defaultEnvironment) ??
+        s.environment
+
       return {
+        environment: isStringEmptyOrNil(prodEnv?.id) ? prodEnv : defaultEnv,
+        defaultEnvironment: environments.find(
+          ({ name }) => name === defaultEnvironment,
+        ),
+        pinnedEnvironments: environments.filter(env =>
+          pinnedEnvs.includes(env.name),
+        ),
         environments: new Set(environments),
       }
     })

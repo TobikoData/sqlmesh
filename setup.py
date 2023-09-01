@@ -41,12 +41,12 @@ setup(
         "hyperscript",
         "ipywidgets",
         "jinja2",
-        "pandas",
+        "pandas<2.1.0",
         "pydantic[email]>=1.10.7,<2.0.0",
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=18.0.0",
+        "sqlglot~=18.0.1",
     ],
     extras_require={
         "bigquery": [

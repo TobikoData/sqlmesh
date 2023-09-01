@@ -47,11 +47,11 @@ from sqlmesh.utils.metaprogramming import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.audit import Audit
+    from sqlmesh.core.audit import ModelAudit
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
-    from sqlmesh.core.snapshot import Snapshot
+    from sqlmesh.core.snapshot import Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
@@ -380,10 +380,19 @@ class _Model(ModelMeta, frozen=True):
         for select in query.find_all(exp.Select):
             if select.args.get("from"):
                 select.where(exp.false(), copy=False)
-
+        if self.managed_columns:
+            query.select(
+                *[
+                    exp.alias_(exp.cast(exp.Null(), to=col_type), col)
+                    for col, col_type in self.managed_columns.items()
+                    if col not in query.named_selects
+                ],
+                append=True,
+                copy=False,
+            )
         return query
 
-    def referenced_audits(self, audits: t.Dict[str, Audit]) -> t.List[Audit]:
+    def referenced_audits(self, audits: t.Dict[str, ModelAudit]) -> t.List[ModelAudit]:
         """Returns audits referenced in this model.
 
         Args:
@@ -402,15 +411,20 @@ class _Model(ModelMeta, frozen=True):
                 )
         return referenced_audits
 
-    def text_diff(self, other: Model) -> str:
-        """Produce a text diff against another model.
+    def text_diff(self, other: Node) -> str:
+        """Produce a text diff against another node.
 
         Args:
-            other: The model to diff against.
+            other: The node to diff against.
 
         Returns:
             A unified text diff showing additions and deletions.
         """
+        if not isinstance(other, _Model):
+            raise SQLMeshError(
+                f"Cannot diff model '{self.name} against a non-model node '{other.name}'"
+            )
+
         meta_a, *statements_a = self.render_definition()
         meta_b, *statements_b = other.render_definition()
 
@@ -517,7 +531,9 @@ class _Model(ModelMeta, frozen=True):
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         """Returns the mapping of column names to types of this model."""
-        return self.columns_to_types_
+        if self.columns_to_types_ is None:
+            return None
+        return {**self.columns_to_types_, **self.managed_columns}
 
     @property
     def columns_to_types_or_raise(self) -> t.Dict[str, exp.DataType]:
@@ -530,8 +546,12 @@ class _Model(ModelMeta, frozen=True):
     @property
     def annotated(self) -> bool:
         """Checks if all column projection types of this model are known."""
-        columns_to_types = self.columns_to_types
-        if columns_to_types is None:
+        if self.columns_to_types is None:
+            return False
+        columns_to_types = {
+            k: v for k, v in self.columns_to_types.items() if k not in self.managed_columns
+        }
+        if not columns_to_types:
             return False
         return all(
             column_type.this != exp.DataType.Type.UNKNOWN
@@ -697,7 +717,7 @@ class _Model(ModelMeta, frozen=True):
 
         return data  # type: ignore
 
-    def metadata_hash(self, audits: t.Dict[str, Audit]) -> str:
+    def metadata_hash(self, audits: t.Dict[str, ModelAudit]) -> str:
         """
         Computes the metadata hash for the node.
 
@@ -782,6 +802,11 @@ class _Model(ModelMeta, frozen=True):
                 output.append(d.jinja_statement(macro_info.definition))
 
         return output
+
+    @property
+    def is_model(self) -> bool:
+        """Return True if this is a model node"""
+        return True
 
 
 class _SqlBasedModel(_Model):
@@ -976,9 +1001,8 @@ class SqlModel(_SqlBasedModel):
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
-            return self.columns_to_types_
-
-        if self._columns_to_types is None:
+            self._columns_to_types = self.columns_to_types_
+        elif self._columns_to_types is None:
             query = self._query_renderer.render()
             if query is None:
                 return None
@@ -986,7 +1010,8 @@ class SqlModel(_SqlBasedModel):
 
         if "*" in self._columns_to_types:
             return None
-        return self._columns_to_types
+
+        return {**self._columns_to_types, **self.managed_columns}
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
@@ -1159,7 +1184,7 @@ class SeedModel(_SqlBasedModel):
             df[string_columns] = df[string_columns].astype(str)
             yield df
 
-    def text_diff(self, other: Model) -> str:
+    def text_diff(self, other: Node) -> str:
         if not isinstance(other, SeedModel):
             return super().text_diff(other)
 
@@ -1645,8 +1670,9 @@ def create_python_model(
         depends_on: The custom set of model's upstream dependencies.
     """
     # Find dependencies for python models by parsing code if they are not explicitly defined
+    # Also remove self-references that are found
     depends_on = (
-        _parse_depends_on(entrypoint, python_env)
+        _parse_depends_on(entrypoint, python_env) - {name}
         if depends_on is None and python_env is not None
         else None
     )

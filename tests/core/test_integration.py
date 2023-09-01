@@ -1,6 +1,10 @@
+import pathlib
+import shutil
 import typing as t
 from collections import Counter
 
+import numpy as np
+import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
@@ -28,7 +32,14 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import TimeLike, to_date, to_ds, to_timestamp
+from sqlmesh.utils.date import (
+    TimeLike,
+    to_date,
+    to_datetime,
+    to_ds,
+    to_timestamp,
+    to_ts,
+)
 from tests.conftest import DuckDBMetadata, SushiDataValidator, init_and_plan_context
 
 
@@ -748,7 +759,7 @@ def test_environment_suffix_target_table(mocker: MockerFixture):
     assert set(metadata.schemas) - starting_schemas == set()
     prod_views = {x for x in metadata.qualified_views if x.db in environments_schemas}
     # Make sure that all models are present
-    assert len(prod_views) == 10
+    assert len(prod_views) == 12
     apply_to_environment(context, "dev")
     # Make sure no new schemas are created
     assert set(metadata.schemas) - starting_schemas == set()
@@ -797,11 +808,166 @@ def test_ignored_snapshots(sushi_context: Context):
     assert exp.to_table("sushi__dev.order_items") in metadata.qualified_views
 
 
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_scd_type_2(tmp_path: pathlib.Path):
+    def create_source_dataframe(values: t.List[t.Tuple[int, str, str]]) -> pd.DataFrame:
+        return pd.DataFrame(
+            np.array(
+                values,
+                [
+                    ("customer_id", "int32"),
+                    ("status", "object"),
+                    ("updated_at", "datetime64[ns]"),
+                ],
+            ),
+        )
+
+    def create_target_dataframe(
+        values: t.List[t.Tuple[int, str, str, str, t.Optional[str]]]
+    ) -> pd.DataFrame:
+        return pd.DataFrame(
+            np.array(
+                values,
+                [
+                    ("customer_id", "int32"),
+                    ("status", "object"),
+                    ("updated_at", "datetime64[ns]"),
+                    ("valid_from", "datetime64[ns]"),
+                    ("valid_to", "datetime64[ns]"),
+                ],
+            ),
+        )
+
+    def replace_source_table(
+        context: Context,
+        values: t.List[t.Tuple[int, str, str]],
+    ):
+        df = create_source_dataframe(values)
+        context.engine_adapter.replace_query(
+            "sushi.raw_marketing",
+            df,
+            columns_to_types={
+                "customer_id": exp.DataType.build("int"),
+                "status": exp.DataType.build("STRING"),
+                "updated_at": exp.DataType.build("TIMESTAMP"),
+            },
+        )
+
+    def compare_dataframes(df1: pd.DataFrame, df2: pd.DataFrame):
+        df1 = df1.sort_values(by=["customer_id"]).reset_index(drop=True)
+        df2 = df2.sort_values(by=["customer_id"]).reset_index(drop=True)
+        pd.testing.assert_frame_equal(df1, df2)
+
+    def get_current_df(context: Context):
+        return context.engine_adapter.fetchdf("SELECT * FROM sushi.marketing")
+
+    sushi_root = pathlib.Path("examples/sushi")
+    shutil.copy(str(pathlib.Path(sushi_root / "config.py")), str(tmp_path / "config.py"))
+    (tmp_path / "models").mkdir()
+    shutil.copy(
+        str(pathlib.Path(sushi_root / "models" / "marketing.sql")),
+        str(tmp_path / "models" / "marketing.sql"),
+    )
+
+    context = Context(paths=[str(tmp_path)], config="test_config")
+    context.engine_adapter.create_schema("sushi")
+    replace_source_table(
+        context,
+        [
+            (1, "a", "2020-01-01 00:00:00"),
+            (2, "b", "2020-01-01 00:00:00"),
+            (3, "c", "2020-01-01 00:00:00"),
+        ],
+    )
+    plan = context.plan("prod")
+    plan.apply()
+    df_actual = get_current_df(context)
+    df_expected = create_target_dataframe(
+        [
+            (1, "a", "2020-01-01 00:00:00", "1970-01-01 00:00:00", None),
+            (2, "b", "2020-01-01 00:00:00", "1970-01-01 00:00:00", None),
+            (3, "c", "2020-01-01 00:00:00", "1970-01-01 00:00:00", None),
+        ]
+    )
+    compare_dataframes(df_actual, df_expected)
+
+    replace_source_table(
+        context,
+        [
+            # Update to "x"
+            (1, "x", "2020-01-02 00:00:00"),
+            # No Change
+            (2, "b", "2020-01-01 00:00:00"),
+            # Deleted 3
+            # (3, "c", "2020-01-01 00:00:00"),
+            # Added 4
+            (4, "d", "2020-01-02 00:00:00"),
+        ],
+    )
+    tomorrow = to_datetime("tomorrow")
+    context.run("prod", start=to_datetime("today"), end=tomorrow, execution_time=tomorrow)
+    df_actual = get_current_df(context)
+    df_expected = create_target_dataframe(
+        [
+            (1, "a", "2020-01-01 00:00:00", "1970-01-01 00:00:00", "2020-01-02 00:00:00"),
+            (1, "x", "2020-01-02 00:00:00", "2020-01-02 00:00:00", None),
+            (2, "b", "2020-01-01 00:00:00", "1970-01-01 00:00:00", None),
+            (3, "c", "2020-01-01 00:00:00", "1970-01-01 00:00:00", to_ts(tomorrow)),
+            (4, "d", "2020-01-02 00:00:00", "1970-01-01 00:00:00", None),
+        ]
+    )
+    compare_dataframes(df_actual, df_expected)
+
+    replace_source_table(
+        context,
+        [
+            # Update to "y"
+            (1, "y", "2020-01-03 00:00:00"),
+            # Delete 2
+            # (2, "b", "2020-01-01 00:00:00"),
+            # Add back 3
+            (3, "c", "2099-01-01 00:00:00"),
+            # No Change
+            (4, "d", "2020-01-02 00:00:00"),
+            # Added 5
+            (5, "e", "2020-01-03 00:00:00"),
+        ],
+    )
+    two_days_from_now = to_datetime("in 2 days")
+    context.run(
+        "prod",
+        start=to_datetime("tomorrow"),
+        end=two_days_from_now,
+        execution_time=two_days_from_now,
+    )
+    df_actual = get_current_df(context)
+    df_expected = create_target_dataframe(
+        [
+            (1, "a", "2020-01-01 00:00:00", "1970-01-01 00:00:00", "2020-01-02 00:00:00"),
+            (1, "x", "2020-01-02 00:00:00", "2020-01-02 00:00:00", "2020-01-03 00:00:00"),
+            (1, "y", "2020-01-03 00:00:00", "2020-01-03 00:00:00", None),
+            (2, "b", "2020-01-01 00:00:00", "1970-01-01 00:00:00", to_ts(two_days_from_now)),
+            (3, "c", "2020-01-01 00:00:00", "1970-01-01 00:00:00", to_ts(tomorrow)),
+            # Since 3 was deleted and came back and the updated at time when it came back
+            # is greater than the execution time when it was deleted, we have the valid_from
+            # match the updated_at time. If it was less then the valid_from would match the
+            # execution time when it was deleted.
+            (3, "c", "2099-01-01 00:00:00", "2099-01-01 00:00:00", None),
+            # What the result would be if the updated_at time was `2020-01-03`
+            # (3, "c", "2020-01-03 00:00:00", to_ts(tomorrow), None),
+            (4, "d", "2020-01-02 00:00:00", "1970-01-01 00:00:00", None),
+            (5, "e", "2020-01-03 00:00:00", "1970-01-01 00:00:00", None),
+        ]
+    )
+    compare_dataframes(df_actual, df_expected)
+
+
 def initial_add(context: Context, environment: str):
     assert not context.state_reader.get_environment(environment)
 
     plan = context.plan(environment, start=start(context), create_from="nonexistent_env")
-    validate_plan_changes(plan, added=context.models)
+    validate_plan_changes(plan, added=set(context.models) | set(context.standalone_audits))
 
     context.apply(plan)
     validate_apply_basics(context, environment, plan.snapshots)
@@ -869,9 +1035,9 @@ def validate_plan_changes(
     added = added or []
     modified = modified or []
     removed = removed or []
-    assert set(added) == set(plan.context_diff.added)
+    assert set(added) == plan.context_diff.added
     assert set(modified) == set(plan.context_diff.modified_snapshots)
-    assert set(removed) == set(plan.context_diff.removed)
+    assert set(removed) == set(plan.context_diff.removed_snapshots)
 
 
 def validate_versions_same(
@@ -922,6 +1088,8 @@ def validate_state_sync_environment(
 def validate_tables(snapshots: t.Iterable[Snapshot], context: Context) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
+        if not snapshot.is_model:
+            continue
         table_should_exist = not snapshot.is_symbolic
         assert adapter.table_exists(snapshot.table_name()) == table_should_exist
         if table_should_exist:
@@ -933,7 +1101,7 @@ def validate_environment_views(
 ) -> None:
     adapter = context.engine_adapter
     for snapshot in snapshots:
-        if snapshot.is_symbolic:
+        if not snapshot.is_model or snapshot.is_symbolic:
             continue
         view_name = snapshot.qualified_view_name.for_environment(
             EnvironmentNamingInfo(

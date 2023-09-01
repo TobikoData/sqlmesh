@@ -29,7 +29,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
-from sqlmesh.core.node import IntervalUnit, Node
+from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
@@ -836,7 +836,7 @@ def test_render_definition():
 
 
 def test_cron():
-    daily = Node(name="x", cron="@daily")
+    daily = _Node(name="x", cron="@daily")
     assert to_datetime(daily.cron_prev("2020-01-01")) == to_datetime("2019-12-31")
     assert to_datetime(daily.cron_floor("2020-01-01")) == to_datetime("2020-01-01")
     assert to_timestamp(daily.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
@@ -847,7 +847,7 @@ def test_cron():
     assert to_timestamp(interval.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
     assert to_timestamp(interval.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
 
-    offset = Node(name="x", cron="1 0 * * *")
+    offset = _Node(name="x", cron="1 0 * * *")
     assert to_datetime(offset.cron_prev("2020-01-01")) == to_datetime("2019-12-31 00:01")
     assert to_datetime(offset.cron_floor("2020-01-01")) == to_datetime("2019-12-31 00:01")
     assert to_timestamp(offset.cron_floor("2020-01-01 10:00:00")) == to_timestamp(
@@ -860,7 +860,7 @@ def test_cron():
     assert to_timestamp(interval.cron_floor("2020-01-01 10:00:00")) == to_timestamp("2020-01-01")
     assert to_timestamp(interval.cron_next("2020-01-01 10:00:00")) == to_timestamp("2020-01-02")
 
-    hourly = Node(name="x", cron="1 * * * *")
+    hourly = _Node(name="x", cron="1 * * * *")
     assert to_timestamp(hourly.cron_prev("2020-01-01 10:00:00")) == to_timestamp(
         "2020-01-01 09:01:00"
     )
@@ -881,7 +881,7 @@ def test_cron():
         "2020-01-01 10:00:00"
     )
 
-    monthly = Node(name="x", cron="0 0 2 * *")
+    monthly = _Node(name="x", cron="0 0 2 * *")
     assert to_timestamp(monthly.cron_prev("2020-01-01 00:00:00")) == to_timestamp(
         "2019-12-02 00:00:00"
     )

@@ -427,13 +427,36 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "$ref": "#/components/schemas/Environment"
-                  },
-                  "type": "object",
-                  "title": "Response Get Environments Api Environments Get"
-                }
+                "schema": { "$ref": "#/components/schemas/Environments" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/environments/{environment}": {
+      "delete": {
+        "summary": "Delete Environment",
+        "description": "Invalidate and delete an environment",
+        "operationId": "delete_environment_api_environments__environment__delete",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Environment" },
+            "name": "environment",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
               }
             }
           }
@@ -984,6 +1007,32 @@
         "title": "EnvironmentSuffixTarget",
         "description": "An enumeration."
       },
+      "Environments": {
+        "properties": {
+          "environments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Environment"
+            },
+            "type": "object",
+            "title": "Environments",
+            "default": {}
+          },
+          "pinned_environments": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Pinned Environments",
+            "default": []
+          },
+          "default_target_environment": {
+            "type": "string",
+            "title": "Default Target Environment",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "Environments"
+      },
       "EvaluateInput": {
         "properties": {
           "model": { "type": "string", "title": "Model" },
@@ -1189,6 +1238,7 @@
           "INCREMENTAL_BY_UNIQUE_KEY",
           "INCREMENTAL_UNMANAGED",
           "FULL",
+          "SCD_TYPE_2",
           "VIEW",
           "EMBEDDED",
           "SEED",

@@ -27,7 +27,7 @@ from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape, optional_import
 from sqlmesh.utils.connection_pool import create_connection_pool
-from sqlmesh.utils.date import TimeLike, make_inclusive
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
@@ -88,6 +88,7 @@ class EngineAdapter:
     SUPPORTS_INDEXES = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
+    SUPPORTS_CLONING = False
     SCHEMA_DIFFER = SchemaDiffer()
 
     def __init__(
@@ -377,6 +378,33 @@ class EngineAdapter:
         )
         self.execute(create_expression)
 
+    def clone_table(
+        self,
+        target_table_name: TableName,
+        source_table_name: TableName,
+        replace: bool = False,
+        clone_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        """Creates a table with the target name by cloning the source table.
+
+        Args:
+            target_table_name: The name of the table that should be created.
+            source_table_name: The name of the source table that should be cloned.
+            replace: Whether or not to replace an existing table.
+        """
+        if not self.SUPPORTS_CLONING:
+            raise NotImplementedError(f"Engine does not support cloning: {type(self)}")
+        self.execute(
+            exp.Create(
+                this=exp.to_table(target_table_name),
+                kind="TABLE",
+                replace=replace,
+                clone=exp.Clone(this=exp.to_table(source_table_name), **(clone_kwargs or {})),
+                **kwargs,
+            )
+        )
+
     def drop_table(self, table_name: TableName, exists: bool = True) -> None:
         """Drops a table.
 
@@ -635,6 +663,7 @@ class EngineAdapter:
         ],
         time_column: TimeColumn | exp.Column | str,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
     ) -> None:
         if columns_to_types is None:
             columns_to_types = self.columns(table_name)
@@ -744,6 +773,150 @@ class EngineAdapter:
                 on=on,
                 expressions=match_expressions,
             )
+        )
+
+    def scd_type_2(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        unique_key: t.Sequence[str],
+        valid_from_name: str,
+        valid_to_name: str,
+        updated_at_name: str,
+        execution_time: TimeLike,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        if columns_to_types is None:
+            columns_to_types = self.columns(target_table)
+        if updated_at_name not in columns_to_types:
+            raise SQLMeshError(
+                f"Column {updated_at_name} not found in {target_table}. Table must contain an `updated_at` timestamp for SCD Type 2"
+            )
+        unmanaged_columns = [
+            col for col in columns_to_types if col not in {valid_from_name, valid_to_name}
+        ]
+        df = self.try_get_pandas_df(source_table)
+        if df is not None:
+            source_table = next(
+                pandas_to_sql(
+                    df,
+                    columns_to_types={
+                        k: v for k, v in columns_to_types.items() if k in unmanaged_columns
+                    },
+                )
+            )
+        start_time = "CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)"
+        query = (
+            exp.Select()  # type: ignore
+            .with_(
+                "source",
+                exp.select(*unmanaged_columns).from_(
+                    source_table.subquery("raw_source")  # type: ignore
+                ),
+            )
+            # Historical Records that Do Not Change
+            .with_(
+                "static",
+                exp.select(*columns_to_types)
+                .from_(target_table)
+                .where(f"{valid_to_name} IS NOT NULL"),
+            )
+            # Latest Records that can be updated
+            .with_(
+                "latest",
+                exp.select(*columns_to_types).from_(target_table).where(f"{valid_to_name} IS NULL"),
+            )
+            # Deleted records which can be used to determine `valid_from` for undeleted source records
+            .with_(
+                "deleted",
+                exp.select(*[f"static.{col}" for col in columns_to_types])
+                .from_("static")
+                .join("latest", using=unique_key, join_type="left")
+                .where(f"latest.{valid_to_name} IS NULL"),
+            )
+            # Get the latest `valid_to` deleted record for each unique key
+            .with_(
+                "latest_deleted",
+                exp.select(
+                    *unique_key,
+                    f"MAX({valid_to_name}) AS {valid_to_name}",
+                )
+                .from_("deleted")
+                .group_by(*unique_key),
+            )
+            # Do a full join between latest records and source table in order to combine them together
+            .with_(
+                "joined",
+                exp.select(
+                    *(f"latest.{col} AS t_{col}" for col in columns_to_types),
+                    *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
+                )
+                .from_("latest")
+                .join("source", using=unique_key, join_type="full"),
+            )
+            # Get deleted, new, no longer current, or unchanged records
+            .with_(
+                "updated_rows",
+                exp.select(
+                    *(f"COALESCE(t_{col}, s_{col}) as {col}" for col in unmanaged_columns),
+                    f"""
+                    CASE 
+                        WHEN t_{valid_from_name} IS NULL 
+                             AND latest_deleted.{unique_key[0]} IS NOT NULL 
+                        THEN CASE 
+                                WHEN latest_deleted.{valid_to_name} > s_{updated_at_name} 
+                                THEN latest_deleted.{valid_to_name} 
+                                ELSE s_{updated_at_name} 
+                             END 
+                        WHEN t_{valid_from_name} IS NULL 
+                        THEN {start_time} 
+                        ELSE t_{valid_from_name} 
+                    END AS {valid_from_name}""",
+                    f"""
+                    CASE 
+                        WHEN s_{updated_at_name} > t_{updated_at_name} 
+                        THEN s_{updated_at_name} 
+                        WHEN s_{unique_key[0]} IS NULL 
+                        THEN CAST('{to_ts(execution_time)}' AS TIMESTAMP) 
+                        ELSE t_{valid_to_name} 
+                    END AS {valid_to_name}""",
+                )
+                .from_("joined")
+                .join(
+                    "latest_deleted",
+                    on=" AND ".join(f"joined.s_{col} = latest_deleted.{col}" for col in unique_key),
+                    join_type="left",
+                ),
+            )
+            # Get records that have been "updated" which means inserting a new record with previous `valid_from`
+            .with_(
+                "inserted_rows",
+                exp.select(
+                    *(f"s_{col} as {col}" for col in unmanaged_columns),
+                    f"s_{updated_at_name} as {valid_from_name}",
+                    f"NULL as {valid_to_name}",
+                )
+                .from_("joined")
+                .where(
+                    f"t_{unique_key[0]} IS NOT NULL AND s_{unique_key[0]} IS NOT NULL AND s_{updated_at_name} > t_{updated_at_name}"
+                ),
+            )
+            .select("*")
+            .from_("static")
+            .union(
+                "SELECT * FROM updated_rows",
+                distinct=False,
+            )
+            .union(
+                "SELECT * FROM inserted_rows",
+                distinct=False,
+            )
+        )
+        self.replace_query(
+            target_table,
+            query,
+            columns_to_types=columns_to_types,
         )
 
     def merge(

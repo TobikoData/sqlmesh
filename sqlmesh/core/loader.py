@@ -15,7 +15,7 @@ from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import Audit, ModelAudit
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
@@ -326,7 +326,7 @@ class SqlMeshLoader(Loader):
                 self._track_file(path)
                 with open(path, "r", encoding="utf-8") as file:
                     expressions = parse(file.read(), default_dialect=config.model_defaults.dialect)
-                    audits = Audit.load_multiple(
+                    audits = ModelAudit.load_multiple(
                         expressions=expressions,
                         path=path,
                         dialect=config.model_defaults.dialect,

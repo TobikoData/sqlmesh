@@ -12,10 +12,10 @@ from sqlglot import exp
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit
+from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, ModelAudit, StandaloneAudit
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
-from sqlmesh.core.node import IntervalUnit
+from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -43,7 +43,8 @@ if t.TYPE_CHECKING:
 
 Interval = t.Tuple[int, int]
 Intervals = t.List[Interval]
-SnapshotNode = Annotated[Model, Field(discriminator="source_type")]
+
+Node = Annotated[t.Union[Model, StandaloneAudit], Field(descriminator="source_type")]
 
 
 class SnapshotChangeCategory(IntEnum):
@@ -281,6 +282,18 @@ class SnapshotInfoMixin(ModelKindMixin):
             is_temp=is_temp,
         )
 
+    @property
+    def node_type(self) -> NodeType:
+        raise NotImplementedError
+
+    @property
+    def is_model(self) -> bool:
+        return self.node_type == NodeType.MODEL
+
+    @property
+    def is_audit(self) -> bool:
+        return self.node_type == NodeType.AUDIT
+
 
 class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     name: str
@@ -291,7 +304,8 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     parents: t.Tuple[SnapshotId, ...]
     previous_versions: t.Tuple[SnapshotDataVersion, ...] = ()
     change_category: t.Optional[SnapshotChangeCategory] = None
-    kind_name: ModelKindName
+    kind_name: t.Optional[ModelKindName] = None
+    node_type_: NodeType = Field(default=NodeType.MODEL, alias="node_type")
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -330,8 +344,12 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
         return self.fingerprint.to_version() == self.version
 
     @property
-    def model_kind_name(self) -> ModelKindName:
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self.kind_name
+
+    @property
+    def node_type(self) -> NodeType:
+        return self.node_type_
 
     @property
     def name_version(self) -> SnapshotNameVersion:
@@ -340,24 +358,24 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
 
 
 class Snapshot(PydanticModel, SnapshotInfoMixin):
-    """A snapshot represents a model at a certain point in time.
+    """A snapshot represents a node at a certain point in time.
 
-    Snapshots are used to encapsulate everything needed to evaluate a model.
+    Snapshots are used to encapsulate everything needed to evaluate a node.
     They are standalone objects that hold all state and dynamic content necessary
-    to render a model's query including things like macros. Snapshots also store intervals
+    to render a node's query including things like macros. Snapshots also store intervals
     (timestamp ranges for what data we've processed).
 
-    Models can be dynamically rendered due to macros. Rendering a model to its full extent
+    Nodes can be dynamically rendered due to macros. Rendering a node to its full extent
     requires storing variables and macro definitions. We store all of the macro definitions and
     global variable references in `python_env` in raw text to avoid pickling. The helper methods
     to achieve this are defined in utils.metaprogramming.
 
     Args:
-        name: The snapshot name which is the same as the model name and should be unique per model.
-        fingerprint: A unique hash of the model definition so that models can be reused across environments.
+        name: The snapshot name which is the same as the node name and should be unique per node.
+        fingerprint: A unique hash of the node definition so that nodes can be reused across environments.
         node: Node object that the snapshot encapsulates.
         parents: The list of parent snapshots (upstream dependencies).
-        audits: The list of audits used by the model.
+        audits: The list of generic audits used by the node.
         intervals: List of [start, end) intervals showing which time ranges a snapshot has data for.
         dev_intervals: List of [start, end) intervals showing development intervals (forward-only).
         created_ts: Epoch millis timestamp when a snapshot was first created.
@@ -366,9 +384,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             in any environment.
         previous: The snapshot data version that this snapshot was based on. If this snapshot is new, then previous will be None.
         version: User specified version for a snapshot that is used for physical storage.
-            By default, the version is the fingerprint, but not all changes to models require a backfill.
+            By default, the version is the fingerprint, but not all changes to nodes require a backfill.
             If a user passes a previous version, that will be used instead and no backfill will be required.
-        change_category: User specified change category indicating which models require backfill from model changes made in this snapshot.
+        change_category: User specified change category indicating which nodes require backfill from node changes made in this snapshot.
         unpaused_ts: The timestamp which indicates when this snapshot was unpaused. Unpaused means that
             this snapshot is evaluated on a recurring basis. None indicates that this snapshot is paused.
         effective_from: The timestamp which indicates when this snapshot should be considered effective.
@@ -378,9 +396,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     name: str
     fingerprint: SnapshotFingerprint
     physical_schema_: t.Optional[str] = Field(default=None, alias="physical_schema")
-    node: SnapshotNode
+    node: Node
     parents: t.Tuple[SnapshotId, ...]
-    audits: t.Tuple[Audit, ...]
+    audits: t.Tuple[ModelAudit, ...] = tuple()
     intervals: Intervals = []
     dev_intervals: Intervals = []
     created_ts: int
@@ -464,42 +482,44 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         return result
 
     @classmethod
-    def from_model(
+    def from_node(
         cls,
-        model: Model,
+        node: Node,
         *,
-        nodes: t.Dict[str, SnapshotNode],
+        nodes: t.Dict[str, Node],
         ttl: str = c.DEFAULT_SNAPSHOT_TTL,
         version: t.Optional[str] = None,
-        audits: t.Optional[t.Dict[str, Audit]] = None,
+        audits: t.Optional[t.Dict[str, ModelAudit]] = None,
         cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
     ) -> Snapshot:
-        """Creates a new snapshot for a model.
+        """Creates a new snapshot for a node.
 
         Args:
-            model: Model to snapshot.
+            Node: Node to snapshot.
             nodes: Dictionary of all nodes in the graph to make the fingerprint dependent on parent changes.
                 If no dictionary is passed in the fingerprint will not be dependent on a node's parents.
             ttl: A TTL to determine how long orphaned (snapshots that are not promoted anywhere) should live.
             version: The version that a snapshot is associated with. Usually set during the planning phase.
             audits: Available audits by name.
-            cache: Cache of model name to fingerprints.
+            cache: Cache of node name to fingerprints.
 
         Returns:
             The newly created snapshot.
         """
         created_ts = now_timestamp()
+        kwargs = {}
+        if node.is_model:
+            kwargs["audits"] = tuple(t.cast(_Model, node).referenced_audits(audits or {}))
 
-        audits = audits or {}
         return cls(
-            name=model.name,
+            name=node.name,
             fingerprint=fingerprint_from_node(
-                model,
+                node,
                 nodes=nodes,
                 audits=audits,
                 cache=cache,
             ),
-            node=model,
+            node=node,
             parents=tuple(
                 SnapshotId(
                     name=name,
@@ -510,15 +530,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                         cache=cache,
                     ).to_identifier(),
                 )
-                for name in _parents_from_node(model, nodes)
+                for name in _parents_from_node(node, nodes)
             ),
-            audits=tuple(model.referenced_audits(audits)),
             intervals=[],
             dev_intervals=[],
             created_ts=created_ts,
             updated_ts=created_ts,
             ttl=ttl,
             version=version,
+            **kwargs,
         )
 
     def __eq__(self, other: t.Any) -> bool:
@@ -593,7 +613,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A [start, end) pair.
         """
-        interval_unit = self.model.interval_unit
+        interval_unit = self.node.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
 
         if is_date(end):
@@ -647,7 +667,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A set of snapshot names being restated
             is_dev: Indicates whether missing intervals are computed for the development environment.
-            ignore_cron: Whether to ignore the model's cron schedule.
+            ignore_cron: Whether to ignore the node's cron schedule.
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -672,10 +692,10 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
         )
 
-        interval_unit = self.model.interval_unit
+        interval_unit = self.node.interval_unit
 
         upper_bound_ts = to_timestamp(
-            self.model.cron_floor(execution_time) if not ignore_cron else execution_time
+            self.node.cron_floor(execution_time) if not ignore_cron else execution_time
         )
         end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
 
@@ -693,7 +713,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 croniter.get_prev()
                 break
 
-        lookback = self.model.lookback
+        lookback = self.model.lookback if self.is_model else 0
 
         for _ in range(lookback):
             ts = to_timestamp(croniter.get_next())
@@ -751,7 +771,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             unpaused_dt: The datetime object of when this snapshot was unpaused.
         """
         self.unpaused_ts = (
-            to_timestamp(self.model.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
+            to_timestamp(self.node.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
     def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
@@ -806,7 +826,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.depends_on_past and start:
             if not snapshot_start:
                 raise SQLMeshError("Snapshot must have a start defined if it depends on past")
-            start_ts = to_timestamp(self.model.interval_unit.cron_floor(start))
+            start_ts = to_timestamp(self.node.interval_unit.cron_floor(start))
             if not self.intervals:
                 return to_timestamp(snapshot_start) >= start_ts
             # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
@@ -829,7 +849,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return end
 
         return (
-            to_end_date(to_timestamp(self.intervals[-1][1]), self.model.interval_unit)
+            to_end_date(to_timestamp(self.intervals[-1][1]), self.node.interval_unit)
             if self.intervals
             else default
         )
@@ -838,7 +858,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def physical_schema(self) -> str:
         if self.physical_schema_ is not None:
             return self.physical_schema_
-        return self.model.physical_schema
+        return self.model.physical_schema if self.is_model else ""
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -854,6 +874,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             previous_versions=self.previous_versions,
             change_category=self.change_category,
             kind_name=self.model_kind_name,
+            node_type=self.node_type,
         )
 
     @property
@@ -881,7 +902,9 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def is_materialized_view(self) -> bool:
         """Returns whether or not this snapshot's model represents a materialized view."""
-        return isinstance(self.model.kind, ViewKind) and self.model.kind.materialized
+        return (
+            self.is_model and isinstance(self.model.kind, ViewKind) and self.model.kind.materialized
+        )
 
     @property
     def is_new_version(self) -> bool:
@@ -900,30 +923,69 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     @property
     def normalized_effective_from_ts(self) -> t.Optional[int]:
         return (
-            to_timestamp(self.model.interval_unit.cron_floor(self.effective_from))
+            to_timestamp(self.node.interval_unit.cron_floor(self.effective_from))
             if self.effective_from
             else None
         )
 
     @property
-    def model_kind_name(self) -> ModelKindName:
-        return self.model.kind.name
+    def model_kind_name(self) -> t.Optional[ModelKindName]:
+        return self.model.kind.name if self.is_model else None
+
+    @property
+    def node_type(self) -> NodeType:
+        if self.node.is_model:
+            return NodeType.MODEL
+        elif self.node.is_audit:
+            return NodeType.AUDIT
+        raise SQLMeshError(f"Snapshot {self.snapshot_id} has an unknown node type.")
 
     @property
     def model(self) -> Model:
-        if isinstance(self.node, _Model):
-            return t.cast(Model, self.node)
+        model = self.model_or_none
+        if model:
+            return model
         raise SQLMeshError(f"Snapshot {self.snapshot_id} is not a model snapshot.")
+
+    @property
+    def model_or_none(self) -> t.Optional[Model]:
+        if self.is_model:
+            return t.cast(Model, self.node)
+        return None
+
+    @property
+    def audit(self) -> StandaloneAudit:
+        if self.is_audit:
+            return t.cast(StandaloneAudit, self.node)
+        raise SQLMeshError(f"Snapshot {self.snapshot_id} is not an audit snapshot.")
 
     @property
     def depends_on_past(self) -> bool:
         """Whether or not this models depends on past intervals to be accurate before loading following intervals."""
-        return self.model.depends_on_past
+        return self.is_model and self.model.depends_on_past
+
+    @property
+    def audits_with_args(self) -> t.List[t.Tuple[Audit, t.Dict[str, exp.Expression]]]:
+        if self.is_model:
+            audits_by_name = {**BUILT_IN_AUDITS, **{a.name: a for a in self.audits}}
+            return [
+                (audits_by_name[audit_name], audit_args)
+                for audit_name, audit_args in self.model.audits
+            ]
+        elif self.is_audit:
+            return [(self.audit, {})]
+
+        return []
 
     @property
     def name_version(self) -> SnapshotNameVersion:
         """Returns the name and version of the snapshot."""
         return SnapshotNameVersion(name=self.name, version=self.version)
+
+    @property
+    def disable_restatement(self) -> bool:
+        """Is restatement disabled for the node"""
+        return self.is_model and self.model.disable_restatement
 
     def _ensure_categorized(self) -> None:
         if not self.change_category:
@@ -952,10 +1014,10 @@ def table_name(physical_schema: str, name: str, version: str, is_temp: bool = Fa
 
 
 def fingerprint_from_node(
-    node: SnapshotNode,
+    node: Node,
     *,
-    nodes: t.Dict[str, SnapshotNode],
-    audits: t.Optional[t.Dict[str, Audit]] = None,
+    nodes: t.Dict[str, Node],
+    audits: t.Optional[t.Dict[str, ModelAudit]] = None,
     cache: t.Optional[t.Dict[str, SnapshotFingerprint]] = None,
 ) -> SnapshotFingerprint:
     """Helper function to generate a fingerprint based on the data and metadata of the node and its parents.
@@ -969,7 +1031,7 @@ def fingerprint_from_node(
         nodes: Dictionary of all nodes in the graph to make the fingerprint dependent on parent changes.
             If no dictionary is passed in the fingerprint will not be dependent on a node's parents.
         audits: Available audits by name.
-        cache: Cache of model name to fingerprints.
+        cache: Cache of node name to fingerprints.
 
     Returns:
         The fingerprint.
@@ -1005,14 +1067,14 @@ def fingerprint_from_node(
 
 
 def _parents_from_node(
-    node: SnapshotNode,
-    nodes: t.Dict[str, SnapshotNode],
+    node: Node,
+    nodes: t.Dict[str, Node],
 ) -> t.Set[str]:
     parent_nodes = set()
     for parent in node.depends_on:
         if parent in nodes:
             parent_nodes.add(parent)
-            if nodes[parent].kind.is_embedded:
+            if nodes[parent].is_model and t.cast(_Model, nodes[parent]).kind.is_embedded:
                 parent_nodes.update(_parents_from_node(nodes[parent], nodes))
 
     return parent_nodes
@@ -1166,7 +1228,7 @@ def earliest_start_date(
     earliest = to_datetime(yesterday().date())
     if snapshots:
         for snapshot in snapshots:
-            if not snapshot.parents and not snapshot.model.start:
+            if not snapshot.parents and not snapshot.node.start:
                 cache[snapshot.name] = earliest
         return min(start_date(snapshot, snapshots, cache) or earliest for snapshot in snapshots)
     return earliest
@@ -1179,7 +1241,7 @@ def start_date(
 ) -> t.Optional[datetime]:
     """Get the effective/inferred start date for a snapshot.
 
-    Not all snapshots define a start date. In those cases, the model's start date
+    Not all snapshots define a start date. In those cases, the node's start date
     can be inferred from its parent's start date.
 
     Args:
@@ -1193,8 +1255,8 @@ def start_date(
     cache = {} if cache is None else cache
     if snapshot.name in cache:
         return cache[snapshot.name]
-    if snapshot.model.start:
-        start = to_datetime(snapshot.model.start)
+    if snapshot.node.start:
+        start = to_datetime(snapshot.node.start)
         cache[snapshot.name] = start
         return start
 

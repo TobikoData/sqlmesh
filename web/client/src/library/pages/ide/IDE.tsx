@@ -233,9 +233,22 @@ export default function PageIDE(): JSX.Element {
   }, [location])
 
   useEffect(() => {
-    if (isNil(dataEnvironments) || isObjectEmpty(dataEnvironments)) return
+    if (
+      isNil(dataEnvironments) ||
+      isNil(dataEnvironments.environments) ||
+      isObjectEmpty(dataEnvironments) ||
+      isObjectEmpty(dataEnvironments.environments)
+    )
+      return
 
-    addSynchronizedEnvironments(Object.values(dataEnvironments))
+    const { environments, default_target_environment, pinned_environments } =
+      dataEnvironments
+
+    addSynchronizedEnvironments(
+      Object.values(environments),
+      default_target_environment,
+      pinned_environments,
+    )
 
     // This use case is happening when user refreshes the page
     // while plan is still applying

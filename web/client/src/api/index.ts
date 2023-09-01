@@ -12,7 +12,6 @@ import {
 } from '@tanstack/react-query'
 import {
   type ContextEnvironment,
-  type GetEnvironmentsApiEnvironmentsGet200,
   type BodyWriteFileApiFilesPathPost,
   type PlanDates,
   type File,
@@ -46,6 +45,8 @@ import {
   getApiMetaApiMetaGet,
   type GetModelsApiModelsGet200,
   type ApiExceptionPayload,
+  deleteEnvironmentApiEnvironmentsEnvironmentDelete as apiDeleteEnvironment,
+  type Environments,
 } from './client'
 import {
   useIDE,
@@ -67,13 +68,13 @@ export interface ApiQueryMeta extends QueryMeta {
   onSuccess: () => void
 }
 
-const DELAY = 15000
+const DELAY = 60 * 1000 // 1min
 
 export type UseQueryWithTimeoutOptions<
   TData = any,
   TError extends ApiExceptionPayload = ApiExceptionPayload,
 > = UseQueryResult<TData, TError> & {
-  cancel: () => Promise<void>
+  cancel: () => void
   isTimeout: boolean
 }
 
@@ -106,7 +107,6 @@ export function useApiModels(
       ...options,
       errorKey: EnumErrorKey.Models,
       trigger: 'API -> useApiModels',
-      delay: DELAY * 2, // With many models this can take a while
     },
   )
 }
@@ -186,8 +186,8 @@ export function useApiColumnLineage(
 
 export function useApiEnvironments(
   options?: ApiOptions,
-): UseQueryWithTimeoutOptions<GetEnvironmentsApiEnvironmentsGet200> {
-  return useQueryWithTimeout<GetEnvironmentsApiEnvironmentsGet200, ErrorIDE>(
+): UseQueryWithTimeoutOptions<Environments> {
+  return useQueryWithTimeout<Environments, ErrorIDE>(
     {
       queryKey: ['/api/environments'],
       queryFn: getEnvironmentsApiEnvironmentsGet,
@@ -200,12 +200,14 @@ export function useApiEnvironments(
   )
 }
 
+export { apiDeleteEnvironment }
+
 export function useApiCancelPlan(
   options?: ApiOptions,
 ): UseQueryWithTimeoutOptions {
   return useQueryWithTimeout(
     {
-      queryKey: ['/api/commands/evaluate'],
+      queryKey: ['/api/commands/apply'],
       queryFn: cancelPlanApiPlanCancelPost,
     },
     {
@@ -241,7 +243,6 @@ export function useApiPlanRun(
       ...options,
       errorKey: EnumErrorKey.RunPlan,
       trigger: 'API -> useApiPlanRun',
-      delay: DELAY * 4, // With many models this can take a while
     },
   )
 }
@@ -396,41 +397,66 @@ function useQueryWithTimeout<
 
   const [isTimeout, setIsTimeout] = useState(false)
 
-  let timeoutId: ReturnType<typeof setTimeout>
+  let timeoutId: Optional<ReturnType<typeof setTimeout>>
+  let timeoutCallback: Optional<() => void> = function timeoutCallback(): void {
+    console.log(
+      `[REQUEST TIMEOUT] ${key} id: ${String(
+        timeoutId,
+      )} timed out after ${delay}ms`,
+    )
 
-  async function cancel(): Promise<void> {
-    console.log(`[REQUEST CANCELED] ${key} at ${Date.now()}`)
+    const { removeError } = addError(errorKey, {
+      message: 'Request timed out',
+      description: `Request ${key} with timeoutId: ${String(
+        timeoutId,
+      )} timed out after ${delay}ms`,
+      timestamp: Date.now(),
+      origin: 'useQueryTimeout',
+      trigger,
+    })
+
+    setIsTimeout(true)
+
+    void cancel()
+
+    if (isNotNil(removeTimeoutErrorAfter)) {
+      setTimeout(() => removeError(), removeTimeoutErrorAfter)
+    }
+  }
+
+  function timeoutClear(): void {
+    console.log(
+      `[CLEAR TIMEOUT] ${key} id: ${String(timeoutId)} at ${Date.now()}`,
+    )
 
     clearTimeout(timeoutId)
 
-    void queryClient.cancelQueries({ queryKey: options.queryKey })
+    timeoutId = undefined
+    timeoutCallback = undefined
   }
 
   function timeout(): void {
     timeoutId = setTimeout(() => {
-      console.log(`[REQUEST TIMEOUT] ${key} timed out after ${delay}ms`)
-      const { removeError } = addError(errorKey, {
-        message: 'Request timed out',
-        description: `Request ${key} timed out after ${delay}ms`,
-        timestamp: Date.now(),
-        origin: 'useQueryTimeout',
-        trigger,
-      })
-
-      setIsTimeout(true)
-
-      void cancel()
-
-      if (isNotNil(removeTimeoutErrorAfter)) {
-        setTimeout(() => removeError(), removeTimeoutErrorAfter)
-      }
+      timeoutCallback?.()
     }, delay)
+
+    console.log(
+      `[START TIMEOUT] ${key} id: ${String(timeoutId)} at ${Date.now()}`,
+    )
   }
 
-  function onError(err: TError): void {
-    clearTimeout(timeoutId)
+  function cancel(): void {
+    timeoutClear()
 
-    if (isCancelledError(err)) {
+    void queryClient.cancelQueries({ queryKey: options.queryKey })
+
+    console.log(`[REQUEST CANCELED] ${key} at ${Date.now()}`)
+  }
+
+  function onError(err: TError & { name?: string }): void {
+    timeoutClear()
+
+    if (isCancelledError(err) || err.name === 'AbortError') {
       console.log(
         `[REQUEST ABORTED] ${key} aborted by React Query at ${Date.now()}`,
       )
@@ -442,7 +468,9 @@ function useQueryWithTimeout<
   }
 
   function onSuccess(): void {
-    clearTimeout(timeoutId)
+    timeoutClear()
+
+    console.log(`[REQUEST COMPLETED] ${key} completed at ${Date.now()}`)
   }
 
   async function queryFn(...args: any[]): Promise<TQueryFnData> {
@@ -453,18 +481,29 @@ function useQueryWithTimeout<
     )
   }
 
+  const q = useQuery<TQueryFnData, TError, TData, TQueryKey>({
+    cacheTime: 0,
+    enabled: false,
+    queryKey: options.queryKey,
+    queryFn,
+    meta: {
+      ...options.meta,
+      onError,
+      onSuccess,
+    },
+  })
+
   return {
-    ...useQuery<TQueryFnData, TError, TData, TQueryKey>({
-      cacheTime: 0,
-      enabled: false,
-      queryKey: options.queryKey,
-      queryFn,
-      meta: {
-        ...options.meta,
-        onError,
-        onSuccess,
-      },
-    }),
+    ...q,
+    refetch: async (...args: any[]) =>
+      new Promise((resolve, reject) => {
+        q.refetch(...args, { throwOnError: true })
+          .then(resolve)
+          .catch(error => {
+            onError(error)
+            reject(error)
+          })
+      }),
     cancel,
     isTimeout,
   }

@@ -4,8 +4,9 @@ from unittest.mock import call
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
-from sqlglot import parse, parse_one
+from sqlglot import parse, parse_one, select
 
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -702,3 +703,292 @@ def python_func(**kwargs):
     )
 
     assert adapter_mock.insert_overwrite_by_time_partition.call_args[0][1].to_dict() == output_dict
+
+
+def test_create_clone_in_dev(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.SUPPORTS_CLONING = True
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds
+                )
+            );
+
+            SELECT 1::INT as a, ds::DATE FROM a;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.previous_versions = snapshot.all_versions
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.create_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
+        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        storage_format=None,
+        partitioned_by=[exp.to_column("ds")],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+    )
+
+    adapter_mock.clone_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
+        replace=True,
+    )
+
+    adapter_mock.alter_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source",
+    )
+
+    adapter_mock.drop_table.assert_called_once_with(
+        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp__schema_migration_source"
+    )
+
+
+def test_forward_only_snapshot_for_added_model(mocker: MockerFixture, adapter_mock, make_snapshot):
+    adapter_mock.SUPPORTS_CLONING = False
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_TIME_RANGE (
+                    time_column ds
+                )
+            );
+
+            SELECT 1::INT as a, ds::DATE FROM a;
+            """
+        ),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+
+    evaluator.create([snapshot], {})
+
+    common_create_args: t.Dict[str, t.Any] = dict(
+        columns_to_types={"a": exp.DataType.build("int"), "ds": exp.DataType.build("date")},
+        storage_format=None,
+        partitioned_by=[exp.to_column("ds")],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+    )
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}__temp",
+                **common_create_args,
+            ),
+            call(
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}",
+                **common_create_args,
+            ),
+        ]
+    )
+
+
+def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind SCD_TYPE_2 (
+                    unique_key id,
+                )
+            );
+
+            SELECT id::int, name::string, updated_at::timestamp FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.create_table.assert_called_once_with(
+        snapshot.table_name(),
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+            "updated_at": exp.DataType.build("TIMESTAMP"),
+            # Make sure that the call includes these extra columns
+            "valid_from": exp.DataType.build("TIMESTAMP"),
+            "valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+    )
+
+
+def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind SCD_TYPE_2 (
+                    unique_key id,
+                )
+            );
+
+            SELECT * FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.create([snapshot], {})
+
+    adapter_mock.ctas.assert_called_once_with(
+        snapshot.table_name(),
+        # Verify that managed columns are included in CTAS with types
+        parse_one(
+            """SELECT *, CAST(NULL AS TIMESTAMP) AS valid_from, CAST(NULL AS TIMESTAMP) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE"""
+        ),
+        None,
+        storage_format=None,
+        partitioned_by=[],
+        partition_interval_unit=IntervalUnit.DAY,
+        clustered_by=[],
+        table_properties={},
+    )
+
+
+def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind SCD_TYPE_2 (
+                    unique_key id,
+                )
+            );
+
+            SELECT id::int, name::string, updated_at::timestamp FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        "2020-01-01",
+        "2020-01-02",
+        "2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.scd_type_2.assert_called_once_with(
+        target_table=snapshot.table_name(),
+        source_table=model.render_query(),
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+            "updated_at": exp.DataType.build("TIMESTAMP"),
+            # Make sure that the call includes these extra columns
+            "valid_from": exp.DataType.build("TIMESTAMP"),
+            "valid_to": exp.DataType.build("TIMESTAMP"),
+        },
+        unique_key=["id"],
+        valid_from_name="valid_from",
+        valid_to_name="valid_to",
+        updated_at_name="updated_at",
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+    )
+
+
+def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    audit = StandaloneAudit(name="test_standalone_audit", query=parse_one("SELECT NULL LIMIT 0"))
+
+    snapshot = make_snapshot(audit)
+    snapshot.categorize_as(SnapshotChangeCategory.NON_BREAKING)
+
+    # Create
+    evaluator.create([snapshot], {})
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+
+    # Evaluate
+    payload = {"calls": 0}
+    evaluator.evaluate(
+        snapshot, "2020-01-01", "2020-01-02", "2020-01-02", snapshots={}, payload=payload
+    )
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+    assert payload["calls"] == 0
+
+    # Audit
+    adapter_mock.fetchone.return_value = (0,)
+    evaluator.audit(snapshot=snapshot, snapshots={})
+
+    query = audit.render_query(snapshot)
+    adapter_mock.fetchone.assert_called_once_with(
+        select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
+    )
+
+    # Promote
+    adapter_mock.reset_mock()
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+
+    # Migrate
+    evaluator.migrate([snapshot], snapshots={})
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+
+    # Demote
+    evaluator.demote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()
+
+    # Cleanup
+    evaluator.cleanup([snapshot])
+
+    adapter_mock.assert_not_called()
+    adapter_mock.transaction.assert_not_called()
+    adapter_mock.session.assert_not_called()

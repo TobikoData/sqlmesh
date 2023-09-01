@@ -14,7 +14,7 @@ A snapshot evaluator also promotes and demotes snapshots to a given environment.
 
 # Audits
 
-A snapshot evaluator can also run the audits for a snapshot's model. This is often done after a snapshot
+A snapshot evaluator can also run the audits for a snapshot's node. This is often done after a snapshot
 has been evaluated to check for data quality issues.
 
 For more information about audits, see `sqlmesh.core.audit`.
@@ -31,10 +31,10 @@ import pandas as pd
 from sqlglot import exp, select
 from sqlglot.executor import execute
 
-from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, AuditResult
+from sqlmesh.core.audit import Audit, AuditResult
 from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
-from sqlmesh.core.model import IncrementalUnmanagedKind, Model, ViewKind
+from sqlmesh.core.model import IncrementalUnmanagedKind, Model, SCDType2Kind, ViewKind
 from sqlmesh.core.snapshot import (
     QualifiedViewName,
     Snapshot,
@@ -98,18 +98,22 @@ class SnapshotEvaluator:
             start: The start datetime to render.
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
             limit: If limit is > 0, the query will not be persisted but evaluated and returned as a dataframe.
             is_dev: Indicates whether the evaluation happens in the development mode and temporary
                 tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
+        if not snapshot.is_model:
+            return None
+
+        model = snapshot.model
+
         if not limit and not snapshot.is_forward_only:
             self._ensure_no_paused_forward_only_upstream(snapshot, snapshots)
 
         logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
 
-        model = snapshot.model
         table_name = "" if limit else snapshot.table_name(is_dev=is_dev)
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
@@ -117,12 +121,26 @@ class SnapshotEvaluator:
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
             if index > 0:
                 evaluation_strategy.append(
-                    model, table_name, query_or_df, snapshots, is_dev, start=start, end=end
+                    snapshot,
+                    table_name,
+                    query_or_df,
+                    snapshots,
+                    is_dev,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
                 )
             else:
                 logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
                 evaluation_strategy.insert(
-                    model, table_name, query_or_df, snapshots, is_dev, start=start, end=end
+                    snapshot,
+                    table_name,
+                    query_or_df,
+                    snapshots,
+                    is_dev,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
                 )
 
         from sqlmesh.core.context import ExecutionContext
@@ -212,9 +230,7 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._promote_snapshot(
-                    s, environment_naming_info, is_dev, on_complete, s.model
-                ),
+                lambda s: self._promote_snapshot(s, environment_naming_info, is_dev, on_complete),
                 self.ddl_concurrent_tasks,
             )
 
@@ -300,11 +316,11 @@ class SnapshotEvaluator:
         is_dev: bool = False,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
-        """Execute a snapshot's model's audit queries.
+        """Execute a snapshot's node's audit queries.
 
         Args:
             snapshot: Snapshot to evaluate.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
             start: The start datetime to audit. Defaults to epoch start.
             end: The end datetime to audit. Defaults to epoch start.
             execution_time: The date/time time reference to use for execution time.
@@ -325,11 +341,8 @@ class SnapshotEvaluator:
 
         logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 
-        audits_by_name = {**BUILT_IN_AUDITS, **{a.name: a for a in snapshot.audits}}
-
         results = []
-        for audit_name, audit_args in snapshot.model.audits:
-            audit = audits_by_name[audit_name]
+        for audit, audit_args in snapshot.audits_with_args:
             results.append(
                 self._audit(
                     audit=audit,
@@ -374,10 +387,13 @@ class SnapshotEvaluator:
         snapshots: t.Dict[SnapshotId, Snapshot],
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
+        if not snapshot.is_model:
+            return
+
         # If a snapshot reuses an existing version we assume that the table for that version
         # has already been created, so we only need to create a temporary table or a clone.
         is_dev = snapshot.is_forward_only or snapshot.is_indirect_non_breaking
-        table_name = snapshot.table_name(is_dev=is_dev)
+        target_table_name = snapshot.table_name(is_dev=is_dev)
 
         parent_snapshots_by_name = {
             snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
@@ -390,12 +406,33 @@ class SnapshotEvaluator:
             is_dev=is_dev,
         )
 
+        evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
+
         with self.adapter.transaction(TransactionType.DDL), self.adapter.session():
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
-            _evaluation_strategy(snapshot, self.adapter).create(
-                snapshot.model, table_name, **render_kwargs
-            )
+            if is_dev and not snapshot.previous_versions:
+                # This is a FORWARD_ONLY snapshot which represents an added model. This means
+                # that the physical table associated with it doesn't exist yet.
+                logger.info(
+                    f"Detected a forward-only snapshot without previous versions: {snapshot.snapshot_id}"
+                )
+                evaluation_strategy.create(snapshot, target_table_name, **render_kwargs)
+                evaluation_strategy.create(snapshot, snapshot.table_name(), **render_kwargs)
+            elif is_dev and snapshot.is_materialized and self.adapter.SUPPORTS_CLONING:
+                tmp_table_name = f"{target_table_name}__schema_migration_source"
+                source_table_name = snapshot.table_name()
+
+                logger.info(f"Cloning table '{source_table_name}' into '{target_table_name}'")
+
+                evaluation_strategy.create(snapshot, tmp_table_name, **render_kwargs)
+                try:
+                    self.adapter.clone_table(target_table_name, snapshot.table_name(), replace=True)
+                    self.adapter.alter_table(target_table_name, tmp_table_name)
+                finally:
+                    self.adapter.drop_table(tmp_table_name)
+            else:
+                evaluation_strategy.create(snapshot, target_table_name, **render_kwargs)
 
             self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
@@ -419,20 +456,19 @@ class SnapshotEvaluator:
         tmp_table_name = snapshot.table_name(is_dev=True)
         target_table_name = snapshot.table_name()
         _evaluation_strategy(snapshot, self.adapter).migrate(
-            snapshot.model, parent_snapshots_by_name, target_table_name, tmp_table_name
+            snapshot, parent_snapshots_by_name, target_table_name, tmp_table_name
         )
 
     def _promote_snapshot(
         self,
-        snapshot: SnapshotInfoLike,
+        snapshot: Snapshot,
         environment_naming_info: EnvironmentNamingInfo,
         is_dev: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
-        model: Model,
     ) -> None:
         table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
         _evaluation_strategy(snapshot, self.adapter).promote(
-            snapshot.qualified_view_name, environment_naming_info, table_name, model
+            snapshot.qualified_view_name, environment_naming_info, table_name, snapshot
         )
 
         if on_complete is not None:
@@ -453,9 +489,13 @@ class SnapshotEvaluator:
 
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
         snapshot = snapshot.table_info
-        table_names = [snapshot.table_name()]
-        if snapshot.version != snapshot.fingerprint.to_version():
-            table_names.append(snapshot.table_name(is_dev=True))
+
+        table_name = snapshot.table_name()
+        dev_table_name = snapshot.table_name(is_dev=True)
+
+        table_names = [table_name]
+        if table_name != dev_table_name:
+            table_names.append(dev_table_name)
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
@@ -492,7 +532,7 @@ class SnapshotEvaluator:
         if audit.skip:
             return AuditResult(
                 audit=audit,
-                model=snapshot.model,
+                model=snapshot.model_or_none,
                 skipped=True,
             )
         query = audit.render_query(
@@ -512,7 +552,7 @@ class SnapshotEvaluator:
         if count and raise_exception:
             audit_error = AuditError(
                 audit_name=audit.name,
-                model_name=snapshot.model.name,
+                model=snapshot.model_or_none,
                 count=count,
                 query=query,
             )
@@ -522,7 +562,7 @@ class SnapshotEvaluator:
                 logger.warning(f"{audit_error}\nAudit is warn only so proceeding with execution.")
         return AuditResult(
             audit=audit,
-            model=snapshot.model,
+            model=snapshot.model_or_none,
             count=count,
             query=query,
         )
@@ -532,7 +572,7 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
     klass: t.Type
     if snapshot.is_embedded:
         klass = EmbeddedStrategy
-    elif snapshot.is_symbolic:
+    elif snapshot.is_symbolic or snapshot.is_audit:
         klass = SymbolicStrategy
     elif snapshot.is_full or snapshot.is_seed:
         klass = FullRefreshStrategy
@@ -544,6 +584,8 @@ def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> 
         klass = IncrementalUnmanagedStrategy
     elif snapshot.is_view:
         klass = ViewStrategy
+    elif snapshot.is_scd_type_2:
+        klass = SCDType2Strategy
     else:
         raise SQLMeshError(f"Unexpected snapshot: {snapshot}")
 
@@ -557,7 +599,7 @@ class EvaluationStrategy(abc.ABC):
     @abc.abstractmethod
     def insert(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
@@ -567,7 +609,7 @@ class EvaluationStrategy(abc.ABC):
         """Inserts the given query or a DataFrame into the target table or replaces a view.
 
         Args:
-            model: The target model.
+            snapshot: The target snapshot.
             name: The name of the target table or view.
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
@@ -577,7 +619,7 @@ class EvaluationStrategy(abc.ABC):
     @abc.abstractmethod
     def append(
         self,
-        model: Model,
+        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
@@ -587,7 +629,7 @@ class EvaluationStrategy(abc.ABC):
         """Appends the given query or a DataFrame to the existing table.
 
         Args:
-            model: The target model.
+            snapshot: The target snapshot.
             table_name: The target table name.
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
@@ -597,22 +639,22 @@ class EvaluationStrategy(abc.ABC):
     @abc.abstractmethod
     def create(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
         """Creates the target table or view.
 
         Args:
-            model: The target model.
+            snapshot: The target snapshot.
             name: The name of a table or a view.
-            render_kwargs: Additional kwargs for model rendering.
+            render_kwargs: Additional kwargs for node rendering.
         """
 
     @abc.abstractmethod
     def migrate(
         self,
-        model: Model,
+        snapshot: Snapshot,
         snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
@@ -620,7 +662,7 @@ class EvaluationStrategy(abc.ABC):
         """Migrates the target table schema so that it corresponds to the source table schema.
 
         Args:
-            model: The target model.
+            snapshot: The target snapshot.
             snapshots: Parent snapshots.
             target_table_name: The target table name.
             source_table_name: The source table name.
@@ -640,7 +682,7 @@ class EvaluationStrategy(abc.ABC):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        model: Model,
+        snapshot: Snapshot,
     ) -> None:
         """Updates the target view to point to the target table.
 
@@ -648,7 +690,7 @@ class EvaluationStrategy(abc.ABC):
             view_name: The name of the target view.
             environment_naming_info: The naming information for the target environment
             table_name: The name of the target table.
-            model: The target model. Not currently used but can be used by others if needed.
+            snapshot: The target snapshot. Not ucrrently used but can be used by others if needed.
         """
 
     @abc.abstractmethod
@@ -668,7 +710,7 @@ class EvaluationStrategy(abc.ABC):
 class SymbolicStrategy(EvaluationStrategy):
     def insert(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
@@ -679,7 +721,7 @@ class SymbolicStrategy(EvaluationStrategy):
 
     def append(
         self,
-        model: Model,
+        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
@@ -690,7 +732,7 @@ class SymbolicStrategy(EvaluationStrategy):
 
     def create(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
@@ -698,7 +740,7 @@ class SymbolicStrategy(EvaluationStrategy):
 
     def migrate(
         self,
-        model: Model,
+        snapshot: Snapshot,
         snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
@@ -713,7 +755,7 @@ class SymbolicStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        model: Model,
+        snapshot: Snapshot,
     ) -> None:
         pass
 
@@ -731,7 +773,7 @@ class EmbeddedStrategy(SymbolicStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        model: Model,
+        snapshot: Snapshot,
     ) -> None:
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Dropping view '%s' for non-materialized table", target_name)
@@ -744,7 +786,7 @@ class PromotableStrategy(EvaluationStrategy):
         view_name: QualifiedViewName,
         environment_naming_info: EnvironmentNamingInfo,
         table_name: str,
-        model: Model,
+        snapshot: Snapshot,
     ) -> None:
         schema = view_name.schema_for_environment(environment_naming_info=environment_naming_info)
         if schema is not None:
@@ -769,21 +811,23 @@ class PromotableStrategy(EvaluationStrategy):
 class MaterializableStrategy(PromotableStrategy):
     def append(
         self,
-        model: Model,
+        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
         self.adapter.insert_append(table_name, query_or_df, columns_to_types=model.columns_to_types)
 
     def create(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
         table = exp.to_table(name)
         self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
@@ -817,7 +861,7 @@ class MaterializableStrategy(PromotableStrategy):
 
     def migrate(
         self,
-        model: Model,
+        snapshot: Snapshot,
         snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
@@ -833,13 +877,14 @@ class MaterializableStrategy(PromotableStrategy):
 class IncrementalByTimeRangeStrategy(MaterializableStrategy):
     def insert(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
         assert model.time_column
         self.adapter.insert_overwrite_by_time_partition(
             name,
@@ -854,13 +899,14 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
 class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
     def insert(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
         self.adapter.merge(
             name,
             query_or_df,
@@ -870,13 +916,14 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
 
     def append(
         self,
-        model: Model,
+        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
         self.adapter.merge(
             table_name,
             query_or_df,
@@ -888,31 +935,33 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
 class IncrementalUnmanagedStrategy(MaterializableStrategy):
     def insert(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
         if isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
             self.adapter.insert_overwrite_by_partition(
                 name, query_or_df, model.partitioned_by, columns_to_types=model.columns_to_types
             )
         else:
-            self.append(model, name, query_or_df, snapshots, is_dev, **kwargs)
+            self.append(snapshot, name, query_or_df, snapshots, is_dev, **kwargs)
 
 
 class FullRefreshStrategy(MaterializableStrategy):
     def insert(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
         self.adapter.replace_query(
             name,
             query_or_df,
@@ -924,16 +973,63 @@ class FullRefreshStrategy(MaterializableStrategy):
         )
 
 
-class ViewStrategy(PromotableStrategy):
+class SCDType2Strategy(MaterializableStrategy):
     def insert(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         is_dev: bool,
         **kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
+        assert isinstance(model.kind, SCDType2Kind)
+        self.adapter.scd_type_2(
+            target_table=name,
+            source_table=query_or_df,
+            unique_key=model.unique_key,
+            valid_from_name=model.kind.valid_from_name,
+            valid_to_name=model.kind.valid_to_name,
+            updated_at_name=model.kind.updated_at_name,
+            columns_to_types=model.columns_to_types,
+            **kwargs,
+        )
+
+    def append(
+        self,
+        snapshot: Snapshot,
+        table_name: str,
+        query_or_df: QueryOrDF,
+        snapshots: t.Dict[str, Snapshot],
+        is_dev: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        model = snapshot.model
+        assert isinstance(model.kind, SCDType2Kind)
+        self.adapter.scd_type_2(
+            target_table=table_name,
+            source_table=query_or_df,
+            unique_key=model.unique_key,
+            valid_from_name=model.kind.valid_from_name,
+            valid_to_name=model.kind.valid_to_name,
+            updated_at_name=model.kind.updated_at_name,
+            columns_to_types=model.columns_to_types,
+            **kwargs,
+        )
+
+
+class ViewStrategy(PromotableStrategy):
+    def insert(
+        self,
+        snapshot: Snapshot,
+        name: str,
+        query_or_df: QueryOrDF,
+        snapshots: t.Dict[str, Snapshot],
+        is_dev: bool,
+        **kwargs: t.Any,
+    ) -> None:
+        model = snapshot.model
         if (
             isinstance(query_or_df, exp.Expression)
             and model.render_query(snapshots=snapshots, is_dev=is_dev, engine_adapter=self.adapter)
@@ -954,7 +1050,7 @@ class ViewStrategy(PromotableStrategy):
 
     def append(
         self,
-        model: Model,
+        snapshot: Snapshot,
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
@@ -965,10 +1061,12 @@ class ViewStrategy(PromotableStrategy):
 
     def create(
         self,
-        model: Model,
+        snapshot: Snapshot,
         name: str,
         **render_kwargs: t.Any,
     ) -> None:
+        model = snapshot.model
+
         table = exp.to_table(name)
         self.adapter.create_schema(table.db, catalog_name=table.catalog)
 
@@ -982,12 +1080,13 @@ class ViewStrategy(PromotableStrategy):
 
     def migrate(
         self,
-        model: Model,
+        snapshot: Snapshot,
         snapshots: t.Dict[str, Snapshot],
         target_table_name: str,
         source_table_name: str,
     ) -> None:
         logger.info("Migrating view '%s'", target_table_name)
+        model = snapshot.model
         self.adapter.create_view(
             target_table_name,
             model.render_query_or_raise(

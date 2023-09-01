@@ -10,6 +10,7 @@ from sqlglot import exp
 from watchfiles import Change
 
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.core.environment import Environment
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.utils.date import TimeLike
@@ -167,6 +168,12 @@ class ContextEnvironment(BaseModel):
     end: TimeLike
     changes: t.Optional[ContextEnvironmentChanges] = None
     backfills: t.List[ContextEnvironmentBackfill] = []
+
+
+class Environments(BaseModel):
+    environments: t.Dict[str, Environment] = {}
+    pinned_environments: t.Set[str] = set()
+    default_target_environment: str = ""
 
 
 class EvaluateInput(BaseModel):

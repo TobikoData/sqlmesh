@@ -20,6 +20,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
     DIALECT = "snowflake"
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_CLONING = True
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

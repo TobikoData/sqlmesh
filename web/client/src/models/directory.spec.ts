@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest'
 import { ModelDirectory } from './directory'
 
 describe('Model Directory', () => {
