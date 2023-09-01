@@ -553,7 +553,6 @@ class Plan:
             snapshot = self._snapshot_mapping.get(name)
             if not snapshot or snapshot.change_category:
                 continue
-            self._dag.upstream(name)
 
             if name in self.context_diff.modified_snapshots:
                 is_directly_modified = self.context_diff.directly_modified(name)
