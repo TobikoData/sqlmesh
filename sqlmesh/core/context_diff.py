@@ -3,11 +3,11 @@
 
 ContextDiff encapsulates the differences between two environments. The two environments can be the local
 environment and a remote environment, or two remote environments. ContextDiff is an important part of
-SQLMesh. SQLMesh plans use ContextDiff to determine what models were changed between two environments.
+SQLMesh. SQLMesh plans use ContextDiff to determine what nodes were changed between two environments.
 The SQLMesh CLI diff command uses ContextDiff to determine what to visualize.
 
 When creating a ContextDiff object, SQLMesh will compare the snapshots from one environment with those of
-another remote environment and determine if models have been added, removed, or modified.
+another remote environment and determine if nodes have been added, removed, or modified.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotId,
+    SnapshotTableInfo,
 )
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -42,9 +43,9 @@ class ContextDiff(PydanticModel):
     create_from: str
     """The name of the environment the target environment will be created from if new."""
     added: t.Set[str]
-    """New models."""
-    removed: t.Set[str]
-    """Deleted models."""
+    """New nodes."""
+    removed_snapshots: t.Dict[str, SnapshotTableInfo]
+    """Deleted nodes."""
     modified_snapshots: t.Dict[str, t.Tuple[Snapshot, Snapshot]]
     """Modified snapshots."""
     snapshots: t.Dict[str, Snapshot]
@@ -88,10 +89,10 @@ class ContextDiff(PydanticModel):
             previously_promoted_model_names = {s.name for s in env.promoted_snapshots}
 
         existing_info = {info.name: info for info in (env.snapshots if env else [])}
-        existing_models = set(existing_info)
-        current_models = set(snapshots)
-        removed = existing_models - current_models
-        added = current_models - existing_models
+        existing_nodes = set(existing_info)
+        current_nodes = set(snapshots)
+        removed = existing_nodes - current_nodes
+        added = current_nodes - existing_nodes
         modified_info = {
             name: existing_info[name]
             for name, snapshot in snapshots.items()
@@ -112,7 +113,8 @@ class ContextDiff(PydanticModel):
                 ]
             ),
             **state_reader.get_snapshots(
-                modified_remote_snapshot_ids | modified_local_seed_snapshot_ids, hydrate_seeds=True
+                modified_remote_snapshot_ids | modified_local_seed_snapshot_ids,
+                hydrate_seeds=True,
             ),
         }
 
@@ -125,8 +127,12 @@ class ContextDiff(PydanticModel):
             modified = modified_info.get(name)
             existing = stored.get(snapshot.snapshot_id)
 
-            if existing:
-                # Keep the original model instance to preserve the query cache.
+            if modified and snapshot.node_type != modified.node_type:
+                added.add(snapshot.name)
+                removed.add(modified.name)
+                modified_info.pop(name)
+            elif existing:
+                # Keep the original node instance to preserve the query cache.
                 existing.node = snapshot.node
 
                 merged_snapshots[name] = existing.copy()
@@ -172,7 +178,7 @@ class ContextDiff(PydanticModel):
             is_unfinalized_environment=bool(env and not env.finalized_ts),
             create_from=create_from,
             added=added,
-            removed=removed,
+            removed_snapshots={name: existing_info[name] for name in removed},
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
@@ -188,12 +194,17 @@ class ContextDiff(PydanticModel):
 
     @property
     def has_snapshot_changes(self) -> bool:
-        return bool(self.added or self.removed or self.modified_snapshots)
+        return bool(self.added or self.removed_snapshots or self.modified_snapshots)
 
     @property
     def added_materialized_models(self) -> t.Set[str]:
         """Returns the set of added internal models."""
-        return {name for name in self.added if self.snapshots[name].model_kind_name.is_materialized}
+        return {
+            name
+            for name in self.added
+            if self.snapshots[name].model_kind_name
+            and self.snapshots[name].model_kind_name.is_materialized  # type: ignore
+        }
 
     @property
     def promotable_models(self) -> t.Set[str]:
@@ -202,77 +213,77 @@ class ContextDiff(PydanticModel):
             *self.previously_promoted_model_names,
             *self.added,
             *self.modified_snapshots,
-        } - self.removed
+        } - set(self.removed_snapshots)
 
     @property
     def unpromoted_models(self) -> t.Set[str]:
         """The set of model names that have not yet been promoted in the target environment."""
         return set(self.snapshots) - self.previously_promoted_model_names
 
-    def directly_modified(self, model_name: str) -> bool:
-        """Returns whether or not a model was directly modified in this context.
+    def directly_modified(self, name: str) -> bool:
+        """Returns whether or not a node was directly modified in this context.
 
         Args:
-            model_name: The model name to check.
+            name: The node name to check.
 
         Returns:
-            Whether or not the model was directly modified.
+            Whether or not the node was directly modified.
         """
 
-        if model_name not in self.modified_snapshots:
+        if name not in self.modified_snapshots:
             return False
 
-        current, previous = self.modified_snapshots[model_name]
+        current, previous = self.modified_snapshots[name]
         return current.fingerprint.data_hash != previous.fingerprint.data_hash
 
-    def indirectly_modified(self, model_name: str) -> bool:
-        """Returns whether or not a model was indirectly modified in this context.
+    def indirectly_modified(self, name: str) -> bool:
+        """Returns whether or not a node was indirectly modified in this context.
 
         Args:
-            model_name: The model name to check.
+            name: The node name to check.
 
         Returns:
-            Whether or not the model was indirectly modified.
+            Whether or not the node was indirectly modified.
         """
 
-        if model_name not in self.modified_snapshots:
+        if name not in self.modified_snapshots:
             return False
 
-        current, previous = self.modified_snapshots[model_name]
+        current, previous = self.modified_snapshots[name]
         return (
             current.fingerprint.data_hash == previous.fingerprint.data_hash
             and current.fingerprint.parent_data_hash != previous.fingerprint.parent_data_hash
         )
 
-    def metadata_updated(self, model_name: str) -> bool:
-        """Returns whether or not the given model's metadata has been updated.
+    def metadata_updated(self, name: str) -> bool:
+        """Returns whether or not the given node's metadata has been updated.
 
         Args:
-            model_name: The model name to check.
+            name: The node name to check.
 
         Returns:
-            Whether or not the model's metadata has been updated.
+            Whether or not the node's metadata has been updated.
         """
 
-        if model_name not in self.modified_snapshots:
+        if name not in self.modified_snapshots:
             return False
 
-        current, previous = self.modified_snapshots[model_name]
+        current, previous = self.modified_snapshots[name]
         return current.fingerprint.metadata_hash != previous.fingerprint.metadata_hash
 
-    def text_diff(self, model: str) -> str:
-        """Finds the difference of a model between the current and remote environment.
+    def text_diff(self, node: str) -> str:
+        """Finds the difference of a node between the current and remote environment.
 
         Args:
-            model: The model name.
+            node: The node name.
 
         Returns:
-            A unified text diff of the model.
+            A unified text diff of the node.
         """
-        if model not in self.snapshots:
-            raise SQLMeshError(f"`{model}` does not exist.")
-        if model not in self.modified_snapshots:
+        if node not in self.snapshots:
+            raise SQLMeshError(f"`{node}` does not exist.")
+        if node not in self.modified_snapshots:
             return ""
 
-        new, old = self.modified_snapshots[model]
-        return old.model.text_diff(new.model)
+        new, old = self.modified_snapshots[node]
+        return old.node.text_diff(new.node)

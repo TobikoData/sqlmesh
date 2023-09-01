@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from sqlglot import exp
 
-from sqlmesh.core.audit.definition import Audit
+from sqlmesh.core.audit.definition import ModelAudit
 
 # not_null(columns=[column_1, column_2])
-not_null_audit = Audit(
+not_null_audit = ModelAudit(
     name="not_null",
     query="""
 SELECT *
@@ -21,7 +21,7 @@ WHERE @REDUCE(
 )
 
 # unique_values(columns=[column_1, column_2])
-unique_values_audit = Audit(
+unique_values_audit = ModelAudit(
     name="unique_values",
     query="""
 SELECT *
@@ -44,7 +44,7 @@ WHERE @REDUCE(
 )
 
 # accepted_values(column=column_name, is_in=[1, 2, 3])
-accepted_values_audit = Audit(
+accepted_values_audit = ModelAudit(
     name="accepted_values",
     query="""
 SELECT *
@@ -54,7 +54,7 @@ WHERE @column NOT IN @is_in
 )
 
 # number_of_rows(threshold=100)
-number_of_rows_audit = Audit(
+number_of_rows_audit = ModelAudit(
     name="number_of_rows",
     query="""
 SELECT 1
@@ -69,7 +69,7 @@ HAVING COUNT(*) <= @threshold
 #   column_2 in (1, 2, 3),
 #   column_3 is not null
 # ]))
-forall_audit = Audit(
+forall_audit = ModelAudit(
     name="forall",
     query="""
 SELECT *
@@ -87,7 +87,7 @@ WHERE @REDUCE(
 # accepted_range(column=age, min_v=0, max_v=100)
 # accepted_range(column=age, min_v=10)
 # accepted_range(column=age, max_v=50)
-accepted_range_audit = Audit(
+accepted_range_audit = ModelAudit(
     name="accepted_range",
     defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
     query="""
@@ -103,7 +103,7 @@ WHERE
 )
 
 # at_least_one(column=column_name)
-at_least_one_audit = Audit(
+at_least_one_audit = ModelAudit(
     name="at_least_one",
     query="""
 SELECT 1
@@ -114,7 +114,7 @@ HAVING COUNT(@column) = 0
 )
 
 # not_constant(column=column_name)
-not_constant_audit = Audit(
+not_constant_audit = ModelAudit(
     name="not_constant",
     query="""
 SELECT 1
@@ -127,7 +127,7 @@ WHERE r.t_cardinality <= 1
 )
 
 # not_empty_string(column=column_name)
-not_empty_string_audit = Audit(
+not_empty_string_audit = ModelAudit(
     name="not_empty_string",
     query="""
 SELECT *
@@ -137,7 +137,7 @@ WHERE @column = ''
 )
 
 # not_null_proportion(column=column_name, threshold=0.9)
-not_null_proportion_audit = Audit(
+not_null_proportion_audit = ModelAudit(
     name="not_null_proportion",
     query="""
 SELECT *
@@ -153,7 +153,7 @@ WHERE s.cnt_not_null <= s.cnt_tot * @threshold
 )
 
 # not_accepted_values(column=column_name, is_in=[1, 2, 3])
-not_accepted_values_audit = Audit(
+not_accepted_values_audit = ModelAudit(
     name="not_accepted_values",
     query="""
 SELECT *
@@ -164,7 +164,7 @@ WHERE @column IN @is_in
 
 # sequential_values(column=column_name, interval=1)
 # TODO: support grouping
-sequential_values_audit = Audit(
+sequential_values_audit = ModelAudit(
     name="sequential_values",
     defaults={"interval": exp.Literal.number(1)},
     query="""
@@ -187,7 +187,7 @@ FROM validation_errors
 )
 
 # unique_combination_of_columns(columns=[column_1, column_2])
-unique_combination_of_columns_audit = Audit(
+unique_combination_of_columns_audit = ModelAudit(
     name="unique_combination_of_columns",
     query="""
 SELECT @EACH(@columns, c -> c)
@@ -199,7 +199,7 @@ HAVING COUNT(*) > 1
 
 # mutually_exclusive_ranges(lower_bound_column=date_from, upper_bound_column=date_to)
 # TODO: make inclusivity configurable
-mutually_exclusive_ranges_audit = Audit(
+mutually_exclusive_ranges_audit = ModelAudit(
     name="mutually_exclusive_ranges",
     defaults={"partition_clause": exp.false()},
     query="""
@@ -244,7 +244,7 @@ FROM validation_errors
 )
 
 # valid_uuid(column=column_name)
-valid_uuid_audit = Audit(
+valid_uuid_audit = ModelAudit(
     name="valid_uuid",
     query="""
 SELECT *
@@ -254,7 +254,7 @@ WHERE NOT REGEXP_LIKE(LOWER(@column), '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}
 )
 
 # valid_url(column=column_name)
-valid_url_audit = Audit(
+valid_url_audit = ModelAudit(
     name="valid_url",
     query=r"""
 SELECT *
@@ -264,7 +264,7 @@ WHERE NOT REGEXP_LIKE(@column, '^(https?|ftp)://[^\s/$.?#].[^\s]*$')
 )
 
 # valid_http_method(column=column_name)
-valid_http_method_audit = Audit(
+valid_http_method_audit = ModelAudit(
     name="valid_http_method",
     query="""
 SELECT *
@@ -274,7 +274,7 @@ WHERE NOT @column IN ('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'
 )
 
 # valid_email(column=column_name)
-valid_email_audit = Audit(
+valid_email_audit = ModelAudit(
     name="valid_email",
     query=r"""
 SELECT *
@@ -284,7 +284,7 @@ WHERE NOT REGEXP_LIKE(@column, '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$
 )
 
 # match_regex_pattern_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
-match_regex_pattern_list_audit = Audit(
+match_regex_pattern_list_audit = ModelAudit(
     name="match_regex_pattern_list",
     query="""
 SELECT *
@@ -300,7 +300,7 @@ WHERE @REDUCE(
 )
 
 # not_match_regex_pattern_list(column=column_name, patterns=['^pattern_1', 'pattern_2$'])
-not_match_regex_pattern_list_audit = Audit(
+not_match_regex_pattern_list_audit = ModelAudit(
     name="not_match_regex_pattern_list",
     query="""
 SELECT *
@@ -316,7 +316,7 @@ WHERE @REDUCE(
 )
 
 # match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
-match_like_pattern_list = Audit(
+match_like_pattern_list = ModelAudit(
     name="match_like_pattern_list",
     query="""
 SELECT *
@@ -332,7 +332,7 @@ WHERE @REDUCE(
 )
 
 # not_match_like_pattern_list(column=column_name, patterns=['%pattern_1%', 'pattern_2%'])
-not_match_like_pattern_list_audit = Audit(
+not_match_like_pattern_list_audit = ModelAudit(
     name="not_match_like_pattern_list",
     query="""
 SELECT *
@@ -348,7 +348,7 @@ WHERE @REDUCE(
 )
 
 # z_score_audit(column=column_name, threshold=3)
-z_score_audit = Audit(
+z_score_audit = ModelAudit(
     name="z_score",
     query="""
 WITH stats AS (
@@ -366,7 +366,7 @@ WHERE ABS((@column - mean_@column) / NULLIF(stddev_@column, 0)) > @threshold
 )
 
 # string_length_between_audit(column=column_name, max_v=22)
-string_length_between_audit = Audit(
+string_length_between_audit = ModelAudit(
     name="string_length_between",
     defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
     query="""
@@ -382,7 +382,7 @@ WHERE
 )
 
 # string_length_equal_audit(column=column_name, v=22)
-string_length_equal_audit = Audit(
+string_length_equal_audit = ModelAudit(
     name="string_length_equal",
     query="""
 SELECT *
@@ -392,7 +392,7 @@ WHERE LENGTH(@column) != @v
 )
 
 # stddev_in_range(column=age, min_v=2.5, max_v=25)
-stddev_in_range_audit = Audit(
+stddev_in_range_audit = ModelAudit(
     name="stddev_in_range",
     defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
     query="""
@@ -411,7 +411,7 @@ WHERE
 )
 
 # mean_in_range(column=age, min_v=2.5, max_v=25)
-mean_in_range_audit = Audit(
+mean_in_range_audit = ModelAudit(
     name="mean_in_range",
     defaults={"min_v": exp.null(), "max_v": exp.null(), "inclusive": exp.true()},
     query="""
@@ -430,7 +430,7 @@ WHERE
 )
 
 # kl_divergence(column=age, target_column=normalized_age, threshold=0.1)
-kl_divergence_audit = Audit(
+kl_divergence_audit = ModelAudit(
     name="kl_divergence",
     query="""
 WITH
@@ -521,7 +521,7 @@ HAVING kl_divergence > @threshold
 # chi2.ppf(0.95, 1) where 0.95 is the p-value and 1 is the degrees of freedom
 # https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.chi2.html
 # or use a table like https://www.medcalc.org/manual/chi-square-table.php
-chi_square_audit = Audit(
+chi_square_audit = ModelAudit(
     name="chi_square",
     expressions=[
         "@def(c, (SELECT COUNT(DISTINCT x_a) FROM contingency_table))",
@@ -566,7 +566,7 @@ HAVING NOT @IF(@dependent, chi_square > @critical_value, chi_square <= @critical
 # we are awaiting a first class way to express cross-model audits
 
 # cardinality_equality(source_column=column_1, target_column=column_2, to=some.model)
-# cardinality_equality_audit = Audit(
+# cardinality_equality_audit = ModelAudit(
 #     name="cardinality_equality",
 #     query="""
 # WITH table_a AS (
@@ -610,7 +610,7 @@ HAVING NOT @IF(@dependent, chi_square > @critical_value, chi_square <= @critical
 
 
 # relationship(to=some.model, source_column=id, target_column=id)
-# relationship_audit = Audit(
+# relationship_audit = ModelAudit(
 #     name="relationship",
 #     defaults={"from_condition": exp.true(), "to_condition": exp.true()},
 #     query="""
@@ -633,7 +633,7 @@ HAVING NOT @IF(@dependent, chi_square > @critical_value, chi_square <= @critical
 # )
 
 # equality(columns=[column_1, column_2], to=some.model)
-# equality_audit = Audit(
+# equality_audit = ModelAudit(
 #     name="equality",
 #     query="""
 # SELECT @EACH(@columns, c -> c)
@@ -645,7 +645,7 @@ HAVING NOT @IF(@dependent, chi_square > @critical_value, chi_square <= @critical
 # )
 
 # equal_row_count(to=some.model)
-# equal_row_count_audit = Audit(
+# equal_row_count_audit = ModelAudit(
 #     name="equal_row_count",
 #     query="""
 # SELECT 1
@@ -661,7 +661,7 @@ HAVING NOT @IF(@dependent, chi_square > @critical_value, chi_square <= @critical
 # )
 
 # fewer_rows_than(to=some.model)
-# fewer_rows_than_audit = Audit(
+# fewer_rows_than_audit = ModelAudit(
 #     name="fewer_rows_than",
 #     query="""
 # SELECT 1

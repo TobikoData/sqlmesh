@@ -4,8 +4,9 @@ from pathlib import Path
 import pytest
 from dbt.adapters.base import BaseRelation
 
+from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
-from sqlmesh.dbt.common import QuotingConfig
+from sqlmesh.dbt.common import Dependencies, QuotingConfig
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
@@ -146,6 +147,32 @@ def test_test_to_sqlmesh_fields():
     assert audit.skip == True
     assert audit.blocking == False
     assert sql in audit.query.sql()
+
+
+def test_singular_test_to_standalone_audit():
+    sql = "SELECT * FROM FOO WHERE cost > 100"
+    test_config = TestConfig(
+        name="foo_test",
+        sql=sql,
+        severity="ERROR",
+        enabled=True,
+        dependencies=Dependencies(refs=["foo"]),
+    )
+
+    assert test_config.is_standalone == True
+
+    model = ModelConfig(name="foo", alias="foo")
+
+    context = DbtContext()
+    context.add_models({model.name: model})
+    context._project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="foo")
+    standalone_audit = test_config.to_sqlmesh(context)
+
+    assert standalone_audit.name == "foo_test"
+    assert standalone_audit.dialect == "duckdb"
+    assert standalone_audit.query == jinja_query(sql)
+    assert standalone_audit.depends_on == {"foo"}
 
 
 def test_model_config_sql_no_config():

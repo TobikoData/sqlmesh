@@ -130,7 +130,7 @@ class SQLMeshMagics(Magics):
         model = self._context.get_model(args.model, raise_if_missing=True)
 
         if sql:
-            config = self._context.config_for_model(model)
+            config = self._context.config_for_node(model)
             loaded = load_sql_based_model(
                 parse(sql, default_dialect=config.dialect),
                 macros=self._context._macros,
