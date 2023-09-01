@@ -1189,6 +1189,7 @@
           "INCREMENTAL_BY_UNIQUE_KEY",
           "INCREMENTAL_UNMANAGED",
           "FULL",
+          "SCD_TYPE_2",
           "VIEW",
           "EMBEDDED",
           "SEED",
