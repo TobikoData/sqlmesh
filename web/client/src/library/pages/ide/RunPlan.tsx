@@ -252,7 +252,7 @@ function PlanChanges({
               <ChangesPreview
                 headline="Direct Changes"
                 type={EnumPlanChangeType.Direct}
-                changes={plan!.changes!.modified.direct!.map(
+                changes={plan!.changes!.modified.direct.map(
                   ({ model_name }) => model_name,
                 )}
               />
@@ -261,7 +261,7 @@ function PlanChanges({
               <ChangesPreview
                 headline="Indirectly Modified"
                 type={EnumPlanChangeType.Indirect}
-                changes={plan!.changes!.modified.indirect!.map(
+                changes={plan!.changes!.modified.indirect.map(
                   ci => ci.model_name,
                 )}
               />

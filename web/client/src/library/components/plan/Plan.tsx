@@ -254,6 +254,7 @@ function Plan({
           setPlanState(EnumPlanState.Finished)
         }
       })
+      .catch(console.log)
       .finally(() => {
         elTaskProgress?.current?.scrollIntoView({
           behavior: 'smooth',
