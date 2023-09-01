@@ -1,6 +1,6 @@
 import { type Environment } from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
-import { isArrayEmpty, isFalse, isStringEmptyOrNil } from '~/utils'
+import { isArrayEmpty, isFalse, isNotNil, isStringEmptyOrNil } from '~/utils'
 
 export const EnumDefaultEnvironment = {
   Empty: '',
@@ -49,6 +49,10 @@ export class ModelEnvironment {
     this._createFrom = this.isDefault
       ? EnumDefaultEnvironment.Empty
       : createFrom
+  }
+
+  get id(): string {
+    return this._initial.plan_id ?? ''
   }
 
   get name(): string {
@@ -100,14 +104,14 @@ export class ModelEnvironment {
   }): void {
     const output: Partial<Profile> = {}
 
-    if (environment != null) {
+    if (isNotNil(environment)) {
       output.environment = {
         name: environment.name,
         createFrom: environment.createFrom,
       }
     }
 
-    if (environments != null) {
+    if (isNotNil(environments)) {
       output.environments = ModelEnvironment.getOnlyLocal(environments).map(
         env => ({
           name: env.name,

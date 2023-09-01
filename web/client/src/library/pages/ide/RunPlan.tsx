@@ -1,8 +1,12 @@
 import { Menu, Popover, Transition } from '@headlessui/react'
-import { ChevronDownIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
+import {
+  ChevronDownIcon,
+  CheckCircleIcon,
+  MinusCircleIcon,
+} from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { useState, useEffect, Fragment, type MouseEvent } from 'react'
-import { useApiPlanRun } from '~/api'
+import { apiDeleteEnvironment, useApiPlanRun } from '~/api'
 import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import {
@@ -24,7 +28,7 @@ import {
   type PlanChangeType,
 } from '@components/plan/context'
 import PlanChangePreview from '@components/plan/PlanChangePreview'
-import { useIDE } from './context'
+import { EnumErrorKey, useIDE } from './context'
 
 export default function RunPlan(): JSX.Element {
   const { setIsPlanOpen } = useIDE()
@@ -297,11 +301,25 @@ function SelectEnvironemnt({
   onSelect?: () => void
   showAddEnvironment?: boolean
 }): JSX.Element {
+  const { addError } = useIDE()
+
   const environments = useStoreContext(s => s.environments)
+  const pinnedEnvironments = useStoreContext(s => s.pinnedEnvironments)
+  const defaultEnvironment = useStoreContext(s => s.defaultEnvironment)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
   const removeLocalEnvironment = useStoreContext(s => s.removeLocalEnvironment)
 
   const ButtonMenu = makeButton<HTMLDivElement>(Menu.Button)
+
+  function deleteEnvironment(env: ModelEnvironment): void {
+    apiDeleteEnvironment(env.name)
+      .then(() => {
+        removeLocalEnvironment(env)
+      })
+      .catch(error => {
+        addError(EnumErrorKey.Environments, error)
+      })
+  }
 
   return (
     <Menu>
@@ -355,7 +373,7 @@ function SelectEnvironemnt({
                           onSelect?.()
                         }}
                         className={clsx(
-                          'flex justify-between items-center px-4 py-1 cursor-pointer overflow-auto',
+                          'flex justify-between items-center pl-2 pr-1 py-1 cursor-pointer overflow-auto',
                           active && 'bg-primary-10',
                           env === environment &&
                             'pointer-events-none cursor-default bg-secondary-10',
@@ -364,7 +382,7 @@ function SelectEnvironemnt({
                         <div className="flex items-start">
                           <CheckCircleIcon
                             className={clsx(
-                              'w-4 h-4 text-primary-500 mt-1',
+                              'w-4 h-4 text-primary-500 mt-1.5',
                               active && 'opacity-10',
                               env !== environment && 'opacity-0',
                             )}
@@ -384,6 +402,13 @@ function SelectEnvironemnt({
                             {env.isDefault && (
                               <span className="flex ml-2">
                                 <small className="text-xs text-neutral-500">
+                                  Main Environment
+                                </small>
+                              </span>
+                            )}
+                            {defaultEnvironment === env && (
+                              <span className="flex ml-2">
+                                <small className="text-xs text-neutral-500">
                                   Default Environment
                                 </small>
                               </span>
@@ -392,7 +417,7 @@ function SelectEnvironemnt({
                         </div>
                         {env.isLocal && env !== environment && (
                           <Button
-                            className="my-0 mx-0"
+                            className="!m-0 !px-2 bg-transparent hover:bg-transparent border-none"
                             size={EnumSize.xs}
                             variant={EnumVariant.Neutral}
                             onClick={(e: MouseEvent) => {
@@ -401,9 +426,26 @@ function SelectEnvironemnt({
                               removeLocalEnvironment(env)
                             }}
                           >
-                            -
+                            <MinusCircleIcon className="w-4 text-neutral-500 dark:text-neutral-100" />
                           </Button>
                         )}
+                        {isFalse(env.isDefault) &&
+                          env !== environment &&
+                          env.isSynchronized &&
+                          isFalse(pinnedEnvironments.includes(env)) && (
+                            <Button
+                              className="!px-2 !my-0"
+                              size={EnumSize.xs}
+                              variant={EnumVariant.Danger}
+                              onClick={(e: MouseEvent) => {
+                                e.stopPropagation()
+
+                                deleteEnvironment(env)
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          )}
                       </div>
                     )}
                   </Menu.Item>
