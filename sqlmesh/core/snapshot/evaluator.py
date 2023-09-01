@@ -417,9 +417,7 @@ class SnapshotEvaluator:
                 )
                 non_dev_render_kwargs: t.Dict[str, t.Any] = {**render_kwargs, "is_dev": False}
                 self.adapter.execute(snapshot.model.render_pre_statements(**non_dev_render_kwargs))
-                evaluation_strategy.create(
-                    snapshot.model, snapshot.table_name(), **non_dev_render_kwargs
-                )
+                evaluation_strategy.create(snapshot, snapshot.table_name(), **non_dev_render_kwargs)
                 self.adapter.execute(snapshot.model.render_post_statements(**non_dev_render_kwargs))
 
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))

@@ -676,7 +676,7 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
         "a": snapshot_a,
         "b": snapshot_b,
     }
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = {"b"}
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {}
@@ -707,7 +707,7 @@ def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):
         "a": snapshot_a,
         "b": snapshot_b,
     }
-    context_diff_mock.removed = set()
+    context_diff_mock.removed_snapshots = set()
     context_diff_mock.added = {"a", "b"}
     context_diff_mock.added_materialized_models = set()
     context_diff_mock.modified_snapshots = {}

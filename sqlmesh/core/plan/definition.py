@@ -553,7 +553,7 @@ class Plan:
             snapshot = self._snapshot_mapping.get(name)
             if not snapshot or snapshot.change_category:
                 continue
-            upstream_model_names = self._dag.upstream(name)
+            self._dag.upstream(name)
 
             if name in self.context_diff.modified_snapshots:
                 is_directly_modified = self.context_diff.directly_modified(name)
@@ -742,7 +742,8 @@ class Plan:
             # to be categorized as forward-only. Checking the previous versions to make
             # sure that the snapshot doesn't represent a newly added model.
             return (
-                snapshot.model.forward_only
+                snapshot.node.is_model
+                and snapshot.model.forward_only
                 and not snapshot.change_category
                 and bool(snapshot.previous_versions)
             )
