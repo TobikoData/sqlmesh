@@ -496,13 +496,10 @@ function useQueryWithTimeout<
   return {
     ...q,
     refetch: async (...args: any[]) =>
-      new Promise((resolve, reject) => {
+      new Promise(resolve => {
         q.refetch(...args, { throwOnError: true })
           .then(resolve)
-          .catch(error => {
-            onError(error)
-            reject(error)
-          })
+          .catch(onError)
       }),
     cancel,
     isTimeout,
