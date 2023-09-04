@@ -1050,13 +1050,15 @@ class Context(BaseContext):
                 snapshots=self.snapshots,
                 raise_exception=False,
             ):
-                audit_id = f"{audit_result.model.name}:{audit_result.audit.name}"
+                audit_id = f"{audit_result.audit.name}"
+                if audit_result.model:
+                    audit_id += f" on model {audit_result.model.name}"
                 if audit_result.skipped:
                     self.console.log_status_update(f"{audit_id} SKIPPED.")
                     skipped_count += 1
                 elif audit_result.count:
                     errors.append(audit_result)
-                    self.console.log_status_update(f"{audit_id} FAIL.")
+                    self.console.log_status_update(f"{audit_id} FAIL [{audit_result.count}].")
                 else:
                     self.console.log_status_update(f"{audit_id} PASS.")
 
