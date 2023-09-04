@@ -1058,7 +1058,9 @@ class Context(BaseContext):
                     skipped_count += 1
                 elif audit_result.count:
                     errors.append(audit_result)
-                    self.console.log_status_update(f"{audit_id} FAIL [{audit_result.count}].")
+                    self.console.log_status_update(
+                        f"{audit_id} FAIL [{audit_result.count}] [{audit_result.count}]."
+                    )
                 else:
                     self.console.log_status_update(f"{audit_id} PASS.")
 
