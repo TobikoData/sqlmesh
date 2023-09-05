@@ -41,6 +41,13 @@ A directly-modified model that is classified as non-breaking will be backfilled,
 
 This is a common choice in scenarios such as an addition of a new column, an action which doesn't affect downstream models, as new columns can't be used by downstream models without modifying them directly to select the column. If any downstream models contain a `select *` from the model, SQLMesh attempts to infer breaking status on a best-effort basis. We recommend explicitly specifying a query's columns to avoid unnecessary recomputation.
 
+### Forward-only change
+A modified (either directly or indirectly) model that is categorized as forward-only will continue to use the existing physical table once the change is deployed to production (the `prod` environment). This means that no backfill will take place.
+
+While iterating on forward-only changes in the development environment, the model's output will be stored in either a temporary table or a shallow clone of the production table if supported by the engine. In either case the data produced this way in the development environment will **not** be reused once the change is deployed to production. See [Forward-only Plans](#forward-only-plans) for more details.
+
+This category is assigned by SQLMesh automatically either when a user opts into using a [forward-only plan](#forward-only-plans) or when a model is explicitly configured to be forward-only.
+
 ## Plan application
 Once a plan has been created and reviewed, it is then applied to the target [environment](environments.md) in order for its changes to take effect.
 
@@ -81,7 +88,13 @@ When a forward-only plan is applied to the `prod` environment, none of the plan'
 
 Note that once a forward-only change is applied to `prod`, all development environments that referred to the previous versions of the updated models will be impacted.
 
-A core component of the development process is to execute code and verify its behavior. To enable this while preserving isolation between environments, `sqlmesh plan [environment name]` evaluates code in non-`prod` environments by creating temporary physical tables for forward-only model versions. This means that only a limited preview of changes is available in the development environment before the change is promoted to `prod`. The date range of the preview is provided as part of plan creation command.
+A core component of the development process is to execute code and verify its behavior. To enable this while preserving isolation between environments, `sqlmesh plan [environment name]` evaluates code in non-`prod` environments while targeting shallow (a.k.a. "zero-copy") clones of production tables for engines that support them or newly created temporary physical tables for engines that don't. This means that only a limited preview of changes is available in the development environment before the change is promoted to `prod`. The date range of the preview is provided as part of plan creation command.
+
+Engines for which table cloning is supported include:
+
+* `BigQuery`
+* `Databricks`
+* `Snowflake`
 
 Note that all changes made as part of a forward-only plan automatically get a **forward-only** category assigned to them. These types of changes can't be mixed together with [breaking and non-breaking changes](#change-categories) within the same plan.
 
@@ -89,6 +102,8 @@ To create a forward-only plan, add the `--forward-only` option to the `plan` com
 ```bash
 sqlmesh plan [environment name] --forward-only
 ```
+
+**Note:** The `--forward-only` flag is not required when applying changes to models that have been explicitly configured as [forward-only](models/overview.md#forward_only). Use it only if you need to provide a time range for the preview window or the [effective date](#effective-date).
 
 ### Effective date
 Changes that are part of the forward-only plan can also be applied retroactively to the production environment by specifying the effective date:
