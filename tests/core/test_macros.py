@@ -9,7 +9,7 @@ from sqlmesh.utils.metaprogramming import Executable
 
 @macro()
 def filter_country(
-    evaluator: MacroEvaluator, expression: exp.Condition, country: str
+    evaluator: MacroEvaluator, expression: exp.Condition, country: exp.Literal
 ) -> exp.Condition:
     return t.cast(exp.Condition, exp.and_(expression, exp.column("country").eq(country)))
 
