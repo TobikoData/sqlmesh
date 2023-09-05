@@ -135,6 +135,12 @@ For models that are incremental, the following parameters can be specified in th
 ### batch_size
 - Batch size is used to optimize backfilling incremental data. It determines the maximum number of intervals to run in a single job. For example, if a model specifies a cron of `@hourly` and a batch_size of `12`, when backfilling 3 days of data, the scheduler will spawn 6 jobs. (3 days * 24 hours/day = 72 hour intervals to fill. 72 intervals / 12 intervals per job = 6 jobs.)
 
+### forward_only
+- Set this to true to indicate that all changes to this model should be [forward-only](../plans.md#forward-only-plans).
+
+### disable_restatement
+- Set this to true to indicate that [data restatement](../plans.md#restatement-plans) is disabled for this model.
+
 ## Macros
 Macros can be used for passing in parameterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../macros/overview.md).
 

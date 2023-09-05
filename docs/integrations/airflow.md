@@ -13,7 +13,7 @@ SQLMesh provides [partial support for AWS MWAA](#aws-mwaa) (Amazon Managed Workf
 ## Airflow cluster configuration
 To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed on that cluster. Ensure it is installed with the extras for your engine if needed; for example: `sqlmesh[databricks]` for Databricks. Check [setup.py](https://github.com/TobikoData/sqlmesh/blob/main/setup.py) for a list of extras.
 
-**Note:** The Airflow Webserver instance(s) must be restarted after installation.
+**Note:** The Airflow Webserver instance(s) must be restarted after **installation** and every time the SQLMesh package is **upgraded**.
 
 Once the package is installed, the following Python module must be created in the `dags/` folder of the target DAG repository with the following contents:
 
