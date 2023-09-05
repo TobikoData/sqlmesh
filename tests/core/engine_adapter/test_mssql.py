@@ -224,10 +224,10 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             [
                 'ALTER TABLE "test_table" DROP COLUMN "c"',
                 'ALTER TABLE "test_table" DROP COLUMN "d"',
-                'ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100) FIRST',
-                'ALTER TABLE "test_table" ADD COLUMN "e" TEXT AFTER "a"',
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INTEGER AFTER "nested_a"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INTEGER AFTER "array_a"',
+                'ALTER TABLE "test_table" ADD "f" VARCHAR(100) FIRST',
+                'ALTER TABLE "test_table" ADD "e" TEXT AFTER "a"',
+                'ALTER TABLE "test_table" ADD "nested"."nested_b" INTEGER AFTER "nested_a"',
+                'ALTER TABLE "test_table" ADD "array_col"."element"."array_b" INTEGER AFTER "array_a"',
             ],
         ),
         (
@@ -262,10 +262,10 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             [
                 'ALTER TABLE "test_table" DROP COLUMN "c"',
                 'ALTER TABLE "test_table" DROP COLUMN "d"',
-                'ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)',
-                'ALTER TABLE "test_table" ADD COLUMN "e" TEXT',
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INTEGER',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INTEGER',
+                'ALTER TABLE "test_table" ADD "f" VARCHAR(100)',
+                'ALTER TABLE "test_table" ADD "e" TEXT',
+                'ALTER TABLE "test_table" ADD "nested"."nested_b" INTEGER',
+                'ALTER TABLE "test_table" ADD "array_col"."element"."array_b" INTEGER',
             ],
         ),
         (
@@ -299,12 +299,12 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             [
                 'ALTER TABLE "test_table" DROP COLUMN "c"',
                 'ALTER TABLE "test_table" DROP COLUMN "d"',
-                'ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)',
-                'ALTER TABLE "test_table" ADD COLUMN "e" TEXT',
+                'ALTER TABLE "test_table" ADD "f" VARCHAR(100)',
+                'ALTER TABLE "test_table" ADD "e" TEXT',
                 'ALTER TABLE "test_table" DROP COLUMN "nested"',
-                'ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INTEGER, "nested_b" INTEGER, "nested_c" INTEGER>',
+                'ALTER TABLE "test_table" ADD "nested" STRUCT<"nested_a" INTEGER, "nested_b" INTEGER, "nested_c" INTEGER>',
                 'ALTER TABLE "test_table" DROP COLUMN "array_col"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INTEGER, "array_b" INTEGER, "array_c" INTEGER>>',
+                'ALTER TABLE "test_table" ADD "array_col" ARRAY<STRUCT<"array_a" INTEGER, "array_b" INTEGER, "array_c" INTEGER>>',
             ],
         ),
         (
@@ -338,12 +338,12 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             [
                 'ALTER TABLE "test_table" DROP COLUMN "c"',
                 'ALTER TABLE "test_table" DROP COLUMN "d"',
-                'ALTER TABLE "test_table" ADD COLUMN "f" VARCHAR(100)',
-                'ALTER TABLE "test_table" ADD COLUMN "e" TEXT',
+                'ALTER TABLE "test_table" ADD "f" VARCHAR(100)',
+                'ALTER TABLE "test_table" ADD "e" TEXT',
                 'ALTER TABLE "test_table" DROP COLUMN "nested"',
-                'ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INTEGER, "nested_b" INTEGER, "nested_c" INTEGER>',
+                'ALTER TABLE "test_table" ADD "nested" STRUCT<"nested_a" INTEGER, "nested_b" INTEGER, "nested_c" INTEGER>',
                 'ALTER TABLE "test_table" DROP COLUMN "array_col"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INTEGER, "array_b" INTEGER, "array_c" INTEGER>>',
+                'ALTER TABLE "test_table" ADD "array_col" ARRAY<STRUCT<"array_a" INTEGER, "array_b" INTEGER, "array_c" INTEGER>>',
             ],
         ),
         # Test multiple operations on a column with positional and nested features enabled
@@ -367,11 +367,11 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             },
             [
                 'ALTER TABLE "test_table" DROP COLUMN "nested"."nested_c"',
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INTEGER AFTER "nested_a"',
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_d" INTEGER AFTER "nested_b"',
+                'ALTER TABLE "test_table" ADD "nested"."nested_b" INTEGER AFTER "nested_a"',
+                'ALTER TABLE "test_table" ADD "nested"."nested_d" INTEGER AFTER "nested_b"',
                 'ALTER TABLE "test_table" DROP COLUMN "array_col"."element"."array_c"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INTEGER AFTER "array_a"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_d" INTEGER AFTER "array_b"',
+                'ALTER TABLE "test_table" ADD "array_col"."element"."array_b" INTEGER AFTER "array_a"',
+                'ALTER TABLE "test_table" ADD "array_col"."element"."array_d" INTEGER AFTER "array_b"',
             ],
         ),
         # Test multiple operations on a column with positional and nested features enabled and that when adding
@@ -397,11 +397,11 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             [
                 'ALTER TABLE "test_table" DROP COLUMN "nested"."nested_c"',
                 # Position is not included since we are adding to last so we don't need to specify position
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INTEGER',
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_d" INTEGER',
+                'ALTER TABLE "test_table" ADD "nested"."nested_b" INTEGER',
+                'ALTER TABLE "test_table" ADD "nested"."nested_d" INTEGER',
                 'ALTER TABLE "test_table" DROP COLUMN "array_col"."element"."array_c"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INTEGER',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_d" INTEGER',
+                'ALTER TABLE "test_table" ADD "array_col"."element"."array_b" INTEGER',
+                'ALTER TABLE "test_table" ADD "array_col"."element"."array_d" INTEGER',
             ],
         ),
         # Test multiple operations on a column with positional and no nested features enabled
@@ -427,9 +427,9 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             },
             [
                 'ALTER TABLE "test_table" DROP COLUMN "nested"',
-                'ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INTEGER, "nested_b" INTEGER, "nested_d" INTEGER, "nested_e" INTEGER> FIRST',
+                'ALTER TABLE "test_table" ADD "nested" STRUCT<"nested_a" INTEGER, "nested_b" INTEGER, "nested_d" INTEGER, "nested_e" INTEGER> FIRST',
                 'ALTER TABLE "test_table" DROP COLUMN "array_col"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INTEGER, "array_b" INTEGER, "array_d" INTEGER, "array_e" INTEGER>> AFTER "nested"',
+                'ALTER TABLE "test_table" ADD "array_col" ARRAY<STRUCT<"array_a" INTEGER, "array_b" INTEGER, "array_d" INTEGER, "array_e" INTEGER>> AFTER "nested"',
             ],
         ),
         # Test multiple operations on a column with no positional and nested features enabled
@@ -455,11 +455,11 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             },
             [
                 'ALTER TABLE "test_table" DROP COLUMN "nested"."nested_c"',
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_b" INTEGER',
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_d" INTEGER',
+                'ALTER TABLE "test_table" ADD "nested"."nested_b" INTEGER',
+                'ALTER TABLE "test_table" ADD "nested"."nested_d" INTEGER',
                 'ALTER TABLE "test_table" DROP COLUMN "array_col"."element"."array_c"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_b" INTEGER',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col"."element"."array_d" INTEGER',
+                'ALTER TABLE "test_table" ADD "array_col"."element"."array_b" INTEGER',
+                'ALTER TABLE "test_table" ADD "array_col"."element"."array_d" INTEGER',
             ],
         ),
         # Test multiple operations on a column with no positional or nested features enabled
@@ -484,9 +484,9 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             },
             [
                 'ALTER TABLE "test_table" DROP COLUMN "nested"',
-                'ALTER TABLE "test_table" ADD COLUMN "nested" STRUCT<"nested_a" INTEGER, "nested_b" INTEGER, "nested_d" INTEGER, "nested_e" INTEGER>',
+                'ALTER TABLE "test_table" ADD "nested" STRUCT<"nested_a" INTEGER, "nested_b" INTEGER, "nested_d" INTEGER, "nested_e" INTEGER>',
                 'ALTER TABLE "test_table" DROP COLUMN "array_col"',
-                'ALTER TABLE "test_table" ADD COLUMN "array_col" ARRAY<STRUCT<"array_a" INTEGER, "array_b" INTEGER, "array_d" INTEGER, "array_e" INTEGER>>',
+                'ALTER TABLE "test_table" ADD "array_col" ARRAY<STRUCT<"array_a" INTEGER, "array_b" INTEGER, "array_d" INTEGER, "array_e" INTEGER>>',
             ],
         ),
         # Test deeply nested structures
@@ -505,7 +505,7 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
                 "nested": """STRUCT<nested_1_a STRUCT<"nested_2_a" ARRAY<STRUCT<nested_3_a STRUCT<nested_4_a ARRAY<STRUCT<"nested_5_a" ARRAY<STRUCT<nested_6_a INT, nested_6_b INT>>>>>>>>>""",
             },
             [
-                'ALTER TABLE "test_table" ADD COLUMN "nested"."nested_1_a"."nested_2_a"."element"."nested_3_a"."nested_4_a"."element"."nested_5_a"."element"."nested_6_b" INTEGER',
+                'ALTER TABLE "test_table" ADD "nested"."nested_1_a"."nested_2_a"."element"."nested_3_a"."nested_4_a"."element"."nested_5_a"."element"."nested_6_b" INTEGER',
             ],
         ),
     ],
