@@ -133,7 +133,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "promoted_snapshot_ids": [
                 {
                     "name": "test_model",
-                    "identifier": "3474928511",
+                    "identifier": "4130255842",
                 }
             ],
             "suffix_target": "schema",
