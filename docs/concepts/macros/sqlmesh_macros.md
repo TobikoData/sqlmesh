@@ -248,7 +248,7 @@ FROM table
 
 This syntax works regardless of whether the array values are quoted or not.
 
-NOTE: SQLMesh macros do not currently support placing array values anywhere other than the end of a column name. For example, `column_@x` is supported as in the example above, but neither `@x_column` nor `my_@x_column` are allowed.
+NOTE: SQLMesh macros do not currently support placing array values anywhere other than the end of a column name. For example, `column_@x` is supported as in the example above, but neither `@x_column` nor `my_@x_column` is allowed.
 
 #### @IF
 
