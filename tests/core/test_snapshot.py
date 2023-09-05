@@ -395,8 +395,8 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="1116890341",
-        metadata_hash="1312958471",
+        data_hash="3811098861",
+        metadata_hash="1237394431",
     )
 
     assert fingerprint == original_fingerprint
@@ -442,8 +442,8 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="1421766360",
-        metadata_hash="1617581697",
+        data_hash="3270932819",
+        metadata_hash="3585221762",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -482,8 +482,8 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="4053778362",
-        metadata_hash="1312958471",
+        data_hash="2864998504",
+        metadata_hash="1237394431",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
@@ -605,7 +605,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     assert (
         fully_qualified_snapshot.table_name(is_dev=False, for_read=False)
-        == '"my-catalog".sqlmesh__db.my_catalog__db__table__2528031000'
+        == '"my-catalog".sqlmesh__db.my_catalog__db__table__1271801991'
     )
 
 
