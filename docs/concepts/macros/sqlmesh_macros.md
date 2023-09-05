@@ -228,7 +228,7 @@ SELECT
 FROM table
 ```
 
-Now we can use the array values as part of a column name by using the SQLMesh macro operator `@` inside the `@EACH` operator:
+Now we can place the array values at the end of a column name by using the SQLMesh macro operator `@` inside the `@EACH` operator:
 
 ```sql linenums="1"
 SELECT
@@ -247,6 +247,8 @@ FROM table
 ```
 
 This syntax works regardless of whether the array values are quoted or not.
+
+NOTE: SQLMesh macros do not currently support placing array values anywhere other than the end of a column name. For example, `column_@x` is supported as in the example above, but neither `@x_column` nor `my_@x_column` are allowed.
 
 #### @IF
 
