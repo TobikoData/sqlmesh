@@ -34,7 +34,9 @@ export const EnumPlanActions = {
   External: 'external',
   TestsReportErrors: 'tests-report-errors',
   TestsReportMessages: 'tests-report-messages',
-  PlanReport: 'plan-report',
+  PlanChangesReport: 'plan-changes-report',
+  PlanValidateReport: 'plan-validate-report',
+  ApplyReport: 'apply-report',
 } as const
 
 export const EnumPlanChangeType = {
@@ -113,10 +115,21 @@ export interface TestReportMessage {
   message: string
 }
 
-export interface PlanReport {
+export interface PlanChangesReport {
   ok: boolean
   timestamp: number
   type: string
+  status: string
+}
+
+export interface PlanValidateReport {
+  ok: boolean
+  timestamp: number
+  type: string
+  status: string
+}
+
+export interface ApplyReport {
   status: string
 }
 
@@ -127,7 +140,9 @@ interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
   isInitialPlanRun: boolean
   categories: Category[]
   change_categorization: Map<string, ChangeCategory>
-  planReport: Map<string, PlanReport>
+  planChangesReport: Map<string, PlanChangesReport>
+  planValidateReport: Map<string, PlanValidateReport>
+  applyReport: Map<string, ApplyReport>
   testsReportErrors?: TestReportError
   testsReportMessages?: TestReportMessage
 }
@@ -135,7 +150,11 @@ interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
 type PlanAction =
   | ({ type: PlanActions } & Partial<PlanDetails> &
       Partial<ChangeCategory> & { modified?: ModelsDiff })
-  | { planReport?: PlanReport }
+  | {
+      planChangesReport?: PlanChangesReport
+      applyReport?: ApplyReport
+      planValidateReport?: PlanValidateReport
+    }
 
 const [defaultCategory, categories] = useCategories()
 const initial = {
@@ -182,7 +201,9 @@ const initial = {
   errors: [],
   testsReportErrors: undefined,
   testsReportMessages: undefined,
-  planReport: new Map(),
+  planChangesReport: new Map(),
+  planValidateReport: new Map(),
+  applyReport: new Map(),
 }
 
 export const PlanContext = createContext<PlanDetails>(initial)
@@ -378,22 +399,45 @@ function reducer(
       })
     }
 
-    case EnumPlanActions.PlanReport: {
-      const report = newState.planReport as unknown as PlanReport
-      let planReport = new Map(plan.planReport)
-
-      if (isNil(report)) {
-        planReport = new Map()
-      } else {
-        planReport.set(report.type, report)
-      }
+    case EnumPlanActions.PlanChangesReport: {
+      const report = newState.planChangesReport ?? plan.planChangesReport
 
       return Object.assign<
         Record<string, unknown>,
         PlanDetails,
-        Pick<PlanDetails, 'planReport'>
+        Pick<PlanDetails, 'planChangesReport'>
       >({}, plan, {
-        planReport,
+        planChangesReport: isNil(report)
+          ? new Map()
+          : new Map(Object.entries(report)),
+      })
+    }
+
+    case EnumPlanActions.PlanValidateReport: {
+      const report = newState.planValidateReport ?? plan.planValidateReport
+
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'planValidateReport'>
+      >({}, plan, {
+        planValidateReport: isNil(report)
+          ? new Map()
+          : new Map(Object.entries(report)),
+      })
+    }
+
+    case EnumPlanActions.ApplyReport: {
+      const report = newState.applyReport ?? plan.applyReport
+
+      return Object.assign<
+        Record<string, unknown>,
+        PlanDetails,
+        Pick<PlanDetails, 'applyReport'>
+      >({}, plan, {
+        applyReport: isNil(report)
+          ? new Map()
+          : new Map(Object.entries(report)),
       })
     }
 

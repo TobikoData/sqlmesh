@@ -3,11 +3,11 @@ import {
   MinusCircleIcon,
   PlusCircleIcon,
   CheckCircleIcon,
+  ExclamationCircleIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { type RefObject, Suspense, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { type ContextEnvironmentBackfill } from '~/api/client'
-import { useStoreContext } from '~/context/context'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -16,15 +16,22 @@ import {
   type PlanTaskStatus,
 } from '../../../context/plan'
 import {
-  isArrayEmpty,
   isArrayNotEmpty,
   isFalse,
   isObjectNotEmpty,
   isNotNil,
+  toRatio,
+  isTrue,
+  isNil,
 } from '../../../utils'
 import Spinner from '../logo/Spinner'
-import { EnumPlanChangeType, usePlan } from './context'
-import { getBackfillStepHeadline, isModified } from './help'
+import {
+  EnumPlanChangeType,
+  type TestReportError,
+  type TestReportMessage,
+  usePlan,
+} from './context'
+import { isModified } from './help'
 import Plan from './Plan'
 import PlanChangePreview from './PlanChangePreview'
 import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
@@ -33,6 +40,8 @@ import TasksOverview from '../tasksOverview/TasksOverview'
 import Loading from '@components/loading/Loading'
 import Title from '@components/title/Title'
 import ReportTestsErrors from '@components/report/ReportTestsErrors'
+import { Divider } from '@components/divider/Divider'
+import Progress from '@components/progress/Progress'
 
 interface PropsPlanWizardStepMessage extends React.HTMLAttributes<HTMLElement> {
   hasSpinner?: boolean
@@ -40,11 +49,288 @@ interface PropsPlanWizardStepMessage extends React.HTMLAttributes<HTMLElement> {
   index?: number
 }
 
-export default function PlanWizard({
-  setRefTasksOverview,
+export default function PlanWizard(): JSX.Element {
+  const {
+    planChangesReport,
+    planValidateReport,
+    applyReport,
+    testsReportMessages,
+    testsReportErrors,
+  } = usePlan()
+  const planAction = useStorePlan(s => s.action)
+
+  return (
+    <div className="w-full h-full py-4 overflow-hidden">
+      <div className="w-full h-full px-4 overflow-y-scroll hover:scrollbar scrollbar--vertical">
+        {planAction === EnumPlanAction.Run ? (
+          <Plan.StepOptions className="w-full" />
+        ) : (
+          <>
+            {planChangesReport.has('plan') && (
+              <StepChanges report={planChangesReport}>
+                <PlanModelChanges />
+              </StepChanges>
+            )}
+            {isTrue(planChangesReport.get('skip_tests')) && (
+              <PlanWizardStepMessage variant={EnumVariant.Info}>
+                Tests Skipped
+              </PlanWizardStepMessage>
+            )}
+            {isNotNil(testsReportMessages) && (
+              <StepTestsCompleted report={testsReportMessages} />
+            )}
+            {isNotNil(testsReportErrors) && (
+              <StepTestsFailed report={testsReportErrors} />
+            )}
+            {planValidateReport.has('plan') && (
+              <StepValidate report={planValidateReport} />
+            )}
+            {isNil(testsReportErrors) && applyReport.has('evaluation') && (
+              <StepEvaluate report={applyReport}>
+                {applyReport.has('creation') && (
+                  <StepCreation report={applyReport} />
+                )}
+                {applyReport.has('restate') ? (
+                  <StepRestate report={applyReport} />
+                ) : (
+                  <PlanWizardStepMessage
+                    variant={EnumVariant.Info}
+                    className="mt-2"
+                  >
+                    No Models To Restate
+                  </PlanWizardStepMessage>
+                )}
+                {applyReport.has('backfill') && (
+                  <StepBackfill report={applyReport} />
+                )}
+                {applyReport.has('promotion') && (
+                  <StepPromote report={applyReport} />
+                )}
+              </StepEvaluate>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function StepChanges({
+  report,
+  children,
 }: {
-  setRefTasksOverview: RefObject<HTMLDivElement>
+  report: Map<string, any>
+  children?: React.ReactNode
 }): JSX.Element {
+  const payload = report.get('plan')
+
+  return (
+    <Step
+      report={payload}
+      states={[
+        'Plan Changes Collected',
+        'Failed Getting Plan Changes',
+        'Getting Plan Changes...',
+      ]}
+      isOpen={true}
+      panel={children}
+    >
+      {isNotNil(payload.backfills) && (
+        <p className="mb-0.5">
+          Backfills <b>{payload.backfills.length}</b>
+        </p>
+      )}
+      {isNotNil(payload.changes) && (
+        <>
+          <p className="mb-0.5">
+            Added <b>{payload.changes.added.length}</b>
+          </p>
+          <p className="mb-0.5">
+            Modified{' '}
+            <b>{Object.values(payload.changes.modified).flat().length}</b>
+          </p>
+          <p className="mb-0.5">
+            Removed <b>{payload.changes.removed.length}</b>
+          </p>
+        </>
+      )}
+    </Step>
+  )
+}
+
+function StepTestsCompleted({
+  report,
+}: {
+  report: TestReportMessage
+}): JSX.Element {
+  return (
+    <Step
+      report={{
+        status: 'success',
+        ...report,
+      }}
+      trigger={
+        <>
+          <CheckCircleIcon className="w-6 mr-4" />
+          <Title
+            text="Tests Completed"
+            size={EnumSize.sm}
+            variant={EnumVariant.Success}
+            className="w-full"
+          />
+        </>
+      }
+    >
+      <p className="mb-0.5">{report.message}</p>
+    </Step>
+  )
+}
+
+function StepTestsFailed({ report }: { report: TestReportError }): JSX.Element {
+  return (
+    <Step
+      variant={EnumVariant.Danger}
+      report={{
+        status: 'fail',
+        ...report,
+      }}
+      trigger={
+        <>
+          <CheckCircleIcon className="w-6 mr-4" />
+          <Title
+            text="Tests Failed"
+            size={EnumSize.sm}
+            variant={EnumVariant.Danger}
+            className="w-full"
+          />
+        </>
+      }
+    >
+      <ReportTestsErrors report={report} />
+    </Step>
+  )
+}
+
+function StepValidate({ report }: { report: Map<string, any> }): JSX.Element {
+  const payload = report.get('plan')
+
+  return (
+    <Step
+      report={payload}
+      states={[
+        'Plan Validated',
+        'Plan Validation Failed',
+        'Validating Plan...',
+      ]}
+    />
+  )
+}
+
+function StepEvaluate({
+  report,
+  children,
+}: {
+  report: Map<string, any>
+  children: React.ReactNode
+}): JSX.Element {
+  const payload = report.get('evaluation')
+
+  return (
+    <div className="pt-6 pb-2">
+      {isNotNil(payload.start_at) && (
+        <>
+          <small className="text-neutral-500 block px-4 mb-1">
+            Evaluation started at{' '}
+            <b>{new Date(payload.start_at).toLocaleString()}</b>
+          </small>
+          <Divider />
+          <small className="text-neutral-500 block px-4 mt-1">
+            Given a plan, it pushes snapshots into the state and then kicks off
+            the backfill process for all affected snapshots. Once backfill is
+            done, snapshots that are part of the plan are promoted in the
+            environment targeted by this plan.
+          </small>
+        </>
+      )}
+      <div className="py-2">{children}</div>
+      {isNotNil(payload.stop_at) && (
+        <>
+          <Divider />
+          <small className="text-neutral-500 block px-4 mt-1">
+            Evaluation stopped at{' '}
+            <b>{new Date(payload.stop_at).toLocaleString()}</b>
+          </small>
+        </>
+      )}
+    </div>
+  )
+}
+
+function StepCreation({
+  report,
+  isOpen,
+}: {
+  report: Map<string, any>
+  isOpen?: boolean
+}): JSX.Element {
+  const payload = report.get('creation')
+
+  return (
+    <Step
+      report={payload}
+      states={[
+        'Snapshot Tables Created',
+        'Snapshot Tables Creation Failed',
+        'Creating Snapshot Tables...',
+      ]}
+      isOpen={isOpen}
+    >
+      {isNotNil(payload.total_tasks) && (
+        <TasksOverview.Block>
+          <TasksOverview.Task>
+            <TasksOverview.TaskDetails>
+              <TasksOverview.TaskInfo>
+                <TasksOverview.TaskHeadline headline="Snapshot Tables" />
+              </TasksOverview.TaskInfo>
+              <TasksOverview.DetailsProgress>
+                <TasksOverview.TaskSize
+                  completed={payload.total_tasks}
+                  total={payload.num_tasks}
+                  unit="task"
+                />
+                <TasksOverview.TaskDivider />
+                <TasksOverview.TaskProgress
+                  completed={payload.num_tasks}
+                  total={payload.total_tasks}
+                />
+              </TasksOverview.DetailsProgress>
+            </TasksOverview.TaskDetails>
+            <Progress
+              progress={toRatio(payload.num_tasks, payload.total_tasks)}
+            />
+          </TasksOverview.Task>
+        </TasksOverview.Block>
+      )}
+    </Step>
+  )
+}
+
+function StepRestate({ report }: { report: Map<string, any> }): JSX.Element {
+  const payload = report.get('restate')
+
+  return (
+    <Step
+      report={payload}
+      states={[
+        'Restate Models',
+        'Restate Models Failed',
+        'Restating Models...',
+      ]}
+    />
+  )
+}
+
+function StepBackfill({ report }: { report: Map<string, any> }): JSX.Element {
   const {
     backfills,
     hasChanges,
@@ -53,19 +339,11 @@ export default function PlanWizard({
     modified,
     added,
     removed,
-    virtualUpdateDescription,
     skip_backfill,
     change_categorization,
     hasVirtualUpdate,
-    testsReportMessages,
-    planReport,
-    testsReportErrors,
   } = usePlan()
-
-  const environment = useStoreContext(s => s.environment)
-
   const planState = useStorePlan(s => s.state)
-  const planAction = useStorePlan(s => s.action)
 
   const categories = useMemo(
     () =>
@@ -133,12 +411,12 @@ export default function PlanWizard({
     },
     [categories],
   )
-
+  const payload = report.get('backfill')
   const tasks: PlanTasks = useMemo(
     (): PlanTasks =>
-      activeBackfill?.tasks != null
-        ? filterActiveBackfillsTasks(activeBackfill.tasks)
-        : filterBackfillsTasks(backfills),
+      isNil(payload?.tasks)
+        ? filterBackfillsTasks(backfills)
+        : filterActiveBackfillsTasks(payload?.tasks),
     [backfills, change_categorization, activeBackfill],
   )
 
@@ -148,6 +426,7 @@ export default function PlanWizard({
     hasBackfills,
     isObjectNotEmpty(tasks),
   ].every(isFalse)
+
   const showDetails =
     (hasVirtualUpdate && isFalse(isFinished)) ||
     (isFalse(hasNoChanges) &&
@@ -155,337 +434,92 @@ export default function PlanWizard({
       isFalse(skip_backfill) &&
       isArrayNotEmpty(Object.keys(tasks)))
 
-  const backfillStepHeadline = getBackfillStepHeadline({
-    planAction,
-    planState,
-    hasBackfills,
-    hasVirtualUpdate,
-    hasNoChanges: hasNoChanges || isArrayEmpty(Object.keys(tasks)),
-    skip_backfill,
-  })
-  const isFailed = Array.from(planReport.values()).some(
-    report => report.status === 'fail',
-  )
-
-  console.log({ planReport, isFailed }, Object.values(planReport))
+  const environment = report.get('environment')
 
   return (
-    <div className="w-full h-full py-4 overflow-hidden">
-      <div className="w-full h-full px-4 overflow-y-auto hover:scrollbar scrollbar--vertical ">
-        {planAction === EnumPlanAction.Run ? (
-          <Plan.StepOptions className="w-full" />
-        ) : (
+    <Step
+      report={payload}
+      states={[
+        'Intervals Backfilled',
+        'Intervals Backfilling Failed',
+        'Backfilling Intervals...',
+      ]}
+      showDetails={showDetails}
+      isOpen={true}
+    >
+      <TasksOverview tasks={payload.tasks}>
+        {({ total, completed, models, completedBatches, totalBatches }) => (
           <>
-            <PlanModelChanges />
-            {planReport.has('plan') && (
-              <div className="px-2">
-                {planReport.get('plan')!.status === 'init' && (
-                  <Banner
-                    className="my-2"
-                    variant={EnumVariant.Primary}
-                  >
-                    <Loading
-                      text="Step 1: Validating Plan..."
-                      hasSpinner
-                      size={EnumSize.lg}
-                      variant={EnumVariant.Primary}
-                    />
-                  </Banner>
-                )}
-                {planReport.get('plan')!.status === 'success' && (
-                  <Banner
-                    className="my-2 flex items-center"
-                    variant={EnumVariant.Success}
-                  >
-                    <CheckCircleIcon className="w-5 mr-4" />
-                    <Title
-                      text="Plan Validated"
-                      size={EnumSize.sm}
-                      variant={EnumVariant.Success}
-                    />
-                  </Banner>
-                )}
-              </div>
-            )}
-            {planReport.has('tests') && (
-              <div className="px-2">
-                {planReport.get('tests')!.status === 'init' && (
-                  <PlanWizardStepMessage
-                    index={2}
-                    hasSpinner
-                  >
-                    Running Tests...
-                  </PlanWizardStepMessage>
-                )}
-                {planReport.get('tests')!.status === 'success' &&
-                  isNotNil(testsReportMessages) && (
-                    <Banner
-                      className="my-2 flex items-center"
-                      variant={EnumVariant.Success}
-                    >
-                      <CheckCircleIcon className="w-5 mr-4" />
-                      <Title
-                        text={testsReportMessages?.message}
-                        size={EnumSize.sm}
-                        variant={EnumVariant.Success}
-                      />
-                    </Banner>
-                  )}
-                {planReport.get('tests')!.status === 'fail' &&
-                  isNotNil(testsReportErrors) &&
-                  isObjectNotEmpty(testsReportErrors) && (
-                    <Banner variant={EnumVariant.Danger}>
-                      <Disclosure defaultOpen={true}>
-                        {({ open }) => (
-                          <>
-                            <div className="flex items-center">
-                              <p className="w-full mr-2 text-sm">
-                                {testsReportErrors?.title}
-                              </p>
-                              <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
-                                {open ? (
-                                  <MinusCircleIcon className="w-4 text-danger-500" />
-                                ) : (
-                                  <PlusCircleIcon className="w-4 text-danger-500" />
-                                )}
-                              </Disclosure.Button>
-                            </div>
-                            <Disclosure.Panel className="px-4 pb-2 text-sm">
-                              <ReportTestsErrors report={testsReportErrors} />
-                            </Disclosure.Panel>
-                          </>
-                        )}
-                      </Disclosure>
-                    </Banner>
-                  )}
-                {planReport.get('tests')!.status === 'skip' && (
-                  <PlanWizardStepMessage
-                    index={2}
-                    variant={EnumVariant.Info}
-                  >
-                    Tests Skipped
-                  </PlanWizardStepMessage>
-                )}
-              </div>
-            )}
-            {planReport.has('push') && isFalse(isFailed) && (
-              <div className="px-2 mt-2">
-                {planReport.get('push')!.status === 'init' && (
-                  <PlanWizardStepMessage
-                    index={3}
-                    hasSpinner
-                  >
-                    Pushing Changes...
-                  </PlanWizardStepMessage>
-                )}
-                {planReport.get('push')!.status === 'success' && (
-                  <Banner
-                    className="my-2 flex items-center"
-                    variant={EnumVariant.Success}
-                  >
-                    <CheckCircleIcon className="w-5 mr-4" />
-                    <Title
-                      text="Changes Pushed"
-                      size={EnumSize.sm}
-                      variant={EnumVariant.Success}
-                    />
-                  </Banner>
-                )}
-                {planReport.get('push')!.status === 'fail' && (
-                  <PlanWizardStepMessage
-                    index={3}
-                    variant={EnumVariant.Danger}
-                  >
-                    Pushing Failed
-                  </PlanWizardStepMessage>
-                )}
-              </div>
-            )}
-            {planReport.has('restate') && isFalse(isFailed) && (
-              <div className="px-2">
-                {planReport.get('restate')!.status === 'init' && (
-                  <PlanWizardStepMessage
-                    index={4}
-                    hasSpinner
-                  >
-                    Restating Models...
-                  </PlanWizardStepMessage>
-                )}
-                {planReport.get('restate')!.status === 'success' && (
-                  <PlanWizardStepMessage
-                    index={4}
-                    variant={EnumVariant.Success}
-                  >
-                    Restate Completed
-                  </PlanWizardStepMessage>
-                )}
-                {planReport.get('restate')!.status === 'fail' && (
-                  <PlanWizardStepMessage
-                    index={4}
-                    variant={EnumVariant.Danger}
-                  >
-                    Restate Failed
-                  </PlanWizardStepMessage>
-                )}
-                {planReport.get('restate')!.status === 'skip' && (
-                  <Banner
-                    className="my-2 flex items-center"
-                    variant={EnumVariant.Info}
-                  >
-                    <CheckCircleIcon className="w-5 mr-4" />
-                    <Title
-                      text="No Models To Restate"
-                      size={EnumSize.sm}
-                      variant={EnumVariant.Info}
-                    />
-                  </Banner>
-                )}
-              </div>
-            )}
-            {(isNotNil(activeBackfill) || hasVirtualUpdate) &&
-              isFalse(isFailed) && (
-                <Disclosure
-                  key={backfillStepHeadline}
-                  defaultOpen={hasBackfills}
-                >
-                  {({ open }) => (
-                    <div className="px-2">
-                      <Banner
-                        className="my-2 flex items-center"
-                        variant={
-                          planState === EnumPlanState.Finished
-                            ? EnumVariant.Success
-                            : planState === EnumPlanState.Failed
-                            ? EnumVariant.Danger
-                            : EnumVariant.Info
-                        }
-                      >
-                        {planState === EnumPlanState.Finished && (
-                          <CheckCircleIcon className="w-5 mr-4" />
-                        )}
-                        <Title
-                          text={backfillStepHeadline}
-                          size={EnumSize.sm}
-                          variant={
-                            planState === EnumPlanState.Finished
-                              ? EnumVariant.Success
-                              : planState === EnumPlanState.Failed
-                              ? EnumVariant.Danger
-                              : EnumVariant.Info
-                          }
-                          className="w-full"
-                        />
-                        {showDetails && (
-                          <div className="flex items-center">
-                            <p className="mr-2 text-sm">Details</p>
-                            <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
-                              {open ? (
-                                <MinusCircleIcon className="w-5" />
-                              ) : (
-                                <PlusCircleIcon className="w-5" />
-                              )}
-                            </Disclosure.Button>
-                          </div>
-                        )}
-                      </Banner>
-                      <Disclosure.Panel className="px-4 pb-2 text-sm">
-                        {hasBackfills &&
-                          isFalse(skip_backfill) &&
-                          isArrayNotEmpty(Object.keys(tasks)) && (
-                            <>
-                              <Suspense
-                                fallback={<Spinner className="w-4 h-4 mr-2" />}
-                              >
-                                <TasksOverview
-                                  tasks={tasks}
-                                  setRefTasksOverview={setRefTasksOverview}
-                                >
-                                  {({
-                                    total,
-                                    completed,
-                                    models,
-                                    completedBatches,
-                                    totalBatches,
-                                  }) => (
-                                    <>
-                                      <TasksOverview.Summary
-                                        environment={environment.name}
-                                        planState={planState}
-                                        headline="Target Environment"
-                                        completed={completed}
-                                        total={total}
-                                        completedBatches={completedBatches}
-                                        totalBatches={totalBatches}
-                                        updateType={
-                                          hasVirtualUpdate
-                                            ? 'Virtual'
-                                            : 'Backfill'
-                                        }
-                                        updatedAt={activeBackfill?.updated_at}
-                                      />
-                                      {models != null && (
-                                        <TasksOverview.Details
-                                          models={models}
-                                          changes={{
-                                            modified,
-                                            added,
-                                            removed,
-                                          }}
-                                          showBatches={hasBackfills}
-                                          showVirtualUpdate={hasVirtualUpdate}
-                                          showProgress={true}
-                                        />
-                                      )}
-                                    </>
-                                  )}
-                                </TasksOverview>
-                              </Suspense>
-                            </>
-                          )}
-                        {hasVirtualUpdate && (
-                          <div>
-                            <small className="text-sm">
-                              {virtualUpdateDescription}
-                            </small>
-                          </div>
-                        )}
-                      </Disclosure.Panel>
-                    </div>
-                  )}
-                </Disclosure>
-              )}
-            {planReport.has('promote') && isFalse(isFailed) && (
-              <div className="px-2">
-                {planReport.get('promote')!.status === 'init' && (
-                  <PlanWizardStepMessage
-                    index={6}
-                    hasSpinner
-                  >
-                    Promoting...
-                  </PlanWizardStepMessage>
-                )}
-                {planReport.get('promote')!.status === 'success' && (
-                  <PlanWizardStepMessage
-                    index={6}
-                    variant={EnumVariant.Success}
-                  >
-                    Promote Completed
-                  </PlanWizardStepMessage>
-                )}
-                {planReport.get('promote')!.status === 'fail' && (
-                  <PlanWizardStepMessage
-                    index={6}
-                    variant={EnumVariant.Danger}
-                  >
-                    Promote Failed
-                  </PlanWizardStepMessage>
-                )}
-              </div>
+            <TasksOverview.Summary
+              environment={environment}
+              planState={planState}
+              headline="Target Environment"
+              completed={completed}
+              total={total}
+              completedBatches={completedBatches}
+              totalBatches={totalBatches}
+              updateType={hasVirtualUpdate ? 'Virtual' : 'Backfill'}
+            />
+            {isNotNil(models) && (
+              <TasksOverview.Details
+                models={models}
+                queue={payload.queue}
+                changes={{
+                  modified,
+                  added,
+                  removed,
+                }}
+                showBatches={hasBackfills}
+                showVirtualUpdate={hasVirtualUpdate}
+                showProgress={true}
+              />
             )}
           </>
         )}
-      </div>
-    </div>
+      </TasksOverview>
+    </Step>
+  )
+}
+
+function StepPromote({ report }: { report: Map<string, any> }): JSX.Element {
+  const payload = report.get('promotion')
+
+  return (
+    <Step
+      report={payload}
+      states={[
+        'Environment Promoted',
+        'Promotion Failed',
+        'Promoting Environment...',
+      ]}
+    >
+      <TasksOverview.Block>
+        <TasksOverview.Task>
+          <TasksOverview.TaskDetails>
+            <TasksOverview.TaskInfo>
+              <TasksOverview.TaskHeadline
+                headline={`Promote Environment: ${payload.target_environment}`}
+              />
+            </TasksOverview.TaskInfo>
+            <TasksOverview.DetailsProgress>
+              <TasksOverview.TaskSize
+                completed={payload.total_tasks}
+                total={payload.num_tasks}
+                unit="task"
+              />
+              <TasksOverview.TaskDivider />
+              <TasksOverview.TaskProgress
+                completed={payload.num_tasks}
+                total={payload.total_tasks}
+              />
+            </TasksOverview.DetailsProgress>
+          </TasksOverview.TaskDetails>
+          <Progress
+            progress={toRatio(payload.num_tasks, payload.total_tasks)}
+          />
+        </TasksOverview.Task>
+      </TasksOverview.Block>
+    </Step>
   )
 }
 
@@ -502,7 +536,7 @@ function PlanModelChanges(): JSX.Element {
     isPlanRunning
 
   return (
-    <div className={clsx('w-full', shouldBeFullAndCenter && 'h-full')}>
+    <div className={clsx('w-full my-2', shouldBeFullAndCenter && 'h-[25vh]')}>
       {isPlanRunning && (
         <Banner
           isFull
@@ -560,7 +594,7 @@ function PlanModelChanges(): JSX.Element {
             <>
               {isArrayNotEmpty(modified?.direct) && (
                 <PlanChangePreview
-                  className="m-2"
+                  className="my-2 w-full"
                   headline="Modified Directly"
                   type={EnumPlanChangeType.Direct}
                 >
@@ -569,7 +603,7 @@ function PlanModelChanges(): JSX.Element {
               )}
               {isArrayNotEmpty(modified.indirect) && (
                 <PlanChangePreview
-                  className="m-2"
+                  className="my-2 w-full"
                   headline="Modified Indirectly"
                   type={EnumPlanChangeType.Indirect}
                 >
@@ -580,7 +614,7 @@ function PlanModelChanges(): JSX.Element {
               )}
               {isArrayNotEmpty(modified?.metadata) && (
                 <PlanChangePreview
-                  className="m-2 max-h-[50vh]"
+                  className="my-2 w-full"
                   headline="Modified Metadata"
                   type={EnumPlanChangeType.Metadata}
                 >
@@ -603,9 +637,13 @@ function PlanWizardStepMessage({
   variant = EnumVariant.Primary,
   index,
   children,
+  className,
 }: PropsPlanWizardStepMessage): JSX.Element {
   return (
-    <Banner variant={variant}>
+    <Banner
+      className={className}
+      variant={variant}
+    >
       <span className="flex items-center w-full">
         {isNotNil(index) && (
           <span className="inline-block mr-3 font-black whitespace-nowrap">
@@ -616,5 +654,110 @@ function PlanWizardStepMessage({
         {children}
       </span>
     </Banner>
+  )
+}
+
+function Step({
+  report,
+  states = ['Success', 'Failed', 'Running'],
+  isOpen = false,
+  trigger,
+  panel,
+  children,
+  showDetails = true,
+}: {
+  variant?: Variant
+  report: Record<string, any>
+  trigger?: React.ReactNode
+  panel?: React.ReactNode
+  children?: React.ReactNode
+  states?: [string, string, string]
+  isOpen?: boolean
+  showDetails?: boolean
+}): JSX.Element {
+  const variant =
+    report.status === 'success'
+      ? EnumVariant.Success
+      : report.status === 'fail'
+      ? EnumVariant.Danger
+      : EnumVariant.Info
+  const [titleSuccess, titleFail, titleDefault] = states
+  const text =
+    report.status === 'success'
+      ? titleSuccess
+      : report.status === 'fail'
+      ? titleFail
+      : titleDefault
+
+  return (
+    <Disclosure defaultOpen={isOpen}>
+      {({ open }) => (
+        <>
+          <Banner
+            className="my-2 flex items-center"
+            variant={variant}
+          >
+            {isNil(trigger) ? (
+              <>
+                {report.status === 'success' && (
+                  <CheckCircleIcon className="w-6 mr-4" />
+                )}
+                {report.status === 'fail' && (
+                  <ExclamationCircleIcon className="w-6 mr-4" />
+                )}
+                {report.status === 'init' ? (
+                  <Loading
+                    text={text}
+                    hasSpinner
+                    size={EnumSize.sm}
+                    variant={EnumVariant.Primary}
+                    className="w-full"
+                  />
+                ) : (
+                  <Title
+                    text={text}
+                    size={EnumSize.sm}
+                    variant={variant}
+                    className="w-full"
+                  />
+                )}
+              </>
+            ) : (
+              trigger
+            )}
+            {showDetails && (
+              <div className="flex items-center">
+                <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                  {open ? (
+                    <MinusCircleIcon className="w-5" />
+                  ) : (
+                    <PlusCircleIcon className="w-5" />
+                  )}
+                </Disclosure.Button>
+              </div>
+            )}
+          </Banner>
+          <Disclosure.Panel className={clsx('px-2 text-xs')}>
+            <div
+              className={clsx(
+                'p-4 rounded-md',
+                variant === EnumVariant.Danger
+                  ? 'bg-danger-10 text-danger-500'
+                  : 'bg-neutral-5',
+              )}
+            >
+              {isNotNil(report.start_at) && isNotNil(report.stop_at) && (
+                <p className="mb-2">
+                  {text} in <b>{(report.stop_at - report.start_at) / 1000}</b>{' '}
+                  seconds
+                </p>
+              )}
+              {children}
+            </div>
+            {report.status !== 'fail' && panel}
+          </Disclosure.Panel>
+        </>
+      )}
+    </Disclosure>
   )
 }

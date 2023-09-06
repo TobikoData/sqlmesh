@@ -19,7 +19,7 @@ export default function PlanHeader(): JSX.Element {
   return (
     <div className="flex flex-col pb-2 w-full">
       <div className="flex justify-between items-center">
-        <h4 className="flex items-center text-xl px-6 font-bold">
+        <h4 className="flex items-center text-xl px-6 font-bold whitespace-nowrap">
           <span>Target Environment is</span>
           <span className="block ml-2 px-2 py-1 font-sm rounded-md bg-primary-10 text-primary-500">
             {environment.name}
@@ -29,7 +29,7 @@ export default function PlanHeader(): JSX.Element {
           <ReportErrors />
         </div>
       </div>
-      <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical px-6 py-2">
+      <div className="w-full h-full overflow-auto scrollbar scrollbar--vertical px-4 py-2">
         {shouldShowBannerProdEnv && (
           <Banner variant={EnumVariant.Warning}>
             <Disclosure defaultOpen={false}>

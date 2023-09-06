@@ -35,7 +35,7 @@ function Banner({
         variant === EnumVariant.Danger &&
           'bg-danger-10 border-danger-400 text-danger-600 dark:text-danger-400',
         variant === EnumVariant.Info &&
-          'bg-neutral-10 border-neutral-400 text-neutral-600 dark:text-neutral-400',
+          'bg-neutral-5 border-neutral-400 text-neutral-600 dark:text-neutral-400',
         className,
       )}
     >

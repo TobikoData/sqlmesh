@@ -18,7 +18,7 @@ export default function Title({
   return (
     <Tag
       className={clsx(
-        'font-bold',
+        'font-bold whitespace-nowrap',
         variant === EnumVariant.Primary &&
           'text-primary-600 dark:text-primary-400',
         variant === EnumVariant.Secondary &&
