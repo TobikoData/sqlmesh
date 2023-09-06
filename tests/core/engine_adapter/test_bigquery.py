@@ -358,6 +358,28 @@ def test_create_table_time_partition(
     ]
 
 
+def test_ctas_time_partition(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockerFixture,
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+    adapter.ctas(
+        "test_table",
+        exp.select("*").from_("a"),
+        partitioned_by=[exp.column("ds")],
+        partition_interval_unit=IntervalUnit.HOUR,
+    )
+
+    sql_calls = _to_sql_calls(execute_mock)
+    assert sql_calls == [
+        f"CREATE TABLE IF NOT EXISTS `test_table` PARTITION BY `ds` AS SELECT * FROM `a`",
+    ]
+
+
 def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
