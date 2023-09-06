@@ -13,6 +13,7 @@ from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.errors import PlanError
 from web.server import models
+from web.server.console import ApiConsole
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -34,13 +35,18 @@ async def apply(
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> models.ApplyResponse:
     """Apply a plan"""
-
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-
+    console: ApiConsole = context.console  # type: ignore
+    report_plan = models.ReportProgressPlan(
+        environment=environment, meta={"skip_tests": plan_options.skip_tests}
+    )
+    console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
+    report_stage_validate = models.ReportPlanStageValidation()
+    report_plan.add(models.ReportPlanStage.validation, report_stage_validate)
     plan_func = functools.partial(
         context.plan,
         environment=environment,
@@ -59,9 +65,15 @@ async def apply(
     request.app.state.task = plan_task = asyncio.create_task(run_in_executor(plan_func))
     try:
         plan = await plan_task
-    except PlanError as e:
+        report_stage_validate.stop(success=True)
+        report_plan.stop(success=True)
+        console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
+    except PlanError:
+        report_stage_validate.stop(success=False)
+        report_plan.stop(success=False)
+        console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
         raise ApiException(
-            message=str(e),
+            message="Unable to run a plan",
             origin="API -> commands -> apply",
         )
 

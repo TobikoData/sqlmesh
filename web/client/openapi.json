@@ -382,7 +382,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ContextEnvironment" }
+                "schema": { "$ref": "#/components/schemas/ReportProgressPlan" }
               }
             }
           },
@@ -853,62 +853,6 @@
         "type": "object",
         "required": ["name", "type"],
         "title": "Column"
-      },
-      "ContextEnvironment": {
-        "properties": {
-          "environment": { "type": "string", "title": "Environment" },
-          "start": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "Start"
-          },
-          "end": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "End"
-          },
-          "changes": {
-            "$ref": "#/components/schemas/ContextEnvironmentChanges"
-          },
-          "backfills": {
-            "items": {
-              "$ref": "#/components/schemas/ContextEnvironmentBackfill"
-            },
-            "type": "array",
-            "title": "Backfills",
-            "default": []
-          }
-        },
-        "type": "object",
-        "required": ["environment", "start", "end"],
-        "title": "ContextEnvironment"
-      },
-      "ContextEnvironmentBackfill": {
-        "properties": {
-          "model_name": { "type": "string", "title": "Model Name" },
-          "view_name": { "type": "string", "title": "View Name" },
-          "interval": {
-            "items": [{ "type": "string" }, { "type": "string" }],
-            "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
-            "title": "Interval"
-          },
-          "batches": { "type": "integer", "title": "Batches" }
-        },
-        "type": "object",
-        "required": ["model_name", "view_name", "interval", "batches"],
-        "title": "ContextEnvironmentBackfill"
       },
       "ContextEnvironmentChanges": {
         "properties": {
@@ -1405,6 +1349,160 @@
         "type": "object",
         "required": ["model"],
         "title": "RenderInput"
+      },
+      "ReportBackfillProgress": {
+        "properties": {
+          "completed": { "type": "integer", "title": "Completed" },
+          "total": { "type": "integer", "title": "Total" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": ["completed", "total", "view_name", "start"],
+        "title": "ReportBackfillProgress"
+      },
+      "ReportPlanStageChanges": {
+        "properties": {
+          "status": {
+            "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
+            "default": "init"
+          },
+          "start_at": {
+            "type": "integer",
+            "title": "Start At",
+            "default": 1694034149329
+          },
+          "meta": { "type": "object", "title": "Meta" },
+          "stop_at": { "type": "integer", "title": "Stop At" },
+          "duration": { "type": "integer", "title": "Duration" },
+          "done": { "type": "boolean", "title": "Done", "default": false },
+          "changes": {
+            "$ref": "#/components/schemas/ContextEnvironmentChanges"
+          },
+          "backfills": {
+            "items": { "$ref": "#/components/schemas/ReportBackfillProgress" },
+            "type": "array",
+            "title": "Backfills"
+          }
+        },
+        "type": "object",
+        "title": "ReportPlanStageChanges"
+      },
+      "ReportPlanStageValidation": {
+        "properties": {
+          "status": {
+            "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
+            "default": "init"
+          },
+          "start_at": {
+            "type": "integer",
+            "title": "Start At",
+            "default": 1694034149329
+          },
+          "meta": { "type": "object", "title": "Meta" },
+          "stop_at": { "type": "integer", "title": "Stop At" },
+          "duration": { "type": "integer", "title": "Duration" },
+          "done": { "type": "boolean", "title": "Done", "default": false },
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "title": "ReportPlanStageValidation"
+      },
+      "ReportProgressPlan": {
+        "properties": {
+          "status": {
+            "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
+            "default": "init"
+          },
+          "start_at": {
+            "type": "integer",
+            "title": "Start At",
+            "default": 1694034149329
+          },
+          "meta": { "type": "object", "title": "Meta" },
+          "stop_at": { "type": "integer", "title": "Stop At" },
+          "duration": { "type": "integer", "title": "Duration" },
+          "done": { "type": "boolean", "title": "Done", "default": false },
+          "environment": { "type": "string", "title": "Environment" },
+          "stages": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReportStage"
+            },
+            "type": "object",
+            "title": "Stages",
+            "default": {}
+          },
+          "validation": {
+            "$ref": "#/components/schemas/ReportPlanStageValidation"
+          },
+          "changes": { "$ref": "#/components/schemas/ReportPlanStageChanges" }
+        },
+        "type": "object",
+        "required": ["environment"],
+        "title": "ReportProgressPlan"
+      },
+      "ReportStage": {
+        "properties": {
+          "status": {
+            "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
+            "default": "init"
+          },
+          "start_at": {
+            "type": "integer",
+            "title": "Start At",
+            "default": 1694034149329
+          },
+          "meta": { "type": "object", "title": "Meta" },
+          "stop_at": { "type": "integer", "title": "Stop At" },
+          "duration": { "type": "integer", "title": "Duration" },
+          "done": { "type": "boolean", "title": "Done", "default": false }
+        },
+        "type": "object",
+        "title": "ReportStage"
+      },
+      "ReportStatus": {
+        "type": "string",
+        "enum": ["init", "success", "fail"],
+        "title": "ReportStatus",
+        "description": "An enumeration of report statuses."
       },
       "RowDiff": {
         "properties": {

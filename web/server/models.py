@@ -13,7 +13,7 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import (
     PYDANTIC_MAJOR_VERSION,
     field_validator,
@@ -37,6 +37,37 @@ class ApplyType(str, enum.Enum):
 
     virtual = "virtual"
     backfill = "backfill"
+
+
+class ConsoleEvent(str, enum.Enum):
+    """An enumeration of report statuses."""
+
+    report_plan = "report-plan"
+    report_plan_apply = "report-plan-apply"
+    report_tests = "report-tests"
+
+
+class ReportStatus(str, enum.Enum):
+    """An enumeration of report statuses."""
+
+    init = "init"
+    success = "success"
+    fail = "fail"
+
+
+class ReportPlanStage(str, enum.Enum):
+    """An enumeration of plan apply strage."""
+
+    validation = "validation"
+    changes = "changes"
+    backfills = "backfills"
+
+
+class ReportPlanApplyStage(str, enum.Enum):
+    creation = "creation"
+    restate = "restate"
+    backfill = "backfill"
+    promote = "promote"
 
 
 class File(BaseModel):
@@ -147,27 +178,6 @@ class ModelsDiff(BaseModel):
             indirect=indirect,
             metadata=metadata,
         )
-
-
-class ContextEnvironmentChanges(BaseModel):
-    added: t.Set[str]
-    removed: t.Set[str]
-    modified: ModelsDiff
-
-
-class ContextEnvironmentBackfill(BaseModel):
-    model_name: str
-    view_name: str
-    interval: t.Tuple[str, str]
-    batches: int
-
-
-class ContextEnvironment(BaseModel):
-    environment: str
-    start: TimeLike
-    end: TimeLike
-    changes: t.Optional[ContextEnvironmentChanges] = None
-    backfills: t.List[ContextEnvironmentBackfill] = []
 
 
 class Environments(BaseModel):
@@ -362,3 +372,130 @@ class ArtifactChange(BaseModel):
     path: str
     type: t.Optional[ArtifactType] = None
     file: t.Optional[File] = None
+
+
+class ReportBackfillProgress(BaseModel):
+    completed: int
+    total: int
+    view_name: str
+    start: TimeLike
+    end: t.Optional[TimeLike] = None
+
+
+class ReportTestsRusult(BaseModel):
+    message: str
+
+
+class ReportTestDetails(ReportTestsRusult):
+    details: str
+
+
+class ReportTestsFailure(ReportTestsRusult):
+    total: int
+    failures: int
+    errors: int
+    successful: int
+    dialect: str
+    details: t.List[ReportTestDetails]
+    traceback: str
+
+
+class Report(BaseModel):
+    status: t.Optional[ReportStatus] = None
+    start_at: t.Optional[int] = None
+    meta: t.Optional[t.Dict[str, t.Any]] = None
+    stop_at: t.Optional[int] = None
+    duration: t.Optional[int] = None
+    done: bool = False
+
+    def __init__(self, *arg: t.Any, **kargs: t.Any) -> None:
+        super().__init__(*arg, **kargs)
+        self.status = ReportStatus.init
+        self.start_at = now_timestamp()
+
+    def stop(self, success: bool = True) -> None:
+        if success:
+            self.status = ReportStatus.success
+        else:
+            self.status = ReportStatus.fail
+        self.stop_at = now_timestamp()
+
+        if self.start_at and self.stop_at:
+            self.duration = self.stop_at - self.start_at  # in milliseconds
+            self.done = True
+
+
+class BackfillDetails(BaseModel):
+    model_name: t.Optional[str] = None
+    view_name: str
+    interval: t.Tuple[str, str]
+    batches: int
+
+
+class BackfillTask(BaseModel):
+    completed: int
+    total: int
+    view_name: str
+    start: TimeLike
+    end: t.Optional[TimeLike] = None
+
+
+class ReportStage(Report):
+    def update(self, data: t.Dict[str, t.Any]) -> None:
+        for k, v in data.items():
+            setattr(self, k, v)
+
+
+class ReportPlanStageValidation(ReportStage):
+    start: t.Optional[TimeLike] = None
+    end: t.Optional[TimeLike] = None
+
+
+class ReportPlanStageChanges(ReportStage):
+    added: t.Optional[t.Set[str]] = None
+    removed: t.Optional[t.Set[str]] = None
+    modified: t.Optional[ModelsDiff] = None
+
+
+class ReportPlanStageBackfills(ReportStage):
+    models: t.Optional[t.List[BackfillDetails]] = None
+
+
+class ReportPlanApplyStageCreation(ReportStage):
+    total_tasks: int
+    num_tasks: int
+
+
+class ReportPlanApplyStageRestate(ReportStage):
+    pass
+
+
+class ReportPlanApplyStageBackfill(ReportStage):
+    queue: t.Set[str] = set()
+    tasks: t.Dict[str, BackfillTask] = {}
+
+
+class ReportPlanApplyStagePromote(ReportStage):
+    total_tasks: int
+    num_tasks: int
+    target_environment: str
+
+
+class ReportProgress(Report):
+    environment: str
+
+    def add(self, stage: t.Union[ReportPlanStage, ReportPlanApplyStage], data: ReportStage) -> None:
+        setattr(self, stage, data)
+
+
+class ReportProgressPlan(ReportProgress):
+    validation: t.Optional[ReportPlanStageValidation] = None
+    changes: t.Optional[ReportPlanStageChanges] = None
+    backfills: t.Optional[ReportPlanStageBackfills] = None
+
+
+class ReportProgressPlanApply(ReportProgress):
+    creation: t.Optional[ReportPlanApplyStageCreation] = None
+    restate: t.Optional[ReportPlanApplyStageRestate] = None
+    backfill: t.Optional[ReportPlanApplyStageBackfill] = None
+    promote: t.Optional[ReportPlanApplyStagePromote] = None
