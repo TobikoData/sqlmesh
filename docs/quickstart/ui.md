@@ -160,11 +160,10 @@ The `Details` pane at the bottom displays the project's table and column lineage
 
 ![Incremental model open in editor](./ui/ui-quickstart_incremental-model.png)
 
-Modify the incremental SQL model by adding a new column to the query:
+Modify the incremental SQL model by adding a new column to the query. Press `Cmd + S` (`Ctrl + S` on Windows) to save the modified model file and display the updated lineage:
 
 ![Incremental model modified in editor](./ui/ui-quickstart_incremental-model-modified.png)
 
-Press `Cmd + S` (`Ctrl + S` on Windows) to save the modified model file.
 
 ## 4. Plan and apply updates
 Preview the impact of the change by clicking the `Run Plan` button in the top right.
