@@ -178,7 +178,9 @@ class EngineAdapter:
             return self._create_table_from_df(table, df, columns_to_types, replace=True, **kwargs)
         else:
             query_or_df = t.cast("Query", query_or_df)
-            return self._create_table_from_query(table, query_or_df, replace=True, **kwargs)
+            return self._create_table_from_query(
+                table, query_or_df, replace=True, columns_to_types=columns_to_types, **kwargs
+            )
 
     def create_index(
         self,
@@ -250,7 +252,9 @@ class EngineAdapter:
             self._create_table_from_df(table_name, df, columns_to_types, exists, **kwargs)
         else:
             query_or_df = t.cast("Query", query_or_df)
-            self._create_table_from_query(table_name, query_or_df, exists, **kwargs)
+            self._create_table_from_query(
+                table_name, query_or_df, exists=exists, columns_to_types=columns_to_types, **kwargs
+            )
 
     def create_state_table(
         self,
@@ -302,7 +306,7 @@ class EngineAdapter:
             ]
             + primary_key_expression,
         )
-        self._create_table(schema, None, exists=exists, **kwargs)
+        self._create_table(schema, None, exists=exists, columns_to_types=columns_to_types, **kwargs)
 
     def _create_table_from_query(
         self,
@@ -310,10 +314,18 @@ class EngineAdapter:
         query: Query,
         exists: bool = True,
         replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
-        self._create_table(table, query, exists=exists, replace=replace, **kwargs)
+        self._create_table(
+            table,
+            query,
+            exists=exists,
+            replace=replace,
+            columns_to_types=columns_to_types,
+            **kwargs,
+        )
 
     def _create_table_from_df(
         self,
@@ -339,12 +351,17 @@ class EngineAdapter:
         expression: t.Optional[exp.Expression],
         exists: bool = True,
         replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
         exists = False if replace else exists
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
-        properties = self._create_table_properties(**kwargs) if kwargs else None
+        properties = (
+            self._create_table_properties(**kwargs, columns_to_types=columns_to_types)
+            if kwargs
+            else None
+        )
         create = exp.Create(
             this=table_name_or_schema,
             kind="TABLE",
@@ -1134,6 +1151,7 @@ class EngineAdapter:
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> t.Optional[exp.Properties]:
         """Creates a SQLGlot table properties expression for ddl."""
         return None

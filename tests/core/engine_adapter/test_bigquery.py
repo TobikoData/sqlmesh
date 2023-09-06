@@ -291,21 +291,51 @@ def test_create_table_date_partition(
 
 
 @pytest.mark.parametrize(
-    "partition_by_cols, partition_by_statement",
+    "partition_by_cols, partition_column_type, partition_interval_unit, partition_by_statement",
     [
-        ([exp.to_column("ds")], "TIMESTAMP_TRUNC(`ds`, HOUR)"),
+        ([exp.to_column("ds")], "date", IntervalUnit.MINUTE, "`ds`"),
+        ([exp.to_column("ds")], "date", IntervalUnit.HOUR, "`ds`"),
+        ([exp.to_column("ds")], "date", IntervalUnit.DAY, "`ds`"),
+        ([exp.to_column("ds")], "date", IntervalUnit.MONTH, "DATE_TRUNC(`ds`, MONTH)"),
+        ([exp.to_column("ds")], "date", IntervalUnit.YEAR, "DATE_TRUNC(`ds`, YEAR)"),
+        ([exp.to_column("ds")], "datetime", IntervalUnit.HOUR, "DATETIME_TRUNC(`ds`, HOUR)"),
+        ([exp.to_column("ds")], "datetime", IntervalUnit.DAY, "DATETIME_TRUNC(`ds`, DAY)"),
+        ([exp.to_column("ds")], "datetime", IntervalUnit.MONTH, "DATETIME_TRUNC(`ds`, MONTH)"),
+        ([exp.to_column("ds")], "datetime", IntervalUnit.YEAR, "DATETIME_TRUNC(`ds`, YEAR)"),
+        ([exp.to_column("ds")], "timestamp", IntervalUnit.HOUR, "TIMESTAMP_TRUNC(`ds`, HOUR)"),
+        ([exp.to_column("ds")], "timestamp", IntervalUnit.DAY, "TIMESTAMP_TRUNC(`ds`, DAY)"),
+        ([exp.to_column("ds")], "timestamp", IntervalUnit.MONTH, "TIMESTAMP_TRUNC(`ds`, MONTH)"),
+        ([exp.to_column("ds")], "timestamp", IntervalUnit.YEAR, "TIMESTAMP_TRUNC(`ds`, YEAR)"),
         (
             [d.parse_one("TIMESTAMP_TRUNC(ds, HOUR)", dialect="bigquery")],
+            "timestamp",
+            IntervalUnit.HOUR,
             "TIMESTAMP_TRUNC(`ds`, HOUR)",
+        ),
+        (
+            [d.parse_one("TIMESTAMP_TRUNC(ds, HOUR)", dialect="bigquery")],
+            "timestamp",
+            IntervalUnit.DAY,
+            "TIMESTAMP_TRUNC(`ds`, HOUR)",
+        ),
+        (
+            [d.parse_one("TIMESTAMP_TRUNC(ds, DAY)", dialect="bigquery")],
+            "timestamp",
+            IntervalUnit.MINUTE,
+            "TIMESTAMP_TRUNC(`ds`, DAY)",
         ),
     ],
 )
 def test_create_table_time_partition(
     make_mocked_engine_adapter: t.Callable,
     partition_by_cols,
+    partition_column_type,
+    partition_interval_unit,
     partition_by_statement,
     mocker: MockerFixture,
 ):
+    partition_column_sql_type = exp.DataType.build(partition_column_type, dialect="bigquery")
+
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
 
     execute_mock = mocker.patch(
@@ -313,14 +343,40 @@ def test_create_table_time_partition(
     )
     adapter.create_table(
         "test_table",
-        {"a": "int", "b": "int"},
+        {
+            "a": exp.DataType.build("int"),
+            "b": exp.DataType.build("int"),
+            "ds": partition_column_sql_type,
+        },
         partitioned_by=partition_by_cols,
+        partition_interval_unit=partition_interval_unit,
+    )
+
+    sql_calls = _to_sql_calls(execute_mock)
+    assert sql_calls == [
+        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` INT64, `b` INT64, `ds` {partition_column_sql_type.sql(dialect='bigquery')}) PARTITION BY {partition_by_statement}"
+    ]
+
+
+def test_ctas_time_partition(
+    make_mocked_engine_adapter: t.Callable,
+    mocker: MockerFixture,
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+    adapter.ctas(
+        "test_table",
+        exp.select("*").from_("a"),
+        partitioned_by=[exp.column("ds")],
         partition_interval_unit=IntervalUnit.HOUR,
     )
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
-        f"CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int) PARTITION BY {partition_by_statement}"
+        f"CREATE TABLE IF NOT EXISTS `test_table` PARTITION BY `ds` AS SELECT * FROM `a`",
     ]
 
 
