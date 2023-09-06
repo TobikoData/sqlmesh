@@ -77,30 +77,35 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
     def evaluate(self, plan: Plan) -> None:
-        snapshots = {s.snapshot_id: s for s in plan.snapshots}
-        all_names = {s.name for s in plan.snapshots}
-        deployability_index = DeployabilityIndex.create(snapshots)
-        if plan.is_dev:
-            before_promote_snapshots = all_names
-            after_promote_snapshots = set()
-        else:
-            before_promote_snapshots = {
-                s.name for s in snapshots.values() if deployability_index.is_representative(s)
-            }
-            after_promote_snapshots = all_names - before_promote_snapshots
-            deployability_index = DeployabilityIndex.all_deployable()
+        self.console.start_plan_evaluation(plan)
 
-        update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
+        try:
+            snapshots = {s.snapshot_id: s for s in plan.snapshots}
+            all_names = {s.name for s in plan.snapshots}
+            deployability_index = DeployabilityIndex.create(snapshots)
+            if plan.is_dev:
+                before_promote_snapshots = all_names
+                after_promote_snapshots = set()
+            else:
+                before_promote_snapshots = {
+                    s.name for s in snapshots.values() if deployability_index.is_representative(s)
+                }
+                after_promote_snapshots = all_names - before_promote_snapshots
+                deployability_index = DeployabilityIndex.all_deployable()
 
-        self._push(plan, deployability_index)
-        self._restate(plan)
-        self._backfill(plan, before_promote_snapshots, deployability_index)
-        promotion_result = self._promote(plan, deployability_index)
-        self._backfill(plan, after_promote_snapshots, deployability_index)
-        self._update_views(plan, promotion_result, deployability_index)
+            update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
 
-        if not plan.requires_backfill:
-            self.console.log_success("Virtual Update executed successfully")
+            self._push(plan, deployability_index)
+            self._restate(plan)
+            self._backfill(plan, before_promote_snapshots, deployability_index)
+            promotion_result = self._promote(plan, deployability_index)
+            self._backfill(plan, after_promote_snapshots, deployability_index)
+            self._update_views(plan, promotion_result, deployability_index)
+
+            if not plan.requires_backfill:
+                self.console.log_success("Virtual Update executed successfully")
+        finally:
+            self.console.stop_plan_evaluation()
 
     def _backfill(
         self, plan: Plan, selected_snapshots: t.Set[str], deployability_index: DeployabilityIndex
