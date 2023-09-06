@@ -495,6 +495,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
@@ -506,14 +507,20 @@ class BigQueryEngineAdapter(EngineAdapter):
 
             this = partitioned_by[0]
 
-            if isinstance(this, exp.Column):
-                if partition_interval_unit == IntervalUnit.MINUTE:
-                    raise SQLMeshError("BigQuery does not support partitioning by minute")
+            if isinstance(this, exp.Column) and partition_interval_unit != IntervalUnit.MINUTE:
+                column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
 
-                if partition_interval_unit == IntervalUnit.HOUR:
-                    trunc_func = "TIMESTAMP_TRUNC"
-                elif partition_interval_unit in (IntervalUnit.MONTH, IntervalUnit.YEAR):
+                if column_type == exp.DataType.build(
+                    "date", dialect=self.dialect
+                ) and partition_interval_unit in (
+                    IntervalUnit.MONTH,
+                    IntervalUnit.YEAR,
+                ):
                     trunc_func = "DATE_TRUNC"
+                elif column_type == exp.DataType.build("timestamp", dialect=self.dialect):
+                    trunc_func = "TIMESTAMP_TRUNC"
+                elif column_type == exp.DataType.build("datetime", dialect=self.dialect):
+                    trunc_func = "DATETIME_TRUNC"
                 else:
                     trunc_func = ""
 
