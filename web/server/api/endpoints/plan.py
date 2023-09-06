@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-import asyncio
-import functools
 import typing as t
 
 from fastapi import APIRouter, Body, Depends, Request, Response, status
 
 from sqlmesh.core.context import Context
-from sqlmesh.utils.date import make_inclusive, to_ds
-from sqlmesh.utils.errors import PlanError
+from sqlmesh.utils.date import make_inclusive, now_timestamp, to_ds
 from web.server import models
 from web.server.exceptions import ApiException
 from web.server.settings import get_context, get_loaded_context
-from web.server.utils import run_in_executor
 
 router = APIRouter()
 
@@ -30,33 +26,43 @@ async def run_plan(
     plan_options: models.PlanOptions = models.PlanOptions(),
 ) -> models.ContextEnvironment:
     """Get a plan for an environment."""
-
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
             message="Plan/apply is already running",
             origin="API -> plan -> run_plan",
         )
 
-    plan_func = functools.partial(
-        context.plan,
-        no_prompts=True,
-        skip_tests=True,
-        environment=environment,
-        start=plan_dates.start if plan_dates else None,
-        end=plan_dates.end if plan_dates else None,
-        create_from=plan_options.create_from,
-        restate_models=plan_options.restate_models,
-        no_gaps=plan_options.no_gaps,
-        skip_backfill=plan_options.skip_backfill,
-        forward_only=plan_options.forward_only,
-        no_auto_categorization=plan_options.no_auto_categorization,
-    )
-    request.app.state.task = asyncio.create_task(run_in_executor(plan_func))
+    console: ApiConsole = context.console  # type: ignore
+    data: t.Any = {
+        "environment": environment,
+        "skip_tests": plan_options.skip_tests,
+        "plan": {
+            "status": "init",
+            "start_at": now_timestamp(),
+        },
+    }
+    console.log(event="plan-changes", data=data)
     try:
-        plan = await request.app.state.task
-    except PlanError as e:
+        plan = context.plan(
+            environment=environment,
+            no_prompts=True,
+            include_unmodified=True,
+            start=plan_dates.start if plan_dates else None,
+            end=plan_dates.end if plan_dates else None,
+            create_from=plan_options.create_from,
+            skip_tests=plan_options.skip_tests,
+            restate_models=plan_options.restate_models,
+            no_gaps=plan_options.no_gaps,
+            skip_backfill=plan_options.skip_backfill,
+            forward_only=plan_options.forward_only,
+            no_auto_categorization=plan_options.no_auto_categorization,
+        )
+    except Exception:
+        data["plan"]["status"] = "fail"
+        data["plan"]["stop_at"] = now_timestamp()
+        console.log(event="plan-changes", data=data)
         raise ApiException(
-            message=str(e),
+            message="Unable to run a plan",
             origin="API -> plan -> run_plan",
         )
 
@@ -92,6 +98,18 @@ async def run_plan(
             added=plan.context_diff.added,
             modified=models.ModelsDiff.get_modified_snapshots(plan.context_diff),
         )
+    data["plan"].update(
+        {
+            "status": "success",
+            "stop_at": now_timestamp(),
+            "start": plan.start,
+            "end": plan.end,
+            "environment": payload.environment,
+            "backfills": payload.backfills,
+            "changes": payload.changes,
+        }
+    )
+    console.log(event="plan-changes", data=data)
 
     return payload
 
@@ -103,12 +121,9 @@ async def cancel_plan(
     context: Context = Depends(get_context),
 ) -> None:
     """Cancel a plan application"""
-    if not hasattr(request.app.state, "task") and not request.app.state.task.done():
+    if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():
         raise ApiException(
-            message="No running plan to cancel",
+            message="Plan/apply is already running",
             origin="API -> plan -> cancel_plan",
         )
-    else:
-        request.app.state.task.cancel()
-
     response.status_code = status.HTTP_204_NO_CONTENT

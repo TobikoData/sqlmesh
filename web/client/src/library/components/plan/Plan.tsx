@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { includes, isFalse, isTrue } from '~/utils'
+import { useEffect, useState } from 'react'
+import { includes, isFalse, isNil } from '~/utils'
 import {
   EnumPlanState,
   EnumPlanAction,
@@ -53,8 +53,6 @@ function Plan({
   const setPlanAction = useStorePlan(s => s.setAction)
   const setPlanState = useStorePlan(s => s.setState)
 
-  const elTaskProgress = useRef<HTMLDivElement>(null)
-
   const [isPlanRan, setIsPlanRan] = useState(false)
 
   const channel = useChannelEvents()
@@ -72,11 +70,15 @@ function Plan({
 
   useEffect(() => {
     const channelTests = channel('tests', updateTestsReport)
-    const channelPlanReport = channel('report', updatePlanReport)
-
-    if (environment.isInitial && environment.isDefault) {
-      run()
-    }
+    const channelPlanChangesReport = channel(
+      'plan-changes',
+      updatePlanChangesReport,
+    )
+    const channelPlanValidateReport = channel(
+      'plan-validate',
+      updatePlanValidateReport,
+    )
+    const channelApplyReport = channel('apply', updateApplyReport)
 
     dispatch([
       {
@@ -87,13 +89,17 @@ function Plan({
     ])
 
     channelTests?.subscribe()
-    channelPlanReport?.subscribe()
+    channelPlanChangesReport?.subscribe()
+    channelPlanValidateReport?.subscribe()
+    channelApplyReport?.subscribe()
 
     return () => {
       void cancelRequestPlanRun()
 
       channelTests?.unsubscribe()
-      channelPlanReport?.unsubscribe()
+      channelPlanChangesReport?.unsubscribe()
+      channelPlanValidateReport?.unsubscribe()
+      channelApplyReport?.unsubscribe()
     }
   }, [])
 
@@ -163,30 +169,43 @@ function Plan({
     setPlanState(EnumPlanState.Failed)
   }, [errors])
 
-  function updateTestsReport(data: any & { ok: boolean }): void {
+  function updateTestsReport(data: any): void {
     dispatch([
-      isTrue(data.ok)
+      isNil(data.message)
         ? {
-            type: EnumPlanActions.TestsReportMessages,
-            testsReportMessages: data,
-          }
-        : {
             type: EnumPlanActions.TestsReportErrors,
             testsReportErrors: data,
+          }
+        : {
+            type: EnumPlanActions.TestsReportMessages,
+            testsReportMessages: data,
           },
     ])
   }
 
-  function updatePlanReport(data: {
-    ok: boolean
-    status: string
-    timestamp: number
-    type: string
-  }): void {
+  function updatePlanChangesReport(data: any): void {
     dispatch([
       {
-        type: EnumPlanActions.PlanReport,
-        planReport: data,
+        type: EnumPlanActions.PlanChangesReport,
+        planChangesReport: data,
+      },
+    ])
+  }
+
+  function updatePlanValidateReport(data: any): void {
+    dispatch([
+      {
+        type: EnumPlanActions.PlanValidateReport,
+        planValidateReport: data,
+      },
+    ])
+  }
+
+  function updateApplyReport(data: any): void {
+    dispatch([
+      {
+        type: EnumPlanActions.ApplyReport,
+        applyReport: data,
       },
     ])
   }
@@ -210,8 +229,12 @@ function Plan({
         type: EnumPlanActions.ResetPlanOptions,
       },
       {
-        type: EnumPlanActions.PlanReport,
-        planReport: undefined,
+        type: EnumPlanActions.PlanChangesReport,
+        planChangesReport: undefined,
+      },
+      {
+        type: EnumPlanActions.ApplyReport,
+        applyReport: undefined,
       },
     ])
   }
@@ -246,7 +269,11 @@ function Plan({
     if (planAction === EnumPlanAction.Applying) {
       cancelAction = cancelRequestPlanRun
 
+      channel('tests')?.unsubscribe()
       channel('tasks')?.unsubscribe()
+      channel('apply')?.unsubscribe()
+      channel('plan-changes')?.unsubscribe()
+      channel('plan-validate')?.unsubscribe()
 
       setActivePlan(undefined)
     } else {
@@ -254,6 +281,7 @@ function Plan({
     }
 
     cancelAction()
+    cancelPlan()
       .then(() => {
         setPlanAction(EnumPlanAction.Run)
         setPlanState(EnumPlanState.Cancelled)
@@ -261,8 +289,6 @@ function Plan({
       .catch(() => {
         reset()
       })
-
-    void cancelPlan()
   }
 
   function apply(): void {
@@ -282,12 +308,6 @@ function Plan({
         }
       })
       .catch(console.log)
-      .finally(() => {
-        elTaskProgress?.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        })
-      })
   }
 
   function run(): void {
@@ -329,10 +349,7 @@ function Plan({
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden pt-6">
-      <PlanBlock
-        elTaskProgress={elTaskProgress}
-        hasDivider={true}
-      />
+      <PlanBlock hasDivider={true} />
       <Divider />
       <Plan.Actions
         disabled={disabled}
@@ -357,10 +374,8 @@ export default Plan
 
 function PlanBlock({
   hasDivider = false,
-  elTaskProgress,
 }: {
   hasDivider?: boolean
-  elTaskProgress: React.RefObject<HTMLDivElement>
 }): JSX.Element {
   const planAction = useStorePlan(s => s.action)
 
@@ -371,7 +386,7 @@ function PlanBlock({
       {planAction === EnumPlanAction.Cancelling ? (
         <CancellingPlanOrApply />
       ) : (
-        <Plan.Wizard setRefTasksOverview={elTaskProgress} />
+        <Plan.Wizard />
       )}
     </>
   )

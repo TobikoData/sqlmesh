@@ -42,7 +42,7 @@ function PlanChangePreview({
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
         type === EnumPlanChangeType.Indirect && 'bg-warning-10',
-        type === 'metadata' && 'bg-neutral-10',
+        type === 'metadata' && 'bg-neutral-5',
         className,
       )}
     >

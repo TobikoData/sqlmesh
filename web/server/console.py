@@ -5,6 +5,7 @@ import json
 import typing as t
 import unittest
 
+from fastapi.encoders import jsonable_encoder
 from sse_starlette.sse import ServerSentEvent
 
 from sqlmesh.core.console import TerminalConsole
@@ -17,78 +18,162 @@ from web.server.exceptions import ApiException
 
 class ApiConsole(TerminalConsole):
     task: t.Optional[asyncio.Task] = None
+    payload: t.Dict[str, t.Any] = {}
 
     def __init__(self) -> None:
         super().__init__()
         self.current_task_status: t.Dict[str, t.Dict[str, t.Any]] = {}
         self.queue: asyncio.Queue = asyncio.Queue()
 
-    def _make_event(
-        self, data: str | dict[str, t.Any], event: str | None = None, ok: bool | None = None
-    ) -> ServerSentEvent:
-        payload: dict[str, t.Any] = {
-            "ok": True if ok is None else ok,
-            "timestamp": now_timestamp(),
+    def start_evaluation(self, environment: str) -> None:
+        self.payload = {}
+        self.payload["environment"] = environment
+        self.payload["evaluation"] = {
+            "start_at": now_timestamp(),
         }
-        if isinstance(data, str):
-            payload["message"] = data
-        else:
-            payload.update(data)
-        return ServerSentEvent(
-            event=event,
-            data=json.dumps(payload),
-        )
+        self.log(event="apply", data=self.payload)
+
+    def stop_evaluation(self) -> None:
+        self.payload["evaluation"]["stop_at"] = now_timestamp()
+        self.log(event="apply", data=self.payload)
+        self.payload = {}
+
+    def start_creation_progress(self, total_tasks: int) -> None:
+        self.payload["creation"] = {
+            "status": "init",
+            "start_at": now_timestamp(),
+            "total_tasks": total_tasks,
+            "num_tasks": 0,
+        }
+        self.log(event="apply", data=self.payload)
+
+    def update_creation_progress(self, num_tasks: int) -> None:
+        if "creation" in self.payload:
+            self.payload["creation"]["num_tasks"] = (
+                self.payload["creation"]["num_tasks"] + num_tasks
+            )
+        self.log(event="apply", data=self.payload)
+
+    def stop_creation_progress(self, success: bool = True) -> None:
+        if "creation" in self.payload:
+            self.payload["creation"]["stop_at"] = now_timestamp()
+
+            if success:
+                self.payload["creation"]["status"] = "success"
+                self.log(event="apply", data=self.payload)
+            else:
+                self.payload["creation"]["status"] = "fail"
+                self.log(event="apply", data=self.payload)
+                self.stop_evaluation()
+
+    def start_restate_progress(self) -> None:
+        self.payload["restate"] = {"status": "init", "start_at": now_timestamp()}
+        self.log(event="apply", data=self.payload)
+
+    def stop_restate_progress(self) -> None:
+        """Stop the restate progress."""
+        self.payload["restate"]["stop_at"] = now_timestamp()
+        self.payload["restate"]["status"] = "success"
+        self.log(event="apply", data=self.payload)
 
     def start_evaluation_progress(
         self,
         batches: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
     ) -> None:
-        self.current_task_status = {
-            snapshot.name: {
-                "completed": 0,
-                "total": total_tasks,
-                "start": now_timestamp(),
-                "view_name": snapshot.qualified_view_name.for_environment(environment_naming_info),
-            }
-            for snapshot, total_tasks in batches.items()
+        self.payload["backfill"] = {
+            "status": "init",
+            "start_at": now_timestamp(),
+            "queue": set(),
+            "tasks": {
+                snapshot.name: {
+                    "completed": 0,
+                    "total": total_tasks,
+                    "start": now_timestamp(),
+                    "view_name": snapshot.qualified_view_name.for_environment(
+                        environment_naming_info
+                    ),
+                }
+                for snapshot, total_tasks in batches.items()
+            },
         }
+        self.log(event="apply", data=self.payload)
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
-        pass
+        if "backfill" in self.payload:
+            self.payload["backfill"]["queue"].add(snapshot.name)
+            self.log(event="apply", data=self.payload)
 
-    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
+    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_tasks: int) -> None:
         """Update snapshot evaluation progress."""
-        if self.current_task_status:
-            self.current_task_status[snapshot.name]["completed"] += num_batches
+        if "backfill" in self.payload:
+            self.payload["backfill"]["tasks"][snapshot.name]["completed"] += num_tasks
             if (
-                self.current_task_status[snapshot.name]["completed"]
-                >= self.current_task_status[snapshot.name]["total"]
+                self.payload["backfill"]["tasks"][snapshot.name]["completed"]
+                >= self.payload["backfill"]["tasks"][snapshot.name]["total"]
             ):
-                self.current_task_status[snapshot.name]["end"] = now_timestamp()
-            self.queue.put_nowait(
-                self._make_event({"tasks": self.current_task_status}, event="tasks")
-            )
+                self.payload["backfill"]["tasks"][snapshot.name]["end"] = now_timestamp()
+                self.payload["backfill"]["queue"].remove(snapshot.name)
+            self.log(event="apply", data=self.payload)
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
         """Stop the snapshot evaluation progress."""
-        self.current_task_status = {}
+        if "backfill" in self.payload:
+            self.payload["backfill"]["queue"] == set()
+            self.payload["backfill"]["stop_at"] = now_timestamp()
 
-        if self.task and self.task.cancelled():
-            return
+            if success:
+                self.payload["backfill"]["status"] = "success"
+                self.log(event="apply", data=self.payload)
+            else:
+                self.payload["backfill"]["status"] = "fail"
+                self.log(event="apply", data=self.payload)
+                self.stop_evaluation()
 
-        if success:
-            self.queue.put_nowait(
-                self._make_event("All model batches have been executed successfully")
+    def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
+        self.payload["promotion"] = {
+            "status": "init",
+            "start_at": now_timestamp(),
+            "total_tasks": total_tasks,
+            "num_tasks": 0,
+            "target_environment": environment,
+        }
+        self.log(event="apply", data=self.payload)
+
+    def update_promotion_progress(self, num_tasks: int) -> None:
+        """Update snapshot promotion progress."""
+        if "promotion" in self.payload:
+            self.payload["promotion"]["num_tasks"] = (
+                self.payload["promotion"]["num_tasks"] + num_tasks
             )
+        self.log(event="apply", data=self.payload)
+
+    def stop_promotion_progress(self, success: bool = True) -> None:
+        if "promotion" in self.payload:
+            self.payload["promotion"]["stop_at"] = now_timestamp()
+            if success:
+                self.payload["promotion"]["status"] = "success"
+                self.log(event="apply", data=self.payload)
+            else:
+                self.payload["promotion"]["status"] = "fail"
+                self.log(event="apply", data=self.payload)
+                self.stop_evaluation()
+
+    def _make_event(self, data: dict[str, t.Any], event: str) -> ServerSentEvent:
+
+        return ServerSentEvent(
+            event=event,
+            data=json.dumps(jsonable_encoder(data)),
+        )
 
     def log_test_results(
         self, result: unittest.result.TestResult, output: str, target_dialect: str
     ) -> None:
-        ok = True
-        data: str | t.Dict[str, t.Any]
+        data: t.Dict[str, t.Any]
         if result.wasSuccessful():
-            data = f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
+            data = {
+                "message": f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
+            }
         else:
             messages = []
             for test, details in result.failures + result.errors:
@@ -109,39 +194,13 @@ class ApiConsole(TerminalConsole):
                 "details": messages,
                 "traceback": output,
             }
-            ok = False
-        self.queue.put_nowait(self._make_event(data, event="tests", ok=ok))
+        self.queue.put_nowait(self._make_event(data, event="tests"))
 
-    def log_success(self, msg: str) -> None:
-        if self.task and self.task.cancelled():
-            return
+    def log(self, event: str, data: dict[str, t.Any]) -> None:
+        self.queue.put_nowait(self._make_event(data=data, event=event))
 
-        self.queue.put_nowait(self._make_event(msg))
-
-    def log(
-        self, event: str | None = None, data: str | dict[str, t.Any] | None = None, ok: bool = True
-    ) -> None:
-        self.queue.put_nowait(self._make_event(data=data or {}, event=event, ok=ok))
-
-    def stop_promotion_progress(self, success: bool = True) -> None:
-        self.promotion_task = None
-
-        if self.promotion_progress is None:
-            return
-
-        self.promotion_progress.stop()
-        self.promotion_progress = None
-
-        if self.task and self.task.cancelled():
-            return
-
-        if success:
-            self.queue.put_nowait(
-                self._make_event(
-                    "The target environment has been updated successfully",
-                    event="promote-environment",
-                )
-            )
+    def log_event_apply(self) -> None:
+        self.queue.put_nowait(self._make_event(data=self.payload, event="apply"))
 
     def log_exception(self) -> None:
         self.queue.put_nowait(

@@ -6,13 +6,14 @@ import {
   type PlanState,
   type PlanTasks,
 } from '~/context/plan'
-import { toDateFormat, toRatio } from '~/utils'
+import { isArrayNotEmpty, isNotNil, toDateFormat, toRatio } from '~/utils'
 import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
 import pluralize from 'pluralize'
 import { type EnvironmentName } from '~/models/environment'
 import { type ContextEnvironmentChanges } from '~/api/client'
 import { EnumPlanChangeType, type PlanChangeType } from '../plan/context'
+import Title from '@components/title/Title'
 
 interface PropsTasks {
   tasks: PlanTasks
@@ -142,10 +143,12 @@ function TasksDetails({
   showBatches = true,
   showProgress = true,
   showVirtualUpdate = false,
+  queue,
 }: {
   className?: string
   changes?: ContextEnvironmentChanges
   models: Array<[string, PlanTaskStatus]>
+  queue?: string[]
   showBatches: boolean
   showProgress: boolean
   showVirtualUpdate: boolean
@@ -172,69 +175,139 @@ function TasksDetails({
   }, [changes])
 
   return (
-    <TasksBlock className={className}>
-      <Tasks models={models}>
-        {([modelName, task]) => (
-          <Task>
-            <TaskDetails>
-              <TaskDetailsInfo>
-                {task.interval != null && (
-                  <TaskInterval
-                    start={task.interval[0]}
-                    end={task.interval[1]}
-                  />
-                )}
-                <TaskModelName
-                  modelName={modelName}
-                  changeType={getChangeType({
-                    modelName,
-                    changesAdded,
-                    changesRemoved,
-                    changesModifiedDirect,
-                    changesModifiedIndirect,
-                  })}
-                />
-              </TaskDetailsInfo>
-              <TaskDetailsProgress>
-                {showBatches && (
-                  <TaskSize
-                    completed={task.completed}
-                    total={task.total}
-                    unit="batch"
-                  />
-                )}
-                <TaskDivider />
-                {showProgress && (
-                  <>
-                    {task.end == null || task.start == null ? (
-                      <TaskProgress
-                        total={task.total}
-                        completed={task.completed}
-                      />
-                    ) : (
-                      <TaskCompletionTime
-                        start={task.start}
-                        end={task.end}
+    <>
+      {isArrayNotEmpty(queue) && (
+        <div className="p-4 mt-6 shadow-lg bg-neutral-5 rounded-lg">
+          <Title text="Currently in proccess" />
+          <Tasks
+            models={models.filter(([modelName]) => queue?.includes(modelName))}
+          >
+            {([modelName, task]) => (
+              <Task>
+                <TaskDetails>
+                  <TaskDetailsInfo>
+                    {isNotNil(task.interval) && (
+                      <TaskInterval
+                        start={task.interval[0]}
+                        end={task.interval[1]}
                       />
                     )}
-                  </>
+                    <TaskModelName
+                      modelName={modelName}
+                      changeType={getChangeType({
+                        modelName,
+                        changesAdded,
+                        changesRemoved,
+                        changesModifiedDirect,
+                        changesModifiedIndirect,
+                      })}
+                    />
+                  </TaskDetailsInfo>
+                  <TaskDetailsProgress>
+                    {showBatches && (
+                      <TaskSize
+                        completed={task.completed}
+                        total={task.total}
+                        unit="batch"
+                      />
+                    )}
+                    <TaskDivider />
+                    {showProgress && (
+                      <>
+                        {task.end == null || task.start == null ? (
+                          <TaskProgress
+                            total={task.total}
+                            completed={task.completed}
+                          />
+                        ) : (
+                          <TaskCompletionTime
+                            start={task.start}
+                            end={task.end}
+                          />
+                        )}
+                      </>
+                    )}
+                    {showVirtualUpdate && (
+                      <span className="inline-block whitespace-nowrap font-bold ml-2">
+                        Updated
+                      </span>
+                    )}
+                  </TaskDetailsProgress>
+                </TaskDetails>
+                {showProgress ? (
+                  <Progress progress={toRatio(task.completed, task.total)} />
+                ) : (
+                  <Divider className="my-1 border-neutral-200 opacity-50" />
                 )}
-                {showVirtualUpdate && (
-                  <span className="inline-block whitespace-nowrap font-bold ml-2">
-                    Updated
-                  </span>
-                )}
-              </TaskDetailsProgress>
-            </TaskDetails>
-            {showProgress ? (
-              <Progress progress={toRatio(task.completed, task.total)} />
-            ) : (
-              <Divider className="my-1 border-neutral-200 opacity-50" />
+              </Task>
             )}
-          </Task>
-        )}
-      </Tasks>
-    </TasksBlock>
+          </Tasks>
+        </div>
+      )}
+      <TasksBlock className={className}>
+        <Tasks models={models}>
+          {([modelName, task]) => (
+            <Task>
+              <TaskDetails>
+                <TaskDetailsInfo>
+                  {isNotNil(task.interval) && (
+                    <TaskInterval
+                      start={task.interval[0]}
+                      end={task.interval[1]}
+                    />
+                  )}
+                  <TaskModelName
+                    modelName={modelName}
+                    changeType={getChangeType({
+                      modelName,
+                      changesAdded,
+                      changesRemoved,
+                      changesModifiedDirect,
+                      changesModifiedIndirect,
+                    })}
+                  />
+                </TaskDetailsInfo>
+                <TaskDetailsProgress>
+                  {showBatches && (
+                    <TaskSize
+                      completed={task.completed}
+                      total={task.total}
+                      unit="batch"
+                    />
+                  )}
+                  <TaskDivider />
+                  {showProgress && (
+                    <>
+                      {task.end == null || task.start == null ? (
+                        <TaskProgress
+                          total={task.total}
+                          completed={task.completed}
+                        />
+                      ) : (
+                        <TaskCompletionTime
+                          start={task.start}
+                          end={task.end}
+                        />
+                      )}
+                    </>
+                  )}
+                  {showVirtualUpdate && (
+                    <span className="inline-block whitespace-nowrap font-bold ml-2">
+                      Updated
+                    </span>
+                  )}
+                </TaskDetailsProgress>
+              </TaskDetails>
+              {showProgress ? (
+                <Progress progress={toRatio(task.completed, task.total)} />
+              ) : (
+                <Divider className="my-1 border-neutral-200 opacity-50" />
+              )}
+            </Task>
+          )}
+        </Tasks>
+      </TasksBlock>
+    </>
   )
 }
 
@@ -248,7 +321,7 @@ function TasksBlock({
   return (
     <div
       className={clsx(
-        'my-3 mx-4 max-h-[50vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
+        'my-3 max-h-[50vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
         className,
       )}
     >
@@ -264,7 +337,7 @@ function Task({
   className?: string
   children: React.ReactNode
 }): JSX.Element {
-  return <div className={clsx('px-4', className)}>{children}</div>
+  return <div className={clsx('px-2', className)}>{children}</div>
 }
 
 function Tasks({
@@ -279,7 +352,7 @@ function Tasks({
   return (
     <ul
       className={clsx(
-        'bg-neutral-10 rounded-lg py-4 overflow-auto text-prose hover:scrollbar scrollbar--vertical scrollbar--horizontal',
+        'rounded-lg py-4 overflow-auto text-prose hover:scrollbar scrollbar--vertical scrollbar--horizontal',
         className,
       )}
     >
@@ -321,8 +394,8 @@ function TaskHeadline({
   planState,
 }: {
   headline: string
-  environment: EnvironmentName
-  planState: PlanState
+  environment?: EnvironmentName
+  planState?: PlanState
   className?: string
 }): JSX.Element {
   return (
@@ -330,10 +403,12 @@ function TaskHeadline({
       <span className="block whitespace-nowrap text-sm font-medium">
         {headline}
       </span>
-      <small className="inline-block ml-1 px-2 py-[0.125rem] text-xs font-bold bg-neutral-10 rounded-md">
-        {environment}
-      </small>
-      {planState !== EnumPlanState.Init && (
+      {isNotNil(environment) && (
+        <small className="inline-block ml-1 px-2 py-[0.125rem] text-xs font-bold bg-neutral-10 rounded-md">
+          {environment}
+        </small>
+      )}
+      {isNotNil(planState) && planState !== EnumPlanState.Init && (
         <>
           <TaskDivider />
           <small className="ml-1">{planState}</small>
@@ -504,8 +579,15 @@ function TaskModelName({
 TasksOverview.Block = TasksBlock
 TasksOverview.Summary = TasksSummary
 TasksOverview.Details = TasksDetails
+TasksOverview.DetailsProgress = TaskDetailsProgress
 TasksOverview.Task = Task
 TasksOverview.Tasks = Tasks
+TasksOverview.TaskDetails = TaskDetails
+TasksOverview.TaskProgress = TaskProgress
+TasksOverview.TaskSize = TaskSize
+TasksOverview.TaskDivider = TaskDivider
+TasksOverview.TaskInfo = TaskDetailsInfo
+TasksOverview.TaskHeadline = TaskHeadline
 
 export default TasksOverview
 

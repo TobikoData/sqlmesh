@@ -74,6 +74,7 @@ class Directory(BaseModel):
 
 class Meta(BaseModel):
     version: str
+    has_running_task: bool = False
 
 
 class ChangeDirect(BaseModel):
@@ -362,3 +363,11 @@ class ArtifactChange(BaseModel):
     path: str
     type: t.Optional[ArtifactType] = None
     file: t.Optional[File] = None
+
+
+class BackfillProgress(BaseModel):
+    completed: int
+    total: int
+    view_name: str
+    start: TimeLike
+    end: t.Optional[TimeLike] = None

@@ -71,6 +71,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
     def evaluate(self, plan: Plan) -> None:
+        self.console.start_evaluation(plan.environment.name)
+
         snapshots = plan.snapshots
         if plan.is_dev:
             before_promote_snapshots = {s.name for s in snapshots}
@@ -87,6 +89,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         if not plan.requires_backfill:
             self.console.log_success("Virtual Update executed successfully")
+
+        self.console.stop_evaluation()
 
     def _backfill(self, plan: Plan, selected_snapshots: t.Set[str]) -> None:
         """Backfill missing intervals for snapshots that are part of the given plan.
@@ -195,7 +199,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def _restate(self, plan: Plan) -> None:
         if not plan.restatements:
             return
-
+        self.console.start_restate_progress()
         self.state_sync.remove_interval(
             [
                 (plan.context_diff.snapshots[s], interval)
@@ -204,6 +208,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan._execution_time,
             remove_shared_versions=not plan.is_dev,
         )
+        self.console.stop_restate_progress()
 
 
 class AirflowPlanEvaluator(PlanEvaluator):

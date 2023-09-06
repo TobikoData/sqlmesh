@@ -164,6 +164,7 @@
     --color-danger-900: hsla(341, 79%, 27%, 1);
 
     /* Neutral */
+    --color-neutral-5: hsla(190, 8%, 50%, 0.05);
     --color-neutral-10: hsla(190, 8%, 50%, 0.1);
     --color-neutral-20: hsla(190, 8%, 50%, 0.2);
     --color-neutral-30: hsla(190, 8%, 50%, 0.3);

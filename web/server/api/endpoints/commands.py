@@ -12,9 +12,9 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
+from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.errors import PlanError
 from web.server import models
-from web.server.console import ApiConsole
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -36,32 +36,30 @@ async def apply(
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> models.ApplyResponse:
     """Apply a plan"""
-
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
             message="Plan/apply is already running",
-            origin="API -> commands -> apply",
+            origin="API -> plan -> run_plan",
         )
 
-    """
-        1 Run Plan
-        2 Run Tests
-            2.1 Run Audits?
-        3 Push state 
-        4 Restate
-        5 Backfill
-        6 Promote
-        
-    """
     console: ApiConsole = context.console  # type: ignore
+    data: t.Any = {
+        "environment": environment,
+        "skip_tests": plan_options.skip_tests,
+        "plan": {
+            "status": "init",
+            "start_at": now_timestamp(),
+        },
+    }
+    console.log(event="plan-changes", data=data)
     plan_func = functools.partial(
         context.plan,
-        skip_tests=True,
+        environment=environment,
         no_prompts=True,
         include_unmodified=plan_options.include_unmodified,
-        environment=environment,
         start=plan_dates.start if plan_dates else None,
         end=plan_dates.end if plan_dates else None,
+        skip_tests=plan_options.skip_tests,
         no_gaps=plan_options.no_gaps,
         restate_models=plan_options.restate_models,
         create_from=plan_options.create_from,
@@ -71,123 +69,25 @@ async def apply(
     )
     request.app.state.task = plan_task = asyncio.create_task(run_in_executor(plan_func))
     try:
-        console.log(event="report", data={"type": "plan", "status": "init"})
         plan = await plan_task
-        console.log(event="report", data={"type": "plan", "status": "success"})
-    except PlanError as e:
-        console.log(event="report", data={"type": "plan", "status": "fail"})
+        data["plan"]["status"] = "success"
+        data["plan"]["stop_at"] = now_timestamp()
+        console.log(event="plan-validate", data=data)
+    except PlanError:
+        data["plan"]["status"] = "fail"
+        data["plan"]["stop_at"] = now_timestamp()
+        console.log(event="plan-validate", data=data)
         raise ApiException(
-            message=str(e),
+            message="Unable to run a plan",
             origin="API -> commands -> apply",
         )
 
-    if not plan_options.skip_tests:
-        tests_func = functools.partial(context._run_tests)
-        request.app.state.task = asyncio.create_task(run_in_executor(tests_func))
-        try:
-            console.log(event="report", data={"type": "tests", "status": "init"})
-            result, test_output = await request.app.state.task
-            console.log(event="report", data={"type": "tests", "status": "success"})
-            if not result.wasSuccessful():
-                console.log(event="report", data={"type": "tests", "status": "fail"})
-                console.log(
-                    event="errors",
-                    data=ApiException(
-                        message="Cannot generate plan due to failing test(s). Fix test(s) and run again",
-                        origin="API -> commands -> apply",
-                    ).to_dict(),
-                )
-            console.log_test_results(
-                result=result,
-                output=test_output,
-                target_dialect=context._test_engine_adapter.dialect,
-            )
-        except PlanError as e:
-            console.log(event="report", data={"type": "tests", "status": "fail"})
-            raise ApiException(
-                message=str(e),
-                origin="API -> commands -> apply",
-            )
-    else:
-        console.log(event="report", data={"type": "tests", "status": "skip"})
     if categories is not None:
-        _categorize(plan, categories)
-
-    plan_evaluator = context._scheduler.create_plan_evaluator(context)  # type: ignore
-    # tasks = (
-    #     [plan_evaluator._push, plan_evaluator._restate, plan_evaluator._backfill, plan_evaluator._promote]
-    #     if not has_paused_forward_only(plan.snapshots, plan.snapshots) or plan.is_dev
-    #     else [plan_evaluator._push, plan_evaluator._restate, plan_evaluator._promote, plan_evaluator._backfill]
-    # )
-    push_func = functools.partial(
-        plan_evaluator._push,  # type: ignore
-        plan=plan,
-    )
-    request.app.state.task = asyncio.create_task(run_in_executor(push_func))
-    try:
-        console.log(event="report", data={"type": "push", "status": "init"})
-        await request.app.state.task
-        console.log(event="report", data={"type": "push", "status": "success"})
-    except PlanError as e:
-        console.log(event="report", data={"type": "push", "status": "fail"})
-        raise ApiException(
-            message=str(e),
-            origin="API -> commands -> apply -> push",
-        )
-
-    if plan_options.restate_models:
-        restate_func = functools.partial(
-            plan_evaluator._restate,  # type: ignore
-            plan=plan,
-        )
-        request.app.state.task = asyncio.create_task(run_in_executor(restate_func))
-        try:
-            console.log(event="report", data={"type": "restate", "status": "init"})
-            await request.app.state.task
-            console.log(event="report", data={"type": "restate", "status": "success"})
-        except PlanError as e:
-            console.log(event="report", data={"type": "restate", "status": "fail"})
-            raise ApiException(
-                message=str(e),
-                origin="API -> commands -> apply",
-            )
-    else:
-        console.log(event="report", data={"type": "restate", "status": "skip"})
-
-    backfill_func = functools.partial(
-        plan_evaluator._backfill,  # type: ignore
-        plan=plan,
-    )
-    request.app.state.task = asyncio.create_task(run_in_executor(backfill_func))
-    try:
-        console.log(event="report", data={"type": "backfill", "status": "init"})
-        await request.app.state.task
-        console.log(event="report", data={"type": "backfill", "status": "success"})
-    except PlanError as e:
-        console.log(event="report", data={"type": "backfill", "status": "fail"})
-        raise ApiException(
-            message=str(e),
-            origin="API -> commands -> apply",
-        )
-
-    promote_func = functools.partial(
-        plan_evaluator._promote,  # type: ignore
-        plan=plan,
-    )
-    request.app.state.task = apply_task = asyncio.create_task(run_in_executor(promote_func))
-    try:
-        console.log(event="report", data={"type": "promote", "status": "init"})
-        await request.app.state.task
-        console.log(event="report", data={"type": "promote", "status": "success"})
-    except PlanError as e:
-        console.log(event="report", data={"type": "promote", "status": "fail"})
-        raise ApiException(
-            message=str(e),
-            origin="API -> commands -> apply",
-        )
+        for new, _ in plan.context_diff.modified_snapshots.values():
+            if plan.is_new_snapshot(new) and new.name in categories:
+                plan.set_choice(new, categories[new.name])
 
     request.app.state.task = apply_task = asyncio.create_task(run_in_executor(context.apply, plan))
-    # context.console.task = request.app.state.task
     if not plan.requires_backfill or plan_options.skip_backfill:
         try:
             await apply_task

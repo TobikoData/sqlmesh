@@ -15,7 +15,7 @@ export default function ReportTestsErrors({
         <p>Dialect: {report.dialect}</p>
       </div>
       <ul>
-        {report.details.map(item => (
+        {report.details?.map(item => (
           <li
             key={item.message}
             className="flex mb-1"

@@ -57,6 +57,7 @@ module.exports = {
         900: 'var(--color-brand-900)',
       },
       neutral: {
+        5: 'var(--color-neutral-5)',
         10: 'var(--color-neutral-10)',
         20: 'var(--color-neutral-20)',
         30: 'var(--color-neutral-30)',
