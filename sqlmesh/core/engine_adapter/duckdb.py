@@ -26,7 +26,11 @@ class DuckDBEngineAdapter(LogicalMergeMixin):
     ) -> t.List[SourceQuery]:
         assert columns_to_types
         temp_table = self._get_temp_table(target_table)
-        temp_table_sql = exp.select(*columns_to_types).from_("df").sql(dialect=self.dialect)
+        casted_columns = [
+            exp.alias_(exp.cast(column, to=kind), column, copy=False)
+            for column, kind in columns_to_types.items()
+        ]
+        temp_table_sql = exp.select(*casted_columns).from_("df").sql(dialect=self.dialect)
         self.cursor.sql(f"CREATE TABLE {temp_table} AS {temp_table_sql}")
         return [
             SourceQuery(

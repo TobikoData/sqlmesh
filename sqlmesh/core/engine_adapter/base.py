@@ -409,7 +409,14 @@ class EngineAdapter:
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
                     if i == 0:
-                        self._create_table(table, query, exists=exists, replace=replace, **kwargs)
+                        self._create_table(
+                            table,
+                            query,
+                            columns_to_types=columns_to_types,
+                            exists=exists,
+                            replace=replace,
+                            **kwargs,
+                        )
                     else:
                         self._insert_append_query(
                             table_name, query, columns_to_types or self.columns(table)

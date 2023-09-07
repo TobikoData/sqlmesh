@@ -58,7 +58,7 @@ def test_create_table(adapter: EngineAdapter, duck_conn):
 def test_replace_query_pandas(adapter: EngineAdapter, duck_conn):
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
-        "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
+        "test_table", df, {"a": exp.DataType.build("long"), "b": exp.DataType.build("long")}
     )
     pd.testing.assert_frame_equal(adapter.fetchdf("SELECT * FROM test_table"), df)
 
