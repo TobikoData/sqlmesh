@@ -81,14 +81,6 @@ def test_logical_replace_self_reference(
     ]
 
 
-# ['CREATE TABLE IF NOT EXISTS '
-#  '"__temp_replace_temp_d5e58eb32e0949e4b02604e868934277" AS SELECT "col" FROM '
-#  '"db"."table"',
-#  'TRUNCATE "db"."table"',
-#  'INSERT INTO "db"."table" ("col") SELECT "col" + 1 FROM "db"."table"',
-#  'DROP TABL
-
-
 def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(LogicalMergeMixin, "duckdb")
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.base.EngineAdapter._get_temp_table")

@@ -402,16 +402,18 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
         table = exp.to_table(table_name)
-        multiple_queries = len(source_queries) > 1
-        with self.transaction(condition=multiple_queries):
-            with source_queries[0] as query:
-                self._create_table(table, query, exists=exists, replace=replace, **kwargs)
-            if multiple_queries:
-                self._insert_append_source_queries(table_name, source_queries[1:], columns_to_types)
+        with self.transaction(condition=len(source_queries) > 1):
+            for i, source_query in enumerate(source_queries):
+                with source_query as query:
+                    if i == 0:
+                        self._create_table(table, query, exists=exists, replace=replace, **kwargs)
+                    else:
+                        self._insert_append_query(
+                            table_name, query, columns_to_types or self.columns(table)
+                        )
 
     def _create_table(
         self,

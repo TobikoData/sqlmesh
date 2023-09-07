@@ -75,7 +75,6 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin)
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         exists: bool = True,
         replace: bool = False,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
         """
