@@ -54,14 +54,17 @@ MODEL (
 ```
 **Note:** The time format should be defined using the same SQL dialect as the one used to define the model's query.
 
-SQLMesh also uses the time column to automatically append a time range filter to the model's query at runtime, which prevents records that are not part of the target interval from being stored. This is a safety mechanism that prevents unintentionally overriding unrelated records when handling late-arriving data.
+SQLMesh also uses the time column to automatically append a time range filter to the model's query at runtime, which prevents records that are not part of the target interval from being stored. This is a safety mechanism that prevents unintentionally overwriting unrelated records when handling late-arriving data.
 
-Consider the following model definition:
+The required filter you write in the model query's `WHERE` clause filters the **input** data as it is read from upstream tables, reducing the amount of data processed by the model. The automatically appended time range filter is applied to the model query's **output** data to prevent data leakage.
+
+Consider the following model definition, which specifies a `WHERE` clause filter with the `receipt_date` column. The model's `time_column` is a different column `event_date`, whose filter is automatically added to the model query. This approach is useful when an upstream model's time column is different from the model's time column:
+
 ```sql linenums="1"
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column event_date
+    time_column event_date -- `event_date` is model's time column
   )
 );
 
@@ -70,7 +73,7 @@ SELECT
   event_payload::TEXT as payload
 FROM raw_events
 WHERE
-  receipt_date BETWEEN @start_ds AND @end_ds;
+  receipt_date BETWEEN @start_ds AND @end_ds; -- User-supplied `receipt_date` filter
 ```
 
 At runtime, SQLMesh will automatically modify the model's query to look like this:
@@ -81,7 +84,7 @@ SELECT
 FROM raw_events
 WHERE
   receipt_date BETWEEN @start_ds AND @end_ds
-  AND event_date BETWEEN @start_ds AND @end_ds;
+  AND event_date BETWEEN @start_ds AND @end_ds; -- `event_date` time column filter automatically added
 ```
 
 ### Idempotency
@@ -263,7 +266,7 @@ The `SEED` model kind is used to specify [seed models](./seed_models.md) for usi
 
 ## SCD Type 2
 
-SCD Type 2 is a model kind that supports [slowly changing dimensions](https://en.wikipedia.org/wiki/Slowly_changing_dimension#Type_2:_add_new_row) (SCDs) in your SQLMesh project. SCDs are a common pattern in data warehousing that allow you to track changes to records over time. 
+SCD Type 2 is a model kind that supports [slowly changing dimensions](https://en.wikipedia.org/wiki/Slowly_changing_dimension#Type_2:_add_new_row) (SCDs) in your SQLMesh project. SCDs are a common pattern in data warehousing that allow you to track changes to records over time.
 
 SQLMesh achieves this by adding a `valid_from` and `valid_to` column to your model. The `valid_from` column is the timestamp that the record became valid (inclusive) and the `valid_to` column is the timestamp that the record became invalid (exclusive). The `valid_to` column is set to `NULL` for the latest record.
 
@@ -285,7 +288,7 @@ SELECT
   name::STRING,
   price::DOUBLE,
   updated_at::TIMESTAMP
-FROM 
+FROM
   stg.current_menu_items;
 ```
 
@@ -387,7 +390,7 @@ Now lets say that you update the source table with the following data:
 | 3  | French Fries     | 4.99  | 2020-01-01 00:00:00 |
 | 4  | Milkshake        | 3.99  | 2020-01-02 00:00:00 |
 
-Summary of Changes: 
+Summary of Changes:
 * The price of the Chicken Sandwich was increased from $10.99 to $12.99.
 * Cheeseburger was removed from the menu.
 * Milkshakes were added to the menu.
@@ -429,7 +432,7 @@ Target table will be updated with the following data:
 | 4  | Milkshake           | 3.99  | 2020-01-02 00:00:00 | 2020-01-02 00:00:00 | 2020-01-03 00:00:00 |
 | 4  | Chocolate Milkshake | 3.99  | 2020-01-03 00:00:00 | 2020-01-03 00:00:00 |        NULL         |
 
-Note: `Cheeseburger` was deleted from `2020-01-02 02:00:00` to `2020-01-03 00:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. This is the most accurate representation of the menu based on the source data provided. If `Cheeseburger` were added back to the menu with it's original updated at timestamp of `2020-01-01 00:00:00` then the `valid_from` timestamp of the new record would have been `2020-01-02 02:00:00` resulting in no period of time where the item was deleted. Since in this case the updated at timestamp did not change it is likely the item was removed in error and this again most accurately represents the menu based on the source data. 
+Note: `Cheeseburger` was deleted from `2020-01-02 02:00:00` to `2020-01-03 00:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. This is the most accurate representation of the menu based on the source data provided. If `Cheeseburger` were added back to the menu with it's original updated at timestamp of `2020-01-01 00:00:00` then the `valid_from` timestamp of the new record would have been `2020-01-02 02:00:00` resulting in no period of time where the item was deleted. Since in this case the updated at timestamp did not change it is likely the item was removed in error and this again most accurately represents the menu based on the source data.
 
 ### Querying SCD Type 2 Models
 
@@ -438,19 +441,19 @@ Note: `Cheeseburger` was deleted from `2020-01-02 02:00:00` to `2020-01-03 00:00
 Although SCD Type 2 models support history, it is still very easy to query for just the latest version of a record. Simply query the model as you would any other table. For example, if you wanted to query the latest version of the `menu_items` table you would simply run:
 
 ```sql linenums="1" hl_lines="3"
-SELECT 
-    * 
-FROM 
+SELECT
+    *
+FROM
     menu_items
-WHERE 
+WHERE
     valid_to IS NULL;
 ```
 
 One could also create a view on top of the SCD Type 2 model that creates a new `is_current` column to make it easy for consumers to identify the current record.
-    
+
 ```sql linenums="1" hl_lines="3"
-SELECT 
-    *, 
+SELECT
+    *,
     valid_to IS NULL AS is_current
 FROM
     menu_items;
@@ -461,7 +464,7 @@ FROM
 If you wanted to query the `menu_items` table as it was on `2020-01-02 01:00:00` you would simply run:
 
 ```sql linenums="1" hl_lines="3"
-SELECT 
+SELECT
     *
 FROM
     menu_items
@@ -474,7 +477,7 @@ WHERE
 Example in a join:
 
 ```sql linenums="1" hl_lines="3"
-SELECT 
+SELECT
     *
 FROM
     orders
@@ -519,12 +522,12 @@ Note: The precision of the timestamps in this example is second so I subtract 1 
 One way to identify deleted records is to query for records that do not have a `valid_to` record of `NULL`. For example, if you wanted to query for all deleted ids in the `menu_items` table you would simply run:
 
 ```sql linenums="1" hl_lines="3"
-SELECT 
+SELECT
     id,
     MAX(CASE WHEN valid_to IS NULL THEN 0 ELSE 1 END) AS is_deleted
 FROM
     menu_items
-GROUP BY 
+GROUP BY
     id
 ```
 
