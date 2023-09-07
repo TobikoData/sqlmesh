@@ -29,38 +29,6 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin)
         cursor.paramstyle = "qmark"
         return cursor
 
-    def create_view(
-        self,
-        view_name: TableName,
-        query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        replace: bool = True,
-        materialized: bool = False,
-        **create_kwargs: t.Any,
-    ) -> None:
-        """
-        Redshift doesn't support `VALUES` expressions outside of a `INSERT` statement. Currently sqlglot cannot
-        performantly convert a values expression into a series of `UNION ALL` statements. Therefore we just don't
-        support views for Redshift until sqlglot is updated to performantly support large union statements.
-
-        Also Redshift views are "binding" by default to their underlying table which means you can't drop that
-        underlying table without dropping the view first. This is a problem for us since we want to be able to
-        swap tables out from under views. Therefore we create the view as non-binding.
-        """
-        if self.is_pandas_df(query_or_df):
-            raise NotImplementedError(
-                "DataFrames are not supported for Redshift views because Redshift doesn't "
-                "support using `VALUES` in a `CREATE VIEW` statement."
-            )
-        return super().create_view(
-            view_name,
-            query_or_df,
-            replace=replace,
-            materialized=materialized,
-            no_schema_binding=True,
-            **create_kwargs,
-        )
-
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:

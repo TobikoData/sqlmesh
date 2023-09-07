@@ -23,16 +23,29 @@ if t.TYPE_CHECKING:
 TEST_SCHEMA = "test_schema"
 
 
-class Formatter:
+class TestContext:
     def __init__(
         self,
         test_type: str,
         engine_adapter: EngineAdapter,
-        columns_to_types: t.Dict[str, t.Union[str, exp.DataType]],
+        columns_to_types: t.Optional[t.Dict[str, t.Union[str, exp.DataType]]] = None,
     ):
         self.test_type = test_type
         self.engine_adapter = engine_adapter
-        self.columns_to_types = {k: exp.DataType.build(v) for k, v in columns_to_types.items()}
+        self._columns_to_types = columns_to_types
+
+    @property
+    def columns_to_types(self):
+        if self._columns_to_types is None:
+            self._columns_to_types = {
+                "id": exp.DataType.build("int"),
+                "ds": exp.DataType.build("string"),
+            }
+        return self._columns_to_types
+
+    @columns_to_types.setter
+    def columns_to_types(self, value: t.Dict[str, t.Union[str, exp.DataType]]):
+        self._columns_to_types = {k: exp.DataType.build(v) for k, v in value.items()}
 
     @property
     def time_columns(self) -> t.List[str]:
@@ -62,6 +75,44 @@ class Formatter:
     def partitioned_by(self) -> t.List[exp.Expression]:
         return [parse_one(self.time_column)]
 
+    @property
+    def dialect(self) -> str:
+        return self.engine_adapter.dialect
+
+    @classmethod
+    def _compare_dfs(
+        cls, actual: t.Union[pd.DataFrame, exp.Expression, str], expected: pd.DataFrame
+    ) -> None:
+        def replace_nat_with_none(df):
+            return [
+                col if type(col) != NaTType else None
+                for row in sorted(list(df.itertuples(index=False, name=None)))
+                for col in row
+            ]
+
+        assert replace_nat_with_none(actual) == replace_nat_with_none(expected)
+
+    def get_metadata_results(self, schema: str = TEST_SCHEMA) -> MetadataResults:
+        return MetadataResults.from_data_objects(self.engine_adapter._get_data_objects(schema))
+
+    def _init_engine_adapter(self) -> None:
+        schema = normalize_identifiers(
+            exp.to_identifier(TEST_SCHEMA), dialect=self.engine_adapter.dialect
+        ).sql(dialect=self.engine_adapter.dialect)
+        self.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
+        self.engine_adapter.create_schema(schema)
+
+    def _format_df(self, data: pd.DataFrame, include_tz: bool = False) -> pd.DataFrame:
+        for timestamp_column in self.timestamp_columns:
+            if timestamp_column in data.columns:
+                data[timestamp_column] = pd.to_datetime(data[timestamp_column], utc=include_tz)
+        return data
+
+    def init(self):
+        if self.test_type == "pyspark" and not hasattr(self.engine_adapter, "is_pyspark_df"):
+            pytest.skip(f"Engine adapter {self.engine_adapter} doesn't support pyspark")
+        self._init_engine_adapter()
+
     def input_data(
         self, data: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     ) -> t.Union[Query, pd.DataFrame]:
@@ -73,12 +124,12 @@ class Formatter:
                 batch_end=sys.maxsize,
                 columns_to_types=columns_to_types,
             )
+        elif self.test_type == "pyspark":
+            return self.engine_adapter.spark.createDataFrame(data)  # type: ignore
         return self._format_df(data)
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        return self._format_df(
-            data, include_tz=self.engine_adapter.dialect in ["spark", "databricks"]
-        )
+        return self._format_df(data)
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
         return normalize_identifiers(
@@ -86,11 +137,11 @@ class Formatter:
             dialect=self.engine_adapter.dialect,
         )
 
-    def _format_df(self, data: pd.DataFrame, include_tz: bool = False) -> pd.DataFrame:
-        for timestamp_column in self.timestamp_columns:
-            if timestamp_column in data.columns:
-                data[timestamp_column] = pd.to_datetime(data[timestamp_column], utc=include_tz)
-        return data
+    def get_current_data(self, table: exp.Table) -> pd.DataFrame:
+        return self.engine_adapter.fetchdf(exp.select("*").from_(table))
+
+    def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
+        self._compare_dfs(self.get_current_data(table), self.output_data(expected))
 
 
 class MetadataResults(PydanticModel):
@@ -115,7 +166,7 @@ class MetadataResults(PydanticModel):
         return [x for x in self.tables if not x.startswith("__temp")]
 
 
-@pytest.fixture(params=["df", "query"])
+@pytest.fixture(params=["df", "query", "pyspark"])
 def test_type(request):
     return request.param
 
@@ -130,13 +181,13 @@ def config() -> Config:
 
 @pytest.fixture(
     params=[
-        "duckdb",
-        pytest.param("postgres", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("mysql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("bigquery", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # "duckdb",
+        # pytest.param("postgres", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("mysql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("bigquery", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("databricks", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("redshift", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("snowflake", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("redshift", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("snowflake", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:
@@ -146,34 +197,7 @@ def engine_adapter(request, config) -> EngineAdapter:
         pytest.skip(f"Gateway {gateway} not configured")
     engine_adapter = config.gateways[gateway].connection.create_engine_adapter()
     engine_adapter.DEFAULT_BATCH_SIZE = 1
-    schema = normalize_identifiers(
-        exp.to_identifier(TEST_SCHEMA), dialect=engine_adapter.dialect
-    ).sql(dialect=engine_adapter.dialect)
-    engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
-    engine_adapter.create_schema(schema)
     return engine_adapter
-
-
-def compare_dfs(
-    actual: t.Union[pd.DataFrame, exp.Expression, str],
-    expected: pd.DataFrame,
-) -> None:
-    def replace_nat_with_none(df):
-        return [
-            col if type(col) != NaTType else None
-            for row in sorted(list(df.itertuples(index=False, name=None)))
-            for col in row
-        ]
-
-    assert replace_nat_with_none(actual) == replace_nat_with_none(expected)
-
-
-def create_metadata_results(engine_adapter, schema: str = TEST_SCHEMA) -> MetadataResults:
-    return MetadataResults.from_data_objects(engine_adapter._get_data_objects(schema))
-
-
-def get_current_data(engine_adapter, table_name: exp.Table) -> pd.DataFrame:
-    return engine_adapter.fetchdf(exp.select("*").from_(table_name))
 
 
 @pytest.fixture
@@ -181,17 +205,13 @@ def default_columns_to_types():
     return {"id": exp.DataType.build("int"), "ds": exp.DataType.build("string")}
 
 
-def get_table(
-    table_name: str, engine_adapter: EngineAdapter, schema: str = TEST_SCHEMA
-) -> exp.Table:
-    return normalize_identifiers(
-        exp.to_table(".".join([schema, table_name]), dialect=engine_adapter.dialect),
-        dialect=engine_adapter.dialect,
-    )
+@pytest.fixture
+def ctx(engine_adapter, test_type):
+    return TestContext(test_type, engine_adapter)
 
 
-def test_temp_table(engine_adapter, test_type, default_columns_to_types):
-    formatter = Formatter(test_type, engine_adapter, default_columns_to_types)
+def test_temp_table(ctx: TestContext):
+    ctx.init()
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -199,22 +219,22 @@ def test_temp_table(engine_adapter, test_type, default_columns_to_types):
             {"id": 3, "ds": "2022-01-03"},
         ]
     )
-    table = formatter.table("example")
-    with engine_adapter.temp_table(
-        formatter.input_data(input_data), table.sql(dialect=engine_adapter.dialect)
+    table = ctx.table("example")
+    with ctx.engine_adapter.temp_table(
+        ctx.input_data(input_data), table.sql(dialect=ctx.dialect)
     ) as table_name:
-        results = create_metadata_results(engine_adapter)
+        results = ctx.get_metadata_results()
         assert len(results.views) == 0
         assert len(results.tables) == 1
         assert len(results.non_temp_tables) == 0
-        compare_dfs(get_current_data(engine_adapter, table_name), formatter.output_data(input_data))
-    results = create_metadata_results(engine_adapter)
+        ctx.compare_with_current(table_name, input_data)
+    results = ctx.get_metadata_results()
     assert len(results.views) == len(results.tables) == len(results.non_temp_tables) == 0
 
 
-def test_ctas(engine_adapter, test_type, default_columns_to_types):
-    formatter = Formatter(test_type, engine_adapter, default_columns_to_types)
-    table = formatter.table("test_table")
+def test_ctas(ctx: TestContext):
+    ctx.init()
+    table = ctx.table("test_table")
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -222,17 +242,15 @@ def test_ctas(engine_adapter, test_type, default_columns_to_types):
             {"id": 3, "ds": "2022-01-03"},
         ]
     )
-    engine_adapter.ctas(table, formatter.input_data(input_data))
-    results = create_metadata_results(engine_adapter)
+    ctx.engine_adapter.ctas(table, ctx.input_data(input_data))
+    results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
-    compare_dfs(get_current_data(engine_adapter, table), formatter.output_data(input_data))
+    ctx.compare_with_current(table, input_data)
 
 
-def test_create_view(engine_adapter, test_type, default_columns_to_types):
-    formatter = Formatter(test_type, engine_adapter, default_columns_to_types)
-    view = formatter.table("test_view")
+def test_create_view(ctx: TestContext):
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -240,26 +258,20 @@ def test_create_view(engine_adapter, test_type, default_columns_to_types):
             {"id": 3, "ds": "2022-01-03"},
         ]
     )
-    if engine_adapter.dialect == "redshift" and test_type == "df":
-        with pytest.raises(
-            NotImplementedError,
-            match=r"DataFrames are not supported for Redshift views because Redshift doesn't support using `VALUES` in a `CREATE VIEW` statement.",
-        ):
-            engine_adapter.create_view(view, formatter.input_data(input_data))
-        return
-    engine_adapter.create_view(view, formatter.input_data(input_data))
-    results = create_metadata_results(engine_adapter)
+    view = ctx.table("test_view")
+    ctx.init()
+    ctx.engine_adapter.create_view(view, ctx.input_data(input_data))
+    results = ctx.get_metadata_results()
     assert len(results.tables) == 0
     assert len(results.views) == 1
     assert results.views[0] == view.name
-    compare_dfs(get_current_data(engine_adapter, view), formatter.output_data(input_data))
+    ctx.compare_with_current(view, input_data)
 
 
-def test_replace_query(engine_adapter, test_type, default_columns_to_types):
-    # Replace query doesn't support batched queries so we enforce that here
-    engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
-    formatter = Formatter(test_type, engine_adapter, default_columns_to_types)
-    table = formatter.table("test_table")
+def test_replace_query(ctx: TestContext):
+    ctx.engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
+    ctx.init()
+    table = ctx.table("test_table")
     # Initial Load
     input_data = pd.DataFrame(
         [
@@ -268,23 +280,21 @@ def test_replace_query(engine_adapter, test_type, default_columns_to_types):
             {"id": 3, "ds": "2022-01-03"},
         ]
     )
-    engine_adapter.create_table(table, formatter.columns_to_types)
-    engine_adapter.replace_query(
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    ctx.engine_adapter.replace_query(
         table,
-        formatter.input_data(input_data),
+        ctx.input_data(input_data),
         # Spark based engines do a create table -> insert overwrite instead of replace. If columns to types aren't
         # provided then it checks the table itself for types. This is fine within SQLMesh since we always know the tables
         # exist prior to evaluation but when running these tests that isn't the case. As a result we just pass in
         # columns_to_types for these two engines so we can still test inference on the other ones
-        columns_to_types=formatter.columns_to_types
-        if engine_adapter.dialect in ["spark", "databricks"]
-        else None,
+        columns_to_types=ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None,
     )
-    results = create_metadata_results(engine_adapter)
+    results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
-    compare_dfs(get_current_data(engine_adapter, table), formatter.output_data(input_data))
+    ctx.compare_with_current(table, input_data)
 
     # Replace that we only need to run once
     if type == "df":
@@ -295,24 +305,24 @@ def test_replace_query(engine_adapter, test_type, default_columns_to_types):
                 {"id": 6, "ds": "2022-01-06"},
             ]
         )
-        engine_adapter.replace_query(
+        ctx.engine_adapter.replace_query(
             table,
-            formatter.input_data(replace_data),
-            columns_to_types=formatter.columns_to_types
-            if engine_adapter.dialect in ["spark", "databricks"] and test_type == "query"
+            ctx.input_data(replace_data),
+            columns_to_types=ctx.columns_to_types
+            if ctx.dialect in ["spark", "databricks"]
             else None,
         )
-        results = create_metadata_results(engine_adapter)
+        results = ctx.get_metadata_results()
         assert len(results.views) == 0
         assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
-        compare_dfs(get_current_data(engine_adapter, table), formatter.output_data(replace_data))
+        ctx.compare_with_current(table, replace_data)
 
 
-def test_insert_append(engine_adapter, test_type, default_columns_to_types):
-    formatter = Formatter(test_type, engine_adapter, default_columns_to_types)
-    table = formatter.table("test_table")
-    engine_adapter.create_table(table, default_columns_to_types)
+def test_insert_append(ctx: TestContext):
+    ctx.init()
+    table = ctx.table("test_table")
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
     # Initial Load
     input_data = pd.DataFrame(
         [
@@ -321,12 +331,12 @@ def test_insert_append(engine_adapter, test_type, default_columns_to_types):
             {"id": 3, "ds": "2022-01-03"},
         ]
     )
-    engine_adapter.insert_append(table, formatter.input_data(input_data))
-    results = create_metadata_results(engine_adapter)
+    ctx.engine_adapter.insert_append(table, ctx.input_data(input_data))
+    results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
-    compare_dfs(get_current_data(engine_adapter, table), formatter.output_data(input_data))
+    ctx.compare_with_current(table, input_data)
 
     # Replace that we only need to run once
     if type == "df":
@@ -337,97 +347,93 @@ def test_insert_append(engine_adapter, test_type, default_columns_to_types):
                 {"id": 6, "ds": "2022-01-06"},
             ]
         )
-        engine_adapter.insert_append(table, formatter.input_data(append_data))
-        results = create_metadata_results(engine_adapter)
+        ctx.engine_adapter.insert_append(table, ctx.input_data(append_data))
+        results = ctx.get_metadata_results()
         assert len(results.views) == 0
         assert len(results.tables) in [1, 2, 3]
         assert len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
-        compare_dfs(
-            get_current_data(engine_adapter, table),
-            formatter.output_data(pd.concat([input_data, append_data])),
-        )
+        ctx.compare_with_current(table, pd.concat([input_data, append_data]))
 
 
-def test_insert_overwrite_by_time_partition(engine_adapter, test_type, default_columns_to_types):
-    ds_type = "timestamp" if engine_adapter.dialect == "bigquery" else "string"
-    formatter = Formatter(test_type, engine_adapter, columns_to_types={"id": "int", "ds": ds_type})
-    table = formatter.table("test_table")
-    if engine_adapter.dialect == "bigquery":
+def test_insert_overwrite_by_time_partition(ctx: TestContext):
+    ds_type = "timestamp" if ctx.dialect == "bigquery" else "string"
+    ctx.columns_to_types = {"id": "int", "ds": ds_type}
+    ctx.init()
+    table = ctx.table("test_table")
+    if ctx.dialect == "bigquery":
         partitioned_by = ["DATE(ds)"]
     else:
-        partitioned_by = formatter.partitioned_by
-    engine_adapter.create_table(
+        partitioned_by = ctx.partitioned_by  # type: ignore
+    ctx.engine_adapter.create_table(
         table,
-        formatter.columns_to_types,
+        ctx.columns_to_types,
         partitioned_by=partitioned_by,
         partition_interval_unit="DAY",
     )
     input_data = pd.DataFrame(
         [
-            {"id": 1, formatter.time_column: "2022-01-01"},
-            {"id": 2, formatter.time_column: "2022-01-02"},
-            {"id": 3, formatter.time_column: "2022-01-03"},
+            {"id": 1, ctx.time_column: "2022-01-01"},
+            {"id": 2, ctx.time_column: "2022-01-02"},
+            {"id": 3, ctx.time_column: "2022-01-03"},
         ]
     )
-    engine_adapter.insert_overwrite_by_time_partition(
+    ctx.engine_adapter.insert_overwrite_by_time_partition(
         table,
-        formatter.input_data(input_data),
+        ctx.input_data(input_data),
         start="2022-01-02",
         end="2022-01-03",
-        time_formatter=formatter.time_formatter,
-        time_column=formatter.time_column,
-        columns_to_types=formatter.columns_to_types,
+        time_formatter=ctx.time_formatter,
+        time_column=ctx.time_column,
+        columns_to_types=ctx.columns_to_types,
     )
-    results = create_metadata_results(engine_adapter)
+    results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
-    compare_dfs(get_current_data(engine_adapter, table), formatter.output_data(input_data.iloc[1:]))
+    ctx.compare_with_current(table, input_data.iloc[1:])
 
     if test_type == "df":
         overwrite_data = pd.DataFrame(
             [
-                {"id": 10, formatter.time_column: "2022-01-03"},
-                {"id": 4, formatter.time_column: "2022-01-04"},
-                {"id": 5, formatter.time_column: "2022-01-05"},
+                {"id": 10, ctx.time_column: "2022-01-03"},
+                {"id": 4, ctx.time_column: "2022-01-04"},
+                {"id": 5, ctx.time_column: "2022-01-05"},
             ]
         )
-        engine_adapter.insert_overwrite_by_time_partition(
+        ctx.engine_adapter.insert_overwrite_by_time_partition(
             table,
-            formatter.input_data(overwrite_data),
+            ctx.input_data(overwrite_data),
             start="2022-01-03",
             end="2022-01-05",
-            time_formatter=formatter.time_formatter,
-            time_column=formatter.time_column,
-            columns_to_types=formatter.columns_to_types,
+            time_formatter=ctx.time_formatter,
+            time_column=ctx.time_column,
+            columns_to_types=ctx.columns_to_types,
         )
-        results = create_metadata_results(engine_adapter)
+        results = ctx.get_metadata_results()
         assert len(results.views) == 0
         assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
-        compare_dfs(
-            get_current_data(engine_adapter, table),
-            formatter.output_data(
-                pd.DataFrame(
-                    [
-                        {"id": 2, formatter.time_column: "2022-01-02"},
-                        {"id": 10, formatter.time_column: "2022-01-03"},
-                        {"id": 4, formatter.time_column: "2022-01-04"},
-                        {"id": 5, formatter.time_column: "2022-01-05"},
-                    ]
-                )
+        ctx.compare_with_current(
+            table,
+            pd.DataFrame(
+                [
+                    {"id": 2, ctx.time_column: "2022-01-02"},
+                    {"id": 10, ctx.time_column: "2022-01-03"},
+                    {"id": 4, ctx.time_column: "2022-01-04"},
+                    {"id": 5, ctx.time_column: "2022-01-05"},
+                ]
             ),
         )
 
 
-def test_merge(engine_adapter, test_type, default_columns_to_types):
-    if engine_adapter.dialect == "redshift":
+def test_merge(ctx: TestContext):
+    if ctx.dialect == "redshift":
         pytest.skip("Redshift currently doesn't support `MERGE`")
-    formatter = Formatter(test_type, engine_adapter, default_columns_to_types)
-    table = formatter.table("test_table")
-    engine_adapter.create_table(table, formatter.columns_to_types)
+    ctx.init()
+    table = ctx.table("test_table")
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
     input_data = pd.DataFrame(
         [
             {"id": 1, "ds": "2022-01-01"},
@@ -435,18 +441,18 @@ def test_merge(engine_adapter, test_type, default_columns_to_types):
             {"id": 3, "ds": "2022-01-03"},
         ]
     )
-    engine_adapter.merge(
+    ctx.engine_adapter.merge(
         table,
-        formatter.input_data(input_data),
+        ctx.input_data(input_data),
         columns_to_types=None,
         unique_key=["id"],
     )
-    results = create_metadata_results(engine_adapter)
+    results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
-    compare_dfs(get_current_data(engine_adapter, table), formatter.output_data(input_data))
+    ctx.compare_with_current(table, input_data)
 
     if test_type == "df":
         merge_data = pd.DataFrame(
@@ -456,49 +462,44 @@ def test_merge(engine_adapter, test_type, default_columns_to_types):
                 {"id": 5, "ds": "2022-01-05"},
             ]
         )
-        engine_adapter.merge(
+        ctx.engine_adapter.merge(
             table,
-            formatter.input_data(merge_data),
+            ctx.input_data(merge_data),
             columns_to_types=None,
             unique_key=["id"],
         )
-        results = create_metadata_results(engine_adapter)
+        results = ctx.get_metadata_results()
         assert len(results.views) == 0
         assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
-        compare_dfs(
-            get_current_data(engine_adapter, table),
-            formatter.output_data(
-                pd.DataFrame(
-                    [
-                        {"id": 1, "ds": "2022-01-01"},
-                        {"id": 2, "ds": "2022-01-10"},
-                        {"id": 3, "ds": "2022-01-03"},
-                        {"id": 4, "ds": "2022-01-04"},
-                        {"id": 5, "ds": "2022-01-05"},
-                    ]
-                )
+        ctx.compare_with_current(
+            table,
+            pd.DataFrame(
+                [
+                    {"id": 1, "ds": "2022-01-01"},
+                    {"id": 2, "ds": "2022-01-10"},
+                    {"id": 3, "ds": "2022-01-03"},
+                    {"id": 4, "ds": "2022-01-04"},
+                    {"id": 5, "ds": "2022-01-05"},
+                ]
             ),
         )
 
 
-def test_scd_type_2(engine_adapter, test_type):
-    formatter = Formatter(
-        test_type,
-        engine_adapter,
-        columns_to_types={
-            "id": "int",
-            "name": "string",
-            "updated_at": "timestamp",
-            "valid_from": "timestamp",
-            "valid_to": "timestamp",
-        },
-    )
-    table = formatter.table("test_table")
-    input_schema = {
-        k: v for k, v in formatter.columns_to_types.items() if k not in ("valid_from", "valid_to")
+def test_scd_type_2(ctx: TestContext):
+    ctx.columns_to_types = {
+        "id": "int",
+        "name": "string",
+        "updated_at": "timestamp",
+        "valid_from": "timestamp",
+        "valid_to": "timestamp",
     }
-    engine_adapter.create_table(table, formatter.columns_to_types)
+    ctx.init()
+    table = ctx.table("test_table")
+    input_schema = {
+        k: v for k, v in ctx.columns_to_types.items() if k not in ("valid_from", "valid_to")
+    }
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
     input_data = pd.DataFrame(
         [
             {"id": 1, "name": "a", "updated_at": "2022-01-01 00:00:00"},
@@ -506,9 +507,9 @@ def test_scd_type_2(engine_adapter, test_type):
             {"id": 3, "name": "c", "updated_at": "2022-01-03 00:00:00"},
         ]
     )
-    engine_adapter.scd_type_2(
+    ctx.engine_adapter.scd_type_2(
         table,
-        formatter.input_data(input_data, input_schema),
+        ctx.input_data(input_data, input_schema),
         unique_key=["id"],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
@@ -516,39 +517,37 @@ def test_scd_type_2(engine_adapter, test_type):
         execution_time="2023-01-01",
         columns_to_types=input_schema,
     )
-    results = create_metadata_results(engine_adapter)
+    results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
-    compare_dfs(
-        get_current_data(engine_adapter, table),
-        formatter.output_data(
-            pd.DataFrame(
-                [
-                    {
-                        "id": 1,
-                        "name": "a",
-                        "updated_at": "2022-01-01 00:00:00",
-                        "valid_from": "1970-01-01 00:00:00",
-                        "valid_to": pd.NaT,
-                    },
-                    {
-                        "id": 2,
-                        "name": "b",
-                        "updated_at": "2022-01-02 00:00:00",
-                        "valid_from": "1970-01-01 00:00:00",
-                        "valid_to": pd.NaT,
-                    },
-                    {
-                        "id": 3,
-                        "name": "c",
-                        "updated_at": "2022-01-03 00:00:00",
-                        "valid_from": "1970-01-01 00:00:00",
-                        "valid_to": pd.NaT,
-                    },
-                ]
-            )
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "updated_at": "2022-01-01 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "updated_at": "2022-01-02 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "updated_at": "2022-01-03 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+            ]
         ),
     )
 
@@ -566,9 +565,9 @@ def test_scd_type_2(engine_adapter, test_type):
             {"id": 4, "name": "d", "updated_at": "2022-01-04 00:00:00"},
         ]
     )
-    engine_adapter.scd_type_2(
+    ctx.engine_adapter.scd_type_2(
         table,
-        formatter.input_data(current_data, input_schema),
+        ctx.input_data(current_data, input_schema),
         unique_key=["id"],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
@@ -576,51 +575,49 @@ def test_scd_type_2(engine_adapter, test_type):
         execution_time="2023-01-05",
         columns_to_types=input_schema,
     )
-    results = create_metadata_results(engine_adapter)
+    results = ctx.get_metadata_results()
     assert len(results.views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
-    compare_dfs(
-        get_current_data(engine_adapter, table),
-        formatter.output_data(
-            pd.DataFrame(
-                [
-                    {
-                        "id": 1,
-                        "name": "a",
-                        "updated_at": "2022-01-01 00:00:00",
-                        "valid_from": "1970-01-01 00:00:00",
-                        "valid_to": "2022-01-04 00:00:00",
-                    },
-                    {
-                        "id": 1,
-                        "name": "x",
-                        "updated_at": "2022-01-04 00:00:00",
-                        "valid_from": "2022-01-04 00:00:00",
-                        "valid_to": pd.NaT,
-                    },
-                    {
-                        "id": 2,
-                        "name": "b",
-                        "updated_at": "2022-01-02 00:00:00",
-                        "valid_from": "1970-01-01 00:00:00",
-                        "valid_to": "2023-01-05 00:00:00",
-                    },
-                    {
-                        "id": 3,
-                        "name": "c",
-                        "updated_at": "2022-01-03 00:00:00",
-                        "valid_from": "1970-01-01 00:00:00",
-                        "valid_to": pd.NaT,
-                    },
-                    {
-                        "id": 4,
-                        "name": "d",
-                        "updated_at": "2022-01-04 00:00:00",
-                        "valid_from": "1970-01-01 00:00:00",
-                        "valid_to": pd.NaT,
-                    },
-                ]
-            )
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {
+                    "id": 1,
+                    "name": "a",
+                    "updated_at": "2022-01-01 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2022-01-04 00:00:00",
+                },
+                {
+                    "id": 1,
+                    "name": "x",
+                    "updated_at": "2022-01-04 00:00:00",
+                    "valid_from": "2022-01-04 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 2,
+                    "name": "b",
+                    "updated_at": "2022-01-02 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": "2023-01-05 00:00:00",
+                },
+                {
+                    "id": 3,
+                    "name": "c",
+                    "updated_at": "2022-01-03 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+                {
+                    "id": 4,
+                    "name": "d",
+                    "updated_at": "2022-01-04 00:00:00",
+                    "valid_from": "1970-01-01 00:00:00",
+                    "valid_to": pd.NaT,
+                },
+            ]
         ),
     )

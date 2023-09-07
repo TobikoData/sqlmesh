@@ -111,7 +111,7 @@ class SparkEngineAdapter(EngineAdapter):
 
         def query_factory() -> Query:
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+            df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
             temp_table.set("db", "global_temp")
             return exp.select("*").from_(temp_table)
 
