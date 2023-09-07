@@ -10,6 +10,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter import SparkEngineAdapter
 from sqlmesh.utils.errors import SQLMeshError
+from tests.core.engine_adapter import to_sql_calls
 
 
 def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
@@ -107,9 +108,10 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
-    adapter.cursor.execute.assert_called_once_with(
-        "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT * FROM (SELECT `a` FROM `tbl`) AS `_subquery` WHERE 1 = 1"
-    )
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int)",
+        "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT * FROM (SELECT `a` FROM `tbl`) AS `_subquery` WHERE 1 = 1",
+    ]
 
 
 def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
@@ -120,9 +122,10 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
         "test_table", df, {"a": exp.DataType.build("int"), "b": exp.DataType.build("int")}
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT * FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)) AS `_subquery` WHERE 1 = 1"
-    )
+    assert to_sql_calls(adapter) == [
+        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` INT)",
+        "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT * FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)) AS `_subquery` WHERE 1 = 1",
+    ]
 
 
 def test_create_table_table_options(make_mocked_engine_adapter: t.Callable):

@@ -103,12 +103,15 @@ class SparkEngineAdapter(EngineAdapter):
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
-        target_table: t.Optional[TableName] = None,
+        target_table: TableName,
     ) -> t.List[SourceQuery]:
+        if not self._use_spark_session:
+            return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+        df = self._ensure_pyspark_df(df, columns_to_types)
+
         def query_factory() -> Query:
-            df = self._ensure_pyspark_df(df, columns_to_types)
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
-            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))
+            df.createOrReplaceTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
             temp_table.set("db", "global_temp")
             return exp.select("*").from_(temp_table)
 
@@ -176,9 +179,13 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> None:
         # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
         # currently check for storage formats we will just do an insert/overwrite.
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
+        columns_to_types = columns_to_types or self.columns(table_name)
+        if not columns_to_types:
+            raise SQLMeshError("Cannot replace table without columns to types")
+        self.create_table(table_name, columns_to_types)
         return self._insert_overwrite_by_condition(
             table_name, source_queries, columns_to_types, where=exp.condition("1=1")
         )

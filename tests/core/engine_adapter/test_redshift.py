@@ -1,6 +1,5 @@
 # type: ignore
 import typing as t
-from unittest.mock import call
 
 import pandas as pd
 import pytest
@@ -119,7 +118,10 @@ def test_values_to_sql(make_mocked_engine_adapter: t.Callable, mocker: MockerFix
         batch_end=2,
     )
     # 3,6 is missing since the batch range excluded it
-    assert result.sql(dialect="redshift") == "VALUES (1, 4), (2, 5)"
+    assert (
+        result.sql(dialect="redshift")
+        == "SELECT CAST(a AS INTEGER) AS a, CAST(b AS INTEGER) AS b FROM (SELECT 1 AS a, 4 AS b UNION ALL SELECT 2, 5) AS t"
+    )
 
 
 def test_replace_query_with_query(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
@@ -136,7 +138,6 @@ def test_replace_query_with_query(make_mocked_engine_adapter: t.Callable, mocker
     adapter.replace_query(table_name="test_table", query_or_df=parse_one("SELECT cola FROM table"))
 
     assert to_sql_calls(adapter) == [
-        'DROP TABLE IF EXISTS "test_table"',
         'CREATE TABLE "test_table" AS SELECT "cola" FROM "table"',
     ]
 
@@ -166,15 +167,13 @@ def test_replace_query_with_df_table_exists(
     adapter.cursor.begin.assert_called_once()
     adapter.cursor.commit.assert_called_once()
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call('CREATE TABLE "test_table_temp_1234" ("a" INTEGER, "b" INTEGER)'),
-            call('INSERT INTO "test_table_temp_1234" ("a", "b") VALUES (1, 4), (2, 5), (3, 6)'),
-            call('ALTER TABLE "test_table" RENAME TO "test_table_old_1234"'),
-            call('ALTER TABLE "test_table_temp_1234" RENAME TO "test_table"'),
-            call('DROP TABLE IF EXISTS "test_table_old_1234"'),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE "test_table_temp_1234" ("a" INTEGER, "b" INTEGER)',
+        'INSERT INTO "test_table_temp_1234" ("a", "b") SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS t',
+        'ALTER TABLE "test_table" RENAME TO "test_table_old_1234"',
+        'ALTER TABLE "test_table_temp_1234" RENAME TO "test_table"',
+        'DROP TABLE IF EXISTS "test_table_old_1234"',
+    ]
 
 
 def test_replace_query_with_df_table_not_exists(
@@ -195,12 +194,9 @@ def test_replace_query_with_df_table_not_exists(
         },
     )
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call('CREATE TABLE "test_table" ("a" INTEGER, "b" INTEGER)'),
-            call('INSERT INTO "test_table" ("a", "b") VALUES (1, 4), (2, 5), (3, 6)'),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE "test_table" AS SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS t',
+    ]
 
 
 def test_table_exists_db_table(mocker: MockerFixture):

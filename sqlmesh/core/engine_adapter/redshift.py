@@ -7,14 +7,14 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
+from sqlmesh.core.engine_adapter.mixins import LogicalReplaceQueryMixin
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF, SourceQuery
 
 
-class RedshiftEngineAdapter(BasePostgresEngineAdapter):
+class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin):
     DIALECT = "redshift"
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
@@ -49,7 +49,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         """
         if self.is_pandas_df(query_or_df):
             raise NotImplementedError(
-                "DataFrames are not supported for Redshift views because Redshift doesn't"
+                "DataFrames are not supported for Redshift views because Redshift doesn't "
                 "support using `VALUES` in a `CREATE VIEW` statement."
             )
         return super().create_view(
@@ -94,27 +94,6 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
             table_name, source_queries, exists=False, **kwargs
         )
 
-    @classmethod
-    def _values_to_sql(
-        cls,
-        values: t.List[t.Tuple[t.Any, ...]],
-        columns_to_types: t.Dict[str, exp.DataType],
-        batch_start: int,
-        batch_end: int,
-        alias: str = "t",
-        contains_json: bool = False,
-    ) -> Query:
-        """
-        Extracts the `VALUES` expression from the SELECT statement and also removes the alias.
-        """
-        query = super()._values_to_sql(
-            values, columns_to_types, batch_start, batch_end, alias, contains_json
-        )
-        values_expression = t.cast(exp.Select, query.find(exp.Values))
-        values_expression.parent = None
-        values_expression.set("alias", None)
-        return values_expression
-
     def replace_query(
         self,
         table_name: TableName,
@@ -130,34 +109,34 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter):
         If it does exist then we need to do the:
             `CREATE TABLE...`, `INSERT INTO...`, `RENAME TABLE...`, `RENAME TABLE...`, DROP TABLE...`  dance.
         """
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
+        if not self.is_pandas_df(query_or_df) or not self.table_exists(table_name):
+            return super().replace_query(table_name, query_or_df, columns_to_types, **kwargs)
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
-        if not isinstance(query_or_df, pd.DataFrame):
-            with self.transaction():
-                self.drop_table(table_name, exists=True)
-                return self._create_table_from_source_queries(
-                    table_name, source_queries, exists=True
-                )
         columns_to_types = columns_to_types or self.columns(table_name)
         target_table = exp.to_table(table_name)
-        target_exists = self.table_exists(target_table)
-        if target_exists:
-            with self.transaction():
-                temp_table_name = f"{target_table.alias_or_name}_temp_{self._short_hash()}"
-                temp_table = target_table.copy()
-                temp_table.set("this", exp.to_identifier(temp_table_name))
-                old_table_name = f"{target_table.alias_or_name}_old_{self._short_hash()}"
-                old_table = target_table.copy()
-                old_table.set("this", exp.to_identifier(old_table_name))
-                self.create_table(temp_table, columns_to_types, exists=False, **kwargs)
-                self._insert_append_source_queries(temp_table, source_queries, columns_to_types)
-                self.rename_table(target_table, old_table)
-                self.rename_table(temp_table, target_table)
-                self.drop_table(old_table)
-        else:
-            self.create_table(target_table, columns_to_types, exists=False, **kwargs)
-            self._insert_append_source_queries(target_table, source_queries, columns_to_types)
+        with self.transaction():
+            temp_table_name = f"{target_table.alias_or_name}_temp_{self._short_hash()}"
+            temp_table = target_table.copy()
+            temp_table.set("this", exp.to_identifier(temp_table_name))
+            old_table_name = f"{target_table.alias_or_name}_old_{self._short_hash()}"
+            old_table = target_table.copy()
+            old_table.set("this", exp.to_identifier(old_table_name))
+            self.create_table(temp_table, columns_to_types, exists=False, **kwargs)
+            self._insert_append_source_queries(temp_table, source_queries, columns_to_types)
+            self.rename_table(target_table, old_table)
+            self.rename_table(temp_table, target_table)
+            self.drop_table(old_table)
+
+    def merge(
+        self,
+        target_table: TableName,
+        source_table: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        unique_key: t.Sequence[str],
+    ) -> None:
+        raise NotImplementedError("Merge is not currently implemented on Redshift")
 
     def _short_hash(self) -> str:
         return uuid.uuid4().hex[:8]

@@ -132,7 +132,7 @@ def test_insert_overwrite_by_time_partition(make_mocked_engine_adapter: t.Callab
 
     assert to_sql_calls(adapter) == [
         """DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
-        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"',
+        """INSERT INTO "test_table" ("a") SELECT * FROM (SELECT "a" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
     ]
 
 
@@ -772,6 +772,8 @@ def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
             "name": exp.DataType.Type.VARCHAR,
             "price": exp.DataType.Type.DOUBLE,
             "test_updated_at": exp.DataType.Type.TIMESTAMP,
+            "test_valid_from": exp.DataType.Type.TIMESTAMP,
+            "test_valid_to": exp.DataType.Type.TIMESTAMP,
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
@@ -800,7 +802,9 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_updated_at"
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -809,7 +813,9 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_updated_at"
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -818,7 +824,9 @@ WITH "source" AS (
     "static"."id",
     "static"."name",
     "static"."price",
-    "static"."test_updated_at"
+    "static"."test_updated_at",
+    "static"."test_valid_from",
+    "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
     USING ("id")
@@ -837,12 +845,29 @@ WITH "source" AS (
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
     "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
     "source"."id" AS "s_id",
     "source"."name" AS "s_name",
     "source"."price" AS "s_price",
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
-  FULL JOIN "source"
+  LEFT JOIN "source"
+    USING ("id")
+  UNION
+  SELECT
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "s_id",
+    "source"."name" AS "s_name",
+    "source"."price" AS "s_price",
+    "source"."test_updated_at" AS "s_test_updated_at"
+  FROM "latest"
+  RIGHT JOIN "source"
     USING ("id")
 ), "updated_rows" AS (
   SELECT
@@ -858,14 +883,14 @@ WITH "source" AS (
         ELSE "s_test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "s_test_updated_at" > "t_test_updated_at"
       THEN "s_test_updated_at"
       WHEN "s_id" IS NULL
-      THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -878,7 +903,7 @@ WITH "source" AS (
     "s_price" AS "price",
     "s_test_updated_at" AS "test_updated_at",
     "s_test_updated_at" AS "test_valid_from",
-    NULL AS "test_valid_to"
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     NOT "t_id" IS NULL AND NOT "s_id" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
@@ -924,6 +949,8 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             "name": exp.DataType.Type.VARCHAR,
             "price": exp.DataType.Type.DOUBLE,
             "test_updated_at": exp.DataType.Type.TIMESTAMP,
+            "test_valid_from": exp.DataType.Type.TIMESTAMP,
+            "test_valid_to": exp.DataType.Type.TIMESTAMP,
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
@@ -946,11 +973,13 @@ WITH "source" AS (
       CAST("id2" AS INT) AS "id2",
       CAST("name" AS VARCHAR) AS "name",
       CAST("price" AS DOUBLE) AS "price",
-      CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at"
+      CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at",
+      CAST("test_valid_from" AS TIMESTAMP) AS "test_valid_from",
+      CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to"
     FROM (VALUES
       (1, 4, 'muffins', 4.0, '2020-01-01 10:00:00'),
       (2, 5, 'chips', 5.0, '2020-01-02 15:00:00'),
-      (3, 6, 'soda', 6.0, '2020-01-03 12:00:00')) AS "t"("id1", "id2", "name", "price", "test_updated_at")
+      (3, 6, 'soda', 6.0, '2020-01-03 12:00:00')) AS "t"("id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to")
   ) AS "raw_source"
 ), "static" AS (
   SELECT
@@ -958,7 +987,9 @@ WITH "source" AS (
     "id2",
     "name",
     "price",
-    "test_updated_at"
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -968,7 +999,9 @@ WITH "source" AS (
     "id2",
     "name",
     "price",
-    "test_updated_at"
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -978,7 +1011,9 @@ WITH "source" AS (
     "static"."id2",
     "static"."name",
     "static"."price",
-    "static"."test_updated_at"
+    "static"."test_updated_at",
+    "static"."test_valid_from",
+    "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
     USING ("id1", "id2")
@@ -1000,13 +1035,32 @@ WITH "source" AS (
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
     "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
     "source"."id1" AS "s_id1",
     "source"."id2" AS "s_id2",
     "source"."name" AS "s_name",
     "source"."price" AS "s_price",
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
-  FULL JOIN "source"
+  LEFT JOIN "source"
+    USING ("id1", "id2")
+  UNION
+  SELECT
+    "latest"."id1" AS "t_id1",
+    "latest"."id2" AS "t_id2",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id1" AS "s_id1",
+    "source"."id2" AS "s_id2",
+    "source"."name" AS "s_name",
+    "source"."price" AS "s_price",
+    "source"."test_updated_at" AS "s_test_updated_at"
+  FROM "latest"
+  RIGHT JOIN "source"
     USING ("id1", "id2")
 ), "updated_rows" AS (
   SELECT
@@ -1023,14 +1077,14 @@ WITH "source" AS (
         ELSE "s_test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "s_test_updated_at" > "t_test_updated_at"
       THEN "s_test_updated_at"
       WHEN "s_id1" IS NULL
-      THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -1045,7 +1099,7 @@ WITH "source" AS (
     "s_price" AS "price",
     "s_test_updated_at" AS "test_updated_at",
     "s_test_updated_at" AS "test_valid_from",
-    NULL AS "test_valid_to"
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     NOT "t_id1" IS NULL AND NOT "s_id1" IS NULL AND "s_test_updated_at" > "t_test_updated_at"

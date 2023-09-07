@@ -28,7 +28,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
-        target_table: t.Optional[TableName] = None,
+        target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
         full_columns_to_types: t.Dict[
@@ -49,7 +49,10 @@ class SnowflakeEngineAdapter(EngineAdapter):
             for column, kind in (full_columns_to_types or {}).items():
                 if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):  # type: ignore
                     df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
-
+                # https://github.com/snowflakedb/snowflake-connector-python/issues/1677
+                elif is_datetime64_dtype(df.dtypes[column]):  # type: ignore
+                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
+            self.create_table(temp_table, full_columns_to_types, exists=False)
             write_pandas(
                 self._connection_pool.get(),
                 df,
@@ -92,6 +95,8 @@ class SnowflakeEngineAdapter(EngineAdapter):
         target = nullsafe_join(".", catalog_name, schema_name)
         sql = f"SHOW TERSE OBJECTS IN {target}"
         df = self.fetchdf(sql, quote_identifiers=True)
+        if df.empty:
+            return []
         return [
             DataObject(
                 catalog=row.database_name,  # type: ignore

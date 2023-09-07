@@ -22,15 +22,16 @@ class DuckDBEngineAdapter(LogicalMergeMixin):
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
-        target_table: t.Optional[TableName] = None,
+        target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert columns_to_types
-        temp_table = self._get_temp_table(target_table or "pandas")
+        temp_table = self._get_temp_table(target_table)
         temp_table_sql = exp.select(*columns_to_types).from_("df").sql(dialect=self.dialect)
         self.cursor.sql(f"CREATE TABLE {temp_table} AS {temp_table_sql}")
         return [
             SourceQuery(
                 query_factory=lambda: exp.select(*columns_to_types).from_(temp_table),  # type: ignore
+                cleanup_func=lambda: self.drop_table(temp_table),
             )
         ]
 

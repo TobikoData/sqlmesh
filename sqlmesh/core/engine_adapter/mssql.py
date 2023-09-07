@@ -72,12 +72,26 @@ class MSSQLEngineAdapter(
     def connection(self) -> pymssql.Connection:
         return self.cursor.connection
 
+    def drop_schema(
+        self, schema_name: str, ignore_if_not_exists: bool = True, cascade: bool = False
+    ) -> None:
+        """
+        MsSql doesn't support CASCADE clause and drops schemas unconditionally.
+        """
+        if cascade:
+            # Note: Assumes all objects in the schema are captured by the `_get_data_objects` call and can be dropped
+            # with a `drop_table` call.
+            objects = self._get_data_objects(schema_name)
+            for obj in objects:
+                self.drop_table(obj.name, exists=ignore_if_not_exists)
+        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
+
     def _df_to_source_queries(
         self,
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
-        target_table: t.Optional[TableName] = None,
+        target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
         assert columns_to_types
@@ -88,7 +102,7 @@ class MSSQLEngineAdapter(
             self.create_table(temp_table, full_columns_to_types)
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
-            conn.bulk_copy(temp_table.name, rows)
+            conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
             return exp.select(*full_columns_to_types).from_(temp_table)
 
         return [

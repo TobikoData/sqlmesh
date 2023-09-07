@@ -15,6 +15,7 @@ import sys
 import types
 import typing as t
 import uuid
+from datetime import datetime, timezone
 from enum import Enum
 from functools import partial
 
@@ -150,12 +151,31 @@ class EngineAdapter:
     def is_pandas_df(cls, value: t.Any) -> bool:
         return isinstance(value, pd.DataFrame)
 
+    @classmethod
+    def _to_utc_timestamp(cls, col: t.Union[str, exp.Literal, exp.Column, exp.Null]) -> exp.Cast:
+        def ensure_utc_exp(
+            ts: t.Union[str, exp.Literal, exp.Column, exp.Null]
+        ) -> t.Union[exp.Literal, exp.Column, exp.Null]:
+            if not isinstance(ts, (str, exp.Literal)):
+                return ts
+            if isinstance(ts, exp.Literal):
+                if not ts.is_string:
+                    raise SQLMeshError("Timestamp literal must be a string")
+                ts = ts.this
+            return exp.Literal.string(
+                datetime.fromisoformat(t.cast(str, ts))
+                .astimezone(timezone.utc)
+                .strftime("%Y-%m-%d %H:%M:%S")
+            )
+
+        return exp.cast(ensure_utc_exp(col), "TIMESTAMP")
+
     def _get_source_queries(
         self,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_table: TableName,
         *,
-        target_table: t.Optional[TableName] = None,
         batch_size: t.Optional[int] = None,
     ) -> t.List[SourceQuery]:
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
@@ -171,7 +191,7 @@ class EngineAdapter:
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
-        target_table: t.Optional[TableName] = None,
+        target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
         assert columns_to_types
@@ -191,12 +211,12 @@ class EngineAdapter:
             for i in range(0, num_rows, batch_size)
         ]
 
-    def _get_source_query_and_columns_to_types(
+    def _get_source_queries_and_columns_to_types(
         self,
         query_or_df: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        target_table: TableName,
         *,
-        target_table: t.Optional[TableName] = None,
         batch_size: t.Optional[int] = None,
     ) -> t.Tuple[t.List[SourceQuery], t.Optional[t.Dict[str, exp.DataType]]]:
         columns_to_types = self._columns_to_types(query_or_df, columns_to_types)
@@ -244,7 +264,7 @@ class EngineAdapter:
             kwargs: Optional create table properties.
         """
         table = exp.to_table(table_name)
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
         return self._create_table_from_source_queries(
@@ -316,8 +336,8 @@ class EngineAdapter:
             exists: Indicates whether to include the IF NOT EXISTS check.
             kwargs: Optional create table properties.
         """
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
-            query_or_df, columns_to_types
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df, columns_to_types, target_table=table_name
         )
         return self._create_table_from_source_queries(
             table_name, source_queries, columns_to_types, exists, **kwargs
@@ -528,8 +548,8 @@ class EngineAdapter:
                 batch_start=0,
                 batch_end=len(values),
             )
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
-            query_or_df, columns_to_types, batch_size=0
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df, columns_to_types, batch_size=0, target_table=view_name
         )
         if len(source_queries) != 1:
             raise SQLMeshError("Only one source query is supported for creating views")
@@ -638,7 +658,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         contains_json: bool = False,
     ) -> None:
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
         self._insert_append_source_queries(
@@ -682,9 +702,18 @@ class EngineAdapter:
             columns_to_types = columns_to_types or self.columns(table_name)
             for source_query in source_queries:
                 with source_query as query:
-                    if contains_json:
-                        query = self._escape_json(query)
-                    self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
+                    self._insert_append_query(table_name, query, columns_to_types, contains_json)
+
+    def _insert_append_query(
+        self,
+        table_name: TableName,
+        query: Query,
+        columns_to_types: t.Dict[str, exp.DataType],
+        contains_json: bool = False,
+    ) -> None:
+        if contains_json:
+            query = self._escape_json(query)
+        self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
         self,
@@ -693,10 +722,9 @@ class EngineAdapter:
         partitioned_by: t.List[exp.Expression],
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> None:
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
-            query_or_df, columns_to_types, target_table=table_name
+        raise NotImplementedError(
+            "Insert Overwrite by Partition (not time) is not supported by this engine"
         )
-        self._insert_overwrite_by_condition(table_name, source_queries, columns_to_types)
 
     def insert_overwrite_by_time_partition(
         self,
@@ -711,7 +739,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, target_table=table_name
         )
         columns_to_types = columns_to_types or self.columns(table_name)
@@ -764,13 +792,13 @@ class EngineAdapter:
             columns_to_types = columns_to_types or self.columns(table_name)
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
+                    query = self._add_where_to_query(query, where)
                     if i > 0 or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
                         if i == 0:
                             assert where is not None
                             self.delete_from(table_name, where=where)
                         self.insert_append(table_name, query, columns_to_types=columns_to_types)
                     else:
-                        query = self._add_where_to_query(query, where)
                         insert_exp = exp.insert(
                             query,
                             table,
@@ -832,10 +860,12 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table, batch_size=0
         )
         columns_to_types = columns_to_types or self.columns(target_table)
+        if valid_from_name not in columns_to_types or valid_to_name not in columns_to_types:
+            columns_to_types = self.columns(target_table)
         if updated_at_name not in columns_to_types:
             raise SQLMeshError(
                 f"Column {updated_at_name} not found in {target_table}. Table must contain an `updated_at` timestamp for SCD Type 2"
@@ -844,7 +874,6 @@ class EngineAdapter:
             col for col in columns_to_types if col not in {valid_from_name, valid_to_name}
         ]
         with source_queries[0] as source_query:
-            start_time = "CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)"
             query = (
                 exp.Select()  # type: ignore
                 .with_(
@@ -886,6 +915,7 @@ class EngineAdapter:
                     .group_by(*unique_key),
                 )
                 # Do a full join between latest records and source table in order to combine them together
+                # MySQL doesn't suport full join so going to do a left then right join and remove dups with union
                 .with_(
                     "joined",
                     exp.select(
@@ -893,7 +923,15 @@ class EngineAdapter:
                         *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
                     )
                     .from_("latest")
-                    .join("source", using=unique_key, join_type="full"),
+                    .join("source", using=unique_key, join_type="left")
+                    .union(
+                        exp.select(
+                            *(f"latest.{col} AS t_{col}" for col in columns_to_types),
+                            *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
+                        )
+                        .from_("latest")
+                        .join("source", using=unique_key, join_type="right")
+                    ),
                 )
                 # Get deleted, new, no longer current, or unchanged records
                 .with_(
@@ -910,7 +948,7 @@ class EngineAdapter:
                                     ELSE s_{updated_at_name} 
                                  END 
                             WHEN t_{valid_from_name} IS NULL 
-                            THEN {start_time} 
+                            THEN {self._to_utc_timestamp('1970-01-01 00:00:00+00:00').sql()} 
                             ELSE t_{valid_from_name} 
                         END AS {valid_from_name}""",
                         f"""
@@ -918,7 +956,7 @@ class EngineAdapter:
                             WHEN s_{updated_at_name} > t_{updated_at_name} 
                             THEN s_{updated_at_name} 
                             WHEN s_{unique_key[0]} IS NULL 
-                            THEN CAST('{to_ts(execution_time)}' AS TIMESTAMP) 
+                            THEN {self._to_utc_timestamp(to_ts(execution_time)).sql()} 
                             ELSE t_{valid_to_name} 
                         END AS {valid_to_name}""",
                     )
@@ -937,7 +975,7 @@ class EngineAdapter:
                     exp.select(
                         *(f"s_{col} as {col}" for col in unmanaged_columns),
                         f"s_{updated_at_name} as {valid_from_name}",
-                        f"NULL as {valid_to_name}",
+                        f"{self._to_utc_timestamp(exp.null())} as {valid_to_name}",
                     )
                     .from_("joined")
                     .where(
@@ -968,7 +1006,7 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[str],
     ) -> None:
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table
         )
         columns_to_types = columns_to_types or self.columns(target_table)
@@ -1160,7 +1198,7 @@ class EngineAdapter:
         Yields:
             The table expression
         """
-        source_queries, columns_to_types = self._get_source_query_and_columns_to_types(
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types=columns_to_types, target_table=name
         )
         with self.transaction(TransactionType.DDL):

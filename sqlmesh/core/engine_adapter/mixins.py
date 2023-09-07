@@ -7,6 +7,7 @@ from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapter, SourceQuery, TransactionType
+from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -73,14 +74,47 @@ class LogicalReplaceQueryMixin(EngineAdapter):
         Some engines do not support replace table and also enforce binding views. Therefore we can't swap out tables
         under views and we also can't drop them. Therefore we need to truncate and insert within a transaction.
         """
+
+        def get_truncate(table_name: TableName) -> str:
+            table = quote_identifiers(exp.to_table(table_name))
+            return f"TRUNCATE {table.sql(dialect=self.dialect)}"
+
         if not self.table_exists(table_name):
             return self.ctas(table_name, query_or_df, columns_to_types, exists=False, **kwargs)
         with self.transaction(TransactionType.DDL):
             # TODO: remove quote_identifiers when sqlglot has an expression to represent TRUNCATE
-            table = quote_identifiers(exp.to_table(table_name))
-            sql = f"TRUNCATE {table.sql(dialect=self.dialect)}"
-            self.execute(sql)
-            return self.insert_append(table_name, query_or_df, columns_to_types)
+            source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+                query_or_df, columns_to_types, table_name
+            )
+            columns_to_types = columns_to_types or self.columns(table_name)
+            if len(source_queries) != 1:
+                raise SQLMeshError(
+                    f"Replace query for {table_name} must have exactly one source query."
+                )
+            with source_queries[0] as query:
+                target_table = exp.to_table(table_name)
+                # Check if self-referencing
+                if any(
+                    [
+                        table
+                        for table in query.find_all(exp.Table)
+                        if quote_identifiers(table) == quote_identifiers(target_table)
+                    ]
+                ):
+                    with self.temp_table(
+                        exp.select(*columns_to_types).from_(target_table),
+                        target_table,
+                        columns_to_types,
+                    ) as temp_table:
+                        for table in query.find_all(exp.Table):
+                            if table == target_table:
+                                table.set("this", temp_table.this)
+                                table.set("db", temp_table.args.get("db"))
+                                table.set("catalog", temp_table.args.get("catalog"))
+                        self.execute(get_truncate(table_name))
+                        return self._insert_append_query(table_name, query, columns_to_types)
+                self.execute(get_truncate(table_name))
+                return self._insert_append_query(table_name, query, columns_to_types)
 
 
 class PandasNativeFetchDFSupportMixin(EngineAdapter):

@@ -1,7 +1,6 @@
 # type: ignore
 import typing as t
 import uuid
-from unittest.mock import call
 
 import pandas as pd
 from pytest_mock.plugin import MockerFixture
@@ -50,15 +49,10 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         time_column="ds",
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
-    adapter._connection_pool.get().assert_has_calls(
-        [
-            call.bulk_copy(
-                f"__temp_test_table_{temp_table_uuid.hex}",
-                [(1, "2022-01-01"), (2, "2022-01-02")],
-            )
-        ]
+    adapter._connection_pool.get().bulk_copy.assert_called_with(
+        f'"__temp_test_table_{temp_table_uuid.hex}"',
+        [(1, "2022-01-01"), (2, "2022-01-02")],
     )
-
     assert to_sql_calls(adapter) == [
         f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "ds" TEXT)')""",
         f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_uuid.hex}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1 = 2 WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
@@ -86,13 +80,9 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
         time_column="ds",
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
-    adapter._connection_pool.get().assert_has_calls(
-        [
-            call.bulk_copy(
-                f"__temp_test_table_{temp_table_uuid.hex}",
-                [(1, "2022-01-01"), (2, "2022-01-02")],
-            )
-        ]
+    adapter._connection_pool.get().bulk_copy.assert_called_with(
+        f'"__temp_test_table_{temp_table_uuid.hex}"',
+        [(1, "2022-01-01"), (2, "2022-01-02")],
     )
 
     assert to_sql_calls(adapter) == [
@@ -118,13 +108,9 @@ def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
             "b": exp.DataType.build("INT"),
         },
     )
-    adapter._connection_pool.get().assert_has_calls(
-        [
-            call.bulk_copy(
-                f"__temp_test_table_{temp_table_uuid.hex}",
-                [(1, 4), (2, 5), (3, 6)],
-            )
-        ]
+    adapter._connection_pool.get().bulk_copy.assert_called_with(
+        f'"__temp_test_table_{temp_table_uuid.hex}"',
+        [(1, 4), (2, 5), (3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
@@ -185,13 +171,9 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
         },
         unique_key=["id"],
     )
-    adapter._connection_pool.get().assert_has_calls(
-        [
-            call.bulk_copy(
-                f"__temp_target_{temp_table_uuid.hex}",
-                [(1, 4), (2, 5), (3, 6)],
-            )
-        ]
+    adapter._connection_pool.get().bulk_copy.assert_called_with(
+        f'"__temp_target_{temp_table_uuid.hex}"',
+        [(1, 4), (2, 5), (3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
@@ -212,13 +194,9 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
         },
         unique_key=["id", "ts"],
     )
-    adapter._connection_pool.get().assert_has_calls(
-        [
-            call.bulk_copy(
-                f"__temp_target_{temp_table_uuid.hex}",
-                [(1, 4), (2, 5), (3, 6)],
-            )
-        ]
+    adapter._connection_pool.get().bulk_copy.assert_called_with(
+        f'"__temp_target_{temp_table_uuid.hex}"',
+        [(1, 4), (2, 5), (3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
@@ -251,19 +229,15 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
-    adapter._connection_pool.get().assert_has_calls(
-        [
-            call.bulk_copy(
-                f"__temp_test_table_{temp_table_uuid.hex}",
-                [(1, 4), (2, 5), (3, 6)],
-            )
-        ]
+    adapter._connection_pool.get().bulk_copy.assert_called_with(
+        f'"__temp_test_table_{temp_table_uuid.hex}"',
+        [(1, 4), (2, 5), (3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
         """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table'""",
-        'TRUNCATE "test_table"',
         f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" int, "b" int)')""",
+        'TRUNCATE "test_table"',
         f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}"',
         f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}"',
     ]

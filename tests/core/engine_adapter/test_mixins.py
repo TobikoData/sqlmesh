@@ -1,5 +1,6 @@
 # type: ignore
 import typing as t
+import uuid
 from unittest.mock import call
 
 from pytest_mock.plugin import MockerFixture
@@ -49,6 +50,43 @@ def test_logical_replace_query_does_not_exist(
     adapter.cursor.execute.assert_called_once_with(
         'CREATE TABLE "db"."table" AS SELECT "col" FROM "db"."other_table"'
     )
+
+
+def test_logical_replace_self_reference(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(LogicalReplaceQueryMixin, "postgres")
+    adapter.cursor.fetchone.return_value = (1,)
+    temp_table_uuid = uuid.uuid4()
+    uuid4_mock = mocker.patch("uuid.uuid4")
+    uuid4_mock.return_value = temp_table_uuid
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.table_exists",
+        return_value=True,
+    )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.columns",
+        return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
+    )
+
+    adapter.replace_query("db.table", parse_one("SELECT col + 1 FROM db.table"))
+
+    assert to_sql_calls(adapter) == [
+        f'CREATE SCHEMA IF NOT EXISTS "db"',
+        f'CREATE TABLE IF NOT EXISTS "db"."__temp_table_{temp_table_uuid.hex}" AS SELECT "col" FROM "db"."table"',
+        'TRUNCATE "db"."table"',
+        f'INSERT INTO "db"."table" ("col") SELECT "col" + 1 FROM "db"."__temp_table_{temp_table_uuid.hex}"',
+        f'DROP TABLE IF EXISTS "db"."__temp_table_{temp_table_uuid.hex}"',
+    ]
+
+
+# ['CREATE TABLE IF NOT EXISTS '
+#  '"__temp_replace_temp_d5e58eb32e0949e4b02604e868934277" AS SELECT "col" FROM '
+#  '"db"."table"',
+#  'TRUNCATE "db"."table"',
+#  'INSERT INTO "db"."table" ("col") SELECT "col" + 1 FROM "db"."table"',
+#  'DROP TABL
 
 
 def test_logical_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):

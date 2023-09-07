@@ -92,7 +92,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         df: DF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         batch_size: int,
-        target_table: t.Optional[TableName] = None,
+        target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert columns_to_types
         temp_bq_table = self.__get_temp_bq_table(
