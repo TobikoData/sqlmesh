@@ -55,7 +55,7 @@ class ReportStatus(str, enum.Enum):
     fail = "fail"
 
 
-class ReportPlanStage(str, enum.Enum):
+class ReportStagePlan(str, enum.Enum):
     """An enumeration of plan apply strage."""
 
     validation = "validation"
@@ -63,7 +63,7 @@ class ReportPlanStage(str, enum.Enum):
     backfills = "backfills"
 
 
-class ReportPlanApplyStage(str, enum.Enum):
+class ReportStagePlanApply(str, enum.Enum):
     creation = "creation"
     restate = "restate"
     backfill = "backfill"
@@ -400,10 +400,9 @@ class ReportTestsFailure(ReportTestsRusult):
     traceback: str
 
 
-class Report(BaseModel):
+class ReportMeta(BaseModel):
     status: t.Optional[ReportStatus] = None
     start_at: t.Optional[int] = None
-    meta: t.Optional[t.Dict[str, t.Any]] = None
     stop_at: t.Optional[int] = None
     duration: t.Optional[int] = None
     done: bool = False
@@ -413,16 +412,24 @@ class Report(BaseModel):
         self.status = ReportStatus.init
         self.start_at = now_timestamp()
 
+
+class Stage(BaseModel):
+    meta: ReportMeta = ReportMeta()
+
+    def __init__(self, *arg: t.Any, **kargs: t.Any) -> None:
+        super().__init__(*arg, **kargs)
+        self.meta = ReportMeta()
+
     def stop(self, success: bool = True) -> None:
         if success:
-            self.status = ReportStatus.success
+            self.meta.status = ReportStatus.success
         else:
-            self.status = ReportStatus.fail
-        self.stop_at = now_timestamp()
+            self.meta.status = ReportStatus.fail
 
-        if self.start_at and self.stop_at:
-            self.duration = self.stop_at - self.start_at  # in milliseconds
-            self.done = True
+        self.meta.stop_at = now_timestamp()
+        if self.meta.start_at and self.meta.stop_at:
+            self.meta.duration = self.meta.stop_at - self.meta.start_at  # in milliseconds
+            self.meta.done = True
 
 
 class BackfillDetails(BaseModel):
@@ -440,62 +447,63 @@ class BackfillTask(BaseModel):
     end: t.Optional[TimeLike] = None
 
 
-class ReportStage(Report):
+class ReportStage(Stage):
     def update(self, data: t.Dict[str, t.Any]) -> None:
         for k, v in data.items():
             setattr(self, k, v)
 
 
-class ReportPlanStageValidation(ReportStage):
+class ReportStagePlanValidation(ReportStage):
     start: t.Optional[TimeLike] = None
     end: t.Optional[TimeLike] = None
 
 
-class ReportPlanStageChanges(ReportStage):
+class ReportStagePlanChanges(ReportStage):
     added: t.Optional[t.Set[str]] = None
     removed: t.Optional[t.Set[str]] = None
     modified: t.Optional[ModelsDiff] = None
 
 
-class ReportPlanStageBackfills(ReportStage):
+class ReportStagePlanBackfills(ReportStage):
     models: t.Optional[t.List[BackfillDetails]] = None
 
 
-class ReportPlanApplyStageCreation(ReportStage):
+class ReportStagePlanApplyCreation(ReportStage):
     total_tasks: int
     num_tasks: int
 
 
-class ReportPlanApplyStageRestate(ReportStage):
+class ReportStagePlanApplyRestate(ReportStage):
     pass
 
 
-class ReportPlanApplyStageBackfill(ReportStage):
+class ReportStagePlanApplyBackfill(ReportStage):
     queue: t.Set[str] = set()
     tasks: t.Dict[str, BackfillTask] = {}
 
 
-class ReportPlanApplyStagePromote(ReportStage):
+class ReportStagePlanApplyPromote(ReportStage):
     total_tasks: int
     num_tasks: int
     target_environment: str
 
 
-class ReportProgress(Report):
+class Report(Stage):
     environment: str
+    options: t.Optional[t.Dict[str, t.Any]] = None
 
-    def add(self, stage: t.Union[ReportPlanStage, ReportPlanApplyStage], data: ReportStage) -> None:
+    def add(self, stage: t.Union[ReportStagePlan, ReportStagePlanApply], data: ReportStage) -> None:
         setattr(self, stage, data)
 
 
-class ReportProgressPlan(ReportProgress):
-    validation: t.Optional[ReportPlanStageValidation] = None
-    changes: t.Optional[ReportPlanStageChanges] = None
-    backfills: t.Optional[ReportPlanStageBackfills] = None
+class ReportProgressPlan(Report):
+    validation: t.Optional[ReportStagePlanValidation] = None
+    changes: t.Optional[ReportStagePlanChanges] = None
+    backfills: t.Optional[ReportStagePlanBackfills] = None
 
 
-class ReportProgressPlanApply(ReportProgress):
-    creation: t.Optional[ReportPlanApplyStageCreation] = None
-    restate: t.Optional[ReportPlanApplyStageRestate] = None
-    backfill: t.Optional[ReportPlanApplyStageBackfill] = None
-    promote: t.Optional[ReportPlanApplyStagePromote] = None
+class ReportProgressPlanApply(Report):
+    creation: t.Optional[ReportStagePlanApplyCreation] = None
+    restate: t.Optional[ReportStagePlanApplyRestate] = None
+    backfill: t.Optional[ReportStagePlanApplyBackfill] = None
+    promote: t.Optional[ReportStagePlanApplyPromote] = None

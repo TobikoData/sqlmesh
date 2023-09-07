@@ -1388,7 +1388,7 @@
         "required": ["completed", "total", "view_name", "start"],
         "title": "ReportBackfillProgress"
       },
-      "ReportPlanStageChanges": {
+      "ReportStagePlanChanges": {
         "properties": {
           "status": {
             "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
@@ -1413,9 +1413,9 @@
           }
         },
         "type": "object",
-        "title": "ReportPlanStageChanges"
+        "title": "ReportStagePlanChanges"
       },
-      "ReportPlanStageValidation": {
+      "ReportStagePlanValidation": {
         "properties": {
           "status": {
             "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
@@ -1452,7 +1452,7 @@
           }
         },
         "type": "object",
-        "title": "ReportPlanStageValidation"
+        "title": "ReportStagePlanValidation"
       },
       "ReportProgressPlan": {
         "properties": {
@@ -1479,9 +1479,9 @@
             "default": {}
           },
           "validation": {
-            "$ref": "#/components/schemas/ReportPlanStageValidation"
+            "$ref": "#/components/schemas/ReportStagePlanValidation"
           },
-          "changes": { "$ref": "#/components/schemas/ReportPlanStageChanges" }
+          "changes": { "$ref": "#/components/schemas/ReportStagePlanChanges" }
         },
         "type": "object",
         "required": ["environment"],
