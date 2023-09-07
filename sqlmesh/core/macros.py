@@ -18,7 +18,7 @@ from sqlmesh.core.dialect import (
     MacroStrReplace,
     MacroVar,
 )
-from sqlmesh.utils import UniqueKeyDict, registry_decorator
+from sqlmesh.utils import DECORATOR_RETURN_TYPE, UniqueKeyDict, registry_decorator
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
@@ -110,8 +110,7 @@ class MacroEvaluator:
         for k, v in self.python_env.items():
             if v.is_definition:
                 self.macros[normalize_macro_name(k)] = self.env[v.name or k]
-            elif v.is_import and getattr(self.env.get(k), "__wrapped__", None):
-                # External macros that are serialized as imports will have __wrapped__ set
+            elif v.is_import and getattr(self.env.get(k), "is_macro", None):
                 self.macros[normalize_macro_name(k)] = self.env[k]
 
     def send(
@@ -271,6 +270,15 @@ class macro(registry_decorator):
     """
 
     registry_name = "macros"
+
+    def __call__(
+        self, func: t.Callable[..., DECORATOR_RETURN_TYPE]
+    ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
+        wrapper = super().__call__(func)
+
+        # This is useful to identify macros at runtime
+        setattr(wrapper, "is_macro", True)
+        return wrapper
 
 
 ExecutableOrMacro = t.Union[Executable, macro]
