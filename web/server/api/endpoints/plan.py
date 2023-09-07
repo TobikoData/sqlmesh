@@ -36,11 +36,11 @@ async def run_plan(
 
     console: ApiConsole = context.console  # type: ignore
     report = models.ReportProgressPlan(
-        environment=environment, meta={"skip_tests": plan_options.skip_tests}
+        environment=environment, options={"skip_tests": plan_options.skip_tests}
     )
     console.log_event(event=models.ConsoleEvent.report_plan, data=report.dict())
-    report_stage_validate = models.ReportPlanStageValidation()
-    report.add(stage=models.ReportPlanStage.validation, data=report_stage_validate)
+    report_stage_validate = models.ReportStagePlanValidation()
+    report.add(stage=models.ReportStagePlan.validation, data=report_stage_validate)
     try:
         plan = context.plan(
             environment=environment,
@@ -68,8 +68,8 @@ async def run_plan(
         )
 
     if plan.context_diff.has_changes:
-        report_stage_changes = models.ReportPlanStageChanges()
-        report.add(stage=models.ReportPlanStage.changes, data=report_stage_changes)
+        report_stage_changes = models.ReportStagePlanChanges()
+        report.add(stage=models.ReportStagePlan.changes, data=report_stage_changes)
         report_stage_changes.update(
             {
                 "removed": set(plan.context_diff.removed_snapshots),
@@ -80,8 +80,8 @@ async def run_plan(
         report_stage_changes.stop(success=True)
 
     if plan.requires_backfill:
-        report_stage_backfills = models.ReportPlanStageBackfills()
-        report.add(stage=models.ReportPlanStage.backfills, data=report_stage_backfills)
+        report_stage_backfills = models.ReportStagePlanBackfills()
+        report.add(stage=models.ReportStagePlan.backfills, data=report_stage_backfills)
         batches = context.scheduler().batches()
         tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
         report_stage_backfills.update(

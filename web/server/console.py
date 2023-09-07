@@ -63,7 +63,7 @@ class ApiConsole(TerminalConsole):
     def start_restate_progress(self) -> None:
         if self.report:
             self.report.add(
-                models.ReportPlanApplyStage.restate, models.ReportPlanApplyStageRestate()
+                models.ReportStagePlanApply.restate, models.ReportStagePlanApplyRestate()
             )
 
         self.log_event_apply()
@@ -82,8 +82,8 @@ class ApiConsole(TerminalConsole):
     ) -> None:
         if self.report:
             self.report.add(
-                models.ReportPlanApplyStage.backfill,
-                models.ReportPlanApplyStageBackfill(
+                models.ReportStagePlanApply.backfill,
+                models.ReportStagePlanApplyBackfill(
                     queue=set(),
                     tasks={
                         snapshot.name: models.BackfillTask(
@@ -147,8 +147,8 @@ class ApiConsole(TerminalConsole):
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
         if self.report:
             self.report.add(
-                models.ReportPlanApplyStage.promote,
-                models.ReportPlanApplyStagePromote(
+                models.ReportStagePlanApply.promote,
+                models.ReportStagePlanApplyPromote(
                     total_tasks=total_tasks, num_tasks=0, target_environment=environment
                 ),
             )

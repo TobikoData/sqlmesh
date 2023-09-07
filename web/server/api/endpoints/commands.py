@@ -42,11 +42,11 @@ async def apply(
         )
     console: ApiConsole = context.console  # type: ignore
     report_plan = models.ReportProgressPlan(
-        environment=environment, meta={"skip_tests": plan_options.skip_tests}
+        environment=environment, options={"skip_tests": plan_options.skip_tests}
     )
     console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
-    report_stage_validate = models.ReportPlanStageValidation()
-    report_plan.add(models.ReportPlanStage.validation, report_stage_validate)
+    report_stage_validate = models.ReportStagePlanValidation()
+    report_plan.add(models.ReportStagePlan.validation, report_stage_validate)
     plan_func = functools.partial(
         context.plan,
         environment=environment,
