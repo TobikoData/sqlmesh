@@ -110,7 +110,7 @@ class MacroEvaluator:
         for k, v in self.python_env.items():
             if v.is_definition:
                 self.macros[normalize_macro_name(k)] = self.env[v.name or k]
-            elif v.is_import and getattr(self.env.get(k), "sqlmesh_macro", None):
+            elif v.is_import and getattr(self.env.get(k), "__sqlmesh_macro__", None):
                 self.macros[normalize_macro_name(k)] = self.env[k]
 
     def send(
@@ -277,7 +277,7 @@ class macro(registry_decorator):
         wrapper = super().__call__(func)
 
         # This is useful to identify macros at runtime
-        setattr(wrapper, "sqlmesh_macro", True)
+        setattr(wrapper, "__sqlmesh_macro__", True)
         return wrapper
 
 
