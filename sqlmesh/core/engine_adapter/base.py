@@ -797,7 +797,9 @@ class EngineAdapter:
                         if i == 0:
                             assert where is not None
                             self.delete_from(table_name, where=where)
-                        self.insert_append(table_name, query, columns_to_types=columns_to_types)
+                        self._insert_append_query(
+                            table_name, query, columns_to_types=columns_to_types
+                        )
                     else:
                         insert_exp = exp.insert(
                             query,
