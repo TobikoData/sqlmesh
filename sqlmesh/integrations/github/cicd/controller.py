@@ -11,6 +11,7 @@ import unittest
 from enum import Enum
 from typing import List
 
+import requests
 from hyperscript import Element, h
 from sqlglot.helper import seq_get
 
@@ -112,6 +113,53 @@ class GithubCheckConclusion(str, Enum):
     @property
     def is_skipped(self) -> bool:
         return self == GithubCheckConclusion.SKIPPED
+
+
+class MergeStateStatus(str, Enum):
+    """
+    https://docs.github.com/en/graphql/reference/enums#mergestatestatus
+    """
+
+    BEHIND = "behind"
+    BLOCKED = "blocked"
+    CLEAN = "clean"
+    DIRTY = "dirty"
+    DRAFT = "draft"
+    HAS_HOOKS = "has_hooks"
+    UNKNOWN = "unknown"
+    UNSTABLE = "unstable"
+
+    @property
+    def is_behind(self) -> bool:
+        return self == MergeStateStatus.BEHIND
+
+    @property
+    def is_blocked(self) -> bool:
+        return self == MergeStateStatus.BLOCKED
+
+    @property
+    def is_clean(self) -> bool:
+        return self == MergeStateStatus.CLEAN
+
+    @property
+    def is_dirty(self) -> bool:
+        return self == MergeStateStatus.DIRTY
+
+    @property
+    def is_draft(self) -> bool:
+        return self == MergeStateStatus.DRAFT
+
+    @property
+    def is_has_hooks(self) -> bool:
+        return self == MergeStateStatus.HAS_HOOKS
+
+    @property
+    def is_unknown(self) -> bool:
+        return self == MergeStateStatus.UNKNOWN
+
+    @property
+    def is_unstable(self) -> bool:
+        return self == MergeStateStatus.UNSTABLE
 
 
 class MergeMethod(str, Enum):
@@ -335,6 +383,8 @@ class GithubController:
 
     def _get_plan_summary(self, plan: Plan) -> str:
         try:
+            # Clear out any output that might exist from prior steps
+            self._console.clear_captured_outputs()
             self._console._show_categorized_snapshots(plan)
             catagorized_snapshots = self._console.consume_captured_output()
             self._console._show_missing_dates(plan)
@@ -359,6 +409,35 @@ class GithubController:
         if not comment:
             comment = self._issue.create_comment(header)
         return comment
+
+    def _get_merge_state_status(self) -> MergeStateStatus:
+        """
+        This feature is currently in preview and therefore not available in the python module.
+        So we query GraphQL directly instead.
+        """
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Accept": "application/vnd.github.merge-info-preview+json",
+        }
+        query = f"""{{
+            repository(owner: "{self._event.pull_request_info.owner}", name: "{self._event.pull_request_info.repo}") {{
+                pullRequest(number: {self._event.pull_request_info.pr_number}) {{
+                    title 
+                    state 
+                    mergeStateStatus
+                }}
+            }}
+        }}"""
+        request = requests.post(
+            "/".join([os.environ["GITHUB_API_URL"], "graphql"]),
+            json={"query": query},
+            headers=headers,
+        )
+        if request.status_code == 200:
+            return MergeStateStatus(
+                request.json()["data"]["repository"]["pullRequest"]["mergeStateStatus"].lower()
+            )
+        raise CICDBotError(f"Unable to get merge state status. Error: {request.text}")
 
     def update_sqlmesh_comment_info(
         self, value: str, find_regex: t.Optional[str], replace_if_exists: bool = True
@@ -394,6 +473,12 @@ class GithubController:
         if self._pull_request.merged and not self._event.is_pull_request_closed:
             raise CICDBotError(
                 "PR is already merged and this event was triggered prior to the merge."
+            )
+        merge_status = self._get_merge_state_status()
+        if merge_status.is_dirty:
+            raise CICDBotError(
+                "Merge commit cannot be cleanly created. Likely from a merge conflict. "
+                "Please check PR and resolve any issues."
             )
         plan_summary = f"""<details>
   <summary>Prod Plan Being Applied</summary>
