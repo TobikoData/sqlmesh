@@ -24,7 +24,9 @@ SQLMesh takes a different approach by using time *intervals*.
 
 The first step to using time intervals is to create the set of all intervals based on the model's *start datetime* and *interval unit*. The start datetime specifies when time "begins" for the model, and interval unit specifies how finely time should be divided.
 
-For example, consider a model with a start datetime of 12am yesterday and an interval unit of 12 hours. We are working with the model today at 12pm. The model's set of intervals would have 3 entries: 1 for the first half of yesterday, 1 for the second half of yesterday, and one for today. This is illustrated in the top panel of Figure 1.
+For example, consider a model with a start datetime of 12am yesterday and an interval unit of 12 hours. We are working with the model today at 12pm.
+
+The model's set of intervals would have 3 entries: 1 for the first half of yesterday, 1 for the second half of yesterday, and one for today. This is illustrated in the top panel of Figure 1.
 
 If the model's interval unit was 1 hour, its set of time intervals would have 36 entries: 24 for each hour of yesterday and 12 for each hour today from 12am to 12pm. This is illustrated in the bottom panel of Figure 1.
 
@@ -34,7 +36,9 @@ _Figure 1: Illustration of counting intervals over a 36 hour period with interva
 
 When we first execute and backfill the bottom model as part of a `sqlmesh plan` today at 12pm, SQLMesh calculates its set of 36 time intervals and records that all 36 of them were backfilled. It retains this information in the SQLMesh state tables for future use.
 
-If we `sqlmesh run` the model tomorrow at 12pm, SQLMesh calculates the set of all intervals as (24 for day 1) + (24 for day 2) + (12 for today 12am to 12pm) = 60 intervals. It compares this set of 60 to the stored set of 36 that we already backfilled to identify the 24 un-processed intervals from 12pm yesterday to 12pm today. It then processes only those 24 intervals during today's run.
+If we `sqlmesh run` the model tomorrow at 12pm, SQLMesh calculates the set of all intervals as (24 for day 1) + (24 for day 2) + (12 for today 12am to 12pm) = 60 intervals.
+
+It compares this set of 60 to the stored set of 36 that we already backfilled to identify the 24 un-processed intervals from 12pm yesterday to 12pm today. It then processes only those 24 intervals during today's run.
 
 ## Running `run`
 
@@ -66,23 +70,26 @@ MODEL (
     ),
 );
 
-SELECT *
-FROM sqlmesh_example.incremental_model
-WHERE ds BETWEEN @start_ds and @end_ds -- WHERE clause filters based on time
+SELECT
+    *
+FROM
+    sqlmesh_example.incremental_model
+WHERE
+    ds BETWEEN @start_ds and @end_ds -- WHERE clause filters based on time
 ```
 
 The model configuration specifies that the column `ds` represents the time stamp for each row, and the model query contains a `WHERE` clause that uses the time column to filter the data.
 
 The `WHERE` clause uses the [SQLMesh predefined macro variables](../concepts/macros/macro_variables.md#predefined-variables) `@start_ds` and `@end_ds` to specify the date range. SQLMesh automatically substitutes in the correct dates based on which intervals are being processed in a job.
 
-In addition, SQLMesh prevents data leakage by automatically wrapping the query in another time-filtering `WHERE` clause using the time column in the model's configuration.
+In addition to the query `WHERE` clause, SQLMesh prevents data leakage by automatically wrapping the query in another time-filtering `WHERE` clause using the time column in the model's configuration.
 
 This raises a question: if SQLMesh automatically adds a time filtering `WHERE` clause, why do you need to include one in the query? Because the two filters play different roles:
 
 - The model query `WHERE` clause filters the data *read into the model*
 - The SQLMesh wrapper `WHERE` clause filters the data *output by the model*
 
-The model query ensures that only the necessary data is processed by the model, so no resources are wasted. In some cases, upstream models may use a different time column than the model itself, which can be used in addition to (or in place of) the model's time column in the `WHERE` clause.
+The model query ensures that only the necessary data is processed by the model, so no resources are wasted. It also adds flexibility - if an upstream model uses a different time column than the model itself, that column can be used in addition to (or in place of) the model's time column in the query `WHERE` clause.
 
 The SQLMesh wrapper clause prevents data leakage by ensuring the model does not return records outside the time range. This is a safety mechanism that guards against improperly specified queries.
 
@@ -94,7 +101,7 @@ Every time a model is modified, SQLMesh classifies the change as "[breaking](../
 
 Breaking changes may invalidate data for downstream models, so a new physical table is created and fully refreshed for the changed model and all models downstream of it. Non-breaking changes only affect the changed model, so only its physical table is refreshed.
 
-Sometimes a model's data may be so large that it is not feasible to rebuild either its own or its downstream model physical tables. In those situations a third type of change, "forward only," can be used. The name reflects that the change is only applied "going forward" in time.
+Sometimes a model's data may be so large that it is not feasible to rebuild either its own or its downstream models' physical tables. In those situations a third type of change, "forward only," can be used. The name reflects that the change is only applied "going forward" in time.
 
 ### Specifying forward-only
 
@@ -108,12 +115,15 @@ MODEL (
     kind incremental_by_time_range (
         time_column (ds, '%Y-%m-%d'),
     ),
-    forward_only true
+    forward_only true -- All changes will be forward only
 );
 
-SELECT *
-FROM sqlmesh_example.incremental_model
-WHERE ds BETWEEN @start_ds and @end_ds
+SELECT
+    *
+FROM
+    sqlmesh_example.incremental_model
+WHERE
+    ds BETWEEN @start_ds and @end_ds
 ```
 
 Alternatively, all the changes contained in a plan can be classified as forward-only with a flag: `sqlmesh plan --forward-only`. Learn more about forward-only plans [here](../concepts/plans.md#forward-only-plans).
