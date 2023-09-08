@@ -203,6 +203,12 @@ Options:
                             will fail.
   --auto-apply              Automatically apply the new plan after creation.
   --no-auto-categorization  Disable automatic change categorization.
+  --effective-from          The effective date from which to apply forward-only
+                            changes on production.
+  --include-unmodified      Whether to include unmodified models in the target
+                            development environment.
+  --model-selections        A list of model selection strings to filter the
+                            models that should be included into this plan.
   --help                    Show this message and exit.
 ```
 
