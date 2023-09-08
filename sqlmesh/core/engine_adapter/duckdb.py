@@ -3,28 +3,41 @@ from __future__ import annotations
 import math
 import typing as t
 
-import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.core.engine_adapter.base import SourceQuery
 from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
+    from sqlmesh.core.engine_adapter._typing import DF
 
 
 class DuckDBEngineAdapter(LogicalMergeMixin):
     DIALECT = "duckdb"
 
-    def _insert_append_pandas_df(
+    def _df_to_source_queries(
         self,
-        table_name: TableName,
-        df: pd.DataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        contains_json: bool = False,
-    ) -> None:
-        column_names = list(columns_to_types or [])
-        self.execute(exp.insert("SELECT * FROM df", table_name, columns=column_names))
+        df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        batch_size: int,
+        target_table: TableName,
+    ) -> t.List[SourceQuery]:
+        assert columns_to_types
+        temp_table = self._get_temp_table(target_table)
+        casted_columns = [
+            exp.alias_(exp.cast(column, to=kind), column, copy=False)
+            for column, kind in columns_to_types.items()
+        ]
+        temp_table_sql = exp.select(*casted_columns).from_("df").sql(dialect=self.dialect)
+        self.cursor.sql(f"CREATE TABLE {temp_table} AS {temp_table_sql}")
+        return [
+            SourceQuery(
+                query_factory=lambda: exp.select(*columns_to_types).from_(temp_table),  # type: ignore
+                cleanup_func=lambda: self.drop_table(temp_table),
+            )
+        ]
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None

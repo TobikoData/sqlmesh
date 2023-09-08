@@ -248,6 +248,7 @@ def make_mocked_engine_adapter(mocker: MockerFixture) -> t.Callable:
         connection_mock = mocker.NonCallableMock()
         cursor_mock = mocker.Mock()
         connection_mock.cursor.return_value = cursor_mock
+        cursor_mock.connection.return_value = connection_mock
         return klass(lambda: connection_mock, dialect=dialect or klass.DIALECT)
 
     return _make_function

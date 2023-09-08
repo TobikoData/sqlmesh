@@ -519,7 +519,7 @@ def test_migrate_view(
     cursor_mock.execute.assert_has_calls(
         [
             call(
-                'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
+                'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" ("c", "a") AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
             )
         ]
     )

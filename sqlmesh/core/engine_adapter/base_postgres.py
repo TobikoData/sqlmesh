@@ -14,7 +14,7 @@ from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import QueryOrDF
+    from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 
 class BasePostgresEngineAdapter(CommitOnExecuteMixin):
@@ -29,12 +29,14 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
         sql = (
             exp.select("column_name", "data_type")
             .from_(self.COLUMNS_TABLE)
-            .where(f"table_name = '{table.alias_or_name}' AND table_schema = '{table.args['db']}'")
+            .where(
+                f"table_name = '{table.alias_or_name}' AND table_schema = '{table.args['db'].name}'"
+            )
         )
         self.execute(sql)
         resp = self.cursor.fetchall()
         if not resp:
-            SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
+            raise SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect)
             for column_name, data_type in resp
@@ -58,7 +60,7 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
             .from_("information_schema.tables")
             .where(f"table_name = '{table.alias_or_name}'")
         )
-        database_name = table.args.get("db")
+        database_name = table.db
         if database_name:
             sql = sql.where(f"table_schema = '{database_name}'")
 
@@ -90,7 +92,6 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
             super().create_view(
                 view_name,
                 query_or_df,
-                columns_to_types=columns_to_types,
                 replace=False,
                 materialized=materialized,
                 **create_kwargs,
