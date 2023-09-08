@@ -1038,7 +1038,7 @@ class Context(BaseContext):
             else self.snapshots.values()
         )
 
-        num_audits = sum(len(snapshot.audits) for snapshot in snapshots)
+        num_audits = sum(len(snapshot.audits_with_args) for snapshot in snapshots)
         self.console.log_status_update(f"Found {num_audits} audit(s).")
         errors = []
         skipped_count = 0
