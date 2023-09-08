@@ -11,6 +11,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubController,
     GithubEvent,
     MergeMethod,
+    MergeStateStatus,
 )
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import CICDBotError
@@ -113,6 +114,21 @@ def test_deploy_to_prod_merge_error(github_pr_synchronized_approvers_controller:
         CICDBotError,
         match=r"^PR is already merged and this event was triggered prior to the merge.$",
     ):
+        controller.deploy_to_prod()
+
+
+def test_deploy_to_prod_dirty_pr(
+    github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
+):
+    merge_state_status = mocker.MagicMock()
+    merge_state_status.return_value = MergeStateStatus.DIRTY
+    mocker.patch(
+        "sqlmesh.integrations.github.cicd.controller.GithubController._get_merge_state_status",
+        merge_state_status,
+    )
+    controller = github_pr_synchronized_approvers_controller
+    controller._pull_request = AttributeDict({"merged": False})
+    with pytest.raises(CICDBotError, match=r"^Merge commit cannot be cleanly created.*"):
         controller.deploy_to_prod()
 
 
