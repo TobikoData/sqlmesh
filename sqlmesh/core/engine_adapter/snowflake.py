@@ -6,13 +6,14 @@ import pandas as pd
 from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.base import EngineAdapter, SourceQuery
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import nullsafe_join
+from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter._typing import DF, Query
 
 
 class SnowflakeEngineAdapter(EngineAdapter):
@@ -21,6 +22,52 @@ class SnowflakeEngineAdapter(EngineAdapter):
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
+
+    def _df_to_source_queries(
+        self,
+        df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        batch_size: int,
+        target_table: TableName,
+    ) -> t.List[SourceQuery]:
+        assert isinstance(df, pd.DataFrame)
+        full_columns_to_types: t.Dict[
+            str, exp.DataType
+        ] = columns_to_types or columns_to_types_from_df(df)
+        temp_table = self._get_temp_table(target_table or "pandas")
+
+        def query_factory() -> Query:
+            from snowflake.connector.pandas_tools import write_pandas
+
+            # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
+            #
+            # The above issue has already been fixed upstream, but we keep the following
+            # line anyway in order to support a wider range of Snowflake versions.
+            self.cursor.execute(f'USE SCHEMA "{temp_table.db}"')
+
+            # See: https://stackoverflow.com/a/75627721
+            for column, kind in (full_columns_to_types or {}).items():
+                if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):  # type: ignore
+                    df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
+                # https://github.com/snowflakedb/snowflake-connector-python/issues/1677
+                elif is_datetime64_dtype(df.dtypes[column]):  # type: ignore
+                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
+            self.create_table(temp_table, full_columns_to_types, exists=False)
+            write_pandas(
+                self._connection_pool.get(),
+                df,
+                temp_table.name,
+                schema=temp_table.db,
+                chunk_size=self.DEFAULT_BATCH_SIZE,
+            )
+            return exp.select(*full_columns_to_types).from_(temp_table)
+
+        return [
+            SourceQuery(
+                query_factory=query_factory,
+                cleanup_func=lambda: self.drop_table(temp_table),
+            )
+        ]
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
@@ -48,6 +95,8 @@ class SnowflakeEngineAdapter(EngineAdapter):
         target = nullsafe_join(".", catalog_name, schema_name)
         sql = f"SHOW TERSE OBJECTS IN {target}"
         df = self.fetchdf(sql, quote_identifiers=True)
+        if df.empty:
+            return []
         return [
             DataObject(
                 catalog=row.database_name,  # type: ignore
@@ -57,33 +106,3 @@ class SnowflakeEngineAdapter(EngineAdapter):
             )
             for row in df[["database_name", "schema_name", "name", "kind"]].itertuples()
         ]
-
-    def _insert_append_pandas_df(
-        self,
-        table_name: TableName,
-        df: pd.DataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        contains_json: bool = False,
-    ) -> None:
-        from snowflake.connector.pandas_tools import write_pandas
-
-        table = exp.to_table(table_name)
-
-        # Workaround for https://github.com/snowflakedb/snowflake-connector-python/issues/1034
-        #
-        # The above issue has already been fixed upstream, but we keep the following
-        # line anyway in order to support a wider range of Snowflake versions.
-        self.cursor.execute(f'USE SCHEMA "{table.db}"')
-
-        # See: https://stackoverflow.com/a/75627721
-        for column, kind in (columns_to_types or {}).items():
-            if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):
-                df[column] = pd.to_datetime(df[column]).dt.date
-
-        write_pandas(
-            self._connection_pool.get(),
-            df,
-            table.name,
-            schema=table.db,
-            chunk_size=self.DEFAULT_BATCH_SIZE,
-        )
