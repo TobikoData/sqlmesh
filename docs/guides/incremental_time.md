@@ -2,7 +2,7 @@
 
 SQLMesh models are classified by [kind](../concepts/models/model_kinds.md). One powerful model kind is "incremental by time range" - this guide describes how these models work and demonstrates how to use them.
 
-See the [models guide](./models.md) to learn more about working with models in general.
+See the [models guide](./models.md) to learn more about working with models in general or the [model kinds concepts page](../concepts/models/model_kinds.md) for an overview of the different model kinds.
 
 ## Load the right data
 
@@ -56,7 +56,7 @@ When `batch_size` is specified, the total number of intervals to process is divi
 
 Incremental by time models require specification of a time column in their configuration. In addition, their model SQL queries should specify a `WHERE` clause that filters the data on a time range.
 
-This example shows an incremental by time model from the SQLMesh [quickstart project](../quick_start.md):
+This example shows an incremental by time model that could be added to the SQLMesh [quickstart project](../quick_start.md):
 
 ``` sql linenums="1"
 MODEL (
@@ -98,4 +98,22 @@ Sometimes a model's data may be so large that it is not feasible to rebuild eith
 
 ### Specifying forward-only
 
-Forward-only changes can be specified in two ways. First, model can be [configured as forward-only](../guides/configuration.md#models) such that all changes to them are automatically classified as forward-only. Alternatively, all the changes contained in a plan can be classified as forward-only with a flag: `sqlmesh plan --forward-only`.
+Forward-only changes can be specified in two ways. First, a model can be [configured as forward-only](../guides/configuration.md#models) such that all changes to them are automatically classified as forward-only. This guarantees that the model's physical table will never be fully refreshed.
+
+This example configures the model in the previous example to be forward only:
+
+``` sql linenums="1"
+MODEL (
+    name sqlmesh_example.new_model,
+    kind incremental_by_time_range (
+        time_column (ds, '%Y-%m-%d'),
+    ),
+    forward_only true
+);
+
+SELECT *
+FROM sqlmesh_example.incremental_model
+WHERE ds BETWEEN @start_ds and @end_ds
+```
+
+Alternatively, all the changes contained in a plan can be classified as forward-only with a flag: `sqlmesh plan --forward-only`. Learn more about forward-only plans [here](../concepts/plans.md#forward-only-plans).
