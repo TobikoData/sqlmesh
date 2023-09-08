@@ -14,6 +14,7 @@ nav:
   - Guides:
     - guides/projects.md
     - guides/models.md
+    - guides/incremental_time.md
     - guides/testing.md
     - guides/scheduling.md
     - guides/connections.md
