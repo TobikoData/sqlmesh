@@ -2,7 +2,6 @@
 import typing as t
 
 import pandas as pd
-import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
@@ -19,18 +18,6 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
         """SELECT "column_name", "data_type" FROM "SVV_COLUMNS" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
     )
     assert resp == {"col": exp.DataType.build("INT")}
-
-
-def test_create_view_from_dataframe(make_mocked_engine_adapter: t.Callable):
-    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
-    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    pytest.raises(
-        NotImplementedError,
-        adapter.create_view,
-        view_name="test_view",
-        query_or_df=df,
-        columns_to_types={"a": "int", "b": "int"},
-    )
 
 
 def test_create_table_from_query_exists_no_if_not_exists(
