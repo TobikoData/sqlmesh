@@ -261,6 +261,10 @@ class ModelConfig(BaseModelConfig):
             dialect="bigquery",
         )
 
+    @property
+    def sqlmesh_config_fields(self) -> t.Set[str]:
+        return super().sqlmesh_config_fields | {"cron", "interval_unit"}
+
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         dialect = context.dialect
@@ -279,11 +283,6 @@ class ModelConfig(BaseModelConfig):
             optional_kwargs["clustered_by"] = [
                 d.parse_one(c, dialect=dialect).name for c in self.cluster_by
             ]
-
-        for field in ["cron", "interval_unit"]:
-            field_val = getattr(self, field, None) or self.meta.get(field, None)
-            if field_val:
-                optional_kwargs[field] = field_val
 
         if not context.target:
             raise ConfigError(f"Target required to load '{self.sql_name}' into SQLMesh.")

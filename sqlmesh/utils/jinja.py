@@ -4,6 +4,7 @@ import importlib
 import re
 import typing as t
 from collections import defaultdict
+from enum import Enum
 
 from jinja2 import Environment, Template, nodes
 from sqlglot import Dialect, Parser, TokenType
@@ -178,15 +179,19 @@ class JinjaMacroRegistry(PydanticModel):
 
     @field_validator("global_objs", mode="before")
     @classmethod
-    def _validate_attribute_dict(cls, value: t.Any) -> t.Any:
-        def _attribute_dict(val: t.Dict[str, t.Any]) -> AttributeDict:
-            return AttributeDict(
-                {k: _attribute_dict(v) if isinstance(v, dict) else v for k, v in val.items()}
-            )
+    def _validate_global_objs(cls, value: t.Any) -> t.Any:
+        def _normalize(val: t.Any) -> t.Any:
+            if isinstance(val, dict):
+                return AttributeDict({k: _normalize(v) for k, v in val.items()})
+            if isinstance(val, list):
+                return [_normalize(v) for v in val]
+            if isinstance(val, set):
+                return [_normalize(v) for v in sorted(val)]
+            if isinstance(val, Enum):
+                return val.value
+            return val
 
-        if isinstance(value, t.Dict):
-            return _attribute_dict(value)
-        return value
+        return _normalize(value)
 
     @field_serializer("global_objs")
     def _serialize_attribute_dict(
@@ -215,6 +220,14 @@ class JinjaMacroRegistry(PydanticModel):
             self.packages[package] = package_macros
         else:
             self.root_macros.update(macros)
+
+    def add_globals(self, globals: t.Dict[str, JinjaGlobalAttribute]) -> None:
+        """Adds global objects to the registry.
+
+        Args:
+            globals: The global objects that should be added.
+        """
+        self.global_objs.update(**self._validate_global_objs(globals))
 
     def build_macro(self, reference: MacroReference, **kwargs: t.Any) -> t.Optional[t.Callable]:
         """Builds a Python callable for a macro with the given reference.

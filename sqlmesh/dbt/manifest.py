@@ -167,18 +167,18 @@ class ManifestHelper:
             dependencies.macros.append(MacroReference(package="dbt", name="get_where_subquery"))
             dependencies.macros.append(MacroReference(package="dbt", name="should_store_failures"))
 
-            test_owner = _test_owner(node)
+            test_model = _test_model(node)
 
             test = TestConfig(
                 sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
-                owner=test_owner,
+                model_name=test_model,
                 test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
                 dependencies=dependencies,
                 **_node_base_config(node),
             )
             self._tests_per_package[node.package_name][node.name.lower()] = test
-            if test_owner:
-                self._tests_by_owner[test_owner].append(test)
+            if test_model:
+                self._tests_by_owner[test_model].append(test)
 
     def _load_models_and_seeds(self) -> None:
         for node in self._manifest.nodes.values():
@@ -294,7 +294,7 @@ def _model_node_id(model_name: str, package: str) -> str:
     return f"model.{package}.{model_name}"
 
 
-def _test_owner(node: ManifestNode) -> t.Optional[str]:
+def _test_model(node: ManifestNode) -> t.Optional[str]:
     attached_node = getattr(node, "attached_node", None)
     if attached_node:
         pieces = attached_node.split(".")
