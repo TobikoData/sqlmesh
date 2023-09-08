@@ -391,6 +391,7 @@ Now lets say that you update the source table with the following data:
 | 4  | Milkshake        | 3.99  | 2020-01-02 00:00:00 |
 
 Summary of Changes:
+
 * The price of the Chicken Sandwich was increased from $10.99 to $12.99.
 * Cheeseburger was removed from the menu.
 * Milkshakes were added to the menu.
@@ -415,6 +416,7 @@ For our final pass, lets say that you update the source table with the following
 | 4  | Chocolate Milkshake | 3.99  | 2020-01-02 00:00:00 |
 
 Summary of changes:
+
 * The price of the Chicken Sandwich was increased from $12.99 to $14.99 (must be good!)
 * Cheeseburger was added back to the menu with original name and price.
 * Milkshake name was updated to be "Chocolate Milkshake".
@@ -432,7 +434,7 @@ Target table will be updated with the following data:
 | 4  | Milkshake           | 3.99  | 2020-01-02 00:00:00 | 2020-01-02 00:00:00 | 2020-01-03 00:00:00 |
 | 4  | Chocolate Milkshake | 3.99  | 2020-01-03 00:00:00 | 2020-01-03 00:00:00 |        NULL         |
 
-Note: `Cheeseburger` was deleted from `2020-01-02 02:00:00` to `2020-01-03 00:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. This is the most accurate representation of the menu based on the source data provided. If `Cheeseburger` were added back to the menu with it's original updated at timestamp of `2020-01-01 00:00:00` then the `valid_from` timestamp of the new record would have been `2020-01-02 02:00:00` resulting in no period of time where the item was deleted. Since in this case the updated at timestamp did not change it is likely the item was removed in error and this again most accurately represents the menu based on the source data.
+**Note:** `Cheeseburger` was deleted from `2020-01-02 02:00:00` to `2020-01-03 00:00:00` meaning if you queried the table during that time range then you would not see `Cheeseburger` in the menu. This is the most accurate representation of the menu based on the source data provided. If `Cheeseburger` were added back to the menu with it's original updated at timestamp of `2020-01-01 00:00:00` then the `valid_from` timestamp of the new record would have been `2020-01-02 02:00:00` resulting in no period of time where the item was deleted. Since in this case the updated at timestamp did not change it is likely the item was removed in error and this again most accurately represents the menu based on the source data.
 
 ### Querying SCD Type 2 Models
 
