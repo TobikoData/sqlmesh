@@ -117,8 +117,7 @@ class SparkEngineAdapter(EngineAdapter):
 
         if self._use_spark_session:
             return [SourceQuery(query_factory=query_factory)]
-        else:
-            return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
 
     def _ensure_pyspark_df(
         self, generic_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -187,7 +186,7 @@ class SparkEngineAdapter(EngineAdapter):
             raise SQLMeshError("Cannot replace table without columns to types")
         self.create_table(table_name, columns_to_types)
         return self._insert_overwrite_by_condition(
-            table_name, source_queries, columns_to_types, where=exp.condition("1=1")
+            table_name, source_queries, columns_to_types, where=exp.true()
         )
 
     def create_state_table(

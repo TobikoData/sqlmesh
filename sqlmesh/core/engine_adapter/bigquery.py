@@ -94,7 +94,8 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
-        assert columns_to_types
+        if not columns_to_types:
+            raise SQLMeshError("columns_to_types is required when using a dataframe.")
         temp_bq_table = self.__get_temp_bq_table(
             self._get_temp_table(target_table or "pandas"), columns_to_types
         )

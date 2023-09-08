@@ -161,11 +161,9 @@ class EngineAdapter:
             if isinstance(ts, exp.Literal):
                 if not ts.is_string:
                     raise SQLMeshError("Timestamp literal must be a string")
-                ts = ts.this
+                ts = ts.name
             return exp.Literal.string(
-                datetime.fromisoformat(t.cast(str, ts))
-                .astimezone(timezone.utc)
-                .strftime("%Y-%m-%d %H:%M:%S")
+                datetime.fromisoformat(ts).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             )
 
         return exp.cast(ensure_utc_exp(col), "TIMESTAMP")
@@ -181,10 +179,9 @@ class EngineAdapter:
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
         if isinstance(query_or_df, (exp.Subqueryable, exp.DerivedTable)):
             return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
-        else:
-            return self._df_to_source_queries(
-                query_or_df, columns_to_types, batch_size, target_table=target_table
-            )
+        return self._df_to_source_queries(
+            query_or_df, columns_to_types, batch_size, target_table=target_table
+        )
 
     def _df_to_source_queries(
         self,
@@ -550,7 +547,8 @@ class EngineAdapter:
         if self.is_pandas_df(query_or_df):
             values = list(t.cast(pd.DataFrame, query_or_df).itertuples(index=False, name=None))
             columns_to_types = columns_to_types or self._columns_to_types(query_or_df)
-            assert columns_to_types
+            if not columns_to_types:
+                raise SQLMeshError("columns_to_types must be provided for dataframes")
             query_or_df = self._values_to_sql(
                 values,
                 columns_to_types,
@@ -804,6 +802,10 @@ class EngineAdapter:
                     query = self._add_where_to_query(query, where)
                     if i > 0 or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
                         if i == 0:
+                            if not where:
+                                raise SQLMeshError(
+                                    "Where condition is required when doing a delete/insert"
+                                )
                             assert where is not None
                             self.delete_from(table_name, where=where)
                         self._insert_append_query(
@@ -959,7 +961,7 @@ class EngineAdapter:
                                     ELSE s_{updated_at_name} 
                                  END 
                             WHEN t_{valid_from_name} IS NULL 
-                            THEN {self._to_utc_timestamp('1970-01-01 00:00:00+00:00').sql()} 
+                            THEN {self._to_utc_timestamp('1970-01-01 00:00:00+00:00')} 
                             ELSE t_{valid_from_name} 
                         END AS {valid_from_name}""",
                         f"""
@@ -967,7 +969,7 @@ class EngineAdapter:
                             WHEN s_{updated_at_name} > t_{updated_at_name} 
                             THEN s_{updated_at_name} 
                             WHEN s_{unique_key[0]} IS NULL 
-                            THEN {self._to_utc_timestamp(to_ts(execution_time)).sql()} 
+                            THEN {self._to_utc_timestamp(to_ts(execution_time))} 
                             ELSE t_{valid_to_name} 
                         END AS {valid_to_name}""",
                     )

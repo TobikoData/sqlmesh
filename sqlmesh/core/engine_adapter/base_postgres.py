@@ -60,9 +60,9 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
             .from_("information_schema.tables")
             .where(f"table_name = '{table.alias_or_name}'")
         )
-        database_name = table.args.get("db")
+        database_name = table.db
         if database_name:
-            sql = sql.where(f"table_schema = '{database_name.this}'")
+            sql = sql.where(f"table_schema = '{database_name}'")
 
         self.execute(sql)
 

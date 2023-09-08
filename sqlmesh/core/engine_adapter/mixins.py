@@ -154,7 +154,7 @@ class CommitOnExecuteMixin(EngineAdapter):
 
 
 class InsertOverwriteWithMergeMixin(EngineAdapter):
-    FALSE_PREDICATE: exp.Condition = exp.FALSE
+    FALSE_PREDICATE: exp.Condition = exp.false()
 
     def _insert_overwrite_by_condition(
         self,
