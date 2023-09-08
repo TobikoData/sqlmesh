@@ -12,6 +12,8 @@ from sqlglot import parse_one
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
+from sqlmesh.utils.date import to_ds
+from tests.core.engine_adapter import to_sql_calls
 
 
 def test_create_view(make_mocked_engine_adapter: t.Callable):
@@ -26,13 +28,27 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
         table_properties={"a": exp.convert(1)},
     )
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
-            call('CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
-            call('CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"'),
-        ]
+    assert to_sql_calls(adapter) == [
+        'CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"',
+        'CREATE VIEW "test_view" AS SELECT "a" FROM "tbl"',
+        'CREATE OR REPLACE VIEW "test_view" AS SELECT "a" FROM "tbl"',
+    ]
+
+
+def test_create_view_pandas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.create_view("test_view", pd.DataFrame({"a": [1, 2, 3]}), replace=False)
+    adapter.create_view(
+        "test_view",
+        pd.DataFrame({"a": [1, 2, 3]}),
+        replace=True,
+        table_properties={"a": exp.convert(1)},
     )
+
+    assert to_sql_calls(adapter) == [
+        'CREATE VIEW "test_view" ("a") AS SELECT CAST("a" AS BIGINT) AS "a" FROM (VALUES (1), (2), (3)) AS "t"("a")',
+        'CREATE OR REPLACE VIEW "test_view" ("a") AS SELECT CAST("a" AS BIGINT) AS "a" FROM (VALUES (1), (2), (3)) AS "t"("a")',
+    ]
 
 
 def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
@@ -101,22 +117,23 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
 def test_insert_overwrite_by_time_partition(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
-    adapter._insert_overwrite_by_condition(
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         parse_one("SELECT a FROM tbl"),
-        where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     adapter.cursor.begin.assert_called_once()
     adapter.cursor.commit.assert_called_once()
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call("""DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""),
-            call('INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        """DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
+        """INSERT INTO "test_table" ("a") SELECT * FROM (SELECT "a" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
+    ]
 
 
 def test_insert_overwrite_by_time_partition_supports_insert_overwrite(
@@ -125,10 +142,14 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite(
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
-    adapter._insert_overwrite_by_condition(
+
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         parse_one("SELECT a, b FROM tbl"),
-        where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
@@ -143,31 +164,39 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
-    adapter._insert_overwrite_by_condition(
+
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         df,
-        where=parse_one("ds BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="ds",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
-    )
+    assert to_sql_calls(adapter) == [
+        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
+    ]
 
 
 def test_insert_overwrite_by_time_partition_replace_where(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
-    adapter._insert_overwrite_by_condition(
+
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         parse_one("SELECT a, b FROM tbl"),
-        where=parse_one("b BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="b",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
+    assert to_sql_calls(adapter) == [
         """INSERT INTO "test_table" REPLACE WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
-    )
+    ]
 
 
 def test_insert_overwrite_by_time_partition_replace_where_pandas(
@@ -177,16 +206,20 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
 
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
-    adapter._insert_overwrite_by_condition(
+
+    adapter.insert_overwrite_by_time_partition(
         "test_table",
         df,
-        where=parse_one("ds BETWEEN '2022-01-01' and '2022-01-02'"),
+        start="2022-01-01",
+        end="2022-01-02",
+        time_column="ds",
+        time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "test_table"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
-    )
+    assert to_sql_calls(adapter) == [
+        """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
+    ]
 
 
 def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
@@ -198,9 +231,9 @@ def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
         columns_to_types={"a": exp.DataType.build("INT")},
     )
 
-    adapter.cursor.execute.assert_called_once_with(
-        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"'
-    )
+    assert to_sql_calls(adapter) == [
+        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"',
+    ]
 
 
 def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):
@@ -216,16 +249,33 @@ def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable):
         },
     )
 
+    assert to_sql_calls(adapter) == [
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")',
+    ]
+
+
+def test_insert_append_pandas_batches(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.DEFAULT_BATCH_SIZE = 1
+
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    adapter.insert_append(
+        "test_table",
+        df,
+        columns_to_types={
+            "a": exp.DataType.build("INT"),
+            "b": exp.DataType.build("INT"),
+        },
+    )
+
     adapter.cursor.begin.assert_called_once()
     adapter.cursor.commit.assert_called_once()
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call(
-                'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")',
-            ),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")',
+    ]
 
 
 def test_create_table(make_mocked_engine_adapter: t.Callable):
@@ -722,6 +772,8 @@ def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
             "name": exp.DataType.Type.VARCHAR,
             "price": exp.DataType.Type.DOUBLE,
             "test_updated_at": exp.DataType.Type.TIMESTAMP,
+            "test_valid_from": exp.DataType.Type.TIMESTAMP,
+            "test_valid_to": exp.DataType.Type.TIMESTAMP,
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
@@ -733,6 +785,7 @@ def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
 CREATE OR REPLACE TABLE "target" AS
 WITH "source" AS (
   SELECT
+    DISTINCT ON ("id")
     "id",
     "name",
     "price",
@@ -750,7 +803,9 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_updated_at"
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -759,7 +814,9 @@ WITH "source" AS (
     "id",
     "name",
     "price",
-    "test_updated_at"
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -768,7 +825,9 @@ WITH "source" AS (
     "static"."id",
     "static"."name",
     "static"."price",
-    "static"."test_updated_at"
+    "static"."test_updated_at",
+    "static"."test_valid_from",
+    "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
     USING ("id")
@@ -787,12 +846,29 @@ WITH "source" AS (
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
     "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
     "source"."id" AS "s_id",
     "source"."name" AS "s_name",
     "source"."price" AS "s_price",
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
-  FULL JOIN "source"
+  LEFT JOIN "source"
+    USING ("id")
+  UNION
+  SELECT
+    "latest"."id" AS "t_id",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id" AS "s_id",
+    "source"."name" AS "s_name",
+    "source"."price" AS "s_price",
+    "source"."test_updated_at" AS "s_test_updated_at"
+  FROM "latest"
+  RIGHT JOIN "source"
     USING ("id")
 ), "updated_rows" AS (
   SELECT
@@ -808,14 +884,14 @@ WITH "source" AS (
         ELSE "s_test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "s_test_updated_at" > "t_test_updated_at"
       THEN "s_test_updated_at"
       WHEN "s_id" IS NULL
-      THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -828,7 +904,7 @@ WITH "source" AS (
     "s_price" AS "price",
     "s_test_updated_at" AS "test_updated_at",
     "s_test_updated_at" AS "test_valid_from",
-    NULL AS "test_valid_to"
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     NOT "t_id" IS NULL AND NOT "s_id" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
@@ -874,6 +950,8 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             "name": exp.DataType.Type.VARCHAR,
             "price": exp.DataType.Type.DOUBLE,
             "test_updated_at": exp.DataType.Type.TIMESTAMP,
+            "test_valid_from": exp.DataType.Type.TIMESTAMP,
+            "test_valid_to": exp.DataType.Type.TIMESTAMP,
         },
         execution_time=datetime(2020, 1, 1, 0, 0, 0),
     )
@@ -885,6 +963,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
 CREATE OR REPLACE TABLE "target" AS
 WITH "source" AS (
   SELECT
+    DISTINCT ON ("id1", "id2")
     "id1",
     "id2",
     "name",
@@ -896,11 +975,13 @@ WITH "source" AS (
       CAST("id2" AS INT) AS "id2",
       CAST("name" AS VARCHAR) AS "name",
       CAST("price" AS DOUBLE) AS "price",
-      CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at"
+      CAST("test_updated_at" AS TIMESTAMP) AS "test_updated_at",
+      CAST("test_valid_from" AS TIMESTAMP) AS "test_valid_from",
+      CAST("test_valid_to" AS TIMESTAMP) AS "test_valid_to"
     FROM (VALUES
       (1, 4, 'muffins', 4.0, '2020-01-01 10:00:00'),
       (2, 5, 'chips', 5.0, '2020-01-02 15:00:00'),
-      (3, 6, 'soda', 6.0, '2020-01-03 12:00:00')) AS "t"("id1", "id2", "name", "price", "test_updated_at")
+      (3, 6, 'soda', 6.0, '2020-01-03 12:00:00')) AS "t"("id1", "id2", "name", "price", "test_updated_at", "test_valid_from", "test_valid_to")
   ) AS "raw_source"
 ), "static" AS (
   SELECT
@@ -908,7 +989,9 @@ WITH "source" AS (
     "id2",
     "name",
     "price",
-    "test_updated_at"
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
   FROM "target"
   WHERE
     NOT "test_valid_to" IS NULL
@@ -918,7 +1001,9 @@ WITH "source" AS (
     "id2",
     "name",
     "price",
-    "test_updated_at"
+    "test_updated_at",
+    "test_valid_from",
+    "test_valid_to"
   FROM "target"
   WHERE
     "test_valid_to" IS NULL
@@ -928,7 +1013,9 @@ WITH "source" AS (
     "static"."id2",
     "static"."name",
     "static"."price",
-    "static"."test_updated_at"
+    "static"."test_updated_at",
+    "static"."test_valid_from",
+    "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
     USING ("id1", "id2")
@@ -950,13 +1037,32 @@ WITH "source" AS (
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
     "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
     "source"."id1" AS "s_id1",
     "source"."id2" AS "s_id2",
     "source"."name" AS "s_name",
     "source"."price" AS "s_price",
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
-  FULL JOIN "source"
+  LEFT JOIN "source"
+    USING ("id1", "id2")
+  UNION
+  SELECT
+    "latest"."id1" AS "t_id1",
+    "latest"."id2" AS "t_id2",
+    "latest"."name" AS "t_name",
+    "latest"."price" AS "t_price",
+    "latest"."test_updated_at" AS "t_test_updated_at",
+    "latest"."test_valid_from" AS "t_test_valid_from",
+    "latest"."test_valid_to" AS "t_test_valid_to",
+    "source"."id1" AS "s_id1",
+    "source"."id2" AS "s_id2",
+    "source"."name" AS "s_name",
+    "source"."price" AS "s_price",
+    "source"."test_updated_at" AS "s_test_updated_at"
+  FROM "latest"
+  RIGHT JOIN "source"
     USING ("id1", "id2")
 ), "updated_rows" AS (
   SELECT
@@ -973,14 +1079,14 @@ WITH "source" AS (
         ELSE "s_test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
-      THEN CAST('1970-01-01 00:00:00+00:00' AS TIMESTAMP)
+      THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
       WHEN "s_test_updated_at" > "t_test_updated_at"
       THEN "s_test_updated_at"
       WHEN "s_id1" IS NULL
-      THEN CAST('2020-01-01T00:00:00+00:00' AS TIMESTAMP)
+      THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
@@ -995,7 +1101,7 @@ WITH "source" AS (
     "s_price" AS "price",
     "s_test_updated_at" AS "test_updated_at",
     "s_test_updated_at" AS "test_valid_from",
-    NULL AS "test_valid_to"
+    CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
     NOT "t_id1" IS NULL AND NOT "s_id1" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
@@ -1020,26 +1126,24 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
-    adapter.cursor.execute.assert_called_once_with(
+    # TODO: Shouldn't we enforce that `a` is casted to an int?
+    assert to_sql_calls(adapter) == [
         'CREATE OR REPLACE TABLE "test_table" AS SELECT "a" FROM "tbl"'
-    )
+    ]
 
 
 def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.DEFAULT_BATCH_SIZE = 1
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
-    adapter.cursor.execute.assert_has_calls(
-        [
-            call('DROP TABLE IF EXISTS "test_table"'),
-            call('CREATE TABLE IF NOT EXISTS "test_table" ("a" int, "b" int)'),
-            call(
-                'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
-            ),
-        ]
-    )
+    assert to_sql_calls(adapter) == [
+        'CREATE OR REPLACE TABLE "test_table" AS SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (1, 4)) AS "t"("a", "b")',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (2, 5)) AS "t"("a", "b")',
+        'INSERT INTO "test_table" ("a", "b") SELECT CAST("a" AS INT) AS "a", CAST("b" AS INT) AS "b" FROM (VALUES (3, 6)) AS "t"("a", "b")',
+    ]
 
 
 def test_create_table_like(make_mocked_engine_adapter: t.Callable):
@@ -1095,3 +1199,25 @@ def test_clone_table(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE `target_table` CLONE `source_table`"
     )
+
+
+def test_ctas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.ctas("new_table", parse_one("SELECT * FROM old_table"))
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "new_table" AS SELECT * FROM "old_table"'
+    ]
+
+
+def test_ctas_pandas(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    # Inferring the types from the dataframe
+    adapter.ctas("new_table", df)
+
+    assert to_sql_calls(adapter) == [
+        'CREATE TABLE IF NOT EXISTS "new_table" AS SELECT CAST("a" AS BIGINT) AS "a", CAST("b" AS BIGINT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
+    ]

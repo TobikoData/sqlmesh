@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import re
+import sys
 import typing as t
 from difflib import unified_diff
 from enum import Enum, auto
@@ -654,36 +655,46 @@ def extend_sqlglot() -> None:
 
 
 def select_from_values(
-    values: t.Iterable[t.Tuple[t.Any, ...]],
+    values: t.List[t.Tuple[t.Any, ...]],
     columns_to_types: t.Dict[str, exp.DataType],
-    batch_size: int = 0,
+    batch_size: int = sys.maxsize,
     alias: str = "t",
-) -> t.Generator[exp.Select, None, None]:
+) -> t.Iterator[exp.Select]:
     """Generate a VALUES expression that has a select wrapped around it to cast the values to their correct types.
 
     Args:
         values: List of values to use for the VALUES expression.
         columns_to_types: Mapping of column names to types to assign to the values.
-        batch_size: The maximum number of tuples per batch, if <= 0 then no batching will occur.
+        batch_size: The maximum number of tuples per batch.
         alias: The alias to assign to the values expression. If not provided then will default to "t"
 
     Returns:
         This method operates as a generator and yields a VALUES expression.
     """
+    num_rows = len(values)
+    for i in range(0, num_rows, batch_size):
+        yield select_from_values_for_batch_range(
+            values=values,
+            columns_to_types=columns_to_types,
+            batch_start=i,
+            batch_end=min(i + batch_size, num_rows),
+            alias=alias,
+        )
+
+
+def select_from_values_for_batch_range(
+    values: t.List[t.Tuple[t.Any, ...]],
+    columns_to_types: t.Dict[str, exp.DataType],
+    batch_start: int,
+    batch_end: int,
+    alias: str = "t",
+) -> exp.Select:
     casted_columns = [
         exp.alias_(exp.cast(column, to=kind), column, copy=False)
         for column, kind in columns_to_types.items()
     ]
-    batch = []
-    for row in values:
-        batch.append(row)
-        if batch_size > 0 and len(batch) > batch_size:
-            values_exp = exp.values(batch, alias=alias, columns=columns_to_types)
-            yield exp.select(*casted_columns).from_(values_exp)
-            batch.clear()
-    if batch:
-        values_exp = exp.values(batch, alias=alias, columns=columns_to_types)
-        yield exp.select(*casted_columns).from_(values_exp)
+    values_exp = exp.values(values[batch_start:batch_end], alias=alias, columns=columns_to_types)
+    return exp.select(*casted_columns).from_(values_exp, copy=False)
 
 
 def pandas_to_sql(
@@ -704,7 +715,7 @@ def pandas_to_sql(
         This method operates as a generator and yields a VALUES expression.
     """
     yield from select_from_values(
-        values=df.itertuples(index=False, name=None),
+        values=list(df.itertuples(index=False, name=None)),
         columns_to_types=columns_to_types or columns_to_types_from_df(df),
         batch_size=batch_size,
         alias=alias,

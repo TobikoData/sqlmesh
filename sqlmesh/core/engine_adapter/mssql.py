@@ -3,31 +3,31 @@
 
 from __future__ import annotations
 
-import contextlib
 import typing as t
 
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport
+from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport, SourceQuery
 from sqlmesh.core.engine_adapter.mixins import (
+    InsertOverwriteWithMergeMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     import pymssql
 
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import Query, QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import DF, Query
 
 
 class MSSQLEngineAdapter(
     EngineAdapterWithIndexSupport,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
+    InsertOverwriteWithMergeMixin,
 ):
     """Implementation of EngineAdapterWithIndexSupport for MsSql compatibility.
 
@@ -39,6 +39,7 @@ class MSSQLEngineAdapter(
     """
 
     DIALECT: str = "tsql"
+    FALSE_PREDICATE = exp.condition("1=2")
 
     def table_exists(self, table_name: TableName) -> bool:
         """
@@ -71,79 +72,45 @@ class MSSQLEngineAdapter(
     def connection(self) -> pymssql.Connection:
         return self.cursor.connection
 
-    @contextlib.contextmanager
-    def __try_load_pandas_to_temp_table(
-        self,
-        reference_table_name: TableName,
-        query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-    ) -> t.Generator[Query, None, None]:
-        reference_table = exp.to_table(reference_table_name)
-        df = self.try_get_pandas_df(query_or_df)
-        if df is None:
-            yield t.cast("Query", query_or_df)
-            return
-        if columns_to_types is None:
-            raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
-        if reference_table.db is None:
-            raise SQLMeshError("table must be qualified when using Pandas DataFrames")
-        with self.temp_table(query_or_df, reference_table) as temp_table:
-            rows: t.List[t.Iterable[t.Any]] = list(df.itertuples(False, None))
-
-            conn = self._connection_pool.get()
-            conn.bulk_copy(temp_table.name, rows)
-
-            yield exp.select(*columns_to_types).from_(temp_table)
-
-    def _insert_overwrite_by_condition(
-        self,
-        table_name: TableName,
-        query_or_df: QueryOrDF,
-        where: t.Optional[exp.Condition] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+    def drop_schema(
+        self, schema_name: str, ignore_if_not_exists: bool = True, cascade: bool = False
     ) -> None:
         """
-        SQL Server does not directly support `INSERT OVERWRITE` but it does
-        support `MERGE` with a `False` condition and delete that mimics an
-        `INSERT OVERWRITE`. Based on documentation this should have the same
-        runtime performance as `INSERT OVERWRITE`.
-
-        If a Pandas DataFrame is provided, it will be loaded into a temporary
-        table and then merged with the target table. This temporary table is
-        deleted after the merge is complete or after it's expiration time has
-        passed.
+        MsSql doesn't support CASCADE clause and drops schemas unconditionally.
         """
-        with self.__try_load_pandas_to_temp_table(
-            table_name,
-            query_or_df,
-            columns_to_types,
-        ) as source_table:
-            query = self._add_where_to_query(source_table, where)
+        if cascade:
+            # Note: Assumes all objects in the schema are captured by the `_get_data_objects` call and can be dropped
+            # with a `drop_table` call.
+            objects = self._get_data_objects(schema_name)
+            for obj in objects:
+                self.drop_table(obj.name, exists=ignore_if_not_exists)
+        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
-            columns = [
-                exp.to_column(col)
-                for col in (columns_to_types or [col.alias_or_name for col in query.expressions])
-            ]
-            when_not_matched_by_source = exp.When(
-                matched=False,
-                source=True,
-                condition=where,
-                then=exp.Delete(),
+    def _df_to_source_queries(
+        self,
+        df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        batch_size: int,
+        target_table: TableName,
+    ) -> t.List[SourceQuery]:
+        assert isinstance(df, pd.DataFrame)
+        assert columns_to_types
+        full_columns_to_types = columns_to_types
+        temp_table = self._get_temp_table(target_table or "pandas")
+
+        def query_factory() -> Query:
+            self.create_table(temp_table, full_columns_to_types)
+            rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
+            conn = self._connection_pool.get()
+            conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
+            return exp.select(*full_columns_to_types).from_(temp_table)
+
+        return [
+            SourceQuery(
+                query_factory=query_factory,
+                cleanup_func=lambda: self.drop_table(temp_table),
             )
-            when_not_matched_by_target = exp.When(
-                matched=False,
-                source=False,
-                then=exp.Insert(
-                    this=exp.Tuple(expressions=columns),
-                    expression=exp.Tuple(expressions=columns),
-                ),
-            )
-            self._merge(
-                target_table=table_name,
-                source_table=query,
-                on=exp.condition("1=2"),
-                match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
-            )
+        ]
 
     def _get_data_objects(
         self,

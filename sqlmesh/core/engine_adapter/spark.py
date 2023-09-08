@@ -6,7 +6,11 @@ import typing as t
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter, InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.base import (
+    EngineAdapter,
+    InsertOverwriteStrategy,
+    SourceQuery,
+)
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
@@ -23,8 +27,9 @@ if t.TYPE_CHECKING:
         DF,
         PySparkDataFrame,
         PySparkSession,
-        QueryOrDF,
+        Query,
     )
+    from sqlmesh.core.engine_adapter.base import QueryOrDF
     from sqlmesh.core.node import IntervalUnit
 
 
@@ -77,6 +82,43 @@ class SparkEngineAdapter(EngineAdapter):
             )
             return None
 
+    @classmethod
+    def is_pyspark_df(cls, value: t.Any) -> bool:
+        return hasattr(value, "sparkSession")
+
+    @classmethod
+    def try_get_pyspark_df(cls, value: t.Any) -> t.Optional[PySparkDataFrame]:
+        if cls.is_pyspark_df(value):
+            return value
+        return None
+
+    @classmethod
+    def try_get_pandas_df(cls, value: t.Any) -> t.Optional[pd.DataFrame]:
+        if cls.is_pandas_df(value):
+            return value
+        return None
+
+    def _df_to_source_queries(
+        self,
+        df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        batch_size: int,
+        target_table: TableName,
+    ) -> t.List[SourceQuery]:
+        if not self._use_spark_session:
+            return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+        df = self._ensure_pyspark_df(df, columns_to_types)
+
+        def query_factory() -> Query:
+            temp_table = self._get_temp_table(target_table or "spark", table_only=True)
+            df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
+            temp_table.set("db", "global_temp")
+            return exp.select("*").from_(temp_table)
+
+        if self._use_spark_session:
+            return [SourceQuery(query_factory=query_factory)]
+        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)
+
     def _ensure_pyspark_df(
         self, generic_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
     ) -> PySparkDataFrame:
@@ -104,122 +146,6 @@ class SparkEngineAdapter(EngineAdapter):
         return self._ensure_pyspark_df(
             self._fetch_native_df(query, quote_identifiers=quote_identifiers)
         )
-
-    def _insert_overwrite_by_condition(
-        self,
-        table_name: TableName,
-        query_or_df: QueryOrDF,
-        where: t.Optional[exp.Condition] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ) -> None:
-        df = self.try_get_df(query_or_df)
-        if self._use_spark_session and df is not None:
-            self._insert_pyspark_df(
-                table_name,
-                self._ensure_pyspark_df(df, columns_to_types),
-                overwrite=True,
-                where=where,
-            )
-        else:
-            super()._insert_overwrite_by_condition(table_name, query_or_df, where, columns_to_types)
-
-    def insert_append(
-        self,
-        table_name: TableName,
-        query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        contains_json: bool = False,
-    ) -> None:
-        df = self.try_get_df(query_or_df)
-        if self._use_spark_session and df is not None:
-            self._insert_append_pyspark_df(
-                table_name, self._ensure_pyspark_df(df, columns_to_types)
-            )
-        else:
-            super().insert_append(table_name, query_or_df, columns_to_types, contains_json)
-
-    def merge(
-        self,
-        target_table: TableName,
-        source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        unique_key: t.Sequence[str],
-    ) -> None:
-        if columns_to_types is None:
-            columns_to_types = self.columns(target_table)
-
-        column_names = columns_to_types.keys()
-        df = self.try_get_df(source_table)
-        if self._use_spark_session and df is not None:
-            pyspark_df = self._ensure_pyspark_df(df, columns_to_types)
-            temp_view = self._get_temp_table(target_table, table_only=True)
-            pyspark_df.createOrReplaceGlobalTempView(temp_view.sql(dialect=self.dialect))
-            temp_view.set("db", "global_temp")
-            query = exp.select(*column_names).from_(temp_view.sql(dialect=self.dialect))
-            super().merge(target_table, query, columns_to_types, unique_key)
-        else:
-            super().merge(target_table, source_table, columns_to_types, unique_key)
-
-    def _insert_append_pandas_df(
-        self,
-        table_name: TableName,
-        df: pd.DataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        contains_json: bool = False,
-    ) -> None:
-        if self._use_spark_session:
-            self._insert_pyspark_df(
-                table_name, self._ensure_pyspark_df(df, columns_to_types), overwrite=False
-            )
-        else:
-            super()._insert_append_pandas_df(table_name, df, columns_to_types, contains_json)
-
-    def _insert_append_pyspark_df(
-        self,
-        table_name: TableName,
-        df: PySparkDataFrame,
-    ) -> None:
-        self._insert_pyspark_df(table_name, df, overwrite=False)
-
-    def _insert_pyspark_df(
-        self,
-        table_name: TableName,
-        df: PySparkDataFrame,
-        overwrite: bool = False,
-        where: t.Optional[exp.Condition] = None,
-    ) -> None:
-        if isinstance(table_name, exp.Table):
-            table_name = table_name.sql(dialect=self.dialect)
-
-        df = df.where(where.sql(dialect=self.dialect)) if where else df
-
-        df_writer = df.select(*self.spark.table(table_name).columns).write
-        if overwrite:
-            df_writer = df_writer.mode("overwrite")
-            if self.INSERT_OVERWRITE_STRATEGY.is_replace_where:
-                if where is None:
-                    raise SQLMeshError(
-                        "Cannot use Replace Where Insert/Overwrite without a where clause"
-                    )
-                df_writer = df_writer.option("replaceWhere", where.sql(dialect=self.dialect))
-        df_writer.insertInto(table_name)
-
-    def _create_table_from_df(
-        self,
-        table_name: TableName,
-        df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        exists: bool = True,
-        replace: bool = True,
-        **kwargs: t.Any,
-    ) -> None:
-        if self._use_spark_session:
-            df = self._ensure_pyspark_df(df, columns_to_types)
-            if isinstance(table_name, exp.Table):
-                table_name = table_name.sql(dialect=self.dialect)
-            df.write.saveAsTable(table_name, mode="overwrite")
-        else:
-            super()._create_table_from_df(table_name, df, columns_to_types, exists, replace)
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
@@ -252,8 +178,15 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> None:
         # Note: Some storage formats (like Delta and Iceberg) support REPLACE TABLE but since we don't
         # currently check for storage formats we will just do an insert/overwrite.
+        source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
+            query_or_df, columns_to_types, target_table=table_name
+        )
+        columns_to_types = columns_to_types or self.columns(table_name)
+        if not columns_to_types:
+            raise SQLMeshError("Cannot replace table without columns to types")
+        self.create_table(table_name, columns_to_types)
         return self._insert_overwrite_by_condition(
-            table_name, query_or_df, columns_to_types=columns_to_types, where=exp.condition("1=1")
+            table_name, source_queries, columns_to_types, where=exp.true()
         )
 
     def create_state_table(
