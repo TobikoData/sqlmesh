@@ -383,28 +383,23 @@ class StandaloneAudit(_Node, AuditMixin):
         Args:
             include_python: Whether or not to include Python code in the rendered definition.
         """
-        expressions = []
-        self.all_field_infos()
+        expressions: t.List[exp.Expression] = []
         comment = None
-        for field_name, field_info in self.all_field_infos().items():
-            if field_name not in self.meta_fields:
-                continue
-
+        for field_name in sorted(self.meta_fields):
             field_value = getattr(self, field_name)
+            field_info = self.all_field_infos()[field_name]
             if field_name == "standalone" or field_value != field_info.default:
                 if field_name == "description":
                     comment = field_value
                 else:
-                    expressions.append(
-                        exp.Property(
-                            this=field_info.alias or field_name,
-                            value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(
-                                field_value
-                            ),
-                        )
+                    expression = exp.Property(
+                        this=field_info.alias or field_name,
+                        value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(field_value),
                     )
-
-        # expressions.append(exp.Property(this="standalone", value=exp.convert(True)))
+                    if field_name == "name":
+                        expressions.insert(0, expression)
+                    else:
+                        expressions.append(expression)
 
         audit = d.Audit(expressions=expressions)
         audit.comments = [comment] if comment else None

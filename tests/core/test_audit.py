@@ -490,8 +490,8 @@ def test_render_definition():
         """
         AUDIT (
             name my_audit,
-            owner owner_name,
             dialect spark,
+            owner owner_name,
             standalone true,
         );
 
