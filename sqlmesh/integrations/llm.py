@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from langchain import LLMChain, PromptTemplate
-from langchain.chat_models import ChatOpenAI
+from langchain.chat_models import ChatLiteLLM
 
 from sqlmesh.core.model import Model
 
@@ -30,7 +30,7 @@ class LLMIntegration:
         query_prompt_template = PromptTemplate.from_template(_QUERY_PROMPT_TEMPLATE).partial(
             dialect=dialect, table_info=_to_table_info(models)
         )
-        llm = ChatOpenAI(temperature=temperature)  # type: ignore
+        llm = ChatLiteLLM(temperature=temperature)  # type: ignore
         self._query_chain = LLMChain(llm=llm, prompt=query_prompt_template, verbose=verbose)
 
     def query(self, prompt: str) -> str:

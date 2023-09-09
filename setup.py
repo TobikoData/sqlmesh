@@ -103,6 +103,7 @@ setup(
         "llm": [
             "langchain",
             "openai",
+            "litellm",
         ],
         "mssql": [
             "pymssql",
