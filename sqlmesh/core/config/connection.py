@@ -7,6 +7,7 @@ import typing as t
 from enum import Enum
 
 from pydantic import Field
+from sqlglot.helper import subclasses
 
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
@@ -16,15 +17,15 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import model_validator
+from sqlmesh.utils.pydantic import field_validator, model_validator
 
 if sys.version_info >= (3, 9):
-    from typing import Annotated, Literal
+    from typing import Literal
 else:
-    from typing_extensions import Annotated, Literal
+    from typing_extensions import Literal
 
 
-class _ConnectionConfig(abc.ABC, BaseConfig):
+class ConnectionConfig(abc.ABC, BaseConfig):
     concurrent_tasks: int
 
     @property
@@ -72,7 +73,7 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
         )
 
 
-class DuckDBConnectionConfig(_ConnectionConfig):
+class DuckDBConnectionConfig(ConnectionConfig):
     """Configuration for the DuckDB connection.
 
     Args:
@@ -101,7 +102,7 @@ class DuckDBConnectionConfig(_ConnectionConfig):
         return duckdb.connect
 
 
-class SnowflakeConnectionConfig(_ConnectionConfig):
+class SnowflakeConnectionConfig(ConnectionConfig):
     """Configuration for the Snowflake connection.
 
     Args:
@@ -159,7 +160,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
         return connector.connect
 
 
-class DatabricksConnectionConfig(_ConnectionConfig):
+class DatabricksConnectionConfig(ConnectionConfig):
     """
     Databricks connection that uses the SQL connector for SQL models and then Databricks Connect for Dataframe operations
 
@@ -329,7 +330,7 @@ class BigQueryPriority(str, Enum):
         return QueryPriority.INTERACTIVE
 
 
-class BigQueryConnectionConfig(_ConnectionConfig):
+class BigQueryConnectionConfig(ConnectionConfig):
     """
     BigQuery Connection Configuration.
     """
@@ -430,7 +431,7 @@ class BigQueryConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class GCPPostgresConnectionConfig(_ConnectionConfig):
+class GCPPostgresConnectionConfig(ConnectionConfig):
     """
     Postgres Connection Configuration for GCP.
 
@@ -497,7 +498,7 @@ class GCPPostgresConnectionConfig(_ConnectionConfig):
         return Connector().connect
 
 
-class RedshiftConnectionConfig(_ConnectionConfig):
+class RedshiftConnectionConfig(ConnectionConfig):
     """
     Redshift Connection Configuration.
 
@@ -591,7 +592,7 @@ class RedshiftConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class PostgresConnectionConfig(_ConnectionConfig):
+class PostgresConnectionConfig(ConnectionConfig):
     host: str
     user: str
     password: str
@@ -631,7 +632,7 @@ class PostgresConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class MySQLConnectionConfig(_ConnectionConfig):
+class MySQLConnectionConfig(ConnectionConfig):
     host: str
     user: str
     password: str
@@ -673,7 +674,7 @@ class MySQLConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class MSSQLConnectionConfig(_ConnectionConfig):
+class MSSQLConnectionConfig(ConnectionConfig):
     host: str
     user: str
     password: str
@@ -719,7 +720,7 @@ class MSSQLConnectionConfig(_ConnectionConfig):
         return pymssql.connect
 
 
-class SparkConnectionConfig(_ConnectionConfig):
+class SparkConnectionConfig(ConnectionConfig):
     """
     Vanilla Spark Connection Configuration. Use `DatabricksConnectionConfig` for Databricks.
     """
@@ -767,18 +768,35 @@ class SparkConnectionConfig(_ConnectionConfig):
         }
 
 
-ConnectionConfig = Annotated[
-    t.Union[
-        BigQueryConnectionConfig,
-        GCPPostgresConnectionConfig,
-        DatabricksConnectionConfig,
-        DuckDBConnectionConfig,
-        MSSQLConnectionConfig,
-        MySQLConnectionConfig,
-        PostgresConnectionConfig,
-        RedshiftConnectionConfig,
-        SnowflakeConnectionConfig,
-        SparkConnectionConfig,
-    ],
-    Field(discriminator="type_"),
-]
+CONNECTION_CONFIG_TO_TYPE = {
+    # Map all subclasses of ConnectionConfig to the value of their `type_` field.
+    tpe.all_field_infos()["type_"].default: tpe
+    for tpe in subclasses(__name__, ConnectionConfig, exclude=(ConnectionConfig,))
+}
+
+
+def _connection_config_validator(
+    cls: t.Type, v: ConnectionConfig | t.Dict[str, t.Any] | None
+) -> ConnectionConfig | None:
+    if v is None or isinstance(v, ConnectionConfig):
+        return v
+
+    if "type" not in v:
+        raise ConfigError("Missing connection type.")
+
+    connection_type = v["type"]
+    if connection_type not in CONNECTION_CONFIG_TO_TYPE:
+        raise ConfigError(f"Unknown connection type '{connection_type}'.")
+
+    return CONNECTION_CONFIG_TO_TYPE[connection_type](**v)
+
+
+connection_config_validator = field_validator(
+    "connection",
+    "state_connection",
+    "test_connection",
+    "default_connection",
+    "default_test_connection",
+    mode="before",
+    check_fields=False,
+)(_connection_config_validator)
