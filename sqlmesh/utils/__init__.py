@@ -262,3 +262,10 @@ def merge_dicts(*args: t.Dict) -> t.Dict:
 
 def sqlglot_dialects() -> str:
     return "'" + "', '".join(Dialects.__members__.values()) + "'"
+
+
+NON_ALNUM = re.compile(r"[^a-zA-Z0-9_]")
+
+
+def sanitize_name(name: str) -> str:
+    return NON_ALNUM.sub("_", name)
