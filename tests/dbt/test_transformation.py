@@ -599,7 +599,7 @@ def test_dbt_max_partition(sushi_test_project: Project, assert_exp_eq, mocker: M
 JINJA_STATEMENT_BEGIN;
 {% if is_incremental() %}
   DECLARE _dbt_max_partition DATETIME DEFAULT (
-    SELECT MAX(PARSE_DATETIME('%Y%m', partition_id)) FROM `{{ target.database }}`.`{{ adapter.resolve_schema(this) }}`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND partition_id IS NOT NULL AND partition_id != '__NULL__'
+    SELECT MAX(PARSE_DATETIME('%Y%m', partition_id)) FROM `{{ target.database }}`.`{{ adapter.resolve_schema(this) }}`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '{{ adapter.resolve_identifier(this) }}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'
   );
 {% endif %}
 JINJA_END;""".strip()

@@ -668,11 +668,24 @@ def select_partitions_expr(
     if parse_fun:
         granularity = granularity or "day"
         parse_format = GRANULARITY_TO_PARTITION_FORMAT[granularity.lower()]
-        partition_expr = f"{parse_fun}('{parse_format}', partition_id)"
+        partition_expr = exp.func(
+            parse_fun,
+            exp.Literal.string(parse_format),
+            exp.column("partition_id"),
+            dialect="bigquery",
+        )
     else:
-        partition_expr = "CAST(partition_id AS INT64)"
+        partition_expr = exp.cast(exp.column("partition_id"), "INT64", dialect="bigquery")
 
-    return f"SELECT {agg_func.upper()}({partition_expr}) FROM {partitions_table_name} WHERE table_name = '{table_name}' AND partition_id IS NOT NULL AND partition_id != '__NULL__'"
+    return (
+        exp.select(exp.func(agg_func, partition_expr))
+        .from_(partitions_table_name, dialect="bigquery")
+        .where(
+            f"table_name = '{table_name}' AND partition_id IS NOT NULL AND partition_id != '__NULL__'",
+            copy=False,
+        )
+        .sql(dialect="bigquery")
+    )
 
 
 GRANULARITY_TO_PARTITION_FORMAT = {
