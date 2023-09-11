@@ -115,6 +115,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         authenticator: The optional authenticator name. Defaults to username/password authentication ("snowflake").
                        Options: https://github.com/snowflakedb/snowflake-connector-python/blob/e937591356c067a77f34a0a42328907fda792c23/src/snowflake/connector/network.py#L178-L183
+        private_key: The optional private key to use for authentication.
     """
 
     account: str
@@ -124,6 +125,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     database: t.Optional[str] = None
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
+    private_key: t.Optional[str] = None
 
     concurrent_tasks: int = 4
 
@@ -136,18 +138,48 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
+        from snowflake.connector.network import (
+            DEFAULT_AUTHENTICATOR,
+            KEY_PAIR_AUTHENTICATOR,
+        )
+
         if "type" in values and values["type"] != "snowflake":
             return values
         auth = values.get("authenticator")
+        auth = auth.upper() if auth else DEFAULT_AUTHENTICATOR
         user = values.get("user")
         password = values.get("password")
-        if not auth and (not user or not password):
+        private_key = values.get("private_key")
+        if private_key:
+            auth = auth if auth and auth != DEFAULT_AUTHENTICATOR else KEY_PAIR_AUTHENTICATOR
+            if auth != KEY_PAIR_AUTHENTICATOR:
+                raise ConfigError(
+                    f"Private key can only be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+                )
+            if not user:
+                raise ConfigError(
+                    f"User must be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+                )
+            if password:
+                raise ConfigError(
+                    f"Password cannot be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+                )
+        if auth == DEFAULT_AUTHENTICATOR and (not user or not password):
             raise ConfigError("User and password must be provided if using default authentication")
         return values
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {"user", "password", "account", "warehouse", "database", "role", "authenticator"}
+        return {
+            "user",
+            "password",
+            "account",
+            "warehouse",
+            "database",
+            "role",
+            "authenticator",
+            "private_key",
+        }
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
