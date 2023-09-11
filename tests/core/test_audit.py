@@ -523,3 +523,48 @@ def test_render_definition():
 
     # Should include the macro implementation.
     assert "def test_macro(evaluator, v):" in format_model_expressions(audit.render_definition())
+
+
+def test_text_diff():
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            dialect spark,
+            owner owner_name,
+            standalone true,
+        );
+
+        SELECT
+            *,
+            @test_macro(1),
+        FROM
+            db.table t1
+        WHERE
+            col IS NULL
+    """
+    )
+
+    audit = load_audit(
+        expressions,
+        macros={"test_macro": Executable(payload="def test_macro(evaluator, v):\n    return v")},
+    )
+
+    modified_audit = audit.copy()
+    modified_audit.name = "my_audit_2"
+
+    assert (
+        audit.text_diff(modified_audit)
+        == """--- 
+
++++ 
+
+@@ -1,5 +1,5 @@
+
+ Audit (
+-  name my_audit,
++  name my_audit_2,
+   dialect spark,
+   owner owner_name,
+   standalone TRUE"""
+    )

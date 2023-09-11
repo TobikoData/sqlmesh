@@ -39,7 +39,7 @@ else:
     from typing_extensions import Literal
 
 
-class AuditMeta:
+class AuditCommonMetaMixin:
     """
     Metadata for audits which can be defined in SQL.
 
@@ -58,7 +58,7 @@ class AuditMeta:
     standalone: bool
 
 
-class AuditMixin(AuditMeta):
+class AuditMixin(AuditCommonMetaMixin):
     """
     Mixin for common Audit functionality
 
@@ -361,8 +361,6 @@ class StandaloneAudit(_Node, AuditMixin):
         meta_a, *statements_a = self.render_definition()
         meta_b, *statements_b = other.render_definition()
 
-        breakpoint()
-
         query_a = statements_a.pop() if statements_a else None
         query_b = statements_b.pop() if statements_b else None
 
@@ -416,7 +414,7 @@ class StandaloneAudit(_Node, AuditMixin):
             if python_env.expressions:
                 python_expressions.append(python_env)
 
-            jinja_expressions = self._jinja_macros_to_exprs()
+            jinja_expressions = self.jinja_macros.macros_to_expressions()
 
         return [audit, *python_expressions, *jinja_expressions, *self.expressions, self.query]
 
@@ -427,7 +425,7 @@ class StandaloneAudit(_Node, AuditMixin):
 
     @property
     def meta_fields(self) -> t.Iterable[str]:
-        return set(AuditMeta.__annotations__) | set(_Node.all_field_infos())
+        return set(AuditCommonMetaMixin.__annotations__) | set(_Node.all_field_infos())
 
     def _create_query_renderer(self, node: _Node) -> QueryRenderer:
         return QueryRenderer(
@@ -438,28 +436,6 @@ class StandaloneAudit(_Node, AuditMixin):
             jinja_macro_registry=self.jinja_macros,
             python_env=self.python_env,
         )
-
-    def _jinja_macros_to_exprs(self) -> t.List[exp.Expression]:
-        output: t.List[exp.Expression] = []
-
-        if self.jinja_macros.global_objs:
-            output.append(
-                d.PythonCode(
-                    expressions=[
-                        f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
-                        for k, v in sorted(self.jinja_macros.global_objs.items())
-                    ]
-                )
-            )
-
-        for macro_name, macro_info in sorted(self.jinja_macros.root_macros.items()):
-            output.append(d.jinja_statement(macro_info.definition))
-
-        for _, package in sorted(self.jinja_macros.packages.items()):
-            for macro_name, macro_info in sorted(package.items()):
-                output.append(d.jinja_statement(macro_info.definition))
-
-        return output
 
 
 Audit = t.Union[ModelAudit, StandaloneAudit]

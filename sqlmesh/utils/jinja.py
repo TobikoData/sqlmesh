@@ -7,8 +7,9 @@ from collections import defaultdict
 from enum import Enum
 
 from jinja2 import Environment, Template, nodes
-from sqlglot import Dialect, Parser, TokenType
+from sqlglot import Dialect, Expression, Parser, TokenType
 
+from sqlmesh.core import dialect as d
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.pydantic import PydanticModel, field_serializer, field_validator
 
@@ -342,6 +343,28 @@ class JinjaMacroRegistry(PydanticModel):
             root_package_name=self.root_package_name or other.root_package_name,
             top_level_packages=[*self.top_level_packages, *other.top_level_packages],
         )
+
+    def macros_to_expressions(self) -> t.List[Expression]:
+        output: t.List[Expression] = []
+
+        if self.global_objs:
+            output.append(
+                d.PythonCode(
+                    expressions=[
+                        f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
+                        for k, v in sorted(self.global_objs.items())
+                    ]
+                )
+            )
+
+        for macro_name, macro_info in sorted(self.root_macros.items()):
+            output.append(d.jinja_statement(macro_info.definition))
+
+        for _, package in sorted(self.packages.items()):
+            for macro_name, macro_info in sorted(package.items()):
+                output.append(d.jinja_statement(macro_info.definition))
+
+        return output
 
     def __deepcopy__(self, memo: t.Optional[t.Dict[int, t.Any]] = None) -> JinjaMacroRegistry:
         return JinjaMacroRegistry.parse_obj(self.dict())
