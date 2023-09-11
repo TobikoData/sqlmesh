@@ -699,6 +699,7 @@ class _Model(ModelMeta, frozen=True):
             *(self.clustered_by or []),
             self.stamp,
             self.physical_schema,
+            str(self.interval_unit_) if self.interval_unit_ is not None else None,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -741,7 +742,6 @@ class _Model(ModelMeta, frozen=True):
             *sorted(ref.json(sort_keys=True) for ref in self.all_references),
             str(self.forward_only),
             str(self.disable_restatement),
-            str(self.interval_unit_) if self.interval_unit_ is not None else None,
             self.project,
         ]
 

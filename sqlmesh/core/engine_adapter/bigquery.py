@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import logging
 import typing as t
 
@@ -10,7 +9,8 @@ from sqlglot.errors import ErrorLevel
 from sqlglot.helper import ensure_list
 from sqlglot.transforms import remove_precision_parameterized_types
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter
+from sqlmesh.core.engine_adapter.base import SourceQuery
+from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
 from sqlmesh.core.engine_adapter.shared import (
     DataObject,
     DataObjectType,
@@ -20,7 +20,6 @@ from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import to_datetime
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
     from google.api_core.retry import Retry
@@ -32,13 +31,13 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.table import Table as BigQueryTable
 
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
-
+    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
 
 
-class BigQueryEngineAdapter(EngineAdapter):
+class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     """
     BigQuery Engine Adapter using the `google-cloud-bigquery` library's DB API.
     """
@@ -68,7 +67,7 @@ class BigQueryEngineAdapter(EngineAdapter):
 
     @property
     def client(self) -> BigQueryClient:
-        return self.cursor.connection._client
+        return self.connection._client
 
     @property
     def connection(self) -> BigQueryConnection:
@@ -87,6 +86,41 @@ class BigQueryEngineAdapter(EngineAdapter):
         if self._extra_config.get("maximum_bytes_billed"):
             params["maximum_bytes_billed"] = self._extra_config.get("maximum_bytes_billed")
         return params
+
+    def _df_to_source_queries(
+        self,
+        df: DF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        batch_size: int,
+        target_table: TableName,
+    ) -> t.List[SourceQuery]:
+        if not columns_to_types:
+            raise SQLMeshError("columns_to_types is required when using a dataframe.")
+        temp_bq_table = self.__get_temp_bq_table(
+            self._get_temp_table(target_table or "pandas"), columns_to_types
+        )
+        temp_table = exp.table_(
+            temp_bq_table.table_id,
+            db=temp_bq_table.dataset_id,
+            catalog=temp_bq_table.project,
+        )
+
+        def query_factory() -> Query:
+            # Make mypy happy
+            assert isinstance(df, pd.DataFrame)
+            assert columns_to_types
+            self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
+            result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
+            if result.errors:
+                raise SQLMeshError(result.errors)
+            return exp.select(*columns_to_types).from_(temp_table)
+
+        return [
+            SourceQuery(
+                query_factory=query_factory,
+                cleanup_func=lambda: self.drop_table(temp_table),
+            )
+        ]
 
     def _begin_session(self) -> None:
         from google.cloud.bigquery import QueryJobConfig
@@ -204,41 +238,6 @@ class BigQueryEngineAdapter(EngineAdapter):
         )
         return list(self._query_data)
 
-    def _create_table_from_df(
-        self,
-        table_name: TableName,
-        df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        exists: bool = True,
-        replace: bool = False,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        Creates a table from a pandas dataframe. Will create the table if it doesn't exist. Will replace the contents
-        of the table if `replace` is true.
-        """
-        assert isinstance(df, pd.DataFrame)
-        if columns_to_types is None:
-            columns_to_types = columns_to_types_from_df(df)
-        table = self.__get_bq_table(table_name, columns_to_types)
-        self._db_call(self.client.create_table, table=table, exists_ok=exists)
-        self.__load_pandas_to_table(table, df, columns_to_types, replace=replace)
-
-    def _insert_append_pandas_df(
-        self,
-        table_name: TableName,
-        df: pd.DataFrame,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-        contains_json: bool = False,
-    ) -> None:
-        """
-        Appends to a table from a pandas dataframe. Will create the table if it doesn't exist.
-        """
-        if columns_to_types is None:
-            columns_to_types = columns_to_types_from_df(df)
-        table = self.__get_bq_table(table_name, columns_to_types)
-        self.__load_pandas_to_table(table, df, columns_to_types, replace=False)
-
     def __load_pandas_to_table(
         self,
         table: bigquery.Table,
@@ -290,12 +289,12 @@ class BigQueryEngineAdapter(EngineAdapter):
         ]
 
     def __get_temp_bq_table(
-        self, table: TableName, columns_to_type: t.Dict[str, exp.DataType]
+        self, table: exp.Table, columns_to_type: t.Dict[str, exp.DataType]
     ) -> bigquery.Table:
         """
         Returns a bigquery table object that is temporary and will expire in 3 hours.
         """
-        bq_table = self.__get_bq_table(self._get_temp_table(table), columns_to_type)
+        bq_table = self.__get_bq_table(table, columns_to_type)
         bq_table.expires = to_datetime("in 3 hours")
         return bq_table
 
@@ -328,48 +327,6 @@ class BigQueryEngineAdapter(EngineAdapter):
             maximum=3.0,
         )
 
-    @contextlib.contextmanager
-    def __try_load_pandas_to_temp_table(
-        self,
-        reference_table_name: TableName,
-        query_or_df: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-    ) -> t.Generator[Query, None, None]:
-        reference_table = exp.to_table(reference_table_name)
-        df = self.try_get_pandas_df(query_or_df)
-        if df is None:
-            yield t.cast("Query", query_or_df)
-            return
-        if columns_to_types is None:
-            raise SQLMeshError("columns_to_types must be provided when using Pandas DataFrames")
-        if reference_table.db is None:
-            raise SQLMeshError("table must be qualified when using Pandas DataFrames")
-        temp_bq_table = self.__get_temp_bq_table(reference_table, columns_to_types)
-        self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
-        result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
-        if result.errors:
-            raise SQLMeshError(result.errors)
-
-        temp_table = exp.table_(
-            temp_bq_table.table_id,
-            db=temp_bq_table.dataset_id,
-            catalog=temp_bq_table.project,
-        )
-        yield exp.select(*columns_to_types).from_(temp_table)
-        self.drop_table(temp_table)
-
-    def merge(
-        self,
-        target_table: TableName,
-        source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        unique_key: t.Sequence[str],
-    ) -> None:
-        with self.__try_load_pandas_to_temp_table(
-            target_table, source_table, columns_to_types
-        ) as source_table:
-            return super().merge(target_table, source_table, columns_to_types, unique_key)
-
     def insert_overwrite_by_partition(
         self,
         table_name: TableName,
@@ -386,11 +343,14 @@ class BigQueryEngineAdapter(EngineAdapter):
         partition_sql = partition_exp.sql(dialect=self.dialect)
         partition_column = partition_exp.find(exp.Column)
 
+        granularity = partition_exp.args.get("unit")
+        if granularity:
+            granularity = granularity.name.lower()
+
         if not partition_column:
             raise SQLMeshError(
                 f"The partition expression '{partition_sql}' doesn't contain a column."
             )
-
         with self.session(), self.temp_table(query_or_df, name=table_name) as temp_table_name:
             if columns_to_types is None or columns_to_types[
                 partition_column.name
@@ -399,63 +359,26 @@ class BigQueryEngineAdapter(EngineAdapter):
 
             partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
             temp_table_name_sql = temp_table_name.sql(dialect=self.dialect)
+
+            select_array_agg_partitions = select_partitions_expr(
+                temp_table_name.db,
+                temp_table_name.name,
+                partition_type_sql,
+                granularity=granularity,
+                agg_func="ARRAY_AGG",
+            )
+
             self.execute(
-                f"DECLARE _sqlmesh_target_partitions_ ARRAY<{partition_type_sql}> DEFAULT (SELECT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
+                f"DECLARE _sqlmesh_target_partitions_ ARRAY<{partition_type_sql}> DEFAULT ({select_array_agg_partitions});"
             )
 
             where = t.cast(exp.Condition, partition_exp).isin(unnest="_sqlmesh_target_partitions_")
 
             self._insert_overwrite_by_condition(
                 table_name,
-                exp.select("*").from_(temp_table_name),
+                [SourceQuery(query_factory=lambda: exp.select("*").from_(temp_table_name))],
+                columns_to_types,
                 where=where,
-                columns_to_types=columns_to_types,
-            )
-
-    def _insert_overwrite_by_condition(
-        self,
-        table_name: TableName,
-        query_or_df: QueryOrDF,
-        where: t.Optional[exp.Condition] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ) -> None:
-        """
-        Bigquery does not directly support `INSERT OVERWRITE` but it does support `MERGE` with a `False`
-        condition and delete that mimics an `INSERT OVERWRITE`. Based on documentation this should have the
-        same runtime performance as `INSERT OVERWRITE`.
-
-        If a Pandas DataFrame is provided, it will be loaded into a temporary table and then merged with the
-        target table. This temporary table is deleted after the merge is complete or after it's expiration time has
-        passed.
-        """
-        with self.__try_load_pandas_to_temp_table(
-            table_name, query_or_df, columns_to_types
-        ) as source_table:
-            query = self._add_where_to_query(source_table, where)
-
-            columns = [
-                exp.to_column(col)
-                for col in (columns_to_types or [col.alias_or_name for col in query.expressions])
-            ]
-            when_not_matched_by_source = exp.When(
-                matched=False,
-                source=True,
-                condition=where,
-                then=exp.Delete(),
-            )
-            when_not_matched_by_target = exp.When(
-                matched=False,
-                source=False,
-                then=exp.Insert(
-                    this=exp.Tuple(expressions=columns),
-                    expression=exp.Tuple(expressions=columns),
-                ),
-            )
-            self._merge(
-                target_table=table_name,
-                source_table=query,
-                on=exp.false(),
-                match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
             )
 
     def table_exists(self, table_name: TableName) -> bool:
@@ -495,6 +418,7 @@ class BigQueryEngineAdapter(EngineAdapter):
         partition_interval_unit: t.Optional[IntervalUnit] = None,
         clustered_by: t.Optional[t.List[str]] = None,
         table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> t.Optional[exp.Properties]:
         properties: t.List[exp.Expression] = []
 
@@ -506,14 +430,20 @@ class BigQueryEngineAdapter(EngineAdapter):
 
             this = partitioned_by[0]
 
-            if isinstance(this, exp.Column):
-                if partition_interval_unit == IntervalUnit.MINUTE:
-                    raise SQLMeshError("BigQuery does not support partitioning by minute")
+            if isinstance(this, exp.Column) and partition_interval_unit != IntervalUnit.MINUTE:
+                column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
 
-                if partition_interval_unit == IntervalUnit.HOUR:
-                    trunc_func = "TIMESTAMP_TRUNC"
-                elif partition_interval_unit in (IntervalUnit.MONTH, IntervalUnit.YEAR):
+                if column_type == exp.DataType.build(
+                    "date", dialect=self.dialect
+                ) and partition_interval_unit in (
+                    IntervalUnit.MONTH,
+                    IntervalUnit.YEAR,
+                ):
                     trunc_func = "DATE_TRUNC"
+                elif column_type == exp.DataType.build("timestamp", dialect=self.dialect):
+                    trunc_func = "TIMESTAMP_TRUNC"
+                elif column_type == exp.DataType.build("datetime", dialect=self.dialect):
+                    trunc_func = "DATETIME_TRUNC"
                 else:
                     trunc_func = ""
 
@@ -703,3 +633,64 @@ class _ErrorCounter:
             )
             return True
         return False
+
+
+def select_partitions_expr(
+    schema: str,
+    table_name: str,
+    data_type: t.Union[str, exp.DataType],
+    granularity: t.Optional[str] = None,
+    agg_func: str = "MAX",
+    database: t.Optional[str] = None,
+) -> str:
+    """Generates a SQL expression that aggregates partition values for a table.
+
+    Args:
+        schema: The schema (BigQueyr dataset) of the table.
+        table_name: The name of the table.
+        data_type: The data type of the partition column.
+        granularity: The granularity of the partition. Supported values are: 'day', 'month', 'year' and 'hour'.
+        agg_func: The aggregation function to use.
+        database: The database (BigQuery project ID) of the table.
+
+    Returns:
+        A SELECT statement that aggregates partition values for a table.
+    """
+    partitions_table_name = f"`{schema}`.INFORMATION_SCHEMA.PARTITIONS"
+    if database:
+        partitions_table_name = f"`{database}`.{partitions_table_name}"
+
+    if isinstance(data_type, exp.DataType):
+        data_type = data_type.sql(dialect="bigquery")
+    data_type = data_type.upper()
+
+    parse_fun = f"PARSE_{data_type}" if data_type in ("DATE", "DATETIME", "TIMESTAMP") else None
+    if parse_fun:
+        granularity = granularity or "day"
+        parse_format = GRANULARITY_TO_PARTITION_FORMAT[granularity.lower()]
+        partition_expr = exp.func(
+            parse_fun,
+            exp.Literal.string(parse_format),
+            exp.column("partition_id"),
+            dialect="bigquery",
+        )
+    else:
+        partition_expr = exp.cast(exp.column("partition_id"), "INT64", dialect="bigquery")
+
+    return (
+        exp.select(exp.func(agg_func, partition_expr))
+        .from_(partitions_table_name, dialect="bigquery")
+        .where(
+            f"table_name = '{table_name}' AND partition_id IS NOT NULL AND partition_id != '__NULL__'",
+            copy=False,
+        )
+        .sql(dialect="bigquery")
+    )
+
+
+GRANULARITY_TO_PARTITION_FORMAT = {
+    "day": "%Y%m%d",
+    "month": "%Y%m",
+    "year": "%Y",
+    "hour": "%Y%m%d%H",
+}

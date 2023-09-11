@@ -102,7 +102,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
 def _unique_key_validator(v: t.Any) -> t.List[str]:
     if isinstance(v, exp.Identifier):
         return [v.name]
-    if isinstance(v, exp.Tuple):
+    if isinstance(v, (exp.Tuple, exp.Array)):
         return [e.name for e in v.expressions]
     return [i.name if isinstance(i, exp.Identifier) else str(i) for i in v]
 

@@ -121,7 +121,12 @@ class ModelConfig(BaseModelConfig):
         if isinstance(v, dict):
             if not v.get("field"):
                 raise ConfigError("'field' key required for partition_by.")
-            if "granularity" in v and v["granularity"] not in GRANULARITY_TO_PARTITION_FORMAT:
+            if "granularity" in v and v["granularity"].lower() not in (
+                "day",
+                "month",
+                "year",
+                "hour",
+            ):
                 granularity = v["granularity"]
                 raise ConfigError(f"Unexpected granularity '{granularity}' in partition_by '{v}'.")
             return {"data_type": "date", "granularity": "day", **v}
@@ -319,32 +324,21 @@ class ModelConfig(BaseModelConfig):
         ):
             return None
 
-        data_type = self.partition_by["data_type"]
-        granularity = self.partition_by["granularity"]
+        from sqlmesh.core.engine_adapter.bigquery import select_partitions_expr
 
-        parse_fun = f"parse_{data_type}" if data_type in ("date", "datetime", "timestamp") else None
-        if parse_fun:
-            parse_format = GRANULARITY_TO_PARTITION_FORMAT[granularity]
-            partition_exp = f"{parse_fun}('{parse_format}', partition_id)"
-        else:
-            partition_exp = "CAST(partition_id AS INT64)"
+        data_type = self.partition_by["data_type"]
+        select_max_partition_expr = select_partitions_expr(
+            "{{ adapter.resolve_schema(this) }}",
+            "{{ adapter.resolve_identifier(this) }}",
+            data_type,
+            granularity=self.partition_by.get("granularity"),
+            database="{{ target.database }}",
+        )
 
         return f"""
 {{% if is_incremental() %}}
   DECLARE _dbt_max_partition {data_type.upper()} DEFAULT (
-    SELECT MAX({partition_exp})
-    FROM `{{{{ target.database }}}}`.`{{{{ adapter.resolve_schema(this) }}}}`.INFORMATION_SCHEMA.PARTITIONS
-    WHERE table_name = '{{{{ adapter.resolve_identifier(this) }}}}'
-      AND partition_id IS NOT NULL
-      AND partition_id != '__NULL__'
+    {select_max_partition_expr}
   );
 {{% endif %}}
 """
-
-
-GRANULARITY_TO_PARTITION_FORMAT = {
-    "day": "%Y%m%d",
-    "month": "%Y%m",
-    "year": "%Y",
-    "hour": "%Y%m%d%H",
-}

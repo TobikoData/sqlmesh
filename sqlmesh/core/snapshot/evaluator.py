@@ -195,9 +195,9 @@ class SnapshotEvaluator:
                 and snapshot.is_incremental_by_time_range
             ):
                 query_or_df = reduce(
-                    lambda a, b: a.union_all(b)  # type: ignore
-                    if self.adapter.is_pyspark_df(a)
-                    else pd.concat([a, b], ignore_index=True),  # type: ignore
+                    lambda a, b: pd.concat([a, b], ignore_index=True)  # type: ignore
+                    if self.adapter.is_pandas_df(a)
+                    else a.union_all(b),  # type: ignore
                     queries_or_dfs,
                 )
                 apply(query_or_df, index=0)

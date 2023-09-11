@@ -46,7 +46,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot>=18.2.0",
+        "sqlglot~=18.3.0",
     ],
     extras_require={
         "bigquery": [
@@ -75,6 +75,7 @@ setup(
             "pandas-stubs",
             "pdoc",
             "psycopg2-binary",
+            "pyarrow>=10.0.1,<10.1.0",
             "PyGithub",
             "pytest",
             "pytest-asyncio",
@@ -82,6 +83,7 @@ setup(
             "pytest-mock",
             "pyspark>=3.4.0",
             "pytz",
+            "snowflake-connector-python[pandas,secure-local-storage]",
             "sqlalchemy-stubs",
             "tenacity==8.1.0",
             "types-croniter",

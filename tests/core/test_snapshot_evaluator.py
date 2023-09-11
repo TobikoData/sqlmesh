@@ -442,7 +442,7 @@ def test_promote_model_info(mocker: MockerFixture, make_snapshot):
     adapter_mock.create_schema.assert_called_once_with("test_schema__test_env", catalog_name=None)
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
-        parse_one("SELECT * FROM physical_schema.test_schema__test_model__3512709882"),
+        parse_one(f"SELECT * FROM physical_schema.test_schema__test_model__{snapshot.version}"),
     )
 
 
@@ -519,7 +519,7 @@ def test_migrate_view(
     cursor_mock.execute.assert_has_calls(
         [
             call(
-                'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
+                'CREATE OR REPLACE VIEW "sqlmesh__test_schema"."test_schema__test_model__1" ("c", "a") AS SELECT "c" AS "c", "a" AS "a" FROM "tbl" AS "tbl"'
             )
         ]
     )
@@ -810,7 +810,7 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
             MODEL (
                 name test_schema.test_model,
                 kind SCD_TYPE_2 (
-                    unique_key id,
+                    unique_key [id, name],
                 )
             );
 

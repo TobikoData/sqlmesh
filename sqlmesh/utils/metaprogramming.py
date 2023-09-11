@@ -278,7 +278,8 @@ def build_env(
     if name not in env:
         # We only need to add the undecorated code of @macro() functions in env, which
         # is accessible through the `__wrapped__` attribute added by functools.wraps
-        env[name] = getattr(obj, "__wrapped__", obj)
+        env[name] = obj.__wrapped__ if getattr(obj, "__sqlmesh_macro__", None) else obj
+
         if obj_module and _is_relative_to(obj_module.__file__, path):
             walk(env[name])
     elif env[name] != obj:

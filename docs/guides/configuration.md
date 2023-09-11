@@ -92,6 +92,91 @@ The `config` sub-module API documentation describes the individual classes used 
 
 See the [notifications guide](../guides/notifications.md) for more information about user and notification specification.
 
+## Environment variables
+
+All software runs within a system environment that stores information as "environment variables."
+
+SQLMesh can access environment variables during configuration, which enables approaches like storing passwords/secrets outside the configuration file and changing configuration parameters dynamically based on which user is running SQLMesh.
+
+You can use environment variables in two ways: specifying them in the configuration file or creating properly named variables to override configuration file values.
+
+### Configuration file
+
+This section demonstrates using environment variables in YAML and Python configuration files.
+
+The examples specify a Snowflake connection whose password is stored in an environment variable `SNOWFLAKE_PW`.
+
+=== "YAML"
+
+    Specify environment variables in a YAML configuration with the syntax `{{ env_var('<ENVIRONMENT VARIABLE NAME>') }}`. Note that the environment variable name is contained in single quotes.
+
+    Access the `SNOWFLAKE_PW` environment variable in a Snowflake connection configuration like this:
+
+    ```yaml linenums="1"
+    gateways:
+        my_gateway:
+            connection:
+                type: snowflake
+                user: <username>
+                password: {{ env_var('SNOWFLAKE_PW') }}
+                account: <account>
+    ```
+
+=== "Python"
+
+    Python accesses environment variables via the `os` library's `environ` dictionary.
+
+    Access the `SNOWFLAKE_PW` environment variable in a Snowflake connection configuration like this:
+
+    ```python linenums="1"
+    import os
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+        SnowflakeConnectionConfig
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        gateways={
+            "my_gateway": GatewayConfig(
+                connection=SnowflakeConnectionConfig(
+                    user=<username>,
+                    password=os.environ['SNOWFLAKE_PW'],
+                    account=<account>,
+                ),
+            ),
+        }
+    )
+    ```
+
+### Overrides
+
+Environment variables have the highest precedence among configuration methods, as [noted above](#configuration-files). They will automatically override configuration file specifications if they follow a specific naming structure.
+
+The structure is based on the names of the configuration fields, with double underscores `__` between the field names. The environment variable name must begin with `SQLMESH__`, followed by the YAML field names starting at the root and moving downward in the hierarchy.
+
+For example, we can override the password specified in a Snowflake connection. This is the YAML specification contained in our configuration file, which specifies a password `dummy_pw`:
+
+```yaml linenums="1"
+gateways:
+    my_gateway:
+        connection:
+            type: snowflake
+            user: <username>
+            password: dummy_pw
+            account: <account>
+```
+
+We can override the `dummy_pw` value with the true password `real_pw` by creating the environment variable. This example demonstrates creating the variable with the bash `export` function:
+
+```bash
+$ export SQLMESH__GATEWAYS__MY_GATEWAY__CONNECTION__PASSWORD="real_pw"
+```
+
+After the initial string `SQLMESH__`, the environment variable name components move down the key hierarchy in the YAML specification: `GATEWAYS` --> `MY_GATEWAY` --> `CONNECTION` --> `PASSWORD`.
+
 ## Configuration types
 
 A SQLMesh project configuration is hierarchical and consists of root level parameters within which other parameters are defined.
@@ -608,11 +693,85 @@ The three default connection types are used when some gateways in the `gateways`
 
 If a configuration contains multiple gateways, SQLMesh will use the first one in the `gateways` dictionary by default. The `default_gateway` key is used to specify a different gateway name as the SQLMesh default.
 
+Example configuration:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    gateways:
+        my_gateway:
+            <gateway specification>
+    default_gateway: my_gateway
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        GatewayConfig,
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        gateways={
+            "my_gateway": GatewayConfig(
+                <gateway specification>
+            ),
+        },
+        default_gateway="my_gateway",
+    )
+    ```
+
 #### Default connections/scheduler
 
 The `default_connection`, `default_test_connection`, and `default_scheduler` keys are used to specify shared defaults across multiple gateways.
 
 For example, you might have a specific connection where your tests should run regardless of which gateway is being used. Instead of duplicating the test connection information in each gateway specification, specify it once in the `default_test_connection` key.
+
+Example configuration specifying a Postgres default connection, in-memory DuckDB default test connection, and builtin default scheduler:
+
+=== "YAML"
+
+    ```yaml linenums="1"
+    default_connection:
+        type: postgres
+        host: <host>
+        port: <port>
+        user: <username>
+        password: <password>
+        database: <database>
+    default_test_connection:
+        type: duckdb
+    default_scheduler:
+        type: builtin
+    ```
+
+=== "Python"
+
+    ```python linenums="1"
+    from sqlmesh.core.config import (
+        Config,
+        ModelDefaultsConfig,
+        PostgresConnectionConfig,
+        DuckDBConnectionConfig,
+        BuiltInSchedulerConfig
+    )
+
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect=<dialect>),
+        default_connection=PostgresConnectionConfig(
+            host=<host>,
+            port=<port>,
+            user=<username>,
+            password=<password>,
+            database=<database>,
+        ),
+        default_test_connection=DuckDBConnectionConfig(),
+        default_scheduler=BuiltInSchedulerConfig(),
+    )
+    ```
 
 ### Models
 
@@ -688,14 +847,15 @@ If a kind requires additional parameters it can be provided as an object:
 === "Python"
 
     The Python `model_defaults` `kind` argument takes a model kind object with a value of:
-        - EmbeddedKind
-        - ExternalKind
-        - FullKind
-        - IncrementalByTimeRangeKind
-        - IncrementalByUniqueKeyKind
-        - IncrementalUnmanagedKind
-        - SeedKind
-        - ViewKind
+
+    - EmbeddedKind
+    - ExternalKind
+    - FullKind
+    - IncrementalByTimeRangeKind
+    - IncrementalByUniqueKeyKind
+    - IncrementalUnmanagedKind
+    - SeedKind
+    - ViewKind
 
     ```python linenums="1"
     from sqlmesh.core.config import (
@@ -716,7 +876,9 @@ If a kind requires additional parameters it can be provided as an object:
 
 ### Debug mode
 
-To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y". Enabling this mode ensures that full backtraces are printed when using CLI. Additionally the default log level is set to `DEBUG` when this mode is enabled.
+To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: `1`, `true`, `t`, `yes` or `y`.
+
+Enabling this mode ensures that full backtraces are printed when using CLI. Additionally, the default log level is set to `DEBUG` when this mode is enabled.
 
 Example enabling debug mode for the CLI command `sqlmesh plan`:
 

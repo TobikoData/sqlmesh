@@ -1,15 +1,17 @@
+import sys
 import typing as t
+from unittest import mock
 
 import pytest
 from sqlglot import exp, parse_one
 
 from sqlmesh.core.macros import MacroEvaluator, macro
-from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
 @macro()
 def filter_country(
-    evaluator: MacroEvaluator, expression: exp.Condition, country: str
+    evaluator: MacroEvaluator, expression: exp.Condition, country: exp.Literal
 ) -> exp.Condition:
     return t.cast(exp.Condition, exp.and_(expression, exp.column("country").eq(country)))
 
@@ -34,6 +36,32 @@ def macro_evaluator() -> MacroEvaluator:
 
 def test_case():
     assert macro.get_registry()["upper"]
+
+
+def test_external_macro() -> None:
+    def foo(evaluator: MacroEvaluator) -> str:
+        return "foo"
+
+    # Mimic a SQLMesh macro definition by setting the func's metadata appropriately
+    setattr(foo, "__wrapped__", foo)
+    setattr(foo, "__sqlmesh_macro__", True)
+
+    sys.modules["pkg"] = mock.Mock()
+    with mock.patch("pkg.foo", foo):
+        evaluator = MacroEvaluator(
+            python_env={
+                "foo": Executable(
+                    payload="from pkg import foo",
+                    kind=ExecutableKind.IMPORT,
+                    name=None,
+                    path=None,
+                    alias=None,
+                )
+            }
+        )
+
+        assert "@FOO" in evaluator.macros
+        assert evaluator.macros["@FOO"](evaluator) == "foo"
 
 
 def test_macro_var(macro_evaluator):
