@@ -20,6 +20,7 @@ from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
+from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import TimeLike, to_datetime, yesterday_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -350,8 +351,9 @@ class SnapshotDagGenerator:
                 continue
 
             snapshot = snapshots[sid]
+            sanitized_snapshot_name = sanitize_name(snapshot.name)
 
-            task_id_prefix = f"snapshot_evaluator__{snapshot.name}__{snapshot.identifier}"
+            task_id_prefix = f"snapshot_evaluator__{sanitized_snapshot_name}__{snapshot.identifier}"
             tasks = [
                 self._create_snapshot_evaluator_operator(
                     snapshots=snapshots,
@@ -364,10 +366,10 @@ class SnapshotDagGenerator:
                 for (start, end) in intervals_per_snapshot.intervals
             ]
             snapshot_start_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.identifier}__start"
+                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start"
             )
             snapshot_end_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{snapshot.name}__{snapshot.identifier}__end"
+                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end"
             )
             if snapshot.depends_on_past:
                 baseoperator.chain(snapshot_start_task, *tasks, snapshot_end_task)
@@ -506,7 +508,7 @@ class SnapshotDagGenerator:
                     HighWaterMarkSensor(
                         target_snapshot_info=upstream_snapshot.table_info,
                         this_snapshot=snapshot,
-                        task_id=f"{upstream_snapshot.name}_{upstream_snapshot.version}_high_water_mark_sensor",
+                        task_id=f"{sanitize_name(upstream_snapshot.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
                     )
                 )
         return output
