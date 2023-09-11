@@ -40,6 +40,58 @@ def test_snowflake_auth():
         ConfigError, match="User and password must be provided if using default authentication"
     ):
         _connection_config_validator(None, dict(type="snowflake", account="test"))
+    # Private key and username with no authenticator is fine
+    config = _connection_config_validator(
+        None, dict(type="snowflake", account="test", private_key="test", user="test")
+    )
+    assert isinstance(config, SnowflakeConnectionConfig)
+    # Private key with jwt auth is fine
+    config = _connection_config_validator(
+        None,
+        dict(
+            type="snowflake",
+            account="test",
+            private_key="test",
+            authenticator="snowflake_jwt",
+            user="test",
+        ),
+    )
+    assert isinstance(config, SnowflakeConnectionConfig)
+    # Private key without username raises
+    with pytest.raises(
+        ConfigError, match=r"User must be provided when using SNOWFLAKE_JWT authentication"
+    ):
+        _connection_config_validator(
+            None,
+            dict(
+                type="snowflake", account="test", private_key="test", authenticator="snowflake_jwt"
+            ),
+        )
+    # Private key with password raises
+    with pytest.raises(
+        ConfigError, match=r"Password cannot be provided when using SNOWFLAKE_JWT authentication"
+    ):
+        _connection_config_validator(
+            None,
+            dict(
+                type="snowflake", account="test", private_key="test", user="test", password="test"
+            ),
+        )
+    # Private key with different authenticator raise
+    with pytest.raises(
+        ConfigError,
+        match=r"Private key can only be provided when using SNOWFLAKE_JWT authentication",
+    ):
+        _connection_config_validator(
+            None,
+            dict(
+                type="snowflake",
+                account="test",
+                private_key="test",
+                user="test",
+                authenticator="externalbrowser",
+            ),
+        )
 
 
 def test_validator():
