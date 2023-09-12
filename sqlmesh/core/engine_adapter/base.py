@@ -1322,6 +1322,10 @@ class EngineAdapter:
 
         return query
 
+    def _truncate_table(self, table_name: TableName) -> str:
+        table = quote_identifiers(exp.to_table(table_name))
+        return f"TRUNCATE {table.sql(dialect=self.dialect)}"
+
 
 class EngineAdapterWithIndexSupport(EngineAdapter):
     SUPPORTS_INDEXES = True
