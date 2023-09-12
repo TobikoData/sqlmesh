@@ -38,12 +38,14 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
         snapshot.qualified_view_name.schema_for_environment(environment.naming_info)
         for environment in expired_schema_environments
         for snapshot in environment.snapshots
+        if snapshot.is_model
     }:
         adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
     for expired_view in {
         snapshot.qualified_view_name.for_environment(environment.naming_info)
         for environment in expired_table_environments
         for snapshot in environment.snapshots
+        if snapshot.is_model
     }:
         adapter.drop_view(expired_view, ignore_if_not_exists=True)
 
