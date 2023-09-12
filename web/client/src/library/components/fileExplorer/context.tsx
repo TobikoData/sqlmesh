@@ -147,7 +147,10 @@ export default function FileExplorerProvider({
   function renameArtifact(artifact: ModelArtifact, newName?: string): void {
     newName = newName?.trim()
 
-    if (isLoading || isStringEmptyOrNil(newName)) return
+    const parentAtrifacts = artifact.parent?.artifacts ?? []
+    const isDuplicate = parentAtrifacts.some(a => a.name === newName)
+
+    if (isLoading || isStringEmptyOrNil(newName) || isDuplicate) return
 
     setIsLoading(true)
 
