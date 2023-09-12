@@ -122,6 +122,7 @@ class EngineAdapter:
     SUPPORTS_MATERIALIZED_VIEWS = False
     SUPPORTS_CLONING = False
     SCHEMA_DIFFER = SchemaDiffer()
+    SUPPORTS_TUPLE_IN = True
 
     def __init__(
         self,
@@ -914,7 +915,11 @@ class EngineAdapter:
                     "deleted",
                     exp.select(*[f"static.{col}" for col in columns_to_types])
                     .from_("static")
-                    .join("latest", using=unique_key, join_type="left")
+                    .join(
+                        "latest",
+                        on=" AND ".join(f"static.{col} = latest.{col}" for col in unique_key),
+                        join_type="left",
+                    )
                     .where(f"latest.{valid_to_name} IS NULL"),
                 )
                 # Get the latest `valid_to` deleted record for each unique key
@@ -936,14 +941,22 @@ class EngineAdapter:
                         *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
                     )
                     .from_("latest")
-                    .join("source", using=unique_key, join_type="left")
+                    .join(
+                        "source",
+                        on=" AND ".join(f"latest.{col} = source.{col}" for col in unique_key),
+                        join_type="left",
+                    )
                     .union(
                         exp.select(
                             *(f"latest.{col} AS t_{col}" for col in columns_to_types),
                             *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
                         )
                         .from_("latest")
-                        .join("source", using=unique_key, join_type="right")
+                        .join(
+                            "source",
+                            on=" AND ".join(f"latest.{col} = source.{col}" for col in unique_key),
+                            join_type="right",
+                        )
                     ),
                 )
                 # Get deleted, new, no longer current, or unchanged records
@@ -952,25 +965,25 @@ class EngineAdapter:
                     exp.select(
                         *(f"COALESCE(t_{col}, s_{col}) as {col}" for col in unmanaged_columns),
                         f"""
-                        CASE 
-                            WHEN t_{valid_from_name} IS NULL 
-                                 AND latest_deleted.{unique_key[0]} IS NOT NULL 
-                            THEN CASE 
-                                    WHEN latest_deleted.{valid_to_name} > s_{updated_at_name} 
-                                    THEN latest_deleted.{valid_to_name} 
-                                    ELSE s_{updated_at_name} 
-                                 END 
-                            WHEN t_{valid_from_name} IS NULL 
-                            THEN {self._to_utc_timestamp('1970-01-01 00:00:00+00:00')} 
-                            ELSE t_{valid_from_name} 
+                        CASE
+                            WHEN t_{valid_from_name} IS NULL
+                                 AND latest_deleted.{unique_key[0]} IS NOT NULL
+                            THEN CASE
+                                    WHEN latest_deleted.{valid_to_name} > s_{updated_at_name}
+                                    THEN latest_deleted.{valid_to_name}
+                                    ELSE s_{updated_at_name}
+                                 END
+                            WHEN t_{valid_from_name} IS NULL
+                            THEN {self._to_utc_timestamp('1970-01-01 00:00:00+00:00')}
+                            ELSE t_{valid_from_name}
                         END AS {valid_from_name}""",
                         f"""
-                        CASE 
-                            WHEN s_{updated_at_name} > t_{updated_at_name} 
-                            THEN s_{updated_at_name} 
-                            WHEN s_{unique_key[0]} IS NULL 
-                            THEN {self._to_utc_timestamp(to_ts(execution_time))} 
-                            ELSE t_{valid_to_name} 
+                        CASE
+                            WHEN s_{updated_at_name} > t_{updated_at_name}
+                            THEN s_{updated_at_name}
+                            WHEN s_{unique_key[0]} IS NULL
+                            THEN {self._to_utc_timestamp(to_ts(execution_time))}
+                            ELSE t_{valid_to_name}
                         END AS {valid_to_name}""",
                     )
                     .from_("joined")

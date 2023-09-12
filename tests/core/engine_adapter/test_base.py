@@ -830,7 +830,7 @@ WITH "source" AS (
     "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
-    USING ("id")
+    ON "static"."id" = "latest"."id"
   WHERE
     "latest"."test_valid_to" IS NULL
 ), "latest_deleted" AS (
@@ -854,7 +854,7 @@ WITH "source" AS (
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
   LEFT JOIN "source"
-    USING ("id")
+    ON "latest"."id" = "source"."id"
   UNION
   SELECT
     "latest"."id" AS "t_id",
@@ -869,7 +869,7 @@ WITH "source" AS (
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
   RIGHT JOIN "source"
-    USING ("id")
+    ON "latest"."id" = "source"."id"
 ), "updated_rows" AS (
   SELECT
     COALESCE("t_id", "s_id") AS "id",
@@ -1018,7 +1018,7 @@ WITH "source" AS (
     "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
-    USING ("id1", "id2")
+    ON "static"."id1" = "latest"."id1" AND "static"."id2" = "latest"."id2"
   WHERE
     "latest"."test_valid_to" IS NULL
 ), "latest_deleted" AS (
@@ -1046,7 +1046,7 @@ WITH "source" AS (
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
   LEFT JOIN "source"
-    USING ("id1", "id2")
+    ON "latest"."id1" = "source"."id1" AND "latest"."id2" = "source"."id2"
   UNION
   SELECT
     "latest"."id1" AS "t_id1",
@@ -1063,7 +1063,7 @@ WITH "source" AS (
     "source"."test_updated_at" AS "s_test_updated_at"
   FROM "latest"
   RIGHT JOIN "source"
-    USING ("id1", "id2")
+    ON "latest"."id1" = "source"."id1" AND "latest"."id2" = "source"."id2"
 ), "updated_rows" AS (
   SELECT
     COALESCE("t_id1", "s_id1") AS "id1",
