@@ -192,3 +192,40 @@ positional arguments:
 options:
   --ls       List tests associated with a model.
 ```
+
+## table_diff
+```
+%table_diff --source SOURCE --target TARGET --on ON [ON ...]
+              [--model MODEL] [--where WHERE] [--limit LIMIT]
+
+Show the diff between two tables.
+
+Can either be two tables or two environments and a model.
+
+options:
+  --source SOURCE, -s SOURCE
+                        The source environment or table.
+  --target TARGET, -t TARGET
+                        The target environment or table.
+  --on <ON [ON ...]>    The SQL join condition or list of columns to use as
+                        keys. Table aliases must be "s" and "t" for source and
+                        target.
+  --model MODEL         The model to diff against when source and target are
+                        environments and not tables.
+  --where WHERE         An optional where statement to filter results.
+  --limit LIMIT         The limit of the sample dataframe.
+```
+
+## rewrite
+```
+%rewrite [--read READ] [--write WRITE]
+
+Rewrite a sql expression with semantic references into an executable query.
+
+https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+
+options:
+  --read READ           The input dialect of the sql string.
+  --write WRITE, -t WRITE
+                        The output dialect of the sql string.
+```
