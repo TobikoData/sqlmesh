@@ -191,7 +191,7 @@ def rewrite(
     sql: str | exp.Expression,
     graph: ReferenceGraph,
     metrics: t.Dict[str, Metric],
-    dialect: str = "",
+    dialect: t.Optional[str] = "",
 ) -> exp.Expression:
     rewriter = Rewriter(graph=graph, metrics=metrics, dialect=dialect)
 
