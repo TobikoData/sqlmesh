@@ -89,21 +89,19 @@ class MSSQLEngineAdapter(
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
-        assert columns_to_types
-        full_columns_to_types = columns_to_types
         temp_table = self._get_temp_table(target_table or "pandas")
 
         def query_factory() -> Query:
-            self.create_table(temp_table, full_columns_to_types)
+            self.create_table(temp_table, columns_to_types)
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
             conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
-            return exp.select(*full_columns_to_types).from_(temp_table)
+            return exp.select(*columns_to_types).from_(temp_table)
 
         return [
             SourceQuery(

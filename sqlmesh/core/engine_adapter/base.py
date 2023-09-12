@@ -168,6 +168,13 @@ class EngineAdapter:
 
         return exp.cast(ensure_utc_exp(col), "TIMESTAMP")
 
+    @classmethod
+    def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
+        return [
+            exp.alias_(exp.cast(column, to=kind), column, copy=False)
+            for column, kind in columns_to_types.items()
+        ]
+
     def _get_source_queries(
         self,
         query_or_df: QueryOrDF,
@@ -179,6 +186,10 @@ class EngineAdapter:
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
         if isinstance(query_or_df, (exp.Subqueryable, exp.DerivedTable)):
             return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
+        if not columns_to_types:
+            raise SQLMeshError(
+                "It is expected that if a DF is passed in then columns_to_types is set"
+            )
         return self._df_to_source_queries(
             query_or_df, columns_to_types, batch_size, target_table=target_table
         )
@@ -186,12 +197,11 @@ class EngineAdapter:
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
-        assert columns_to_types
         num_rows = len(df.index)
         batch_size = sys.maxsize if batch_size == 0 else batch_size
         values = list(df.itertuples(index=False, name=None))
@@ -223,6 +233,18 @@ class EngineAdapter:
             ),
             columns_to_types,
         )
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Dict[str, exp.DataType]:
+        ...
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        ...
 
     def _columns_to_types(
         self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
