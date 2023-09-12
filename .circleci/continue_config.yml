@@ -146,21 +146,6 @@ jobs:
           name: Run Core integration tests
           command: make core-it-test
 
-  engine_adapter_integration_tests:
-    machine:
-      image: ubuntu-2204:2022.10.2
-      docker_layer_caching: true
-    resource_class: large
-    steps:
-      - checkout
-      - run:
-          name: Install dependencies
-          command: make install-dev
-      - run:
-          name: Run Engine Adapter integration tests
-          command: make engine_it_test
-          no_output_timeout: 15m
-
   airflow_integration_tests:
     machine:
       image: ubuntu-2204:2022.10.2
@@ -187,6 +172,30 @@ jobs:
           when: on_fail
       - store_artifacts:
           path: /tmp/airflow_logs
+
+  engine_adapter_integration_tests:
+    machine:
+      image: ubuntu-2204:2022.10.2
+      docker_layer_caching: true
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Install pg_config
+          command: sudo apt-get update && sudo apt-get install libpq-dev
+      - run:
+          name: Install dependencies
+          command: make install-engine-integration
+      - run:
+          name: Bring up MySQL, Postgres, and MSSQL
+          command: make core_engine_it_test_docker
+      - run:
+          name: Make sure DBs are ready
+          command: sleep 10
+      - run:
+          name: Run tests
+          command: make core_engine_it_test
+          no_output_timeout: 15m
 
 workflows:
   main_pr:
