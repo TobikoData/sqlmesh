@@ -429,8 +429,6 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
 
 
 def test_merge(ctx: TestContext):
-    if ctx.dialect == "redshift":
-        pytest.skip("Redshift currently doesn't support `MERGE`")
     ctx.init()
     table = ctx.table("test_table")
     ctx.engine_adapter.create_table(table, ctx.columns_to_types)
