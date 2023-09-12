@@ -76,10 +76,14 @@ class model(registry_decorator):
             **self.kwargs,
         )
 
+        dialect = common_kwargs.pop("dialect", dialect)
+        for key in ("pre_statements", "post_statements"):
+            statements = common_kwargs.get(key)
+            if statements:
+                common_kwargs[key] = [exp.maybe_parse(s, dialect=dialect) for s in statements]
+
         if self.is_sql:
             query = MacroFunc(this=exp.Anonymous(this=entrypoint))
-            dialect = common_kwargs.pop("dialect", dialect)
-
             return create_sql_model(
                 self.name, query, module_path=module_path, dialect=dialect, **common_kwargs
             )

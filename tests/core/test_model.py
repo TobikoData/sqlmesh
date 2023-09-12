@@ -1225,6 +1225,7 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
         description="A dummy model.",
         kind="full",
         dialect="snowflake",
+        post_statements=["PUT file:///dir/tmp.csv @%table"]
     )
     def model1_entrypoint(evaluator: MacroEvaluator) -> exp.Select:
         return exp.select("x", "y").from_(exp.values([("1", 2), ("2", 3)], "_v", ["x", "y"]))
@@ -1252,6 +1253,8 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
         FROM (VALUES ('1', 2), ('2', 3)) AS "_V"("X", "Y")
         """,
     )
+    post_statement = context.models["MODEL1"].post_statements[0].sql(dialect="snowflake")
+    assert post_statement == "PUT file:///dir/tmp.csv @%table"
 
     assert isinstance(model2, SqlModel)
     assert isinstance(model2.query, d.MacroFunc)
