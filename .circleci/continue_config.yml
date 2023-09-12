@@ -209,9 +209,5 @@ workflows:
       - engine_adapter_integration_tests:
           requires:
             - style_and_unit_tests
-          filters:
-            branches:
-              only:
-                - main
       - ui_style
       - ui_test
