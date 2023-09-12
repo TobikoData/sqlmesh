@@ -60,7 +60,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.loader import Loader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
-from sqlmesh.core.metric import Metric
+from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -68,6 +68,7 @@ from sqlmesh.core.notification_target import (
     NotificationTargetManager,
 )
 from sqlmesh.core.plan import Plan
+from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.selector import Selector
@@ -1077,6 +1078,25 @@ class Context(BaseContext):
             self.console.show_sql(f"{error.query}")
 
         self.console.log_status_update("Done.")
+
+    def rewrite(self, sql: str, dialect: str = "") -> exp.Expression:
+        """Rewrite a sql expression with semantic references into an executable query.
+
+        https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+
+        Args:
+            sql: The sql string to rewrite.
+            dialect: The dialect of the sql string, defaults to the project dialect.
+
+        Returns:
+            A SQLGlot expression with semantic references expanded.
+        """
+        return rewrite(
+            sql,
+            graph=ReferenceGraph(self.models.values()),
+            metrics=self._metrics,
+            dialect=dialect or self.config.dialect,
+        )
 
     def migrate(self) -> None:
         """Migrates SQLMesh to the current running version.
