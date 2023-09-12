@@ -135,7 +135,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
 
     def _get_command_payload(self, context: Context) -> t.Optional[commands.EvaluateCommandPayload]:
         snapshot = self.snapshot
-        if isinstance(snapshot.model, SeedModel) and not snapshot.model.is_hydrated:
+        if isinstance(snapshot.node, SeedModel) and not snapshot.node.is_hydrated:
             with util.scoped_state_sync() as state_sync:
                 snapshot = state_sync.get_snapshots([snapshot], hydrate_seeds=True)[
                     snapshot.snapshot_id
@@ -151,9 +151,14 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
         )
 
     def _get_start(self, context: Context) -> TimeLike:
-        return self.start or self.snapshot.model.lookback_start(
-            t.cast(datetime, context["dag_run"].data_interval_start)
-        )
+        if self.start:
+            return self.start
+
+        start = t.cast(datetime, context["dag_run"].data_interval_start)
+        if not self.snapshot.is_model:
+            return start
+
+        return self.snapshot.model.lookback_start(start)
 
     def _get_end(self, context: Context) -> TimeLike:
         return self.end or context["dag_run"].data_interval_end
