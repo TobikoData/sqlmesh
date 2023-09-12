@@ -206,8 +206,6 @@ workflows:
             branches:
               only:
                 - main
-      - engine_adapter_integration_tests:
-          requires:
-            - style_and_unit_tests
+      - engine_adapter_integration_tests
       - ui_style
       - ui_test
