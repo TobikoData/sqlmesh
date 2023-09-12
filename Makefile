@@ -24,6 +24,14 @@ doc-test:
 core-it-test:
 	pytest -m "core_integration"
 
+core_engine_it_test:
+	pytest -m "engine_integration"
+
+core_engine_it_test_docker:
+	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml up -d
+
+engine_it_test: core_engine_it_test_docker core_engine_it_test
+
 it-test: core-it-test airflow-it-test-with-env
 
 it-test-docker: core-it-test airflow-it-test-docker-with-env

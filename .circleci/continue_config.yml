@@ -146,6 +146,22 @@ jobs:
           name: Run Core integration tests
           command: make core-it-test
 
+  engine_adapter_integration_tests:
+    machine:
+      image: ubuntu-2204:2022.10.2
+      docker_layer_caching: true
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: make install-dev
+      - run:
+          name: Run Engine Adapter integration tests
+          command: make engine_it_test
+          context: engine_adapter_integration
+          no_output_timeout: 15m
+
   airflow_integration_tests:
     machine:
       image: ubuntu-2204:2022.10.2
@@ -184,6 +200,13 @@ workflows:
       - style_and_unit_tests_pydantic_v2
       - core_integration_tests
       - airflow_integration_tests:
+          requires:
+            - style_and_unit_tests
+          filters:
+            branches:
+              only:
+                - main
+      - engine_adapter_integration_tests:
           requires:
             - style_and_unit_tests
           filters:

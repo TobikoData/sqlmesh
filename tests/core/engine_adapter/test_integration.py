@@ -191,7 +191,7 @@ def config() -> Config:
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:
-    gateway = f"test__{request.param}"
+    gateway = f"inttest_{request.param}"
     if gateway not in config.gateways:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
         pytest.skip(f"Gateway {gateway} not configured")
