@@ -21,7 +21,7 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with(
         """SELECT 1 """
         """FROM "master"."information_schema"."tables" """
-        """WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
+        """WHERE "table_name" = 'table' AND "table_schema" = 'db';"""
     )
     assert resp
     adapter.cursor.fetchone.return_value = None
@@ -54,9 +54,9 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         [(1, "2022-01-01"), (2, "2022-01-02")],
     )
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "ds" TEXT)')""",
-        f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_uuid.hex}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1 = 2 WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
-        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}"',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "ds" TEXT)');""",
+        f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_uuid.hex}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1 = 2 WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds");""",
+        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}";',
     ]
 
 
@@ -86,9 +86,9 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     )
 
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "ds" TEXT)')""",
-        f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_uuid.hex}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1 = 2 WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds")""",
-        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}"',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "ds" TEXT)');""",
+        f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT * FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_uuid.hex}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON 1 = 2 WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds");""",
+        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}";',
     ]
 
 
@@ -114,9 +114,9 @@ def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     )
 
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "b" INTEGER)')""",
-        f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}"',
-        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}"',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "b" INTEGER)');""",
+        f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}";',
+        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}";',
     ]
 
 
@@ -130,7 +130,7 @@ def test_create_table(make_mocked_engine_adapter: t.Callable):
     adapter.create_table("test_table", columns_to_types)
 
     adapter.cursor.execute.assert_called_once_with(
-        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT)')"""
+        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT)');"""
     )
 
 
@@ -149,7 +149,7 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
     )
 
     adapter.cursor.execute.assert_called_once_with(
-        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT)')"""
+        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT)');"""
     )
 
 
@@ -177,9 +177,9 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     )
 
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_target_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_target_{temp_table_uuid.hex}" ("id" INTEGER, "ts" DATETIME2, "val" INTEGER)')""",
-        f'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "__temp_target_{temp_table_uuid.hex}") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")',
-        f'DROP TABLE IF EXISTS "__temp_target_{temp_table_uuid.hex}"',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_target_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_target_{temp_table_uuid.hex}" ("id" INTEGER, "ts" DATETIME2, "val" INTEGER)');""",
+        f'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "__temp_target_{temp_table_uuid.hex}") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val");',
+        f'DROP TABLE IF EXISTS "__temp_target_{temp_table_uuid.hex}";',
     ]
 
     adapter.cursor.reset_mock()
@@ -200,9 +200,9 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     )
 
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_target_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_target_{temp_table_uuid.hex}" ("id" INTEGER, "ts" DATETIME2, "val" INTEGER)')""",
-        f'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "__temp_target_{temp_table_uuid.hex}") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")',
-        f'DROP TABLE IF EXISTS "__temp_target_{temp_table_uuid.hex}"',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_target_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_target_{temp_table_uuid.hex}" ("id" INTEGER, "ts" DATETIME2, "val" INTEGER)');""",
+        f'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "__temp_target_{temp_table_uuid.hex}") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val");',
+        f'DROP TABLE IF EXISTS "__temp_target_{temp_table_uuid.hex}";',
     ]
 
 
@@ -212,9 +212,9 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table'""",
-        'TRUNCATE "test_table"',
-        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"',
+        """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table';""",
+        'TRUNCATE TABLE "test_table"',
+        'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl";',
     ]
 
 
@@ -237,11 +237,11 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     )
 
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table'""",
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "b" INTEGER)')""",
-        'TRUNCATE "test_table"',
-        f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}"',
-        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}"',
+        """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table';""",
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "b" INTEGER)');""",
+        'TRUNCATE TABLE "test_table"',
+        f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}";',
+        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}";',
     ]
 
 
@@ -255,7 +255,7 @@ def test_create_table_primary_key(make_mocked_engine_adapter: t.Callable):
     adapter.create_table("test_table", columns_to_types, primary_key=("cola", "colb"))
 
     adapter.cursor.execute.assert_called_once_with(
-        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT, PRIMARY KEY ("cola", "colb"))')"""
+        """IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = 'test_table') EXEC('CREATE TABLE "test_table" ("cola" INTEGER, "colb" TEXT, PRIMARY KEY ("cola", "colb"))');"""
     )
 
 
@@ -265,5 +265,5 @@ def test_create_index(make_mocked_engine_adapter: t.Callable):
 
     adapter.create_index("test_table", "test_index", ("cola", "colb"))
     adapter.cursor.execute.assert_called_once_with(
-        """IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = object_id('test_table') AND name = 'test_index') EXEC('CREATE INDEX "test_index" ON "test_table"("cola", "colb")')"""
+        """IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = object_id('test_table') AND name = 'test_index') EXEC('CREATE INDEX "test_index" ON "test_table"("cola", "colb")');"""
     )

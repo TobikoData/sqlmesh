@@ -123,6 +123,7 @@ class EngineAdapter:
     SUPPORTS_CLONING = False
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
+    TRAILING_SEMICOLON = False
 
     def __init__(
         self,
@@ -1277,7 +1278,12 @@ class EngineAdapter:
         if quote:
             quote_identifiers(expression)
 
-        return expression.sql(**sql_gen_kwargs)  # type: ignore
+        sql = expression.sql(**sql_gen_kwargs)  # type: ignore
+
+        if self.TRAILING_SEMICOLON:
+            sql = f"{sql};"
+
+        return sql
 
     def _get_data_objects(
         self, schema_name: str, catalog_name: t.Optional[str] = None
