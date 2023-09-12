@@ -82,6 +82,10 @@ class MetricAgg(exp.AggFunc):
 
     arg_types = {"this": True}
 
+    @property
+    def output_name(self) -> str:
+        return self.this.name
+
 
 def _scan_var(self: Tokenizer) -> None:
     param = False
