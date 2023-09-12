@@ -4,6 +4,7 @@ from unittest.mock import call
 
 import pandas as pd
 import pytest
+from pyspark.sql import types as spark_types
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
@@ -154,41 +155,194 @@ def test_create_state_table(make_mocked_engine_adapter: t.Callable):
     )
 
 
-def test_col_to_types_to_spark_schema():
+test_primitive_params = [
+    ("byte", spark_types.ByteType()),
+    ("short", spark_types.ShortType()),
+    ("int", spark_types.IntegerType()),
+    ("bigint", spark_types.LongType()),
+    ("float", spark_types.FloatType()),
+    ("double", spark_types.DoubleType()),
+    ("decimal", spark_types.DecimalType()),
+    ("text", spark_types.StringType()),
+    # Spark supports VARCHAR and CHAR but SQLGlot currently converts them to strings
+    ("varchar(25)", spark_types.StringType()),
+    ("char(30)", spark_types.StringType()),
+    ("binary", spark_types.BinaryType()),
+    ("boolean", spark_types.BooleanType()),
+    ("date", spark_types.DateType()),
+    ("datetime", spark_types.TimestampNTZType()),
+    ("timestamp", spark_types.TimestampType()),
+]
+
+
+@pytest.mark.parametrize(
+    "type_name, spark_type",
+    test_primitive_params,
+    ids=[x[0] for x in test_primitive_params],
+)
+def test_col_to_types_to_spark_schema_primitives(type_name, spark_type):
     from pyspark.sql import types as spark_types
 
-    assert SparkEngineAdapter.convert_columns_to_types_to_pyspark_schema(
-        {
-            "col_text": exp.DataType.build("text"),
-            "col_boolean": exp.DataType.build("boolean"),
-            "col_int": exp.DataType.build("int"),
-            "col_bigint": exp.DataType.build("bigint"),
-            "col_float": exp.DataType.build("float"),
-            "col_double": exp.DataType.build("double"),
-            "col_decimal": exp.DataType.build("decimal"),
-            "col_date": exp.DataType.build("date"),
-            "col_timestamp": exp.DataType.build("timestamp"),
-        }
-    ) == spark_types.StructType(
-        [
-            spark_types.StructField("col_text", spark_types.StringType()),
-            spark_types.StructField("col_boolean", spark_types.BooleanType()),
-            spark_types.StructField("col_int", spark_types.IntegerType()),
-            spark_types.StructField("col_bigint", spark_types.LongType()),
-            spark_types.StructField("col_float", spark_types.FloatType()),
-            spark_types.StructField("col_double", spark_types.DoubleType()),
-            spark_types.StructField("col_decimal", spark_types.DecimalType()),
-            spark_types.StructField("col_date", spark_types.DateType()),
-            spark_types.StructField("col_timestamp", spark_types.TimestampType()),
-        ]
-    )
+    assert SparkEngineAdapter.sqlglot_to_spark_types(
+        {f"col_{type_name}": exp.DataType.build(type_name, dialect="spark")}
+    ) == spark_types.StructType([spark_types.StructField(f"col_{type_name}", spark_type)])
 
-    assert (
-        SparkEngineAdapter.convert_columns_to_types_to_pyspark_schema(
-            {
-                "col_text": exp.DataType.build("text"),
-                "col_array": exp.DataType.build("array<int>"),
-            }
-        )
-        is None
+
+test_complex_params = [
+    (
+        "map",
+        "map<int, string>",
+        spark_types.MapType(spark_types.IntegerType(), spark_types.StringType()),
+    ),
+    (
+        "array_primitives",
+        "array<int>",
+        spark_types.ArrayType(spark_types.IntegerType(), True),
+    ),
+    (
+        "array_struct",
+        "array<struct<cola:int,colb:array<string>>>",
+        spark_types.ArrayType(
+            spark_types.StructType(
+                [
+                    spark_types.StructField("cola", spark_types.IntegerType()),
+                    spark_types.StructField(
+                        "colb", spark_types.ArrayType(spark_types.StringType(), True)
+                    ),
+                ]
+            ),
+            True,
+        ),
+    ),
+    (
+        "struct_primitives",
+        "struct<col1: int, col2: string>",
+        spark_types.StructType(
+            [
+                spark_types.StructField("col1", spark_types.IntegerType()),
+                spark_types.StructField("col2", spark_types.StringType()),
+            ]
+        ),
+    ),
+    (
+        "struct_of_arrays",
+        "struct<col1: array<int>, col2: array<string>>",
+        spark_types.StructType(
+            [
+                spark_types.StructField(
+                    "col1", spark_types.ArrayType(spark_types.IntegerType(), True)
+                ),
+                spark_types.StructField(
+                    "col2", spark_types.ArrayType(spark_types.StringType(), True)
+                ),
+            ]
+        ),
+    ),
+    (
+        "struct_and_array",
+        "struct<col1: array<struct<cola:int,colb:array<string>>>, col2: struct<col1: int, col2: string>>",
+        spark_types.StructType(
+            [
+                spark_types.StructField(
+                    "col1",
+                    spark_types.ArrayType(
+                        spark_types.StructType(
+                            [
+                                spark_types.StructField("cola", spark_types.IntegerType()),
+                                spark_types.StructField(
+                                    "colb",
+                                    spark_types.ArrayType(spark_types.StringType(), True),
+                                ),
+                            ]
+                        ),
+                        True,
+                    ),
+                ),
+                spark_types.StructField(
+                    "col2",
+                    spark_types.StructType(
+                        [
+                            spark_types.StructField("col1", spark_types.IntegerType()),
+                            spark_types.StructField("col2", spark_types.StringType()),
+                        ]
+                    ),
+                ),
+            ]
+        ),
+    ),
+    (
+        "array_of_maps",
+        "array<map<int, string>>",
+        spark_types.ArrayType(
+            spark_types.MapType(spark_types.IntegerType(), spark_types.StringType()), True
+        ),
+    ),
+    (
+        "struct_with_struct",
+        "struct<col1: struct<cola:int,colb:array<string>>, col2: struct<col1: int, col2: string>>",
+        spark_types.StructType(
+            [
+                spark_types.StructField(
+                    "col1",
+                    spark_types.StructType(
+                        [
+                            spark_types.StructField("cola", spark_types.IntegerType()),
+                            spark_types.StructField(
+                                "colb",
+                                spark_types.ArrayType(spark_types.StringType(), True),
+                            ),
+                        ]
+                    ),
+                ),
+                spark_types.StructField(
+                    "col2",
+                    spark_types.StructType(
+                        [
+                            spark_types.StructField("col1", spark_types.IntegerType()),
+                            spark_types.StructField("col2", spark_types.StringType()),
+                        ]
+                    ),
+                ),
+            ]
+        ),
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "type_name, spark_type",
+    [x[1:] for x in test_complex_params],
+    ids=[x[0] for x in test_complex_params],
+)
+def test_col_to_types_to_spark_schema_complex(type_name, spark_type):
+    actual = SparkEngineAdapter.sqlglot_to_spark_types(
+        {f"col_{type_name}": exp.DataType.build(type_name, dialect="spark")}
     )
+    expected = spark_types.StructType([spark_types.StructField(f"col_{type_name}", spark_type)])
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "type_name, spark_type",
+    test_primitive_params,
+    ids=[x[0] for x in test_primitive_params],
+)
+def test_spark_struct_primitives_to_col_to_types(type_name, spark_type):
+    actual = SparkEngineAdapter.spark_to_sqlglot_types(
+        spark_types.StructType([spark_types.StructField(f"col_{type_name}", spark_type)])
+    )
+    expected = {f"col_{type_name}": exp.DataType.build(type_name, dialect="spark")}
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "type_name, spark_type",
+    [x[1:] for x in test_complex_params],
+    ids=[x[0] for x in test_complex_params],
+)
+def test_spark_struct_complex_to_col_to_types(type_name, spark_type):
+    actual = SparkEngineAdapter.spark_to_sqlglot_types(
+        spark_types.StructType([spark_types.StructField(f"col_{type_name}", spark_type)])
+    )
+    expected = {f"col_{type_name}": exp.DataType.build(type_name, dialect="spark")}
+    assert actual == expected

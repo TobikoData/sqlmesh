@@ -90,12 +90,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
-        if not columns_to_types:
-            raise SQLMeshError("columns_to_types is required when using a dataframe.")
         temp_bq_table = self.__get_temp_bq_table(
             self._get_temp_table(target_table or "pandas"), columns_to_types
         )
@@ -108,7 +106,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         def query_factory() -> Query:
             # Make mypy happy
             assert isinstance(df, pd.DataFrame)
-            assert columns_to_types
             self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
             result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
             if result.errors:
