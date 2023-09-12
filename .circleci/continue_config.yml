@@ -159,7 +159,6 @@ jobs:
       - run:
           name: Run Engine Adapter integration tests
           command: make engine_it_test
-          context: engine_adapter_integration
           no_output_timeout: 15m
 
   airflow_integration_tests:
@@ -206,6 +205,7 @@ workflows:
             branches:
               only:
                 - main
-      - engine_adapter_integration_tests
+      - engine_adapter_integration_tests:
+          context: engine_adapter_integration
       - ui_style
       - ui_test

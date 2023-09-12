@@ -191,12 +191,11 @@ def config() -> Config:
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:
-    gateway = f"inttest_{request.param}".upper()
-    gateways = {k.upper(): v for k, v in config.gateways.items()}
-    if gateway not in gateways:
+    gateway = f"inttest_{request.param}"
+    if gateway not in config.gateways:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
         pytest.skip(f"Gateway {gateway} not configured")
-    engine_adapter = gateways[gateway].connection.create_engine_adapter()
+    engine_adapter = config.gateways[gateway].connection.create_engine_adapter()
     engine_adapter.DEFAULT_BATCH_SIZE = 1
     return engine_adapter
 
