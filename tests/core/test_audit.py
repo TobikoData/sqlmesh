@@ -1,9 +1,18 @@
 import pytest
-from sqlglot import exp, parse, parse_one
+from sqlglot import exp, parse_one
 
-from sqlmesh.core.audit import ModelAudit, StandaloneAudit, builtin
+from sqlmesh.core.audit import (
+    ModelAudit,
+    StandaloneAudit,
+    builtin,
+    load_audit,
+    load_multiple_audits,
+)
+from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import IncrementalByTimeRangeKind, Model, create_sql_model
 from sqlmesh.utils.errors import AuditConfigError
+from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
+from sqlmesh.utils.metaprogramming import Executable
 
 
 @pytest.fixture
@@ -33,7 +42,8 @@ def test_load(assert_exp_eq):
     """
     )
 
-    audit = ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
+    audit = load_audit(expressions, path="/path/to/audit", dialect="duckdb")
+    assert isinstance(audit, ModelAudit)
     assert audit.dialect == "spark"
     assert audit.blocking is False
     assert audit.skip is False
@@ -48,6 +58,122 @@ def test_load(assert_exp_eq):
         col IS NULL
     """,
     )
+
+
+def test_load_standalone(assert_exp_eq):
+    expressions = parse(
+        """
+        Audit (
+            name my_audit,
+            dialect spark,
+            blocking false,
+            standalone true,
+            cron '@hourly',
+            owner 'Sally',
+        );
+
+        SELECT
+            *
+        FROM
+            db.table
+        WHERE
+            col IS NULL
+    """
+    )
+
+    audit = load_audit(expressions, path="/path/to/audit", dialect="duckdb")
+    assert isinstance(audit, StandaloneAudit)
+    assert audit.dialect == "spark"
+    assert audit.blocking is False
+    assert audit.skip is False
+    assert audit.cron == "@hourly"
+    assert audit.owner == "Sally"
+    assert_exp_eq(
+        audit.query,
+        """
+    SELECT
+        *
+    FROM
+        db.table
+    WHERE
+        col IS NULL
+    """,
+    )
+
+
+def test_load_standalone_with_macros(assert_exp_eq):
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            owner owner_name,
+            dialect spark,
+            standalone true,
+        );
+
+        @DEF(x, 1);
+        CACHE TABLE x AS SELECT 1;
+        ADD JAR 's3://my_jar.jar';
+
+        SELECT
+            *,
+            @test_macro(1),
+        FROM
+            db.table t1
+        WHERE
+            col IS NULL
+    """
+    )
+
+    audit = load_audit(
+        expressions,
+        macros={
+            "test_macro": Executable(payload="def test_macro(evaluator, v):\n    return v"),
+            "extra_macro": Executable(payload="def extra_macro(evaluator, v):\n    return v + 1"),
+        },
+    )
+
+    assert "test_macro" in audit.python_env
+    assert "extra_macro" not in audit.python_env
+
+
+def test_load_standalone_with_jinja_macros(assert_exp_eq):
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            owner owner_name,
+            dialect spark,
+            standalone true,
+        );
+
+        JINJA_QUERY_BEGIN;
+        SELECT
+            *,
+            {{ test_macro(1) }},
+        FROM
+            db.table t1
+        WHERE
+            col IS NULL
+        JINJA_QUERY_END;
+    """
+    )
+
+    macros = """
+    {% macro test_macro(v) %}{{ v }}{% endmacro %}
+
+    {% macro extra_macro(v) %}{{ v + 1 }}{% endmacro %}
+    """
+
+    jinja_macros = JinjaMacroRegistry()
+    jinja_macros.add_macros(MacroExtractor().extract(macros))
+    audit = load_audit(
+        expressions,
+        jinja_macros=jinja_macros,
+    )
+
+    assert "test_macro" in audit.jinja_macros.root_macros
+    assert "extra_macro" not in audit.jinja_macros.root_macros
 
 
 def test_load_multiple(assert_exp_eq):
@@ -74,7 +200,7 @@ def test_load_multiple(assert_exp_eq):
     """
     )
 
-    first_audit, second_audit = ModelAudit.load_multiple(expressions, path="/path/to/audit")
+    first_audit, second_audit = load_multiple_audits(expressions, path="/path/to/audit")
     assert first_audit.dialect == "spark"
     assert first_audit.blocking is True
     assert first_audit.skip is False
@@ -107,7 +233,7 @@ def test_no_audit_statement():
     """
     )
     with pytest.raises(AuditConfigError) as ex:
-        ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
+        load_audit(expressions, path="/path/to/audit", dialect="duckdb")
     assert "Incomplete audit definition" in str(ex.value)
 
 
@@ -123,7 +249,7 @@ def test_unordered_audit_statements():
     )
 
     with pytest.raises(AuditConfigError) as ex:
-        ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
+        load_audit(expressions, path="/path/to/audit", dialect="duckdb")
     assert "AUDIT statement is required as the first statement" in str(ex.value)
 
 
@@ -139,7 +265,7 @@ def test_no_query():
     )
 
     with pytest.raises(AuditConfigError) as ex:
-        ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
+        load_audit(expressions, path="/path/to/audit", dialect="duckdb")
     assert "Missing SELECT query" in str(ex.value)
 
 
@@ -183,7 +309,7 @@ def test_load_with_defaults(model, assert_exp_eq):
             AND @field3 != @field4
     """
     )
-    audit = ModelAudit.load(expressions, path="/path/to/audit", dialect="duckdb")
+    audit = load_audit(expressions, path="/path/to/audit", dialect="duckdb")
     assert audit.defaults == {
         "field1": exp.to_column("some_column"),
         "field2": exp.Literal.number(3),
@@ -356,4 +482,89 @@ def test_standalone_audit(model: Model, assert_exp_eq):
     rendered_query = audit.render_query(audit)
     assert_exp_eq(
         rendered_query, """SELECT * FROM "db"."test_model" AS "test_model" WHERE "col" IS NULL"""
+    )
+
+
+def test_render_definition():
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            dialect spark,
+            owner owner_name,
+            standalone true,
+        );
+
+        @DEF(x, 1);
+        CACHE TABLE x AS SELECT 1;
+        ADD JAR 's3://my_jar.jar';
+
+        SELECT
+            *,
+            @test_macro(1),
+        FROM
+            db.table t1
+        WHERE
+            col IS NULL
+    """
+    )
+
+    audit = load_audit(
+        expressions,
+        macros={"test_macro": Executable(payload="def test_macro(evaluator, v):\n    return v")},
+    )
+
+    from sqlmesh.core.dialect import format_model_expressions
+
+    # Should not include the macro implementation.
+    assert format_model_expressions(
+        audit.render_definition(include_python=False)
+    ) == format_model_expressions(expressions)
+
+    # Should include the macro implementation.
+    assert "def test_macro(evaluator, v):" in format_model_expressions(audit.render_definition())
+
+
+def test_text_diff():
+    expressions = parse(
+        """
+        AUDIT (
+            name my_audit,
+            dialect spark,
+            owner owner_name,
+            standalone true,
+        );
+
+        SELECT
+            *,
+            @test_macro(1),
+        FROM
+            db.table t1
+        WHERE
+            col IS NULL
+    """
+    )
+
+    audit = load_audit(
+        expressions,
+        macros={"test_macro": Executable(payload="def test_macro(evaluator, v):\n    return v")},
+    )
+
+    modified_audit = audit.copy()
+    modified_audit.name = "my_audit_2"
+
+    assert (
+        audit.text_diff(modified_audit)
+        == """--- 
+
++++ 
+
+@@ -1,5 +1,5 @@
+
+ Audit (
+-  name my_audit,
++  name my_audit_2,
+   dialect spark,
+   owner owner_name,
+   standalone TRUE"""
     )

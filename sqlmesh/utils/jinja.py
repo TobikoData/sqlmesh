@@ -4,10 +4,12 @@ import importlib
 import re
 import typing as t
 from collections import defaultdict
+from enum import Enum
 
 from jinja2 import Environment, Template, nodes
-from sqlglot import Dialect, Parser, TokenType
+from sqlglot import Dialect, Expression, Parser, TokenType
 
+from sqlmesh.core import dialect as d
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.pydantic import PydanticModel, field_serializer, field_validator
 
@@ -178,15 +180,19 @@ class JinjaMacroRegistry(PydanticModel):
 
     @field_validator("global_objs", mode="before")
     @classmethod
-    def _validate_attribute_dict(cls, value: t.Any) -> t.Any:
-        def _attribute_dict(val: t.Dict[str, t.Any]) -> AttributeDict:
-            return AttributeDict(
-                {k: _attribute_dict(v) if isinstance(v, dict) else v for k, v in val.items()}
-            )
+    def _validate_global_objs(cls, value: t.Any) -> t.Any:
+        def _normalize(val: t.Any) -> t.Any:
+            if isinstance(val, dict):
+                return AttributeDict({k: _normalize(v) for k, v in val.items()})
+            if isinstance(val, list):
+                return [_normalize(v) for v in val]
+            if isinstance(val, set):
+                return [_normalize(v) for v in sorted(val)]
+            if isinstance(val, Enum):
+                return val.value
+            return val
 
-        if isinstance(value, t.Dict):
-            return _attribute_dict(value)
-        return value
+        return _normalize(value)
 
     @field_serializer("global_objs")
     def _serialize_attribute_dict(
@@ -215,6 +221,14 @@ class JinjaMacroRegistry(PydanticModel):
             self.packages[package] = package_macros
         else:
             self.root_macros.update(macros)
+
+    def add_globals(self, globals: t.Dict[str, JinjaGlobalAttribute]) -> None:
+        """Adds global objects to the registry.
+
+        Args:
+            globals: The global objects that should be added.
+        """
+        self.global_objs.update(**self._validate_global_objs(globals))
 
     def build_macro(self, reference: MacroReference, **kwargs: t.Any) -> t.Optional[t.Callable]:
         """Builds a Python callable for a macro with the given reference.
@@ -329,6 +343,28 @@ class JinjaMacroRegistry(PydanticModel):
             root_package_name=self.root_package_name or other.root_package_name,
             top_level_packages=[*self.top_level_packages, *other.top_level_packages],
         )
+
+    def to_expressions(self) -> t.List[Expression]:
+        output: t.List[Expression] = []
+
+        if self.global_objs:
+            output.append(
+                d.PythonCode(
+                    expressions=[
+                        f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
+                        for k, v in sorted(self.global_objs.items())
+                    ]
+                )
+            )
+
+        for macro_name, macro_info in sorted(self.root_macros.items()):
+            output.append(d.jinja_statement(macro_info.definition))
+
+        for _, package in sorted(self.packages.items()):
+            for macro_name, macro_info in sorted(package.items()):
+                output.append(d.jinja_statement(macro_info.definition))
+
+        return output
 
     def __deepcopy__(self, memo: t.Optional[t.Dict[int, t.Any]] = None) -> JinjaMacroRegistry:
         return JinjaMacroRegistry.parse_obj(self.dict())

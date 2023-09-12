@@ -8,6 +8,8 @@ from sqlmesh.core.audit.definition import (
     AuditResult,
     ModelAudit,
     StandaloneAudit,
+    load_audit,
+    load_multiple_audits,
 )
 
 
