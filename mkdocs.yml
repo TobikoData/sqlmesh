@@ -41,6 +41,9 @@ nav:
       - concepts/macros/macro_variables.md
       - concepts/macros/sqlmesh_macros.md
       - concepts/macros/jinja_macros.md
+    - Metrics:
+      - concepts/metrics/overview.md
+      - concepts/metrics/definition.md
     - Architecture:
       - concepts/architecture/snapshots.md
       - concepts/architecture/serialization.md
