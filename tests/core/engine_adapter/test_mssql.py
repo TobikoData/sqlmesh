@@ -160,7 +160,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     uuid4_mock = mocker.patch("uuid.uuid4")
     uuid4_mock.return_value = temp_table_uuid
 
-    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    df = pd.DataFrame({"id": [1, 2, 3], "ts": [1, 2, 3], "val": [4, 5, 6]})
     adapter.merge(
         target_table="target",
         source_table=df,
@@ -173,7 +173,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
         f'"__temp_target_{temp_table_uuid.hex}"',
-        [(1, 4), (2, 5), (3, 6)],
+        [(1, 1, 4), (2, 2, 5), (3, 3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
@@ -196,7 +196,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
         f'"__temp_target_{temp_table_uuid.hex}"',
-        [(1, 4), (2, 5), (3, 6)],
+        [(1, 1, 4), (2, 2, 5), (3, 3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
@@ -227,7 +227,9 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     uuid4_mock.return_value = temp_table_uuid
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
+    adapter.replace_query(
+        "test_table", df, {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+    )
 
     adapter._connection_pool.get().bulk_copy.assert_called_with(
         f'"__temp_test_table_{temp_table_uuid.hex}"',
@@ -236,7 +238,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
 
     assert to_sql_calls(adapter) == [
         """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table'""",
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" int, "b" int)')""",
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "b" INTEGER)')""",
         'TRUNCATE "test_table"',
         f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}"',
         f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}"',

@@ -6,6 +6,7 @@ from __future__ import annotations
 import typing as t
 
 import pandas as pd
+from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport, SourceQuery
@@ -100,6 +101,13 @@ class MSSQLEngineAdapter(
         temp_table = self._get_temp_table(target_table or "pandas")
 
         def query_factory() -> Query:
+            # pymssql doesn't convert Pandas Timestamp (datetime64) types
+            for column, kind in (full_columns_to_types or {}).items():
+                if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):  # type: ignore
+                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
+                elif is_datetime64_dtype(df.dtypes[column]):  # type: ignore
+                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
+
             self.create_table(temp_table, full_columns_to_types)
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
