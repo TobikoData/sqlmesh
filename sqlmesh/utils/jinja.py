@@ -344,7 +344,7 @@ class JinjaMacroRegistry(PydanticModel):
             top_level_packages=[*self.top_level_packages, *other.top_level_packages],
         )
 
-    def macros_to_expressions(self) -> t.List[Expression]:
+    def to_expressions(self) -> t.List[Expression]:
         output: t.List[Expression] = []
 
         if self.global_objs:

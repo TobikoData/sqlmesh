@@ -204,7 +204,7 @@ class _Model(ModelMeta, frozen=True):
             if python_env.expressions:
                 python_expressions.append(python_env)
 
-            jinja_expressions = self.jinja_macros.macros_to_expressions()
+            jinja_expressions = self.jinja_macros.to_expressions()
 
         return [
             model,
