@@ -739,9 +739,14 @@ class EngineAdapter:
         query: Query,
         columns_to_types: t.Dict[str, exp.DataType],
         contains_json: bool = False,
+        order_projections: bool = True,
     ) -> None:
         if contains_json:
             query = self._escape_json(query)
+        if order_projections and query.named_selects != list(columns_to_types):
+            if isinstance(query, exp.Subqueryable):
+                query = query.subquery()
+            query = exp.select(*columns_to_types).from_(query)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
@@ -821,7 +826,7 @@ class EngineAdapter:
             columns_to_types = columns_to_types or self.columns(table_name)
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
-                    query = self._add_where_to_query(query, where)
+                    query = self._add_where_to_query(query, where, columns_to_types)
                     if i > 0 or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
                         if i == 0:
                             if not where:
@@ -831,7 +836,10 @@ class EngineAdapter:
                             assert where is not None
                             self.delete_from(table_name, where=where)
                         self._insert_append_query(
-                            table_name, query, columns_to_types=columns_to_types
+                            table_name,
+                            query,
+                            columns_to_types=columns_to_types,
+                            order_projections=False,
                         )
                     else:
                         insert_exp = exp.insert(
@@ -1314,14 +1322,19 @@ class EngineAdapter:
 
         return table
 
-    def _add_where_to_query(self, query: Query, where: t.Optional[exp.Expression]) -> Query:
+    def _add_where_to_query(
+        self,
+        query: Query,
+        where: t.Optional[exp.Expression],
+        columns_to_type: t.Dict[str, exp.DataType],
+    ) -> Query:
         if not where or not isinstance(query, exp.Subqueryable):
             return query
 
         query = t.cast(exp.Subqueryable, query.copy())
         with_ = query.args.pop("with", None)
         query = (
-            exp.select("*", copy=False)
+            exp.select(*columns_to_type, copy=False)
             .from_(query.subquery("_subquery", copy=False), copy=False)
             .where(where, copy=False)
         )

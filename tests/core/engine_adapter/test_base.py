@@ -119,12 +119,12 @@ def test_insert_overwrite_by_time_partition(make_mocked_engine_adapter: t.Callab
 
     adapter.insert_overwrite_by_time_partition(
         "test_table",
-        parse_one("SELECT a FROM tbl"),
+        parse_one("SELECT a, b FROM tbl"),
         start="2022-01-01",
         end="2022-01-02",
         time_column="b",
         time_formatter=lambda x, _: exp.Literal.string(to_ds(x)),
-        columns_to_types={"a": exp.DataType.build("INT")},
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("STRING")},
     )
 
     adapter.cursor.begin.assert_called_once()
@@ -132,7 +132,7 @@ def test_insert_overwrite_by_time_partition(make_mocked_engine_adapter: t.Callab
 
     assert to_sql_calls(adapter) == [
         """DELETE FROM "test_table" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
-        """INSERT INTO "test_table" ("a") SELECT * FROM (SELECT "a" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
+        """INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'""",
     ]
 
 
@@ -154,7 +154,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite(
     )
 
     adapter.cursor.execute.assert_called_once_with(
-        """INSERT OVERWRITE TABLE "test_table" ("a", "b") SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
+        """INSERT OVERWRITE TABLE "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
     )
 
 
@@ -176,7 +176,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     )
 
     assert to_sql_calls(adapter) == [
-        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
+        """INSERT OVERWRITE TABLE "test_table" ("a", "ds") SELECT "a", "ds" FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
     ]
 
 
@@ -195,7 +195,7 @@ def test_insert_overwrite_by_time_partition_replace_where(make_mocked_engine_ada
     )
 
     assert to_sql_calls(adapter) == [
-        """INSERT INTO "test_table" REPLACE WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
+        """INSERT INTO "test_table" REPLACE WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02' SELECT "a", "b" FROM (SELECT "a", "b" FROM "tbl") AS "_subquery" WHERE "b" BETWEEN '2022-01-01' AND '2022-01-02'"""
     ]
 
 
@@ -218,7 +218,7 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     )
 
     assert to_sql_calls(adapter) == [
-        """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT * FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
+        """INSERT INTO "test_table" REPLACE WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02' SELECT "a", "ds" FROM (SELECT CAST("a" AS INT) AS "a", CAST("ds" AS TEXT) AS "ds" FROM (VALUES (1, '2022-01-01'), (2, '2022-01-02')) AS "t"("a", "ds")) AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02'"""
     ]
 
 
@@ -233,6 +233,20 @@ def test_insert_append_query(make_mocked_engine_adapter: t.Callable):
 
     assert to_sql_calls(adapter) == [
         'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl"',
+    ]
+
+
+def test_insert_append_query_select_star(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.insert_append(
+        "test_table",
+        parse_one("SELECT 1 AS a, * FROM tbl"),
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+    )
+
+    assert to_sql_calls(adapter) == [
+        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl")',
     ]
 
 
