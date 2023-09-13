@@ -67,7 +67,7 @@ The model must contain a standalone query, which can be a single `SELECT` expres
 
 ## Python-based definition
 
-The Python-based definition of SQL models consists of a single python function, decorated with SQLMesh's `@model` [decorator](https://wiki.python.org/moin/PythonDecorators), where the decorator is required to have the `is_sql` keyword argument set to `True` to distinguish it from [Python models](./python_models.md) that return DataFrame instances.
+The Python-based definition of SQL models consists of a single python function, decorated with SQLMesh's `@model` [decorator](https://wiki.python.org/moin/PythonDecorators). The decorator is required to have the `is_sql` keyword argument set to `True` to distinguish it from [Python models](./python_models.md) that return DataFrame instances.
 
 This function's return value serves as the model's query, and it must be either a SQL string, or a [SQLGlot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py). The `@model` decorator is used to define the model's [metadata](#MODEL-DDL) and, optionally, its pre/post-statements that are also in the form of SQL strings or SQLGlot expressions.
 
