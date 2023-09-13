@@ -1,6 +1,6 @@
 # SQL models
 
-SQL models are the main type of models used by SQLMesh. These models can be defined using either SQL or Python.
+SQL models are the main type of models used by SQLMesh. These models can be defined using either SQL or Python that generates SQL.
 
 ## SQL-based definition
 
