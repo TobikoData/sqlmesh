@@ -918,7 +918,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     new_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     new_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
 
-    assert len(old_snapshots) == len(new_snapshots)
+    assert len(old_snapshots) * 2 == len(new_snapshots)
     assert len(old_environments) == len(new_environments)
 
     start = "2023-01-01"
@@ -935,6 +935,9 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     dev_snapshots = state_sync.get_snapshots(
         t.cast(Environment, state_sync.get_environment("dev")).snapshots
     ).values()
+
+    assert all(s.migrated for s in dev_snapshots)
+    assert all(s.change_category is not None for s in dev_snapshots)
 
     assert not missing_intervals(dev_snapshots, start=start, end=end)
 
