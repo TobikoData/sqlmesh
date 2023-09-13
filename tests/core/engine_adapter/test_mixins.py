@@ -70,13 +70,13 @@ def test_logical_replace_self_reference(
         return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
     )
 
-    adapter.replace_query("db.table", parse_one("SELECT col + 1 FROM db.table"))
+    adapter.replace_query("db.table", parse_one("SELECT col + 1 AS col FROM db.table"))
 
     assert to_sql_calls(adapter) == [
         f'CREATE SCHEMA IF NOT EXISTS "db"',
         f'CREATE TABLE IF NOT EXISTS "db"."__temp_table_{temp_table_uuid.hex}" AS SELECT "col" FROM "db"."table"',
         'TRUNCATE "db"."table"',
-        f'INSERT INTO "db"."table" ("col") SELECT "col" + 1 FROM "db"."__temp_table_{temp_table_uuid.hex}"',
+        f'INSERT INTO "db"."table" ("col") SELECT "col" + 1 AS "col" FROM "db"."__temp_table_{temp_table_uuid.hex}"',
         f'DROP TABLE IF EXISTS "db"."__temp_table_{temp_table_uuid.hex}"',
     ]
 
