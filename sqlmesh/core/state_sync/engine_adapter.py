@@ -36,7 +36,6 @@ from sqlmesh.core.snapshot import (
     Intervals,
     Node,
     Snapshot,
-    SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotFingerprint,
     SnapshotId,
@@ -346,6 +345,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
         hydrate_seeds: bool = False,
+        hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots or all snapshots.
 
@@ -353,6 +353,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             snapshot_ids: The collection of snapshot like objects to fetch.
             lock_for_update: Lock the snapshot rows for future update
             hydrate_seeds: Whether to hydrate seed snapshots with the content.
+            hydrate_intervals: Whether to hydrate result snapshots with intervals.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
@@ -389,7 +390,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if hydrate_seeds and isinstance(snapshot.node, SeedModel) and row[1]:
                 snapshot.node = t.cast(SeedModel, snapshot.node).to_hydrated(row[1])
 
-        if snapshots:
+        if snapshots and hydrate_intervals:
             _, intervals = self._get_snapshot_intervals(snapshots.values())
             Snapshot.hydrate_with_intervals_by_version(snapshots.values(), intervals)
 
@@ -701,13 +702,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     )
 
     def _migrate_rows(self) -> None:
-        all_snapshots = {
-            s.snapshot_id: s
-            for s in Snapshot.hydrate_with_intervals_by_identifier(
-                self._get_snapshots(lock_for_update=True, hydrate_seeds=True).values(),
-                self._get_snapshot_intervals(None)[1],
-            )
-        }
+        all_snapshots = self._get_snapshots(
+            lock_for_update=True, hydrate_seeds=True, hydrate_intervals=False
+        )
         environments = self.get_environments()
 
         snapshot_mapping = {}
@@ -766,21 +763,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
                 continue
 
-            # Infer the missing change category to account for SQLMesh versions in which
-            # we didn't assign a change category to indirectly modified snapshots.
-            if not new_snapshot.change_category:
-                new_snapshot.change_category = (
-                    SnapshotChangeCategory.INDIRECT_BREAKING
-                    if snapshot.fingerprint.to_version() == snapshot.version
-                    else SnapshotChangeCategory.INDIRECT_NON_BREAKING
-                )
-
+            new_snapshot.previous_versions = snapshot.all_versions
+            new_snapshot.migrated = True
             if not new_snapshot.temp_version:
                 new_snapshot.temp_version = snapshot.fingerprint.to_version()
 
             self.console.update_migration_progress(1)
 
-            if new_snapshot == snapshot:
+            if new_snapshot.fingerprint == snapshot.fingerprint:
                 logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
                 continue
             if new_snapshot.snapshot_id in all_snapshots:
@@ -816,17 +806,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for name, versions in from_snapshot.indirect_versions.items()
             }
 
-        delete_filter = self._snapshot_id_filter(snapshot_mapping)
-        self.engine_adapter.delete_from(self.seeds_table, delete_filter)
-        self.engine_adapter.delete_from(self.intervals_table, delete_filter)
-        self.delete_snapshots(snapshot_mapping)
-
         new_snapshots = set(snapshot_mapping.values())
         self._push_snapshots(new_snapshots, overwrite=True)
-        self._push_snapshot_intervals(new_snapshots)
 
+        updated_prod_environment: t.Optional[Environment] = None
         updated_environments = []
-
         for environment in environments:
             snapshots = [
                 snapshot_mapping[info.snapshot_id].table_info
@@ -838,9 +822,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if snapshots != environment.snapshots:
                 environment.snapshots = snapshots
                 updated_environments.append(environment)
+                if environment.name == c.PROD:
+                    updated_prod_environment = environment
 
         for environment in environments:
             self._update_environment(environment)
+
+        if updated_prod_environment:
+            self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
 
     def _snapshot_id_filter(
         self, snapshot_ids: t.Iterable[SnapshotIdLike]

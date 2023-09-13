@@ -411,6 +411,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
+    migrated: bool = False
 
     @field_validator("ttl")
     @classmethod

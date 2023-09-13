@@ -109,6 +109,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "updated_ts": 1665014400000,
                 "version": snapshot.version,
                 "change_category": snapshot.change_category,
+                "migrated": False,
             }
         ],
         "environment": {
