@@ -68,11 +68,14 @@ class ModelTest(unittest.TestCase):
         for table_name, rows in self.body.get("inputs", {}).items():
             df = pd.DataFrame.from_records(rows)  # noqa
             columns_to_types: dict[str, exp.DataType] = {}
+            if table_name in self.models:
+                columns_to_types = self.models[table_name].columns_to_types or {}
 
-            for i, v in rows[0].items():
-                # convert ruamel into python
-                v = v.real if hasattr(v, "real") else v
-                columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
+            if not columns_to_types:
+                for i, v in rows[0].items():
+                    # convert ruamel into python
+                    v = v.real if hasattr(v, "real") else v
+                    columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
             table = exp.to_table(table_name)
             if table.db:
                 self.engine_adapter.create_schema(table.db, catalog_name=table.catalog)

@@ -343,7 +343,7 @@ def test_environment_promotion(sushi_context: Context):
     apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.BREAKING)
 
     # Make changes in dev
-    change_data_type(sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.INT)
+    change_data_type(sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.DECIMAL)
     apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.NON_BREAKING)
 
     change_data_type(sushi_context, "sushi.top_waiters", DataType.Type.DOUBLE, DataType.Type.INT)
