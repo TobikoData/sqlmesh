@@ -58,7 +58,7 @@ The `MODEL` DDL is used to specify metadata about the model such as its name, [k
 Refer to `MODEL` [properties](./overview.md#properties) for the full list of allowed properties.
 
 ### Optional pre/post-statements
-Optional pre/post-statements can help prepare the model's query and execute "clean-up" actions after it has successfully executed, respectively. For example, you might create temporary tables, set permissions, or evict previously cached tables from memory.
+Optional pre/post-statements can help prepare the model's query and execute "clean-up" actions after it has successfully executed, respectively. For example, you might create temporary views, set permissions, or evict previously cached tables from memory.
 
 However, be careful not to run any statement that could conflict with the execution of another statement when ran concurrently, such as creating a physical table.
 
