@@ -104,7 +104,7 @@ Note that one could also define this model by simply returning a string that con
 
 ### `@model` decorator
 
-The `@model` decorator is the Python equivalent of the `MODEL` DDL. In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements` and `post_statements` to a list of SQL strings and / or SQLGlot expressions to define the pre/post-statements of the model, respectively.
+The `@model` decorator is the Python equivalent of the `MODEL` DDL. In addition to model metadata and configuration information, one can also set the keyword arguments `pre_statements` and `post_statements` to a list of SQL strings and/or SQLGlot expressions to define the pre/post-statements of the model, respectively.
 
 **Note:** All of the [metadata](./overview.md#properties) field names are the same as those in the `MODEL` DDL.
 
