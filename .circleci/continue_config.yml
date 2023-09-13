@@ -216,5 +216,11 @@ workflows:
                 - main
       - engine_adapter_integration_tests:
           context: engine_adapter_integration
+          requires:
+            - style_and_unit_tests
+          filters:
+            branches:
+              only:
+                - main
       - ui_style
       - ui_test
