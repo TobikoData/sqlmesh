@@ -499,29 +499,30 @@ class TerminalConsole(Console):
         tree = Tree(f"[bold]{header}:")
         if added_names:
             added_tree = Tree(f"[bold][added]Added:")
-            for model_name in added_names:
-                added_tree.add(f"[added]{model_name}")
+            for name in added_names:
+                added_tree.add(f"[added]{name}")
             tree.add(added_tree)
         if removed_names:
             removed_tree = Tree(f"[bold][removed]Removed:")
-            for model_name in removed_names:
-                removed_tree.add(f"[removed]{model_name}")
+            for name in removed_names:
+                removed_tree.add(f"[removed]{name}")
             tree.add(removed_tree)
         if modified_names:
             direct = Tree(f"[bold][direct]Directly Modified:")
             indirect = Tree(f"[bold][indirect]Indirectly Modified:")
             metadata = Tree(f"[bold][metadata]Metadata Updated:")
-            for model_name in modified_names:
-                if context_diff.directly_modified(model_name):
+            for name in modified_names:
+                if context_diff.directly_modified(name):
                     direct.add(
-                        Syntax(f"{model_name}\n{context_diff.text_diff(model_name)}", "sql")
+                        Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql")
                         if detailed
-                        else f"[direct]{model_name}"
+                        else f"[direct]{name}"
                     )
-                elif context_diff.indirectly_modified(model_name):
-                    indirect.add(f"[indirect]{model_name}")
-                elif context_diff.metadata_updated(model_name):
-                    metadata.add(f"[metadata]{model_name}")
+                elif context_diff.indirectly_modified(name):
+                    indirect.add(f"[indirect]{name}")
+                elif context_diff.metadata_updated(name):
+                    metadata.add(Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql"))
+                    # metadata.add(f"[metadata]{name}")
             if direct.children:
                 tree.add(direct)
             if indirect.children:

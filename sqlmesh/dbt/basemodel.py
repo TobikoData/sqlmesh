@@ -222,6 +222,10 @@ class BaseModelConfig(GeneralConfig):
         dependencies.macros = []
         return dependencies
 
+    @property
+    def sqlmesh_config_fields(self) -> t.Set[str]:
+        return {"description", "owner", "stamp", "storage_format"}
+
     def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
         model_context = context.context_for_dependencies(
@@ -230,7 +234,7 @@ class BaseModelConfig(GeneralConfig):
         jinja_macros = model_context.jinja_macros.trim(
             self.dependencies.macros, package=self.package_name
         )
-        jinja_macros.global_objs.update(
+        jinja_macros.add_globals(
             {
                 "this": self.relation_info,
                 "model": self.model_function(),
@@ -239,12 +243,6 @@ class BaseModelConfig(GeneralConfig):
                 **model_context.jinja_globals,  # type: ignore
             }
         )
-
-        optional_kwargs: t.Dict[str, t.Any] = {}
-        for field in ("description", "owner", "stamp", "storage_format"):
-            field_val = getattr(self, field, None) or self.meta.get(field, None)
-            if field_val:
-                optional_kwargs[field] = field_val
 
         return {
             "audits": [(test.name, {}) for test in self.tests],
@@ -260,7 +258,7 @@ class BaseModelConfig(GeneralConfig):
             "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             "tags": self.tags,
             "physical_schema_override": context.sqlmesh_config.physical_schema_override,
-            **optional_kwargs,
+            **self.sqlmesh_config_kwargs,
         }
 
     @abstractmethod

@@ -191,7 +191,7 @@ def config() -> Config:
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:
-    gateway = f"test__{request.param}"
+    gateway = f"inttest_{request.param}"
     if gateway not in config.gateways:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
         pytest.skip(f"Gateway {gateway} not configured")
@@ -429,8 +429,6 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
 
 
 def test_merge(ctx: TestContext):
-    if ctx.dialect == "redshift":
-        pytest.skip("Redshift currently doesn't support `MERGE`")
     ctx.init()
     table = ctx.table("test_table")
     ctx.engine_adapter.create_table(table, ctx.columns_to_types)

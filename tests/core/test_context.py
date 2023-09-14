@@ -348,16 +348,22 @@ model_defaults:
 
 def test_physical_schema_override() -> None:
     def get_schemas(context: Context):
-        return {snapshot.physical_schema for snapshot in context.snapshots.values()}
+        return {
+            snapshot.physical_schema for snapshot in context.snapshots.values() if snapshot.is_model
+        }
 
     def get_view_schemas(context: Context):
-        return {snapshot.qualified_view_name.schema_name for snapshot in context.snapshots.values()}
+        return {
+            snapshot.qualified_view_name.schema_name
+            for snapshot in context.snapshots.values()
+            if snapshot.is_model
+        }
 
     def get_sushi_fingerprints(context: Context):
         return {
             snapshot.fingerprint.to_identifier()
             for snapshot in context.snapshots.values()
-            if snapshot.model.schema_name == "sushi"
+            if snapshot.is_model and snapshot.model.schema_name == "sushi"
         }
 
     no_mapping_context = Context(paths="examples/sushi")

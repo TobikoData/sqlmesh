@@ -528,6 +528,30 @@ def table_diff(
     )
 
 
+@cli.command("rewrite")
+@click.argument("sql")
+@click.option(
+    "--read",
+    type=str,
+    help="The input dialect of the sql string.",
+)
+@click.option(
+    "--write",
+    type=str,
+    help="The output dialect of the sql string.",
+)
+@click.pass_obj
+@error_handler
+def rewrite(obj: Context, sql: str, read: str = "", write: str = "") -> None:
+    """Rewrite a sql expression with semantic references into an executable query.
+
+    https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+    """
+    obj.console.show_sql(
+        obj.rewrite(sql, dialect=read).sql(pretty=True, dialect=write or obj.config.dialect),
+    )
+
+
 @cli.command("prompt")
 @click.argument("prompt")
 @click.option(

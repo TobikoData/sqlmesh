@@ -3,6 +3,7 @@ from __future__ import annotations
 import pathlib
 import sys
 import typing as t
+from itertools import zip_longest
 from pathlib import Path
 
 from pydantic import Field
@@ -11,14 +12,15 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import bool_validator, expression_validator
-from sqlmesh.core.model.definition import _Model
+from sqlmesh.core.model.definition import _Model, _python_env, _single_value_or_tuple
 from sqlmesh.core.node import _Node
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import AuditConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
-from sqlmesh.utils.jinja import JinjaMacroRegistry
+from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
 from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.pydantic import (
     PydanticModel,
@@ -29,6 +31,7 @@ from sqlmesh.utils.pydantic import (
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Node, Snapshot
+    from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -36,31 +39,40 @@ else:
     from typing_extensions import Literal
 
 
-class AuditMixin:
+class AuditCommonMetaMixin:
     """
-    Mixin for common Audit functionality
+    Metadata for audits which can be defined in SQL.
 
     Args:
         name: The unique name of the audit.
         dialect: The dialect of the audit query.
         skip: Setting this to `true` will cause this audit to be skipped. Defaults to `false`.
         blocking: Setting this to `true` will cause the pipeline execution to stop if this audit fails.
-        query: The audit query.
-        defaults: Default values for the audit query.
-        expressions: Additional sql statements to execute alongside the audit.
-        jinja_macros: A registry of jinja macros to use when rendering the audit query.
+        standalone: Setting this to `true` will cause this audit to be executed as a standalone audit.
     """
 
     name: str
     dialect: str
     skip: bool
     blocking: bool
+    standalone: bool
+
+
+class AuditMixin(AuditCommonMetaMixin):
+    """
+    Mixin for common Audit functionality
+
+    Args:
+        query: The audit query.
+        defaults: Default values for the audit query.
+        expressions: Additional sql statements to execute alongside the audit.
+        jinja_macros: A registry of jinja macros to use when rendering the audit query.
+    """
+
     query: t.Union[exp.Subqueryable, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression]
     expressions_: t.Optional[t.List[exp.Expression]]
     jinja_macros: JinjaMacroRegistry
-
-    _path: t.Optional[pathlib.Path]
 
     def render_query(
         self,
@@ -152,12 +164,13 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
     dialect: str = ""
     skip: bool = False
     blocking: bool = True
+    standalone: Literal[False] = False
     query: t.Union[exp.Subqueryable, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
 
-    _path: t.Optional[pathlib.Path] = None
+    _path: t.Optional[Path] = None
 
     # Validators
     _query_validator = expression_validator
@@ -235,94 +248,6 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
             only_execution_time=model.kind.only_execution_time,
         )
 
-    @classmethod
-    def load(
-        cls,
-        expressions: t.List[exp.Expression],
-        *,
-        path: pathlib.Path,
-        dialect: t.Optional[str] = None,
-    ) -> ModelAudit:
-        """Load an audit from a parsed SQLMesh audit file.
-
-        Args:
-            expressions: Audit, *Statements, Query
-            path: An optional path of the file.
-            dialect: The default dialect if no audit dialect is configured.
-        """
-        if len(expressions) < 2:
-            _raise_config_error("Incomplete audit definition, missing AUDIT or QUERY", path)
-
-        meta, *statements, query = expressions
-
-        if not isinstance(meta, d.Audit):
-            _raise_config_error(
-                "AUDIT statement is required as the first statement in the definition",
-                path,
-            )
-            raise
-
-        provided_meta_fields = {p.name for p in meta.expressions}
-        provided_meta_fields.add("query")
-
-        missing_required_fields = cls.missing_required_fields(provided_meta_fields)
-        if missing_required_fields:
-            breakpoint()
-            _raise_config_error(
-                f"Missing required fields {missing_required_fields} in the audit definition",
-                path,
-            )
-
-        extra_fields = cls.extra_fields(provided_meta_fields)
-        if extra_fields:
-            _raise_config_error(
-                f"Invalid extra fields {extra_fields} in the audit definition", path
-            )
-
-        if not isinstance(query, exp.Subqueryable):
-            _raise_config_error("Missing SELECT query in the audit definition", path)
-            raise
-
-        try:
-            audit = cls(
-                query=query,
-                expressions=statements,
-                **{
-                    "dialect": dialect or "",
-                    **{prop.name: prop.args.get("value") for prop in meta.expressions if prop},
-                },
-            )
-        except Exception as ex:
-            _raise_config_error(str(ex), path)
-
-        audit._path = path
-        return audit
-
-    @classmethod
-    def load_multiple(
-        cls,
-        expressions: t.List[exp.Expression],
-        *,
-        path: pathlib.Path,
-        dialect: t.Optional[str] = None,
-    ) -> t.Generator[ModelAudit, None, None]:
-        audit_block: t.List[exp.Expression] = []
-        for expression in expressions:
-            if isinstance(expression, d.Audit):
-                if audit_block:
-                    yield cls.load(
-                        expressions=audit_block,
-                        path=path,
-                        dialect=dialect,
-                    )
-                    audit_block.clear()
-            audit_block.append(expression)
-        yield cls.load(
-            expressions=audit_block,
-            path=path,
-            dialect=dialect,
-        )
-
 
 class StandaloneAudit(_Node, AuditMixin):
     """
@@ -336,6 +261,7 @@ class StandaloneAudit(_Node, AuditMixin):
     dialect: str = ""
     skip: bool = False
     blocking: bool = False
+    standalone: Literal[True] = True
     query: t.Union[exp.Subqueryable, d.JinjaQuery]
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
@@ -346,7 +272,7 @@ class StandaloneAudit(_Node, AuditMixin):
 
     source_type: Literal["audit"] = "audit"
 
-    _path: t.Optional[pathlib.Path] = None
+    _path: t.Optional[Path] = None
     _depends_on: t.Optional[t.Set[str]] = None
 
     # Validators
@@ -432,22 +358,83 @@ class StandaloneAudit(_Node, AuditMixin):
                 f"Cannot diff audit '{self.name} against a non-audit node '{other.name}'"
             )
 
-        return d.text_diff(self.query, other.query, self.dialect)
+        meta_a, *statements_a = self.render_definition()
+        meta_b, *statements_b = other.render_definition()
+
+        query_a = statements_a.pop() if statements_a else None
+        query_b = statements_b.pop() if statements_b else None
+
+        return "\n".join(
+            (
+                d.text_diff(meta_a, meta_b, self.dialect),
+                *(
+                    d.text_diff(sa, sb, self.dialect)
+                    for sa, sb in zip_longest(statements_a, statements_b)
+                ),
+                d.text_diff(query_a, query_b, self.dialect),
+            )
+        ).strip()
+
+    def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
+        """Returns the original list of sql expressions comprising the model definition.
+
+        Args:
+            include_python: Whether or not to include Python code in the rendered definition.
+        """
+        expressions: t.List[exp.Expression] = []
+        comment = None
+        for field_name in sorted(self.meta_fields):
+            field_value = getattr(self, field_name)
+            field_info = self.all_field_infos()[field_name]
+            if field_name == "standalone" or field_value != field_info.default:
+                if field_name == "description":
+                    comment = field_value
+                else:
+                    expression = exp.Property(
+                        this=field_info.alias or field_name,
+                        value=META_FIELD_CONVERTER.get(field_name, exp.to_identifier)(field_value),
+                    )
+                    if field_name == "name":
+                        expressions.insert(0, expression)
+                    else:
+                        expressions.append(expression)
+
+        audit = d.Audit(expressions=expressions)
+        audit.comments = [comment] if comment else None
+
+        jinja_expressions = []
+        python_expressions = []
+        if include_python:
+            python_env = d.PythonCode(
+                expressions=[
+                    v.payload if v.is_import or v.is_definition else f"{k} = {v.payload}"
+                    for k, v in self.sorted_python_env
+                ]
+            )
+            if python_env.expressions:
+                python_expressions.append(python_env)
+
+            jinja_expressions = self.jinja_macros.to_expressions()
+
+        return [audit, *python_expressions, *jinja_expressions, *self.expressions, self.query]
 
     @property
     def is_audit(self) -> bool:
         """Return True if this is an audit node"""
         return True
 
+    @property
+    def meta_fields(self) -> t.Iterable[str]:
+        return set(AuditCommonMetaMixin.__annotations__) | set(_Node.all_field_infos())
+
     def _create_query_renderer(self, node: _Node) -> QueryRenderer:
-        audit = t.cast(StandaloneAudit, node)
         return QueryRenderer(
             self.query,
             self.dialect,
             self.macro_definitions,
             path=self._path or Path(),
             jinja_macro_registry=self.jinja_macros,
-            python_env=audit.python_env,
+            python_env=self.python_env,
         )
 
 
@@ -464,7 +451,127 @@ class AuditResult(PydanticModel):
     query: t.Optional[exp.Expression] = None
     """The rendered query used by the audit. This could be None if the audit was skipped."""
     skipped: bool = False
-    """Whether this audit was skipped or not."""
+
+
+def load_audit(
+    expressions: t.List[exp.Expression],
+    *,
+    path: Path = Path(),
+    module_path: Path = Path(),
+    macros: t.Optional[MacroRegistry] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
+    dialect: t.Optional[str] = None,
+) -> Audit:
+    """Load an audit from a parsed SQLMesh audit file.
+
+    Args:
+        expressions: Audit, *Statements, Query
+        path: An optional path of the file.
+        dialect: The default dialect if no audit dialect is configured.
+    """
+    if len(expressions) < 2:
+        _raise_config_error("Incomplete audit definition, missing AUDIT or QUERY", path)
+
+    meta, *statements, query = expressions
+
+    if not isinstance(meta, d.Audit):
+        _raise_config_error(
+            "AUDIT statement is required as the first statement in the definition",
+            path,
+        )
+        raise
+
+    meta_fields = {p.name: p.args.get("value") for p in meta.expressions if p}
+    if meta.comments:
+        meta_fields["description"] = "\n".join(comment.strip() for comment in meta.comments)
+
+    standalone_field = meta_fields.pop("standalone", None)
+    if standalone_field and not isinstance(standalone_field, exp.Boolean):
+        _raise_config_error(
+            f"""Standalone must be a boolean for '{meta_fields.get("name")}'""",
+            path,
+        )
+        raise
+    is_standalone = standalone_field and standalone_field.this
+
+    audit_class: t.Union[t.Type[StandaloneAudit], t.Type[ModelAudit]] = (
+        StandaloneAudit if is_standalone else ModelAudit
+    )
+
+    missing_required_fields = audit_class.missing_required_fields(set(meta_fields))
+    missing_required_fields -= {"query"}
+    if missing_required_fields:
+        _raise_config_error(
+            f"Missing required fields {missing_required_fields} in the audit definition",
+            path,
+        )
+
+    extra_fields = audit_class.extra_fields(set(meta_fields))
+
+    if extra_fields:
+        _raise_config_error(f"Invalid extra fields {extra_fields} in the audit definition", path)
+
+    if not isinstance(query, exp.Subqueryable) and not isinstance(query, d.JinjaQuery):
+        _raise_config_error("Missing SELECT query in the audit definition", path)
+        raise
+
+    extra_kwargs: t.Dict[str, t.Any] = {}
+    if is_standalone:
+        jinja_macro_refrences: t.Set[MacroReference] = {
+            r
+            for references in [
+                *[extract_macro_references(s.sql()) for s in statements],
+                extract_macro_references(query.sql()),
+            ]
+            for r in references
+        }
+        extra_kwargs["python_env"] = _python_env(
+            [*statements, query], jinja_macro_refrences, module_path, macros or macro.get_registry()
+        )
+        extra_kwargs["jinja_macros"] = (jinja_macros or JinjaMacroRegistry()).trim(
+            jinja_macro_refrences
+        )
+
+    dialect = meta_fields.pop("dialect", dialect)
+    try:
+        audit = audit_class(
+            query=query, expressions=statements, dialect=dialect, **meta_fields, **extra_kwargs
+        )
+    except Exception as ex:
+        _raise_config_error(str(ex), path)
+
+    audit._path = path
+    return audit
+
+
+def load_multiple_audits(
+    expressions: t.List[exp.Expression],
+    *,
+    path: Path = Path(),
+    module_path: Path = Path(),
+    macros: t.Optional[MacroRegistry] = None,
+    jinja_macros: t.Optional[JinjaMacroRegistry] = None,
+    dialect: t.Optional[str] = None,
+) -> t.Generator[Audit, None, None]:
+    audit_block: t.List[exp.Expression] = []
+    for expression in expressions:
+        if isinstance(expression, d.Audit):
+            if audit_block:
+                yield load_audit(
+                    expressions=audit_block,
+                    path=path,
+                    module_path=module_path,
+                    macros=macros,
+                    jinja_macros=jinja_macros,
+                    dialect=dialect,
+                )
+                audit_block.clear()
+        audit_block.append(expression)
+    yield load_audit(
+        expressions=audit_block,
+        path=path,
+        dialect=dialect,
+    )
 
 
 def _raise_config_error(msg: str, path: pathlib.Path) -> None:
@@ -476,4 +583,15 @@ def _raise_config_error(msg: str, path: pathlib.Path) -> None:
 def _maybe_parse_arg_pair(e: exp.Expression) -> t.Tuple[str, exp.Expression]:
     if isinstance(e, exp.EQ):
         return e.left.name, e.right
-    raise_config_error(f"Invalid defaults expression: {e}", error_type=AuditConfigError)
+
+
+META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
+    "start": lambda value: exp.Literal.string(value),
+    "cron": lambda value: exp.Literal.string(value),
+    "skip": exp.convert,
+    "blocking": exp.convert,
+    "standalone": exp.convert,
+    "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
+    "tags": _single_value_or_tuple,
+    "hash_raw_query": exp.convert,
+}

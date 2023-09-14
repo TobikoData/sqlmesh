@@ -15,7 +15,7 @@ from sqlglot.errors import SqlglotError
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.audit import Audit, ModelAudit
+from sqlmesh.core.audit import Audit, load_multiple_audits
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
@@ -124,7 +124,7 @@ class Loader(abc.ABC):
             macros=macros,
             jinja_macros=jinja_macros,
             models=models,
-            audits=self._load_audits(),
+            audits=self._load_audits(macros=macros, jinja_macros=jinja_macros),
             metrics=expand_metrics(metrics),
             dag=self._dag,
         )
@@ -154,7 +154,9 @@ class Loader(abc.ABC):
         """Loads all models."""
 
     @abc.abstractmethod
-    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+    def _load_audits(
+        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
+    ) -> UniqueKeyDict[str, Audit]:
         """Loads all audits."""
 
     def _load_metrics(self) -> UniqueKeyDict[str, MetricMeta]:
@@ -318,7 +320,9 @@ class SqlMeshLoader(Loader):
 
         return models
 
-    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+    def _load_audits(
+        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
+    ) -> UniqueKeyDict[str, Audit]:
         """Loads all the model audits."""
         audits_by_name: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
         for context_path, config in self._context.configs.items():
@@ -326,9 +330,12 @@ class SqlMeshLoader(Loader):
                 self._track_file(path)
                 with open(path, "r", encoding="utf-8") as file:
                     expressions = parse(file.read(), default_dialect=config.model_defaults.dialect)
-                    audits = ModelAudit.load_multiple(
+                    audits = load_multiple_audits(
                         expressions=expressions,
                         path=path,
+                        module_path=context_path,
+                        macros=macros,
+                        jinja_macros=jinja_macros,
                         dialect=config.model_defaults.dialect,
                     )
                     for audit in audits:

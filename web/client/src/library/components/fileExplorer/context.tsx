@@ -36,7 +36,7 @@ interface FileExplorer {
   setArtifactRename: (artifact?: ModelArtifact) => void
   selectArtifactsInRange: (to: ModelArtifact) => void
   createDirectory: (parent: ModelDirectory) => void
-  createFile: (parent: ModelDirectory) => void
+  createFile: (parent: ModelDirectory, extension?: string) => void
   renameArtifact: (artifact: ModelArtifact, newName?: string) => void
   removeArtifacts: (artifacts: ModelArtifact[]) => void
   removeArtifactWithConfirmation: (artifact: ModelArtifact) => void
@@ -125,8 +125,18 @@ export default function FileExplorerProvider({
       })
   }
 
-  function createFile(parent: ModelDirectory, extension = '.py'): void {
+  function createFile(parent: ModelDirectory, extension?: string): void {
     if (isLoading) return
+
+    if (isNil(extension)) {
+      if (parent.isModels) {
+        extension = '.sql'
+      } else if (parent.isTests) {
+        extension = '.yaml'
+      } else {
+        extension = '.py'
+      }
+    }
 
     setIsLoading(true)
 
@@ -147,7 +157,10 @@ export default function FileExplorerProvider({
   function renameArtifact(artifact: ModelArtifact, newName?: string): void {
     newName = newName?.trim()
 
-    if (isLoading || isStringEmptyOrNil(newName)) return
+    const parentArtifacts = artifact.parent?.artifacts ?? []
+    const isDuplicate = parentArtifacts.some(a => a.name === newName)
+
+    if (isLoading || isStringEmptyOrNil(newName) || isDuplicate) return
 
     setIsLoading(true)
 

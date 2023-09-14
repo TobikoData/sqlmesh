@@ -8,7 +8,11 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
 from sqlmesh.core.config.categorizer import CategorizerConfig
-from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
+from sqlmesh.core.config.connection import (
+    ConnectionConfig,
+    DuckDBConnectionConfig,
+    connection_config_validator,
+)
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
@@ -85,6 +89,8 @@ class Config(BaseConfig):
         "pinned_environments": UpdateStrategy.EXTEND,
         "physical_schema_override": UpdateStrategy.KEY_UPDATE,
     }
+
+    _connection_config_validator = connection_config_validator
 
     @field_validator("gateways", mode="before", always=True)
     @classmethod

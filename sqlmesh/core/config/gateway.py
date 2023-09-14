@@ -4,7 +4,7 @@ import typing as t
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config.base import BaseConfig
-from sqlmesh.core.config.connection import ConnectionConfig
+from sqlmesh.core.config.connection import ConnectionConfig, connection_config_validator
 from sqlmesh.core.config.scheduler import SchedulerConfig
 
 
@@ -27,3 +27,5 @@ class GatewayConfig(BaseConfig):
     test_connection: t.Optional[ConnectionConfig] = None
     scheduler: t.Optional[SchedulerConfig] = None
     state_schema: t.Optional[str] = c.SQLMESH
+
+    _connection_config_validator = connection_config_validator
