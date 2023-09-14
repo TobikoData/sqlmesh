@@ -6,6 +6,7 @@ SQLMesh will automatically determine the relationships among and lineage of your
 
 ## Example
 The following is an example of a model defined in SQL. Note the following aspects:
+
   - Models can include descriptive information as comments, such as the first line.
   - The first non-comment statement of a `model.sql` file is the `MODEL` DDL.
   - The last non-comment statement should be a `SELECT` statement that defines the logic needed to create the table
@@ -41,7 +42,7 @@ SQLMesh uses the postgres `x::int` syntax for casting; the casts are automatical
 
 ```sql linenums="1"
 WITH cte AS (
-SELECT 1 AS foo -- don't need to cast here
+  SELECT 1 AS foo -- don't need to cast here
 )
 SELECT foo::int -- need to cast here because it's in the final select statement
 ```
@@ -64,7 +65,7 @@ SELECT
   SUM(x) as x, -- explicitly x
 ```
 
-## Properties
+## Model properties
 The `MODEL` DDL statement takes various properties, which are used for both metadata and controlling behavior.
 
 ### name
@@ -151,9 +152,9 @@ For models that are incremental, the following parameters can be specified in th
 Macros can be used for passing in parameterized arguments such as dates, as well as for making SQL less repetitive. By default, SQLMesh provides several predefined macro variables that can be used. Macros are used by prefixing with the `@` symbol. For more information, refer to [macros](../macros/overview.md).
 
 ## Statements
-Models can have additional statements that run before the main query. This can be useful for loading things such as [UDFs](../glossary.md#user-defined-function-udf).
+Models can have additional statements that run before and/or after the main query. They can be useful for loading things such as [UDFs](../glossary.md#user-defined-function-udf) or cleaning up after a model query has run.
 
-In general, such statements should only be used for preparing the main query. They should not be used for creating or altering tables, as this could lead to unpredictable behavior.
+In general, pre-statements statements should only be used for preparing the main query. They should not be used for creating or altering tables, as this could lead to unpredictable behavior if multiple models are running simultaneously.
 
 ```sql linenums="1" hl_lines="5-7"
 MODEL (
@@ -165,10 +166,10 @@ ADD JAR s3://special_udf.jar;
 CREATE TEMPORARY FUNCTION UDF AS 'my.jar.udf';
 
 SELECT UDF(x)::int AS x
-FROM y
+FROM y;
 ```
 
-Additional statements can also be provided **after** the main query, in which case they will run after each evaluation of the SELECT query.
+Additional statements can also be provided after the main query, in which case they will run after each evaluation of the SELECT query. Note that the model query must end with a semi-colon prior to the post-statements.
 
 ```sql linenums="1" hl_lines="10-11"
 MODEL (
@@ -189,7 +190,7 @@ Models that are loaded incrementally require a time column to partition data.
 
 A time column is a column in a model with an optional format string in the dialect of the model; for example, `'%Y-%m-%d'` for DuckDB or `'yyyy-mm-dd'` for Snowflake. For more information, refer to [time column](./model_kinds.md#time-column).
 
-## Advanced usage
+### Advanced usage
 The column used as your model's time column is not limited to a text or date type. In the following example, the time column, `di`, is an integer:
 
 ```sql linenums="1" hl_lines="5"
