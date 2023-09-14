@@ -2,7 +2,7 @@
 
 This page lists SQLMesh model configuration options and their parameters.
 
-Learn more about configuring SQLMesh model properties in the [model concepts overview page](../concepts/models/overview.md#model-properties).
+Learn more about specifying SQLMesh model properties in the [model concepts overview page](../concepts/models/overview.md#model-properties).
 
 ## General model properties
 
@@ -21,9 +21,9 @@ Configuration options for SQLMesh model properties supported by all model kinds.
 
 ### Model defaults
 
-The SQLMesh project-level `model_defaults` configuration is **required** and must contain a value for the `dialect` key. Other values are set automatically unless explicitly overridden in the model definition. Learn more about project-level configuration in the [configuration guide](../guides/configuration.md).
+The SQLMesh project-level configuration must contain the `model_defaults` key and must specify a value for its `dialect` key. Other values are set automatically unless explicitly overridden in the model definition. Learn more about project-level configuration in the [configuration guide](../guides/configuration.md).
 
-The SQLMesh project-level `model_defaults` configuration supports all options in the [general model properties](#general-model-properties) table above except for `depends_on`.
+The SQLMesh project-level `model_defaults` key supports all options in the [general model properties](#general-model-properties) table above except for `depends_on`.
 
 ## Model kind properties
 

@@ -38,7 +38,7 @@ Configuration options for SQLMesh environment creation and promotion.
 
 ### Model defaults
 
-The `model_defaults` configuration is **required** and must contain a value for the `dialect` key.
+The `model_defaults` key is **required** and must contain a value for the `dialect` key.
 
 See all the keys allowed in `model_defaults` at the [model configuration reference page](./model_configuration.md#model-defaults).
 
