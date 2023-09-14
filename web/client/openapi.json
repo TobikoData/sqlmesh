@@ -1123,7 +1123,7 @@
         "type": "string",
         "enum": ["year", "month", "day", "hour", "minute"],
         "title": "IntervalUnit",
-        "description": "IntervalUnit is the inferred granularity of an incremental model.\n\nIntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a model. The minimum time delta between a sample set of dates\nis used to determine which unit a model's schedule is."
+        "description": "IntervalUnit is the inferred granularity of an incremental node.\n\nIntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a node. The minimum time delta between a sample set of dates\nis used to determine which unit a node's schedule is."
       },
       "LineageColumn": {
         "properties": {
@@ -1271,6 +1271,12 @@
         },
         "type": "object",
         "title": "ModelsDiff"
+      },
+      "NodeType": {
+        "type": "string",
+        "enum": ["model", "audit"],
+        "title": "NodeType",
+        "description": "An enumeration."
       },
       "PlanDates": {
         "properties": {
@@ -1540,7 +1546,11 @@
           "change_category": {
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           },
-          "kind_name": { "$ref": "#/components/schemas/ModelKindName" }
+          "kind_name": { "$ref": "#/components/schemas/ModelKindName" },
+          "node_type": {
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
+            "default": "model"
+          }
         },
         "additionalProperties": false,
         "type": "object",
@@ -1549,8 +1559,7 @@
           "fingerprint",
           "version",
           "physical_schema",
-          "parents",
-          "kind_name"
+          "parents"
         ],
         "title": "SnapshotTableInfo"
       },

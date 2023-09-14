@@ -9,6 +9,7 @@ def make_model(mocker):
     def make(name, refs=None):
         mock = mocker.Mock()
         mock.name = name
+        mock.columns_to_types = {}
         references = []
         for ref_name, unique in refs or []:
             mock_ref = mocker.Mock()
@@ -41,3 +42,13 @@ def test_graph(make_model):
 
     with pytest.raises(SQLMeshError):
         assert find_path("model_a", "model_e")
+
+
+def test_models_for_column(sushi_context_pre_scheduling):
+    graph = ReferenceGraph(sushi_context_pre_scheduling.models.values())
+    assert graph.models_for_column("sushi.orders", "status") == [
+        "sushi.customers",
+        "sushi.marketing",
+        "sushi.raw_marketing",
+    ]
+    assert graph.models_for_column("sushi.orders", "ds") == ["sushi.orders"]

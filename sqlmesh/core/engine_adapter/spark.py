@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import typing as t
+from functools import partial
 
 import pandas as pd
 from sqlglot import exp
@@ -16,7 +17,7 @@ from sqlmesh.core.engine_adapter.shared import (
     DataObjectType,
     TransactionType,
 )
-from sqlmesh.utils import nullsafe_join
+from sqlmesh.utils import classproperty, nullsafe_join
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -49,38 +50,138 @@ class SparkEngineAdapter(EngineAdapter):
     def _use_spark_session(self) -> bool:
         return True
 
-    @classmethod
-    def convert_columns_to_types_to_pyspark_schema(
-        cls, columns_to_types: t.Dict[str, exp.DataType]
-    ) -> t.Optional[spark_types.StructType]:
+    @classproperty
+    def _sqlglot_to_spark_primitive_mapping(self) -> t.Dict[t.Any, t.Any]:
         from pyspark.sql import types as spark_types
 
-        mapping = {
-            exp.DataType.Type.BOOLEAN: spark_types.BooleanType,
-            exp.DataType.Type.TEXT: spark_types.StringType,
+        return {
+            exp.DataType.Type.TINYINT: spark_types.ByteType,
+            exp.DataType.Type.SMALLINT: spark_types.ShortType,
             exp.DataType.Type.INT: spark_types.IntegerType,
             exp.DataType.Type.BIGINT: spark_types.LongType,
             exp.DataType.Type.FLOAT: spark_types.FloatType,
             exp.DataType.Type.DOUBLE: spark_types.DoubleType,
             exp.DataType.Type.DECIMAL: spark_types.DecimalType,
+            # SQLGlot currently converts VARCHAR and CHAR to Strings
+            exp.DataType.Type.VARCHAR: spark_types.StringType,
+            exp.DataType.Type.CHAR: spark_types.StringType,
+            exp.DataType.Type.TEXT: spark_types.StringType,
+            exp.DataType.Type.BINARY: spark_types.BinaryType,
+            exp.DataType.Type.BOOLEAN: spark_types.BooleanType,
             exp.DataType.Type.DATE: spark_types.DateType,
+            exp.DataType.Type.DATETIME: spark_types.TimestampNTZType,
+            exp.DataType.Type.TIMESTAMPLTZ: spark_types.TimestampType,
+            exp.DataType.Type.TIMESTAMPTZ: spark_types.TimestampType,
             exp.DataType.Type.TIMESTAMP: spark_types.TimestampType,
         }
 
-        try:
-            return spark_types.StructType(
-                [
-                    spark_types.StructField(col_name, mapping[col_type.this]())
-                    for col_name, col_type in columns_to_types.items()
+    @classproperty
+    def _sqlglot_to_spark_complex_mapping(self) -> t.Dict[t.Any, t.Any]:
+        from pyspark.sql import types as spark_types
+
+        return {
+            exp.DataType.Type.ARRAY: spark_types.ArrayType,
+            exp.DataType.Type.MAP: spark_types.MapType,
+            exp.DataType.Type.STRUCT: spark_types.StructType,
+        }
+
+    @classproperty
+    def _spark_to_sqlglot_primitive_mapping(self) -> t.Dict[t.Any, t.Any]:
+        return {v: k for k, v in self._sqlglot_to_spark_primitive_mapping.items()}
+
+    @classproperty
+    def _spark_to_sqlglot_complex_mapping(self) -> t.Dict[t.Any, t.Any]:
+        return {v: k for k, v in self._sqlglot_to_spark_complex_mapping.items()}
+
+    @classmethod
+    def spark_to_sqlglot_types(cls, input: spark_types.StructType) -> t.Dict[str, exp.DataType]:
+        from pyspark.sql import types as spark_types
+
+        def spark_complex_to_sqlglot_complex(
+            complex_type: t.Union[
+                spark_types.StructType, spark_types.ArrayType, spark_types.MapType
+            ]
+        ) -> exp.DataType:
+            def get_fields(
+                complex_type: t.Union[
+                    spark_types.StructType, spark_types.ArrayType, spark_types.MapType
                 ]
+            ) -> t.Sequence[spark_types.DataType]:
+                if isinstance(complex_type, spark_types.StructType):
+                    return complex_type.fields
+                if isinstance(complex_type, spark_types.ArrayType):
+                    return [complex_type.elementType]
+                if isinstance(complex_type, spark_types.MapType):
+                    return [complex_type.keyType, complex_type.valueType]
+                raise SQLMeshError(f"Unsupported complex type: {complex_type}")
+
+            expressions: t.List[t.Union[exp.ColumnDef, exp.DataType]] = []
+            fields = get_fields(complex_type)
+            for field in fields:
+                if isinstance(field, (spark_types.StructType, spark_types.MapType)):
+                    expressions.append(spark_complex_to_sqlglot_complex(field))
+                elif isinstance(field, spark_types.StructField):
+                    sqlglot_data_type = cls._spark_to_sqlglot_primitive_mapping.get(
+                        type(field.dataType)
+                    ) or spark_complex_to_sqlglot_complex(
+                        field.dataType  # type: ignore
+                    )
+                    kind = (
+                        sqlglot_data_type
+                        if isinstance(sqlglot_data_type, exp.DataType)
+                        else exp.DataType(this=sqlglot_data_type)
+                    )
+                    expressions.append(exp.ColumnDef(this=exp.to_identifier(field.name), kind=kind))
+                else:
+                    kind = exp.DataType(this=cls._spark_to_sqlglot_primitive_mapping[type(field)])
+                    expressions.append(kind)
+            dtype = cls._spark_to_sqlglot_complex_mapping[type(complex_type)]
+            return exp.DataType(
+                this=dtype,
+                expressions=expressions,
+                nested=True,
             )
-        except KeyError as e:
-            logger.warning(
-                "Tried to convert column data types to Spark data types but got a type that was not supported."
-                "Currently nested or complex data types are not supported. Therefore Spark will attempt to infer the"
-                f"types from the data itself. Error: {str(e)}"
-            )
-            return None
+
+        resp = spark_complex_to_sqlglot_complex(input)
+        return {column_def.this.name: column_def.args["kind"] for column_def in resp.expressions}
+
+    @classmethod
+    def sqlglot_to_spark_types(cls, input: t.Dict[str, exp.DataType]) -> spark_types.StructType:
+        from pyspark.sql import types as spark_types
+
+        def sqlglot_complex_to_spark_complex(complex_type: exp.DataType) -> spark_types.DataType:
+            is_struct = complex_type.is_type(exp.DataType.Type.STRUCT)
+            expressions = []
+            for column_def in complex_type.expressions:
+                col_name = column_def.this.name if is_struct else None
+                data_type = column_def.args["kind"] if is_struct else column_def
+                primitive_func = cls._sqlglot_to_spark_primitive_mapping.get(data_type.this)
+                type_func = (
+                    primitive_func
+                    if primitive_func
+                    else partial(sqlglot_complex_to_spark_complex, data_type)
+                )
+                if is_struct:
+                    expressions.append(spark_types.StructField(col_name, type_func()))
+                else:
+                    expressions.append(type_func())
+            klass = cls._sqlglot_to_spark_complex_mapping[complex_type.this]
+            if is_struct:
+                return klass(expressions)
+            return klass(*expressions)
+
+        return t.cast(
+            spark_types.StructType,
+            sqlglot_complex_to_spark_complex(
+                exp.DataType(
+                    this=exp.DataType.Type.STRUCT,
+                    expressions=[
+                        exp.ColumnDef(this=exp.to_identifier(column), kind=data_type)
+                        for column, data_type in input.items()
+                    ],
+                )
+            ),
+        )
 
     @classmethod
     def is_pyspark_df(cls, value: t.Any) -> bool:
@@ -98,10 +199,33 @@ class SparkEngineAdapter(EngineAdapter):
             return value
         return None
 
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Dict[str, exp.DataType]:
+        ...
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        ...
+
+    def _columns_to_types(
+        self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        if columns_to_types:
+            return columns_to_types
+        if self.is_pyspark_df(query_or_df):
+            from pyspark.sql import DataFrame
+
+            return self.spark_to_sqlglot_types(t.cast(DataFrame, query_or_df).schema)
+        return super()._columns_to_types(query_or_df, columns_to_types)
+
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
@@ -113,7 +237,7 @@ class SparkEngineAdapter(EngineAdapter):
             temp_table = self._get_temp_table(target_table or "spark", table_only=True)
             df.createOrReplaceGlobalTempView(temp_table.sql(dialect=self.dialect))  # type: ignore
             temp_table.set("db", "global_temp")
-            return exp.select("*").from_(temp_table)
+            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)
 
         if self._use_spark_session:
             return [SourceQuery(query_factory=query_factory)]
@@ -128,12 +252,10 @@ class SparkEngineAdapter(EngineAdapter):
         df = self.try_get_pandas_df(generic_df)
         if df is None:
             raise SQLMeshError("Ensure PySpark DF can only be run on a PySpark or Pandas DataFrame")
-        return self.spark.createDataFrame(  # type: ignore
-            df,
-            schema=self.convert_columns_to_types_to_pyspark_schema(columns_to_types)  # type: ignore
-            if columns_to_types
-            else None,
+        kwargs = (
+            dict(schema=self.sqlglot_to_spark_types(columns_to_types)) if columns_to_types else {}
         )
+        return self.spark.createDataFrame(df, **kwargs)  # type: ignore
 
     def fetchdf(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

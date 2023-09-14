@@ -125,6 +125,7 @@ def test_json(snapshot: Snapshot):
         "indirect_versions": {},
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
+        "migrated": False,
     }
 
 

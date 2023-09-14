@@ -38,7 +38,13 @@ class TestConfig(GeneralConfig):
         name: The name of the test.
         sql: The test sql.
         test_kwargs: The kwargs passed into the test.
+        model_name: The name of the model this test is attached to. Do not set for singular tests.
         owner: The name of the model under test.
+        stamp: An optional arbitrary string sequence used to create new audit versions without making
+            changes to any of the functional components of the definition.
+        cron: A cron string specifying how often the audit should be refreshed, leveraging the
+            [croniter](https://github.com/kiorky/croniter) library.
+        interval_unit: The duration of an interval for the audit. By default, it is computed from the cron expression.
         column_name: The name of the column under test.
         dependencies: The macros, refs, and sources the test depends upon.
         package_name: Name of the package that defines the test.
@@ -59,7 +65,11 @@ class TestConfig(GeneralConfig):
     name: str
     sql: SqlStr
     test_kwargs: t.Dict[str, t.Any] = {}
+    model_name: t.Optional[str] = None
     owner: t.Optional[str] = None
+    stamp: t.Optional[str] = None
+    cron: t.Optional[str] = None
+    interval_unit: t.Optional[str] = None
     column_name: t.Optional[str] = None
     dependencies: Dependencies = Dependencies()
 
@@ -92,7 +102,11 @@ class TestConfig(GeneralConfig):
 
     @property
     def is_standalone(self) -> bool:
-        return not self.owner
+        return not self.model_name
+
+    @property
+    def sqlmesh_config_fields(self) -> t.Set[str]:
+        return {"description", "owner", "stamp", "cron", "interval_unit"}
 
     def to_sqlmesh(self, context: DbtContext) -> Audit:
         """Convert dbt Test to SQLMesh Audit
@@ -107,7 +121,7 @@ class TestConfig(GeneralConfig):
         jinja_macros = test_context.jinja_macros.trim(
             self.dependencies.macros, package=self.package_name
         )
-        jinja_macros.global_objs.update(
+        jinja_macros.add_globals(
             {
                 "config": self.config_attribute_dict,
                 **test_context.jinja_globals,  # type: ignore
@@ -133,6 +147,8 @@ class TestConfig(GeneralConfig):
                     {source.sql_name for source in test_context.sources.values()}
                 ),
                 tags=self.tags,
+                hash_raw_query=True,
+                **self.sqlmesh_config_kwargs,
             )
         else:
             audit = ModelAudit(

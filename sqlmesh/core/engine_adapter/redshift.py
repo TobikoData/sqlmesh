@@ -7,14 +7,17 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
-from sqlmesh.core.engine_adapter.mixins import LogicalReplaceQueryMixin
+from sqlmesh.core.engine_adapter.mixins import (
+    LogicalMergeMixin,
+    LogicalReplaceQueryMixin,
+)
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter.base import QueryOrDF, SourceQuery
 
 
-class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin):
+class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin, LogicalMergeMixin):
     DIALECT = "redshift"
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
@@ -95,15 +98,6 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin)
             self.rename_table(target_table, old_table)
             self.rename_table(temp_table, target_table)
             self.drop_table(old_table)
-
-    def merge(
-        self,
-        target_table: TableName,
-        source_table: QueryOrDF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        unique_key: t.Sequence[str],
-    ) -> None:
-        raise NotImplementedError("Merge is not currently implemented on Redshift")
 
     def _short_hash(self) -> str:
         return uuid.uuid4().hex[:8]

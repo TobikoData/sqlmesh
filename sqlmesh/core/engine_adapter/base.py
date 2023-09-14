@@ -170,6 +170,13 @@ class EngineAdapter:
 
         return exp.cast(ensure_utc_exp(col), "TIMESTAMP")
 
+    @classmethod
+    def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
+        return [
+            exp.alias_(exp.cast(column, to=kind), column, copy=False)
+            for column, kind in columns_to_types.items()
+        ]
+
     def _get_source_queries(
         self,
         query_or_df: QueryOrDF,
@@ -181,6 +188,10 @@ class EngineAdapter:
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
         if isinstance(query_or_df, (exp.Subqueryable, exp.DerivedTable)):
             return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
+        if not columns_to_types:
+            raise SQLMeshError(
+                "It is expected that if a DF is passed in then columns_to_types is set"
+            )
         return self._df_to_source_queries(
             query_or_df, columns_to_types, batch_size, target_table=target_table
         )
@@ -188,12 +199,11 @@ class EngineAdapter:
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
-        assert columns_to_types
         num_rows = len(df.index)
         batch_size = sys.maxsize if batch_size == 0 else batch_size
         values = list(df.itertuples(index=False, name=None))
@@ -225,6 +235,18 @@ class EngineAdapter:
             ),
             columns_to_types,
         )
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Dict[str, exp.DataType]:
+        ...
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        ...
 
     def _columns_to_types(
         self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -719,9 +741,14 @@ class EngineAdapter:
         query: Query,
         columns_to_types: t.Dict[str, exp.DataType],
         contains_json: bool = False,
+        order_projections: bool = True,
     ) -> None:
         if contains_json:
             query = self._escape_json(query)
+        if order_projections and query.named_selects != list(columns_to_types):
+            if isinstance(query, exp.Subqueryable):
+                query = query.subquery()
+            query = exp.select(*columns_to_types).from_(query)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
@@ -801,7 +828,7 @@ class EngineAdapter:
             columns_to_types = columns_to_types or self.columns(table_name)
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
-                    query = self._add_where_to_query(query, where)
+                    query = self._add_where_to_query(query, where, columns_to_types)
                     if i > 0 or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
                         if i == 0:
                             if not where:
@@ -811,7 +838,10 @@ class EngineAdapter:
                             assert where is not None
                             self.delete_from(table_name, where=where)
                         self._insert_append_query(
-                            table_name, query, columns_to_types=columns_to_types
+                            table_name,
+                            query,
+                            columns_to_types=columns_to_types,
+                            order_projections=False,
                         )
                     else:
                         insert_exp = exp.insert(
@@ -1311,14 +1341,19 @@ class EngineAdapter:
 
         return table
 
-    def _add_where_to_query(self, query: Query, where: t.Optional[exp.Expression]) -> Query:
+    def _add_where_to_query(
+        self,
+        query: Query,
+        where: t.Optional[exp.Expression],
+        columns_to_type: t.Dict[str, exp.DataType],
+    ) -> Query:
         if not where or not isinstance(query, exp.Subqueryable):
             return query
 
         query = t.cast(exp.Subqueryable, query.copy())
         with_ = query.args.pop("with", None)
         query = (
-            exp.select("*", copy=False)
+            exp.select(*columns_to_type, copy=False)
             .from_(query.subquery("_subquery", copy=False), copy=False)
             .where(where, copy=False)
         )

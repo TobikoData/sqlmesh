@@ -286,6 +286,20 @@ Options:
   --help           Show this message and exit.
 ```
 
+## rewrite
+```
+Usage: sqlmesh rewrite [OPTIONS] SQL
+
+  Rewrite a sql expression with semantic references into an executable query.
+
+  https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+
+Options:
+  --read TEXT   The input dialect of the sql string.
+  --write TEXT  The output dialect of the sql string.
+  --help        Show this message and exit.
+```
+
 ## test
 ```
 Usage: sqlmesh test [OPTIONS] [TESTS]...
