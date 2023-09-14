@@ -34,21 +34,23 @@ class MWAAClient(BaseAirflowClient):
         return self._post(f"variables set {key} '{value}'")
 
     def get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
-        stdout, stderr = self._post(f"dags list-runs -o json -d {dag_id}")
-        if stdout:
-            dag_runs = json.loads(stdout)
-            if dag_runs:
-                return dag_runs[-1]["run_id"]
+        dag_runs = self._list_dag_runs(dag_id)
+        if dag_runs:
+            return dag_runs[-1]["run_id"]
         return None
 
     def get_dag_run_state(self, dag_id: str, dag_run_id: str) -> str:
+        dag_runs = self._list_dag_runs(dag_id) or []
+        for dag_run in dag_runs:
+            if dag_run["run_id"] == dag_run_id:
+                return dag_run["state"].lower()
+        raise NotFoundError(f"DAG run '{dag_run_id}' was not found for DAG '{dag_id}'")
+
+    def _list_dag_runs(self, dag_id: str) -> t.Optional[t.List[t.Dict[str, t.Any]]]:
         stdout, stderr = self._post(f"dags list-runs -o json -d {dag_id}")
         if stdout:
-            dag_runs = json.loads(stdout)
-            for dag_run in dag_runs:
-                if dag_run["run_id"] == dag_run_id:
-                    return dag_run["state"].lower()
-        raise NotFoundError(f"DAG run '{dag_run_id}' was not found for DAG '{dag_id}'")
+            return json.loads(stdout)
+        return None
 
     def _post(self, data: str) -> t.Tuple[str, str]:
         response = self._session.post(urljoin(self._airflow_url, "aws_mwaa/cli"), data=data)
