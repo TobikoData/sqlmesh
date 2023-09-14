@@ -82,13 +82,13 @@ The following example demonstrates how the above `db.customers` model can be def
 ```python linenums="1"
 from sqlglot import exp
 
-from sqlmesh.core.model import FullKind, model
+from sqlmesh.core.model import model
 from sqlmesh.core.macro import MacroEvaluator
 
 @model(
     "db.customers",
     is_sql=True,
-    kind=FullKind(),
+    kind="FULL",
     pre_statements=["CACHE TABLE countries AS SELECT * FROM raw.countries"],
     post_statements=["UNCACHE TABLE countries"],
 )
