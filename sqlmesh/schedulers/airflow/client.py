@@ -288,7 +288,7 @@ def _list_to_json(models: t.List[T]) -> str:
 def raise_for_status(response: Response) -> None:
     if response.status_code == 404:
         raise NotFoundError(response.text)
-    elif 400 <= response.status_code < 500:
+    if 400 <= response.status_code < 500:
         raise ApiClientError(response.text)
-    elif 500 <= response.status_code < 600:
+    if 500 <= response.status_code < 600:
         raise ApiServerError(response.text)
