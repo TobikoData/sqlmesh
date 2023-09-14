@@ -112,6 +112,9 @@ setup(
         "mysql": [
             "mysql-connector-python",
         ],
+        "mwaa": [
+            "boto3",
+        ],
         "postgres": [
             "psycopg2",
         ],
