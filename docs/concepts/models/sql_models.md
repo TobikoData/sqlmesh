@@ -13,7 +13,7 @@ The SQL-based definition of SQL models is the most common one, and consists of t
 
 These models are designed to look and feel like you're simply using SQL, but they can be customized for advanced use cases.
 
-To create a SQL-based model, add a new file with the `.sql` suffix into the `models/` directory (or a subdirectory of `models/`) within your SQLMesh project. Although the name of the file doesn't matter, it is recommended to use a name that preserves the model's name. Each file can only have one model defined within it.
+To create a SQL-based model, add a new file with the `.sql` suffix into the `models/` directory (or a subdirectory of `models/`) within your SQLMesh project. Although the name of the file doesn't matter, it is customary to use the model's name (without the schema) as the file name. For example, the file containing the model sqlmesh_example.seed_model file would be named `seed_model.sql`.
 
 ### Example
 
@@ -60,7 +60,7 @@ Refer to `MODEL` [properties](./overview.md#properties) for the full list of all
 ### Optional pre/post-statements
 Optional pre/post-statements can help prepare the model's query and execute "clean-up" actions after it has successfully executed, respectively. For example, you might create temporary views, set permissions, or evict previously cached tables from memory.
 
-However, be careful not to run any statement that could conflict with the execution of another statement when ran concurrently, such as creating a physical table.
+However, be careful not to run any statement that could conflict with the execution of another statement if the models run concurrently, such as creating a physical table.
 
 ### The model query
 The model must contain a standalone query, which can be a single `SELECT` expression, or multiple `SELECT` expressions combined with the `UNION`, `INTERSECT`, or `EXCEPT` operators. The result of this query will be used to populate the model's table or view.
@@ -69,15 +69,15 @@ The model must contain a standalone query, which can be a single `SELECT` expres
 
 The Python-based definition of SQL models consists of a single python function, decorated with SQLMesh's `@model` [decorator](https://wiki.python.org/moin/PythonDecorators). The decorator is required to have the `is_sql` keyword argument set to `True` to distinguish it from [Python models](./python_models.md) that return DataFrame instances.
 
-This function's return value serves as the model's query, and it must be either a SQL string, or a [SQLGlot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py). The `@model` decorator is used to define the model's [metadata](#MODEL-DDL) and, optionally, its pre/post-statements that are also in the form of SQL strings or SQLGlot expressions.
+This function's return value serves as the model's query, and it must be either a SQL string or a [SQLGlot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py). The `@model` decorator is used to define the model's [metadata](#MODEL-DDL) and, optionally its pre/post-statements that are also in the form of SQL strings or SQLGlot expressions.
 
-Defining a model like this can be beneficial in cases where its query is too complex to express cleanly in SQL, for example due to having many dynamic components that would require heavy use of [macros](../macros/overview/). Since Python-based models generate SQL, they also support column-level [lineage](../glossary/#lineage), [automatic change categorization](../glossary/#automatic-data-rebasing), etc.
+Defining a SQL model using Python that generates SQL can be beneficial in cases where its query is too complex to express cleanly in SQL, for example due to having many dynamic components that would require heavy use of [macros](../macros/overview/). Since Python-based models generate SQL, they support the same features as regular SQL models, such as column-level [lineage](../glossary/#lineage), [automatic change categorization](../glossary/#automatic-data-rebasing), etc.
 
 To create a Python-based model, add a new file with the `.py` suffix into the `models/` directory (or a subdirectory of `models/`) within your SQLMesh project. The file naming conventions of Python-based models are similar to those of SQL-based models. Inside this file, define a function named `entrypoint` with a single `evaluator` argument, as shown in the example below.
 
 ### Example
 
-The following example demonstrates how the above `db.customers` model can be defined as a Python-based model, using SQLGlot's `Expression` builder methods:
+The following example demonstrates how the above `db.customers` model can be defined as a Python-based model using SQLGlot's `Expression` builder methods:
 
 ```python linenums="1"
 from sqlglot import exp
@@ -127,7 +127,7 @@ External dependencies not defined in SQLMesh are also supported. SQLMesh can eit
 Although automatic dependency detection works most of the time, there may be specific cases for which you want to define dependencies manually. You can do so in the `MODEL` DDL with the [dependencies property](./overview.md#properties).
 
 ## Conventions
-SQLMesh encourages explicitly specifying the data types of a model's columns through casting. This allows SQLMesh to understand the data types in your models, and it prevents incorrect type inference.
+SQLMesh encourages explicitly specifying the data types of a model's columns through casting. This allows SQLMesh to understand the data types in your models, and it prevents incorrect type inference. SQLMesh supports the casting format `<column name>::<data type>` in models of any SQL dialect.
 
 ### Explicit SELECTs
 Although `SELECT *` is convenient, it is dangerous because a model's results can change due to external factors (e.g., an upstream source adding or removing a column). In general, we encourage listing out every column you need or using [`create_external_models`](../../reference/cli.md#create_external_models) to capture the schema of an external data source.
