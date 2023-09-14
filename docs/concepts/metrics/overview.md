@@ -15,7 +15,7 @@ The following is an example metric definition. Note the following aspects:
 
 - The metrics `expression` can be any aggregate SQL function (`COUNT` in this example)
 - The columns referenced in `expression` are fully qualified (`sushi.customers.status`)
-- The metric can reference multiple models as long as their grains/references are properly specified (`expression` uses both the `sushi.customers` and `sushi.orders` models)
+- The metric can reference multiple models as long as their [grains](../models/overview.md#grain)/[references](../models/overview.md#references) are properly specified (`expression` uses both the `sushi.customers` and `sushi.orders` models)
 
 ```sql linenums="1"
 METRIC (
