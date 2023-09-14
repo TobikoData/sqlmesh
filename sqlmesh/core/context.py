@@ -384,6 +384,8 @@ class Context(BaseContext):
             self._macros = project.macros
             self._models = project.models
             self._metrics = project.metrics
+            self._standalone_audits.clear()
+            self._audits.clear()
             for name, audit in project.audits.items():
                 if isinstance(audit, StandaloneAudit):
                     self._standalone_audits[name] = audit
