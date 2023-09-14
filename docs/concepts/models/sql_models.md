@@ -71,7 +71,7 @@ The Python-based definition of SQL models consists of a single python function, 
 
 This function's return value serves as the model's query, and it must be either a SQL string or a [SQLGlot expression](https://github.com/tobymao/sqlglot/blob/main/sqlglot/expressions.py). The `@model` decorator is used to define the model's [metadata](#MODEL-DDL) and, optionally its pre/post-statements that are also in the form of SQL strings or SQLGlot expressions.
 
-Defining a SQL model using Python that generates SQL can be beneficial in cases where its query is too complex to express cleanly in SQL, for example due to having many dynamic components that would require heavy use of [macros](../macros/overview/). Since Python-based models generate SQL, they support the same features as regular SQL models, such as column-level [lineage](../glossary/#lineage), [automatic change categorization](../glossary/#automatic-data-rebasing), etc.
+Defining a SQL model using Python can be beneficial in cases where its query is too complex to express cleanly in SQL, for example due to having many dynamic components that would require heavy use of [macros](../macros/overview/). Since Python-based models generate SQL, they support the same features as regular SQL models, such as column-level [lineage](../glossary/#lineage), [automatic change categorization](../glossary/#automatic-data-rebasing), etc.
 
 To create a Python-based model, add a new file with the `.py` suffix into the `models/` directory (or a subdirectory of `models/`) within your SQLMesh project. The file naming conventions of Python-based models are similar to those of SQL-based models. Inside this file, define a function named `entrypoint` with a single `evaluator` argument, as shown in the example below.
 
