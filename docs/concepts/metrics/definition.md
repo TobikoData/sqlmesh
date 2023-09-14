@@ -2,7 +2,7 @@
 
 Metrics are defined in SQL files in the `metrics/` directory of your SQLMesh project. A single file can contain multiple metric definitions.
 
-A metric is defined with the function `METRIC()` and must include the `name` and `expression` keys. The `name` is used to access the metric in a model query, and the `expression` contains the SQL code used to calculate the metric.
+A metric is defined with the function `METRIC()` and must include the `name` and `expression` keys. The `name` is case insensitive and must be unique, and the `expression` contains the SQL code used to calculate the metric.
 
 ## SQL expression
 The expression field can be any SQL statement that contains an aggregation function (e.g., `MAX`, `SUM`). This example uses the `COUNT` function:
