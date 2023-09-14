@@ -220,6 +220,8 @@ class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
 
     Args:
         environment: The name of the MWAA environment.
+        airflow_url: The URL of the Airflow Webserver.
+        auth_token: The MWAA authentication token.
         dag_run_poll_interval_secs: Determines how often a running DAG can be polled (in seconds).
         dag_creation_poll_interval_secs: Determines how often SQLMesh should check whether a DAG has been created (in seconds).
         dag_creation_max_retry_attempts: Determines the maximum number of attempts that SQLMesh will make while checking for
