@@ -10,7 +10,12 @@ from requests import Session
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.console import Console
-from sqlmesh.core.plan import AirflowPlanEvaluator, BuiltInPlanEvaluator, PlanEvaluator
+from sqlmesh.core.plan import (
+    AirflowPlanEvaluator,
+    BuiltInPlanEvaluator,
+    MWAAPlanEvaluator,
+    PlanEvaluator,
+)
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
 from sqlmesh.utils.pydantic import model_validator
@@ -49,11 +54,7 @@ class _SchedulerConfig(abc.ABC):
         """
 
 
-class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
-    """The Built-In Scheduler configuration."""
-
-    type_: Literal["builtin"] = Field(alias="type", default="builtin")
-
+class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
     def create_state_sync(self, context: Context) -> StateSync:
         state_connection = context.config.get_state_connection(context.gateway)
         engine_adapter = (
@@ -61,6 +62,12 @@ class BuiltInSchedulerConfig(_SchedulerConfig, BaseConfig):
         )
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(engine_adapter, schema=schema, console=context.console)
+
+
+class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
+    """The Built-In Scheduler configuration."""
+
+    type_: Literal["builtin"] = Field(alias="type", default="builtin")
 
     def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
         return BuiltInPlanEvaluator(
@@ -208,7 +215,81 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
         return values
 
 
+class MWAASchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig):
+    """The AWS MWAA Scheduler configuration.
+
+    Args:
+        environment: The name of the MWAA environment.
+        airflow_url: The URL of the Airflow Webserver.
+        auth_token: The MWAA authentication token.
+        dag_run_poll_interval_secs: Determines how often a running DAG can be polled (in seconds).
+        dag_creation_poll_interval_secs: Determines how often SQLMesh should check whether a DAG has been created (in seconds).
+        dag_creation_max_retry_attempts: Determines the maximum number of attempts that SQLMesh will make while checking for
+            whether a DAG has been created.
+        backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+    """
+
+    environment: t.Optional[str] = None
+    airflow_url: t.Optional[str] = None
+    auth_token: t.Optional[str] = None
+    dag_run_poll_interval_secs: int = 10
+    dag_creation_poll_interval_secs: int = 30
+    dag_creation_max_retry_attempts: int = 10
+
+    backfill_concurrent_tasks: int = 4
+    ddl_concurrent_tasks: int = 4
+
+    type_: Literal["mwaa"] = Field(alias="type", default="mwaa")
+
+    _concurrent_tasks_validator = concurrent_tasks_validator
+
+    def create_plan_evaluator(self, context: Context) -> PlanEvaluator:
+        from sqlmesh.schedulers.airflow.mwaa_client import (
+            MWAAClient,
+            url_and_auth_token_for_environment,
+        )
+
+        if self.environment:
+            airflow_url, auth_token = url_and_auth_token_for_environment(self.environment)
+        else:
+            assert self.airflow_url and self.auth_token  # Make mypy happy
+            airflow_url = self.airflow_url
+            auth_token = self.auth_token
+
+        return MWAAPlanEvaluator(
+            client=MWAAClient(airflow_url, auth_token, console=context.console),
+            state_sync=context.state_sync,
+            console=context.console,
+            dag_run_poll_interval_secs=self.dag_run_poll_interval_secs,
+            dag_creation_poll_interval_secs=self.dag_creation_poll_interval_secs,
+            dag_creation_max_retry_attempts=self.dag_creation_max_retry_attempts,
+            notification_targets=context.notification_targets,
+            backfill_concurrent_tasks=self.backfill_concurrent_tasks,
+            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
+            users=context.users,
+        )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _ensure_environment_or_url_with_auth_token(
+        cls, values: t.Dict[str, t.Any]
+    ) -> t.Dict[str, t.Any]:
+        if not values.get("environment"):
+            if not values.get("airflow_url") or not values.get("auth_token"):
+                raise ValueError(
+                    "Either 'environment' or 'airflow_url' and 'auth_token' must be specified for the MWAA scheduler config."
+                )
+
+        return values
+
+
 SchedulerConfig = Annotated[
-    t.Union[BuiltInSchedulerConfig, AirflowSchedulerConfig, CloudComposerSchedulerConfig],
+    t.Union[
+        BuiltInSchedulerConfig,
+        AirflowSchedulerConfig,
+        CloudComposerSchedulerConfig,
+        MWAASchedulerConfig,
+    ],
     Field(discriminator="type_"),
 ]
