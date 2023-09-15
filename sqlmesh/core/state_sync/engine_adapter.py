@@ -843,14 +843,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for name, versions in from_snapshot.indirect_versions.items()
             }
 
-        self.engine_adapter.delete_from(
-            self.seeds_table, self._snapshot_id_filter(snapshot_mapping, self.seeds_table)
-        )
-        self.engine_adapter.delete_from(
-            self.intervals_table, self._snapshot_id_filter(snapshot_mapping, self.intervals_table)
-        )
-        self.delete_snapshots(snapshot_mapping)
-
         new_snapshots = set(snapshot_mapping.values())
         self._push_snapshots(new_snapshots, overwrite=True)
 
