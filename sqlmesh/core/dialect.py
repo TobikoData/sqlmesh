@@ -18,6 +18,8 @@ from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
+JSON_TYPE = exp.DataType.build("json")
+
 
 class Model(exp.Expression):
     arg_types = {"expressions": True}
@@ -773,7 +775,7 @@ def transform_values(
     Currently, the only transformation is wrapping JSON columns with PARSE_JSON().
     """
     for value, col_type in zip(values, columns_to_types.values()):
-        if col_type == exp.DataType.build("json"):
+        if col_type == JSON_TYPE:
             yield exp.func("PARSE_JSON", f"'{value}'")
         else:
             yield value
