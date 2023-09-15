@@ -65,11 +65,11 @@ Configuration options for [incremental by time models](../concepts/models/model_
 
 Configuration options for [incremental by unique key models](../concepts/models/model_kinds.md#incremental_by_unique_key).
 
-| Option                | Description                                                                                                                             | Type | Required  |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | :--: | :-------: |
-| `unique_key`          | The model column(s) containing each row's unique key.                                                                                   | str  | list[str] |    Y
-| `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) | bool |     N     |
-| `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     | bool |     N     |
+| Option                | Description                                                                                                                             |       Type       | Required |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | :--------------: | :------: |
+| `unique_key`          | The model column(s) containing each row's unique key.                                                                                   | str \| list[str] |    Y     |
+| `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) |       bool       |    N     |
+| `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     |       bool       |    N     |
 
 ### `SEED` models
 
