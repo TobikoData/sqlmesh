@@ -231,7 +231,7 @@ class SnapshotEvaluator:
             [
                 s.qualified_view_name.table_for_environment(environment_naming_info)
                 for s in target_snapshots
-                if not s.is_symbolic
+                if s.is_model and not s.is_symbolic
             ]
         )
         with self.concurrent_context():
@@ -274,7 +274,9 @@ class SnapshotEvaluator:
             snapshots: Mapping of snapshot ID to snapshot.
             on_complete: A callback to call on each successfully created snapshot.
         """
-        self._create_schemas([s.table_name() for s in target_snapshots if not s.is_symbolic])
+        self._create_schemas(
+            [s.table_name() for s in target_snapshots if s.is_model and not s.is_symbolic]
+        )
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
