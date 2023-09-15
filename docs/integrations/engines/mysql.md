@@ -12,7 +12,7 @@ pip install "sqlmesh[mysql]"
 
 | Option         | Description                                                  | Type   | Required |
 |----------------|--------------------------------------------------------------|:------:|:--------:|
-| `type`         | Engine type name - must be `mysql`                           | string |    Y     |
+| `type`         | Engine type name - must be `mysql`                           | string | Y        |
 | `host`         | The hostname of the MysQL server                             | string | Y        |
 | `user`         | The username to use for authentication with the MySQL server | string | Y        |
 | `password`     | The password to use for authentication with the MySQL server | string | Y        |
