@@ -13,6 +13,7 @@ pip install "sqlmesh[bigquery]"
 
 | Option                          | Description                                                                                                    |  Type  | Required |
 |---------------------------------|----------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| `type`                          | Engine type name - must be `bigquery`                                                                          | string |    Y     |
 | `method`                        | Connection methods - see [allowed values below](#connection-methods). Default: `ouath`.                        | string |    N     |
 | `project`                       | The name of the GCP project                                                                                    | string |    N     |
 | `location`                      | The location of for the datasets (can be regional or multi-regional)                                           | string |    N     |

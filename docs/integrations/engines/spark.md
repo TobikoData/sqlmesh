@@ -7,6 +7,7 @@
 
 | Option          | Description                                               |  Type  | Required |
 |-----------------|-----------------------------------------------------------|:------:|:--------:|
+| `type`          | Engine type name - must be `spark`                        | string |    Y     |
 | `config_dir`    | Value to set for `SPARK_CONFIG_DIR`                       | string |    N     |
 | `catalog`       | Spark 3.4+ Only. The catalog to use when issuing commands | string |    N     |
 | `config`        | Key/value pairs to set for the Spark Configuration.       |  dict  |    N     |
