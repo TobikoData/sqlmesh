@@ -10,16 +10,17 @@ pip install "sqlmesh[snowflake]"
 
 ### Connection options
 
-| Option          | Description                        |  Type  | Required |
-|-----------------|------------------------------------|:------:|:--------:|
-| `user`          | The Snowflake username             | string |    N     |
-| `password`      | The Snowflake password             | string |    N     |
-| `authenticator` | The Snowflake authenticator method | string |    N     |
-| `account`       | The Snowflake account name         | string |    Y     |
-| `warehouse`     | The Snowflake warehouse name       | string |    N     |
-| `database`      | The Snowflake database name        | string |    N     |
-| `role`          | The Snowflake role name            | string |    N     |
-| `private_key`   | Local path to the private key file | string |    N     |
+| Option          | Description                            |  Type  | Required |
+|-----------------|----------------------------------------|:------:|:--------:|
+| `type`          | Engine type name - must be `snowflake` | string |    Y     |
+| `user`          | The Snowflake username                 | string |    N     |
+| `password`      | The Snowflake password                 | string |    N     |
+| `authenticator` | The Snowflake authenticator method     | string |    N     |
+| `account`       | The Snowflake account name             | string |    Y     |
+| `warehouse`     | The Snowflake warehouse name           | string |    N     |
+| `database`      | The Snowflake database name            | string |    N     |
+| `role`          | The Snowflake role name                | string |    N     |
+| `private_key`   | Local path to the private key file     | string |    N     |
 
 ### Snowflake SSO Authorization
 
