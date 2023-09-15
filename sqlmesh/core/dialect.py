@@ -768,6 +768,10 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
 def transform_values(
     values: t.Tuple[t.Any, ...], columns_to_types: t.Dict[str, exp.DataType]
 ) -> t.Iterator[t.Any]:
+    """Perform transformations on values given columns_to_types.
+
+    Currently, the only transformation is wrapping JSON columns with PARSE_JSON().
+    """
     for value, col_type in zip(values, columns_to_types.values()):
         if col_type == exp.DataType.build("json"):
             yield exp.func("PARSE_JSON", f"'{value}'")
