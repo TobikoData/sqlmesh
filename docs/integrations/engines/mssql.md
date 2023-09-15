@@ -12,6 +12,7 @@ pip install "sqlmesh[mssql]"
 
 | Option            | Description                                                  | Type     | Required |
 |-------------------|--------------------------------------------------------------|:--------:|:--------:|
+| `type`            | Engine type name - must be `mssql`                           | string   |    Y     |
 | `host`            | The hostname of the MSSQL server                             | string   | Y        |
 | `user`            | The username to use for authentication with the MSSQL server | string   | Y        |
 | `password`        | The password to use for authentication with the MSSQL server | string   | Y        |

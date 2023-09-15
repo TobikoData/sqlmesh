@@ -12,6 +12,7 @@ pip install "sqlmesh[postgres]"
 
 | Option            | Description                                                                     | Type   | Required |
 |-------------------|---------------------------------------------------------------------------------|:------:|:--------:|
+| `type`            | Engine type name - must be `postgres`                                           | string |    Y     |
 | `host`            | The hostname of the Postgres server                                             | string | Y        |
 | `user`            | The username to use for authentication with the Postgres server                 | string | Y        |
 | `password`        | The password to use for authentication with the Postgres server                 | string | Y        |

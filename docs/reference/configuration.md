@@ -37,26 +37,51 @@ Configuration options for SQLMesh environment creation and promotion.
 
 ## Gateways
 
-The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler. A gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
+The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler.
 
-Find additional information about gateways in the configuration overview page [gateways section](../guides/configuration.md#gateways).
+It takes one or more named `gateway` configuration keys, each of which can define its own connections. A named gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
+
+For example, a project might configure the `gate1` and `gate2` gateways:
+
+```yaml linenums="1"
+gateways:
+    gate1:
+        connection:
+            ...
+        state_connection: # defaults to `connection` if omitted
+            ...
+        test_connection: # defaults to `connection` if omitted
+            ...
+        scheduler: # defaults to `builtin` if omitted
+            ...
+    gate2:
+        connection:
+            ...
+```
+
+Find additional information about gateways in the configuration guide [gateways section](../guides/configuration.md#gateways).
 
 ### Gateway
 
-Configuration for a gateway.
+Configuration for each named gateway.
 
-#### State schema name
+#### Connections
 
-By default, the schema name used to store state tables is `sqlmesh`. This can be changed by providing the `state_schema` config key in the gateway configuration.
+A named gateway key may define any or all of a data warehouse connection, state backend connection, state schema name, test backend connection, and scheduler.
+
+The state and test connections default to `connection`. The `connection` key may be omitted if a [`default_connection`](#default-connectionsscheduler) is specified.
 
 | Option             | Description                                                                                                                     | Type | Required |
 |--------------------|---------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| `connection` | The data warehouse connection for core SQLMesh functions. | [connection configuration](#connection)  |    N (if [`default_connection`](#default-connectionsscheduler) specified)     |
+| `state_connection` | The data warehouse connection where SQLMesh will store internal information about the project. (Default: `connection`) | [connection configuration](#connection)  |    N     |
 | `state_schema` | The name of the schema where state information should be stored. (Default: `sqlmesh`) | string  |    N     |
-
+| `test_connection` | The data warehouse connection SQLMesh will use to execute tests. (Default: `connection`) | [connection configuration](#connection)  |    N    |
+| `scheduler` | The scheduler SQLMesh will use to execute tests. (Default: `builtin`) | [scheduler configuration](#scheduler)  |    N    |
 
 ### Connection
 
-Configuration for the data warehouse connection.
+Configuration for a data warehouse connection.
 
 Most parameters are specific to the connection engine `type` - see [below](#engine-connection-configuration). The default data warehouse connection type is an in-memory DuckDB database.
 
@@ -64,6 +89,7 @@ Most parameters are specific to the connection engine `type` - see [below](#engi
 
 | Option             | Description                                                                                                                     | Type | Required |
 |--------------------|---------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| `type` | The engine type name, listed in engine-specific configuration pages below.  | str  |    Y     |
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.) | int  |    N     |
 
 #### Engine connection configuration
