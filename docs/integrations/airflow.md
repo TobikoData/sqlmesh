@@ -8,8 +8,6 @@ SQLMesh provides first-class support for Airflow with the following capabilities
 * The janitor DAG runs periodically and automatically to clean up DAGs and other SQLMesh artifacts that are no longer needed.
 * Support for any SQL engine can be added by providing a custom Airflow Operator.
 
-SQLMesh provides [partial support for AWS MWAA](#aws-mwaa) (Amazon Managed Workflows for Apache Airflow) because MWAA does not expose the standard Airflow API.
-
 ## Airflow cluster configuration
 To enable SQLMesh support on a target Airflow cluster, the SQLMesh package should first be installed on that cluster. Ensure it is installed with the extras for your engine if needed; for example: `sqlmesh[databricks]` for Databricks. Check [setup.py](https://github.com/TobikoData/sqlmesh/blob/main/setup.py) for a list of extras.
 
@@ -73,18 +71,24 @@ Astronomer provides [managed Airflow instances](https://www.astronomer.io/produc
 
 ### AWS MWAA
 
-SQLMesh does not fully support AWS MWAA (Amazon Managed Workflows for Apache Airflow) because MWAA does not expose the standard Airflow API. However, SQLMesh can run scheduled DAGs on MWAA via an external state connection.
+Due to MWAA not supporting the Airflow REST API, users are required to configure an external state connection for both the [client](../guides/connections.md#state-connection) and [Airflow cluster](#state-connection) to point to the same database.
 
-In this approach, `sqlmesh plan` and `sqlmesh run` behave differently:
+Additional dependencies need to be installed:
+```bash
+pip install "sqlmesh[mwaa]"
+```
 
-- The `sqlmesh plan` command is issued by users. When they issue the command and choose to backfill, the built-in scheduler executes the project's models in the data warehouse.
-- The `sqlmesh run` command is issued by the MWAA Airflow instance on an appropriate cadence - users do not run the command themselves. MWAA then runs the DAG and executes the models in the data warehouse.
+Additionally, the scheduler needs to be configured accordingly:
+```yaml linenums="1"
+default_scheduler:
+    type: mwaa
+    environment: <The MWAA Environment Name>
+```
 
-The SQLMesh janitor process will also run automatically to clean up DAGs and other SQLMesh artifacts that are no longer needed.
-
-To implement this approach:
-
-1. Follow the normal [Airflow cluster configuration steps](#airflow-cluster-configuration) on the MWAA instance.
-2. In MWAA, configure an [Airflow state connection](#state-connection) to a database accessible by your SQLMesh client.
-3. In your SQLMesh project [`config` file](../reference/configuration.md#configuration-files), configure an [external state connection](../guides/connections.md#state-connection) to the same database from step 2.
-4. Do **not** specify a [gateway scheduler configuration](../reference/configuration.md#scheduler) in your project's [`config` file](../reference/configuration.md#configuration-files).
+Alternatively, the Airflow Webserver URL and the MWAA CLI token can be provided directly instead of the environment name:
+```yaml linenums="1"
+default_scheduler:
+    type: mwaa
+    airflow_url: https://<Airflow Webserver Host>/
+    auth_token: <The MWAA CLI Token>
+```

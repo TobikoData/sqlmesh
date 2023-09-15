@@ -1,3 +1,4 @@
+import abc
 import json
 import time
 import typing as t
@@ -35,16 +36,127 @@ MODELS_PATH = f"{common.SQLMESH_API_BASE_PATH}/models"
 VERSIONS_PATH = f"{common.SQLMESH_API_BASE_PATH}/versions"
 
 
-class AirflowClient:
+class BaseAirflowClient(abc.ABC):
+    def __init__(self, airflow_url: str, console: t.Optional[Console]):
+        self._airflow_url = airflow_url
+        self._console = console
+
+    def print_tracking_url(self, dag_id: str, dag_run_id: str, op_name: str) -> None:
+        if not self._console:
+            return
+
+        tracking_url = self.dag_run_tracking_url(dag_id, dag_run_id)
+        # TODO: Figure out generalized solution for links
+        self._console.log_status_update(
+            f"Track [green]{op_name}[/green] progress using [link={tracking_url}]link[/link]"
+        )
+
+    def dag_run_tracking_url(self, dag_id: str, dag_run_id: str) -> str:
+        url_params = urlencode(
+            dict(
+                dag_id=dag_id,
+                run_id=dag_run_id,
+            )
+        )
+        return urljoin(self._airflow_url, f"dagrun_details?{url_params}")
+
+    def wait_for_dag_run_completion(
+        self, dag_id: str, dag_run_id: str, poll_interval_secs: int
+    ) -> bool:
+        """Blocks until the given DAG Run completes.
+
+        Args:
+            dag_id: The DAG ID.
+            dag_run_id: The DAG Run ID.
+            poll_interval_secs: The number of seconds to wait between polling for the DAG Run state.
+
+        Returns:
+            True if the DAG Run completed successfully, False otherwise.
+        """
+        loading_id = self._console_loading_start()
+
+        while True:
+            state = self.get_dag_run_state(dag_id, dag_run_id)
+            if state in ("failed", "success"):
+                if self._console and loading_id:
+                    self._console.loading_stop(loading_id)
+                return state == "success"
+
+            time.sleep(poll_interval_secs)
+
+    def wait_for_first_dag_run(self, dag_id: str, poll_interval_secs: int, max_retries: int) -> str:
+        """Blocks until the first DAG Run for the given DAG ID is created.
+
+        Args:
+            dag_id: The DAG ID.
+            poll_interval_secs: The number of seconds to wait between polling for the DAG Run.
+            max_retries: The maximum number of retries.
+
+        Returns:
+            The ID of the first DAG Run for the given DAG ID.
+        """
+
+        loading_id = self._console_loading_start()
+
+        attempt_num = 1
+
+        try:
+            while True:
+                try:
+                    first_dag_run_id = self.get_first_dag_run_id(dag_id)
+                    if first_dag_run_id is None:
+                        raise SQLMeshError(f"Missing a DAG Run for DAG '{dag_id}'")
+                    return first_dag_run_id
+                except ApiServerError:
+                    raise
+                except SQLMeshError:
+                    if attempt_num > max_retries:
+                        raise
+
+                attempt_num += 1
+                time.sleep(poll_interval_secs)
+        finally:
+            if self._console and loading_id:
+                self._console.loading_stop(loading_id)
+
+    @abc.abstractmethod
+    def get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
+        """Returns the ID of the first DAG Run for the given DAG ID, or None if no DAG Runs exist.
+
+        Args:
+            dag_id: The DAG ID.
+
+        Returns:
+            The ID of the first DAG Run for the given DAG ID, or None if no DAG Runs exist.
+        """
+
+    @abc.abstractmethod
+    def get_dag_run_state(self, dag_id: str, dag_run_id: str) -> str:
+        """Returns the state of the given DAG Run.
+
+        Args:
+            dag_id: The DAG ID.
+            dag_run_id: The DAG Run ID.
+
+        Returns:
+            The state of the given DAG Run.
+        """
+
+    def _console_loading_start(self) -> t.Optional[uuid.UUID]:
+        if self._console:
+            return self._console.loading_start()
+        return None
+
+
+class AirflowClient(BaseAirflowClient):
     def __init__(
         self,
         session: requests.Session,
         airflow_url: str,
         console: t.Optional[Console] = None,
     ):
+        super().__init__(airflow_url, console)
         self._session = session
-        self._airflow_url = airflow_url
-        self._console = console
 
     def apply_plan(
         self,
@@ -80,7 +192,7 @@ class AirflowClient:
             urljoin(self._airflow_url, PLANS_PATH),
             data=request.json(),
         )
-        self._raise_for_status(response)
+        raise_for_status(response)
 
     def get_snapshots(
         self, snapshot_ids: t.Optional[t.List[SnapshotId]], hydrate_seeds: bool = False
@@ -125,7 +237,7 @@ class AirflowClient:
         response = self._session.delete(
             urljoin(self._airflow_url, f"{ENVIRONMENTS_PATH}/{environment}")
         )
-        self._raise_for_status(response)
+        raise_for_status(response)
 
     def get_versions(self) -> Versions:
         return Versions.parse_obj(self._get(VERSIONS_PATH))
@@ -143,72 +255,15 @@ class AirflowClient:
     def get_all_dags(self) -> t.Dict[str, t.Any]:
         return self._get("api/v1/dags")
 
-    def wait_for_dag_run_completion(
-        self, dag_id: str, dag_run_id: str, poll_interval_secs: int
-    ) -> bool:
-        loading_id = self._console_loading_start()
-
-        while True:
-            state = self.get_dag_run_state(dag_id, dag_run_id)
-            if state in ("failed", "success"):
-                if self._console and loading_id:
-                    self._console.loading_stop(loading_id)
-                return state == "success"
-
-            time.sleep(poll_interval_secs)
-
-    def wait_for_first_dag_run(self, dag_id: str, poll_interval_secs: int, max_retries: int) -> str:
-        loading_id = self._console_loading_start()
-
-        attempt_num = 1
-
-        try:
-            while True:
-                try:
-                    first_dag_run_id = self._get_first_dag_run_id(dag_id)
-                    if first_dag_run_id is None:
-                        raise SQLMeshError(f"Missing a DAG Run for DAG '{dag_id}'")
-                    return first_dag_run_id
-                except ApiServerError:
-                    raise
-                except SQLMeshError:
-                    if attempt_num > max_retries:
-                        raise
-
-                attempt_num += 1
-                time.sleep(poll_interval_secs)
-        finally:
-            if self._console and loading_id:
-                self._console.loading_stop(loading_id)
-
-    def print_tracking_url(self, dag_id: str, dag_run_id: str, op_name: str) -> None:
-        if not self._console:
-            return
-
-        tracking_url = self.dag_run_tracking_url(dag_id, dag_run_id)
-        # TODO: Figure out generalized solution for links
-        self._console.log_status_update(
-            f"Track [green]{op_name}[/green] progress using [link={tracking_url}]link[/link]"
-        )
-
-    def dag_run_tracking_url(self, dag_id: str, dag_run_id: str) -> str:
-        url_params = urlencode(
-            dict(
-                dag_id=dag_id,
-                run_id=dag_run_id,
-            )
-        )
-        return urljoin(self._airflow_url, f"dagrun_details?{url_params}")
-
-    def close(self) -> None:
-        self._session.close()
-
-    def _get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
+    def get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
         dag_runs_response = self._get(f"{DAG_RUN_PATH_TEMPLATE.format(dag_id)}", limit="1")
         dag_runs = dag_runs_response["dag_runs"]
         if not dag_runs:
             return None
         return dag_runs[0]["dag_run_id"]
+
+    def close(self) -> None:
+        self._session.close()
 
     def _get_dag(self, dag_id: str) -> t.Dict[str, t.Any]:
         return self._get(f"api/v1/dags/{dag_id}")
@@ -219,21 +274,8 @@ class AirflowClient:
         if query_string:
             path = f"{path}?{query_string}"
         response = self._session.get(urljoin(self._airflow_url, path))
-        self._raise_for_status(response)
+        raise_for_status(response)
         return response.json()
-
-    def _console_loading_start(self) -> t.Optional[uuid.UUID]:
-        if self._console:
-            return self._console.loading_start()
-        return None
-
-    def _raise_for_status(self, response: Response) -> None:
-        if response.status_code == 404:
-            raise NotFoundError(response.text)
-        elif 400 <= response.status_code < 500:
-            raise ApiClientError(response.text)
-        elif 500 <= response.status_code < 600:
-            raise ApiServerError(response.text)
 
 
 T = t.TypeVar("T", bound=PydanticModel)
@@ -241,3 +283,12 @@ T = t.TypeVar("T", bound=PydanticModel)
 
 def _list_to_json(models: t.List[T]) -> str:
     return json.dumps([m.dict() for m in models], separators=(",", ":"))
+
+
+def raise_for_status(response: Response) -> None:
+    if response.status_code == 404:
+        raise NotFoundError(response.text)
+    if 400 <= response.status_code < 500:
+        raise ApiClientError(response.text)
+    if 500 <= response.status_code < 600:
+        raise ApiServerError(response.text)

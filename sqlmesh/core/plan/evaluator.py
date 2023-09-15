@@ -32,7 +32,8 @@ from sqlmesh.core.snapshot import (
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
-from sqlmesh.schedulers.airflow.client import AirflowClient
+from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
+from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
@@ -206,7 +207,62 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         )
 
 
-class AirflowPlanEvaluator(PlanEvaluator):
+class BaseAirflowPlanEvaluator(PlanEvaluator):
+    def __init__(
+        self,
+        console: t.Optional[Console],
+        blocking: bool,
+        dag_run_poll_interval_secs: int,
+        dag_creation_poll_interval_secs: int,
+        dag_creation_max_retry_attempts: int,
+    ):
+        self.blocking = blocking
+        self.dag_run_poll_interval_secs = dag_run_poll_interval_secs
+        self.dag_creation_poll_interval_secs = dag_creation_poll_interval_secs
+        self.dag_creation_max_retry_attempts = dag_creation_max_retry_attempts
+        self.console = console or get_console()
+
+    def evaluate(self, plan: Plan) -> None:
+        plan_request_id = random_id()
+        self._apply_plan(plan, plan_request_id)
+
+        if self.blocking:
+            plan_application_dag_id = airflow_common.plan_application_dag_id(
+                plan.environment.name, plan_request_id
+            )
+
+            self.console.log_status_update(
+                f"Waiting for the plan application DAG '{plan_application_dag_id}' to be provisioned on Airflow"
+            )
+
+            plan_application_dag_run_id = self.client.wait_for_first_dag_run(
+                plan_application_dag_id,
+                self.dag_creation_poll_interval_secs,
+                self.dag_creation_max_retry_attempts,
+            )
+
+            self.client.print_tracking_url(
+                plan_application_dag_id,
+                plan_application_dag_run_id,
+                "plan application",
+            )
+            plan_application_succeeded = self.client.wait_for_dag_run_completion(
+                plan_application_dag_id,
+                plan_application_dag_run_id,
+                self.dag_run_poll_interval_secs,
+            )
+            if not plan_application_succeeded:
+                raise SQLMeshError("Plan application failed.")
+
+    @property
+    def client(self) -> BaseAirflowClient:
+        raise NotImplementedError
+
+    def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
+        raise NotImplementedError
+
+
+class AirflowPlanEvaluator(BaseAirflowPlanEvaluator):
     def __init__(
         self,
         airflow_client: AirflowClient,
@@ -220,25 +276,27 @@ class AirflowPlanEvaluator(PlanEvaluator):
         ddl_concurrent_tasks: int = 1,
         users: t.Optional[t.List[User]] = None,
     ):
-        self.airflow_client = airflow_client
-        self.blocking = blocking
-        self.dag_run_poll_interval_secs = dag_run_poll_interval_secs
-        self.dag_creation_poll_interval_secs = dag_creation_poll_interval_secs
-        self.dag_creation_max_retry_attempts = dag_creation_max_retry_attempts
-        self.console = console or get_console()
+        super().__init__(
+            console,
+            blocking,
+            dag_run_poll_interval_secs,
+            dag_creation_poll_interval_secs,
+            dag_creation_max_retry_attempts,
+        )
+        self._airflow_client = airflow_client
         self.notification_targets = notification_targets or []
         self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
         self.users = users or []
 
-    def evaluate(self, plan: Plan) -> None:
-        environment = plan.environment
+    @property
+    def client(self) -> BaseAirflowClient:
+        return self._airflow_client
 
-        plan_request_id = random_id()
-
-        self.airflow_client.apply_plan(
+    def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
+        self._airflow_client.apply_plan(
             plan.new_snapshots,
-            environment,
+            plan.environment,
             plan_request_id,
             no_gaps=plan.no_gaps,
             skip_backfill=plan.skip_backfill,
@@ -251,30 +309,62 @@ class AirflowPlanEvaluator(PlanEvaluator):
             forward_only=plan.forward_only,
         )
 
-        if self.blocking:
-            plan_application_dag_id = airflow_common.plan_application_dag_id(
-                environment.name, plan_request_id
-            )
 
-            self.console.log_status_update(
-                f"Waiting for the plan application DAG '{plan_application_dag_id}' to be provisioned on Airflow"
-            )
+class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
+    def __init__(
+        self,
+        client: MWAAClient,
+        state_sync: StateSync,
+        console: t.Optional[Console] = None,
+        blocking: bool = True,
+        dag_run_poll_interval_secs: int = 10,
+        dag_creation_poll_interval_secs: int = 30,
+        dag_creation_max_retry_attempts: int = 10,
+        notification_targets: t.Optional[t.List[NotificationTarget]] = None,
+        backfill_concurrent_tasks: int = 1,
+        ddl_concurrent_tasks: int = 1,
+        users: t.Optional[t.List[User]] = None,
+    ):
+        super().__init__(
+            console,
+            blocking,
+            dag_run_poll_interval_secs,
+            dag_creation_poll_interval_secs,
+            dag_creation_max_retry_attempts,
+        )
+        self._mwaa_client = client
+        self.state_sync = state_sync
+        self.notification_targets = notification_targets or []
+        self.backfill_concurrent_tasks = backfill_concurrent_tasks
+        self.ddl_concurrent_tasks = ddl_concurrent_tasks
+        self.users = users or []
 
-            plan_application_dag_run_id = self.airflow_client.wait_for_first_dag_run(
-                plan_application_dag_id,
-                self.dag_creation_poll_interval_secs,
-                self.dag_creation_max_retry_attempts,
-            )
+    @property
+    def client(self) -> BaseAirflowClient:
+        return self._mwaa_client
 
-            self.airflow_client.print_tracking_url(
-                plan_application_dag_id,
-                plan_application_dag_run_id,
-                "plan application",
-            )
-            plan_application_succeeded = self.airflow_client.wait_for_dag_run_completion(
-                plan_application_dag_id,
-                plan_application_dag_run_id,
-                self.dag_run_poll_interval_secs,
-            )
-            if not plan_application_succeeded:
-                raise SQLMeshError("Plan application failed.")
+    def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
+        from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
+
+        plan_application_request = airflow_common.PlanApplicationRequest(
+            new_snapshots=list(plan.new_snapshots),
+            environment=plan.environment,
+            no_gaps=plan.no_gaps,
+            skip_backfill=plan.skip_backfill,
+            request_id=plan_request_id,
+            restatements=plan.restatements or {},
+            notification_targets=self.notification_targets or [],
+            backfill_concurrent_tasks=self.backfill_concurrent_tasks,
+            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
+            users=self.users or [],
+            is_dev=plan.is_dev,
+            forward_only=plan.forward_only,
+        )
+        plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
+
+        _, stderr = self._mwaa_client.set_variable(
+            airflow_common.plan_dag_spec_key(plan_request_id), plan_dag_spec.json()
+        )
+
+        if stderr:
+            raise SQLMeshError(f"Failed to submit a plan application request:\n{stderr}")
