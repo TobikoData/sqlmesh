@@ -14,25 +14,25 @@ This section describes the other root level configuration parameters.
 
 Configuration options for SQLMesh project directories.
 
-| Option                       | Description                                                                                                                                                                                                                                                                                        | Type                 | Required |
-|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------:|:--------:|
-| `ignore_patterns`            | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`)                                                                                                                                                                                 | list[string]         | N        |
+| Option            | Description                                                                                                        |     Type     | Required |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------ | :----------: | :------: |
+| `ignore_patterns` | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`) | list[string] |    N     |
 
 ### Environments
 
 Configuration options for SQLMesh environment creation and promotion.
 
-| Option                       | Description                                                                                                                                                                                                                                                                                        | Type                 | Required |
-|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------:|:--------:|
-| `snapshot_ttl`               | The period of time that a model snapshot not a part of any environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`) | string               | N        |
-| `environment_ttl`            | The period of time that a development environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`)                      | string               | N        |
-| `pinned_environments`        | The list of development environments that are exempt from deletion due to expiration                                                                                                                                                                                                               | list[string]         | N        |
-| `include_unmodified`         | Indicates whether to create views for all models in the target development environment or only for modified ones                                                                                                                                                                                   | boolean              | N        |
-| `time_column_format`         | The default format to use for all model time columns. This time format uses [python format codes](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) (Default: `%Y-%m-%d`)                                                                                        | string               | N        |
-| `auto_categorize_changes`    | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([additional details](../guides/configuration.md#auto-categorize-changes))                                                                      | dict[string, string] | N        |
-| `default_target_environment` | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   | string               | N        |
-| `physical_schema_override`   | A mapping from model schema names to names of schemas in which physical tables for the corresponding models will be placed - [addition details](../guides/configuration.md#physical-schema-override). (Default physical schema name: `sqlmesh__[model schema]`)                                                                                                                                                                   | string               | N        |
-| `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                                                                   | string               | N        |
+| Option                       | Description                                                                                                                                                                                                                                                                                        |         Type         | Required |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------: | :------: |
+| `snapshot_ttl`               | The period of time that a model snapshot not a part of any environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`) |        string        |    N     |
+| `environment_ttl`            | The period of time that a development environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`)                      |        string        |    N     |
+| `pinned_environments`        | The list of development environments that are exempt from deletion due to expiration                                                                                                                                                                                                               |     list[string]     |    N     |
+| `include_unmodified`         | Indicates whether to create views for all models in the target development environment or only for modified ones                                                                                                                                                                                   |       boolean        |    N     |
+| `time_column_format`         | The default format to use for all model time columns. This time format uses [python format codes](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) (Default: `%Y-%m-%d`)                                                                                        |        string        |    N     |
+| `auto_categorize_changes`    | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([additional details](../guides/configuration.md#auto-categorize-changes))                                            | dict[string, string] |    N     |
+| `default_target_environment` | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   |        string        |    N     |
+| `physical_schema_override`   | A mapping from model schema names to names of schemas in which physical tables for the corresponding models will be placed - [addition details](../guides/configuration.md#physical-schema-override). (Default physical schema name: `sqlmesh__[model schema]`)                                    |        string        |    N     |
+| `environment_suffix_target`  | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                 |        string        |    N     |
 
 
 ## Gateways
@@ -71,13 +71,13 @@ A named gateway key may define any or all of a data warehouse connection, state 
 
 The state and test connections default to `connection`. The `connection` key may be omitted if a [`default_connection`](#default-connectionsscheduler) is specified.
 
-| Option             | Description                                                                                                                     | Type | Required |
-|--------------------|---------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
-| `connection` | The data warehouse connection for core SQLMesh functions. | [connection configuration](#connection)  |    N (if [`default_connection`](#default-connectionsscheduler) specified)     |
-| `state_connection` | The data warehouse connection where SQLMesh will store internal information about the project. (Default: `connection`) | [connection configuration](#connection)  |    N     |
-| `state_schema` | The name of the schema where state information should be stored. (Default: `sqlmesh`) | string  |    N     |
-| `test_connection` | The data warehouse connection SQLMesh will use to execute tests. (Default: `connection`) | [connection configuration](#connection)  |    N    |
-| `scheduler` | The scheduler SQLMesh will use to execute tests. (Default: `builtin`) | [scheduler configuration](#scheduler)  |    N    |
+| Option             | Description                                                                                                            |                  Type                   |                                Required                                |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- | :-------------------------------------: | :--------------------------------------------------------------------: |
+| `connection`       | The data warehouse connection for core SQLMesh functions.                                                              | [connection configuration](#connection) | N (if [`default_connection`](#default-connectionsscheduler) specified) |
+| `state_connection` | The data warehouse connection where SQLMesh will store internal information about the project. (Default: `connection`) | [connection configuration](#connection) |                                   N                                    |
+| `state_schema`     | The name of the schema where state information should be stored. (Default: `sqlmesh`)                                  |                 string                  |                                   N                                    |
+| `test_connection`  | The data warehouse connection SQLMesh will use to execute tests. (Default: `connection`)                               | [connection configuration](#connection) |                                   N                                    |
+| `scheduler`        | The scheduler SQLMesh will use to execute tests. (Default: `builtin`)                                                  |  [scheduler configuration](#scheduler)  |                                   N                                    |
 
 ### Connection
 
@@ -87,9 +87,9 @@ Most parameters are specific to the connection engine `type` - see [below](#engi
 
 #### Concurrent tasks
 
-| Option             | Description                                                                                                                     | Type | Required |
-|--------------------|---------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
-| `type` | The engine type name, listed in engine-specific configuration pages below.  | str  |    Y     |
+| Option             | Description                                                                                                                 | Type | Required |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
+| `type`             | The engine type name, listed in engine-specific configuration pages below.                                                  | str  |    Y     |
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.) | int  |    N     |
 
 #### Engine connection configuration
@@ -124,7 +124,7 @@ No configuration options are supported by this scheduler type.
 See [Airflow Integration Guide](../integrations/airflow.md) for information about how to integrate Airflow with SQLMesh.
 
 | Option                            | Description                                                                                                                        |  Type  | Required |
-|-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
 | `airflow_url`                     | The URL of the Airflow Webserver                                                                                                   | string |    Y     |
 | `username`                        | The Airflow username                                                                                                               | string |    Y     |
 | `password`                        | The Airflow password                                                                                                               | string |    Y     |
@@ -147,9 +147,9 @@ The default gateway and connection keys specify what should happen when gateways
 
 If a configuration contains multiple gateways, SQLMesh will use the first one in the `gateways` dictionary by default. The `default_gateway` key is used to specify a different gateway name as the SQLMesh default.
 
-| Option                    | Description                                                                                                                                            | Type       | Required |
-|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|:----------:|:--------:|
-| `default_gateway`         | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option)                           | string     | N        |
+| Option            | Description                                                                                                                  |  Type  | Required |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
+| `default_gateway` | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option) | string |    N     |
 
 ### Default connections/scheduler
 
@@ -157,11 +157,11 @@ The `default_connection`, `default_test_connection`, and `default_scheduler` key
 
 For example, you might have a specific connection where your tests should run regardless of which gateway is being used. Instead of duplicating the test connection information in each gateway specification, specify it once in the `default_test_connection` key.
 
-| Option                    | Description                                                                                                                                            | Type       | Required |
-|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|:----------:|:--------:|
-| `default_connection`      | The default connection to use if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database)                   | connection | N        |
-| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database | connection) | N        |
-| `default_scheduler`       | The default scheduler configuration to use if one is not specified in a gateway (Default: built-in scheduler)                                          | scheduler  | N        |
+| Option                    | Description                                                                                                                                            |    Type     | Required |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------: | :------: |
+| `default_connection`      | The default connection to use if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database)                   | connection  |    N     |
+| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database | connection) |    N     |
+| `default_scheduler`       | The default scheduler configuration to use if one is not specified in a gateway (Default: built-in scheduler)                                          |  scheduler  |    N     |
 
 ## Models
 
@@ -171,16 +171,16 @@ The `model_defaults` configuration is **required** and must contain a value for 
 
 Other values are set automatically unless explicitly overridden in the model definition. Find additional details in the [configuration overview page models section](../guides/configuration.md#models).
 
-| Option           | Description                                                                                                                                                                                                                                                                                                    |      Type      | Required |
-|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------:|:--------:|
-| `kind`           | The default model kind ([Additional Details](#model-kind)) (Default: `VIEW`)                                                                                                                                                                                                                                          | string or dict |    N     |
-| `dialect`        | The SQL dialect in which the model's query is written                                                                                                                                                                                                                                                                |     string     |    N     |
-| `cron`           | The default cron expression specifying how often the model should be refreshed. (Default: `@daily`.)                                                                                                                                                                                                                                  |     string     |    N     |
-| `owner`          | The owner of a model; may be used for notification purposes                                                                                                                                                                                                                                                   |     string     |    N     |
-| `start`          | The date/time that determines the earliest date interval that should be processed by a model. This value is used to identify missing data intervals during plan application and restatement. The value can be a datetime string, epoch time in milliseconds, or a relative datetime such as `1 year ago`.      | string or int  |    N     |
+| Option           | Description                                                                                                                                                                                                                                                                                                                      |      Type      | Required |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------: | :------: |
+| `kind`           | The default model kind ([Additional Details](#model-kind)) (Default: `VIEW`)                                                                                                                                                                                                                                                     | string or dict |    N     |
+| `dialect`        | The SQL dialect in which the model's query is written                                                                                                                                                                                                                                                                            |     string     |    N     |
+| `cron`           | The default cron expression specifying how often the model should be refreshed. (Default: `@daily`.)                                                                                                                                                                                                                             |     string     |    N     |
+| `owner`          | The owner of a model; may be used for notification purposes                                                                                                                                                                                                                                                                      |     string     |    N     |
+| `start`          | The date/time that determines the earliest date interval that should be processed by a model. This value is used to identify missing data intervals during plan application and restatement. The value can be a datetime string, epoch time in milliseconds, or a relative datetime such as `1 year ago`.                        | string or int  |    N     |
 | `batch_size`     | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. (Default: `None`) |      int       |    N     |
-| `storage_format` | The storage format that should be used to store physical tables; only applicable to engines such as Spark                                                                                                                                                                                                     |     string     |    N     |
-| `depends_on` | Models on which this model depends. (Default: dependencies inferred from model code.)                                                                                                                                                                                                     |     array[string]     |    N     |
+| `storage_format` | The storage format that should be used to store physical tables; only applicable to engines such as Spark                                                                                                                                                                                                                        |     string     |    N     |
+| `depends_on`     | Models on which this model depends. (Default: dependencies inferred from model code.)                                                                                                                                                                                                                                            | array[string]  |    N     |
 
 
 ## Debug mode
