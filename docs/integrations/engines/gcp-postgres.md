@@ -12,6 +12,7 @@ pip install "sqlmesh[gcppostgres]"
 
 | Option                    | Description                                                                         |  Type   | Required |
 |---------------------------|-------------------------------------------------------------------------------------|:-------:|:--------:|
+| `type`                    | Engine type name - must be `postgres`                                               | string  |    Y     |
 | `instance_connection_str` | Connection name for the postgres instance                                           | string  |    Y     |
 | `user`                    | The username (posgres or IAM) to use for authentication                             | string  |    Y     |
 | `password`                | The password to use for authentication. Required when connecting as a Postgres user | string  |    N     |

@@ -7,6 +7,7 @@
 
 | Option     | Description                                                                  |  Type  | Required |
 |------------|------------------------------------------------------------------------------|:------:|:--------:|
+| `type`     | Engine type name - must be `duckdb`                                          | string |    Y     |
 | `database` | The optional database name. If not specified, the in-memory database is used | string |    N     |
 
 ## Airflow Scheduler

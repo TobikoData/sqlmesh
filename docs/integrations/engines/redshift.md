@@ -1,7 +1,7 @@
 # Redshift
 
 ## Local/Built-in Scheduler
-**Engine Adapter Type**: `Redshift`
+**Engine Adapter Type**: `redshift`
 
 ### Installation
 ```
@@ -12,6 +12,7 @@ pip install "sqlmesh[redshift]"
 
 | Option                  | Description                                                                                                 |  Type  | Required |
 |-------------------------|-------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| `type`                  | Engine type name - must be `redshift`                                                                       | string |    Y     |
 | `user`                  | The username to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
 | `password`              | The password to use for authentication with the Amazon Redshift cluster                                     | string |    N     |
 | `database`              | The name of the database instance to connect to                                                             | string |    N     |
