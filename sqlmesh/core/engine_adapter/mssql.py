@@ -54,13 +54,13 @@ class MSSQLEngineAdapter(
 
         table = exp.to_table(table_name)
 
-        catalog_name = table.args.get("catalog") or "master"
+        catalog_name = table.catalog or "master"
         sql = (
             exp.select("column_name", "data_type", "character_maximum_length")
             .from_(f"{catalog_name}.information_schema.columns")
             .where(f"table_name = '{table.name}'")
         )
-        database_name = table.args.get("db")
+        database_name = table.db
         if database_name:
             sql = sql.where(f"table_schema = '{database_name}'")
 
@@ -79,18 +79,16 @@ class MSSQLEngineAdapter(
         }
 
     def table_exists(self, table_name: TableName) -> bool:
-        """
-        MsSql doesn't support describe so we query information_schema
-        """
+        """MsSql doesn't support describe so we query information_schema."""
         table = exp.to_table(table_name)
 
-        catalog_name = table.args.get("catalog") or "master"
+        catalog_name = table.catalog or "master"
         sql = (
             exp.select("1")
             .from_(f"{catalog_name}.information_schema.tables")
             .where(f"table_name = '{table.alias_or_name}'")
         )
-        database_name = table.args.get("db")
+        database_name = table.db
         if database_name:
             sql = sql.where(f"table_schema = '{database_name}'")
 
@@ -132,6 +130,7 @@ class MSSQLEngineAdapter(
 
         def query_factory() -> Query:
             # pymssql doesn't convert Pandas Timestamp (datetime64) types
+            # - this code is based on snowflake adapter implementation
             for column, kind in (columns_to_types or {}).items():
                 if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):  # type: ignore
                     df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
