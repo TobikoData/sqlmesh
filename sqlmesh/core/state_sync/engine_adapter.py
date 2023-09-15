@@ -900,7 +900,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not snapshot_name_versions:
             return exp.false()
         elif self.engine_adapter.SUPPORTS_TUPLE_IN:
-            return t.cast(exp.Tuple, exp.convert((exp.column("name"), exp.column("version")))).isin(
+            return t.cast(
+                exp.Tuple,
+                exp.convert(
+                    (
+                        exp.to_column(f"{fq_table_name}.name"),
+                        exp.to_column(f"{fq_table_name}.version"),
+                    )
+                ),
+            ).isin(
                 *[
                     (snapshot_name_version.name, snapshot_name_version.version)
                     for snapshot_name_version in snapshot_name_versions
