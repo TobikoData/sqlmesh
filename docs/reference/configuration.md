@@ -1,12 +1,14 @@
-# Configuration
+# SQLMesh configuration
 
 This page lists SQLMesh configuration options and their parameters. Learn more about SQLMesh configuration in the [configuration guide](../guides/configuration.md).
+
+Configuration options for model definitions are listed in the [model configuration reference page](./model_configuration.md).
 
 ## Root configurations
 
 A SQLMesh project configuration consists of root level parameters within which other parameters are defined.
 
-Three important root level parameters are [`gateways`](#gateways), [gateway/connection defaults](#gatewayconnection-defaults), and [`model_defaults`](#models), which have their own sections below.
+Two important root level parameters are [`gateways`](#gateways) and [gateway/connection defaults](#gatewayconnection-defaults), which have their own sections below.
 
 This section describes the other root level configuration parameters.
 
@@ -14,9 +16,9 @@ This section describes the other root level configuration parameters.
 
 Configuration options for SQLMesh project directories.
 
-| Option                       | Description                                                                                                                                                                                                                                                                                        | Type                 | Required |
-|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------:|:--------:|
-| `ignore_patterns`            | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`)                                                                                                                                                                                 | list[string]         | N        |
+| Option            | Description                                                                                                        |     Type     | Required |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------ | :----------: | :------: |
+| `ignore_patterns` | Files that match glob patterns specified in this list are ignored when scanning the project folder (Default: `[]`) | list[string] |    N     |
 
 ### Environments
 
@@ -34,36 +36,67 @@ Configuration options for SQLMesh environment creation and promotion.
 | `physical_schema_override`   | A mapping from model schema names to names of schemas in which physical tables for the corresponding models will be placed - [addition details](../guides/configuration.md#physical-schema-override). (Default physical schema name: `sqlmesh__[model schema]`)                                                                                                                                                                   | string               | N        |
 | `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                                                                   | string               | N        |
 
+### Model defaults
+
+The `model_defaults` key is **required** and must contain a value for the `dialect` key.
+
+See all the keys allowed in `model_defaults` at the [model configuration reference page](./model_configuration.md#model-defaults).
 
 ## Gateways
 
-The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler. A gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
+The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler.
 
-Find additional information about gateways in the configuration overview page [gateways section](../guides/configuration.md#gateways).
+It takes one or more named `gateway` configuration keys, each of which can define its own connections. A named gateway does not need to specify all four components and will use defaults if any are omitted - more information is provided about [gateway defaults](#gatewayconnection-defaults) below.
+
+For example, a project might configure the `gate1` and `gate2` gateways:
+
+```yaml linenums="1"
+gateways:
+    gate1:
+        connection:
+            ...
+        state_connection: # defaults to `connection` if omitted
+            ...
+        test_connection: # defaults to `connection` if omitted
+            ...
+        scheduler: # defaults to `builtin` if omitted
+            ...
+    gate2:
+        connection:
+            ...
+```
+
+Find additional information about gateways in the configuration guide [gateways section](../guides/configuration.md#gateways).
 
 ### Gateway
 
-Configuration for a gateway.
+Configuration for each named gateway.
 
-#### State schema name
+#### Connections
 
-By default, the schema name used to store state tables is `sqlmesh`. This can be changed by providing the `state_schema` config key in the gateway configuration.
+A named gateway key may define any or all of a data warehouse connection, state backend connection, state schema name, test backend connection, and scheduler.
 
-| Option             | Description                                                                                                                     | Type | Required |
-|--------------------|---------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
-| `state_schema` | The name of the schema where state information should be stored. (Default: `sqlmesh`) | string  |    N     |
+The state and test connections default to `connection`. The `connection` key may be omitted if a [`default_connection`](#default-connectionsscheduler) is specified.
 
+| Option             | Description                                                                                                            |                  Type                   |                                Required                                |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------- | :-------------------------------------: | :--------------------------------------------------------------------: |
+| `connection`       | The data warehouse connection for core SQLMesh functions.                                                              | [connection configuration](#connection) | N (if [`default_connection`](#default-connectionsscheduler) specified) |
+| `state_connection` | The data warehouse connection where SQLMesh will store internal information about the project. (Default: `connection`) | [connection configuration](#connection) |                                   N                                    |
+| `state_schema`     | The name of the schema where state information should be stored. (Default: `sqlmesh`)                                  |                 string                  |                                   N                                    |
+| `test_connection`  | The data warehouse connection SQLMesh will use to execute tests. (Default: `connection`)                               | [connection configuration](#connection) |                                   N                                    |
+| `scheduler`        | The scheduler SQLMesh will use to execute tests. (Default: `builtin`)                                                  |  [scheduler configuration](#scheduler)  |                                   N                                    |
 
 ### Connection
 
-Configuration for the data warehouse connection.
+Configuration for a data warehouse connection.
 
 Most parameters are specific to the connection engine `type` - see [below](#engine-connection-configuration). The default data warehouse connection type is an in-memory DuckDB database.
 
 #### Concurrent tasks
 
-| Option             | Description                                                                                                                     | Type | Required |
-|--------------------|---------------------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| Option             | Description                                                                                                                 | Type | Required |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
+| `type`             | The engine type name, listed in engine-specific configuration pages below.                                                  | str  |    Y     |
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.) | int  |    N     |
 
 #### Engine connection configuration
@@ -98,7 +131,7 @@ No configuration options are supported by this scheduler type.
 See [Airflow Integration Guide](../integrations/airflow.md) for information about how to integrate Airflow with SQLMesh.
 
 | Option                            | Description                                                                                                                        |  Type  | Required |
-|-----------------------------------|------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
 | `airflow_url`                     | The URL of the Airflow Webserver                                                                                                   | string |    Y     |
 | `username`                        | The Airflow username                                                                                                               | string |    Y     |
 | `password`                        | The Airflow password                                                                                                               | string |    Y     |
@@ -121,9 +154,9 @@ The default gateway and connection keys specify what should happen when gateways
 
 If a configuration contains multiple gateways, SQLMesh will use the first one in the `gateways` dictionary by default. The `default_gateway` key is used to specify a different gateway name as the SQLMesh default.
 
-| Option                    | Description                                                                                                                                            | Type       | Required |
-|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|:----------:|:--------:|
-| `default_gateway`         | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option)                           | string     | N        |
+| Option            | Description                                                                                                                  |  Type  | Required |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
+| `default_gateway` | The name of a gateway to use if one is not provided explicitly (Default: the gateway defined first in the `gateways` option) | string |    N     |
 
 ### Default connections/scheduler
 
@@ -131,31 +164,11 @@ The `default_connection`, `default_test_connection`, and `default_scheduler` key
 
 For example, you might have a specific connection where your tests should run regardless of which gateway is being used. Instead of duplicating the test connection information in each gateway specification, specify it once in the `default_test_connection` key.
 
-| Option                    | Description                                                                                                                                            | Type       | Required |
-|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|:----------:|:--------:|
-| `default_connection`      | The default connection to use if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database)                   | connection | N        |
-| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database | connection) | N        |
-| `default_scheduler`       | The default scheduler configuration to use if one is not specified in a gateway (Default: built-in scheduler)                                          | scheduler  | N        |
-
-## Models
-
-Configuration options for SQLMesh models.
-
-The `model_defaults` configuration is **required** and must contain a value for the `dialect` key. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
-
-Other values are set automatically unless explicitly overridden in the model definition. Find additional details in the [configuration overview page models section](../guides/configuration.md#models).
-
-| Option           | Description                                                                                                                                                                                                                                                                                                    |      Type      | Required |
-|------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------:|:--------:|
-| `kind`           | The default model kind ([Additional Details](#model-kind)) (Default: `VIEW`)                                                                                                                                                                                                                                          | string or dict |    N     |
-| `dialect`        | The SQL dialect in which the model's query is written                                                                                                                                                                                                                                                                |     string     |    N     |
-| `cron`           | The default cron expression specifying how often the model should be refreshed. (Default: `@daily`.)                                                                                                                                                                                                                                  |     string     |    N     |
-| `owner`          | The owner of a model; may be used for notification purposes                                                                                                                                                                                                                                                   |     string     |    N     |
-| `start`          | The date/time that determines the earliest date interval that should be processed by a model. This value is used to identify missing data intervals during plan application and restatement. The value can be a datetime string, epoch time in milliseconds, or a relative datetime such as `1 year ago`.      | string or int  |    N     |
-| `batch_size`     | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. (Default: `None`) |      int       |    N     |
-| `storage_format` | The storage format that should be used to store physical tables; only applicable to engines such as Spark                                                                                                                                                                                                     |     string     |    N     |
-| `depends_on` | Models on which this model depends. (Default: dependencies inferred from model code.)                                                                                                                                                                                                     |     array[string]     |    N     |
-
+| Option                    | Description                                                                                                                                            |    Type     | Required |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------: | :------: |
+| `default_connection`      | The default connection to use if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database)                   | connection  |    N     |
+| `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database | connection) |    N     |
+| `default_scheduler`       | The default scheduler configuration to use if one is not specified in a gateway (Default: built-in scheduler)                                          |  scheduler  |    N     |
 
 ## Debug mode
 
