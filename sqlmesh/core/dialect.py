@@ -18,6 +18,8 @@ from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
+JSON_TYPE = exp.DataType.build("json")
+
 
 class Model(exp.Expression):
     arg_types = {"expressions": True}
@@ -697,7 +699,11 @@ def select_from_values_for_batch_range(
         exp.alias_(exp.cast(column, to=kind), column, copy=False)
         for column, kind in columns_to_types.items()
     ]
-    values_exp = exp.values(values[batch_start:batch_end], alias=alias, columns=columns_to_types)
+    values_exp = exp.values(
+        [tuple(transform_values(v, columns_to_types)) for v in values[batch_start:batch_end]],
+        alias=alias,
+        columns=columns_to_types,
+    )
     return exp.select(*casted_columns).from_(values_exp, copy=False)
 
 
@@ -759,3 +765,17 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
         for table in scope.tables
         if not isinstance(table.this, exp.Func) and exp.table_name(table) not in scope.cte_sources
     }
+
+
+def transform_values(
+    values: t.Tuple[t.Any, ...], columns_to_types: t.Dict[str, exp.DataType]
+) -> t.Iterator[t.Any]:
+    """Perform transformations on values given columns_to_types.
+
+    Currently, the only transformation is wrapping JSON columns with PARSE_JSON().
+    """
+    for value, col_type in zip(values, columns_to_types.values()):
+        if col_type == JSON_TYPE:
+            yield exp.func("PARSE_JSON", f"'{value}'")
+        else:
+            yield value
