@@ -14,12 +14,14 @@ def migrate(state_sync):  # type: ignore
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
 
+    text_type = index_text_type(engine_adapter.dialect)
+
     alter_table_exp = exp.AlterTable(
         this=exp.to_table(snapshots_table),
         actions=[
             exp.ColumnDef(
                 this=exp.to_column("kind_name"),
-                kind=exp.DataType.build("text"),
+                kind=exp.DataType.build(text_type),
             )
         ],
     )
@@ -45,8 +47,6 @@ def migrate(state_sync):  # type: ignore
     if new_snapshots:
         engine_adapter.delete_from(snapshots_table, "TRUE")
 
-        text_type = index_text_type(engine_adapter.dialect)
-
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
@@ -55,7 +55,7 @@ def migrate(state_sync):  # type: ignore
                 "identifier": exp.DataType.build(text_type),
                 "version": exp.DataType.build(text_type),
                 "snapshot": exp.DataType.build("text"),
-                "kind_name": exp.DataType.build("text"),
+                "kind_name": exp.DataType.build(text_type),
             },
             contains_json=True,
         )
