@@ -13,7 +13,7 @@ The SQL-based definition of SQL models is the most common one, and consists of t
 
 These models are designed to look and feel like you're simply using SQL, but they can be customized for advanced use cases.
 
-To create a SQL-based model, add a new file with the `.sql` suffix into the `models/` directory (or a subdirectory of `models/`) within your SQLMesh project. Although the name of the file doesn't matter, it is customary to use the model's name (without the schema) as the file name. For example, the file containing the model `sqlmesh_example.seed_model` file would be named `seed_model.sql`.
+To create a SQL-based model, add a new file with the `.sql` suffix into the `models/` directory (or a subdirectory of `models/`) within your SQLMesh project. Although the name of the file doesn't matter, it is customary to use the model's name (without the schema) as the file name. For example, the file containing the model `sqlmesh_example.seed_model` would be named `seed_model.sql`.
 
 ### Example
 
