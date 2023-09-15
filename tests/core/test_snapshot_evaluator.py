@@ -131,7 +131,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     adapter_mock.create_schema.assert_has_calls(
         [
-            call("sqlmesh__test_schema", catalog_name=""),
+            call("sqlmesh__test_schema", catalog_name=None),
         ]
     )
 
