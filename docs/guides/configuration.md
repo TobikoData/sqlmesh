@@ -187,7 +187,7 @@ Conceptually, we can group the root level parameters into the following types. E
 2. [Environment](../reference/configuration.md#environments) - configuration options for SQLMesh environment creation/promotion, physical table schemas, and view schemas.
 3. [Gateways](../reference/configuration.md#gateways) - configuration options for how SQLMesh should connect to the data warehouse, state backend, and scheduler.
 4. [Gateway/connection defaults](../reference/configuration.md#gatewayconnection-defaults) - configuration options for what should happen when gateways or connections are not all explicitly specified.
-5. [Model defaults](../reference/configuration.md#models) - configuration options for what should happen when model-specific configurations are not explicitly specified in a model's file.
+5. [Model defaults](../reference/model_configuration.md) - configuration options for what should happen when model-specific configurations are not explicitly specified in a model's file.
 6. [Debug mode](../reference/configuration.md#debug-mode) - configuration option for SQLMesh to print and log actions and full backtraces.
 
 ## Configuration details
@@ -775,11 +775,9 @@ Example configuration specifying a Postgres default connection, in-memory DuckDB
 
 ### Models
 
-Configuration options for SQLMesh models. These options are in the [models](../reference/configuration.md#models) section of the configuration reference page.
+The `model_defaults` key is **required** and must contain a value for the `dialect` key. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed. Other values are set automatically unless explicitly overridden in the model definition.
 
-The `model_defaults` configuration is **required** and must contain a value for the `dialect` key. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
-
-Other values are set automatically unless explicitly overridden in the model definition.
+All supported `model_defaults` keys are listed in the [models configuration reference page](../reference/model_configuration.md#model-defaults).
 
 Example configuration:
 

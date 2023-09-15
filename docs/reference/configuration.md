@@ -1,12 +1,14 @@
-# Configuration
+# SQLMesh configuration
 
 This page lists SQLMesh configuration options and their parameters. Learn more about SQLMesh configuration in the [configuration guide](../guides/configuration.md).
+
+Configuration options for model definitions are listed in the [model configuration reference page](./model_configuration.md).
 
 ## Root configurations
 
 A SQLMesh project configuration consists of root level parameters within which other parameters are defined.
 
-Three important root level parameters are [`gateways`](#gateways), [gateway/connection defaults](#gatewayconnection-defaults), and [`model_defaults`](#models), which have their own sections below.
+Two important root level parameters are [`gateways`](#gateways) and [gateway/connection defaults](#gatewayconnection-defaults), which have their own sections below.
 
 This section describes the other root level configuration parameters.
 
@@ -22,18 +24,23 @@ Configuration options for SQLMesh project directories.
 
 Configuration options for SQLMesh environment creation and promotion.
 
-| Option                       | Description                                                                                                                                                                                                                                                                                        |         Type         | Required |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------: | :------: |
-| `snapshot_ttl`               | The period of time that a model snapshot not a part of any environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`) |        string        |    N     |
-| `environment_ttl`            | The period of time that a development environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`)                      |        string        |    N     |
-| `pinned_environments`        | The list of development environments that are exempt from deletion due to expiration                                                                                                                                                                                                               |     list[string]     |    N     |
-| `include_unmodified`         | Indicates whether to create views for all models in the target development environment or only for modified ones                                                                                                                                                                                   |       boolean        |    N     |
-| `time_column_format`         | The default format to use for all model time columns. This time format uses [python format codes](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) (Default: `%Y-%m-%d`)                                                                                        |        string        |    N     |
-| `auto_categorize_changes`    | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([additional details](../guides/configuration.md#auto-categorize-changes))                                            | dict[string, string] |    N     |
-| `default_target_environment` | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   |        string        |    N     |
-| `physical_schema_override`   | A mapping from model schema names to names of schemas in which physical tables for the corresponding models will be placed - [addition details](../guides/configuration.md#physical-schema-override). (Default physical schema name: `sqlmesh__[model schema]`)                                    |        string        |    N     |
-| `environment_suffix_target`  | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                 |        string        |    N     |
+| Option                       | Description                                                                                                                                                                                                                                                                                        | Type                 | Required |
+|------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------:|:--------:|
+| `snapshot_ttl`               | The period of time that a model snapshot not a part of any environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`) | string               | N        |
+| `environment_ttl`            | The period of time that a development environment should exist before being deleted. This is defined as a string with the default `in 1 week`. Other [relative dates](https://dateparser.readthedocs.io/en/latest/) can be used, such as `in 30 days`. (Default: `in 1 week`)                      | string               | N        |
+| `pinned_environments`        | The list of development environments that are exempt from deletion due to expiration                                                                                                                                                                                                               | list[string]         | N        |
+| `include_unmodified`         | Indicates whether to create views for all models in the target development environment or only for modified ones                                                                                                                                                                                   | boolean              | N        |
+| `time_column_format`         | The default format to use for all model time columns. This time format uses [python format codes](https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes) (Default: `%Y-%m-%d`)                                                                                        | string               | N        |
+| `auto_categorize_changes`    | Indicates whether SQLMesh should attempt to automatically [categorize](../concepts/plans.md#change-categories) model changes during plan creation per each model source type ([additional details](../guides/configuration.md#auto-categorize-changes))                                                                      | dict[string, string] | N        |
+| `default_target_environment` | The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands. (Default: `prod`)                                                                                                                                                                   | string               | N        |
+| `physical_schema_override`   | A mapping from model schema names to names of schemas in which physical tables for the corresponding models will be placed - [addition details](../guides/configuration.md#physical-schema-override). (Default physical schema name: `sqlmesh__[model schema]`)                                                                                                                                                                   | string               | N        |
+| `environment_suffix_target`   | Whether SQLMesh views should append their environment name to the `schema` or `table` - [additional details](../guides/configuration.md#view-schema-override). (Default: `schema`)                                                                                                                                                                   | string               | N        |
 
+### Model defaults
+
+The `model_defaults` key is **required** and must contain a value for the `dialect` key.
+
+See all the keys allowed in `model_defaults` at the [model configuration reference page](./model_configuration.md#model-defaults).
 
 ## Gateways
 
@@ -162,26 +169,6 @@ For example, you might have a specific connection where your tests should run re
 | `default_connection`      | The default connection to use if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database)                   | connection  |    N     |
 | `default_test_connection` | The default connection to use when running tests if one is not specified in a gateway (Default: A DuckDB connection that creates an in-memory database | connection) |    N     |
 | `default_scheduler`       | The default scheduler configuration to use if one is not specified in a gateway (Default: built-in scheduler)                                          |  scheduler  |    N     |
-
-## Models
-
-Configuration options for SQLMesh models.
-
-The `model_defaults` configuration is **required** and must contain a value for the `dialect` key. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
-
-Other values are set automatically unless explicitly overridden in the model definition. Find additional details in the [configuration overview page models section](../guides/configuration.md#models).
-
-| Option           | Description                                                                                                                                                                                                                                                                                                                      |      Type      | Required |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------: | :------: |
-| `kind`           | The default model kind ([Additional Details](#model-kind)) (Default: `VIEW`)                                                                                                                                                                                                                                                     | string or dict |    N     |
-| `dialect`        | The SQL dialect in which the model's query is written                                                                                                                                                                                                                                                                            |     string     |    N     |
-| `cron`           | The default cron expression specifying how often the model should be refreshed. (Default: `@daily`.)                                                                                                                                                                                                                             |     string     |    N     |
-| `owner`          | The owner of a model; may be used for notification purposes                                                                                                                                                                                                                                                                      |     string     |    N     |
-| `start`          | The date/time that determines the earliest date interval that should be processed by a model. This value is used to identify missing data intervals during plan application and restatement. The value can be a datetime string, epoch time in milliseconds, or a relative datetime such as `1 year ago`.                        | string or int  |    N     |
-| `batch_size`     | The maximum number of intervals that can be evaluated in a single backfill task. If this is `None`, all intervals will be processed as part of a single task. If this is set, a model's backfill will be chunked such that each individual task only contains jobs with the maximum of `batch_size` intervals. (Default: `None`) |      int       |    N     |
-| `storage_format` | The storage format that should be used to store physical tables; only applicable to engines such as Spark                                                                                                                                                                                                                        |     string     |    N     |
-| `depends_on`     | Models on which this model depends. (Default: dependencies inferred from model code.)                                                                                                                                                                                                                                            | array[string]  |    N     |
-
 
 ## Debug mode
 
