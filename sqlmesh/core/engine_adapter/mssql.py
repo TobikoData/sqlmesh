@@ -87,7 +87,9 @@ class MSSQLEngineAdapter(
             # with a `drop_table` call.
             objects = self._get_data_objects(schema_name)
             for obj in objects:
-                self.drop_table(obj.name, exists=ignore_if_not_exists)
+                self.drop_table(
+                    f"{obj.catalog}.{obj.schema_name}.{obj.name}", exists=ignore_if_not_exists
+                )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
     def _df_to_source_queries(
