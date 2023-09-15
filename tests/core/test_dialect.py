@@ -6,6 +6,7 @@ from sqlmesh.core.dialect import (
     Model,
     format_model_expressions,
     parse,
+    select_from_values_for_batch_range,
     text_diff,
 )
 
@@ -219,3 +220,18 @@ def test_seed():
     )
     assert len(expressions) == 1
     assert "../../../data/data.csv" in expressions[0].sql()
+
+
+def select_from_values_for_batch_range_json():
+    values = [(1, "2022-01-01", '{"foo":"bar"}'), (2, "2022-01-01", '{"foo":"qaz"}')]
+    columns_to_types = {
+        "id": exp.DataType.build("int"),
+        "ds": exp.DataType.build("text"),
+        "json_col": exp.DataType.build("json"),
+    }
+    assert select_from_values_for_batch_range(values, columns_to_types, 0, len(values)).sql() == (
+        """SELECT CAST(id AS INT) AS id, CAST(ds AS TEXT) AS ds, CAST(json_col AS JSON) AS json_col """
+        """FROM """
+        """(VALUES (1, '2022-01-01', PARSE_JSON('{"foo":"bar"}')), (2, '2022-01-01', PARSE_JSON('{"foo":"qaz"}'))) """
+        """AS t(id, ds, json_col)"""
+    )
