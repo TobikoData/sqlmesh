@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from pydantic import Field
-from sqlglot import exp
+from sqlglot import Dialect, exp
 from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
@@ -184,8 +184,9 @@ class ModelMeta(_Node, extra="allow"):
             return columns_to_types
 
         if isinstance(v, dict):
+            udt = Dialect.get_or_raise(dialect).SUPPORTS_USER_DEFINED_TYPES
             for k, data_type in v.items():
-                expr = exp.DataType.build(data_type, dialect=dialect)
+                expr = exp.DataType.build(data_type, dialect=dialect, udt=udt)
                 expr.meta["dialect"] = dialect
                 columns_to_types[normalize_identifiers(k, dialect=dialect).name] = expr
 
