@@ -38,7 +38,7 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
         if not resp:
             raise SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
         return {
-            column_name: exp.DataType.build(data_type, dialect=self.dialect)
+            column_name: exp.DataType.build(data_type, dialect=self.dialect, udt=True)
             for column_name, data_type in resp
         }
 
