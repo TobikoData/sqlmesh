@@ -110,7 +110,6 @@ bool_validator = field_validator(
 
 properties_validator = field_validator(
     "table_properties_",
-    "csv_settings",
     mode="before",
     check_fields=False,
 )(parse_properties)

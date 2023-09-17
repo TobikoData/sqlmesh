@@ -29,6 +29,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
+from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
@@ -586,10 +587,6 @@ def test_seed_provided_columns():
             kind SEED (
               path '../seeds/waiter_names.csv',
               batch_size 100,
-              csv_settings (
-                quotechar = '''',
-                escapechar = '\',
-              ),
             ),
             columns (
               id double,
@@ -604,7 +601,6 @@ def test_seed_provided_columns():
     assert isinstance(model.kind, SeedKind)
     assert model.kind.path == "../seeds/waiter_names.csv"
     assert model.kind.batch_size == 100
-    assert model.kind.csv_settings.sql() == "(quotechar = '''', escapechar = '')"
     assert model.seed is not None
     assert len(model.seed.content) > 0
 
@@ -612,6 +608,33 @@ def test_seed_provided_columns():
         "id": exp.DataType.build("double"),
         "alias": exp.DataType.build("varchar"),
     }
+
+
+def test_seed_csv_settings():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+              csv_settings (
+                quotechar = '''',
+                escapechar = '\\',
+              ),
+            ),
+            columns (
+              id double,
+              alias varchar
+            )
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.kind.csv_settings == CsvSettings(quotechar="'", escapechar="\\")
 
 
 def test_seed_model_diff(tmp_path):
@@ -1989,3 +2012,68 @@ def test_model_jinja_macro_rendering():
     assert definition[1].sql() == "test_int = 1\ntest_str = 'value'"
     assert definition[2].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_b_body\nJINJA_END;"
     assert definition[3].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_a_body\nJINJA_END;"
+
+
+def test_view_model_data_hash():
+    view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind VIEW,
+        );
+        SELECT 1;
+        """
+    )
+    view_model_hash = load_sql_based_model(view_model_expressions).data_hash
+
+    materialized_view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind VIEW (
+              materialized true
+            ),
+        );
+        SELECT 1;
+        """
+    )
+    materialized_view_model_hash = load_sql_based_model(
+        materialized_view_model_expressions
+    ).data_hash
+
+    assert view_model_hash != materialized_view_model_hash
+
+
+def test_seed_model_data_hash():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+            )
+        );
+    """
+    )
+    seed_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              csv_settings (
+                quotechar = '''',
+              )
+            )
+        );
+    """
+    )
+    new_seed_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+
+    assert seed_model.data_hash != new_seed_model.data_hash
