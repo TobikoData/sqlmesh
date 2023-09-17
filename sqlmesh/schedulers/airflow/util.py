@@ -6,7 +6,6 @@ import logging
 import typing as t
 from datetime import timedelta
 
-import pydantic
 from airflow import settings
 from airflow.api.common.experimental.delete_dag import delete_dag
 from airflow.exceptions import AirflowException, DagNotFound
@@ -17,7 +16,7 @@ from airflow.utils.state import DagRunState
 from sqlalchemy.orm import Session
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.config import ConnectionConfig
+from sqlmesh.core.config import parse_connection_config
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow import common
@@ -53,9 +52,7 @@ def scoped_state_sync() -> t.Iterator[StateSync]:
 
         logger.info("Using connection '%s' for state sync", connection.conn_id)
 
-        connection_config: ConnectionConfig = pydantic.parse_obj_as(
-            ConnectionConfig, connection_config_dict  # type: ignore
-        )
+        connection_config = parse_connection_config(connection_config_dict)
         engine_adapter = connection_config.create_engine_adapter()
     except AirflowException:
         logger.info("Using the Airflow database connection for state sync")
