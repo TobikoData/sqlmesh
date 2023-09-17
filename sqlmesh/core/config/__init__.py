@@ -12,6 +12,7 @@ from sqlmesh.core.config.connection import (
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
     SparkConnectionConfig,
+    parse_connection_config,
 )
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.loader import load_config_from_paths, load_config_from_yaml
