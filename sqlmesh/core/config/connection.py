@@ -807,12 +807,7 @@ CONNECTION_CONFIG_TO_TYPE = {
 }
 
 
-def _connection_config_validator(
-    cls: t.Type, v: ConnectionConfig | t.Dict[str, t.Any] | None
-) -> ConnectionConfig | None:
-    if v is None or isinstance(v, ConnectionConfig):
-        return v
-
+def parse_connection_config(v: t.Dict[str, t.Any]) -> ConnectionConfig:
     if "type" not in v:
         raise ConfigError("Missing connection type.")
 
@@ -821,6 +816,14 @@ def _connection_config_validator(
         raise ConfigError(f"Unknown connection type '{connection_type}'.")
 
     return CONNECTION_CONFIG_TO_TYPE[connection_type](**v)
+
+
+def _connection_config_validator(
+    cls: t.Type, v: ConnectionConfig | t.Dict[str, t.Any] | None
+) -> ConnectionConfig | None:
+    if v is None or isinstance(v, ConnectionConfig):
+        return v
+    return parse_connection_config(v)
 
 
 connection_config_validator = field_validator(
