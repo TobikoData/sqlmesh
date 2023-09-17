@@ -599,7 +599,7 @@ class EngineAdapter:
         if materialized and self.SUPPORTS_MATERIALIZED_VIEWS:
             properties.append("expressions", exp.MaterializedProperty())
 
-            if not self.SUPPORTS_MATERIALIZED_VIEW_SCHEMA:
+            if not self.SUPPORTS_MATERIALIZED_VIEW_SCHEMA and isinstance(schema, exp.Schema):
                 schema = schema.this
 
         create_view_properties = self._create_view_properties(
