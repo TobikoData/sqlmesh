@@ -20,6 +20,7 @@ if t.TYPE_CHECKING:
 class BasePostgresEngineAdapter(CommitOnExecuteMixin):
     COLUMNS_TABLE = "information_schema.columns"
     SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
