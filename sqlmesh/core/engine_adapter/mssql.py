@@ -64,13 +64,25 @@ class MSSQLEngineAdapter(
             sql = sql.where(f"table_schema = '{database_name}'")
 
         self.execute(sql)
-
         columns_raw = self.cursor.fetchall()
 
-        columns = [
-            (col[0], f"{col[1]}({col[2]})") if col[1] == "varchar" and col[2] else (col[0], col[1])
-            for col in columns_raw
-        ]
+        def build_var_length_col(row: tuple) -> tuple:
+            var_len_chars = ("binary", "varbinary", "char", "varchar", "nchar", "nvarchar")
+            if row[1] in var_len_chars and row[2] > 0:
+                return (row[0], f"{row[1]}({row[2]})")
+            if row[1] in ("varbinary", "varchar") and row[2] == -1:
+                return (row[0], f"{row[1]}(max)")
+            if row[1] in (
+                "decimal",
+                "numeric",
+            ):
+                return (row[0], f"{row[1]}({row[3]}, {row[4]})")
+            if row[1] == "float":
+                return (row[0], f"{row[1]}({row[3]})")
+
+            return (row[0], row[1])
+
+        columns = [build_var_length_col(col) for col in columns_raw]
 
         return {
             column_name: exp.DataType.build(data_type, dialect=self.dialect)
