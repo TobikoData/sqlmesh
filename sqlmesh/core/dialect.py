@@ -269,21 +269,24 @@ def _parse_order(
     return macro
 
 
+def _parse_prop_value(self: Parser) -> t.Optional[exp.Expression]:
+    this = self._parse_string() or self._parse_id_var()
+    if self._match(TokenType.EQ):
+        this = exp.EQ(this=this, expression=self._parse_string() or self._parse_id_var())
+
+    return this
+
+
 def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     key = self._parse_id_var(any_token=True)
-
     if not key:
         return None
 
-    index = self._index
     if self._match(TokenType.L_PAREN):
-        self._retreat(index)
         value: t.Optional[exp.Expression] = self.expression(
-            exp.Tuple,
-            expressions=self._parse_wrapped_csv(
-                lambda: self._parse_string() or self._parse_id_var()
-            ),
+            exp.Tuple, expressions=self._parse_csv(lambda: _parse_prop_value(self))
         )
+        self._match_r_paren()
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
 
@@ -336,7 +339,6 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                 if not id_var:
                     value = None
                 else:
-                    index = self._index
                     kind = ModelKindName[id_var.name.upper()]
 
                     if kind in (
@@ -345,8 +347,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         ModelKindName.SEED,
                         ModelKindName.VIEW,
                         ModelKindName.SCD_TYPE_2,
-                    ) and self._match(TokenType.L_PAREN):
-                        self._retreat(index)
+                    ) and self._match(TokenType.L_PAREN, advance=False):
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:
                         props = None

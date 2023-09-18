@@ -16,11 +16,12 @@ from sqlmesh.core.model.kind import (
     ViewKind,
     _Incremental,
     model_kind_validator,
+    properties_validator,
 )
 from sqlmesh.core.node import _Node, str_or_exp_to_str
 from sqlmesh.core.reference import Reference
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     field_validator,
     field_validator_v1_args,
@@ -53,6 +54,7 @@ class ModelMeta(_Node, extra="allow"):
     _table_properties: t.Dict[str, exp.Expression] = {}
 
     _model_kind_validator = model_kind_validator
+    _table_properties_validator = properties_validator
 
     @field_validator("audits", mode="before")
     @classmethod
@@ -193,38 +195,6 @@ class ModelMeta(_Node, extra="allow"):
             return columns_to_types
 
         return v
-
-    @field_validator("table_properties_", mode="before")
-    @field_validator_v1_args
-    def _properties_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[exp.Tuple]:
-        if v is None:
-            return v
-        dialect = values.get("dialect")
-        if isinstance(v, str):
-            v = d.parse_one(v, dialect=dialect)
-        if isinstance(v, (exp.Array, exp.Paren, exp.Tuple)):
-            eq_expressions: t.List[exp.Expression] = (
-                [v.unnest()] if isinstance(v, exp.Paren) else v.expressions
-            )
-            for eq_expr in eq_expressions:
-                if not isinstance(eq_expr, exp.EQ):
-                    raise ConfigError(
-                        f"Invalid table property '{eq_expr.sql(dialect=dialect)}'. "
-                        "Table properties must be specified as key-value pairs <key> = <value>. "
-                    )
-            properties = (
-                exp.Tuple(expressions=eq_expressions)
-                if isinstance(v, (exp.Paren, exp.Array))
-                else v
-            )
-        elif isinstance(v, dict):
-            properties = exp.Tuple(
-                expressions=[exp.Literal.string(key).eq(value) for key, value in v.items()]
-            )
-        else:
-            raise SQLMeshError(f"Unexpected table properties '{v}'")
-        properties.meta["dialect"] = dialect
-        return properties
 
     @field_validator("depends_on_", mode="before")
     @field_validator_v1_args
