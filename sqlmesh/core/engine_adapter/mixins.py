@@ -150,8 +150,6 @@ class CommitOnExecuteMixin(EngineAdapter):
 
 
 class InsertOverwriteWithMergeMixin(EngineAdapter):
-    FALSE_PREDICATE: exp.Condition = exp.false()
-
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
@@ -186,6 +184,6 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
                 self._merge(
                     target_table=table_name,
                     query=query,
-                    on=self.FALSE_PREDICATE,
+                    on=exp.false(),
                     match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
                 )

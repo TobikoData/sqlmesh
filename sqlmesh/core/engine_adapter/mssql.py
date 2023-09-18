@@ -41,7 +41,6 @@ class MSSQLEngineAdapter(
     """
 
     DIALECT: str = "tsql"
-    FALSE_PREDICATE = exp.condition("1=2")
     SUPPORTS_TUPLE_IN = False
 
     def columns(
