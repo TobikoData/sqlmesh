@@ -9,7 +9,7 @@ from sqlglot import exp
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import bool_validator
+from sqlmesh.core.model.common import bool_validator, properties_validator
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
@@ -250,6 +250,9 @@ class SeedKind(_ModelKind):
     name: Literal[ModelKindName.SEED] = ModelKindName.SEED
     path: str
     batch_size: int = 1000
+    csv_settings: t.Optional[exp.Tuple] = None
+
+    _csv_settings_validator = properties_validator
 
     @field_validator("batch_size", mode="before")
     @classmethod

@@ -586,6 +586,10 @@ def test_seed_provided_columns():
             kind SEED (
               path '../seeds/waiter_names.csv',
               batch_size 100,
+              csv_settings (
+                quotechar = '''',
+                escapechar = '\',
+              ),
             ),
             columns (
               id double,
@@ -600,6 +604,7 @@ def test_seed_provided_columns():
     assert isinstance(model.kind, SeedKind)
     assert model.kind.path == "../seeds/waiter_names.csv"
     assert model.kind.batch_size == 100
+    assert model.kind.csv_settings.sql() == "(quotechar = '''', escapechar = '')"
     assert model.seed is not None
     assert len(model.seed.content) > 0
 
@@ -1936,7 +1941,7 @@ def test_model_table_properties(sushi_context):
         """('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"""
     )
 
-    with pytest.raises(ConfigError, match=r"Invalid table property 'invalid'.*"):
+    with pytest.raises(ConfigError, match=r"Invalid property 'invalid'.*"):
         load_sql_based_model(
             d.parse(
                 """
