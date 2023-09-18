@@ -22,6 +22,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin,
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
     COLUMNS_TABLE = "SVV_COLUMNS"  # Includes late-binding views
+    SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
 
     @property
     def cursor(self) -> t.Any:

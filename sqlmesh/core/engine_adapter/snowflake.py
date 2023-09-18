@@ -20,6 +20,7 @@ class SnowflakeEngineAdapter(EngineAdapter):
     DIALECT = "snowflake"
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CLONING = True
 
     def _df_to_source_queries(
