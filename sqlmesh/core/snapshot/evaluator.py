@@ -1098,7 +1098,15 @@ class ViewStrategy(PromotableStrategy):
         )
 
     def delete(self, name: str) -> None:
-        self.adapter.drop_view(name)
+        try:
+            self.adapter.drop_view(name)
+        except Exception:
+            logger.debug(
+                "Failed to drop view '%s'. Trying to drop the materialized view instead",
+                name,
+                exc_info=True,
+            )
+            self.adapter.drop_view(name, materialized=True)
         logger.info("Dropped view '%s'", name)
 
     def _is_materialized_view(self, model: Model) -> bool:

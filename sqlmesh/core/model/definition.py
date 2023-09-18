@@ -685,13 +685,13 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The data hash for the node.
         """
-        return hash_data(self._data_hash_fields)
+        return hash_data(self._data_hash_values)
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
+    def _data_hash_values(self) -> t.List[str]:
         data = [
             str(self.sorted_python_env),
-            self.kind.name,
+            *self.kind.data_hash_values,
             self.cron,
             self.storage_format,
             str(self.lookback),
@@ -887,7 +887,7 @@ class _SqlBasedModel(_Model):
         return self.__statement_renderers[expression_key]
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
+    def _data_hash_values(self) -> t.List[str]:
         pre_statements = (
             self.pre_statements if self.hash_raw_query else self.render_pre_statements()
         )
@@ -896,7 +896,7 @@ class _SqlBasedModel(_Model):
         )
         macro_defs = self.macro_definitions if self.hash_raw_query else []
         return [
-            *super()._data_hash_fields,
+            *super()._data_hash_values,
             *[e.sql(comments=False) for e in (*pre_statements, *post_statements, *macro_defs)],
         ]
 
@@ -1099,8 +1099,8 @@ class SqlModel(_SqlBasedModel):
         return self.__query_renderer
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
-        data = super()._data_hash_fields
+    def _data_hash_values(self) -> t.List[str]:
+        data = super()._data_hash_values
 
         query = self.query if self.hash_raw_query else self.render_query() or self.query
         data.append(query.sql(comments=False))
@@ -1284,8 +1284,8 @@ class SeedModel(_SqlBasedModel):
             raise SQLMeshError(f"Seed model '{self.name}' is not hydrated.")
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
-        data = super()._data_hash_fields
+    def _data_hash_values(self) -> t.List[str]:
+        data = super()._data_hash_values
         for column_name, column_hash in self.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
@@ -1349,8 +1349,8 @@ class PythonModel(_Model):
         return None
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
-        data = super()._data_hash_fields
+    def _data_hash_values(self) -> t.List[str]:
+        data = super()._data_hash_values
         data.append(self.entrypoint)
         return data
 
