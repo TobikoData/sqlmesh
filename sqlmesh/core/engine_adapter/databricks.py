@@ -23,6 +23,8 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     SUPPORTS_CLONING = True
+    SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SCHEMA_DIFFER = SchemaDiffer(
         support_positional_add=True,
         support_nested_operations=True,
