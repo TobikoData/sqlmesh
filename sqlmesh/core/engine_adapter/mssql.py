@@ -43,7 +43,6 @@ class MSSQLEngineAdapter(
     DIALECT: str = "tsql"
     FALSE_PREDICATE = exp.condition("1=2")
     SUPPORTS_TUPLE_IN = False
-    TRAILING_SEMICOLON = True
 
     def columns(
         self,
@@ -114,7 +113,7 @@ class MSSQLEngineAdapter(
             objects = self._get_data_objects(schema_name)
             for obj in objects:
                 self.drop_table(
-                    f"{obj.catalog}.{obj.schema_name}.{obj.name}", exists=ignore_if_not_exists
+                    ".".join([obj.catalog, obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
                 )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
@@ -182,3 +181,7 @@ class MSSQLEngineAdapter(
     def _truncate_table(self, table_name: TableName) -> str:
         table = quote_identifiers(exp.to_table(table_name))
         return f"TRUNCATE TABLE {table.sql(dialect=self.dialect)}"
+
+    def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
+        sql = super()._to_sql(expression, quote=quote, **kwargs)
+        return f"{sql};"
