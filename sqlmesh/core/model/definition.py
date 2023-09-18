@@ -691,7 +691,7 @@ class _Model(ModelMeta, frozen=True):
     def _data_hash_fields(self) -> t.List[str]:
         data = [
             str(self.sorted_python_env),
-            self.kind.name,
+            *self.kind.data_hash_fields,
             self.cron,
             self.storage_format,
             str(self.lookback),

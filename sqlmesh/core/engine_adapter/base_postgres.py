@@ -89,7 +89,7 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
         """
         with self.transaction(TransactionType.DDL):
             if replace:
-                self.drop_view(view_name)
+                self.drop_view(view_name, materialized=materialized)
             super().create_view(
                 view_name,
                 query_or_df,

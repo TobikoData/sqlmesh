@@ -657,10 +657,17 @@ class EngineAdapter:
             )
         )
 
-    def drop_view(self, view_name: TableName, ignore_if_not_exists: bool = True) -> None:
+    def drop_view(
+        self, view_name: TableName, ignore_if_not_exists: bool = True, materialized: bool = False
+    ) -> None:
         """Drop a view."""
         self.execute(
-            exp.Drop(this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW")
+            exp.Drop(
+                this=exp.to_table(view_name),
+                exists=ignore_if_not_exists,
+                materialized=materialized,
+                kind="VIEW",
+            )
         )
 
     def columns(
