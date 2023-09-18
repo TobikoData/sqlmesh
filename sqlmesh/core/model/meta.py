@@ -8,6 +8,7 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.model.common import properties_validator
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
@@ -16,7 +17,6 @@ from sqlmesh.core.model.kind import (
     ViewKind,
     _Incremental,
     model_kind_validator,
-    properties_validator,
 )
 from sqlmesh.core.node import _Node, str_or_exp_to_str
 from sqlmesh.core.reference import Reference
