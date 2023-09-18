@@ -41,6 +41,7 @@ class MSSQLEngineAdapter(
     """
 
     DIALECT: str = "tsql"
+    DEFAULT_CATALOG_NAME = "master"
     SUPPORTS_TUPLE_IN = False
 
     def columns(
@@ -52,7 +53,7 @@ class MSSQLEngineAdapter(
 
         table = exp.to_table(table_name)
 
-        catalog_name = table.catalog or "master"
+        catalog_name = table.catalog or self.DEFAULT_CATALOG_NAME
         sql = (
             exp.select("column_name", "data_type", "character_maximum_length")
             .from_(f"{catalog_name}.information_schema.columns")
@@ -92,7 +93,7 @@ class MSSQLEngineAdapter(
         """MsSql doesn't support describe so we query information_schema."""
         table = exp.to_table(table_name)
 
-        catalog_name = table.catalog or "master"
+        catalog_name = table.catalog or self.DEFAULT_CATALOG_NAME
         sql = (
             exp.select("1")
             .from_(f"{catalog_name}.information_schema.tables")

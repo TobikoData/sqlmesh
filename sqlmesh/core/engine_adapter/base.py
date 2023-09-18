@@ -947,7 +947,12 @@ class EngineAdapter:
                     .from_("static")
                     .join(
                         "latest",
-                        on=" AND ".join(f"static.{col} = latest.{col}" for col in unique_key),
+                        on=exp.and_(
+                            *[
+                                exp.column(col, table="static").eq(exp.column(col, table="latest"))
+                                for col in unique_key
+                            ]
+                        ),
                         join_type="left",
                     )
                     .where(f"latest.{valid_to_name} IS NULL"),
@@ -973,7 +978,12 @@ class EngineAdapter:
                     .from_("latest")
                     .join(
                         "source",
-                        on=" AND ".join(f"latest.{col} = source.{col}" for col in unique_key),
+                        on=exp.and_(
+                            *[
+                                exp.column(col, table="latest").eq(exp.column(col, table="source"))
+                                for col in unique_key
+                            ]
+                        ),
                         join_type="left",
                     )
                     .union(
@@ -984,7 +994,14 @@ class EngineAdapter:
                         .from_("latest")
                         .join(
                             "source",
-                            on=" AND ".join(f"latest.{col} = source.{col}" for col in unique_key),
+                            on=exp.and_(
+                                *[
+                                    exp.column(col, table="latest").eq(
+                                        exp.column(col, table="source")
+                                    )
+                                    for col in unique_key
+                                ]
+                            ),
                             join_type="right",
                         )
                     ),
@@ -1019,8 +1036,13 @@ class EngineAdapter:
                     .from_("joined")
                     .join(
                         "latest_deleted",
-                        on=" AND ".join(
-                            f"joined.s_{col} = latest_deleted.{col}" for col in unique_key
+                        on=exp.and_(
+                            *[
+                                exp.column(f"s_{col}", table="joined").eq(
+                                    exp.column(col, table="latest_deleted")
+                                )
+                                for col in unique_key
+                            ]
                         ),
                         join_type="left",
                     ),

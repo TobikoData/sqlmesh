@@ -365,9 +365,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             exp.select(exp.to_column(f"{self.snapshots_table}.snapshot"))
             .from_(self.snapshots_table)
             .where(
-                None
-                if snapshot_ids is None
-                else self._snapshot_id_filter(snapshot_ids, self.snapshots_table)
+                self._snapshot_id_filter(snapshot_ids, self.snapshots_table)
+                if snapshot_ids
+                else None
             )
         )
         if hydrate_seeds:
@@ -381,7 +381,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         for col in ["name", "identifier"]
                     ]
                 ),
-                join_type="left outer",
+                join_type="left",
             )
         elif lock_for_update:
             query = query.lock(copy=False)
@@ -587,7 +587,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
         if uncompacted_only:
             query.join(
-                exp.select(exp.column("name"), exp.column("identifier"))
+                exp.select("name", "identifier")
                 .from_(self.intervals_table)
                 .where(exp.column("is_compacted").not_())
                 .distinct()
@@ -595,7 +595,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 on=exp.and_(
                     *[
                         exp.to_column(f"{self.intervals_table}.{col}").eq(
-                            exp.to_column(f"uncompacted.{col}")
+                            exp.column(col, table="uncompacted")
                         )
                         for col in ["name", "identifier"]
                     ]
