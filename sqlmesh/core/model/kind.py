@@ -121,7 +121,7 @@ class _ModelKind(PydanticModel, ModelKindMixin):
         return d.ModelKind(this=self.name.value.upper(), **kwargs)
 
     @property
-    def data_hash_fields(self) -> t.List[str]:
+    def data_hash_values(self) -> t.List[str]:
         return [self.name.value]
 
 
@@ -251,7 +251,7 @@ class ViewKind(_ModelKind):
 
     @property
     def data_hash_fields(self) -> t.List[str]:
-        return [*super().data_hash_fields, str(self.materialized)]
+        return [*super().data_hash_values, str(self.materialized)]
 
 
 class SeedKind(_ModelKind):
