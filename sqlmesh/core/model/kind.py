@@ -120,6 +120,10 @@ class _ModelKind(PydanticModel, ModelKindMixin):
     def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
         return d.ModelKind(this=self.name.value.upper(), **kwargs)
 
+    @property
+    def data_hash_values(self) -> t.List[str]:
+        return [self.name.value]
+
 
 class TimeColumn(PydanticModel):
     column: str
@@ -244,6 +248,10 @@ class ViewKind(_ModelKind):
         if isinstance(v, exp.Expression):
             return bool(v.this)
         return bool(v)
+
+    @property
+    def data_hash_fields(self) -> t.List[str]:
+        return [*super().data_hash_values, str(self.materialized)]
 
 
 class SeedKind(_ModelKind):
