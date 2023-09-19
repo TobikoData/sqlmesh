@@ -167,12 +167,13 @@ class QualifiedViewName(PydanticModel, frozen=True):
     table: str
 
     def for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
-        return exp.table_name(
-            exp.table_(
-                self.table_for_environment(environment_naming_info),
-                db=self.schema_for_environment(environment_naming_info),
-                catalog=self.catalog,
-            )
+        return exp.table_name(self.table_for_environment(environment_naming_info))
+
+    def table_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> exp.Table:
+        return exp.table_(
+            self.table_name_for_environment(environment_naming_info),
+            db=self.schema_for_environment(environment_naming_info),
+            catalog=self.catalog,
         )
 
     def schema_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
@@ -184,7 +185,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
             schema = f"{schema}__{environment_naming_info.name}"
         return schema
 
-    def table_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
+    def table_name_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
         table = self.table
         if (
             environment_naming_info.name.lower() != c.PROD

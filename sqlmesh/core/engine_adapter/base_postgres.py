@@ -20,6 +20,7 @@ if t.TYPE_CHECKING:
 class BasePostgresEngineAdapter(CommitOnExecuteMixin):
     COLUMNS_TABLE = "information_schema.columns"
     SUPPORTS_MATERIALIZED_VIEWS = True
+    SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
@@ -38,7 +39,7 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
         if not resp:
             raise SQLMeshError("Could not get columns for table '%s'. Table not found.", table_name)
         return {
-            column_name: exp.DataType.build(data_type, dialect=self.dialect)
+            column_name: exp.DataType.build(data_type, dialect=self.dialect, udt=True)
             for column_name, data_type in resp
         }
 
@@ -88,7 +89,7 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
         """
         with self.transaction(TransactionType.DDL):
             if replace:
-                self.drop_view(view_name)
+                self.drop_view(view_name, materialized=materialized)
             super().create_view(
                 view_name,
                 query_or_df,

@@ -9,7 +9,8 @@ from sqlglot import exp
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import bool_validator
+from sqlmesh.core.model.common import bool_validator, parse_properties
+from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
@@ -119,6 +120,10 @@ class _ModelKind(PydanticModel, ModelKindMixin):
 
     def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
         return d.ModelKind(this=self.name.value.upper(), **kwargs)
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [self.name.value]
 
 
 class TimeColumn(PydanticModel):
@@ -245,11 +250,16 @@ class ViewKind(_ModelKind):
             return bool(v.this)
         return bool(v)
 
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [*super().data_hash_values, str(self.materialized)]
+
 
 class SeedKind(_ModelKind):
     name: Literal[ModelKindName.SEED] = ModelKindName.SEED
     path: str
     batch_size: int = 1000
+    csv_settings: t.Optional[CsvSettings] = None
 
     @field_validator("batch_size", mode="before")
     @classmethod
@@ -269,6 +279,20 @@ class SeedKind(_ModelKind):
             return v.this
         return str(v)
 
+    @field_validator("csv_settings", mode="before")
+    @classmethod
+    def _parse_csv_settings(cls, v: t.Any) -> t.Optional[CsvSettings]:
+        if v is None or isinstance(v, CsvSettings):
+            return v
+        if isinstance(v, exp.Expression):
+            tuple_exp = parse_properties(cls, v, {})
+            if not tuple_exp:
+                return None
+            return CsvSettings(**{e.left.name: e.right for e in tuple_exp.expressions})
+        if isinstance(v, dict):
+            return CsvSettings(**v)
+        return v
+
     def to_expression(self, **kwargs: t.Any) -> d.ModelKind:
         """Convert the seed kind into a SQLGlot expression."""
         return super().to_expression(
@@ -280,6 +304,13 @@ class SeedKind(_ModelKind):
                 ),
             ],
         )
+
+    @property
+    def data_hash_values(self) -> t.List[t.Optional[str]]:
+        return [
+            *super().data_hash_values,
+            *(self.csv_settings or CsvSettings()).dict().values(),
+        ]
 
 
 class FullKind(_ModelKind):

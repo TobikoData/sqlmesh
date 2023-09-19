@@ -43,6 +43,7 @@ class MSSQLEngineAdapter(
     DIALECT: str = "tsql"
     DEFAULT_CATALOG_NAME = "master"
     SUPPORTS_TUPLE_IN = False
+    SUPPORTS_MATERIALIZED_VIEWS = True
 
     def columns(
         self,

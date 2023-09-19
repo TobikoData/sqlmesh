@@ -54,15 +54,43 @@ def test_create_view_pandas(make_mocked_engine_adapter: t.Callable):
 def test_create_materialized_view(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.SUPPORTS_MATERIALIZED_VIEWS = True
-    adapter.create_view("test_view", parse_one("SELECT a FROM tbl"), materialized=True)
     adapter.create_view(
-        "test_view", parse_one("SELECT a FROM tbl"), replace=False, materialized=True
+        "test_view",
+        parse_one("SELECT a FROM tbl"),
+        materialized=True,
+        columns_to_types={"a": exp.DataType.build("INT")},
+    )
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a FROM tbl"),
+        replace=False,
+        materialized=True,
+        columns_to_types={"a": exp.DataType.build("INT")},
     )
 
     adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE OR REPLACE MATERIALIZED VIEW "test_view" AS SELECT "a" FROM "tbl"'),
             call('CREATE MATERIALIZED VIEW "test_view" AS SELECT "a" FROM "tbl"'),
+        ]
+    )
+
+    adapter.SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
+    adapter.create_view(
+        "test_view",
+        parse_one("SELECT a, b FROM tbl"),
+        replace=False,
+        materialized=True,
+        columns_to_types={"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")},
+    )
+    adapter.create_view(
+        "test_view", parse_one("SELECT a, b FROM tbl"), replace=False, materialized=True
+    )
+
+    adapter.cursor.execute.assert_has_calls(
+        [
+            call('CREATE MATERIALIZED VIEW "test_view" ("a", "b") AS SELECT "a", "b" FROM "tbl"'),
+            call('CREATE MATERIALIZED VIEW "test_view" AS SELECT "a", "b" FROM "tbl"'),
         ]
     )
 
@@ -1234,4 +1262,16 @@ def test_ctas_pandas(make_mocked_engine_adapter: t.Callable):
 
     assert to_sql_calls(adapter) == [
         'CREATE TABLE IF NOT EXISTS "new_table" AS SELECT CAST("a" AS BIGINT) AS "a", CAST("b" AS BIGINT) AS "b" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("a", "b")'
+    ]
+
+
+def test_drop_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.drop_view("test_view")
+    adapter.drop_view("test_view", materialized=True)
+
+    assert to_sql_calls(adapter) == [
+        'DROP VIEW IF EXISTS "test_view"',
+        'DROP MATERIALIZED VIEW IF EXISTS "test_view"',
     ]

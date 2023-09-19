@@ -120,6 +120,7 @@ class EngineAdapter:
     SUPPORTS_INDEXES = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
+    SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
     SUPPORTS_CLONING = False
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
@@ -578,23 +579,29 @@ class EngineAdapter:
                 batch_start=0,
                 batch_end=len(values),
             )
+
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, batch_size=0, target_table=view_name
         )
         if len(source_queries) != 1:
             raise SQLMeshError("Only one source query is supported for creating views")
+
         schema: t.Union[exp.Table, exp.Schema] = exp.to_table(view_name)
         if columns_to_types:
             schema = exp.Schema(
                 this=exp.to_table(view_name),
                 expressions=[exp.column(column) for column in columns_to_types],
             )
+
         properties = create_kwargs.pop("properties", None)
         if not properties:
             properties = exp.Properties(expressions=[])
 
         if materialized and self.SUPPORTS_MATERIALIZED_VIEWS:
             properties.append("expressions", exp.MaterializedProperty())
+
+            if not self.SUPPORTS_MATERIALIZED_VIEW_SCHEMA and isinstance(schema, exp.Schema):
+                schema = schema.this
 
         create_view_properties = self._create_view_properties(
             create_kwargs.pop("table_properties", None)
@@ -605,6 +612,7 @@ class EngineAdapter:
 
         if properties.expressions:
             create_kwargs["properties"] = properties
+
         with source_queries[0] as query:
             self.execute(
                 exp.Create(
@@ -650,10 +658,17 @@ class EngineAdapter:
             )
         )
 
-    def drop_view(self, view_name: TableName, ignore_if_not_exists: bool = True) -> None:
+    def drop_view(
+        self, view_name: TableName, ignore_if_not_exists: bool = True, materialized: bool = False
+    ) -> None:
         """Drop a view."""
         self.execute(
-            exp.Drop(this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW")
+            exp.Drop(
+                this=exp.to_table(view_name),
+                exists=ignore_if_not_exists,
+                materialized=materialized,
+                kind="VIEW",
+            )
         )
 
     def columns(

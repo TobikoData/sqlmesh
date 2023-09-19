@@ -31,7 +31,7 @@ from sqlmesh.core.model.kind import (
     SeedKind,
 )
 from sqlmesh.core.model.meta import ModelMeta
-from sqlmesh.core.model.seed import Seed, create_seed
+from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
@@ -685,13 +685,13 @@ class _Model(ModelMeta, frozen=True):
         Returns:
             The data hash for the node.
         """
-        return hash_data(self._data_hash_fields)
+        return hash_data(self._data_hash_values)
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
+    def _data_hash_values(self) -> t.List[str]:
         data = [
             str(self.sorted_python_env),
-            self.kind.name,
+            *self.kind.data_hash_values,
             self.cron,
             self.storage_format,
             str(self.lookback),
@@ -887,7 +887,7 @@ class _SqlBasedModel(_Model):
         return self.__statement_renderers[expression_key]
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
+    def _data_hash_values(self) -> t.List[str]:
         pre_statements = (
             self.pre_statements if self.hash_raw_query else self.render_pre_statements()
         )
@@ -896,7 +896,7 @@ class _SqlBasedModel(_Model):
         )
         macro_defs = self.macro_definitions if self.hash_raw_query else []
         return [
-            *super()._data_hash_fields,
+            *super()._data_hash_values,
             *[e.sql(comments=False) for e in (*pre_statements, *post_statements, *macro_defs)],
         ]
 
@@ -1099,8 +1099,8 @@ class SqlModel(_SqlBasedModel):
         return self.__query_renderer
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
-        data = super()._data_hash_fields
+    def _data_hash_values(self) -> t.List[str]:
+        data = super()._data_hash_values
 
         query = self.query if self.hash_raw_query else self.render_query() or self.query
         data.append(query.sql(comments=False))
@@ -1132,6 +1132,7 @@ class SeedModel(_SqlBasedModel):
     column_hashes_: t.Optional[t.Dict[str, str]] = Field(default=None, alias="column_hashes")
     is_hydrated: bool = True
     source_type: Literal["seed"] = "seed"
+    __reader: t.Optional[CsvSeedReader] = None
 
     def render(
         self,
@@ -1155,7 +1156,7 @@ class SeedModel(_SqlBasedModel):
             elif tpe.this in exp.DataType.TEXT_TYPES:
                 string_columns.append(name)
 
-        for df in self.seed.read(batch_size=self.kind.batch_size):
+        for df in self._reader.read(batch_size=self.kind.batch_size):
             for column in date_or_time_columns:
                 df[column] = pd.to_datetime(df[column])
             df[bool_columns] = df[bool_columns].apply(lambda i: str_to_bool(str(i)))
@@ -1194,14 +1195,14 @@ class SeedModel(_SqlBasedModel):
         if self.columns_to_types_ is not None:
             return self.columns_to_types_
         self._ensure_hydrated()
-        return self.seed.columns_to_types
+        return self._reader.columns_to_types
 
     @property
     def column_hashes(self) -> t.Dict[str, str]:
         if self.column_hashes_ is not None:
             return self.column_hashes_
         self._ensure_hydrated()
-        return self.seed.column_hashes
+        return self._reader.column_hashes
 
     @property
     def is_seed(self) -> bool:
@@ -1240,7 +1241,7 @@ class SeedModel(_SqlBasedModel):
 
         return self.copy(
             update={
-                "seed": Seed(content="", dialect=self.dialect),
+                "seed": Seed(content=""),
                 "is_hydrated": False,
                 "column_hashes_": self.column_hashes,
             }
@@ -1257,7 +1258,7 @@ class SeedModel(_SqlBasedModel):
 
         return self.copy(
             update={
-                "seed": Seed(content=content, dialect=self.dialect),
+                "seed": Seed(content=content),
                 "is_hydrated": True,
                 "column_hashes_": None,
             },
@@ -1284,8 +1285,14 @@ class SeedModel(_SqlBasedModel):
             raise SQLMeshError(f"Seed model '{self.name}' is not hydrated.")
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
-        data = super()._data_hash_fields
+    def _reader(self) -> CsvSeedReader:
+        if self.__reader is None:
+            self.__reader = self.seed.reader(dialect=self.dialect, settings=self.kind.csv_settings)
+        return self.__reader
+
+    @property
+    def _data_hash_values(self) -> t.List[str]:
+        data = super()._data_hash_values
         for column_name, column_hash in self.column_hashes.items():
             data.append(column_name)
             data.append(column_hash)
@@ -1349,8 +1356,8 @@ class PythonModel(_Model):
         return None
 
     @property
-    def _data_hash_fields(self) -> t.List[str]:
-        data = super()._data_hash_fields
+    def _data_hash_values(self) -> t.List[str]:
+        data = super()._data_hash_values
         data.append(self.entrypoint)
         return data
 
@@ -1591,8 +1598,7 @@ def create_seed_model(
     if not seed_path.is_absolute():
         seed_path = path / seed_path if path.is_dir() else path.parents[0] / seed_path
 
-    dialect = kwargs.get("dialect") or ""
-    seed = create_seed(seed_path, dialect=dialect)
+    seed = create_seed(seed_path)
 
     pre_statements = pre_statements or []
     post_statements = post_statements or []
