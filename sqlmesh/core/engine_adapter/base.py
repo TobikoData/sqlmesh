@@ -1243,6 +1243,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         name: TableName = "diff",
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
     ) -> t.Iterator[exp.Table]:
         """A context manager for working a temp table.
 
@@ -1264,7 +1265,7 @@ class EngineAdapter:
             if table.db:
                 self.create_schema(table.db)
             self._create_table_from_source_queries(
-                table, source_queries, columns_to_types, exists=True
+                table, source_queries, columns_to_types, exists=True, **kwargs
             )
 
             try:
