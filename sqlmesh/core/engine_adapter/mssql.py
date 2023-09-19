@@ -169,7 +169,7 @@ class MSSQLEngineAdapter(
         """
         Returns all the data objects that exist in the given schema and catalog.
         """
-        catalog_name = f"[{catalog_name}]" if catalog_name else "master"
+        catalog_name = f"[{catalog_name}]" if catalog_name else self.DEFAULT_CATALOG_NAME
         query = f"""
             SELECT
                 '{catalog_name}' AS catalog_name,
