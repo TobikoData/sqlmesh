@@ -56,7 +56,13 @@ class MSSQLEngineAdapter(
 
         catalog_name = table.catalog or self.DEFAULT_CATALOG_NAME
         sql = (
-            exp.select("column_name", "data_type", "character_maximum_length")
+            exp.select(
+                "column_name",
+                "data_type",
+                "character_maximum_length",
+                "numeric_precision",
+                "numeric_scale",
+            )
             .from_(f"{catalog_name}.information_schema.columns")
             .where(f"table_name = '{table.name}'")
         )

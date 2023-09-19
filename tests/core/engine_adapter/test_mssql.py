@@ -13,6 +13,60 @@ from sqlmesh.utils.date import to_ds
 from tests.core.engine_adapter import to_sql_calls
 
 
+def test_columns(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
+    adapter.cursor.fetchall.return_value = [
+        ("decimal_ps", "decimal", None, 5, 4),
+        ("decimal", "decimal", None, 18, 0),
+        ("numeric_ps", "numeric", None, 5, 4),
+        ("numeric", "numeric", None, 18, 0),
+        ("float_n", "real", None, 24, None),
+        ("float", "float", None, 53, None),
+        ("binary_n", "binary", 10, None, None),
+        ("binary", "binary", 1, None, None),
+        ("var_binary_n", "varbinary", 10, None, None),
+        ("var_binary_max", "varbinary", -1, None, None),
+        ("var_binary", "varbinary", 1, None, None),
+        ("char_n", "char", 10, None, None),
+        ("char", "char", 1, None, None),
+        ("varchar_n", "varchar", 10, None, None),
+        ("varchar_max", "varchar", -1, None, None),
+        ("varchar", "varchar", 1, None, None),
+        ("nchar_n", "nchar", 10, None, None),
+        ("nchar", "nchar", 1, None, None),
+        ("nvarchar_n", "nvarchar", 10, None, None),
+        ("nvarchar", "nvarchar", 1, None, None),
+    ]
+
+    assert adapter.columns("db.table") == {
+        "decimal_ps": exp.DataType.build("decimal(5, 4)", dialect=adapter.dialect),
+        "decimal": exp.DataType.build("decimal(18, 0)", dialect=adapter.dialect),
+        "numeric_ps": exp.DataType.build("numeric(5, 4)", dialect=adapter.dialect),
+        "numeric": exp.DataType.build("numeric(18, 0)", dialect=adapter.dialect),
+        "float_n": exp.DataType.build("real", dialect=adapter.dialect),
+        "float": exp.DataType.build("float(53)", dialect=adapter.dialect),
+        "binary_n": exp.DataType.build("binary(10)", dialect=adapter.dialect),
+        "binary": exp.DataType.build("binary(1)", dialect=adapter.dialect),
+        "var_binary_n": exp.DataType.build("varbinary(10)", dialect=adapter.dialect),
+        "var_binary_max": exp.DataType.build("varbinary(max)", dialect=adapter.dialect),
+        "var_binary": exp.DataType.build("varbinary(1)", dialect=adapter.dialect),
+        "char_n": exp.DataType.build("char(10)", dialect=adapter.dialect),
+        "char": exp.DataType.build("char(1)", dialect=adapter.dialect),
+        "varchar_n": exp.DataType.build("varchar(10)", dialect=adapter.dialect),
+        "varchar_max": exp.DataType.build("varchar(max)", dialect=adapter.dialect),
+        "varchar": exp.DataType.build("varchar(1)", dialect=adapter.dialect),
+        "nchar_n": exp.DataType.build("nchar(10)", dialect=adapter.dialect),
+        "nchar": exp.DataType.build("nchar(1)", dialect=adapter.dialect),
+        "nvarchar_n": exp.DataType.build("nvarchar(10)", dialect=adapter.dialect),
+        "nvarchar": exp.DataType.build("nvarchar(1)", dialect=adapter.dialect),
+    }
+
+    adapter.cursor.execute.assert_called_once_with(
+        """SELECT "column_name", "data_type", "character_maximum_length", "numeric_precision", "numeric_scale" FROM "master"."information_schema"."columns" WHERE "table_name" = 'table' AND "table_schema" = 'db';"""
+    )
+
+
 def test_table_exists(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.cursor.fetchone.return_value = (1,)
