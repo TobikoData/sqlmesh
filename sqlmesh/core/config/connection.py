@@ -115,7 +115,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         authenticator: The optional authenticator name. Defaults to username/password authentication ("snowflake").
                        Options: https://github.com/snowflakedb/snowflake-connector-python/blob/e937591356c067a77f34a0a42328907fda792c23/src/snowflake/connector/network.py#L178-L183
-        private_key: The optional private key to use for authentication.
+        private_key: The optional private key to use for authentication. This is in the form of bytes and can only be created with the Python config. https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-example#label-python-key-pair-authn-rotation
     """
 
     account: str
@@ -125,7 +125,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     database: t.Optional[str] = None
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
-    private_key: t.Optional[str] = None
+    private_key: t.Optional[bytes] = None
 
     concurrent_tasks: int = 4
 
