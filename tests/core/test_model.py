@@ -2077,3 +2077,32 @@ def test_seed_model_data_hash():
     )
 
     assert seed_model.data_hash != new_seed_model.data_hash
+
+
+def test_interval_unit_validation():
+    assert (
+        create_sql_model(
+            "a",
+            d.parse_one("SELECT a, ds FROM table_a"),
+            interval_unit=IntervalUnit.HOUR,
+        ).interval_unit
+        == IntervalUnit.HOUR
+    )
+
+    assert (
+        create_sql_model(
+            "a",
+            d.parse_one("SELECT a, ds FROM table_a"),
+            interval_unit="HOUR",
+        ).interval_unit
+        == IntervalUnit.HOUR
+    )
+
+    assert (
+        create_sql_model(
+            "a",
+            d.parse_one("SELECT a, ds FROM table_a"),
+            interval_unit=None,
+        ).interval_unit_
+        is None
+    )
