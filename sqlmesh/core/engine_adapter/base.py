@@ -760,7 +760,7 @@ class EngineAdapter:
             query = self._escape_json(query)
         if order_projections and query.named_selects != list(columns_to_types):
             if isinstance(query, exp.Subqueryable):
-                query = query.subquery()
+                query = query.subquery(alias="_ordered_projections")
             query = exp.select(*columns_to_types).from_(query)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
