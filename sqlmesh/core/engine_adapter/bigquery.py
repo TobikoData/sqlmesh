@@ -337,7 +337,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             )
 
         partition_exp = partitioned_by[0]
-        partition_sql = partition_exp.sql(dialect=self.dialect)
         partition_column = partition_exp.find(exp.Column)
 
         granularity = partition_exp.args.get("unit")
@@ -345,17 +344,19 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             granularity = granularity.name.lower()
 
         if not partition_column:
+            partition_sql = partition_exp.sql(dialect=self.dialect)
             raise SQLMeshError(
                 f"The partition expression '{partition_sql}' doesn't contain a column."
             )
-        with self.session(), self.temp_table(query_or_df, name=table_name) as temp_table_name:
+        with self.session(), self.temp_table(
+            query_or_df, name=table_name, partitioned_by=partitioned_by
+        ) as temp_table_name:
             if columns_to_types is None or columns_to_types[
                 partition_column.name
             ] == exp.DataType.build("unknown"):
                 columns_to_types = self.columns(temp_table_name)
 
             partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
-            temp_table_name_sql = temp_table_name.sql(dialect=self.dialect)
 
             select_array_agg_partitions = select_partitions_expr(
                 temp_table_name.db,
@@ -420,14 +421,16 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         properties: t.List[exp.Expression] = []
 
         if partitioned_by:
-            if partition_interval_unit is None:
-                raise SQLMeshError("partition_interval_unit is required when partitioning a table")
             if len(partitioned_by) > 1:
                 raise SQLMeshError("BigQuery only supports partitioning by a single column")
 
             this = partitioned_by[0]
 
-            if isinstance(this, exp.Column) and partition_interval_unit != IntervalUnit.MINUTE:
+            if (
+                isinstance(this, exp.Column)
+                and partition_interval_unit is not None
+                and partition_interval_unit != IntervalUnit.MINUTE
+            ):
                 column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
 
                 if column_type == exp.DataType.build(
