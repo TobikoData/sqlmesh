@@ -202,7 +202,9 @@ class _Node(PydanticModel):
         return str_or_exp_to_str(v)
 
     @field_validator("interval_unit_", mode="before")
-    def _interval_unit_validator(cls, v: t.Any) -> t.Optional[IntervalUnit]:
+    def _interval_unit_validator(cls, v: t.Any) -> t.Optional[t.Union[IntervalUnit, str]]:
+        if isinstance(v, IntervalUnit):
+            return v
         v = str_or_exp_to_str(v)
         if v:
             v = v.lower()
