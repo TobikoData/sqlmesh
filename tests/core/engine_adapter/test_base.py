@@ -274,7 +274,7 @@ def test_insert_append_query_select_star(make_mocked_engine_adapter: t.Callable)
     )
 
     assert to_sql_calls(adapter) == [
-        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl")',
+        'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM (SELECT 1 AS "a", * FROM "tbl") AS "_ordered_projections"',
     ]
 
 

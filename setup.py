@@ -60,6 +60,7 @@ setup(
         "dev": [
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.3.3')}",
             "autoflake==1.7.7",
+            "agate==1.6.3",
             "google-cloud-bigquery",
             "google-cloud-bigquery-storage",
             "black==22.6.0",

@@ -761,7 +761,7 @@ class EngineAdapter:
             query = self._escape_json(query)
         if order_projections and query.named_selects != list(columns_to_types):
             if isinstance(query, exp.Subqueryable):
-                query = query.subquery()
+                query = query.subquery(alias="_ordered_projections")
             query = exp.select(*columns_to_types).from_(query)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
@@ -1278,6 +1278,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         name: TableName = "diff",
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
     ) -> t.Iterator[exp.Table]:
         """A context manager for working a temp table.
 
@@ -1299,7 +1300,7 @@ class EngineAdapter:
             if table.db:
                 self.create_schema(table.db)
             self._create_table_from_source_queries(
-                table, source_queries, columns_to_types, exists=True
+                table, source_queries, columns_to_types, exists=True, **kwargs
             )
 
             try:
