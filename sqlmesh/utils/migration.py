@@ -1,14 +1,22 @@
 from sqlglot.dialects.dialect import DialectType
 
-# This limit accommodates a composite key which consists of two text fields
-# with 4 bytes per characters and a 3070 bytes limit on the key size.
-MYSQL_MAX_TEXT_INDEX_LENGTH = 380
+# Sizes based on a composite key/index of two text fields with 4 bytes per characters.
+MAX_TEXT_INDEX_LENGTH = {
+    "mysql": "380",  # 380 characters per column, <= 3070 byte index size limit
+    "tsql": "450",  # 450 bytes per column, <= 900 byte index size limit
+}
 
 
 def index_text_type(dialect: DialectType) -> str:
     """
-    MySQL cannot create indexes or primary keys on TEXT fields; it requires that
-    the fields have a VARCHAR type of fixed length. This helper simply abstracts
-    away the type of such fields.
+    MySQL and MSSQL cannot create indexes or primary keys on TEXT fields; they
+    require that the fields have a VARCHAR type of fixed length.
+
+    This helper abstracts away the type of such fields.
     """
-    return f"VARCHAR({MYSQL_MAX_TEXT_INDEX_LENGTH})" if dialect == "mysql" else "TEXT"
+
+    return (
+        f"VARCHAR({MAX_TEXT_INDEX_LENGTH[str(dialect)]})"
+        if dialect in MAX_TEXT_INDEX_LENGTH
+        else "TEXT"
+    )

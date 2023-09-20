@@ -188,6 +188,7 @@ def config() -> Config:
         pytest.param("databricks", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("redshift", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("snowflake", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        pytest.param("mssql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:
@@ -357,7 +358,12 @@ def test_insert_append(ctx: TestContext):
 
 
 def test_insert_overwrite_by_time_partition(ctx: TestContext):
-    ds_type = "timestamp" if ctx.dialect == "bigquery" else "string"
+    ds_type = "string"
+    if ctx.dialect == "bigquery":
+        ds_type = "timestamp"
+    if ctx.dialect == "tsql":
+        ds_type = "varchar(max)"
+
     ctx.columns_to_types = {"id": "int", "ds": ds_type}
     ctx.init()
     table = ctx.table("test_table")
@@ -485,9 +491,13 @@ def test_merge(ctx: TestContext):
 
 
 def test_scd_type_2(ctx: TestContext):
+    if ctx.dialect == "tsql":
+        pytest.skip(f"MSSQL scd type 2 functionality waiting on sqlglot cte in FROM fix")
+
+    name_type = "varchar(max)" if ctx.dialect == "tsql" else "string"
     ctx.columns_to_types = {
         "id": "int",
-        "name": "string",
+        "name": name_type,
         "updated_at": "timestamp",
         "valid_from": "timestamp",
         "valid_to": "timestamp",
