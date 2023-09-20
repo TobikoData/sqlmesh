@@ -6,7 +6,9 @@ from __future__ import annotations
 import typing as t
 
 import pandas as pd
+from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport, SourceQuery
 from sqlmesh.core.engine_adapter.mixins import (
@@ -39,27 +41,72 @@ class MSSQLEngineAdapter(
     """
 
     DIALECT: str = "tsql"
-    FALSE_PREDICATE = exp.condition("1=2")
+    DEFAULT_CATALOG_NAME = "master"
+    SUPPORTS_TUPLE_IN = False
     SUPPORTS_MATERIALIZED_VIEWS = True
 
-    def table_exists(self, table_name: TableName) -> bool:
-        """
-        Similar to Postgres, MsSql doesn't support describe so I'm using what
-        is used there and what the redshift cursor does to check if a table
-        exists. We don't use this directly in order for this to work as a base
-        class for other postgres.
+    def columns(
+        self,
+        table_name: TableName,
+        include_pseudo_columns: bool = True,
+    ) -> t.Dict[str, exp.DataType]:
+        """MsSql doesn't support describe so we query information_schema."""
 
-        Reference: https://github.com/aws/amazon-redshift-python-driver/blob/master/redshift_connector/cursor.py#L528-L553
-        """
         table = exp.to_table(table_name)
 
-        catalog_name = table.args.get("catalog") or "master"
+        catalog_name = table.catalog or self.DEFAULT_CATALOG_NAME
+        sql = (
+            exp.select(
+                "column_name",
+                "data_type",
+                "character_maximum_length",
+                "numeric_precision",
+                "numeric_scale",
+            )
+            .from_(f"{catalog_name}.information_schema.columns")
+            .where(f"table_name = '{table.name}'")
+        )
+        database_name = table.db
+        if database_name:
+            sql = sql.where(f"table_schema = '{database_name}'")
+
+        self.execute(sql)
+        columns_raw = self.cursor.fetchall()
+
+        def build_var_length_col(row: tuple) -> tuple:
+            var_len_chars = ("binary", "varbinary", "char", "varchar", "nchar", "nvarchar")
+            if row[1] in var_len_chars and row[2] > 0:
+                return (row[0], f"{row[1]}({row[2]})")
+            if row[1] in ("varbinary", "varchar") and row[2] == -1:
+                return (row[0], f"{row[1]}(max)")
+            if row[1] in (
+                "decimal",
+                "numeric",
+            ):
+                return (row[0], f"{row[1]}({row[3]}, {row[4]})")
+            if row[1] == "float":
+                return (row[0], f"{row[1]}({row[3]})")
+
+            return (row[0], row[1])
+
+        columns = [build_var_length_col(col) for col in columns_raw]
+
+        return {
+            column_name: exp.DataType.build(data_type, dialect=self.dialect)
+            for column_name, data_type in columns
+        }
+
+    def table_exists(self, table_name: TableName) -> bool:
+        """MsSql doesn't support describe so we query information_schema."""
+        table = exp.to_table(table_name)
+
+        catalog_name = table.catalog or self.DEFAULT_CATALOG_NAME
         sql = (
             exp.select("1")
             .from_(f"{catalog_name}.information_schema.tables")
             .where(f"table_name = '{table.alias_or_name}'")
         )
-        database_name = table.args.get("db")
+        database_name = table.db
         if database_name:
             sql = sql.where(f"table_schema = '{database_name}'")
 
@@ -84,7 +131,9 @@ class MSSQLEngineAdapter(
             # with a `drop_table` call.
             objects = self._get_data_objects(schema_name)
             for obj in objects:
-                self.drop_table(obj.name, exists=ignore_if_not_exists)
+                self.drop_table(
+                    ".".join([obj.catalog, obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
+                )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
     def _df_to_source_queries(
@@ -98,6 +147,14 @@ class MSSQLEngineAdapter(
         temp_table = self._get_temp_table(target_table or "pandas")
 
         def query_factory() -> Query:
+            # pymssql doesn't convert Pandas Timestamp (datetime64) types
+            # - this code is based on snowflake adapter implementation
+            for column, kind in (columns_to_types or {}).items():
+                if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):  # type: ignore
+                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
+                elif is_datetime64_dtype(df.dtypes[column]):  # type: ignore
+                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
+
             self.create_table(temp_table, columns_to_types)
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
@@ -119,22 +176,14 @@ class MSSQLEngineAdapter(
         """
         Returns all the data objects that exist in the given schema and catalog.
         """
-        catalog_name = f"[{catalog_name}]" if catalog_name else "master"
+        catalog_name = f"[{catalog_name}]" if catalog_name else self.DEFAULT_CATALOG_NAME
         query = f"""
             SELECT
                 '{catalog_name}' AS catalog_name,
                 TABLE_NAME AS name,
                 TABLE_SCHEMA AS schema_name,
-                'TABLE' AS type
+                CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
             FROM {catalog_name}.INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA LIKE '%{schema_name}%'
-            UNION ALL
-            SELECT
-                '{catalog_name}' AS catalog_name,
-                TABLE_NAME AS name,
-                TABLE_SCHEMA AS schema_name,
-                'VIEW' AS type
-            FROM {catalog_name}.INFORMATION_SCHEMA.VIEWS
             WHERE TABLE_SCHEMA LIKE '%{schema_name}%'
         """
         dataframe: pd.DataFrame = self.fetchdf(query)
@@ -147,3 +196,11 @@ class MSSQLEngineAdapter(
             )
             for row in dataframe.itertuples()
         ]
+
+    def _truncate_table(self, table_name: TableName) -> str:
+        table = quote_identifiers(exp.to_table(table_name))
+        return f"TRUNCATE TABLE {table.sql(dialect=self.dialect)}"
+
+    def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
+        sql = super()._to_sql(expression, quote=quote, **kwargs)
+        return f"{sql};"
