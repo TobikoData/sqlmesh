@@ -44,8 +44,10 @@ def execute(
         }
     )
     df = df_new.merge(df_existing, on="customer_id", how="left", suffixes=(None, "_old"))
-    df["updated_at"] = np.where(  # type: ignore
-        df["status_old"] != df["status"], execution_time, df["updated_at_old"]
+    df["updated_at"] = pd.to_datetime(
+        np.where(  # type: ignore
+            df["status_old"] != df["status"], execution_time, df["updated_at_old"]
+        )
     )
     df = df.drop(columns=["status_old", "updated_at_old"])
     return df
