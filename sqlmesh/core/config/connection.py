@@ -720,7 +720,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
     autocommit: t.Optional[bool] = False
     tds_version: t.Optional[str] = None
 
-    concurrent_tasks: int = 1
+    concurrent_tasks: int = 4
 
     type_: Literal["mssql"] = Field(alias="type", default="mssql")
 
