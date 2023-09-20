@@ -181,7 +181,7 @@ class CommonStateSyncMixin(StateSync):
         current_time = now()
 
         snapshots_by_version = defaultdict(list)
-        for s in self._get_snapshots().values():
+        for s in self._get_snapshots(hydrate_intervals=False).values():
             snapshots_by_version[(s.name, s.version)].append(s)
 
         promoted_snapshot_ids = {
@@ -305,6 +305,7 @@ class CommonStateSyncMixin(StateSync):
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
         hydrate_seeds: bool = False,
+        hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots.
 
@@ -312,6 +313,7 @@ class CommonStateSyncMixin(StateSync):
             snapshot_ids: The collection of IDs of snapshots to fetch
             lock_for_update: Lock the snapshot rows for future update
             hydrate_seeds: Whether to hydrate seed snapshots with the content.
+            hydrate_intervals: Whether to hydrate result snapshots with intervals.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
