@@ -605,6 +605,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         strict: bool = True,
+        allow_partial: bool = False,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
@@ -612,6 +613,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
+            allow_partial: Whether to allow partial intervals.
+
         Returns:
             A [start, end) pair.
         """
@@ -620,7 +623,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         if is_date(end):
             end = to_datetime(end) + timedelta(days=1)
-        end_ts = to_timestamp(interval_unit.cron_floor(end))
+        end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
             raise ValueError(
@@ -656,6 +659,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         execution_time: t.Optional[TimeLike] = None,
         is_dev: bool = False,
         ignore_cron: bool = False,
+        allow_partial: bool = False,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -670,6 +674,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             restatements: A set of snapshot names being restated
             is_dev: Indicates whether missing intervals are computed for the development environment.
             ignore_cron: Whether to ignore the node's cron schedule.
+            allow_partial: Whether to allow partial intervals.
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -691,15 +696,20 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 start,
                 end,
                 strict=False,
+                allow_partial=allow_partial,
             )
         )
 
         interval_unit = self.node.interval_unit
 
-        upper_bound_ts = to_timestamp(
-            self.node.cron_floor(execution_time) if not ignore_cron else execution_time
-        )
-        end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
+        if allow_partial:
+            upper_bound_ts = to_timestamp(execution_time)
+            end_ts = min(end_ts, upper_bound_ts)
+        else:
+            upper_bound_ts = to_timestamp(
+                self.node.cron_floor(execution_time) if not ignore_cron else execution_time
+            )
+            end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
 
         croniter = interval_unit.croniter(start_ts)
         dates = [start_ts]
@@ -732,7 +742,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             next_ts = (
                 dates[i + 1]
                 if i + 1 < len(dates)
-                else to_timestamp(interval_unit.cron_next(current_ts))
+                else min(to_timestamp(interval_unit.cron_next(current_ts)), upper_bound_ts)
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
@@ -1178,6 +1188,7 @@ def missing_intervals(
     restatements: t.Optional[t.Dict[str, Interval]] = None,
     is_dev: bool = False,
     ignore_cron: bool = False,
+    allow_partial: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
@@ -1205,6 +1216,7 @@ def missing_intervals(
             execution_time=execution_time,
             is_dev=is_dev,
             ignore_cron=ignore_cron,
+            allow_partial=allow_partial,
         )
         if intervals:
             missing[snapshot] = intervals

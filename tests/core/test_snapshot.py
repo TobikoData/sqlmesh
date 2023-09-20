@@ -226,6 +226,21 @@ def test_missing_intervals(snapshot: Snapshot):
     ]
 
 
+def test_missing_intervals_partial(snapshot: Snapshot):
+    start = "2023-01-01"
+    end_ts = to_timestamp(start) + 1000
+    assert snapshot.missing_intervals(start, end_ts) == []
+    assert snapshot.missing_intervals(start, end_ts, allow_partial=True) == [
+        (to_timestamp(start), to_timestamp("2023-01-02")),
+    ]
+    assert snapshot.missing_intervals(start, end_ts, execution_time=end_ts, allow_partial=True) == [
+        (to_timestamp(start), end_ts),
+    ]
+    assert snapshot.missing_intervals(start, start, allow_partial=True) == [
+        (to_timestamp(start), to_timestamp("2023-01-02")),
+    ]
+
+
 def test_incremental_time_self_reference(make_snapshot):
     snapshot = make_snapshot(
         SqlModel(
@@ -300,7 +315,17 @@ def test_lookback(snapshot: Snapshot, make_snapshot):
     assert snapshot.missing_intervals("2023-01-28", "2023-01-28", "2023-01-30 05:00:00") == [
         (to_timestamp("2023-01-28"), to_timestamp("2023-01-29")),
     ]
+    assert snapshot.missing_intervals(
+        "2023-01-28", "2023-01-28", "2023-01-30 05:00:00", allow_partial=True
+    ) == [
+        (to_timestamp("2023-01-28"), to_timestamp("2023-01-29")),
+    ]
     assert snapshot.missing_intervals("2023-01-29", "2023-01-29", "2023-01-30 05:00:00") == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+    assert snapshot.missing_intervals(
+        "2023-01-29", "2023-01-29", "2023-01-30 05:00:00", allow_partial=True
+    ) == [
         (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
     ]
     assert snapshot.missing_intervals("2023-01-27", "2023-01-29", "2023-01-30 05:00:00") == [
@@ -1113,6 +1138,21 @@ def test_model_custom_cron(make_snapshot):
         to_timestamp("2023-01-30"),
         execution_time="2023-01-30 04:59:00",
         ignore_cron=True,
+    ) == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+
+    # Run at 4:59AM and allow partial
+    assert snapshot.missing_intervals(
+        "2023-01-29", "2023-01-29", execution_time="2023-01-30 04:59:00", allow_partial=True
+    ) == [
+        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
+    ]
+    assert snapshot.missing_intervals(
+        to_timestamp("2023-01-29"),
+        to_timestamp("2023-01-30"),
+        execution_time="2023-01-30 04:59:00",
+        allow_partial=True,
     ) == [
         (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
     ]

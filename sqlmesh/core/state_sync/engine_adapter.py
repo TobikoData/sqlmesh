@@ -484,13 +484,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         end: TimeLike,
         is_dev: bool = False,
     ) -> None:
-        logger.info("Adding interval for snapshot %s", snapshot.snapshot_id)
+        start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False)
+        if start_ts >= end_ts:
+            logger.info(
+                "Skipping partial interval (%s, %s) for snapshot %s",
+                start,
+                end,
+                snapshot.snapshot_id,
+            )
+            return
+
+        logger.info(
+            "Adding interval (%s, %s) for snapshot %s", start_ts, end_ts, snapshot.snapshot_id
+        )
 
         is_dev = snapshot.is_temporary_table(is_dev)
-
         self.engine_adapter.insert_append(
             self.intervals_table,
-            _intervals_to_df([(snapshot, snapshot.inclusive_exclusive(start, end))], is_dev, False),
+            _intervals_to_df([(snapshot, (start_ts, end_ts))], is_dev, False),
             columns_to_types=self._interval_columns_to_types,
         )
 

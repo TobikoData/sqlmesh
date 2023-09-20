@@ -301,6 +301,11 @@ def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.An
     is_flag=True,
     help="Run for all missing intervals, ignoring individual cron schedules.",
 )
+@click.option(
+    "--allow-partial",
+    is_flag=True,
+    help="Include partial intervals in the run.",
+)
 @click.pass_context
 @error_handler
 def run(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:

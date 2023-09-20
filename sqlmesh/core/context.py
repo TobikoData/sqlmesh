@@ -411,6 +411,7 @@ class Context(BaseContext):
         execution_time: t.Optional[TimeLike] = None,
         skip_janitor: bool = False,
         ignore_cron: bool = False,
+        allow_partial: bool = False,
     ) -> bool:
         """Run the entire dag through the scheduler.
 
@@ -421,6 +422,7 @@ class Context(BaseContext):
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             skip_janitor: Whether to skip the janitor task.
             ignore_cron: Whether to ignore the model's cron schedule and run all available missing intervals.
+            allow_partial: Whether to allow partial intervals.
 
         Returns:
             True if the run was successful, False otherwise.
@@ -436,6 +438,7 @@ class Context(BaseContext):
                 end=end,
                 execution_time=execution_time,
                 ignore_cron=ignore_cron,
+                allow_partial=allow_partial,
             )
         except Exception as e:
             self.notification_target_manager.notify(
