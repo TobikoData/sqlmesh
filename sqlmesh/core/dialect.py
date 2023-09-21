@@ -205,19 +205,21 @@ def _parse_body_macro(self: Parser) -> t.Tuple[str, t.Optional[exp.Expression]]:
 def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "WITH")
     if not macro:
-        return self.__parse_with()  # type: ignore
+        return self.__parse_with(skip_with_token=skip_with_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_with(skip_with_token=True))  # type: ignore
     return macro
 
 
-def _parse_join(self: Parser, skip_join_token: bool = False) -> t.Optional[exp.Expression]:
+def _parse_join(
+    self, skip_join_token: bool = False, parse_bracket: bool = False
+) -> t.Optional[exp.Join]:
     index = self._index
     method, side, kind = self._parse_join_parts()
     macro = _parse_matching_macro(self, "JOIN")
     if not macro:
         self._retreat(index)
-        return self.__parse_join()  # type: ignore
+        return self.__parse_join(skip_join_token=skip_join_token, parse_bracket=parse_bracket)  # type: ignore
 
     join = self.__parse_join(skip_join_token=True)  # type: ignore
     if method:
@@ -234,7 +236,7 @@ def _parse_join(self: Parser, skip_join_token: bool = False) -> t.Optional[exp.E
 def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "WHERE")
     if not macro:
-        return self.__parse_where()  # type: ignore
+        return self.__parse_where(skip_where_token=skip_where_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_where(skip_where_token=True))  # type: ignore
     return macro
@@ -243,7 +245,7 @@ def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp
 def _parse_group(self: Parser, skip_group_by_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "GROUP_BY")
     if not macro:
-        return self.__parse_group()  # type: ignore
+        return self.__parse_group(skip_group_by_token=skip_group_by_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_group(skip_group_by_token=True))  # type: ignore
     return macro
@@ -252,7 +254,7 @@ def _parse_group(self: Parser, skip_group_by_token: bool = False) -> t.Optional[
 def _parse_having(self: Parser, skip_having_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "HAVING")
     if not macro:
-        return self.__parse_having()  # type: ignore
+        return self.__parse_having(skip_having_token=skip_having_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_having(skip_having_token=True))  # type: ignore
     return macro
@@ -263,7 +265,7 @@ def _parse_order(
 ) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "ORDER_BY")
     if not macro:
-        return self.__parse_order(this)  # type: ignore
+        return self.__parse_order(this, skip_order_token=skip_order_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_order(this, skip_order_token=True))  # type: ignore
     return macro
