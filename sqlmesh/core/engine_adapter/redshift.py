@@ -11,6 +11,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
 )
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
@@ -23,6 +24,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin,
     ESCAPE_JSON = True
     COLUMNS_TABLE = "SVV_COLUMNS"  # Includes late-binding views
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
+    SUPPORTS_MATERIALIZED_VIEWS = False
 
     @property
     def cursor(self) -> t.Any:
@@ -99,6 +101,49 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin,
             self.rename_table(target_table, old_table)
             self.rename_table(temp_table, target_table)
             self.drop_table(old_table)
+
+    def _get_data_objects(
+        self, schema_name: str, catalog_name: t.Optional[str] = None
+    ) -> t.List[DataObject]:
+        """
+        Returns all the data objects that exist in the given schema and optionally catalog.
+        """
+        catalog_name = f"'{catalog_name}'" if catalog_name else "NULL"
+        query = f"""
+            SELECT
+                {catalog_name} AS catalog_name,
+                tablename AS name,
+                schemaname AS schema_name,
+                'TABLE' AS type
+            FROM pg_tables
+            WHERE schemaname ILIKE '{schema_name}'
+            UNION ALL
+            SELECT
+                {catalog_name} AS catalog_name,
+                viewname AS name,
+                schemaname AS schema_name,
+                'VIEW' AS type
+            FROM pg_views
+            WHERE schemaname ILIKE '{schema_name}'
+            AND definition not ilike '%create materialized view%'
+            UNION ALL
+            SELECT
+                {catalog_name} AS catalog_name,
+                viewname AS name,
+                schemaname AS schema_name,
+                'MATERIALIZED_VIEW' AS type
+            FROM
+                pg_views
+            WHERE schemaname ILIKE '{schema_name}'
+            AND definition ilike '%create materialized view%'
+        """
+        df = self.fetchdf(query)
+        return [
+            DataObject(
+                catalog=row.catalog_name, schema=row.schema_name, name=row.name, type=DataObjectType.from_str(row.type)  # type: ignore
+            )
+            for row in df.itertuples()
+        ]
 
     def _short_hash(self) -> str:
         return uuid.uuid4().hex[:8]

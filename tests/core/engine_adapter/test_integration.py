@@ -147,19 +147,23 @@ class TestContext:
 class MetadataResults(PydanticModel):
     tables: t.List[str] = []
     views: t.List[str] = []
+    materialized_views: t.List[str] = []
 
     @classmethod
     def from_data_objects(cls, data_objects: t.List[DataObject]) -> MetadataResults:
         tables = []
         views = []
+        materialized_views = []
         for obj in data_objects:
             if obj.type.is_table:
                 tables.append(obj.name)
             elif obj.type.is_view:
                 views.append(obj.name)
+            elif obj.type.is_materialized_view:
+                materialized_views.append(obj.name)
             else:
                 raise ValueError(f"Unexpected object type: {obj.type}")
-        return MetadataResults(tables=tables, views=views)
+        return MetadataResults(tables=tables, views=views, materialized_views=materialized_views)
 
     @property
     def non_temp_tables(self) -> t.List[str]:
@@ -228,6 +232,7 @@ def test_temp_table(ctx: TestContext):
         assert len(results.views) == 0
         assert len(results.tables) == 1
         assert len(results.non_temp_tables) == 0
+        assert len(results.materialized_views) == 0
         ctx.compare_with_current(table_name, input_data)
     results = ctx.get_metadata_results()
     assert len(results.views) == len(results.tables) == len(results.non_temp_tables) == 0
@@ -246,6 +251,7 @@ def test_ctas(ctx: TestContext):
     ctx.engine_adapter.ctas(table, ctx.input_data(input_data))
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(table, input_data)
@@ -265,8 +271,48 @@ def test_create_view(ctx: TestContext):
     results = ctx.get_metadata_results()
     assert len(results.tables) == 0
     assert len(results.views) == 1
+    assert len(results.materialized_views) == 0
     assert results.views[0] == view.name
     ctx.compare_with_current(view, input_data)
+
+
+def test_materialized_view(ctx: TestContext):
+    if not ctx.engine_adapter.SUPPORTS_MATERIALIZED_VIEWS:
+        pytest.skip(f"Engine adapter {ctx.engine_adapter} doesn't support materialized views")
+    if ctx.engine_adapter.dialect == "databricks":
+        pytest.skip(
+            "Databricks requires DBSQL Serverless or Pro warehouse to test materialized views which we do not have setup"
+        )
+    if ctx.engine_adapter.dialect == "snowflake":
+        pytest.skip("Snowflake requires enterprise edition which we do not have setup")
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.init()
+    source_table = ctx.table("source_table")
+    ctx.engine_adapter.ctas(source_table, ctx.input_data(input_data), ctx.columns_to_types)
+    view = ctx.table("test_view")
+    view_query = exp.select(*ctx.columns_to_types).from_(source_table)
+    ctx.engine_adapter.create_view(view, view_query, materialized=True)
+    results = ctx.get_metadata_results()
+    # Redshift considers the underlying dataset supporting materialized views as a table therefore we get 2
+    # tables in the result
+    if ctx.engine_adapter.dialect == "redshift":
+        assert len(results.tables) == 2
+    else:
+        assert len(results.tables) == 1
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 1
+    assert results.materialized_views[0] == view.name
+    ctx.compare_with_current(view, input_data)
+    # Make sure that dropping a materialized view also works
+    ctx.engine_adapter.drop_view(view, materialized=True)
+    results = ctx.get_metadata_results()
+    assert len(results.materialized_views) == 0
 
 
 def test_replace_query(ctx: TestContext):
@@ -293,6 +339,7 @@ def test_replace_query(ctx: TestContext):
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(table, input_data)
@@ -315,6 +362,7 @@ def test_replace_query(ctx: TestContext):
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
         assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
         ctx.compare_with_current(table, replace_data)
@@ -335,6 +383,7 @@ def test_insert_append(ctx: TestContext):
     ctx.engine_adapter.insert_append(table, ctx.input_data(input_data))
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(table, input_data)
@@ -351,6 +400,7 @@ def test_insert_append(ctx: TestContext):
         ctx.engine_adapter.insert_append(table, ctx.input_data(append_data))
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
         assert len(results.tables) in [1, 2, 3]
         assert len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
@@ -395,6 +445,7 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
@@ -419,6 +470,7 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
         assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
         ctx.compare_with_current(
@@ -453,6 +505,7 @@ def test_merge(ctx: TestContext):
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
@@ -474,6 +527,7 @@ def test_merge(ctx: TestContext):
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
+        assert len(results.materialized_views) == 0
         assert len(results.tables) == len(results.non_temp_tables) == 1
         assert results.non_temp_tables[0] == table.name
         ctx.compare_with_current(
@@ -527,6 +581,7 @@ def test_scd_type_2(ctx: TestContext):
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
@@ -585,6 +640,7 @@ def test_scd_type_2(ctx: TestContext):
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
     assert len(results.tables) == len(results.non_temp_tables) == 1
     assert results.non_temp_tables[0] == table.name
     ctx.compare_with_current(

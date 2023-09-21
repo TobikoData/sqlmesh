@@ -121,6 +121,15 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
                 'VIEW' AS type
             FROM pg_views
             WHERE schemaname ILIKE '{schema_name}'
+            UNION ALL
+            SELECT
+                {catalog_name} AS catalog_name,
+                matviewname AS name,
+                schemaname AS schema_name,
+                'MATERIALIZED_VIEW' AS type
+            FROM
+                pg_matviews
+            WHERE schemaname ILIKE '{schema_name}'
         """
         df = self.fetchdf(query)
         return [
