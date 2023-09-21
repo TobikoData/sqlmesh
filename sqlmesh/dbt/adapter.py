@@ -220,7 +220,10 @@ class RuntimeAdapter(BaseAdapter):
                 schema=do.schema_name,
                 identifier=do.name,
                 quote_policy=self.quote_policy,
-                type=RelationType.External if do.type.is_unknown else RelationType(do.type.lower()),
+                # DBT relation types aren't snake case and instead just one word without spaces so we remove underscores
+                type=RelationType.External
+                if do.type.is_unknown
+                else RelationType(do.type.lower().replace("_", "")),
             )
             for do in data_objects
         ]

@@ -237,10 +237,10 @@ MODEL (
 
 **Note:** This flag only applies to engines that support materialized views and is ignored by other engines. Supported engines include:
 
-* Snowflake
 * BigQuery
-* Redshift
+* Databricks
 * Postgres
+* Snowflake
 
 During the evaluation of a model of this kind, the view will be replaced or recreated only if the model's query rendered during evaluation does not match the query used during the previous view creation for this model, or if the target view does not exist. Thus, views are recreated only when necessary in order to realize all the benefits provided by materialized views.
 
