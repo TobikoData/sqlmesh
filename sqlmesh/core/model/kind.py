@@ -328,6 +328,12 @@ class SCDType2Kind(_ModelKind):
     disable_restatement: bool = True
 
     _unique_key_validator = unique_key_validator
+    _bool_validator = bool_validator
+
+    @field_validator("valid_from_name", "valid_to_name", "updated_at_name", mode="before")
+    @classmethod
+    def _string_validator(cls, v: t.Any) -> str:
+        return v.name if isinstance(v, exp.Expression) else str(v)
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
