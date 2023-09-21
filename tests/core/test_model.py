@@ -2106,3 +2106,74 @@ def test_interval_unit_validation():
         ).interval_unit_
         is None
     )
+
+
+def test_scd_type_2_defaults():
+    view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2 (
+                unique_key id,
+            ),
+        );
+        SELECT 
+            1 as id,
+            '2020-01-01' as ds,
+            '2020-01-01' as test_updated_at,
+            '2020-01-01' as test_valid_from,
+            '2020-01-01' as test_valid_to
+        ;
+        """
+    )
+    scd_type_2_model = load_sql_based_model(view_model_expressions)
+    assert scd_type_2_model.unique_key == ["id"]
+    assert scd_type_2_model.managed_columns == {
+        "valid_from": exp.DataType.build("TIMESTAMP"),
+        "valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+    assert scd_type_2_model.kind.updated_at_name == "updated_at"
+    assert scd_type_2_model.kind.valid_from_name == "valid_from"
+    assert scd_type_2_model.kind.valid_to_name == "valid_to"
+    assert scd_type_2_model.kind.is_scd_type_2
+    assert scd_type_2_model.kind.is_materialized
+    assert scd_type_2_model.kind.forward_only
+    assert scd_type_2_model.kind.disable_restatement
+
+
+def test_scd_type_2_overrides():
+    view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2 (
+                unique_key [id, ds],
+                updated_at_name test_updated_at,
+                valid_from_name test_valid_from,
+                valid_to_name test_valid_to,
+                forward_only False,
+                disable_restatement False,
+            ),
+        );
+        SELECT 
+            1 as id,
+            '2020-01-01' as ds,
+            '2020-01-01' as test_updated_at,
+            '2020-01-01' as test_valid_from,
+            '2020-01-01' as test_valid_to
+        ;
+        """
+    )
+    scd_type_2_model = load_sql_based_model(view_model_expressions)
+    assert scd_type_2_model.unique_key == ["id", "ds"]
+    assert scd_type_2_model.managed_columns == {
+        "test_valid_from": exp.DataType.build("TIMESTAMP"),
+        "test_valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+    assert scd_type_2_model.kind.updated_at_name == "test_updated_at"
+    assert scd_type_2_model.kind.valid_from_name == "test_valid_from"
+    assert scd_type_2_model.kind.valid_to_name == "test_valid_to"
+    assert scd_type_2_model.kind.is_scd_type_2
+    assert scd_type_2_model.kind.is_materialized
+    assert not scd_type_2_model.kind.forward_only
+    assert not scd_type_2_model.kind.disable_restatement
