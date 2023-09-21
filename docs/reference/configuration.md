@@ -92,14 +92,14 @@ Configuration for a data warehouse connection.
 
 Most parameters are specific to the connection engine `type` - see [below](#engine-connection-configuration). The default data warehouse connection type is an in-memory DuckDB database.
 
-#### Concurrent tasks
+#### General
 
 | Option             | Description                                                                                                                 | Type | Required |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
 | `type`             | The engine type name, listed in engine-specific configuration pages below.                                                  | str  |    Y     |
 | `concurrent_tasks` | The maximum number of concurrent tasks that will be run by SQLMesh. (Default: 4 for engines that support concurrent tasks.) | int  |    N     |
 
-#### Engine connection configuration
+#### Engine-specific
 
 These pages describe the connection configuration options for each execution engine.
 
