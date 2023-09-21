@@ -212,8 +212,8 @@ def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.E
 
 
 def _parse_join(
-    self, skip_join_token: bool = False, parse_bracket: bool = False
-) -> t.Optional[exp.Join]:
+    self: Parser, skip_join_token: bool = False, parse_bracket: bool = False
+) -> t.Optional[exp.Expression]:
     index = self._index
     method, side, kind = self._parse_join_parts()
     macro = _parse_matching_macro(self, "JOIN")
