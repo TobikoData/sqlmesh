@@ -10,15 +10,17 @@ pip install "sqlmesh[snowflake]"
 
 ### Connection options
 
-| Option          | Description                        |  Type  | Required |
-|-----------------|------------------------------------|:------:|:--------:|
-| `user`          | The Snowflake username             | string |    N     |
-| `password`      | The Snowflake password             | string |    N     |
-| `authenticator` | The Snowflake authenticator method | string |    N     |
-| `account`       | The Snowflake account name         | string |    Y     |
-| `warehouse`     | The Snowflake warehouse name       | string |    N     |
-| `database`      | The Snowflake database name        | string |    N     |
-| `role`          | The Snowflake role name            | string |    N     |
+| Option          | Description                            |  Type  | Required |
+|-----------------|----------------------------------------|:------:|:--------:|
+| `type`          | Engine type name - must be `snowflake` | string |    Y     |
+| `user`          | The Snowflake username                 | string |    N     |
+| `password`      | The Snowflake password                 | string |    N     |
+| `authenticator` | The Snowflake authenticator method     | string |    N     |
+| `account`       | The Snowflake account name             | string |    Y     |
+| `warehouse`     | The Snowflake warehouse name           | string |    N     |
+| `database`      | The Snowflake database name            | string |    N     |
+| `role`          | The Snowflake role name                | string |    N     |
+| `private_key`   | Local path to the private key file     | string |    N     |
 
 ### Snowflake SSO Authorization
 
@@ -29,13 +31,55 @@ gateways:
     snowflake:
         connection:
             type: snowflake
+            account: ************
             user: ************
             authenticator: externalbrowser
-            account: ************
             warehouse: ************
             database: ************
             role: ************
 ```
+
+### Snowflake Private Key Authorization
+
+SQLMesh supports Snowflake private key authorization connections by providing the private key bytes. Only config.py is supported when using private key authorization. `account` and `user` are required. For example:
+
+```python
+from sqlmesh.core.config import (
+    Config,
+    GatewayConfig,
+    ModelDefaultsConfig,
+    SnowflakeConnectionConfig,
+)
+
+from cryptography.hazmat.primitives import serialization
+
+key = """-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----""".encode()
+
+p_key= serialization.load_pem_private_key(key, password=None)
+
+pkb = p_key.private_bytes(
+    encoding=serialization.Encoding.DER,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption(),
+)
+
+config = Config(
+    model_defaults=ModelDefaultsConfig(dialect="snowflake"),
+    gateways={
+       "my_gateway": GatewayConfig(
+            connection=SnowflakeConnectionConfig(
+                user="user",
+                account="account",
+                private_key=pkb,
+            ),
+        ),
+    }
+)
+```
+
+The authenticator method is assumed to be `snowflake_jwt` when `private_key` is provided, but it can also be explicitly provided in the connection configuration.
 
 ## Airflow Scheduler
 **Engine Name:** `snowflake`

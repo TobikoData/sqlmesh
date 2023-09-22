@@ -100,7 +100,9 @@ class DbtLoader(Loader):
 
         return models
 
-    def _load_audits(self) -> UniqueKeyDict[str, Audit]:
+    def _load_audits(
+        self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
+    ) -> UniqueKeyDict[str, Audit]:
         audits: UniqueKeyDict = UniqueKeyDict("audits")
 
         project = self._load_project()

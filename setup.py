@@ -46,7 +46,7 @@ setup(
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=18.3.0",
+        "sqlglot~=18.5.0",
     ],
     extras_require={
         "bigquery": [
@@ -60,6 +60,7 @@ setup(
         "dev": [
             f"apache-airflow=={os.environ.get('AIRFLOW_VERSION', '2.3.3')}",
             "autoflake==1.7.7",
+            "agate==1.6.3",
             "google-cloud-bigquery",
             "google-cloud-bigquery-storage",
             "black==22.6.0",
@@ -75,6 +76,7 @@ setup(
             "pandas-stubs",
             "pdoc",
             "psycopg2-binary",
+            "pyarrow>=10.0.1,<10.1.0",
             "PyGithub",
             "pytest",
             "pytest-asyncio",
@@ -82,6 +84,7 @@ setup(
             "pytest-mock",
             "pyspark>=3.4.0",
             "pytz",
+            "snowflake-connector-python[pandas,secure-local-storage]",
             "sqlalchemy-stubs",
             "tenacity==8.1.0",
             "types-croniter",
@@ -109,6 +112,9 @@ setup(
         ],
         "mysql": [
             "mysql-connector-python",
+        ],
+        "mwaa": [
+            "boto3",
         ],
         "postgres": [
             "psycopg2",

@@ -36,7 +36,6 @@ from sqlmesh.core.snapshot import (
     Intervals,
     Node,
     Snapshot,
-    SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotFingerprint,
     SnapshotId,
@@ -250,16 +249,19 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         self.engine_adapter.delete_from(
-            self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids)
+            self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids, self.snapshots_table)
         )
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         return {
             SnapshotId(name=name, identifier=identifier)
             for name, identifier in self.engine_adapter.fetchall(
-                exp.select("name", "identifier")
+                exp.select(
+                    exp.to_column(f"{self.snapshots_table}.name"),
+                    exp.to_column(f"{self.snapshots_table}.identifier"),
+                )
                 .from_(self.snapshots_table)
-                .where(self._snapshot_id_filter(snapshot_ids)),
+                .where(self._snapshot_id_filter(snapshot_ids, self.snapshots_table)),
                 quote_identifiers=True,
             )
         }
@@ -307,7 +309,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.update_table(
             self.snapshots_table,
             {"snapshot": snapshot.json()},
-            where=self._snapshot_id_filter([snapshot.snapshot_id]),
+            where=self._snapshot_id_filter([snapshot.snapshot_id], self.snapshots_table),
             contains_json=True,
         )
 
@@ -346,6 +348,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]] = None,
         lock_for_update: bool = False,
         hydrate_seeds: bool = False,
+        hydrate_intervals: bool = True,
     ) -> t.Dict[SnapshotId, Snapshot]:
         """Fetches specified snapshots or all snapshots.
 
@@ -353,18 +356,32 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             snapshot_ids: The collection of snapshot like objects to fetch.
             lock_for_update: Lock the snapshot rows for future update
             hydrate_seeds: Whether to hydrate seed snapshots with the content.
+            hydrate_intervals: Whether to hydrate result snapshots with intervals.
 
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
         query = (
-            exp.select("snapshot")
+            exp.select(exp.to_column(f"{self.snapshots_table}.snapshot"))
             .from_(self.snapshots_table)
-            .where(None if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids))
+            .where(
+                self._snapshot_id_filter(snapshot_ids, self.snapshots_table)
+                if snapshot_ids
+                else None
+            )
         )
         if hydrate_seeds:
-            query = query.select("content").join(
-                self.seeds_table, using=["name", "identifier"], join_type="left outer"
+            query = query.select(exp.to_column(f"{self.seeds_table}.content")).join(
+                self.seeds_table,
+                on=exp.and_(
+                    *[
+                        exp.to_column(f"{self.snapshots_table}.{col}").eq(
+                            exp.to_column(f"{self.seeds_table}.{col}")
+                        )
+                        for col in ["name", "identifier"]
+                    ]
+                ),
+                join_type="left",
             )
         elif lock_for_update:
             query = query.lock(copy=False)
@@ -389,7 +406,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if hydrate_seeds and isinstance(snapshot.node, SeedModel) and row[1]:
                 snapshot.node = t.cast(SeedModel, snapshot.node).to_hydrated(row[1])
 
-        if snapshots:
+        if snapshots and hydrate_intervals:
             _, intervals = self._get_snapshot_intervals(snapshots.values())
             Snapshot.hydrate_with_intervals_by_version(snapshots.values(), intervals)
 
@@ -419,9 +436,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return []
 
         query = (
-            exp.select("snapshot")
+            exp.select(exp.to_column(f"{self.snapshots_table}.snapshot"))
             .from_(self.snapshots_table)
-            .where(self._snapshot_name_version_filter(snapshots))
+            .where(self._snapshot_name_version_filter(snapshots, self.snapshots_table))
         )
         if lock_for_update:
             query = query.lock(copy=False)
@@ -550,10 +567,22 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     ) -> t.Tuple[t.Set[str], t.List[SnapshotIntervals]]:
         query = (
             exp.select(
-                "id", "name", "identifier", "version", "start_ts", "end_ts", "is_dev", "is_removed"
+                "id",
+                exp.to_column(f"{self.intervals_table}.name"),
+                exp.to_column(f"{self.intervals_table}.identifier"),
+                "version",
+                "start_ts",
+                "end_ts",
+                "is_dev",
+                "is_removed",
             )
             .from_(self.intervals_table)
-            .order_by("name", "identifier", "created_ts", "is_removed")
+            .order_by(
+                exp.to_column(f"{self.intervals_table}.name"),
+                exp.to_column(f"{self.intervals_table}.identifier"),
+                "created_ts",
+                "is_removed",
+            )
         )
 
         if uncompacted_only:
@@ -563,12 +592,21 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 .where(exp.column("is_compacted").not_())
                 .distinct()
                 .subquery(alias="uncompacted"),
-                using=["name", "identifier"],
+                on=exp.and_(
+                    *[
+                        exp.to_column(f"{self.intervals_table}.{col}").eq(
+                            exp.column(col, table="uncompacted")
+                        )
+                        for col in ["name", "identifier"]
+                    ]
+                ),
                 copy=False,
             )
 
         if snapshots:
-            query.where(self._snapshot_name_version_filter(snapshots), copy=False)
+            query.where(
+                self._snapshot_name_version_filter(snapshots, self.intervals_table), copy=False
+            )
         elif snapshots is not None:
             return (set(), [])
 
@@ -701,13 +739,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                     )
 
     def _migrate_rows(self) -> None:
-        all_snapshots = {
-            s.snapshot_id: s
-            for s in Snapshot.hydrate_with_intervals_by_identifier(
-                self._get_snapshots(lock_for_update=True, hydrate_seeds=True).values(),
-                self._get_snapshot_intervals(None)[1],
-            )
-        }
+        all_snapshots = self._get_snapshots(
+            lock_for_update=True, hydrate_seeds=True, hydrate_intervals=False
+        )
         environments = self.get_environments()
 
         snapshot_mapping = {}
@@ -766,21 +800,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 logger.exception("Could not compute fingerprint for %s", snapshot.snapshot_id)
                 continue
 
-            # Infer the missing change category to account for SQLMesh versions in which
-            # we didn't assign a change category to indirectly modified snapshots.
-            if not new_snapshot.change_category:
-                new_snapshot.change_category = (
-                    SnapshotChangeCategory.INDIRECT_BREAKING
-                    if snapshot.fingerprint.to_version() == snapshot.version
-                    else SnapshotChangeCategory.INDIRECT_NON_BREAKING
-                )
-
+            new_snapshot.previous_versions = snapshot.all_versions
+            new_snapshot.migrated = True
             if not new_snapshot.temp_version:
                 new_snapshot.temp_version = snapshot.fingerprint.to_version()
 
             self.console.update_migration_progress(1)
 
-            if new_snapshot == snapshot:
+            if new_snapshot.fingerprint == snapshot.fingerprint:
                 logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
                 continue
             if new_snapshot.snapshot_id in all_snapshots:
@@ -816,17 +843,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for name, versions in from_snapshot.indirect_versions.items()
             }
 
-        delete_filter = self._snapshot_id_filter(snapshot_mapping)
-        self.engine_adapter.delete_from(self.seeds_table, delete_filter)
-        self.engine_adapter.delete_from(self.intervals_table, delete_filter)
-        self.delete_snapshots(snapshot_mapping)
-
         new_snapshots = set(snapshot_mapping.values())
         self._push_snapshots(new_snapshots, overwrite=True)
-        self._push_snapshot_intervals(new_snapshots)
 
+        updated_prod_environment: t.Optional[Environment] = None
         updated_environments = []
-
         for environment in environments:
             snapshots = [
                 snapshot_mapping[info.snapshot_id].table_info
@@ -838,32 +859,71 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if snapshots != environment.snapshots:
                 environment.snapshots = snapshots
                 updated_environments.append(environment)
+                if environment.name == c.PROD:
+                    updated_prod_environment = environment
 
         for environment in environments:
             self._update_environment(environment)
 
+        if updated_prod_environment:
+            self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
+
     def _snapshot_id_filter(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike]
-    ) -> t.Union[exp.In, exp.Boolean]:
+        self, snapshot_ids: t.Iterable[SnapshotIdLike], fq_table_name: str
+    ) -> t.Union[exp.In, exp.Boolean, exp.Condition]:
         if not snapshot_ids:
             return exp.false()
-
-        return t.cast(exp.Tuple, exp.convert((exp.column("name"), exp.column("identifier")))).isin(
-            *[(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids]
-        )
+        elif self.engine_adapter.SUPPORTS_TUPLE_IN:
+            return t.cast(
+                exp.Tuple,
+                exp.convert(
+                    (
+                        exp.to_column(f"{fq_table_name}.name"),
+                        exp.to_column(f"{fq_table_name}.identifier"),
+                    )
+                ),
+            ).isin(*[(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids])
+        else:
+            return exp.or_(
+                *[
+                    exp.and_(
+                        exp.to_column(f"{fq_table_name}.name").eq(snapshot_id.name),
+                        exp.to_column(f"{fq_table_name}.identifier").eq(snapshot_id.identifier),
+                    )
+                    for snapshot_id in snapshot_ids
+                ]
+            )
 
     def _snapshot_name_version_filter(
-        self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike]
-    ) -> t.Union[exp.In, exp.Boolean]:
+        self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike], fq_table_name: str
+    ) -> t.Union[exp.In, exp.Boolean, exp.Condition]:
         if not snapshot_name_versions:
             return exp.false()
-
-        return t.cast(exp.Tuple, exp.convert((exp.column("name"), exp.column("version")))).isin(
-            *[
-                (snapshot_name_version.name, snapshot_name_version.version)
-                for snapshot_name_version in snapshot_name_versions
-            ]
-        )
+        elif self.engine_adapter.SUPPORTS_TUPLE_IN:
+            return t.cast(
+                exp.Tuple,
+                exp.convert(
+                    (
+                        exp.to_column(f"{fq_table_name}.name"),
+                        exp.to_column(f"{fq_table_name}.version"),
+                    )
+                ),
+            ).isin(
+                *[
+                    (snapshot_name_version.name, snapshot_name_version.version)
+                    for snapshot_name_version in snapshot_name_versions
+                ]
+            )
+        else:
+            return exp.or_(
+                *[
+                    exp.and_(
+                        exp.to_column(f"{fq_table_name}.name").eq(snapshot_name_version.name),
+                        exp.to_column(f"{fq_table_name}.version").eq(snapshot_name_version.version),
+                    )
+                    for snapshot_name_version in snapshot_name_versions
+                ]
+            )
 
     @contextlib.contextmanager
     def _transaction(self, transaction_type: TransactionType) -> t.Generator[None, None, None]:
@@ -919,7 +979,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
                 "snapshot": snapshot.json(exclude={"intervals", "dev_intervals"}),
-                "kind_name": snapshot.model_kind_name,
+                "kind_name": snapshot.model_kind_name.value if snapshot.model_kind_name else None,
             }
             for snapshot in snapshots
         ]

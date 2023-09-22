@@ -18,6 +18,8 @@ from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
+JSON_TYPE = exp.DataType.build("json")
+
 
 class Model(exp.Expression):
     arg_types = {"expressions": True}
@@ -81,6 +83,10 @@ class MetricAgg(exp.AggFunc):
     """Used for computing metrics."""
 
     arg_types = {"this": True}
+
+    @property
+    def output_name(self) -> str:
+        return self.this.name
 
 
 def _scan_var(self: Tokenizer) -> None:
@@ -199,19 +205,21 @@ def _parse_body_macro(self: Parser) -> t.Tuple[str, t.Optional[exp.Expression]]:
 def _parse_with(self: Parser, skip_with_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "WITH")
     if not macro:
-        return self.__parse_with()  # type: ignore
+        return self.__parse_with(skip_with_token=skip_with_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_with(skip_with_token=True))  # type: ignore
     return macro
 
 
-def _parse_join(self: Parser, skip_join_token: bool = False) -> t.Optional[exp.Expression]:
+def _parse_join(
+    self: Parser, skip_join_token: bool = False, parse_bracket: bool = False
+) -> t.Optional[exp.Expression]:
     index = self._index
     method, side, kind = self._parse_join_parts()
     macro = _parse_matching_macro(self, "JOIN")
     if not macro:
         self._retreat(index)
-        return self.__parse_join()  # type: ignore
+        return self.__parse_join(skip_join_token=skip_join_token, parse_bracket=parse_bracket)  # type: ignore
 
     join = self.__parse_join(skip_join_token=True)  # type: ignore
     if method:
@@ -228,7 +236,7 @@ def _parse_join(self: Parser, skip_join_token: bool = False) -> t.Optional[exp.E
 def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "WHERE")
     if not macro:
-        return self.__parse_where()  # type: ignore
+        return self.__parse_where(skip_where_token=skip_where_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_where(skip_where_token=True))  # type: ignore
     return macro
@@ -237,7 +245,7 @@ def _parse_where(self: Parser, skip_where_token: bool = False) -> t.Optional[exp
 def _parse_group(self: Parser, skip_group_by_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "GROUP_BY")
     if not macro:
-        return self.__parse_group()  # type: ignore
+        return self.__parse_group(skip_group_by_token=skip_group_by_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_group(skip_group_by_token=True))  # type: ignore
     return macro
@@ -246,7 +254,7 @@ def _parse_group(self: Parser, skip_group_by_token: bool = False) -> t.Optional[
 def _parse_having(self: Parser, skip_having_token: bool = False) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "HAVING")
     if not macro:
-        return self.__parse_having()  # type: ignore
+        return self.__parse_having(skip_having_token=skip_having_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_having(skip_having_token=True))  # type: ignore
     return macro
@@ -257,27 +265,30 @@ def _parse_order(
 ) -> t.Optional[exp.Expression]:
     macro = _parse_matching_macro(self, "ORDER_BY")
     if not macro:
-        return self.__parse_order(this)  # type: ignore
+        return self.__parse_order(this, skip_order_token=skip_order_token)  # type: ignore
 
     macro.this.append("expressions", self.__parse_order(this, skip_order_token=True))  # type: ignore
     return macro
 
 
+def _parse_prop_value(self: Parser) -> t.Optional[exp.Expression]:
+    this = self._parse_string() or self._parse_id_var()
+    if self._match(TokenType.EQ):
+        this = exp.EQ(this=this, expression=self._parse_string() or self._parse_id_var())
+
+    return this
+
+
 def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     key = self._parse_id_var(any_token=True)
-
     if not key:
         return None
 
-    index = self._index
     if self._match(TokenType.L_PAREN):
-        self._retreat(index)
         value: t.Optional[exp.Expression] = self.expression(
-            exp.Tuple,
-            expressions=self._parse_wrapped_csv(
-                lambda: self._parse_string() or self._parse_id_var()
-            ),
+            exp.Tuple, expressions=self._parse_csv(lambda: _parse_prop_value(self))
         )
+        self._match_r_paren()
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
 
@@ -330,7 +341,6 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                 if not id_var:
                     value = None
                 else:
-                    index = self._index
                     kind = ModelKindName[id_var.name.upper()]
 
                     if kind in (
@@ -339,8 +349,7 @@ def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str])
                         ModelKindName.SEED,
                         ModelKindName.VIEW,
                         ModelKindName.SCD_TYPE_2,
-                    ) and self._match(TokenType.L_PAREN):
-                        self._retreat(index)
+                    ) and self._match(TokenType.L_PAREN, advance=False):
                         props = self._parse_wrapped_csv(functools.partial(_parse_props, self))
                     else:
                         props = None
@@ -693,7 +702,11 @@ def select_from_values_for_batch_range(
         exp.alias_(exp.cast(column, to=kind), column, copy=False)
         for column, kind in columns_to_types.items()
     ]
-    values_exp = exp.values(values[batch_start:batch_end], alias=alias, columns=columns_to_types)
+    values_exp = exp.values(
+        [tuple(transform_values(v, columns_to_types)) for v in values[batch_start:batch_end]],
+        alias=alias,
+        columns=columns_to_types,
+    )
     return exp.select(*casted_columns).from_(values_exp, copy=False)
 
 
@@ -755,3 +768,17 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
         for table in scope.tables
         if not isinstance(table.this, exp.Func) and exp.table_name(table) not in scope.cte_sources
     }
+
+
+def transform_values(
+    values: t.Tuple[t.Any, ...], columns_to_types: t.Dict[str, exp.DataType]
+) -> t.Iterator[t.Any]:
+    """Perform transformations on values given columns_to_types.
+
+    Currently, the only transformation is wrapping JSON columns with PARSE_JSON().
+    """
+    for value, col_type in zip(values, columns_to_types.values()):
+        if col_type == JSON_TYPE:
+            yield exp.func("PARSE_JSON", f"'{value}'")
+        else:
+            yield value

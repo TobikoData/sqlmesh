@@ -75,10 +75,6 @@ class LogicalReplaceQueryMixin(EngineAdapter):
         under views and we also can't drop them. Therefore we need to truncate and insert within a transaction.
         """
 
-        def get_truncate(table_name: TableName) -> str:
-            table = quote_identifiers(exp.to_table(table_name))
-            return f"TRUNCATE {table.sql(dialect=self.dialect)}"
-
         if not self.table_exists(table_name):
             return self.ctas(table_name, query_or_df, columns_to_types, exists=False, **kwargs)
         with self.transaction(TransactionType.DDL):
@@ -107,9 +103,9 @@ class LogicalReplaceQueryMixin(EngineAdapter):
                         for table in query.find_all(exp.Table):
                             if table == target_table:
                                 table.replace(temp_table.copy())
-                        self.execute(get_truncate(table_name))
+                        self.execute(self._truncate_table(table_name))
                         return self._insert_append_query(table_name, query, columns_to_types)
-                self.execute(get_truncate(table_name))
+                self.execute(self._truncate_table(table_name))
                 return self._insert_append_query(table_name, query, columns_to_types)
 
 
@@ -154,8 +150,6 @@ class CommitOnExecuteMixin(EngineAdapter):
 
 
 class InsertOverwriteWithMergeMixin(EngineAdapter):
-    FALSE_PREDICATE: exp.Condition = exp.false()
-
     def _insert_overwrite_by_condition(
         self,
         table_name: TableName,
@@ -171,7 +165,7 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
         columns_to_types = columns_to_types or self.columns(table_name)
         for source_query in source_queries:
             with source_query as query:
-                query = self._add_where_to_query(query, where)
+                query = self._add_where_to_query(query, where, columns_to_types)
                 columns = [exp.to_column(col) for col in columns_to_types]
                 when_not_matched_by_source = exp.When(
                     matched=False,
@@ -190,6 +184,6 @@ class InsertOverwriteWithMergeMixin(EngineAdapter):
                 self._merge(
                     target_table=table_name,
                     query=query,
-                    on=self.FALSE_PREDICATE,
+                    on=exp.false(),
                     match_expressions=[when_not_matched_by_source, when_not_matched_by_target],
                 )

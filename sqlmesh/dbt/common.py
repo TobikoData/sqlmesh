@@ -153,6 +153,31 @@ class GeneralConfig(DbtConfig):
         for field in other.fields_set:
             setattr(self, field, getattr(other, field))
 
+    @property
+    def sqlmesh_config_kwargs(self) -> t.Dict[str, t.Any]:
+        """
+        Create a kwargs dict of all sqlmesh config fields.
+
+        Returns:
+            Kwargs dict of sqlmesh config fields.
+        """
+        kwargs = {}
+        for field in self.sqlmesh_config_fields:
+            field_val = getattr(self, field, None) or self.meta.get(field, None)
+            if field_val:
+                kwargs[field] = field_val
+        return kwargs
+
+    @property
+    def sqlmesh_config_fields(self) -> t.Set[str]:
+        """
+        SQLMesh config fields that can be set in dbt projects.
+
+        Returns:
+            A set of SQLMesh config fields that can be set in dbt projects.
+        """
+        return set()
+
 
 class Dependencies(PydanticModel):
     """
@@ -228,13 +253,18 @@ def extract_jinja_config(input: str) -> t.Tuple[str, str]:
 EXCLUDED_CONFIG_ATTRIBUTE_KEYS = {
     "config",
     "config_call_dict",
+    "checksum",
+    "created_at",
+    "contract",
     "depends_on",
     "dependencies",
+    "docs",
     "metrics",
     "original_file_path",
     "packages",
     "patch_path",
     "path",
+    "persist_docs",
     "post_hook",
     "pre_hook",
     "raw_code",

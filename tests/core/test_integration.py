@@ -167,6 +167,7 @@ def validate_query_change(
         "sushi.customer_revenue_by_day",
         "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
+        "assert_item_price_above_zero",
     ]
     not_modified = [
         key
@@ -262,6 +263,7 @@ def validate_model_kind_change(
         "sushi.customer_revenue_by_day",
         "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
+        "assert_item_price_above_zero",
     ]
     if kind_name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
         kind: ModelKind = IncrementalByTimeRangeKind(
@@ -308,6 +310,7 @@ def test_environment_isolation(sushi_context: Context):
         "sushi.customer_revenue_by_day",
         "sushi.customer_revenue_lifetime",
         "sushi.top_waiters",
+        "assert_item_price_above_zero",
     ]
 
     apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.BREAKING)
@@ -340,7 +343,7 @@ def test_environment_promotion(sushi_context: Context):
     apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.BREAKING)
 
     # Make changes in dev
-    change_data_type(sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.INT)
+    change_data_type(sushi_context, "sushi.items", DataType.Type.FLOAT, DataType.Type.DECIMAL)
     apply_to_environment(sushi_context, "dev", SnapshotChangeCategory.NON_BREAKING)
 
     change_data_type(sushi_context, "sushi.top_waiters", DataType.Type.DOUBLE, DataType.Type.INT)
@@ -501,6 +504,7 @@ def setup_rebase(
             "sushi.top_waiters",
             "sushi.customer_revenue_by_day",
             "sushi.customer_revenue_lifetime",
+            "assert_item_price_above_zero",
         }
     }
     context.apply(plan)

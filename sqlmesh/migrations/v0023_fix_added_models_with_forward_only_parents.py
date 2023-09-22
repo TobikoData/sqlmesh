@@ -36,6 +36,8 @@ def migrate(state_sync: t.Any) -> None:
     snapshots_to_delete = set()
 
     for snapshot_id in dag:
+        if snapshot_id not in snapshot_mapping:
+            continue
         parsed_snapshot = snapshot_mapping[snapshot_id]
         is_breaking = parsed_snapshot.get("change_category") == 1
         has_previous_versions = bool(parsed_snapshot.get("previous_versions", []))
@@ -43,6 +45,8 @@ def migrate(state_sync: t.Any) -> None:
         has_paused_forward_only_parent = False
         if is_breaking and not has_previous_versions:
             for upstream_id in dag.upstream(snapshot_id):
+                if upstream_id not in snapshot_mapping:
+                    continue
                 upstream_snapshot = snapshot_mapping[upstream_id]
                 upstream_change_category = upstream_snapshot.get("change_category")
                 is_forward_only_upstream = upstream_change_category == 3

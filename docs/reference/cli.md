@@ -203,6 +203,12 @@ Options:
                             will fail.
   --auto-apply              Automatically apply the new plan after creation.
   --no-auto-categorization  Disable automatic change categorization.
+  --effective-from          The effective date from which to apply forward-only
+                            changes on production.
+  --include-unmodified      Whether to include unmodified models in the target
+                            development environment.
+  --model-selections        Model selection strings to filter the
+                            models that should be included in this plan.
   --help                    Show this message and exit.
 ```
 
@@ -278,6 +284,20 @@ Options:
   --where TEXT     An optional where statement to filter results.
   --limit INTEGER  The limit of the sample dataframe.
   --help           Show this message and exit.
+```
+
+## rewrite
+```
+Usage: sqlmesh rewrite [OPTIONS] SQL
+
+  Rewrite a sql expression with semantic references into an executable query.
+
+  https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+
+Options:
+  --read TEXT   The input dialect of the sql string.
+  --write TEXT  The output dialect of the sql string.
+  --help        Show this message and exit.
 ```
 
 ## test

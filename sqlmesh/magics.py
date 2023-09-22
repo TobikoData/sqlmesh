@@ -521,6 +521,32 @@ class SQLMeshMagics(Magics):
             limit=args.limit,
         )
 
+    @magic_arguments()
+    @argument(
+        "--read",
+        type=str,
+        default="",
+        help="The input dialect of the sql string.",
+    )
+    @argument(
+        "--write",
+        type=str,
+        default="",
+        help="The output dialect of the sql string.",
+    )
+    @line_cell_magic
+    def rewrite(self, line: str, sql: str) -> None:
+        """Rewrite a sql expression with semantic references into an executable query.
+
+        https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+        """
+        args = parse_argstring(self.rewrite, line)
+        self._context.console.show_sql(
+            self._context.rewrite(sql, args.read).sql(
+                dialect=args.write or self._context.config.dialect, pretty=True
+            )
+        )
+
     @property
     def _shell(self) -> t.Any:
         # Make mypy happy.

@@ -125,6 +125,7 @@ def test_json(snapshot: Snapshot):
         "indirect_versions": {},
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
+        "migrated": False,
     }
 
 
@@ -605,7 +606,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     assert (
         fully_qualified_snapshot.table_name(is_dev=False, for_read=False)
-        == '"my-catalog".sqlmesh__db.my_catalog__db__table__1271801991'
+        == f'"my-catalog".sqlmesh__db.my_catalog__db__table__{fully_qualified_snapshot.version}'
     )
 
 

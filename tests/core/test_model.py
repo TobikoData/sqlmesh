@@ -29,6 +29,7 @@ from sqlmesh.core.model import (
     model,
 )
 from sqlmesh.core.model.common import parse_expression
+from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
 from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
@@ -609,6 +610,33 @@ def test_seed_provided_columns():
     }
 
 
+def test_seed_csv_settings():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              batch_size 100,
+              csv_settings (
+                quotechar = '''',
+                escapechar = '\\',
+              ),
+            ),
+            columns (
+              id double,
+              alias varchar
+            )
+        );
+    """
+    )
+
+    model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
+
+    assert isinstance(model.kind, SeedKind)
+    assert model.kind.csv_settings == CsvSettings(quotechar="'", escapechar="\\")
+
+
 def test_seed_model_diff(tmp_path):
     model_a_csv_path = (tmp_path / "model_a.csv").absolute()
     model_b_csv_path = (tmp_path / "model_b.csv").absolute()
@@ -995,6 +1023,23 @@ def test_render_query(assert_exp_eq):
         """,
     )
 
+    expressions = d.parse(
+        """
+        MODEL (
+          name dummy.model,
+          kind FULL,
+          dialect postgres
+        );
+
+        SELECT COUNT(DISTINCT a) FILTER (WHERE b > 0) AS c FROM x
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="postgres")
+    assert_exp_eq(
+        model.render_query(),
+        'SELECT COUNT(DISTINCT "a") FILTER (WHERE "b" > 0) AS "c" FROM "x" AS "x"',
+    )
+
 
 def test_time_column():
     expressions = d.parse(
@@ -1225,6 +1270,7 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
         description="A dummy model.",
         kind="full",
         dialect="snowflake",
+        post_statements=["PUT file:///dir/tmp.csv @%table"],
     )
     def model1_entrypoint(evaluator: MacroEvaluator) -> exp.Select:
         return exp.select("x", "y").from_(exp.values([("1", 2), ("2", 3)], "_v", ["x", "y"]))
@@ -1252,6 +1298,8 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
         FROM (VALUES ('1', 2), ('2', 3)) AS "_V"("X", "Y")
         """,
     )
+    post_statement = context.models["MODEL1"].post_statements[0].sql(dialect="snowflake")  # type: ignore
+    assert post_statement == "PUT file:///dir/tmp.csv @%table"
 
     assert isinstance(model2, SqlModel)
     assert isinstance(model2.query, d.MacroFunc)
@@ -1933,7 +1981,7 @@ def test_model_table_properties(sushi_context):
         """('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"""
     )
 
-    with pytest.raises(ConfigError, match=r"Invalid table property 'invalid'.*"):
+    with pytest.raises(ConfigError, match=r"Invalid property 'invalid'.*"):
         load_sql_based_model(
             d.parse(
                 """
@@ -1981,3 +2029,168 @@ def test_model_jinja_macro_rendering():
     assert definition[1].sql() == "test_int = 1\ntest_str = 'value'"
     assert definition[2].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_b_body\nJINJA_END;"
     assert definition[3].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_a_body\nJINJA_END;"
+
+
+def test_view_model_data_hash():
+    view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind VIEW,
+        );
+        SELECT 1;
+        """
+    )
+    view_model_hash = load_sql_based_model(view_model_expressions).data_hash
+
+    materialized_view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind VIEW (
+              materialized true
+            ),
+        );
+        SELECT 1;
+        """
+    )
+    materialized_view_model_hash = load_sql_based_model(
+        materialized_view_model_expressions
+    ).data_hash
+
+    assert view_model_hash != materialized_view_model_hash
+
+
+def test_seed_model_data_hash():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+            )
+        );
+    """
+    )
+    seed_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.seed,
+            kind SEED (
+              path '../seeds/waiter_names.csv',
+              csv_settings (
+                quotechar = '''',
+              )
+            )
+        );
+    """
+    )
+    new_seed_model = load_sql_based_model(
+        expressions, path=Path("./examples/sushi/models/test_model.sql")
+    )
+
+    assert seed_model.data_hash != new_seed_model.data_hash
+
+
+def test_interval_unit_validation():
+    assert (
+        create_sql_model(
+            "a",
+            d.parse_one("SELECT a, ds FROM table_a"),
+            interval_unit=IntervalUnit.HOUR,
+        ).interval_unit
+        == IntervalUnit.HOUR
+    )
+
+    assert (
+        create_sql_model(
+            "a",
+            d.parse_one("SELECT a, ds FROM table_a"),
+            interval_unit="HOUR",
+        ).interval_unit
+        == IntervalUnit.HOUR
+    )
+
+    assert (
+        create_sql_model(
+            "a",
+            d.parse_one("SELECT a, ds FROM table_a"),
+            interval_unit=None,
+        ).interval_unit_
+        is None
+    )
+
+
+def test_scd_type_2_defaults():
+    view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2 (
+                unique_key id,
+            ),
+        );
+        SELECT 
+            1 as id,
+            '2020-01-01' as ds,
+            '2020-01-01' as test_updated_at,
+            '2020-01-01' as test_valid_from,
+            '2020-01-01' as test_valid_to
+        ;
+        """
+    )
+    scd_type_2_model = load_sql_based_model(view_model_expressions)
+    assert scd_type_2_model.unique_key == ["id"]
+    assert scd_type_2_model.managed_columns == {
+        "valid_from": exp.DataType.build("TIMESTAMP"),
+        "valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+    assert scd_type_2_model.kind.updated_at_name == "updated_at"
+    assert scd_type_2_model.kind.valid_from_name == "valid_from"
+    assert scd_type_2_model.kind.valid_to_name == "valid_to"
+    assert scd_type_2_model.kind.is_scd_type_2
+    assert scd_type_2_model.kind.is_materialized
+    assert scd_type_2_model.kind.forward_only
+    assert scd_type_2_model.kind.disable_restatement
+
+
+def test_scd_type_2_overrides():
+    view_model_expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind SCD_TYPE_2 (
+                unique_key [id, ds],
+                updated_at_name test_updated_at,
+                valid_from_name test_valid_from,
+                valid_to_name test_valid_to,
+                forward_only False,
+                disable_restatement False,
+            ),
+        );
+        SELECT 
+            1 as id,
+            '2020-01-01' as ds,
+            '2020-01-01' as test_updated_at,
+            '2020-01-01' as test_valid_from,
+            '2020-01-01' as test_valid_to
+        ;
+        """
+    )
+    scd_type_2_model = load_sql_based_model(view_model_expressions)
+    assert scd_type_2_model.unique_key == ["id", "ds"]
+    assert scd_type_2_model.managed_columns == {
+        "test_valid_from": exp.DataType.build("TIMESTAMP"),
+        "test_valid_to": exp.DataType.build("TIMESTAMP"),
+    }
+    assert scd_type_2_model.kind.updated_at_name == "test_updated_at"
+    assert scd_type_2_model.kind.valid_from_name == "test_valid_from"
+    assert scd_type_2_model.kind.valid_to_name == "test_valid_to"
+    assert scd_type_2_model.kind.is_scd_type_2
+    assert scd_type_2_model.kind.is_materialized
+    assert not scd_type_2_model.kind.forward_only
+    assert not scd_type_2_model.kind.disable_restatement

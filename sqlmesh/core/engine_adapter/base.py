@@ -120,8 +120,10 @@ class EngineAdapter:
     SUPPORTS_INDEXES = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
+    SUPPORTS_MATERIALIZED_VIEW_SCHEMA = False
     SUPPORTS_CLONING = False
     SCHEMA_DIFFER = SchemaDiffer()
+    SUPPORTS_TUPLE_IN = True
 
     def __init__(
         self,
@@ -168,6 +170,13 @@ class EngineAdapter:
 
         return exp.cast(ensure_utc_exp(col), "TIMESTAMP")
 
+    @classmethod
+    def _casted_columns(cls, columns_to_types: t.Dict[str, exp.DataType]) -> t.List[exp.Alias]:
+        return [
+            exp.alias_(exp.cast(column, to=kind), column, copy=False)
+            for column, kind in columns_to_types.items()
+        ]
+
     def _get_source_queries(
         self,
         query_or_df: QueryOrDF,
@@ -179,6 +188,10 @@ class EngineAdapter:
         batch_size = self.DEFAULT_BATCH_SIZE if batch_size is None else batch_size
         if isinstance(query_or_df, (exp.Subqueryable, exp.DerivedTable)):
             return [SourceQuery(query_factory=lambda: query_or_df)]  # type: ignore
+        if not columns_to_types:
+            raise SQLMeshError(
+                "It is expected that if a DF is passed in then columns_to_types is set"
+            )
         return self._df_to_source_queries(
             query_or_df, columns_to_types, batch_size, target_table=target_table
         )
@@ -186,12 +199,11 @@ class EngineAdapter:
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
         assert isinstance(df, pd.DataFrame)
-        assert columns_to_types
         num_rows = len(df.index)
         batch_size = sys.maxsize if batch_size == 0 else batch_size
         values = list(df.itertuples(index=False, name=None))
@@ -223,6 +235,18 @@ class EngineAdapter:
             ),
             columns_to_types,
         )
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: DF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Dict[str, exp.DataType]:
+        ...
+
+    @t.overload
+    def _columns_to_types(
+        self, query_or_df: Query, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
+        ...
 
     def _columns_to_types(
         self, query_or_df: QueryOrDF, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
@@ -555,23 +579,29 @@ class EngineAdapter:
                 batch_start=0,
                 batch_end=len(values),
             )
+
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types, batch_size=0, target_table=view_name
         )
         if len(source_queries) != 1:
             raise SQLMeshError("Only one source query is supported for creating views")
+
         schema: t.Union[exp.Table, exp.Schema] = exp.to_table(view_name)
         if columns_to_types:
             schema = exp.Schema(
                 this=exp.to_table(view_name),
                 expressions=[exp.column(column) for column in columns_to_types],
             )
+
         properties = create_kwargs.pop("properties", None)
         if not properties:
             properties = exp.Properties(expressions=[])
 
         if materialized and self.SUPPORTS_MATERIALIZED_VIEWS:
             properties.append("expressions", exp.MaterializedProperty())
+
+            if not self.SUPPORTS_MATERIALIZED_VIEW_SCHEMA and isinstance(schema, exp.Schema):
+                schema = schema.this
 
         create_view_properties = self._create_view_properties(
             create_kwargs.pop("table_properties", None)
@@ -582,6 +612,7 @@ class EngineAdapter:
 
         if properties.expressions:
             create_kwargs["properties"] = properties
+
         with source_queries[0] as query:
             self.execute(
                 exp.Create(
@@ -627,10 +658,17 @@ class EngineAdapter:
             )
         )
 
-    def drop_view(self, view_name: TableName, ignore_if_not_exists: bool = True) -> None:
+    def drop_view(
+        self, view_name: TableName, ignore_if_not_exists: bool = True, materialized: bool = False
+    ) -> None:
         """Drop a view."""
         self.execute(
-            exp.Drop(this=exp.to_table(view_name), exists=ignore_if_not_exists, kind="VIEW")
+            exp.Drop(
+                this=exp.to_table(view_name),
+                exists=ignore_if_not_exists,
+                materialized=materialized,
+                kind="VIEW",
+            )
         )
 
     def columns(
@@ -717,9 +755,14 @@ class EngineAdapter:
         query: Query,
         columns_to_types: t.Dict[str, exp.DataType],
         contains_json: bool = False,
+        order_projections: bool = True,
     ) -> None:
         if contains_json:
             query = self._escape_json(query)
+        if order_projections and query.named_selects != list(columns_to_types):
+            if isinstance(query, exp.Subqueryable):
+                query = query.subquery(alias="_ordered_projections")
+            query = exp.select(*columns_to_types).from_(query)
         self.execute(exp.insert(query, table_name, columns=list(columns_to_types)))
 
     def insert_overwrite_by_partition(
@@ -799,7 +842,7 @@ class EngineAdapter:
             columns_to_types = columns_to_types or self.columns(table_name)
             for i, source_query in enumerate(source_queries):
                 with source_query as query:
-                    query = self._add_where_to_query(query, where)
+                    query = self._add_where_to_query(query, where, columns_to_types)
                     if i > 0 or self.INSERT_OVERWRITE_STRATEGY.is_delete_insert:
                         if i == 0:
                             if not where:
@@ -809,7 +852,10 @@ class EngineAdapter:
                             assert where is not None
                             self.delete_from(table_name, where=where)
                         self._insert_append_query(
-                            table_name, query, columns_to_types=columns_to_types
+                            table_name,
+                            query,
+                            columns_to_types=columns_to_types,
+                            order_projections=False,
                         )
                     else:
                         insert_exp = exp.insert(
@@ -914,7 +960,16 @@ class EngineAdapter:
                     "deleted",
                     exp.select(*[f"static.{col}" for col in columns_to_types])
                     .from_("static")
-                    .join("latest", using=unique_key, join_type="left")
+                    .join(
+                        "latest",
+                        on=exp.and_(
+                            *[
+                                exp.column(col, table="static").eq(exp.column(col, table="latest"))
+                                for col in unique_key
+                            ]
+                        ),
+                        join_type="left",
+                    )
                     .where(f"latest.{valid_to_name} IS NULL"),
                 )
                 # Get the latest `valid_to` deleted record for each unique key
@@ -936,14 +991,34 @@ class EngineAdapter:
                         *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
                     )
                     .from_("latest")
-                    .join("source", using=unique_key, join_type="left")
+                    .join(
+                        "source",
+                        on=exp.and_(
+                            *[
+                                exp.column(col, table="latest").eq(exp.column(col, table="source"))
+                                for col in unique_key
+                            ]
+                        ),
+                        join_type="left",
+                    )
                     .union(
                         exp.select(
                             *(f"latest.{col} AS t_{col}" for col in columns_to_types),
                             *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
                         )
                         .from_("latest")
-                        .join("source", using=unique_key, join_type="right")
+                        .join(
+                            "source",
+                            on=exp.and_(
+                                *[
+                                    exp.column(col, table="latest").eq(
+                                        exp.column(col, table="source")
+                                    )
+                                    for col in unique_key
+                                ]
+                            ),
+                            join_type="right",
+                        )
                     ),
                 )
                 # Get deleted, new, no longer current, or unchanged records
@@ -952,32 +1027,37 @@ class EngineAdapter:
                     exp.select(
                         *(f"COALESCE(t_{col}, s_{col}) as {col}" for col in unmanaged_columns),
                         f"""
-                        CASE 
-                            WHEN t_{valid_from_name} IS NULL 
-                                 AND latest_deleted.{unique_key[0]} IS NOT NULL 
-                            THEN CASE 
-                                    WHEN latest_deleted.{valid_to_name} > s_{updated_at_name} 
-                                    THEN latest_deleted.{valid_to_name} 
-                                    ELSE s_{updated_at_name} 
-                                 END 
-                            WHEN t_{valid_from_name} IS NULL 
-                            THEN {self._to_utc_timestamp('1970-01-01 00:00:00+00:00')} 
-                            ELSE t_{valid_from_name} 
+                        CASE
+                            WHEN t_{valid_from_name} IS NULL
+                                 AND latest_deleted.{unique_key[0]} IS NOT NULL
+                            THEN CASE
+                                    WHEN latest_deleted.{valid_to_name} > s_{updated_at_name}
+                                    THEN latest_deleted.{valid_to_name}
+                                    ELSE s_{updated_at_name}
+                                 END
+                            WHEN t_{valid_from_name} IS NULL
+                            THEN {self._to_utc_timestamp('1970-01-01 00:00:00+00:00')}
+                            ELSE t_{valid_from_name}
                         END AS {valid_from_name}""",
                         f"""
-                        CASE 
-                            WHEN s_{updated_at_name} > t_{updated_at_name} 
-                            THEN s_{updated_at_name} 
-                            WHEN s_{unique_key[0]} IS NULL 
-                            THEN {self._to_utc_timestamp(to_ts(execution_time))} 
-                            ELSE t_{valid_to_name} 
+                        CASE
+                            WHEN s_{updated_at_name} > t_{updated_at_name}
+                            THEN s_{updated_at_name}
+                            WHEN s_{unique_key[0]} IS NULL
+                            THEN {self._to_utc_timestamp(to_ts(execution_time))}
+                            ELSE t_{valid_to_name}
                         END AS {valid_to_name}""",
                     )
                     .from_("joined")
                     .join(
                         "latest_deleted",
-                        on=" AND ".join(
-                            f"joined.s_{col} = latest_deleted.{col}" for col in unique_key
+                        on=exp.and_(
+                            *[
+                                exp.column(f"s_{col}", table="joined").eq(
+                                    exp.column(col, table="latest_deleted")
+                                )
+                                for col in unique_key
+                            ]
                         ),
                         join_type="left",
                     ),
@@ -1198,6 +1278,7 @@ class EngineAdapter:
         query_or_df: QueryOrDF,
         name: TableName = "diff",
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
     ) -> t.Iterator[exp.Table]:
         """A context manager for working a temp table.
 
@@ -1219,7 +1300,7 @@ class EngineAdapter:
             if table.db:
                 self.create_schema(table.db)
             self._create_table_from_source_queries(
-                table, source_queries, columns_to_types, exists=True
+                table, source_queries, columns_to_types, exists=True, **kwargs
             )
 
             try:
@@ -1292,14 +1373,19 @@ class EngineAdapter:
 
         return table
 
-    def _add_where_to_query(self, query: Query, where: t.Optional[exp.Expression]) -> Query:
+    def _add_where_to_query(
+        self,
+        query: Query,
+        where: t.Optional[exp.Expression],
+        columns_to_type: t.Dict[str, exp.DataType],
+    ) -> Query:
         if not where or not isinstance(query, exp.Subqueryable):
             return query
 
         query = t.cast(exp.Subqueryable, query.copy())
         with_ = query.args.pop("with", None)
         query = (
-            exp.select("*", copy=False)
+            exp.select(*columns_to_type, copy=False)
             .from_(query.subquery("_subquery", copy=False), copy=False)
             .where(where, copy=False)
         )
@@ -1308,6 +1394,10 @@ class EngineAdapter:
             query.set("with", with_)
 
         return query
+
+    def _truncate_table(self, table_name: TableName) -> str:
+        table = quote_identifiers(exp.to_table(table_name))
+        return f"TRUNCATE {table.sql(dialect=self.dialect)}"
 
 
 class EngineAdapterWithIndexSupport(EngineAdapter):

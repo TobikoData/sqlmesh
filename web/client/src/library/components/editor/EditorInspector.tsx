@@ -28,6 +28,7 @@ import {
 } from '@api/index'
 import TabList from '@components/tab/Tab'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
+import Spinner from '@components/logo/Spinner'
 
 interface FormModel {
   model?: string
@@ -202,9 +203,19 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
   const engine = useStoreEditor(s => s.engine)
 
-  const { refetch: getFetchdf, isFetching } = useApiFetchdf({
+  const {
+    refetch: getFetchdf,
+    isFetching,
+    cancel: cancelRunQuery,
+  } = useApiFetchdf({
     sql: tab.file.content,
   })
+
+  useEffect(() => {
+    return () => {
+      cancelRunQuery()
+    }
+  }, [])
 
   function sendQuery(): void {
     setPreviewTable(undefined)
@@ -236,18 +247,38 @@ function FormActionsCustomSQL({ tab }: { tab: EditorTab }): JSX.Element {
         >
           Format
         </Button>
-        <Button
-          size={EnumSize.sm}
-          variant={EnumVariant.Alternative}
-          disabled={isFetching}
-          onClick={e => {
-            e.stopPropagation()
+        {isFetching ? (
+          <div className="flex items-center">
+            <Spinner className="w-3" />
+            <small className="text-xs text-neutral-400 block mx-2">
+              Running Query...
+            </small>
+            <Button
+              size={EnumSize.sm}
+              variant={EnumVariant.Danger}
+              onClick={e => {
+                e.stopPropagation()
 
-            sendQuery()
-          }}
-        >
-          {isFetching ? 'Running Query...' : 'Run Query'}
-        </Button>
+                cancelRunQuery()
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size={EnumSize.sm}
+            variant={EnumVariant.Alternative}
+            disabled={isFetching}
+            onClick={e => {
+              e.stopPropagation()
+
+              sendQuery()
+            }}
+          >
+            Run Query
+          </Button>
+        )}
       </InspectorActions>
     </>
   )
@@ -273,12 +304,20 @@ function FormActionsModel({
   const { refetch: getRender } = useApiRender(
     Object.assign(form, { model: model.name }),
   )
-  const { refetch: getEvaluate, isFetching } = useApiEvaluate(
-    Object.assign(form, { model: model.name }),
-  )
+  const {
+    refetch: getEvaluate,
+    isFetching,
+    cancel: cancelEvaluate,
+  } = useApiEvaluate(Object.assign(form, { model: model.name }))
 
   const shouldEvaluate =
     tab.file.isSQLMeshModel && Object.values(form).every(Boolean)
+
+  useEffect(() => {
+    return () => {
+      cancelEvaluate()
+    }
+  }, [])
 
   function evaluateModel(): void {
     setPreviewQuery(undefined)
@@ -394,7 +433,25 @@ function FormActionsModel({
       <Divider />
       <InspectorActions>
         <div className="flex w-full justify-end">
-          {tab.file.isSQLMeshModel && (
+          {tab.file.isSQLMeshModel && isFetching ? (
+            <div className="flex items-center">
+              <Spinner className="w-3" />
+              <small className="text-xs text-neutral-400 block mx-2">
+                Evaluating...
+              </small>
+              <Button
+                size={EnumSize.sm}
+                variant={EnumVariant.Danger}
+                onClick={e => {
+                  e.stopPropagation()
+
+                  cancelEvaluate()
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
             <Button
               size={EnumSize.sm}
               variant={EnumVariant.Alternative}
@@ -405,7 +462,7 @@ function FormActionsModel({
                 evaluateModel()
               }}
             >
-              {isFetching ? 'Evaluating...' : 'Evaluate'}
+              Evaluate
             </Button>
           )}
         </div>
@@ -432,7 +489,11 @@ function FormDiffModel({
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff, isFetching } = useApiTableDiff({
+  const {
+    refetch: getDiff,
+    isFetching,
+    cancel: cancelGetDiff,
+  } = useApiTableDiff({
     source: selectedSource,
     target: target.value,
     model_or_snapshot: model.name,
@@ -448,6 +509,12 @@ function FormDiffModel({
       setPreviewDiff(data)
     })
   }, [model.name])
+
+  useEffect(() => {
+    return () => {
+      cancelGetDiff()
+    }
+  }, [])
 
   useEffect(() => {
     setSelectedSource(list[0]!.value)
@@ -545,7 +612,25 @@ function FormDiffModel({
             </span>{' '}
             as <b>Source</b>
           </span>
-          {tab.file.isSQLMeshModel && (
+          {isFetching ? (
+            <div className="flex items-center">
+              <Spinner className="w-3" />
+              <small className="text-xs text-neutral-400 block mx-2">
+                Getting Diff...
+              </small>
+              <Button
+                size={EnumSize.sm}
+                variant={EnumVariant.Danger}
+                onClick={e => {
+                  e.stopPropagation()
+
+                  cancelGetDiff()
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
             <Button
               className="ml-2"
               size={EnumSize.sm}
@@ -557,7 +642,7 @@ function FormDiffModel({
                 getTableDiff()
               }}
             >
-              {isFetching ? 'Getting Diff...' : 'Get Diff'}
+              Get Diff
             </Button>
           )}
         </div>
@@ -575,13 +660,23 @@ function FormDiff(): JSX.Element {
   const [on, setOn] = useState('')
   const [where, setWhere] = useState('')
 
-  const { refetch: getDiff, isFetching } = useApiTableDiff({
+  const {
+    refetch: getDiff,
+    isFetching,
+    cancel: cancelGetDiff,
+  } = useApiTableDiff({
     source,
     target,
     limit,
     on,
     where,
   })
+
+  useEffect(() => {
+    return () => {
+      cancelGetDiff()
+    }
+  }, [])
 
   function getTableDiff(): void {
     setPreviewDiff(undefined)
@@ -689,19 +784,39 @@ function FormDiff(): JSX.Element {
       </InspectorForm>
       <Divider />
       <InspectorActions>
-        <Button
-          className="ml-2"
-          size={EnumSize.sm}
-          variant={EnumVariant.Alternative}
-          disabled={isFalse(shouldEnableAction) || isFetching}
-          onClick={e => {
-            e.stopPropagation()
+        {isFetching ? (
+          <div className="flex items-center">
+            <Spinner className="w-3" />
+            <small className="text-xs text-neutral-400 block mx-2">
+              Getting Diff...
+            </small>
+            <Button
+              size={EnumSize.sm}
+              variant={EnumVariant.Danger}
+              onClick={e => {
+                e.stopPropagation()
 
-            getTableDiff()
-          }}
-        >
-          {isFetching ? 'Getting Diff...' : 'Get Diff'}
-        </Button>
+                cancelGetDiff()
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button
+            className="ml-2"
+            size={EnumSize.sm}
+            variant={EnumVariant.Alternative}
+            disabled={isFalse(shouldEnableAction) || isFetching}
+            onClick={e => {
+              e.stopPropagation()
+
+              getTableDiff()
+            }}
+          >
+            Get Diff
+          </Button>
+        )}
       </InspectorActions>
     </>
   )

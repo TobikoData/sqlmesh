@@ -110,6 +110,10 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     return this.path.startsWith('models')
   }
 
+  get isTests(): boolean {
+    return this.path.startsWith('tests')
+  }
+
   open(): void {
     this._isOpen = true
 

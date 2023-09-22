@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing as t
-from collections import defaultdict, deque
+from collections import deque
 
 from sqlglot import exp
 
@@ -53,18 +53,66 @@ class Reference(PydanticModel, frozen=True):
 
 class ReferenceGraph:
     def __init__(self, models: t.Iterable[Model]):
-        self._model_refs: t.DefaultDict[str, t.Dict[str, Reference]] = defaultdict(dict)
-        self._ref_models: t.DefaultDict[str, t.Dict[str, str]] = defaultdict(dict)
+        self._model_refs: t.Dict[str, t.Dict[str, Reference]] = {}
+        self._ref_models: t.Dict[str, t.Set[str]] = {}
+        self._dim_models: t.Dict[str, t.Set[str]] = {}
 
         for model in models:
             self.add_model(model)
 
     def add_model(self, model: Model) -> None:
+        """Add a model and its references to the graph.
+
+        Args:
+            model: the model to add.
+        """
+        for column in model.columns_to_types or {}:
+            self._dim_models.setdefault(column, set())
+            self._dim_models[column].add(model.name)
+
         for ref in model.all_references:
+            self._model_refs.setdefault(model.name, {})
             self._model_refs[model.name][ref.name] = ref
-            self._ref_models[ref.name][model.name] = model.name
+            self._ref_models.setdefault(ref.name, set())
+            self._ref_models[ref.name].add(model.name)
+
+    def models_for_column(self, source: str, column: str, max_depth: int = 3) -> t.List[str]:
+        """Find all the models with a column that join to a source within max_depth.
+
+        Args:
+            source: The source model.
+            column: The column to look for.
+            max_depth: The maximum number of models to join to find a path.
+
+        Returns:
+            The list of models that fit the criteria of the search.
+        """
+        models = []
+
+        for model in self._dim_models[column]:
+            try:
+                if model != source:
+                    self.find_path(source, model)
+                models.append(model)
+            except SQLMeshError:
+                pass
+
+        return sorted(models)
 
     def find_path(self, source: str, target: str, max_depth: int = 3) -> t.List[Reference]:
+        """Find a path from source model to target model with max depth.
+
+        Args:
+            source: The source model.
+            target: The target model.
+            max_depth: The maximum number of models to join to find a path.
+
+        Returns:
+            The list of references representing the join path of source to target.
+        """
+        if source not in self._model_refs:
+            return []
+
         queue = deque(([ref] for ref in self._model_refs[source].values()))
 
         while queue:
@@ -78,7 +126,7 @@ class ReferenceGraph:
 
             ref_name = path[-1].name
 
-            for model_name in self._ref_models[ref_name].values():
+            for model_name in sorted(self._ref_models[ref_name]):
                 for ref in self._model_refs[model_name].values():
                     # paths cannot have loops or contain many to many refs
                     if model_name in visited or (many and not ref.unique):

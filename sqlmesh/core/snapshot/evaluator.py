@@ -227,6 +227,13 @@ class SnapshotEvaluator:
                 tables / table clones should be used where applicable.
             on_complete: A callback to call on each successfully promoted snapshot.
         """
+        self._create_schemas(
+            [
+                s.qualified_view_name.table_for_environment(environment_naming_info)
+                for s in target_snapshots
+                if s.is_model and not s.is_symbolic
+            ]
+        )
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
@@ -267,6 +274,9 @@ class SnapshotEvaluator:
             snapshots: Mapping of snapshot ID to snapshot.
             on_complete: A callback to call on each successfully created snapshot.
         """
+        self._create_schemas(
+            [s.table_name() for s in target_snapshots if s.is_model and not s.is_symbolic]
+        )
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
@@ -567,6 +577,15 @@ class SnapshotEvaluator:
             query=query,
         )
 
+    def _create_schemas(self, tables: t.Iterable[t.Union[exp.Table, str]]) -> None:
+        table_exprs = [exp.to_table(t) for t in tables]
+        unique_schemas = {(t.db, t.args.get("catalog")) for t in table_exprs if t and t.db}
+        # Create schemas sequentially, since some engines (eg. Postgres) may not support concurrent creation
+        # of schemas with the same name.
+        for schema, catalog in unique_schemas:
+            logger.info("Creating schema '%s'", schema)
+            self.adapter.create_schema(schema, catalog_name=catalog)
+
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:
     klass: t.Type
@@ -788,10 +807,6 @@ class PromotableStrategy(EvaluationStrategy):
         table_name: str,
         snapshot: Snapshot,
     ) -> None:
-        schema = view_name.schema_for_environment(environment_naming_info=environment_naming_info)
-        if schema is not None:
-            self.adapter.create_schema(schema, catalog_name=view_name.catalog)
-
         target_name = view_name.for_environment(environment_naming_info)
         logger.info("Updating view '%s' to point at table '%s'", target_name, table_name)
         self.adapter.create_view(
@@ -828,9 +843,6 @@ class MaterializableStrategy(PromotableStrategy):
         **render_kwargs: t.Any,
     ) -> None:
         model = snapshot.model
-        table = exp.to_table(name)
-        self.adapter.create_schema(table.db, catalog_name=table.catalog)
-
         ctas_query = model.ctas_query(**render_kwargs)
 
         logger.info("Creating table '%s'", name)
@@ -1067,9 +1079,6 @@ class ViewStrategy(PromotableStrategy):
     ) -> None:
         model = snapshot.model
 
-        table = exp.to_table(name)
-        self.adapter.create_schema(table.db, catalog_name=table.catalog)
-
         logger.info("Creating view '%s'", name)
         self.adapter.create_view(
             name,
@@ -1098,7 +1107,15 @@ class ViewStrategy(PromotableStrategy):
         )
 
     def delete(self, name: str) -> None:
-        self.adapter.drop_view(name)
+        try:
+            self.adapter.drop_view(name)
+        except Exception:
+            logger.debug(
+                "Failed to drop view '%s'. Trying to drop the materialized view instead",
+                name,
+                exc_info=True,
+            )
+            self.adapter.drop_view(name, materialized=True)
         logger.info("Dropped view '%s'", name)
 
     def _is_materialized_view(self, model: Model) -> bool:

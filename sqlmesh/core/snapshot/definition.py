@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import sys
 import typing as t
 from collections import defaultdict
@@ -16,6 +15,7 @@ from sqlmesh.core.audit import BUILT_IN_AUDITS, Audit, ModelAudit, StandaloneAud
 from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
+from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -167,12 +167,13 @@ class QualifiedViewName(PydanticModel, frozen=True):
     table: str
 
     def for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
-        return exp.table_name(
-            exp.table_(
-                self.table_for_environment(environment_naming_info),
-                db=self.schema_for_environment(environment_naming_info),
-                catalog=self.catalog,
-            )
+        return exp.table_name(self.table_for_environment(environment_naming_info))
+
+    def table_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> exp.Table:
+        return exp.table_(
+            self.table_name_for_environment(environment_naming_info),
+            db=self.schema_for_environment(environment_naming_info),
+            catalog=self.catalog,
         )
 
     def schema_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
@@ -184,7 +185,7 @@ class QualifiedViewName(PydanticModel, frozen=True):
             schema = f"{schema}__{environment_naming_info.name}"
         return schema
 
-    def table_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
+    def table_name_for_environment(self, environment_naming_info: EnvironmentNamingInfo) -> str:
         table = self.table
         if (
             environment_naming_info.name.lower() != c.PROD
@@ -411,6 +412,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     change_category: t.Optional[SnapshotChangeCategory] = None
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
+    migrated: bool = False
 
     @field_validator("ttl")
     @classmethod
@@ -998,14 +1000,12 @@ SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]
 
-ALNUM = re.compile(r"[^a-zA-Z0-9_]")
-
 
 def table_name(physical_schema: str, name: str, version: str, is_temp: bool = False) -> str:
     table = exp.to_table(name)
 
     # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
-    name = "__".join(ALNUM.sub("_", part.name) for part in table.parts)
+    name = "__".join(sanitize_name(part.name) for part in table.parts)
     temp_suffix = "__temp" if is_temp else ""
 
     table.set("this", exp.to_identifier(f"{name}__{version}{temp_suffix}"))

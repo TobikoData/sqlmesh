@@ -90,12 +90,10 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     def _df_to_source_queries(
         self,
         df: DF,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
+        columns_to_types: t.Dict[str, exp.DataType],
         batch_size: int,
         target_table: TableName,
     ) -> t.List[SourceQuery]:
-        if not columns_to_types:
-            raise SQLMeshError("columns_to_types is required when using a dataframe.")
         temp_bq_table = self.__get_temp_bq_table(
             self._get_temp_table(target_table or "pandas"), columns_to_types
         )
@@ -108,7 +106,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         def query_factory() -> Query:
             # Make mypy happy
             assert isinstance(df, pd.DataFrame)
-            assert columns_to_types
             self._db_call(self.client.create_table, table=temp_bq_table, exists_ok=False)
             result = self.__load_pandas_to_table(temp_bq_table, df, columns_to_types, replace=False)
             if result.errors:
@@ -340,23 +337,37 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             )
 
         partition_exp = partitioned_by[0]
-        partition_sql = partition_exp.sql(dialect=self.dialect)
         partition_column = partition_exp.find(exp.Column)
 
+        granularity = partition_exp.args.get("unit")
+        if granularity:
+            granularity = granularity.name.lower()
+
         if not partition_column:
+            partition_sql = partition_exp.sql(dialect=self.dialect)
             raise SQLMeshError(
                 f"The partition expression '{partition_sql}' doesn't contain a column."
             )
-        with self.session(), self.temp_table(query_or_df, name=table_name) as temp_table_name:
+        with self.session(), self.temp_table(
+            query_or_df, name=table_name, partitioned_by=partitioned_by
+        ) as temp_table_name:
             if columns_to_types is None or columns_to_types[
                 partition_column.name
             ] == exp.DataType.build("unknown"):
                 columns_to_types = self.columns(temp_table_name)
 
             partition_type_sql = columns_to_types[partition_column.name].sql(dialect=self.dialect)
-            temp_table_name_sql = temp_table_name.sql(dialect=self.dialect)
+
+            select_array_agg_partitions = select_partitions_expr(
+                temp_table_name.db,
+                temp_table_name.name,
+                partition_type_sql,
+                granularity=granularity,
+                agg_func="ARRAY_AGG",
+            )
+
             self.execute(
-                f"DECLARE _sqlmesh_target_partitions_ ARRAY<{partition_type_sql}> DEFAULT (SELECT ARRAY_AGG(DISTINCT {partition_sql}) FROM {temp_table_name_sql});"
+                f"DECLARE _sqlmesh_target_partitions_ ARRAY<{partition_type_sql}> DEFAULT ({select_array_agg_partitions});"
             )
 
             where = t.cast(exp.Condition, partition_exp).isin(unnest="_sqlmesh_target_partitions_")
@@ -410,14 +421,16 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         properties: t.List[exp.Expression] = []
 
         if partitioned_by:
-            if partition_interval_unit is None:
-                raise SQLMeshError("partition_interval_unit is required when partitioning a table")
             if len(partitioned_by) > 1:
                 raise SQLMeshError("BigQuery only supports partitioning by a single column")
 
             this = partitioned_by[0]
 
-            if isinstance(this, exp.Column) and partition_interval_unit != IntervalUnit.MINUTE:
+            if (
+                isinstance(this, exp.Column)
+                and partition_interval_unit is not None
+                and partition_interval_unit != IntervalUnit.MINUTE
+            ):
                 column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
 
                 if column_type == exp.DataType.build(
@@ -620,3 +633,64 @@ class _ErrorCounter:
             )
             return True
         return False
+
+
+def select_partitions_expr(
+    schema: str,
+    table_name: str,
+    data_type: t.Union[str, exp.DataType],
+    granularity: t.Optional[str] = None,
+    agg_func: str = "MAX",
+    database: t.Optional[str] = None,
+) -> str:
+    """Generates a SQL expression that aggregates partition values for a table.
+
+    Args:
+        schema: The schema (BigQueyr dataset) of the table.
+        table_name: The name of the table.
+        data_type: The data type of the partition column.
+        granularity: The granularity of the partition. Supported values are: 'day', 'month', 'year' and 'hour'.
+        agg_func: The aggregation function to use.
+        database: The database (BigQuery project ID) of the table.
+
+    Returns:
+        A SELECT statement that aggregates partition values for a table.
+    """
+    partitions_table_name = f"`{schema}`.INFORMATION_SCHEMA.PARTITIONS"
+    if database:
+        partitions_table_name = f"`{database}`.{partitions_table_name}"
+
+    if isinstance(data_type, exp.DataType):
+        data_type = data_type.sql(dialect="bigquery")
+    data_type = data_type.upper()
+
+    parse_fun = f"PARSE_{data_type}" if data_type in ("DATE", "DATETIME", "TIMESTAMP") else None
+    if parse_fun:
+        granularity = granularity or "day"
+        parse_format = GRANULARITY_TO_PARTITION_FORMAT[granularity.lower()]
+        partition_expr = exp.func(
+            parse_fun,
+            exp.Literal.string(parse_format),
+            exp.column("partition_id"),
+            dialect="bigquery",
+        )
+    else:
+        partition_expr = exp.cast(exp.column("partition_id"), "INT64", dialect="bigquery")
+
+    return (
+        exp.select(exp.func(agg_func, partition_expr))
+        .from_(partitions_table_name, dialect="bigquery")
+        .where(
+            f"table_name = '{table_name}' AND partition_id IS NOT NULL AND partition_id != '__NULL__'",
+            copy=False,
+        )
+        .sql(dialect="bigquery")
+    )
+
+
+GRANULARITY_TO_PARTITION_FORMAT = {
+    "day": "%Y%m%d",
+    "month": "%Y%m",
+    "year": "%Y",
+    "hour": "%Y%m%d%H",
+}

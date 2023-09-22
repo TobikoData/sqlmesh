@@ -25,7 +25,8 @@ Note: If using Databricks Connect please note the [requirements](https://docs.da
 ### Connection options
 
 | Option                               | Description                                                                                                                                                                              |  Type  | Required |
-|--------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:------:|:--------:|
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----: | :------: |
+| `type`                               | Engine type name - must be `databricks`                                                                                                                                                  | string |    Y     |
 | `server_hostname`                    | Databricks instance host name                                                                                                                                                            | string |    N     |
 | `http_path`                          | HTTP path, either to a DBSQL endpoint (such as `/sql/1.0/endpoints/1234567890abcdef`) or to a DBR interactive cluster (such as `/sql/protocolv1/o/1234567890123456/1234-123456-slid123`) | string |    N     |
 | `access_token`                       | HTTP Bearer access token, such as Databricks Personal Access Token                                                                                                                       | string |    N     |

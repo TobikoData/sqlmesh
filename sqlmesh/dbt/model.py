@@ -121,7 +121,12 @@ class ModelConfig(BaseModelConfig):
         if isinstance(v, dict):
             if not v.get("field"):
                 raise ConfigError("'field' key required for partition_by.")
-            if "granularity" in v and v["granularity"] not in GRANULARITY_TO_PARTITION_FORMAT:
+            if "granularity" in v and v["granularity"].lower() not in (
+                "day",
+                "month",
+                "year",
+                "hour",
+            ):
                 granularity = v["granularity"]
                 raise ConfigError(f"Unexpected granularity '{granularity}' in partition_by '{v}'.")
             return {"data_type": "date", "granularity": "day", **v}
@@ -256,6 +261,10 @@ class ModelConfig(BaseModelConfig):
             dialect="bigquery",
         )
 
+    @property
+    def sqlmesh_config_fields(self) -> t.Set[str]:
+        return super().sqlmesh_config_fields | {"cron", "interval_unit"}
+
     def to_sqlmesh(self, context: DbtContext) -> Model:
         """Converts the dbt model into a SQLMesh model."""
         dialect = context.dialect
@@ -274,11 +283,6 @@ class ModelConfig(BaseModelConfig):
             optional_kwargs["clustered_by"] = [
                 d.parse_one(c, dialect=dialect).name for c in self.cluster_by
             ]
-
-        for field in ["cron", "interval_unit"]:
-            field_val = getattr(self, field, None) or self.meta.get(field, None)
-            if field_val:
-                optional_kwargs[field] = field_val
 
         if not context.target:
             raise ConfigError(f"Target required to load '{self.sql_name}' into SQLMesh.")
@@ -319,32 +323,21 @@ class ModelConfig(BaseModelConfig):
         ):
             return None
 
-        data_type = self.partition_by["data_type"]
-        granularity = self.partition_by["granularity"]
+        from sqlmesh.core.engine_adapter.bigquery import select_partitions_expr
 
-        parse_fun = f"parse_{data_type}" if data_type in ("date", "datetime", "timestamp") else None
-        if parse_fun:
-            parse_format = GRANULARITY_TO_PARTITION_FORMAT[granularity]
-            partition_exp = f"{parse_fun}('{parse_format}', partition_id)"
-        else:
-            partition_exp = "CAST(partition_id AS INT64)"
+        data_type = self.partition_by["data_type"]
+        select_max_partition_expr = select_partitions_expr(
+            "{{ adapter.resolve_schema(this) }}",
+            "{{ adapter.resolve_identifier(this) }}",
+            data_type,
+            granularity=self.partition_by.get("granularity"),
+            database="{{ target.database }}",
+        )
 
         return f"""
 {{% if is_incremental() %}}
   DECLARE _dbt_max_partition {data_type.upper()} DEFAULT (
-    SELECT MAX({partition_exp})
-    FROM `{{{{ target.database }}}}`.`{{{{ adapter.resolve_schema(this) }}}}`.INFORMATION_SCHEMA.PARTITIONS
-    WHERE table_name = '{{{{ adapter.resolve_identifier(this) }}}}'
-      AND partition_id IS NOT NULL
-      AND partition_id != '__NULL__'
+    {select_max_partition_expr}
   );
 {{% endif %}}
 """
-
-
-GRANULARITY_TO_PARTITION_FORMAT = {
-    "day": "%Y%m%d",
-    "month": "%Y%m",
-    "year": "%Y",
-    "hour": "%Y%m%d%H",
-}

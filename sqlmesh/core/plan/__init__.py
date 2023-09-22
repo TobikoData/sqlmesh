@@ -7,5 +7,6 @@ from sqlmesh.core.plan.definition import (
 from sqlmesh.core.plan.evaluator import (
     AirflowPlanEvaluator,
     BuiltInPlanEvaluator,
+    MWAAPlanEvaluator,
     PlanEvaluator,
 )

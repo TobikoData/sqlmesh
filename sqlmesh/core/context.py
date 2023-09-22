@@ -60,7 +60,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.loader import Loader, update_model_schemas
 from sqlmesh.core.macros import ExecutableOrMacro
-from sqlmesh.core.metric import Metric
+from sqlmesh.core.metric import Metric, rewrite
 from sqlmesh.core.model import Model
 from sqlmesh.core.notification_target import (
     NotificationEvent,
@@ -68,6 +68,7 @@ from sqlmesh.core.notification_target import (
     NotificationTargetManager,
 )
 from sqlmesh.core.plan import Plan
+from sqlmesh.core.reference import ReferenceGraph
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.selector import Selector
@@ -383,6 +384,8 @@ class Context(BaseContext):
             self._macros = project.macros
             self._models = project.models
             self._metrics = project.metrics
+            self._standalone_audits.clear()
+            self._audits.clear()
             for name, audit in project.audits.items():
                 if isinstance(audit, StandaloneAudit):
                     self._standalone_audits[name] = audit
@@ -1038,7 +1041,7 @@ class Context(BaseContext):
             else self.snapshots.values()
         )
 
-        num_audits = sum(len(snapshot.audits) for snapshot in snapshots)
+        num_audits = sum(len(snapshot.audits_with_args) for snapshot in snapshots)
         self.console.log_status_update(f"Found {num_audits} audit(s).")
         errors = []
         skipped_count = 0
@@ -1050,14 +1053,20 @@ class Context(BaseContext):
                 snapshots=self.snapshots,
                 raise_exception=False,
             ):
+                audit_id = f"{audit_result.audit.name}"
+                if audit_result.model:
+                    audit_id += f" on model {audit_result.model.name}"
+
                 if audit_result.skipped:
-                    self.console.log_status_update(f"{audit_result.audit.name} SKIPPED.")
+                    self.console.log_status_update(f"{audit_id} ⏸️ SKIPPED.")
                     skipped_count += 1
                 elif audit_result.count:
                     errors.append(audit_result)
-                    self.console.log_status_update(f"{audit_result.audit.name} FAIL.")
+                    self.console.log_status_update(
+                        f"{audit_id} ❌ [red]FAIL [{audit_result.count}][/red]."
+                    )
                 else:
-                    self.console.log_status_update(f"{audit_result.audit.name} PASS.")
+                    self.console.log_status_update(f"{audit_id} ✅ [green]PASS[/green].")
 
         self.console.log_status_update(
             f"\nFinished with {len(errors)} audit error{'' if len(errors) == 1 else 's'} "
@@ -1071,6 +1080,25 @@ class Context(BaseContext):
             self.console.show_sql(f"{error.query}")
 
         self.console.log_status_update("Done.")
+
+    def rewrite(self, sql: str, dialect: str = "") -> exp.Expression:
+        """Rewrite a sql expression with semantic references into an executable query.
+
+        https://sqlmesh.readthedocs.io/en/latest/concepts/metrics/overview/
+
+        Args:
+            sql: The sql string to rewrite.
+            dialect: The dialect of the sql string, defaults to the project dialect.
+
+        Returns:
+            A SQLGlot expression with semantic references expanded.
+        """
+        return rewrite(
+            sql,
+            graph=ReferenceGraph(self.models.values()),
+            metrics=self._metrics,
+            dialect=dialect or self.config.dialect,
+        )
 
     def migrate(self) -> None:
         """Migrates SQLMesh to the current running version.

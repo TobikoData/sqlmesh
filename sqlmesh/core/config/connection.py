@@ -7,6 +7,7 @@ import typing as t
 from enum import Enum
 
 from pydantic import Field
+from sqlglot.helper import subclasses
 
 from sqlmesh.core import engine_adapter
 from sqlmesh.core.config.base import BaseConfig
@@ -16,15 +17,15 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import model_validator
+from sqlmesh.utils.pydantic import field_validator, model_validator
 
 if sys.version_info >= (3, 9):
-    from typing import Annotated, Literal
+    from typing import Literal
 else:
-    from typing_extensions import Annotated, Literal
+    from typing_extensions import Literal
 
 
-class _ConnectionConfig(abc.ABC, BaseConfig):
+class ConnectionConfig(abc.ABC, BaseConfig):
     concurrent_tasks: int
 
     @property
@@ -72,7 +73,7 @@ class _ConnectionConfig(abc.ABC, BaseConfig):
         )
 
 
-class DuckDBConnectionConfig(_ConnectionConfig):
+class DuckDBConnectionConfig(ConnectionConfig):
     """Configuration for the DuckDB connection.
 
     Args:
@@ -101,7 +102,7 @@ class DuckDBConnectionConfig(_ConnectionConfig):
         return duckdb.connect
 
 
-class SnowflakeConnectionConfig(_ConnectionConfig):
+class SnowflakeConnectionConfig(ConnectionConfig):
     """Configuration for the Snowflake connection.
 
     Args:
@@ -114,6 +115,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
         authenticator: The optional authenticator name. Defaults to username/password authentication ("snowflake").
                        Options: https://github.com/snowflakedb/snowflake-connector-python/blob/e937591356c067a77f34a0a42328907fda792c23/src/snowflake/connector/network.py#L178-L183
+        private_key: The optional private key to use for authentication. This is in the form of bytes and can only be created with the Python config. https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-example#label-python-key-pair-authn-rotation
     """
 
     account: str
@@ -123,6 +125,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
     database: t.Optional[str] = None
     role: t.Optional[str] = None
     authenticator: t.Optional[str] = None
+    private_key: t.Optional[bytes] = None
 
     concurrent_tasks: int = 4
 
@@ -135,18 +138,48 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
+        from snowflake.connector.network import (
+            DEFAULT_AUTHENTICATOR,
+            KEY_PAIR_AUTHENTICATOR,
+        )
+
         if "type" in values and values["type"] != "snowflake":
             return values
         auth = values.get("authenticator")
+        auth = auth.upper() if auth else DEFAULT_AUTHENTICATOR
         user = values.get("user")
         password = values.get("password")
-        if not auth and (not user or not password):
+        private_key = values.get("private_key")
+        if private_key:
+            auth = auth if auth and auth != DEFAULT_AUTHENTICATOR else KEY_PAIR_AUTHENTICATOR
+            if auth != KEY_PAIR_AUTHENTICATOR:
+                raise ConfigError(
+                    f"Private key can only be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+                )
+            if not user:
+                raise ConfigError(
+                    f"User must be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+                )
+            if password:
+                raise ConfigError(
+                    f"Password cannot be provided when using {KEY_PAIR_AUTHENTICATOR} authentication"
+                )
+        if auth == DEFAULT_AUTHENTICATOR and (not user or not password):
             raise ConfigError("User and password must be provided if using default authentication")
         return values
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
-        return {"user", "password", "account", "warehouse", "database", "role", "authenticator"}
+        return {
+            "user",
+            "password",
+            "account",
+            "warehouse",
+            "database",
+            "role",
+            "authenticator",
+            "private_key",
+        }
 
     @property
     def _engine_adapter(self) -> t.Type[EngineAdapter]:
@@ -159,7 +192,7 @@ class SnowflakeConnectionConfig(_ConnectionConfig):
         return connector.connect
 
 
-class DatabricksConnectionConfig(_ConnectionConfig):
+class DatabricksConnectionConfig(ConnectionConfig):
     """
     Databricks connection that uses the SQL connector for SQL models and then Databricks Connect for Dataframe operations
 
@@ -329,7 +362,7 @@ class BigQueryPriority(str, Enum):
         return QueryPriority.INTERACTIVE
 
 
-class BigQueryConnectionConfig(_ConnectionConfig):
+class BigQueryConnectionConfig(ConnectionConfig):
     """
     BigQuery Connection Configuration.
     """
@@ -430,7 +463,7 @@ class BigQueryConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class GCPPostgresConnectionConfig(_ConnectionConfig):
+class GCPPostgresConnectionConfig(ConnectionConfig):
     """
     Postgres Connection Configuration for GCP.
 
@@ -497,7 +530,7 @@ class GCPPostgresConnectionConfig(_ConnectionConfig):
         return Connector().connect
 
 
-class RedshiftConnectionConfig(_ConnectionConfig):
+class RedshiftConnectionConfig(ConnectionConfig):
     """
     Redshift Connection Configuration.
 
@@ -591,7 +624,7 @@ class RedshiftConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class PostgresConnectionConfig(_ConnectionConfig):
+class PostgresConnectionConfig(ConnectionConfig):
     host: str
     user: str
     password: str
@@ -631,7 +664,7 @@ class PostgresConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class MySQLConnectionConfig(_ConnectionConfig):
+class MySQLConnectionConfig(ConnectionConfig):
     host: str
     user: str
     password: str
@@ -673,7 +706,7 @@ class MySQLConnectionConfig(_ConnectionConfig):
         return connect
 
 
-class MSSQLConnectionConfig(_ConnectionConfig):
+class MSSQLConnectionConfig(ConnectionConfig):
     host: str
     user: str
     password: str
@@ -719,7 +752,7 @@ class MSSQLConnectionConfig(_ConnectionConfig):
         return pymssql.connect
 
 
-class SparkConnectionConfig(_ConnectionConfig):
+class SparkConnectionConfig(ConnectionConfig):
     """
     Vanilla Spark Connection Configuration. Use `DatabricksConnectionConfig` for Databricks.
     """
@@ -767,18 +800,38 @@ class SparkConnectionConfig(_ConnectionConfig):
         }
 
 
-ConnectionConfig = Annotated[
-    t.Union[
-        BigQueryConnectionConfig,
-        GCPPostgresConnectionConfig,
-        DatabricksConnectionConfig,
-        DuckDBConnectionConfig,
-        MSSQLConnectionConfig,
-        MySQLConnectionConfig,
-        PostgresConnectionConfig,
-        RedshiftConnectionConfig,
-        SnowflakeConnectionConfig,
-        SparkConnectionConfig,
-    ],
-    Field(discriminator="type_"),
-]
+CONNECTION_CONFIG_TO_TYPE = {
+    # Map all subclasses of ConnectionConfig to the value of their `type_` field.
+    tpe.all_field_infos()["type_"].default: tpe
+    for tpe in subclasses(__name__, ConnectionConfig, exclude=(ConnectionConfig,))
+}
+
+
+def parse_connection_config(v: t.Dict[str, t.Any]) -> ConnectionConfig:
+    if "type" not in v:
+        raise ConfigError("Missing connection type.")
+
+    connection_type = v["type"]
+    if connection_type not in CONNECTION_CONFIG_TO_TYPE:
+        raise ConfigError(f"Unknown connection type '{connection_type}'.")
+
+    return CONNECTION_CONFIG_TO_TYPE[connection_type](**v)
+
+
+def _connection_config_validator(
+    cls: t.Type, v: ConnectionConfig | t.Dict[str, t.Any] | None
+) -> ConnectionConfig | None:
+    if v is None or isinstance(v, ConnectionConfig):
+        return v
+    return parse_connection_config(v)
+
+
+connection_config_validator = field_validator(
+    "connection",
+    "state_connection",
+    "test_connection",
+    "default_connection",
+    "default_test_connection",
+    mode="before",
+    check_fields=False,
+)(_connection_config_validator)

@@ -113,7 +113,7 @@ def test_test_to_sqlmesh_fields():
     test_config = TestConfig(
         name="foo_test",
         sql=sql,
-        owner="Foo",
+        model_name="Foo",
         column_name="cost",
         severity="ERROR",
         enabled=True,
@@ -134,7 +134,7 @@ def test_test_to_sqlmesh_fields():
     test_config = TestConfig(
         name="foo_null_test",
         sql=sql,
-        owner="Foo",
+        model_name="Foo",
         column_name="id",
         severity="WARN",
         enabled=False,
@@ -153,6 +153,11 @@ def test_singular_test_to_standalone_audit():
     sql = "SELECT * FROM FOO WHERE cost > 100"
     test_config = TestConfig(
         name="foo_test",
+        description="test description",
+        owner="Sally",
+        stamp="bump",
+        cron="@monthly",
+        interval_unit="Day",
         sql=sql,
         severity="ERROR",
         enabled=True,
@@ -170,6 +175,11 @@ def test_singular_test_to_standalone_audit():
     standalone_audit = test_config.to_sqlmesh(context)
 
     assert standalone_audit.name == "foo_test"
+    assert standalone_audit.description == "test description"
+    assert standalone_audit.owner == "Sally"
+    assert standalone_audit.stamp == "bump"
+    assert standalone_audit.cron == "@monthly"
+    assert standalone_audit.interval_unit.value == "day"
     assert standalone_audit.dialect == "duckdb"
     assert standalone_audit.query == jinja_query(sql)
     assert standalone_audit.depends_on == {"foo"}
