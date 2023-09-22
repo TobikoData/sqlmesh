@@ -382,15 +382,15 @@ class ReportBackfillProgress(BaseModel):
     end: t.Optional[TimeLike] = None
 
 
-class ReportTestsRusult(BaseModel):
+class ReportTestsResult(BaseModel):
     message: str
 
 
-class ReportTestDetails(ReportTestsRusult):
+class ReportTestDetails(ReportTestsResult):
     details: str
 
 
-class ReportTestsFailure(ReportTestsRusult):
+class ReportTestsFailure(ReportTestsResult):
     total: int
     failures: int
     errors: int
