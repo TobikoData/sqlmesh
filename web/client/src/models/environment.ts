@@ -23,6 +23,7 @@ interface InitialEnvironmemt extends Partial<Environment> {
 interface ProfileEnvironment {
   name: EnvironmentName
   createFrom: EnvironmentName
+  isPinned: boolean
 }
 
 interface Profile {
@@ -37,18 +38,21 @@ export class ModelEnvironment {
   private _type: RelativeLocation
   private _createFrom: EnvironmentName
 
+  isPinned = false
   isModel = true
 
   constructor(
     initial: InitialEnvironmemt,
     type: RelativeLocation,
     createFrom: EnvironmentName = EnumDefaultEnvironment.Prod,
+    isPinned = false,
   ) {
     this._initial = initial
     this._type = type ?? EnumRelativeLocation.Local
     this._createFrom = this.isDefault
       ? EnumDefaultEnvironment.Empty
       : createFrom
+    this.isPinned = isPinned
   }
 
   get id(): string {
@@ -108,6 +112,7 @@ export class ModelEnvironment {
       output.environment = {
         name: environment.name,
         createFrom: environment.createFrom,
+        isPinned: environment.isPinned,
       }
     }
 
@@ -116,6 +121,7 @@ export class ModelEnvironment {
         env => ({
           name: env.name,
           createFrom: env.createFrom,
+          isPinned: env.isPinned,
         }),
       )
     }
@@ -137,15 +143,21 @@ export class ModelEnvironment {
     )
   }
 
-  static getDefaultEnvironments(): ModelEnvironment[] {
+  static getEnvironment(): Optional<ProfileEnvironment> {
+    const profile = getProfile()
+
+    return profile?.environment
+  }
+
+  static getEnvironments(): ModelEnvironment[] {
     const profile = getProfile()
     const environments = new Map<EnvironmentName, ProfileEnvironment>()
 
-    if (profile?.environment != null) {
+    if (isNotNil(profile) && isNotNil(profile?.environment)) {
       environments.set(profile.environment.name, profile.environment)
     }
 
-    if (profile?.environments != null) {
+    if (isNotNil(profile) && isNotNil(profile?.environments)) {
       profile.environments.forEach(environment =>
         environments.set(environment.name, environment),
       )
@@ -159,6 +171,7 @@ export class ModelEnvironment {
           { name },
           EnumRelativeLocation.Local,
           environment.createFrom,
+          environment.isPinned,
         ),
       )
     })

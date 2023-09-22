@@ -52,7 +52,7 @@ interface ContextStore {
   ) => void
 }
 
-const environments = new Set(ModelEnvironment.getDefaultEnvironments())
+const environments = new Set(ModelEnvironment.getEnvironments())
 const environment = environments.values().next().value
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
@@ -214,22 +214,57 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
         }
       })
 
-      ModelEnvironment.save({
-        environments,
+      pinnedEnvs.forEach(envName => {
+        const environment = environments.find(
+          ({ name: envNameLocal }) => envName === envNameLocal,
+        )
+
+        if (isNil(environment)) {
+          environments.push(
+            new ModelEnvironment(
+              {
+                name: envName,
+              },
+              EnumRelativeLocation.Local,
+              undefined,
+              true,
+            ),
+          )
+        } else {
+          environment.isPinned = true
+        }
       })
 
+      ModelEnvironment.save({ environments })
       ModelEnvironment.sort(environments)
 
-      const prodEnv = environments.find(({ name }) => name === 'prod')
-      const defaultEnv =
-        environments.find(({ name }) => name === defaultEnvironment) ??
-        s.environment
+      const profileEnv = ModelEnvironment.getEnvironment()
+      let prodEnv = environments.find(({ name }) => name === 'prod')
+      let storredEnv = environments.find(
+        ({ name }) => name === profileEnv?.name,
+      )
+      let defaultEnv = environments.find(
+        ({ name }) => name === defaultEnvironment,
+      )
+
+      environments.forEach(env => {
+        switch (env.name) {
+          case 'prod':
+            prodEnv = env
+            break
+          case profileEnv?.name:
+            storredEnv = env
+            break
+          case defaultEnvironment:
+            defaultEnv = env
+        }
+      })
+
+      const currentEnv = storredEnv ?? defaultEnv ?? s.environment
 
       return {
-        environment: isStringEmptyOrNil(prodEnv?.id) ? prodEnv : defaultEnv,
-        defaultEnvironment: environments.find(
-          ({ name }) => name === defaultEnvironment,
-        ),
+        environment: isStringEmptyOrNil(prodEnv?.id) ? prodEnv : currentEnv,
+        defaultEnvironment: defaultEnv,
         pinnedEnvironments: environments.filter(env =>
           pinnedEnvs.includes(env.name),
         ),
