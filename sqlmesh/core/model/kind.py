@@ -9,11 +9,15 @@ from sqlglot import exp
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import bool_validator, parse_properties
+from sqlmesh.core.model.common import parse_properties
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
+    SQLGlotBool,
+    SQLGlotListOfStrings,
+    SQLGlotPositiveInt,
+    SQLGlotString,
     field_validator,
     model_validator,
     model_validator_v1_args,
@@ -185,23 +189,10 @@ class TimeColumn(PydanticModel):
 
 
 class _Incremental(_ModelKind):
-    batch_size: t.Optional[int] = None
-    lookback: t.Optional[int] = None
-    forward_only: bool = False
-    disable_restatement: bool = False
-
-    _bool_validator = bool_validator
-
-    @field_validator("batch_size", "lookback", mode="before")
-    @classmethod
-    def _int_validator(cls, v: t.Any) -> t.Optional[int]:
-        if isinstance(v, exp.Expression):
-            num = int(v.name)
-        else:
-            num = int(v)
-        if num < 0:
-            raise ConfigError(f"Invalid value {num}. The value should be greater than 0")
-        return num
+    batch_size: t.Optional[SQLGlotPositiveInt] = None
+    lookback: t.Optional[SQLGlotPositiveInt] = None
+    forward_only: SQLGlotBool = False
+    disable_restatement: SQLGlotBool = False
 
     @model_validator(mode="after")
     @model_validator_v1_args
@@ -225,30 +216,19 @@ class IncrementalByTimeRangeKind(_Incremental):
 
 class IncrementalByUniqueKeyKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
-    unique_key: t.List[str]
-
-    _unique_key_validator = unique_key_validator
+    unique_key: SQLGlotListOfStrings
 
 
 class IncrementalUnmanagedKind(_ModelKind):
     name: Literal[ModelKindName.INCREMENTAL_UNMANAGED] = ModelKindName.INCREMENTAL_UNMANAGED
-    insert_overwrite: bool = False
-    forward_only: bool = True
+    insert_overwrite: SQLGlotBool = False
+    forward_only: SQLGlotBool = True
     disable_restatement: Literal[True] = True
-
-    _bool_validator = bool_validator
 
 
 class ViewKind(_ModelKind):
     name: Literal[ModelKindName.VIEW] = ModelKindName.VIEW
-    materialized: bool = False
-
-    @field_validator("materialized", mode="before")
-    @classmethod
-    def _parse_materialized(cls, v: t.Any) -> bool:
-        if isinstance(v, exp.Expression):
-            return bool(v.this)
-        return bool(v)
+    materialized: SQLGlotBool = False
 
     @property
     def data_hash_values(self) -> t.List[t.Optional[str]]:
@@ -257,27 +237,9 @@ class ViewKind(_ModelKind):
 
 class SeedKind(_ModelKind):
     name: Literal[ModelKindName.SEED] = ModelKindName.SEED
-    path: str
-    batch_size: int = 1000
+    path: SQLGlotString
+    batch_size: SQLGlotPositiveInt = 1000
     csv_settings: t.Optional[CsvSettings] = None
-
-    @field_validator("batch_size", mode="before")
-    @classmethod
-    def _parse_batch_size(cls, v: t.Any) -> int:
-        if isinstance(v, exp.Expression) and v.is_int:
-            v = int(v.name)
-        if not isinstance(v, int):
-            raise ValueError("Seed batch size must be an integer value")
-        if v <= 0:
-            raise ValueError("Seed batch size must be a positive integer")
-        return v
-
-    @field_validator("path", mode="before")
-    @classmethod
-    def _parse_path(cls, v: t.Any) -> str:
-        if isinstance(v, exp.Literal):
-            return v.this
-        return str(v)
 
     @field_validator("csv_settings", mode="before")
     @classmethod
@@ -319,21 +281,13 @@ class FullKind(_ModelKind):
 
 class SCDType2Kind(_ModelKind):
     name: Literal[ModelKindName.SCD_TYPE_2] = ModelKindName.SCD_TYPE_2
-    unique_key: t.List[str]
-    valid_from_name: str = "valid_from"
-    valid_to_name: str = "valid_to"
-    updated_at_name: str = "updated_at"
+    unique_key: SQLGlotListOfStrings
+    valid_from_name: SQLGlotString = "valid_from"
+    valid_to_name: SQLGlotString = "valid_to"
+    updated_at_name: SQLGlotString = "updated_at"
 
-    forward_only: bool = True
-    disable_restatement: bool = True
-
-    _unique_key_validator = unique_key_validator
-    _bool_validator = bool_validator
-
-    @field_validator("valid_from_name", "valid_to_name", "updated_at_name", mode="before")
-    @classmethod
-    def _string_validator(cls, v: t.Any) -> str:
-        return v.name if isinstance(v, exp.Expression) else str(v)
+    forward_only: SQLGlotBool = True
+    disable_restatement: SQLGlotBool = True
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
