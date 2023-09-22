@@ -1,3 +1,4 @@
+import sys
 import typing as t
 from functools import wraps
 
@@ -6,6 +7,12 @@ from pydantic.fields import FieldInfo
 from sqlglot import exp
 
 from sqlmesh.core import dialect as d
+from sqlmesh.utils import str_to_bool
+
+if sys.version_info >= (3, 9):
+    from typing import Annotated
+else:
+    from typing_extensions import Annotated
 
 if t.TYPE_CHECKING:
     Model = t.TypeVar("Model", bound="PydanticModel")
@@ -185,3 +192,71 @@ def field_validator_v1_args(func: t.Callable[..., t.Any]) -> t.Callable[..., t.A
         return func(cls, v, values_dict, *args, **kwargs)
 
     return wrapper
+
+
+def validate_list_of_strings(v: t.Any) -> t.List[str]:
+    if isinstance(v, exp.Identifier):
+        return [v.name]
+    if isinstance(v, (exp.Tuple, exp.Array)):
+        return [e.name for e in v.expressions]
+    return [i.name if isinstance(i, exp.Identifier) else str(i) for i in v]
+
+
+def validate_string(v: t.Any) -> str:
+    if isinstance(v, exp.Expression):
+        return v.name
+    return str(v)
+
+
+def bool_validator(v: t.Any) -> bool:
+    if isinstance(v, exp.Boolean):
+        return v.this
+    if isinstance(v, exp.Expression):
+        return str_to_bool(v.name)
+    return str_to_bool(str(v or ""))
+
+
+def positive_int_validator(v: t.Any) -> int:
+    if isinstance(v, exp.Expression) and v.is_int:
+        v = int(v.name)
+    if not isinstance(v, int):
+        raise ValueError(f"Invalid num {v}. Value must be an integer value")
+    if v <= 0:
+        raise ValueError(f"Invalid num {v}. Value must be a positive integer")
+    return v
+
+
+if t.TYPE_CHECKING:
+    SQLGlotListOfStrings = t.List[str]
+    SQLGlotString = str
+    SQLGlotBool = bool
+    SQLGlotPositiveInt = int
+elif PYDANTIC_MAJOR_VERSION >= 2:
+    from pydantic.functional_validators import BeforeValidator  # type: ignore
+
+    SQLGlotListOfStrings = Annotated[t.List[str], BeforeValidator(validate_list_of_strings)]
+    SQLGlotString = Annotated[str, BeforeValidator(validate_string)]
+    SQLGlotBool = Annotated[bool, BeforeValidator(bool_validator)]
+    SQLGlotPositiveInt = Annotated[int, BeforeValidator(positive_int_validator)]
+else:
+
+    T = t.TypeVar("T")
+
+    class PydanticTypeProxy(t.Generic[T]):
+        validate: t.Callable[[t.Any], T]
+
+        @classmethod
+        def __get_validators__(cls) -> t.Iterator[t.Callable[[t.Any], T]]:
+            yield cls.validate
+
+    class SQLGlotListOfStrings(PydanticTypeProxy[t.List[str]]):
+        validate = validate_list_of_strings
+
+    class SQLGlotString(PydanticTypeProxy[str]):
+        validate = validate_string
+
+    class SQLGlotBool(PydanticTypeProxy[bool]):
+        validate = bool_validator
+
+    class SQLGlotPositiveInt(PydanticTypeProxy[int]):
+        validate = positive_int_validator
