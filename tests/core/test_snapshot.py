@@ -173,7 +173,7 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
     ]
     snapshot.add_interval("2018-12-31 23:59:59", "2020-01-31 12:00:01")
     assert snapshot.intervals == [
-        (to_timestamp("2018-12-31"), to_timestamp("2020-01-31")),
+        (to_timestamp("2019-01-01"), to_timestamp("2020-01-31")),
     ]
 
     new_snapshot = make_snapshot(snapshot.model)
@@ -181,7 +181,7 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
     new_snapshot.add_interval("2020-02-05", "2020-02-10")
     new_snapshot.merge_intervals(snapshot)
     assert new_snapshot.intervals == [
-        (to_timestamp("2018-12-31"), to_timestamp("2020-02-02")),
+        (to_timestamp("2019-01-01"), to_timestamp("2020-02-02")),
         (to_timestamp("2020-02-05"), to_timestamp("2020-02-11")),
     ]
 
@@ -196,6 +196,19 @@ def test_add_interval_dev(snapshot: Snapshot):
     snapshot.add_interval("2020-01-02", "2020-01-02", is_dev=True)
     assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
     assert snapshot.dev_intervals == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
+
+
+def test_add_interval_partial(snapshot: Snapshot):
+    snapshot.add_interval("2023-01-01 00:00:00", "2023-01-01 23:59:59")
+    assert snapshot.intervals == []
+
+    snapshot.add_interval("2023-01-01 00:00:00", "2023-01-01 14:00:00")
+    assert snapshot.intervals == []
+
+    snapshot.add_interval("2023-01-01 15:00:00", "2023-01-03 00:00:00")
+    assert snapshot.intervals == [
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+    ]
 
 
 def test_missing_intervals(snapshot: Snapshot):
@@ -1145,6 +1158,7 @@ def test_is_valid_start(make_snapshot):
     assert snapshot.depends_on_past
     assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
     assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert snapshot.is_valid_start("2023-01-02", "2023-01-01 10:00:00")
     assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")
     snapshot.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
     assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
