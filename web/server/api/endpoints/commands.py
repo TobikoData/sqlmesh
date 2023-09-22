@@ -13,7 +13,7 @@ from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.errors import PlanError
 from web.server import models
-from web.server.console import ApiConsole
+from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -40,11 +40,10 @@ async def apply(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-    console: ApiConsole = context.console  # type: ignore
     report_plan = models.ReportProgressPlan(
         environment=environment, options={"skip_tests": plan_options.skip_tests}
     )
-    console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
+    api_console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
     report_stage_validate = models.ReportStagePlanValidation()
     report_plan.add(models.ReportStagePlan.validation, report_stage_validate)
     plan_func = functools.partial(
@@ -67,11 +66,11 @@ async def apply(
         plan = await plan_task
         report_stage_validate.stop(success=True)
         report_plan.stop(success=True)
-        console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
+        api_console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
     except PlanError:
         report_stage_validate.stop(success=False)
         report_plan.stop(success=False)
-        console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
+        api_console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
         raise ApiException(
             message="Unable to run a plan",
             origin="API -> commands -> apply",

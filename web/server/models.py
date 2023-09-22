@@ -5,7 +5,7 @@ import pathlib
 import typing as t
 
 import pydantic
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlglot import exp
 from watchfiles import Change
 
@@ -401,24 +401,23 @@ class ReportTestsFailure(ReportTestsRusult):
 
 
 class ReportMeta(BaseModel):
-    status: t.Optional[ReportStatus] = None
-    start_at: t.Optional[int] = None
+    status: ReportStatus = ReportStatus.init
+    start_at: int = Field(default_factory=now_timestamp)
     stop_at: t.Optional[int] = None
-    duration: t.Optional[int] = None
     done: bool = False
 
-    def __init__(self, *arg: t.Any, **kargs: t.Any) -> None:
-        super().__init__(*arg, **kargs)
-        self.status = ReportStatus.init
-        self.start_at = now_timestamp()
+    @property
+    def duration(self) -> int | None:
+        return self.stop_at - self.start_at if self.start_at and self.stop_at else None
+
+    def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
+        data = super().dict(*args, **kwargs)
+        data["duration"] = self.duration
+        return data
 
 
 class Stage(BaseModel):
-    meta: ReportMeta = ReportMeta()
-
-    def __init__(self, *arg: t.Any, **kargs: t.Any) -> None:
-        super().__init__(*arg, **kargs)
-        self.meta = ReportMeta()
+    meta: ReportMeta = Field(default_factory=ReportMeta)
 
     def stop(self, success: bool = True) -> None:
         if success:
@@ -428,7 +427,6 @@ class Stage(BaseModel):
 
         self.meta.stop_at = now_timestamp()
         if self.meta.start_at and self.meta.stop_at:
-            self.meta.duration = self.meta.stop_at - self.meta.start_at  # in milliseconds
             self.meta.done = True
 
 
