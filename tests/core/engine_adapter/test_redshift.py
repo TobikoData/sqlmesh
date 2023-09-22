@@ -156,7 +156,7 @@ def test_replace_query_with_df_table_exists(
 
     assert to_sql_calls(adapter) == [
         'CREATE TABLE "test_table_temp_1234" ("a" INTEGER, "b" INTEGER)',
-        'INSERT INTO "test_table_temp_1234" ("a", "b") SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS t',
+        'INSERT INTO "test_table_temp_1234" ("a", "b") SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS "t"',
         'ALTER TABLE "test_table" RENAME TO "test_table_old_1234"',
         'ALTER TABLE "test_table_temp_1234" RENAME TO "test_table"',
         'DROP TABLE IF EXISTS "test_table_old_1234"',
@@ -182,7 +182,7 @@ def test_replace_query_with_df_table_not_exists(
     )
 
     assert to_sql_calls(adapter) == [
-        'CREATE TABLE "test_table" AS SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS t',
+        'CREATE TABLE "test_table" AS SELECT CAST("a" AS INTEGER) AS "a", CAST("b" AS INTEGER) AS "b" FROM (SELECT 1 AS "a", 4 AS "b" UNION ALL SELECT 2, 5 UNION ALL SELECT 3, 6) AS "t"',
     ]
 
 
