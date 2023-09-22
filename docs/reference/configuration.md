@@ -90,7 +90,7 @@ The state and test connections default to `connection`. The `connection` key may
 
 Configuration for a data warehouse connection.
 
-Most parameters are specific to the connection engine `type` - see [below](#engine-connection-configuration). The default data warehouse connection type is an in-memory DuckDB database.
+Most parameters are specific to the connection engine `type` - see [below](#engine-specific). The default data warehouse connection type is an in-memory DuckDB database.
 
 #### General
 
