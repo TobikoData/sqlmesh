@@ -691,7 +691,7 @@ def test_incremental_time_self_reference(
         restate_models=["sushi.customer_revenue_lifetime", "sushi.customer_revenue_by_day"],
         no_prompts=True,
         start=start_date,
-        end=to_date("5 days ago"),
+        end="5 days ago",
     )
     assert sorted(plan.missing_intervals, key=lambda x: x.snapshot_name) == sorted(
         [
@@ -710,7 +710,6 @@ def test_incremental_time_self_reference(
                 snapshot_name="sushi.customer_revenue_by_day",
                 intervals=[
                     (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
-                    (to_timestamp(to_date("5 days ago")), to_timestamp(to_date("4 days ago"))),
                 ],
             ),
         ],
