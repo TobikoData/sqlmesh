@@ -153,11 +153,11 @@ export class ModelEnvironment {
     const profile = getProfile()
     const environments = new Map<EnvironmentName, ProfileEnvironment>()
 
-    if (isNotNil(profile) && isNotNil(profile?.environment)) {
+    if (isNotNil(profile) && isNotNil(profile.environment)) {
       environments.set(profile.environment.name, profile.environment)
     }
 
-    if (isNotNil(profile) && isNotNil(profile?.environments)) {
+    if (isNotNil(profile) && isNotNil(profile.environments)) {
       profile.environments.forEach(environment =>
         environments.set(environment.name, environment),
       )
