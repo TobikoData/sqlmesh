@@ -1,10 +1,12 @@
+from datetime import timedelta
+
 import pytest
 from pytest_mock.plugin import MockerFixture
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from sqlmesh.core.context import Context
 from sqlmesh.schedulers.airflow.client import AirflowClient
-from sqlmesh.utils.date import now, yesterday
+from sqlmesh.utils.date import now, to_date, yesterday
 from tests.conftest import SushiDataValidator
 
 
@@ -20,7 +22,7 @@ def wait_for_airflow(airflow_client: AirflowClient):
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_sushi(mocker: MockerFixture, is_docker: bool):
-    start = "1 week ago"
+    start = to_date(now() - timedelta(days=6))
     end = now()
 
     airflow_config = "airflow_config_docker" if is_docker else "airflow_config"
