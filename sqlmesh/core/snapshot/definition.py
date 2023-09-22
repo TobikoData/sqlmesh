@@ -564,9 +564,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 If it is a datetime object, then it is exclusive.
             is_dev: Indicates whether the given interval is being added while in development mode.
         """
-        intervals = self.dev_intervals if is_dev else self.intervals
+        if to_timestamp(start) > to_timestamp(end):
+            raise ValueError(
+                f"Attempted to add an Invalid interval ({start}, {end}) to snapshot {self.snapshot_id}"
+            )
 
-        intervals.append(self.inclusive_exclusive(start, end))
+        start_ts, end_ts = self.inclusive_exclusive(start, end, strict=False)
+        if start_ts == end_ts:
+            # Skipping partial interval.
+            return
+
+        intervals = self.dev_intervals if is_dev else self.intervals
+        intervals.append((start_ts, end_ts))
 
         if len(intervals) < 2:
             return
@@ -617,6 +626,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         interval_unit = self.node.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
+        if start_ts < to_timestamp(start):
+            start_ts = to_timestamp(interval_unit.cron_next(start_ts))
 
         if is_date(end):
             end = to_datetime(end) + timedelta(days=1)
@@ -828,9 +839,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.depends_on_past and start:
             if not snapshot_start:
                 raise SQLMeshError("Snapshot must have a start defined if it depends on past")
-            start_ts = to_timestamp(self.node.interval_unit.cron_floor(start))
+
+            interval_unit = self.node.interval_unit
+            start_ts = to_timestamp(interval_unit.cron_floor(start))
+
             if not self.intervals:
-                return to_timestamp(snapshot_start) >= start_ts
+                # The start date must be aligned by the interval unit.
+                snapshot_start_ts = to_timestamp(interval_unit.cron_floor(snapshot_start))
+                if snapshot_start_ts < to_timestamp(snapshot_start):
+                    snapshot_start_ts = to_timestamp(interval_unit.cron_next(snapshot_start_ts))
+                return snapshot_start_ts >= start_ts
             # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
             # provided start_ts. Otherwise we know that we are doing a non-contiguous load and therefore this is not
             # a valid start.
