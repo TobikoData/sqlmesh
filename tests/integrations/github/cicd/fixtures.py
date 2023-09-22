@@ -1,4 +1,3 @@
-import json
 import typing as t
 
 import pytest
@@ -7,76 +6,152 @@ from pytest_mock.plugin import MockerFixture
 from sqlmesh.integrations.github.cicd.controller import (
     GithubController,
     GithubEvent,
+    MergeStateStatus,
     PullRequestInfo,
 )
-from tests.integrations.github.cicd.helper import get_mocked_controller
+from sqlmesh.utils import AttributeDict
 
 
 @pytest.fixture
-def github_pull_request_review_submit_event() -> GithubEvent:
-    return GithubEvent.from_path("tests/fixtures/github/pull_request_review_submit.json")
+def github_client(mocker: MockerFixture):
+    from github import Github
+    from github.Issue import Issue
+    from github.PullRequest import PullRequest
+    from github.PullRequestReview import PullRequestReview
+    from github.Repository import Repository
 
-
-@pytest.fixture
-def github_pull_request_synchronized_event() -> GithubEvent:
-    return GithubEvent.from_path("tests/fixtures/github/pull_request_synchronized.json")
-
-
-@pytest.fixture
-def github_pull_request_comment_raw() -> t.Dict[str, t.Any]:
-    with open("tests/fixtures/github/pull_request_comment.json") as f:
-        return json.load(f)
-
-
-@pytest.fixture
-def github_pull_request_comment_event() -> GithubEvent:
-    return GithubEvent.from_path("tests/fixtures/github/pull_request_comment.json")
-
-
-@pytest.fixture
-def github_pull_request_command_deploy_prod_event() -> GithubEvent:
-    return GithubEvent.from_path("tests/fixtures/github/pull_request_command_deploy.json")
-
-
-@pytest.fixture
-def github_pull_request_closed_event() -> GithubEvent:
-    return GithubEvent.from_path("tests/fixtures/github/pull_request_closed.json")
-
-
-@pytest.fixture
-def github_pull_request_synchronized_info(
-    github_pull_request_synchronized_event: GithubEvent,
-) -> PullRequestInfo:
-    return PullRequestInfo.create_from_pull_request_url(
-        github_pull_request_synchronized_event.pull_request_url
+    client_mock = mocker.MagicMock(spec=Github)
+    mocker.patch("github.Github", client_mock)
+    mock_repository = mocker.MagicMock(spec=Repository)
+    mock_pull_request = mocker.MagicMock(spec=PullRequest)
+    mock_pull_request.get_reviews = mocker.MagicMock(
+        side_effect=[mocker.MagicMock(spec=PullRequestReview)]
     )
+    mock_repository.get_pull = mocker.MagicMock(side_effect=mock_pull_request)
+    mock_repository.get_issue = mocker.MagicMock(side_effect=mocker.MagicMock(spec=Issue))
+    client_mock.get_repo = mocker.MagicMock(side_effect=mock_repository)
+
+    return client_mock
 
 
 @pytest.fixture
-def github_pr_synchronized_approvers_controller(
-    github_pull_request_synchronized_event: GithubEvent, mocker: MockerFixture
-) -> GithubController:
-    return get_mocked_controller(
-        github_pull_request_synchronized_event, mocker, config="required_approvers_config"
-    )
+def make_pull_request_review() -> t.Callable:
+    from github.PullRequestReview import PullRequestReview
+
+    def _make_function(username: str, state: str, **kwargs) -> PullRequestReview:
+        return PullRequestReview(
+            "test",  # type: ignore
+            {},
+            {
+                "user": AttributeDict(name=username),
+                "state": state,
+                **kwargs,
+            },
+            completed=False,
+        )
+
+    return _make_function
 
 
 @pytest.fixture
-def github_pr_closed_controller(
-    github_pull_request_closed_event: GithubEvent, mocker: MockerFixture
-):
-    return get_mocked_controller(github_pull_request_closed_event, mocker)
+def make_controller(mocker: MockerFixture) -> t.Callable:
+    from github import Github
+
+    def _make_function(
+        event_path: t.Union[str, t.Dict],
+        client: Github,
+        *,
+        merge_state_status: MergeStateStatus = MergeStateStatus.CLEAN,
+    ) -> GithubController:
+        mocker.patch("sqlmesh.core.context.Context.apply", mocker.MagicMock())
+        mocker.patch("sqlmesh.core.context.Context._run_plan_tests", mocker.MagicMock())
+        mocker.patch("sqlmesh.core.context.Context._run_tests", mocker.MagicMock())
+        mocker.patch(
+            "sqlmesh.integrations.github.cicd.controller.GithubController._get_merge_state_status",
+            mocker.MagicMock(side_effect=lambda: merge_state_status),
+        )
+        return GithubController(
+            paths=["examples/sushi"],
+            token="abc",
+            event=GithubEvent.from_path(event_path)
+            if isinstance(event_path, str)
+            else GithubEvent.from_obj(event_path),
+            client=client,
+        )
+
+    return _make_function
 
 
 @pytest.fixture
-def github_pr_invalid_command_controller(
-    github_pull_request_comment_event: GithubEvent, mocker: MockerFixture
-):
-    return get_mocked_controller(github_pull_request_comment_event, mocker)
+def make_event_issue_comment() -> t.Callable:
+    def _make_function(action: str, comment: str) -> t.Dict:
+        return {
+            "action": action,
+            "comment": {"body": comment},
+            "issue": {
+                "pull_request": {
+                    "url": "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
+                }
+            },
+        }
+
+    return _make_function
+
+
+class MockIssueComment:
+    def __init__(self, body: str):
+        self.body = body
+
+    def edit(self, body):
+        self.body = body
 
 
 @pytest.fixture
-def github_pr_command_deploy_prod_controller(
-    github_pull_request_command_deploy_prod_event: GithubEvent, mocker: MockerFixture
-):
-    return get_mocked_controller(github_pull_request_command_deploy_prod_event, mocker)
+def make_mock_issue_comment() -> t.Callable:
+    def _make_function(
+        comment: str, created_comments: t.Optional[t.List[MockIssueComment]] = None
+    ) -> MockIssueComment:
+        mock_issue_comment = MockIssueComment(body=comment)
+        if created_comments is not None:
+            created_comments.append(mock_issue_comment)
+        return mock_issue_comment
+
+    return _make_function
+
+
+class MockCheckRun:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.previous_kwargs = []
+
+    def edit(self, **kwargs):
+        self.previous_kwargs.append(self.kwargs.copy())
+        self.kwargs = {**self.kwargs, **kwargs}
+
+    @property
+    def all_kwargs(self) -> t.List[t.Dict]:
+        return self.previous_kwargs + [self.kwargs]
+
+
+@pytest.fixture
+def make_mock_check_run() -> t.Callable:
+    def _make_function(**kwargs) -> MockCheckRun:
+        return MockCheckRun(**kwargs)
+
+    return _make_function
+
+
+@pytest.fixture
+def make_event_from_fixture() -> t.Callable:
+    def _make_function(fixture_path: str) -> GithubEvent:
+        return GithubEvent.from_path(fixture_path)
+
+    return _make_function
+
+
+@pytest.fixture
+def make_pull_request_info() -> t.Callable:
+    def _make_function(event: GithubEvent) -> PullRequestInfo:
+        return PullRequestInfo.create_from_pull_request_url(event.pull_request_url)
+
+    return _make_function
