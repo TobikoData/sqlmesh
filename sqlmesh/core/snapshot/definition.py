@@ -613,7 +613,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
-            allow_partial: Whether to allow partial intervals.
+            allow_partial: Whether the interval can be partial or not.
 
         Returns:
             A [start, end) pair.
@@ -659,7 +659,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         execution_time: t.Optional[TimeLike] = None,
         is_dev: bool = False,
         ignore_cron: bool = False,
-        allow_partial: bool = False,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
 
@@ -674,7 +673,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             restatements: A set of snapshot names being restated
             is_dev: Indicates whether missing intervals are computed for the development environment.
             ignore_cron: Whether to ignore the node's cron schedule.
-            allow_partial: Whether to allow partial intervals.
 
         Returns:
             A list of all the missing intervals as epoch timestamps.
@@ -689,20 +687,20 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         execution_time = execution_time or now()
-
+        allow_partials = self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
                 start,
                 end,
                 strict=False,
-                allow_partial=allow_partial,
+                allow_partial=allow_partials,
             )
         )
 
         interval_unit = self.node.interval_unit
 
-        if allow_partial:
+        if allow_partials:
             upper_bound_ts = to_timestamp(execution_time)
             end_ts = min(end_ts, upper_bound_ts)
         else:
@@ -1188,7 +1186,6 @@ def missing_intervals(
     restatements: t.Optional[t.Dict[str, Interval]] = None,
     is_dev: bool = False,
     ignore_cron: bool = False,
-    allow_partial: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
@@ -1216,7 +1213,6 @@ def missing_intervals(
             execution_time=execution_time,
             is_dev=is_dev,
             ignore_cron=ignore_cron,
-            allow_partial=allow_partial,
         )
         if intervals:
             missing[snapshot] = intervals

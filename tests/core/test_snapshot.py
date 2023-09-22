@@ -117,6 +117,7 @@ def test_json(snapshot: Snapshot):
             "grains": [],
             "references": [],
             "hash_raw_query": False,
+            "allow_partials": False,
         },
         "audits": [],
         "name": "name",
@@ -226,19 +227,30 @@ def test_missing_intervals(snapshot: Snapshot):
     ]
 
 
-def test_missing_intervals_partial(snapshot: Snapshot):
+def test_missing_intervals_partial(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds")),
+            owner="owner",
+            cron="@daily",
+            query=parse_one("SELECT 1, ds FROM name"),
+            allow_partials=True,
+        )
+    )
+
     start = "2023-01-01"
     end_ts = to_timestamp(start) + 1000
-    assert snapshot.missing_intervals(start, end_ts) == []
-    assert snapshot.missing_intervals(start, end_ts, allow_partial=True) == [
+    assert snapshot.missing_intervals(start, end_ts) == [
         (to_timestamp(start), to_timestamp("2023-01-02")),
     ]
-    assert snapshot.missing_intervals(start, end_ts, execution_time=end_ts, allow_partial=True) == [
+    assert snapshot.missing_intervals(start, end_ts, execution_time=end_ts) == [
         (to_timestamp(start), end_ts),
     ]
-    assert snapshot.missing_intervals(start, start, allow_partial=True) == [
+    assert snapshot.missing_intervals(start, start) == [
         (to_timestamp(start), to_timestamp("2023-01-02")),
     ]
+    assert snapshot.missing_intervals(start, start, execution_time=start, ignore_cron=True) == []
 
 
 def test_incremental_time_self_reference(make_snapshot):
@@ -315,17 +327,7 @@ def test_lookback(snapshot: Snapshot, make_snapshot):
     assert snapshot.missing_intervals("2023-01-28", "2023-01-28", "2023-01-30 05:00:00") == [
         (to_timestamp("2023-01-28"), to_timestamp("2023-01-29")),
     ]
-    assert snapshot.missing_intervals(
-        "2023-01-28", "2023-01-28", "2023-01-30 05:00:00", allow_partial=True
-    ) == [
-        (to_timestamp("2023-01-28"), to_timestamp("2023-01-29")),
-    ]
     assert snapshot.missing_intervals("2023-01-29", "2023-01-29", "2023-01-30 05:00:00") == [
-        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
-    ]
-    assert snapshot.missing_intervals(
-        "2023-01-29", "2023-01-29", "2023-01-30 05:00:00", allow_partial=True
-    ) == [
         (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
     ]
     assert snapshot.missing_intervals("2023-01-27", "2023-01-29", "2023-01-30 05:00:00") == [
@@ -422,7 +424,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="3811098861",
-        metadata_hash="1237394431",
+        metadata_hash="541992912",
     )
 
     assert fingerprint == original_fingerprint
@@ -469,7 +471,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="3270932819",
-        metadata_hash="3585221762",
+        metadata_hash="2823924537",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -509,7 +511,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="2864998504",
-        metadata_hash="1237394431",
+        metadata_hash="541992912",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
@@ -1138,21 +1140,6 @@ def test_model_custom_cron(make_snapshot):
         to_timestamp("2023-01-30"),
         execution_time="2023-01-30 04:59:00",
         ignore_cron=True,
-    ) == [
-        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
-    ]
-
-    # Run at 4:59AM and allow partial
-    assert snapshot.missing_intervals(
-        "2023-01-29", "2023-01-29", execution_time="2023-01-30 04:59:00", allow_partial=True
-    ) == [
-        (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
-    ]
-    assert snapshot.missing_intervals(
-        to_timestamp("2023-01-29"),
-        to_timestamp("2023-01-30"),
-        execution_time="2023-01-30 04:59:00",
-        allow_partial=True,
     ) == [
         (to_timestamp("2023-01-29"), to_timestamp("2023-01-30")),
     ]

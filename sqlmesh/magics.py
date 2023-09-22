@@ -357,11 +357,6 @@ class SQLMeshMagics(Magics):
         action="store_true",
         help="Run for all missing intervals, ignoring individual cron schedules.",
     )
-    @argument(
-        "--allow-partial",
-        action="store_true",
-        help="Allow partial intervals in the run.",
-    )
     @line_magic
     def run_dag(self, line: str) -> None:
         """Evaluate the DAG of models using the built-in scheduler."""
@@ -377,7 +372,6 @@ class SQLMeshMagics(Magics):
             end=args.end,
             skip_janitor=args.skip_janitor,
             ignore_cron=args.ignore_cron,
-            allow_partial=args.allow_partial,
         )
         self._context.console = console
         if not success:

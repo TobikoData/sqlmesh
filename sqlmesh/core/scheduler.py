@@ -78,7 +78,6 @@ class Scheduler:
         is_dev: bool = False,
         restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
         ignore_cron: bool = False,
-        allow_partial: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
     ) -> SnapshotToBatches:
         """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
@@ -99,7 +98,6 @@ class Scheduler:
                 tables / table clones should be used where applicable.
             restatements: A set of snapshot names being restated.
             ignore_cron: Whether to ignore the node's cron schedule.
-            allow_partial: Whether to allow partial intervals.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
         """
         restatements = restatements or {}
@@ -117,7 +115,6 @@ class Scheduler:
             execution_time=execution_time or now(),
             restatements=restatements,
             ignore_cron=ignore_cron,
-            allow_partial=allow_partial,
         )
 
     def evaluate(
@@ -188,7 +185,6 @@ class Scheduler:
         execution_time: t.Optional[TimeLike] = None,
         restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
         ignore_cron: bool = False,
-        allow_partial: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
@@ -202,7 +198,6 @@ class Scheduler:
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A dict of snapshots to restate and their intervals.
             ignore_cron: Whether to ignore the node's cron schedule.
-            allow_partial: Whether to allow partial intervals.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
 
         Returns:
@@ -230,7 +225,6 @@ class Scheduler:
             is_dev=is_dev,
             restatements=restatements,
             ignore_cron=ignore_cron,
-            allow_partial=allow_partial,
             selected_snapshots=selected_snapshots,
         )
         if not batches:
@@ -332,7 +326,6 @@ def compute_interval_params(
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
     ignore_cron: bool = False,
-    allow_partial: bool = False,
 ) -> SnapshotToBatches:
     """Find the optimal date interval paramaters based on what needs processing and maximal batch size.
 
@@ -353,7 +346,6 @@ def compute_interval_params(
         execution_time: The date/time time reference to use for execution time.
         restatements: A dict of snapshot names being restated and their intervals.
         ignore_cron: Whether to ignore the node's cron schedule.
-        allow_partial: Whether to allow partial intervals.
 
     Returns:
         A dict containing all snapshots needing to be run with their associated interval params.
@@ -368,7 +360,6 @@ def compute_interval_params(
         restatements=restatements,
         is_dev=is_dev,
         ignore_cron=ignore_cron,
-        allow_partial=allow_partial,
     ).items():
         batches = []
         batch_size = snapshot.node.batch_size
