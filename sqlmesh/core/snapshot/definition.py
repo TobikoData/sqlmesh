@@ -718,7 +718,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         # get all individual dates with the addition of extra lookback dates up to the execution date
         # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
         while True:
-            ts = to_timestamp(croniter.get_next())
+            ts = to_timestamp(croniter.get_next(estimate=True))
 
             if ts < end_ts:
                 dates.append(ts)
@@ -729,7 +729,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         lookback = self.model.lookback if self.is_model else 0
 
         for _ in range(lookback):
-            ts = to_timestamp(croniter.get_next())
+            ts = to_timestamp(croniter.get_next(estimate=True))
             if ts < upper_bound_ts:
                 dates.append(ts)
             else:
