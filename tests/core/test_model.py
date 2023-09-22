@@ -1040,6 +1040,7 @@ def test_render_query(assert_exp_eq):
         'SELECT COUNT(DISTINCT "a") FILTER (WHERE "b" > 0) AS "c" FROM "x" AS "x"',
     )
 
+
 def test_time_column():
     expressions = d.parse(
         """
