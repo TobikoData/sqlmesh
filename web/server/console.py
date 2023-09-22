@@ -10,6 +10,7 @@ from sse_starlette.sse import ServerSentEvent
 
 from sqlmesh.core.console import TerminalConsole
 from sqlmesh.core.environment import EnvironmentNamingInfo
+from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.snapshot import Snapshot
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.date import now_timestamp
@@ -26,11 +27,11 @@ class ApiConsole(TerminalConsole):
         self.current_task_status: t.Dict[str, t.Dict[str, t.Any]] = {}
         self.queue: asyncio.Queue = asyncio.Queue()
 
-    def start_evaluation(self, environment: str) -> None:
-        self.report = models.ReportProgressPlanApply(environment=environment)
+    def log_start_evaluation(self, plan: Plan) -> None:
+        self.report = models.ReportProgressPlanApply(environment=plan.environment.name)
         self.log_event_apply()
 
-    def stop_evaluation(self) -> None:
+    def log_stop_evaluation(self) -> None:
         if self.report:
             self.report.stop(success=True)
         self.log_event_apply()
@@ -58,7 +59,7 @@ class ApiConsole(TerminalConsole):
             self.report.creation.stop(success=success)
 
             if not success:
-                self.stop_evaluation()
+                self.log_stop_evaluation()
 
     def start_restate_progress(self) -> None:
         if self.report:
@@ -73,7 +74,7 @@ class ApiConsole(TerminalConsole):
             self.report.restate.stop(success=success)
 
             if not success:
-                self.stop_evaluation()
+                self.log_stop_evaluation()
 
     def start_evaluation_progress(
         self,
@@ -126,7 +127,7 @@ class ApiConsole(TerminalConsole):
             self.report.backfill.stop(success=success)
 
             if not success:
-                self.stop_evaluation()
+                self.log_stop_evaluation()
 
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
         if self.report:
@@ -151,7 +152,7 @@ class ApiConsole(TerminalConsole):
             self.report.promote.stop(success=success)
 
             if not success:
-                self.stop_evaluation()
+                self.log_stop_evaluation()
 
     def _make_event(self, event: str, data: dict[str, t.Any]) -> ServerSentEvent:
         if isinstance(event, models.ConsoleEvent):

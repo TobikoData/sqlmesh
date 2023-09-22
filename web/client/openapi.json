@@ -753,6 +753,23 @@
         "title": "ApplyType",
         "description": "An enumeration of possible apply types."
       },
+      "BackfillDetails": {
+        "properties": {
+          "model_name": { "type": "string", "title": "Model Name" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "interval": {
+            "items": [{ "type": "string" }, { "type": "string" }],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Interval"
+          },
+          "batches": { "type": "integer", "title": "Batches" }
+        },
+        "type": "object",
+        "required": ["view_name", "interval", "batches"],
+        "title": "BackfillDetails"
+      },
       "Body_apply_api_commands_apply_post": {
         "properties": {
           "environment": { "type": "string", "title": "Environment" },
@@ -853,26 +870,6 @@
         "type": "object",
         "required": ["name", "type"],
         "title": "Column"
-      },
-      "ContextEnvironmentChanges": {
-        "properties": {
-          "added": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
-            "title": "Added"
-          },
-          "removed": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
-            "title": "Removed"
-          },
-          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
-        },
-        "type": "object",
-        "required": ["added", "removed", "modified"],
-        "title": "ContextEnvironmentChanges"
       },
       "Directory": {
         "properties": {
@@ -1358,78 +1355,71 @@
         "required": ["model"],
         "title": "RenderInput"
       },
-      "ReportBackfillProgress": {
-        "properties": {
-          "completed": { "type": "integer", "title": "Completed" },
-          "total": { "type": "integer", "title": "Total" },
-          "view_name": { "type": "string", "title": "View Name" },
-          "start": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "Start"
-          },
-          "end": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "End"
-          }
-        },
-        "type": "object",
-        "required": ["completed", "total", "view_name", "start"],
-        "title": "ReportBackfillProgress"
-      },
-      "ReportStagePlanChanges": {
+      "ReportMeta": {
         "properties": {
           "status": {
             "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
             "default": "init"
           },
-          "start_at": {
-            "type": "integer",
-            "title": "Start At",
-            "default": 1694034149329
-          },
-          "meta": { "type": "object", "title": "Meta" },
+          "start_at": { "type": "integer", "title": "Start At" },
           "stop_at": { "type": "integer", "title": "Stop At" },
-          "duration": { "type": "integer", "title": "Duration" },
-          "done": { "type": "boolean", "title": "Done", "default": false },
-          "changes": {
-            "$ref": "#/components/schemas/ContextEnvironmentChanges"
+          "done": { "type": "boolean", "title": "Done", "default": false }
+        },
+        "type": "object",
+        "title": "ReportMeta"
+      },
+      "ReportProgressPlan": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/ReportMeta" },
+          "environment": { "type": "string", "title": "Environment" },
+          "options": { "type": "object", "title": "Options" },
+          "validation": {
+            "$ref": "#/components/schemas/ReportStagePlanValidation"
           },
+          "changes": { "$ref": "#/components/schemas/ReportStagePlanChanges" },
           "backfills": {
-            "items": { "$ref": "#/components/schemas/ReportBackfillProgress" },
-            "type": "array",
-            "title": "Backfills"
+            "$ref": "#/components/schemas/ReportStagePlanBackfills"
           }
+        },
+        "type": "object",
+        "required": ["environment"],
+        "title": "ReportProgressPlan"
+      },
+      "ReportStagePlanBackfills": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/ReportMeta" },
+          "models": {
+            "items": { "$ref": "#/components/schemas/BackfillDetails" },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "title": "ReportStagePlanBackfills"
+      },
+      "ReportStagePlanChanges": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/ReportMeta" },
+          "added": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Added"
+          },
+          "removed": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Removed"
+          },
+          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
         },
         "type": "object",
         "title": "ReportStagePlanChanges"
       },
       "ReportStagePlanValidation": {
         "properties": {
-          "status": {
-            "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
-            "default": "init"
-          },
-          "start_at": {
-            "type": "integer",
-            "title": "Start At",
-            "default": 1694034149329
-          },
-          "meta": { "type": "object", "title": "Meta" },
-          "stop_at": { "type": "integer", "title": "Stop At" },
-          "duration": { "type": "integer", "title": "Duration" },
-          "done": { "type": "boolean", "title": "Done", "default": false },
+          "meta": { "$ref": "#/components/schemas/ReportMeta" },
           "start": {
             "anyOf": [
               { "type": "string", "format": "date" },
@@ -1453,58 +1443,6 @@
         },
         "type": "object",
         "title": "ReportStagePlanValidation"
-      },
-      "ReportProgressPlan": {
-        "properties": {
-          "status": {
-            "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
-            "default": "init"
-          },
-          "start_at": {
-            "type": "integer",
-            "title": "Start At",
-            "default": 1694034149329
-          },
-          "meta": { "type": "object", "title": "Meta" },
-          "stop_at": { "type": "integer", "title": "Stop At" },
-          "duration": { "type": "integer", "title": "Duration" },
-          "done": { "type": "boolean", "title": "Done", "default": false },
-          "environment": { "type": "string", "title": "Environment" },
-          "stages": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/ReportStage"
-            },
-            "type": "object",
-            "title": "Stages",
-            "default": {}
-          },
-          "validation": {
-            "$ref": "#/components/schemas/ReportStagePlanValidation"
-          },
-          "changes": { "$ref": "#/components/schemas/ReportStagePlanChanges" }
-        },
-        "type": "object",
-        "required": ["environment"],
-        "title": "ReportProgressPlan"
-      },
-      "ReportStage": {
-        "properties": {
-          "status": {
-            "allOf": [{ "$ref": "#/components/schemas/ReportStatus" }],
-            "default": "init"
-          },
-          "start_at": {
-            "type": "integer",
-            "title": "Start At",
-            "default": 1694034149329
-          },
-          "meta": { "type": "object", "title": "Meta" },
-          "stop_at": { "type": "integer", "title": "Stop At" },
-          "duration": { "type": "integer", "title": "Duration" },
-          "done": { "type": "boolean", "title": "Done", "default": false }
-        },
-        "type": "object",
-        "title": "ReportStage"
       },
       "ReportStatus": {
         "type": "string",

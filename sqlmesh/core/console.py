@@ -59,11 +59,11 @@ class Console(abc.ABC):
     with them when their input is needed."""
 
     @abc.abstractmethod
-    def start_evaluation(self, environment: str) -> None:
+    def log_start_evaluation(self, plan: Plan) -> None:
         """Indicates that a new evaluation has begun."""
 
     @abc.abstractmethod
-    def stop_evaluation(self) -> None:
+    def log_stop_evaluation(self) -> None:
         """Indicates that the evaluation has ended."""
 
     @abc.abstractmethod
@@ -224,10 +224,10 @@ class TerminalConsole(Console):
     def _confirm(self, message: str, **kwargs: t.Any) -> bool:
         return Confirm.ask(message, console=self.console, **kwargs)
 
-    def start_evaluation(self, environment: str) -> None:
+    def log_start_evaluation(self, plan: Plan) -> None:
         pass
 
-    def stop_evaluation(self) -> None:
+    def log_stop_evaluation(self) -> None:
         pass
 
     def start_evaluation_progress(
