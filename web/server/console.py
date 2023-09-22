@@ -187,7 +187,7 @@ class ApiConsole(TerminalConsole):
         if result.wasSuccessful():
             self.log_event(
                 event="tests",
-                data=models.ReportTestsRusult(
+                data=models.ReportTestsResult(
                     message=f"Successfully ran {str(result.testsRun)} tests against {target_dialect}"
                 ).dict(),
             )
