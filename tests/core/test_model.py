@@ -1023,6 +1023,22 @@ def test_render_query(assert_exp_eq):
         """,
     )
 
+    expressions = d.parse(
+        """
+        MODEL (
+          name dummy.model,
+          kind FULL,
+          dialect postgres
+        );
+
+        SELECT COUNT(DISTINCT a) FILTER (WHERE b > 0) AS c FROM x
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="postgres")
+    assert_exp_eq(
+        model.render_query(),
+        'SELECT COUNT(DISTINCT "a") FILTER (WHERE "b" > 0) AS "c" FROM "x" AS "x"',
+    )
 
 def test_time_column():
     expressions = d.parse(
