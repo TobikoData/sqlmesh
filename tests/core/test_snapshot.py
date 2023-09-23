@@ -1203,3 +1203,39 @@ def test_qualified_view_name():
         QualifiedViewName(catalog="a-b", schema_name="c", table="d").for_environment(env)
         == '"a-b".c.d'
     )
+
+
+def test_multi_interval_merge(make_snapshot):
+    a = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            cron="@daily",
+            interval_unit="five_minute",
+            start="2023-01-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    a.add_interval("2023-01-01 00:05:00", "2023-01-01 00:51:00")
+    a_start, a_end = a.intervals[0]
+
+    assert a_start == to_timestamp("2023-01-01 00:05:00")
+    assert a_end == to_timestamp("2023-01-01 00:50:00")
+
+    b = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            cron="@daily",
+            interval_unit="quarter_hour",
+            start="2023-01-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    b.merge_intervals(a)
+    b_start, b_end = b.intervals[0]
+
+    assert b_start == to_timestamp("2023-01-01 00:15:00")
+    assert b_end == to_timestamp("2023-01-01 00:45:00")

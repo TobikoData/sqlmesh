@@ -1217,7 +1217,7 @@ def missing_intervals(
         snapshot_start_date = start_dt
         snapshot_end_date = end_date
         if interval:
-            snapshot_start_date, snapshot_end_date = interval
+            snapshot_start_date, snapshot_end_date = (to_datetime(i) for i in interval)
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
             snapshot.remove_interval(interval, execution_time)
