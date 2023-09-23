@@ -40,30 +40,32 @@ class ApplyType(str, enum.Enum):
 
 
 class ConsoleEvent(str, enum.Enum):
-    """An enumeration of report statuses."""
+    """An enumeration of console events."""
 
-    report_plan = "report-plan"
-    report_plan_apply = "report-plan-apply"
-    report_tests = "report-tests"
+    plan_run = "plan-run"
+    plan_apply = "plan-apply"
+    tests = "tests"
 
 
-class ReportStatus(str, enum.Enum):
-    """An enumeration of report statuses."""
+class Status(str, enum.Enum):
+    """An enumeration of statuses."""
 
     init = "init"
     success = "success"
     fail = "fail"
 
 
-class ReportStagePlan(str, enum.Enum):
-    """An enumeration of plan apply strage."""
+class PlanRunStage(str, enum.Enum):
+    """An enumeration of plan apply stages."""
 
     validation = "validation"
     changes = "changes"
     backfills = "backfills"
 
 
-class ReportStagePlanApply(str, enum.Enum):
+class PlanApplyStage(str, enum.Enum):
+    """An enumeration of plan apply stages."""
+
     creation = "creation"
     restate = "restate"
     backfill = "backfill"
@@ -400,36 +402,6 @@ class ReportTestsFailure(ReportTestsResult):
     traceback: str
 
 
-class ReportMeta(BaseModel):
-    status: ReportStatus = ReportStatus.init
-    start_at: int = Field(default_factory=now_timestamp)
-    stop_at: t.Optional[int] = None
-    done: bool = False
-
-    @property
-    def duration(self) -> int | None:
-        return self.stop_at - self.start_at if self.start_at and self.stop_at else None
-
-    def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
-        data = super().dict(*args, **kwargs)
-        data["duration"] = self.duration
-        return data
-
-
-class Stage(BaseModel):
-    meta: ReportMeta = Field(default_factory=ReportMeta)
-
-    def stop(self, success: bool = True) -> None:
-        if success:
-            self.meta.status = ReportStatus.success
-        else:
-            self.meta.status = ReportStatus.fail
-
-        self.meta.stop_at = now_timestamp()
-        if self.meta.start_at and self.meta.stop_at:
-            self.meta.done = True
-
-
 class BackfillDetails(BaseModel):
     model_name: t.Optional[str] = None
     view_name: str
@@ -445,63 +417,102 @@ class BackfillTask(BaseModel):
     end: t.Optional[TimeLike] = None
 
 
-class ReportStage(Stage):
+class TrackableMeta(BaseModel):
+    """Keep track of start and end time. Calculate duration and record a status"""
+
+    status: Status = Status.init
+    start: int = Field(default_factory=now_timestamp)
+    end: t.Optional[int] = None
+    done: bool = False
+
+    @property
+    def duration(self) -> int | None:
+        return self.end - self.start if self.start and self.end else None
+
+    def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
+        data = super().dict(*args, **kwargs)
+        data["duration"] = self.duration
+        return data
+
+
+class TrackableMixin(BaseModel):
+    """Mixin for trackable classes"""
+
+    meta: TrackableMeta = Field(default_factory=TrackableMeta)
+
+    def stop(self, success: bool = True) -> None:
+        if success:
+            self.meta.status = Status.success
+        else:
+            self.meta.status = Status.fail
+
+        self.meta.end = now_timestamp()
+        self.meta.done = bool(self.meta.start and self.meta.end)
+
+
+class UpdatableMixin(BaseModel):
+    """Mixin for updatable classes"""
+
     def update(self, data: t.Dict[str, t.Any]) -> None:
         for k, v in data.items():
             setattr(self, k, v)
 
 
-class ReportStagePlanValidation(ReportStage):
+class PlanStageTracker(TrackableMixin):
+    environment: str
+    plan_options: t.Optional[PlanOptions] = None
+
+    def add_stage(self, stage: t.Union[PlanRunStage, PlanApplyStage], data: PlanStage) -> None:
+        setattr(self, stage, data)
+
+
+class PlanStage(TrackableMixin, UpdatableMixin):
+    pass
+
+
+class PlanRunStageValidation(PlanStage):
     start: t.Optional[TimeLike] = None
     end: t.Optional[TimeLike] = None
 
 
-class ReportStagePlanChanges(ReportStage):
+class PlanRunStageChanges(PlanStage):
     added: t.Optional[t.Set[str]] = None
     removed: t.Optional[t.Set[str]] = None
     modified: t.Optional[ModelsDiff] = None
 
 
-class ReportStagePlanBackfills(ReportStage):
+class PlanRunStageBackfills(PlanStage):
     models: t.Optional[t.List[BackfillDetails]] = None
 
 
-class ReportStagePlanApplyCreation(ReportStage):
+class PlanApplyStageCreation(PlanStage):
     total_tasks: int
     num_tasks: int
 
 
-class ReportStagePlanApplyRestate(ReportStage):
+class PlanApplyStageRestate(PlanStage):
     pass
 
 
-class ReportStagePlanApplyBackfill(ReportStage):
+class PlanApplyStageBackfill(PlanStage):
     queue: t.Set[str] = set()
     tasks: t.Dict[str, BackfillTask] = {}
 
 
-class ReportStagePlanApplyPromote(ReportStage):
+class PlanApplyStagePromote(PlanStage):
     total_tasks: int
     num_tasks: int
     target_environment: str
 
 
-class Report(Stage):
-    environment: str
-    options: t.Optional[t.Dict[str, t.Any]] = None
-
-    def add(self, stage: t.Union[ReportStagePlan, ReportStagePlanApply], data: ReportStage) -> None:
-        setattr(self, stage, data)
+class PlanRunStageTracker(PlanStageTracker):
+    validation: t.Optional[PlanRunStageValidation] = None
+    changes: t.Optional[PlanRunStageChanges] = None
+    backfills: t.Optional[PlanRunStageBackfills] = None
 
 
-class ReportProgressPlan(Report):
-    validation: t.Optional[ReportStagePlanValidation] = None
-    changes: t.Optional[ReportStagePlanChanges] = None
-    backfills: t.Optional[ReportStagePlanBackfills] = None
-
-
-class ReportProgressPlanApply(Report):
-    creation: t.Optional[ReportStagePlanApplyCreation] = None
-    restate: t.Optional[ReportStagePlanApplyRestate] = None
-    backfill: t.Optional[ReportStagePlanApplyBackfill] = None
-    promote: t.Optional[ReportStagePlanApplyPromote] = None
+class PlanApplyStageTracker(PlanStageTracker):
+    creation: t.Optional[PlanApplyStageCreation] = None
+    restate: t.Optional[PlanApplyStageRestate] = None
+    backfill: t.Optional[PlanApplyStageBackfill] = None
+    promote: t.Optional[PlanApplyStagePromote] = None
