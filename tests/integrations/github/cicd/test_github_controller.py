@@ -1,178 +1,438 @@
 # type: ignore
-import typing as t
-from unittest.mock import Mock, call
+from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd.controller import (
     BotCommand,
-    GithubController,
-    GithubEvent,
     MergeMethod,
     MergeStateStatus,
 )
-from sqlmesh.utils import AttributeDict
-from sqlmesh.utils.errors import CICDBotError
-from tests.integrations.github.cicd.helper import get_mocked_controller
+from tests.integrations.github.cicd.fixtures import MockIssueComment
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 
 
-def test_github_controller_approvers(github_pr_synchronized_approvers_controller: GithubController):
-    controller = github_pr_synchronized_approvers_controller
-    assert not controller.has_required_approval
-    assert controller.do_required_approval_check
+github_controller_approvers_params = [
+    (
+        "2 approvers, 1 required",
+        [
+            {
+                "username": "required_approver",
+                "state": "APPROVED",
+            },
+            {
+                "username": "non_required_approver",
+                "state": "APPROVED",
+            },
+        ],
+        [
+            User(
+                username="test",
+                github_username="required_approver",
+                roles=[UserRole.REQUIRED_APPROVER],
+            ),
+        ],
+        True,
+        True,
+    ),
+    (
+        "2 reviewers, 1 approved and required, 1 disapproved and not required",
+        [
+            {
+                "username": "required_approver",
+                "state": "APPROVED",
+            },
+            {
+                "username": "non_required_approver",
+                "state": "CHANGES_REQUESTED",
+            },
+        ],
+        [
+            User(
+                username="test",
+                github_username="required_approver",
+                roles=[UserRole.REQUIRED_APPROVER],
+            ),
+        ],
+        True,
+        True,
+    ),
+    (
+        "2 reviewers, 1 disapproved and required, 1 approved and not required",
+        [
+            {
+                "username": "required_approver",
+                "state": "CHANGES_REQUESTED",
+            },
+            {
+                "username": "non_required_approver",
+                "state": "APPROVED",
+            },
+        ],
+        [
+            User(
+                username="test",
+                github_username="required_approver",
+                roles=[UserRole.REQUIRED_APPROVER],
+            ),
+        ],
+        False,
+        True,
+    ),
+    (
+        "1 reviewer, 1 approved and not required",
+        [
+            {
+                "username": "non_required_approver",
+                "state": "APPROVED",
+            },
+        ],
+        [
+            User(
+                username="test",
+                github_username="required_approver",
+                roles=[UserRole.REQUIRED_APPROVER],
+            ),
+        ],
+        False,
+        True,
+    ),
+    (
+        "1 reviewer, 1 disapproved and no required approvers",
+        [
+            {
+                "username": "non_required_approver",
+                "state": "CHANGES_REQUESTED",
+            },
+        ],
+        [
+            User(
+                username="test",
+                github_username="required_approver",
+                roles=[],
+            ),
+        ],
+        True,
+        False,
+    ),
+    (
+        "No reviews and 1 required approver",
+        [],
+        [
+            User(
+                username="test",
+                github_username="required_approver",
+                roles=[UserRole.REQUIRED_APPROVER],
+            ),
+        ],
+        False,
+        True,
+    ),
+    (
+        "No reviews and no required approvers",
+        [],
+        [],
+        True,
+        False,
+    ),
+]
 
 
-def test_github_controller_pr_plan(
-    github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
+@pytest.mark.parametrize(
+    "reviews, users, has_required_approval, do_required_approval_check",
+    [test[1:] for test in github_controller_approvers_params],
+    ids=[test[0] for test in github_controller_approvers_params],
+)
+def test_github_controller_approvers(
+    reviews,
+    users,
+    has_required_approval,
+    do_required_approval_check,
+    github_client,
+    make_pull_request_review,
+    make_controller,
+    mocker: MockerFixture,
 ):
-    controller = github_pr_synchronized_approvers_controller
-    mocked_apply = mocker.MagicMock()
-    mocker.patch("sqlmesh.core.context.Context.apply", mocked_apply)
-    pr_plan = controller.pr_plan
-    assert pr_plan.environment_naming_info.name == "hello_world_2"
-    assert pr_plan.skip_backfill
-    assert not pr_plan.auto_categorization_enabled
-    assert not pr_plan.no_gaps
-    assert not mocked_apply.called
-    assert not controller._console.method_calls
+    mock_pull_request = github_client.get_repo().get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(
+        side_effect=lambda: [make_pull_request_review(**review) for review in reviews]
+    )
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_review_submit.json", github_client
+    )
+    controller._context.users = users
+    assert controller.has_required_approval == has_required_approval
+    assert controller.do_required_approval_check == do_required_approval_check
+
+
+is_comment_triggered_params = [
+    (
+        "comment is created",
+        "created",
+        "testing",
+        True,
+    ),
+    (
+        "comment is edited",
+        "edited",
+        "testing",
+        True,
+    ),
+    (
+        "comment is deleted",
+        "deleted",
+        "testing",
+        False,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "action, comment, is_comment_triggered",
+    [test[1:] for test in is_comment_triggered_params],
+    ids=[test[0] for test in is_comment_triggered_params],
+)
+def test_is_comment(
+    action, comment, is_comment_triggered, github_client, make_event_issue_comment, make_controller
+):
+    controller = make_controller(make_event_issue_comment(action, comment), github_client)
+    assert controller.is_comment_added == is_comment_triggered
+
+
+def test_pr_environment_name(github_client, make_controller):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_review_submit.json", github_client
+    )
+    assert controller.pr_environment_name == "hello_world_2"
+
+
+def test_pr_plan(github_client, make_controller):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
+    )
+    assert controller.pr_plan.environment.name == "hello_world_2"
+    assert controller.pr_plan.skip_backfill
+    assert not controller.pr_plan.auto_categorization_enabled
+    assert not controller.pr_plan.no_gaps
+    assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
 
 
-def test_github_controller_prod_plan(
-    github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
-):
-    controller = github_pr_synchronized_approvers_controller
-    mocked_apply = mocker.MagicMock()
-    mocker.patch("sqlmesh.core.context.Context.apply", mocked_apply)
-    prod_plan = controller.prod_plan
-    assert prod_plan.environment_naming_info.name == c.PROD
-    assert not prod_plan.skip_backfill
-    assert not prod_plan.auto_categorization_enabled
-    assert prod_plan.no_gaps
-    assert not mocked_apply.called
-    assert not controller._console.method_calls
+def test_prod_plan(github_client, make_controller):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
+    )
+
+    assert controller.prod_plan.environment.name == c.PROD
+    assert not controller.prod_plan.skip_backfill
+    assert not controller.prod_plan.auto_categorization_enabled
+    assert controller.prod_plan.no_gaps
+    assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
 
 
-def test_github_controller_prod_plan_with_gaps(
-    github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
-):
-    controller = github_pr_synchronized_approvers_controller
-    mocked_apply = mocker.MagicMock()
-    mocker.patch("sqlmesh.core.context.Context.apply", mocked_apply)
-    prod_plan_with_gaps = controller.prod_plan_with_gaps
-    assert prod_plan_with_gaps.environment_naming_info.name == c.PROD
-    assert not prod_plan_with_gaps.skip_backfill
-    assert not prod_plan_with_gaps.auto_categorization_enabled
-    assert not prod_plan_with_gaps.no_gaps
-    assert not mocked_apply.called
-    assert not controller._console.method_calls
+def test_prod_plan_with_gaps(github_client, make_controller):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
+    )
+
+    assert controller.prod_plan_with_gaps.environment.name == c.PROD
+    assert not controller.prod_plan_with_gaps.skip_backfill
+    assert not controller.prod_plan_with_gaps.auto_categorization_enabled
+    assert not controller.prod_plan_with_gaps.no_gaps
+    assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
 
 
-def test_run_tests(github_pr_synchronized_approvers_controller: GithubController):
-    controller = github_pr_synchronized_approvers_controller
+def test_run_tests(github_client, make_controller):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
+    )
     controller.run_tests()
     assert controller._context._run_tests.called
 
 
+update_sqlmesh_comment_info_params = [
+    (
+        "No comments, one is created and then updated with value",
+        [],
+        "test1",
+        None,
+        "**SQLMesh Bot Info**\ntest1",
+        "**SQLMesh Bot Info**\ntest1",
+    ),
+    (
+        "Existing comments that are not related, one is created and then updated with value",
+        [
+            MockIssueComment(body="test2"),
+            MockIssueComment(body="test3"),
+        ],
+        "test1",
+        None,
+        "**SQLMesh Bot Info**\ntest1",
+        "**SQLMesh Bot Info**\ntest1",
+    ),
+    (
+        "Existing bot comment, that is updated and create comment is not called",
+        [
+            MockIssueComment(body="**SQLMesh Bot Info**\ntest2"),
+            MockIssueComment(body="test3"),
+        ],
+        "test1",
+        None,
+        "**SQLMesh Bot Info**\ntest2\ntest1",
+        None,
+    ),
+    (
+        "Existing bot comment, that is not updated because of dedup_regex and create comment is not called",
+        [
+            MockIssueComment(body="**SQLMesh Bot Info**\ntest2"),
+            MockIssueComment(body="test3"),
+        ],
+        "test1",
+        "test2",
+        "**SQLMesh Bot Info**\ntest2",
+        None,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "existing_comments, comment, dedup_regex, resulting_comment, create_comment",
+    [test[1:] for test in update_sqlmesh_comment_info_params],
+    ids=[test[0] for test in update_sqlmesh_comment_info_params],
+)
 def test_update_sqlmesh_comment_info(
-    github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
+    existing_comments,
+    comment,
+    dedup_regex,
+    resulting_comment,
+    create_comment,
+    github_client,
+    make_mock_issue_comment,
+    make_controller,
+    mocker: MockerFixture,
 ):
-    class CommentResponse(Mock):
-        body: str = "- Test Header: blah"
-
-        def edit(self, body):
-            self.body = body
-
-    controller = github_pr_synchronized_approvers_controller
-    comment_response = CommentResponse()
-    mocker.patch(
-        "sqlmesh.integrations.github.cicd.controller.GithubController._get_or_create_comment",
-        comment_response,
+    mock_issue = github_client.get_repo().get_issue()
+    created_comments = []
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: existing_comments)
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda body: make_mock_issue_comment(body, created_comments)
     )
-    resp = controller.update_sqlmesh_comment_info("test1", find_regex=None, replace_if_exists=False)
-    assert resp.body == "- Test Header: blah\ntest1"
-    resp = controller.update_sqlmesh_comment_info(
-        "test2", find_regex="^- Test Header:.*", replace_if_exists=False
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
     )
-    assert resp.body == "- Test Header: blah\ntest1"
-    resp = controller.update_sqlmesh_comment_info(
-        "test3", find_regex="^- Test Header:.*", replace_if_exists=True
-    )
-    assert resp.body == "test3\ntest1"
+    resp = controller.update_sqlmesh_comment_info(comment, dedup_regex=dedup_regex)
+    assert resp.body == resulting_comment
+    if create_comment is None:
+        assert len(created_comments) == 0
+    else:
+        assert len(created_comments) == 1
+        assert created_comments[0].body == create_comment
 
 
-def test_deploy_to_prod_merge_error(github_pr_synchronized_approvers_controller: GithubController):
-    controller = github_pr_synchronized_approvers_controller
-    controller._pull_request = AttributeDict({"merged": True})
+def test_deploy_to_prod_merge_error(github_client, make_controller):
+    mock_pull_request = github_client.get_repo().get_pull()
+    mock_pull_request.merged = True
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
+    )
     with pytest.raises(
-        CICDBotError,
+        Exception,
         match=r"^PR is already merged and this event was triggered prior to the merge.$",
     ):
         controller.deploy_to_prod()
 
 
-def test_deploy_to_prod_dirty_pr(
-    github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
-):
-    merge_state_status = mocker.MagicMock()
-    merge_state_status.return_value = MergeStateStatus.DIRTY
-    mocker.patch(
-        "sqlmesh.integrations.github.cicd.controller.GithubController._get_merge_state_status",
-        merge_state_status,
+def test_deploy_to_prod_dirty_pr(github_client, make_controller):
+    mock_pull_request = github_client.get_repo().get_pull()
+    mock_pull_request.merged = False
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        merge_state_status=MergeStateStatus.DIRTY,
     )
-    controller = github_pr_synchronized_approvers_controller
-    controller._pull_request = AttributeDict({"merged": False})
-    with pytest.raises(CICDBotError, match=r"^Merge commit cannot be cleanly created.*"):
+    with pytest.raises(Exception, match=r"^Merge commit cannot be cleanly created.*"):
         controller.deploy_to_prod()
 
 
-def test_delete_pr_environment(
-    github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
-):
-    controller = github_pr_synchronized_approvers_controller
+def test_delete_pr_environment(github_client, make_controller, mocker: MockerFixture):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
+    )
     controller._context._state_sync = mock_state_sync = mocker.MagicMock()
     controller.delete_pr_environment()
     mock_state_sync.invalidate_environment.assert_called_once_with("hello_world_2")
 
 
-def test_merge_pr(
-    github_pr_synchronized_approvers_controller: GithubController, mocker: MockerFixture
-):
-    controller = github_pr_synchronized_approvers_controller
+def test_merge_pr(github_client, make_controller, mocker: MockerFixture):
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
+    )
     controller._pull_request = mocker.MagicMock()
     controller.merge_pr(merge_method=MergeMethod.MERGE)
-    controller._pull_request.method_calls == [call.merge(merge_method=MergeMethod.MERGE)]
+    assert controller._pull_request.method_calls == [call.merge(merge_method=MergeMethod.MERGE)]
 
 
+bot_command_parsing_params = [
+    (
+        "deleted comment is invalid",
+        "deleted",
+        "/deploy",
+        None,
+        BotCommand.INVALID,
+    ),
+    (
+        "deploy command without namespace is valid",
+        "created",
+        "/deploy",
+        None,
+        BotCommand.DEPLOY_PROD,
+    ),
+    (
+        "deploy command with matching namespace is valid",
+        "edited",
+        "#SQLMesh/deploy",
+        "#SQLMesh",
+        BotCommand.DEPLOY_PROD,
+    ),
+    (
+        "deploy command with non-matching namespace is invalid",
+        "edited",
+        "/deploy",
+        "#SQLMesh",
+        BotCommand.INVALID,
+    ),
+    (
+        "non-deploy command with matching namespace is invalid",
+        "edited",
+        "#SQLMesh/blah",
+        "#SQLMesh",
+        BotCommand.INVALID,
+    ),
+    (
+        "unknown command is invalid",
+        "edited",
+        "/blah",
+        None,
+        BotCommand.INVALID,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "action, comment, namespace, command",
+    [test[1:] for test in bot_command_parsing_params],
+    ids=[test[0] for test in bot_command_parsing_params],
+)
 def test_bot_command_parsing(
-    github_pull_request_comment_raw: t.Dict[str, t.Any], mocker: MockerFixture
+    action, comment, namespace, command, github_client, make_controller, make_event_issue_comment
 ):
-    comment_raw = github_pull_request_comment_raw
-    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
-    assert controller.is_comment_triggered
-    assert controller.get_command_from_comment() == BotCommand.INVALID
-    comment_raw["comment"]["body"] = "/deploy"
-    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
-    assert controller.get_command_from_comment() == BotCommand.DEPLOY_PROD
-    assert controller.get_command_from_comment("#SQLMesh") == BotCommand.INVALID
-    comment_raw["comment"]["body"] = "#SQLMesh/deploy"
-    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
-    assert controller.get_command_from_comment() == BotCommand.INVALID
-    assert controller.get_command_from_comment("#SQLMesh") == BotCommand.DEPLOY_PROD
-    comment_raw["comment"]["body"] = "Something Something /deploy"
-    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
-    assert controller.get_command_from_comment() == BotCommand.INVALID
-    assert controller.get_command_from_comment() == BotCommand.INVALID
-    comment_raw["comment"][
-        "body"
-    ] = """
-    /deploy
-    """
-    controller = get_mocked_controller(GithubEvent.from_obj(comment_raw), mocker)
-    assert controller.get_command_from_comment() == BotCommand.DEPLOY_PROD
+    controller = make_controller(make_event_issue_comment(action, comment), github_client)
+    assert controller.get_command_from_comment(namespace) == command

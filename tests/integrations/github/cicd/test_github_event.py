@@ -1,36 +1,31 @@
-from sqlmesh.integrations.github.cicd.controller import GithubEvent, PullRequestInfo
-
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
 
 
-def test_pull_request_review_submit_event(github_pull_request_review_submit_event: GithubEvent):
-    assert not github_pull_request_review_submit_event.is_pull_request
-    assert github_pull_request_review_submit_event.is_review
-    assert (
-        github_pull_request_review_submit_event.pull_request_url
-        == "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
+def test_pull_request_review_submit_event(make_event_from_fixture):
+    event = make_event_from_fixture("tests/fixtures/github/pull_request_review_submit.json")
+    assert not event.is_pull_request
+    assert event.is_review
+    assert event.pull_request_url == "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
+
+
+def test_pull_request_synchronized_event(make_event_from_fixture):
+    event = make_event_from_fixture("tests/fixtures/github/pull_request_synchronized.json")
+    assert event.is_pull_request
+    assert event.pull_request_url == "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
+
+
+def test_github_pull_request_comment(make_event_from_fixture):
+    event = make_event_from_fixture("tests/fixtures/github/pull_request_comment.json")
+    assert event.is_comment
+    assert event.pull_request_url == "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
+    assert event.pull_request_comment_body == "example_comment"
+
+
+def test_pull_request_synchronized_info(make_event_from_fixture, make_pull_request_info):
+    pull_request_info = make_pull_request_info(
+        make_event_from_fixture("tests/fixtures/github/pull_request_synchronized.json")
     )
-
-
-def test_pull_request_synchronized_event(github_pull_request_synchronized_event: GithubEvent):
-    assert github_pull_request_synchronized_event.is_pull_request
-    assert (
-        github_pull_request_synchronized_event.pull_request_url
-        == "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
-    )
-
-
-def test_github_pull_request_comment(github_pull_request_comment_event: GithubEvent):
-    assert github_pull_request_comment_event.is_comment
-    assert (
-        github_pull_request_comment_event.pull_request_url
-        == "https://api.github.com/repos/Codertocat/Hello-World/pulls/2"
-    )
-    assert github_pull_request_comment_event.pull_request_comment_body == "example_comment"
-
-
-def test_pull_request_synchronized_info(github_pull_request_synchronized_info: PullRequestInfo):
-    assert github_pull_request_synchronized_info.owner == "Codertocat"
-    assert github_pull_request_synchronized_info.repo == "Hello-World"
-    assert github_pull_request_synchronized_info.pr_number == 2
-    assert github_pull_request_synchronized_info.full_repo_path == "Codertocat/Hello-World"
+    assert pull_request_info.owner == "Codertocat"
+    assert pull_request_info.repo == "Hello-World"
+    assert pull_request_info.pr_number == 2
+    assert pull_request_info.full_repo_path == "Codertocat/Hello-World"
