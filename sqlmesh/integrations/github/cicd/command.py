@@ -156,7 +156,7 @@ def _run_all(
     command_namespace: t.Optional[str] = None,
 ) -> None:
     has_required_approval = False
-    if controller.is_comment_triggered:
+    if controller.is_comment_added:
         command = controller.get_command_from_comment(command_namespace)
         if command.is_invalid:
             # Probably a comment unrelated to SQLMesh so we do nothing

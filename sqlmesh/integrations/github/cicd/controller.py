@@ -26,6 +26,7 @@ from sqlmesh.utils.errors import CICDBotError, PlanError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
+    from github import Github
     from github.CheckRun import CheckRun
     from github.Issue import Issue
     from github.IssueComment import IssueComment
@@ -223,7 +224,11 @@ class GithubEvent:
             return False
         if not comment.get("body"):
             return False
-        return self.payload.get("action") != "deleted"
+        return True
+
+    @property
+    def is_comment_added(self) -> bool:
+        return self.is_comment and self.payload.get("action") != "deleted"
 
     @property
     def is_pull_request(self) -> bool:
@@ -253,18 +258,21 @@ class GithubEvent:
 
     @property
     def pull_request_comment_body(self) -> t.Optional[str]:
-        if self.is_comment:
+        if self.is_comment_added:
             return self.payload["comment"]["body"]
         return None
 
 
 class GithubController:
+    BOT_HEADER_MSG = "**SQLMesh Bot Info**"
+
     def __init__(
         self,
         paths: t.Union[str, t.Iterable[str]],
         token: str,
         config: t.Optional[t.Union[Config, str]] = None,
         event: t.Optional[GithubEvent] = None,
+        client: t.Optional[Github] = None,
     ) -> None:
         from github import Github
 
@@ -277,7 +285,7 @@ class GithubController:
         self._prod_plan_with_gaps: t.Optional[Plan] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
         self._console = MarkdownConsole()
-        self._client: Github = Github(
+        self._client: Github = client or Github(
             base_url=os.environ["GITHUB_API_URL"],
             login_or_token=self._token,
         )
@@ -302,8 +310,8 @@ class GithubController:
         )
 
     @property
-    def is_comment_triggered(self) -> bool:
-        return self._event.is_comment
+    def is_comment_added(self) -> bool:
+        return self._event.is_comment_added
 
     @property
     def _required_approvers(self) -> t.List[User]:
@@ -401,7 +409,7 @@ class GithubController:
         """
         return self._context._run_tests()
 
-    def _get_or_create_comment(self, header: str = "**SQLMesh Bot Info**") -> IssueComment:
+    def _get_or_create_comment(self, header: str = BOT_HEADER_MSG) -> IssueComment:
         comment = seq_get(
             [comment for comment in self._issue.get_comments() if header in comment.body],
             0,
@@ -440,21 +448,19 @@ class GithubController:
         raise CICDBotError(f"Unable to get merge state status. Error: {request.text}")
 
     def update_sqlmesh_comment_info(
-        self, value: str, find_regex: t.Optional[str], replace_if_exists: bool = True
+        self, value: str, *, dedup_regex: t.Optional[str]
     ) -> IssueComment:
         """
         Update the SQLMesh PR Comment for the given lookup key with the given value. If a comment does not exist then
-        it creates one. It determines the comment to update by looking for a comment with the header. If the lookup key
-        already exists in the comment then it will replace the value if replace_if_exists is True, otherwise it will
-        not update the comment. If no `find_regex` is provided then it will just append the value to the comment.
+        it creates one. It determines the comment to update by looking for a comment with the header. If a dedup
+        regex is provided then it will check if the value already exists in the comment and if so it will not update
         """
         comment = self._get_or_create_comment()
-        existing_value = seq_get(re.findall(find_regex, comment.body), 0) if find_regex else None
-        if existing_value:
-            if replace_if_exists:
-                comment.edit(body=re.sub(t.cast(str, find_regex), value, comment.body))
-        else:
-            comment.edit(body=f"{comment.body}\n{value}")
+        if dedup_regex:
+            # If we find a match against the regex then we just return since the comment has already been posted
+            if seq_get(re.findall(dedup_regex, comment.body), 0):
+                return comment
+        comment.edit(body=f"{comment.body}\n{value}")
         return comment
 
     def update_pr_environment(self) -> None:
@@ -489,7 +495,7 @@ class GithubController:
 """
         self.update_sqlmesh_comment_info(
             value=plan_summary,
-            find_regex=None,
+            dedup_regex=None,
         )
         self._context.apply(self.prod_plan)
 
@@ -678,8 +684,7 @@ class GithubController:
                     summary = str(h("table", [table_header, table_body]))
                 self.update_sqlmesh_comment_info(
                     value=f"- {check_title}",
-                    find_regex=rf"- {check_title_static}.*",
-                    replace_if_exists=False,
+                    dedup_regex=rf"- {check_title_static}.*",
                 )
             else:
                 conclusion_to_summary = {
@@ -754,7 +759,7 @@ class GithubController:
         """
         Gets the command from the comment
         """
-        if not self._event.is_comment:
+        if not self._event.is_comment_added:
             return BotCommand.INVALID
         assert self._event.pull_request_comment_body is not None
         return BotCommand.from_comment_body(self._event.pull_request_comment_body, namespace)
