@@ -40,12 +40,10 @@ async def apply(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-    report_plan = models.ReportProgressPlan(
-        environment=environment, options={"skip_tests": plan_options.skip_tests}
-    )
-    api_console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
-    report_stage_validate = models.ReportStagePlanValidation()
-    report_plan.add(models.ReportStagePlan.validation, report_stage_validate)
+    report_plan = models.PlanRunStageTracker(environment=environment, plan_options=plan_options)
+    api_console.log_event(event=models.ConsoleEvent.plan_apply, data=report_plan.dict())
+    report_stage_validate = models.PlanRunStageValidation()
+    report_plan.add_stage(models.PlanRunStage.validation, report_stage_validate)
     plan_func = functools.partial(
         context.plan,
         environment=environment,
@@ -66,15 +64,15 @@ async def apply(
         plan = await plan_task
         report_stage_validate.stop(success=True)
         report_plan.stop(success=True)
-        api_console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
     except PlanError:
         report_stage_validate.stop(success=False)
         report_plan.stop(success=False)
-        api_console.log_event(event=models.ConsoleEvent.report_plan, data=report_plan.dict())
         raise ApiException(
-            message="Unable to run a plan",
+            message="Unable to apply a plan",
             origin="API -> commands -> apply",
         )
+    finally:
+        api_console.log_event(event=models.ConsoleEvent.plan_apply, data=report_plan.dict())
 
     if categories is not None:
         for new, _ in plan.context_diff.modified_snapshots.values():

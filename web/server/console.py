@@ -20,71 +20,73 @@ from web.server.exceptions import ApiException
 
 class ApiConsole(TerminalConsole):
     task: t.Optional[asyncio.Task] = None
-    report: t.Optional[models.ReportProgressPlanApply] = None
+    plan_stage_tracker: t.Optional[models.PlanApplyStageTracker] = None
 
     def __init__(self) -> None:
         super().__init__()
         self.current_task_status: t.Dict[str, t.Dict[str, t.Any]] = {}
         self.queue: asyncio.Queue = asyncio.Queue()
 
-    def log_start_evaluation(self, plan: Plan) -> None:
-        self.report = models.ReportProgressPlanApply(environment=plan.environment.name)
+    def start_plan_evaluation(self, plan: Plan) -> None:
+        self.plan_stage_tracker = models.PlanApplyStageTracker(
+            environment=plan.environment.name)
         self.log_event_apply()
 
-    def log_stop_evaluation(self) -> None:
-        if self.report:
-            self.report.stop(success=True)
+    def stop_plan_evaluation(self) -> None:
+        if self.plan_stage_tracker:
+            self.plan_stage_tracker.stop(success=True)
         self.log_event_apply()
-        self.report = None
+        self.plan_stage_tracker = None
 
     def start_creation_progress(self, total_tasks: int) -> None:
-        if self.report:
-            self.report.add(
-                models.ReportPlanApplyStage.creation,
-                models.ReportPlanApplyStageCreation(
+        if self.plan_stage_tracker:
+            self.plan_stage_tracker.add_stage(
+                models.PlanApplyStage.creation,
+                models.PlanApplyStageCreation(
                     total_tasks=total_tasks, num_tasks=0),
             )
 
         self.log_event_apply()
 
     def update_creation_progress(self, num_tasks: int) -> None:
-        if self.report and self.report.creation:
-            self.report.creation.update(
-                {"num_tasks": self.report.creation.num_tasks + num_tasks})
+        if self.plan_stage_tracker and self.plan_stage_tracker.creation:
+            self.plan_stage_tracker.creation.update(
+                {"num_tasks": self.plan_stage_tracker.creation.num_tasks + num_tasks}
+            )
 
         self.log_event_apply()
 
     def stop_creation_progress(self, success: bool = True) -> None:
-        if self.report and self.report.creation:
-            self.report.creation.stop(success=success)
+        if self.plan_stage_tracker and self.plan_stage_tracker.creation:
+            self.plan_stage_tracker.creation.stop(success=success)
 
             if not success:
-                self.log_stop_evaluation()
+                self.stop_plan_evaluation()
 
     def start_restate_progress(self) -> None:
-        if self.report:
-            self.report.add(
-                models.ReportStagePlanApply.restate, models.ReportStagePlanApplyRestate()
+        if self.plan_stage_tracker:
+            self.plan_stage_tracker.add_stage(
+                models.PlanApplyStage.restate, models.PlanApplyStageRestate()
             )
 
         self.log_event_apply()
 
     def stop_restate_progress(self, success: bool) -> None:
-        if self.report and self.report.restate:
-            self.report.restate.stop(success=success)
+        if self.plan_stage_tracker and self.plan_stage_tracker.restate:
+            self.plan_stage_tracker.restate.stop(success=success)
 
             if not success:
-                self.log_stop_evaluation()
+                self.stop_plan_evaluation()
 
     def start_evaluation_progress(
         self,
         batches: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
     ) -> None:
-        if self.report:
-            self.report.add(
-                models.ReportStagePlanApply.backfill,
-                models.ReportStagePlanApplyBackfill(
+        if self.plan_stage_tracker:
+            self.plan_stage_tracker.add_stage(
+                models.PlanApplyStage.backfill,
+                models.PlanApplyStageBackfill(
                     queue=set(),
                     tasks={
                         snapshot.name: models.BackfillTask(
@@ -103,8 +105,8 @@ class ApiConsole(TerminalConsole):
         self.log_event_apply()
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
-        if self.report and self.report.backfill:
-            self.report.backfill.queue.add(snapshot.name)
+        if self.plan_stage_tracker and self.plan_stage_tracker.backfill:
+            self.plan_stage_tracker.backfill.queue.add(snapshot.name)
 
     def update_snapshot_evaluation_progress_1(
         self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
@@ -124,32 +126,32 @@ class ApiConsole(TerminalConsole):
             )
         self.log_event_apply()
 
-    def update_snapshot_evaluation_progress_2(self, snapshot: Snapshot, num_tasks: int) -> None:
-        if self.report and self.report.backfill:
-            task = self.report.backfill.tasks[snapshot.name]
+    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_tasks: int) -> None:
+        if self.plan_stage_tracker and self.plan_stage_tracker.backfill:
+            task = self.plan_stage_tracker.backfill.tasks[snapshot.name]
             task.completed += num_tasks
             if task.completed >= task.total:
                 task.end = now_timestamp()
 
-            self.report.backfill.tasks[snapshot.name] = task
-            self.report.backfill.queue.remove(snapshot.name)
+            self.plan_stage_tracker.backfill.tasks[snapshot.name] = task
+            self.plan_stage_tracker.backfill.queue.remove(snapshot.name)
 
         self.log_event_apply()
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
-        if self.report and self.report.backfill:
-            self.report.backfill.queue.clear()
-            self.report.backfill.tasks = {}
-            self.report.backfill.stop(success=success)
+        if self.plan_stage_tracker and self.plan_stage_tracker.backfill:
+            self.plan_stage_tracker.backfill.queue.clear()
+            self.plan_stage_tracker.backfill.tasks = {}
+            self.plan_stage_tracker.backfill.stop(success=success)
 
             if not success:
-                self.log_stop_evaluation()
+                self.stop_plan_evaluation()
 
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
-        if self.report:
-            self.report.add(
-                models.ReportStagePlanApply.promote,
-                models.ReportStagePlanApplyPromote(
+        if self.plan_stage_tracker:
+            self.plan_stage_tracker.add_stage(
+                models.PlanApplyStage.promote,
+                models.PlanApplyStagePromote(
                     total_tasks=total_tasks, num_tasks=0, target_environment=environment
                 ),
             )
@@ -157,18 +159,19 @@ class ApiConsole(TerminalConsole):
         self.log_event_apply()
 
     def update_promotion_progress(self, num_tasks: int) -> None:
-        if self.report and self.report.promote:
-            self.report.promote.update(
-                {"num_tasks": self.report.promote.num_tasks + num_tasks})
+        if self.plan_stage_tracker and self.plan_stage_tracker.promote:
+            self.plan_stage_tracker.promote.update(
+                {"num_tasks": self.plan_stage_tracker.promote.num_tasks + num_tasks}
+            )
 
         self.log_event_apply()
 
     def stop_promotion_progress(self, success: bool = True) -> None:
-        if self.report and self.report.promote:
-            self.report.promote.stop(success=success)
+        if self.plan_stage_tracker and self.plan_stage_tracker.promote:
+            self.plan_stage_tracker.promote.stop(success=success)
 
             if not success:
-                self.log_stop_evaluation()
+                self.stop_plan_evaluation()
 
     def _make_event(self, event: str, data: dict[str, t.Any]) -> ServerSentEvent:
         if isinstance(event, models.ConsoleEvent):
@@ -219,8 +222,8 @@ class ApiConsole(TerminalConsole):
 
     def log_event_apply(self) -> None:
         self.log_event(
-            event=models.ConsoleEvent.report_plan_apply,
-            data=self.report.dict() if self.report else {},
+            event=models.ConsoleEvent.plan_apply,
+            data=self.plan_stage_tracker.dict() if self.plan_stage_tracker else {},
         )
 
     def log_exception(self) -> None:

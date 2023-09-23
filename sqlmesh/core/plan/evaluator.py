@@ -100,7 +100,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.console.log_success(
                 "Virtual Update executed successfully")
         finally:
-            self.console.log_stop_evaluation()
+            self.console.stop_plan_evaluation()
 
     def _backfill(self, plan: Plan, selected_snapshots: t.Set[str]) -> None:
         """Backfill missing intervals for snapshots that are part of the given plan.

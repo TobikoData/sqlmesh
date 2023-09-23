@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, Depends, Request, Response, status
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
-from web.server.console import ApiConsole
+from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 
@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.post(
     "",
-    response_model=models.ReportProgressPlan,
+    response_model=models.PlanRunStageTracker,
     response_model_exclude_unset=True,
 )
 async def run_plan(
@@ -25,7 +25,7 @@ async def run_plan(
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: models.PlanOptions = models.PlanOptions(),
-) -> models.ReportProgressPlan:
+) -> models.PlanRunStageTracker:
     """Get a plan for an environment."""
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
@@ -34,13 +34,12 @@ async def run_plan(
             origin="API -> plan -> run_plan",
         )
 
-    console: ApiConsole = context.console  # type: ignore
-    report = models.ReportProgressPlan(
+    report = models.PlanRunStageTracker(
         environment=environment, options={"skip_tests": plan_options.skip_tests}
     )
-    console.log_event(event=models.ConsoleEvent.report_plan, data=report.dict())
-    report_stage_validate = models.ReportStagePlanValidation()
-    report.add(stage=models.ReportStagePlan.validation, data=report_stage_validate)
+    api_console.log_event(event=models.ConsoleEvent.plan_run, data=report.dict())
+    report_stage_validate = models.PlanRunStageValidation()
+    report.add_stage(stage=models.PlanRunStage.validation, data=report_stage_validate)
     try:
         plan = context.plan(
             environment=environment,
@@ -61,15 +60,15 @@ async def run_plan(
     except Exception:
         report_stage_validate.stop(success=False)
         report.stop(success=False)
-        console.log_event(event=models.ConsoleEvent.report_plan, data=report.dict())
+        api_console.log_event(event=models.ConsoleEvent.plan_run, data=report.dict())
         raise ApiException(
             message="Unable to run a plan",
             origin="API -> plan -> run_plan",
         )
 
     if plan.context_diff.has_changes:
-        report_stage_changes = models.ReportStagePlanChanges()
-        report.add(stage=models.ReportStagePlan.changes, data=report_stage_changes)
+        report_stage_changes = models.PlanRunStageChanges()
+        report.add_stage(stage=models.PlanRunStage.changes, data=report_stage_changes)
         report_stage_changes.update(
             {
                 "removed": set(plan.context_diff.removed_snapshots),
@@ -80,8 +79,8 @@ async def run_plan(
         report_stage_changes.stop(success=True)
 
     if plan.requires_backfill:
-        report_stage_backfills = models.ReportStagePlanBackfills()
-        report.add(stage=models.ReportStagePlan.backfills, data=report_stage_backfills)
+        report_stage_backfills = models.PlanRunStageBackfills()
+        report.add_stage(stage=models.PlanRunStage.backfills, data=report_stage_backfills)
         batches = context.scheduler().batches()
         tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
         report_stage_backfills.update(
@@ -107,7 +106,7 @@ async def run_plan(
         report_stage_backfills.stop(success=True)
 
     report.stop(success=True)
-    console.log_event(event=models.ConsoleEvent.report_plan, data=report.dict())
+    api_console.log_event(event=models.ConsoleEvent.plan_run, data=report.dict())
     return report
 
 
