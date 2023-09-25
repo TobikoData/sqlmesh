@@ -31,19 +31,20 @@ async def apply(
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
-    plan_options: models.PlanOptions = models.PlanOptions(),
+    plan_options: t.Optional[models.PlanOptions] = None,
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> models.ApplyResponse:
     """Apply a plan"""
+    plan_options = plan_options or models.PlanOptions()
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-    report_plan = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
-    api_console.log_event(event=models.ConsoleEvent.plan_apply, data=report_plan.dict())
-    report_stage_validate = models.PlanApplyStageValidation()
-    report_plan.add_stage(models.PlanApplyStage.validation, report_stage_validate)
+    tracker = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
+    api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
+    tracker_stage_validate = models.PlanApplyStageValidation()
+    tracker.add_stage(models.PlanApplyStage.validation, tracker_stage_validate)
     plan_func = functools.partial(
         context.plan,
         environment=environment,
@@ -62,17 +63,17 @@ async def apply(
     request.app.state.task = plan_task = asyncio.create_task(run_in_executor(plan_func))
     try:
         plan = await plan_task
-        report_stage_validate.stop(success=True)
-        report_plan.stop(success=True)
+        tracker_stage_validate.stop(success=True)
+        tracker.stop(success=True)
     except PlanError:
-        report_stage_validate.stop(success=False)
-        report_plan.stop(success=False)
+        tracker_stage_validate.stop(success=False)
+        tracker.stop(success=False)
         raise ApiException(
             message="Unable to apply a plan",
             origin="API -> commands -> apply",
         )
     finally:
-        api_console.log_event(event=models.ConsoleEvent.plan_apply, data=report_plan.dict())
+        api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
 
     if categories is not None:
         for new, _ in plan.context_diff.modified_snapshots.values():

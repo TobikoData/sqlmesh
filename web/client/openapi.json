@@ -806,18 +806,7 @@
         "properties": {
           "environment": { "type": "string", "title": "Environment" },
           "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
-          "plan_options": {
-            "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
-            "title": "Plan Options",
-            "default": {
-              "skip_tests": false,
-              "skip_backfill": false,
-              "no_gaps": false,
-              "forward_only": false,
-              "no_auto_categorization": false,
-              "include_unmodified": false
-            }
-          },
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
           "categories": {
             "additionalProperties": {
               "$ref": "#/components/schemas/SnapshotChangeCategory"
@@ -832,18 +821,7 @@
         "properties": {
           "environment": { "type": "string", "title": "Environment" },
           "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
-          "plan_options": {
-            "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
-            "title": "Plan Options",
-            "default": {
-              "skip_tests": false,
-              "skip_backfill": false,
-              "no_gaps": false,
-              "forward_only": false,
-              "no_auto_categorization": false,
-              "include_unmodified": false
-            }
-          }
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" }
         },
         "type": "object",
         "title": "Body_run_plan_api_plan_post"
@@ -1359,27 +1337,7 @@
       },
       "PlanApplyStageValidation": {
         "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "start": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "Start"
-          },
-          "end": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "End"
-          }
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
         },
         "type": "object",
         "title": "PlanApplyStageValidation"

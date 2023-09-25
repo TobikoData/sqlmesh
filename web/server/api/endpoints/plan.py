@@ -24,9 +24,11 @@ async def run_plan(
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
-    plan_options: models.PlanOptions = models.PlanOptions(),
+    plan_options: t.Optional[models.PlanOptions] = None,
 ) -> models.PlanApplyStageTracker:
     """Get a plan for an environment."""
+
+    plan_options = plan_options or models.PlanOptions()
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
@@ -34,9 +36,7 @@ async def run_plan(
             origin="API -> plan -> run_plan",
         )
 
-    tracker = models.PlanApplyStageTracker(
-        environment=environment, options={"skip_tests": plan_options.skip_tests}
-    )
+    tracker = models.PlanApplyStageTracker(environment=environment, options=plan_options)
     api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
     tracker_stage_validate = models.PlanApplyStageValidation()
     tracker.add_stage(stage=models.PlanApplyStage.validation, data=tracker_stage_validate)
@@ -55,7 +55,6 @@ async def run_plan(
             forward_only=plan_options.forward_only,
             no_auto_categorization=plan_options.no_auto_categorization,
         )
-        tracker_stage_validate.update({"start": plan.start, "end": plan.end})
         tracker_stage_validate.stop(success=True)
     except Exception:
         tracker_stage_validate.stop(success=False)

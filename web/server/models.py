@@ -438,8 +438,7 @@ class Trackable(BaseModel):
 
 
 class PlanApplyStageValidation(Trackable):
-    start: t.Optional[TimeLike] = None
-    end: t.Optional[TimeLike] = None
+    pass
 
 
 class PlanApplyStageChanges(Trackable):
