@@ -743,6 +743,7 @@ class _Model(ModelMeta, frozen=True):
             str(self.forward_only),
             str(self.disable_restatement),
             self.project,
+            str(self.allow_partials),
         ]
 
         for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):

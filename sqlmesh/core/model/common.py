@@ -103,6 +103,7 @@ bool_validator = field_validator(
     "forward_only",
     "disable_restatement",
     "insert_overwrite",
+    "allow_partials",
     mode="before",
     check_fields=False,
 )(parse_bool)

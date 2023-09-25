@@ -101,6 +101,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "tags": [],
                     "grains": [],
                     "hash_raw_query": False,
+                    "allow_partials": False,
                 },
                 "audits": [],
                 "name": "test_model",
@@ -134,7 +135,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "promoted_snapshot_ids": [
                 {
                     "name": "test_model",
-                    "identifier": "4130255842",
+                    "identifier": snapshot.identifier,
                 }
             ],
             "suffix_target": "schema",
