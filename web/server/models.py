@@ -42,7 +42,6 @@ class ApplyType(str, enum.Enum):
 class ConsoleEvent(str, enum.Enum):
     """An enumeration of console events."""
 
-    plan = "plan"
     plan_apply = "plan-apply"
     tests = "tests"
 
