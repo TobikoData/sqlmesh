@@ -1,7 +1,4 @@
-import {
-  EnumLineageNodeModelType,
-  type LineageNodeModelType,
-} from '@components/graph/Graph'
+import { type LineageNodeModelType } from '@components/graph/Graph'
 import { getModelNodeTypeTitle } from '@components/graph/help'
 import Input from '@components/input/Input'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
@@ -77,14 +74,7 @@ export default function SourceList({
                 }
               >
                 {model.name}
-                <span
-                  title={
-                    model.type === EnumLineageNodeModelType.python
-                      ? `Column lineage disabled for ${model.type} models`
-                      : 'Column lineage'
-                  }
-                  className="inline-block ml-2 bg-primary-10 px-2 rounded-md text-[0.65rem]"
-                >
+                <span className="inline-block ml-2 bg-primary-10 px-2 rounded-md text-[0.65rem]">
                   {getModelNodeTypeTitle(model.type as LineageNodeModelType)}
                 </span>
               </NavLink>
