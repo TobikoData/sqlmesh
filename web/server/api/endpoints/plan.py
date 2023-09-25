@@ -36,7 +36,7 @@ async def run_plan(
             origin="API -> plan -> run_plan",
         )
 
-    tracker = models.PlanApplyStageTracker(environment=environment, options=plan_options)
+    tracker = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
     api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
     tracker_stage_validate = models.PlanApplyStageValidation()
     tracker.add_stage(stage=models.PlanApplyStage.validation, data=tracker_stage_validate)
