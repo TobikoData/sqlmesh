@@ -165,7 +165,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
       <div className="w-full">
         <div className="w-full flex justify-between items-center">
           <span
-            title="No column level lineage for python model"
+            title="No column level lineage for Python models"
             className={clsx('flex items-center', disabled && 'opacity-50')}
           >
             {disabled && <NoSymbolIcon className="w-3 h-3 mr-2" />}
