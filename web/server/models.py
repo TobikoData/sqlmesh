@@ -405,8 +405,6 @@ class BackfillTask(BaseModel):
 
 
 class TrackableMeta(BaseModel):
-    """Keep track of start and end time. Calculate duration and record a status"""
-
     status: Status = Status.init
     start: int = Field(default_factory=now_timestamp)
     end: t.Optional[int] = None

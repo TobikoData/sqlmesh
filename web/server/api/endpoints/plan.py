@@ -37,7 +37,6 @@ async def run_plan(
     tracker = models.PlanApplyStageTracker(
         environment=environment, options={"skip_tests": plan_options.skip_tests}
     )
-    print(tracker.meta.dict())
     api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
     tracker_stage_validate = models.PlanApplyStageValidation()
     tracker.add_stage(stage=models.PlanApplyStage.validation, data=tracker_stage_validate)
