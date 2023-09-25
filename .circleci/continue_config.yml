@@ -78,7 +78,7 @@ jobs:
           command: make install-dev
       - run:
           name: Install Pydantic V2
-          command: pip install --upgrade "pydantic[email]" pydantic-settings
+          command: pip install --upgrade "pydantic[email]~=2.3.0" pydantic-settings
       - run:
           name: Run linters and code style checks
           command: make py-style
