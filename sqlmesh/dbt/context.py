@@ -163,9 +163,14 @@ class DbtContext:
 
     @property
     def refs(self) -> t.Dict[str, t.Union[ModelConfig, SeedConfig]]:
+        from sqlmesh.dbt.model import ModelConfig
+        from sqlmesh.dbt.seed import SeedConfig
+
         if not self._refs:
             # Refs can be called with or without package name.
-            for model in {**self._seeds, **self._models}.values():  # type: ignore
+            for model in t.cast(
+                t.Dict[str, t.Union[ModelConfig, SeedConfig]], {**self._seeds, **self._models}
+            ).values():
                 self._refs[model.name] = model
                 self._refs[model.config_name] = model
         return self._refs
