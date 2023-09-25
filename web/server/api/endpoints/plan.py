@@ -37,7 +37,7 @@ async def run_plan(
         )
 
     tracker = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
-    api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
+    api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
     tracker_stage_validate = models.PlanApplyStageValidation()
     tracker.add_stage(stage=models.PlanApplyStage.validation, data=tracker_stage_validate)
     try:
@@ -59,7 +59,7 @@ async def run_plan(
     except Exception:
         tracker_stage_validate.stop(success=False)
         tracker.stop(success=False)
-        api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
+        api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
         raise ApiException(
             message="Unable to run a plan",
             origin="API -> plan -> run_plan",
@@ -105,7 +105,7 @@ async def run_plan(
         tracker_stage_backfills.stop(success=True)
 
     tracker.stop(success=True)
-    api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
+    api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
     return tracker
 
 
