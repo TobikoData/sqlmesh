@@ -204,7 +204,8 @@ def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[
 
 
 def get_snapshot_intervals(state_sync, snapshot):
-    return state_sync._get_snapshot_intervals([snapshot])[-1][0]
+    intervals = state_sync._get_snapshot_intervals([snapshot])[-1]
+    return intervals[0] if intervals else None
 
 
 def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
@@ -250,6 +251,29 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
     ]
     assert intervals.dev_intervals == [
         (to_timestamp("2020-01-16"), to_timestamp("2020-01-21")),
+    ]
+
+
+def test_add_interval_partial(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
+
+    state_sync.push_snapshots([snapshot])
+
+    state_sync.add_interval(snapshot, "2023-01-01", to_timestamp("2023-01-01") + 1000)
+    assert get_snapshot_intervals(state_sync, snapshot) is None
+
+    state_sync.add_interval(snapshot, "2023-01-01", to_timestamp("2023-01-02") + 1000)
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
     ]
 
 

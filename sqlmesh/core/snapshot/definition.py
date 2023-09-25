@@ -614,6 +614,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         strict: bool = True,
+        allow_partial: bool = False,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
@@ -621,6 +622,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
+            allow_partial: Whether the interval can be partial or not.
+
         Returns:
             A [start, end) pair.
         """
@@ -631,7 +634,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         if is_date(end):
             end = to_datetime(end) + timedelta(days=1)
-        end_ts = to_timestamp(interval_unit.cron_floor(end))
+        end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
             raise ValueError(
@@ -695,22 +698,27 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         execution_time = execution_time or now()
-
+        allow_partials = self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
                 start,
                 end,
                 strict=False,
+                allow_partial=allow_partials,
             )
         )
 
         interval_unit = self.node.interval_unit
 
-        upper_bound_ts = to_timestamp(
-            self.node.cron_floor(execution_time) if not ignore_cron else execution_time
-        )
-        end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
+        if allow_partials:
+            upper_bound_ts = to_timestamp(execution_time)
+            end_ts = min(end_ts, upper_bound_ts)
+        else:
+            upper_bound_ts = to_timestamp(
+                self.node.cron_floor(execution_time) if not ignore_cron else execution_time
+            )
+            end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
 
         croniter = interval_unit.croniter(start_ts)
         dates = [start_ts]
@@ -743,7 +751,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             next_ts = (
                 dates[i + 1]
                 if i + 1 < len(dates)
-                else to_timestamp(interval_unit.cron_next(current_ts))
+                else min(to_timestamp(interval_unit.cron_next(current_ts)), upper_bound_ts)
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 

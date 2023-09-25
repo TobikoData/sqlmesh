@@ -8,7 +8,7 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import properties_validator
+from sqlmesh.core.model.common import bool_validator, properties_validator
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
@@ -51,8 +51,11 @@ class ModelMeta(_Node, extra="allow"):
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
     table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
+    allow_partials: bool = False
+
     _table_properties: t.Dict[str, exp.Expression] = {}
 
+    _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
     _table_properties_validator = properties_validator
 
