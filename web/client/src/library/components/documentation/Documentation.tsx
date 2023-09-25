@@ -82,7 +82,7 @@ const Documentation = function Documentation({
           headline="Description"
           defaultOpen={true}
         >
-          {isNil(model.description) ? 'No description' : model.description}
+          {model.description ?? 'No description'}
         </Section>
       )}
       {withColumns && (
