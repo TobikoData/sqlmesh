@@ -262,7 +262,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
 
     def __db_load_table_from_dataframe(
         self, df: pd.DataFrame, table: bigquery.Table, job_config: bigquery.LoadJobConfig
-    ) -> None:
+    ) -> BigQueryQueryResult:
         job = self.client.load_table_from_dataframe(
             dataframe=df, destination=table, job_config=job_config
         )
@@ -612,7 +612,7 @@ class _ErrorCounter:
 
         return (ServerError, ConnectionError)
 
-    def _is_retryable(self, error: t.Type[Exception]) -> bool:
+    def _is_retryable(self, error: BaseException) -> bool:
         from google.api_core.exceptions import Forbidden
 
         if isinstance(error, self.retryable_errors):
@@ -623,7 +623,7 @@ class _ErrorCounter:
             return True
         return False
 
-    def should_retry(self, error: t.Type[Exception]) -> bool:
+    def should_retry(self, error: BaseException) -> bool:
         if self.num_retries == 0:
             return False
         self.error_count += 1
