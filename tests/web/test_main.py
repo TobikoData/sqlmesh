@@ -382,7 +382,7 @@ def test_apply_test_failures(web_sushi_context: Context, mocker: MockerFixture) 
     mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError())
     response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 422
-    assert response.json()["message"] == "Unable to run a plan"
+    assert response.json()["message"] == "Unable to apply a plan"
 
 
 def test_plan(web_sushi_context: Context) -> None:
