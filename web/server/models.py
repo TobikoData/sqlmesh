@@ -42,7 +42,7 @@ class ApplyType(str, enum.Enum):
 class ConsoleEvent(str, enum.Enum):
     """An enumeration of console events."""
 
-    plan_run = "plan-run"
+    plan = "plan"
     plan_apply = "plan-apply"
     tests = "tests"
 
@@ -55,17 +55,12 @@ class Status(str, enum.Enum):
     fail = "fail"
 
 
-class PlanRunStage(str, enum.Enum):
+class PlanApplyStage(str, enum.Enum):
     """An enumeration of plan apply stages."""
 
     validation = "validation"
     changes = "changes"
     backfills = "backfills"
-
-
-class PlanApplyStage(str, enum.Enum):
-    """An enumeration of plan apply stages."""
-
     creation = "creation"
     restate = "restate"
     backfill = "backfill"
@@ -376,14 +371,6 @@ class ArtifactChange(BaseModel):
     file: t.Optional[File] = None
 
 
-class ReportBackfillProgress(BaseModel):
-    completed: int
-    total: int
-    view_name: str
-    start: TimeLike
-    end: t.Optional[TimeLike] = None
-
-
 class ReportTestsResult(BaseModel):
     message: str
 
@@ -435,9 +422,7 @@ class TrackableMeta(BaseModel):
         return data
 
 
-class TrackableMixin(BaseModel):
-    """Mixin for trackable classes"""
-
+class Trackable(BaseModel):
     meta: TrackableMeta = Field(default_factory=TrackableMeta)
 
     def stop(self, success: bool = True) -> None:
@@ -449,70 +434,57 @@ class TrackableMixin(BaseModel):
         self.meta.end = now_timestamp()
         self.meta.done = bool(self.meta.start and self.meta.end)
 
-
-class UpdatableMixin(BaseModel):
-    """Mixin for updatable classes"""
-
     def update(self, data: t.Dict[str, t.Any]) -> None:
         for k, v in data.items():
             setattr(self, k, v)
 
 
-class PlanStageTracker(TrackableMixin):
-    environment: str
-    plan_options: t.Optional[PlanOptions] = None
-
-    def add_stage(self, stage: t.Union[PlanRunStage, PlanApplyStage], data: PlanStage) -> None:
-        setattr(self, stage, data)
-
-
-class PlanStage(TrackableMixin, UpdatableMixin):
-    pass
-
-
-class PlanRunStageValidation(PlanStage):
+class PlanApplyStageValidation(Trackable):
     start: t.Optional[TimeLike] = None
     end: t.Optional[TimeLike] = None
 
 
-class PlanRunStageChanges(PlanStage):
+class PlanApplyStageChanges(Trackable):
     added: t.Optional[t.Set[str]] = None
     removed: t.Optional[t.Set[str]] = None
     modified: t.Optional[ModelsDiff] = None
 
 
-class PlanRunStageBackfills(PlanStage):
+class PlanApplyStageBackfills(Trackable):
     models: t.Optional[t.List[BackfillDetails]] = None
 
 
-class PlanApplyStageCreation(PlanStage):
+class PlanApplyStageCreation(Trackable):
     total_tasks: int
     num_tasks: int
 
 
-class PlanApplyStageRestate(PlanStage):
+class PlanApplyStageRestate(Trackable):
     pass
 
 
-class PlanApplyStageBackfill(PlanStage):
+class PlanApplyStageBackfill(Trackable):
     queue: t.Set[str] = set()
     tasks: t.Dict[str, BackfillTask] = {}
 
 
-class PlanApplyStagePromote(PlanStage):
+class PlanApplyStagePromote(Trackable):
     total_tasks: int
     num_tasks: int
     target_environment: str
 
 
-class PlanRunStageTracker(PlanStageTracker):
-    validation: t.Optional[PlanRunStageValidation] = None
-    changes: t.Optional[PlanRunStageChanges] = None
-    backfills: t.Optional[PlanRunStageBackfills] = None
+class PlanApplyStageTracker(Trackable):
+    environment: str
+    plan_options: t.Optional[PlanOptions] = None
 
-
-class PlanApplyStageTracker(PlanStageTracker):
+    validation: t.Optional[PlanApplyStageValidation] = None
+    changes: t.Optional[PlanApplyStageChanges] = None
+    backfills: t.Optional[PlanApplyStageBackfills] = None
     creation: t.Optional[PlanApplyStageCreation] = None
     restate: t.Optional[PlanApplyStageRestate] = None
     backfill: t.Optional[PlanApplyStageBackfill] = None
     promote: t.Optional[PlanApplyStagePromote] = None
+
+    def add_stage(self, stage: PlanApplyStage, data: Trackable) -> None:
+        setattr(self, stage, data)

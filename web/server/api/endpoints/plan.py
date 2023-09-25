@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.post(
     "",
-    response_model=models.PlanRunStageTracker,
+    response_model=models.PlanApplyStageTracker,
     response_model_exclude_unset=True,
 )
 async def run_plan(
@@ -25,7 +25,7 @@ async def run_plan(
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: models.PlanOptions = models.PlanOptions(),
-) -> models.PlanRunStageTracker:
+) -> models.PlanApplyStageTracker:
     """Get a plan for an environment."""
 
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
@@ -34,12 +34,13 @@ async def run_plan(
             origin="API -> plan -> run_plan",
         )
 
-    report = models.PlanRunStageTracker(
+    tracker = models.PlanApplyStageTracker(
         environment=environment, options={"skip_tests": plan_options.skip_tests}
     )
-    api_console.log_event(event=models.ConsoleEvent.plan_run, data=report.dict())
-    report_stage_validate = models.PlanRunStageValidation()
-    report.add_stage(stage=models.PlanRunStage.validation, data=report_stage_validate)
+    print(tracker.meta.dict())
+    api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
+    tracker_stage_validate = models.PlanApplyStageValidation()
+    tracker.add_stage(stage=models.PlanApplyStage.validation, data=tracker_stage_validate)
     try:
         plan = context.plan(
             environment=environment,
@@ -55,35 +56,35 @@ async def run_plan(
             forward_only=plan_options.forward_only,
             no_auto_categorization=plan_options.no_auto_categorization,
         )
-        report_stage_validate.update({"start": plan.start, "end": plan.end})
-        report_stage_validate.stop(success=True)
+        tracker_stage_validate.update({"start": plan.start, "end": plan.end})
+        tracker_stage_validate.stop(success=True)
     except Exception:
-        report_stage_validate.stop(success=False)
-        report.stop(success=False)
-        api_console.log_event(event=models.ConsoleEvent.plan_run, data=report.dict())
+        tracker_stage_validate.stop(success=False)
+        tracker.stop(success=False)
+        api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
         raise ApiException(
             message="Unable to run a plan",
             origin="API -> plan -> run_plan",
         )
 
     if plan.context_diff.has_changes:
-        report_stage_changes = models.PlanRunStageChanges()
-        report.add_stage(stage=models.PlanRunStage.changes, data=report_stage_changes)
-        report_stage_changes.update(
+        tracker_stage_changes = models.PlanApplyStageChanges()
+        tracker.add_stage(stage=models.PlanApplyStage.changes, data=tracker_stage_changes)
+        tracker_stage_changes.update(
             {
                 "removed": set(plan.context_diff.removed_snapshots),
                 "added": plan.context_diff.added,
                 "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
             }
         )
-        report_stage_changes.stop(success=True)
+        tracker_stage_changes.stop(success=True)
 
     if plan.requires_backfill:
-        report_stage_backfills = models.PlanRunStageBackfills()
-        report.add_stage(stage=models.PlanRunStage.backfills, data=report_stage_backfills)
+        tracker_stage_backfills = models.PlanApplyStageBackfills()
+        tracker.add_stage(stage=models.PlanApplyStage.backfills, data=tracker_stage_backfills)
         batches = context.scheduler().batches()
         tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
-        report_stage_backfills.update(
+        tracker_stage_backfills.update(
             {
                 "models": [
                     models.BackfillDetails(
@@ -103,11 +104,11 @@ async def run_plan(
                 ]
             }
         )
-        report_stage_backfills.stop(success=True)
+        tracker_stage_backfills.stop(success=True)
 
-    report.stop(success=True)
-    api_console.log_event(event=models.ConsoleEvent.plan_run, data=report.dict())
-    return report
+    tracker.stop(success=True)
+    api_console.log_event(event=models.ConsoleEvent.plan, data=tracker.dict())
+    return tracker
 
 
 @router.post("/cancel")

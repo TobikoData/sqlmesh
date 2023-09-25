@@ -40,10 +40,10 @@ async def apply(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-    report_plan = models.PlanRunStageTracker(environment=environment, plan_options=plan_options)
+    report_plan = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
     api_console.log_event(event=models.ConsoleEvent.plan_apply, data=report_plan.dict())
-    report_stage_validate = models.PlanRunStageValidation()
-    report_plan.add_stage(models.PlanRunStage.validation, report_stage_validate)
+    report_stage_validate = models.PlanApplyStageValidation()
+    report_plan.add_stage(models.PlanApplyStage.validation, report_stage_validate)
     plan_func = functools.partial(
         context.plan,
         environment=environment,

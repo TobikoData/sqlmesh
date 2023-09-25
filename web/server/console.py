@@ -214,7 +214,7 @@ class ApiConsole(TerminalConsole):
         self.log_event(
             event="errors",
             data=ApiException(
-                message="Tasks failed to a run",
+                message="Tasks failed to run",
                 origin="API -> console -> log_exception",
             ).to_dict(),
         )
