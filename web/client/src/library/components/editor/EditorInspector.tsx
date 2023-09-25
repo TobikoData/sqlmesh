@@ -127,7 +127,7 @@ function InspectorModel({
             className="max-h-[15rem]"
             nodeId={model.name}
             columns={model.columns}
-            disabled={model?.type === 'python'}
+            disabled={model.type === 'python'}
             withHandles={false}
             withSource={false}
             withDescription={true}
