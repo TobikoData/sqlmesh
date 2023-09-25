@@ -240,9 +240,7 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
 
       const profileEnv = ModelEnvironment.getEnvironment()
       let prodEnv = environments.find(({ name }) => name === 'prod')
-      let storredEnv = environments.find(
-        ({ name }) => name === profileEnv?.name,
-      )
+      let storedEnv = environments.find(({ name }) => name === profileEnv?.name)
       let defaultEnv = environments.find(
         ({ name }) => name === defaultEnvironment,
       )
@@ -253,14 +251,14 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
             prodEnv = env
             break
           case profileEnv?.name:
-            storredEnv = env
+            storedEnv = env
             break
           case defaultEnvironment:
             defaultEnv = env
         }
       })
 
-      const currentEnv = storredEnv ?? defaultEnv ?? s.environment
+      const currentEnv = storedEnv ?? defaultEnv ?? s.environment
 
       return {
         environment: isStringEmptyOrNil(prodEnv?.id) ? prodEnv : currentEnv,
