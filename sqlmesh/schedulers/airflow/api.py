@@ -68,6 +68,18 @@ def get_environments() -> Response:
     return _success(common.EnvironmentsResponse(environments=environments))
 
 
+@sqlmesh_api_v1.get("/environments/<name>/max_interval_end")
+@csrf.exempt
+@check_authentication
+def get_max_interval_end(name: str) -> Response:
+    with util.scoped_state_sync() as state_sync:
+        max_interval_end = state_sync.max_interval_end_for_environment(name)
+        response = common.MaxIntervalEndResponse(
+            environment=name, max_interval_end=max_interval_end
+        )
+        return _success(response)
+
+
 @sqlmesh_api_v1.delete("/environments/<name>")
 @csrf.exempt
 @check_authentication

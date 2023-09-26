@@ -13,6 +13,7 @@ from sqlmesh.core.node import NodeType
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.client import AirflowClient, _list_to_json
+from sqlmesh.utils.date import to_timestamp
 
 
 @pytest.fixture
@@ -267,6 +268,27 @@ def test_get_environments(mocker: MockerFixture, snapshot: Snapshot):
 
     get_environments_mock.assert_called_once_with(
         "http://localhost:8080/sqlmesh/api/v1/environments"
+    )
+
+
+def test_max_interval_end_for_environment(mocker: MockerFixture, snapshot: Snapshot):
+    response = common.MaxIntervalEndResponse(
+        environment="test_environment", max_interval_end=to_timestamp("2023-01-01")
+    )
+
+    max_interval_end_response_mock = mocker.Mock()
+    max_interval_end_response_mock.status_code = 200
+    max_interval_end_response_mock.json.return_value = response.dict()
+    max_interval_end_mock = mocker.patch("requests.Session.get")
+    max_interval_end_mock.return_value = max_interval_end_response_mock
+
+    client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
+    result = client.max_interval_end_for_environment("test_environment")
+
+    assert result == response.max_interval_end
+
+    max_interval_end_mock.assert_called_once_with(
+        "http://localhost:8080/sqlmesh/api/v1/environments/test_environment/max_interval_end"
     )
 
 
