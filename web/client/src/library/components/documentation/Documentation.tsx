@@ -5,6 +5,7 @@ import { EnumFileExtensions } from '@models/file'
 import {
   isArrayNotEmpty,
   isFalse,
+  isNil,
   isString,
   isTrue,
   toDateFormat,
@@ -81,7 +82,7 @@ const Documentation = function Documentation({
           headline="Description"
           defaultOpen={true}
         >
-          {model.description == null ? 'No description' : model.description}
+          {isNil(model.description) ? 'No description' : model.description}
         </Section>
       )}
       {withColumns && (

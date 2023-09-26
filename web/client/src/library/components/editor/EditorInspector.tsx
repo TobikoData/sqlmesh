@@ -18,7 +18,6 @@ import Input from '../input/Input'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { Tab } from '@headlessui/react'
 import Banner from '@components/banner/Banner'
-import Documentation from '@components/documentation/Documentation'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import {
   useApiEvaluate,
@@ -29,6 +28,11 @@ import {
 import TabList from '@components/tab/Tab'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import Spinner from '@components/logo/Spinner'
+import { ModelColumns } from '@components/graph/Graph'
+import { CodeEditorDefault, CodeEditorRemoteFile } from './EditorCode'
+import { EnumFileExtensions } from '@models/file'
+import { useSQLMeshModelExtensions } from './hooks'
+import { useLineageFlow } from '@components/graph/context'
 
 interface FormModel {
   model?: string
@@ -77,19 +81,25 @@ function InspectorModel({
   tab: EditorTab
   model: ModelSQLMeshModel
 }): JSX.Element {
+  const { handleClickModel } = useLineageFlow()
+
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
   const list = Array.from(environments)
     .filter(({ isSynchronized }) => isSynchronized)
     .map(({ name }) => ({ text: name, value: name }))
 
+  const modelExtensions = useSQLMeshModelExtensions(model.path, model => {
+    handleClickModel?.(model.name)
+  })
   return (
     <Tab.Group>
       <TabList
         list={
           [
             'Actions',
-            'Docs',
+            'Columns',
+            tab.file.isSQLMeshModelSQL && 'Query',
             list.length > 1 && environment.isSynchronized && 'Diff',
           ].filter(Boolean) as string[]
         }
@@ -110,16 +120,34 @@ function InspectorModel({
         <Tab.Panel
           unmount={false}
           className={clsx(
-            'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 py-2',
+            'text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2',
           )}
         >
-          <Documentation
-            model={model}
-            withCode={false}
-            withModel={false}
-            withQuery={tab.file.isSQLMeshModelSQL}
-            withDescription={false}
+          <ModelColumns
+            className="max-h-[15rem]"
+            nodeId={model.name}
+            columns={model.columns}
+            disabled={model.type === 'python'}
+            withHandles={false}
+            withSource={false}
+            withDescription={true}
+            limit={10}
           />
+        </Tab.Panel>
+        <Tab.Panel
+          unmount={false}
+          className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
+        >
+          <CodeEditorRemoteFile path={model.path}>
+            {() => (
+              <CodeEditorDefault
+                type={EnumFileExtensions.SQL}
+                content={model.sql ?? ''}
+                extensions={modelExtensions}
+                className="text-xs"
+              />
+            )}
+          </CodeEditorRemoteFile>
         </Tab.Panel>
         {list.length > 1 && environment.isSynchronized && (
           <Tab.Panel
