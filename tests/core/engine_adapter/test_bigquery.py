@@ -305,7 +305,7 @@ def test_create_table_date_partition(
 @pytest.mark.parametrize(
     "partition_by_cols, partition_column_type, partition_interval_unit, partition_by_statement",
     [
-        ([exp.to_column("ds")], "date", IntervalUnit.MINUTE, "`ds`"),
+        ([exp.to_column("ds")], "date", IntervalUnit.FIVE_MINUTE, "`ds`"),
         ([exp.to_column("ds")], "date", IntervalUnit.HOUR, "`ds`"),
         ([exp.to_column("ds")], "date", IntervalUnit.DAY, "`ds`"),
         ([exp.to_column("ds")], "date", IntervalUnit.MONTH, "DATE_TRUNC(`ds`, MONTH)"),
@@ -333,7 +333,7 @@ def test_create_table_date_partition(
         (
             [d.parse_one("TIMESTAMP_TRUNC(ds, DAY)", dialect="bigquery")],
             "timestamp",
-            IntervalUnit.MINUTE,
+            IntervalUnit.FIVE_MINUTE,
             "TIMESTAMP_TRUNC(`ds`, DAY)",
         ),
     ],

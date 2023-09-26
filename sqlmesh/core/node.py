@@ -21,6 +21,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.snapshot import Node
 
 
+DEFAULT_SAMPLE_SIZE = 5
+
+
 class IntervalUnit(str, Enum):
     """IntervalUnit is the inferred granularity of an incremental node.
 
@@ -33,17 +36,19 @@ class IntervalUnit(str, Enum):
     MONTH = "month"
     DAY = "day"
     HOUR = "hour"
-    MINUTE = "minute"
+    HALF_HOUR = "half_hour"
+    QUARTER_HOUR = "quarter_hour"
+    FIVE_MINUTE = "five_minute"
 
     @classmethod
-    def from_cron(klass, cron: str, sample_size: int = 10) -> IntervalUnit:
+    def from_cron(klass, cron: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> IntervalUnit:
         croniter = CroniterCache(cron)
         samples = [croniter.get_next() for _ in range(sample_size)]
         min_interval = min(b - a for a, b in zip(samples, samples[1:]))
         for unit, seconds in sorted(INTERVAL_SECONDS.items(), key=lambda x: x[1], reverse=True):
-            if seconds <= min_interval:
+            if seconds <= min_interval.total_seconds():
                 return unit
-        raise ConfigError(f"Invalid cron '{cron}': must have a cadence of 1 minute or more.")
+        raise ConfigError(f"Invalid cron '{cron}': must have a cadence of 5 minutes or more.")
 
     @property
     def is_date_granularity(self) -> bool:
@@ -67,12 +72,16 @@ class IntervalUnit(str, Enum):
 
     @property
     def is_minute(self) -> bool:
-        return self == IntervalUnit.MINUTE
+        return self in (IntervalUnit.FIVE_MINUTE, IntervalUnit.QUARTER_HOUR, IntervalUnit.HALF_HOUR)
 
     @property
     def _cron_expr(self) -> str:
-        if self == IntervalUnit.MINUTE:
-            return "* * * * *"
+        if self == IntervalUnit.FIVE_MINUTE:
+            return "*/5 * * * *"
+        if self == IntervalUnit.QUARTER_HOUR:
+            return "*/15 * * * *"
+        if self == IntervalUnit.HALF_HOUR:
+            return "*/30 * * * *"
         if self == IntervalUnit.HOUR:
             return "0 * * * *"
         if self == IntervalUnit.DAY:
@@ -132,7 +141,9 @@ INTERVAL_SECONDS = {
     IntervalUnit.MONTH: 60 * 60 * 24 * 28,
     IntervalUnit.DAY: 60 * 60 * 24,
     IntervalUnit.HOUR: 60 * 60,
-    IntervalUnit.MINUTE: 60,
+    IntervalUnit.HALF_HOUR: 60 * 30,
+    IntervalUnit.QUARTER_HOUR: 60 * 15,
+    IntervalUnit.FIVE_MINUTE: 60 * 5,
 }
 
 
@@ -265,7 +276,7 @@ class _Node(PydanticModel):
         if self._croniter is None:
             self._croniter = CroniterCache(self.cron, value)
         else:
-            self._croniter.curr = value
+            self._croniter.curr = to_datetime(value)
         return self._croniter
 
     def cron_next(self, value: TimeLike) -> TimeLike:
@@ -315,7 +326,7 @@ class _Node(PydanticModel):
         """
         raise NotImplementedError
 
-    def _inferred_interval_unit(self, sample_size: int = 10) -> IntervalUnit:
+    def _inferred_interval_unit(self, sample_size: int = DEFAULT_SAMPLE_SIZE) -> IntervalUnit:
         """Infers the interval unit from the cron expression.
 
         The interval unit is used to determine the lag applied to start_date and end_date for node rendering and intervals.

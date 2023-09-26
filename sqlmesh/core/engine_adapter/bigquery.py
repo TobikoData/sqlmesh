@@ -429,7 +429,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             if (
                 isinstance(this, exp.Column)
                 and partition_interval_unit is not None
-                and partition_interval_unit != IntervalUnit.MINUTE
+                and not partition_interval_unit.is_minute
             ):
                 column_type: t.Optional[exp.DataType] = (columns_to_types or {}).get(this.name)
 
