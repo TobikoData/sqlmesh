@@ -761,11 +761,16 @@ class Context(BaseContext):
         if include_unmodified is None:
             include_unmodified = self.config.include_unmodified
 
+        model_selector = Selector(self.state_reader, self._models, self.path, dag=self.dag)
+
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:
-            models_override = Selector(
-                self.state_reader, self._models, self.path, dag=self.dag
-            ).select_models(select_models, environment, fallback_env_name=create_from or c.PROD)
+            models_override = model_selector.select_models(
+                select_models, environment, fallback_env_name=create_from or c.PROD
+            )
+
+        if restate_models is not None:
+            restate_models = model_selector.expand_model_selections(restate_models)
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
