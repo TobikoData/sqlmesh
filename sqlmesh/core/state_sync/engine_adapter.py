@@ -561,10 +561,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not env:
             return None
 
-        snapshot_filter = self._snapshot_name_version_filter(env.snapshots, self.intervals_table)
+        snapshot_filter = self._snapshot_name_version_filter(env.snapshots, "intervals")
         query = (
             exp.select(exp.func("MAX", exp.to_column("end_ts")))
-            .from_(self.intervals_table)
+            .from_(exp.to_table(self.intervals_table).as_("intervals"))
             .where(snapshot_filter, copy=False)
             .where(exp.to_column("is_dev").not_(), copy=False)
         )
