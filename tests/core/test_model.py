@@ -1997,6 +1997,32 @@ def test_model_table_properties(sushi_context):
         )
 
 
+def test_model_session_properties(sushi_context):
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            session_properties (
+                'spark.executor.cores' = 2,
+                'spark.executor.memory' = '1G',
+                some_bool = True,
+                some_float = 0.1,
+            )
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+
+    assert model.session_properties == {
+        "spark.executor.cores": 2,
+        "spark.executor.memory": "1G",
+        "some_bool": True,
+        "some_float": 0.1,
+    }
+
+
 def test_model_jinja_macro_rendering():
     expressions = d.parse(
         """

@@ -111,6 +111,7 @@ bool_validator = field_validator(
 
 properties_validator = field_validator(
     "table_properties_",
+    "session_properties_",
     mode="before",
     check_fields=False,
 )(parse_properties)

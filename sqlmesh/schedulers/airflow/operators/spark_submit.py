@@ -8,7 +8,10 @@ from airflow.utils.context import Context
 
 import sqlmesh
 from sqlmesh.engines import commands
-from sqlmesh.schedulers.airflow.operators.targets import BaseTarget
+from sqlmesh.schedulers.airflow.operators.targets import (
+    BaseTarget,
+    SnapshotEvaluationTarget,
+)
 
 
 class SQLMeshSparkSubmitOperator(BaseOperator):
@@ -54,7 +57,7 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
         super().__init__(**kwargs)
         self._target = target
         self._application_name = application_name
-        self._spark_conf = spark_conf
+        self._spark_conf = spark_conf or {}
         self._total_executor_cores = total_executor_cores
         self._executor_cores = executor_cores
         self._executor_memory = executor_memory
@@ -77,17 +80,47 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
                 payload_fd.write(command_payload)
 
             if self._hook is None:
+                if (
+                    isinstance(self._target, SnapshotEvaluationTarget)
+                    and self._target.snapshot.is_model
+                ):
+                    session_properties = self._target.snapshot.model.session_properties
+                    executor_cores: t.Optional[int] = session_properties.pop(  # type: ignore
+                        "spark.executor.cores", self._executor_cores
+                    )
+                    executor_memory: t.Optional[str] = session_properties.pop(  # type: ignore
+                        "spark.executor.memory", self._executor_memory
+                    )
+                    driver_memory: t.Optional[str] = session_properties.pop(  # type: ignore
+                        "spark.driver.memory", self._driver_memory
+                    )
+                    num_executors: t.Optional[int] = session_properties.pop(  # type: ignore
+                        "spark.executor.instances", self._num_executors
+                    )
+                    spark_conf: t.Dict[str, t.Any] = {**self._spark_conf, **session_properties}
+                else:
+                    executor_cores = self._executor_cores
+                    executor_memory = self._executor_memory
+                    driver_memory = self._driver_memory
+                    num_executors = self._num_executors
+                    spark_conf = self._spark_conf
+
                 self._hook = self._get_hook(
                     self._target.command_type,
                     payload_file_path,
                     self._target.ddl_concurrent_tasks,
+                    spark_conf,
+                    executor_cores,
+                    executor_memory,
+                    driver_memory,
+                    num_executors,
                 )
             self._hook.submit(self._application)
         self._target.post_hook(context)
 
     def on_kill(self) -> None:
         if self._hook is None:
-            self._hook = self._get_hook(None, None, None)
+            self._hook = self._get_hook(None, None, None, None, None, None, None, None)
         self._hook.on_kill()
 
     def _get_hook(
@@ -95,6 +128,11 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
         command_type: t.Optional[commands.CommandType],
         command_payload_file_path: t.Optional[str],
         ddl_concurrent_tasks: t.Optional[int],
+        spark_conf: t.Optional[t.Dict[str, t.Any]],
+        executor_cores: t.Optional[int],
+        executor_memory: t.Optional[str],
+        driver_memory: t.Optional[str],
+        num_executors: t.Optional[int],
     ) -> SparkSubmitHook:
         application_args = {
             "dialect": "spark",
@@ -105,17 +143,17 @@ class SQLMeshSparkSubmitOperator(BaseOperator):
             else None,
         }
         return SparkSubmitHook(
-            conf=self._spark_conf,
+            conf=spark_conf,
             conn_id=self._connection_id,
             total_executor_cores=self._total_executor_cores,
-            executor_cores=self._executor_cores,
-            executor_memory=self._executor_memory,
-            driver_memory=self._driver_memory,
+            executor_cores=executor_cores,
+            executor_memory=executor_memory,
+            driver_memory=driver_memory,
             keytab=self._keytab,
             principal=self._principal,
             proxy_user=self._proxy_user,
             name=self._application_name,
-            num_executors=self._num_executors,
+            num_executors=num_executors,
             application_args=[f"--{k}={v}" for k, v in application_args.items() if v is not None],
             files=command_payload_file_path,
         )
