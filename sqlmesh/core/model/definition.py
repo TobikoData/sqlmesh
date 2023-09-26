@@ -1741,8 +1741,6 @@ def _create_model(
         raise_config_error(str(ex), location=path)
         raise
 
-    model.column_descriptions
-
     model._path = path
     model.set_time_format(time_column_format)
 
