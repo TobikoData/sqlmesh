@@ -437,7 +437,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="3811098861",
-        metadata_hash="541992912",
+        metadata_hash="3858405978",
     )
 
     assert fingerprint == original_fingerprint
@@ -484,7 +484,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="3270932819",
-        metadata_hash="2823924537",
+        metadata_hash="1017437962",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -524,7 +524,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="2864998504",
-        metadata_hash="541992912",
+        metadata_hash="3858405978",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})

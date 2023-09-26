@@ -1998,6 +1998,12 @@ def test_model_table_properties(sushi_context):
 
 
 def test_model_session_properties(sushi_context):
+    assert sushi_context.models["sushi.items"].session_properties == {
+        "string_prop": "some_value",
+        "int_prop": 1,
+        "float_prop": 1.0,
+        "bool_prop": True,
+    }
     model = load_sql_based_model(
         d.parse(
             """
