@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pickle
 import typing as t
+import zlib
 
 from pydantic import Field
 
@@ -20,7 +22,6 @@ from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.hashing import crc32
 from sqlmesh.utils.pydantic import field_validator, model_validator
 
 
@@ -157,4 +158,4 @@ class Config(BaseConfig):
 
     @property
     def fingerprint(self) -> str:
-        return crc32(self.json(exclude={"loader"}))
+        return str(zlib.crc32(pickle.dumps(self.dict(exclude={"loader"}))))
