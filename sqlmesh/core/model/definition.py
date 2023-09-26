@@ -1004,7 +1004,7 @@ class SqlModel(_SqlBasedModel):
                 return {}
 
             self._column_descriptions = {
-                select.alias: "\n".join(comment.strip() for comment in select.comments)
+                select.alias_or_name: "\n".join(comment.strip() for comment in select.comments)
                 for select in query.selects
                 if select.comments
             }
@@ -1740,6 +1740,8 @@ def _create_model(
     except Exception as ex:
         raise_config_error(str(ex), location=path)
         raise
+
+    model.column_descriptions
 
     model._path = path
     model.set_time_format(time_column_format)
