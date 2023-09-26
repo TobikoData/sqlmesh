@@ -47,7 +47,7 @@ import {
   isNotNil,
 } from '../../../utils'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
-import { LockClosedIcon, ArrowRightCircleIcon } from '@heroicons/react/24/solid'
+import { NoSymbolIcon, ArrowRightCircleIcon } from '@heroicons/react/24/solid'
 import {
   InformationCircleIcon,
   ClockIcon,
@@ -164,8 +164,11 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
       )}
       <div className="w-full">
         <div className="w-full flex justify-between items-center">
-          <span className={clsx('flex items-center', disabled && 'opacity-50')}>
-            {disabled && <LockClosedIcon className="w-3 h-3 mr-2" />}
+          <span
+            title="No column level lineage for Python models"
+            className={clsx('flex items-center', disabled && 'opacity-50')}
+          >
+            {disabled && <NoSymbolIcon className="w-3 h-3 mr-2" />}
             <b>{columnName}</b>
           </span>
           <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-2">
@@ -309,18 +312,12 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
           )}
         >
           {isNotNil(type) && (
-            <span
-              title={
-                type === EnumLineageNodeModelType.python
-                  ? `Column lineage disabled for ${type} models`
-                  : 'Column lineage'
-              }
-              className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]"
-            >
+            <span className="inline-block mr-2 bg-light text-secondary-900 px-2 rounded-[0.25rem] text-[0.5rem]">
               {getModelNodeTypeTitle(type)}
             </span>
           )}
           <span
+            title={label}
             className={clsx(
               'inline-block whitespace-nowrap overflow-hidden overflow-ellipsis pr-2',
               isNotNil(handleClick) && 'cursor-pointer hover:underline',
@@ -853,7 +850,7 @@ function ModelColumnLineage({
             setIsBuildingLayout(false)
             setCenter(node.position.x, node.position.y, {
               zoom: 0.5,
-              duration: 1000,
+              duration: 0,
             })
           }
 
