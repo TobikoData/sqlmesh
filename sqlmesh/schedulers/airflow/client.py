@@ -233,6 +233,10 @@ class AirflowClient(BaseAirflowClient):
         response = self._get(ENVIRONMENTS_PATH)
         return common.EnvironmentsResponse.parse_obj(response).environments
 
+    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
+        response = self._get(f"{ENVIRONMENTS_PATH}/{environment}/max_interval_end")
+        return common.MaxIntervalEndResponse.parse_obj(response).max_interval_end
+
     def invalidate_environment(self, environment: str) -> None:
         response = self._session.delete(
             urljoin(self._airflow_url, f"{ENVIRONMENTS_PATH}/{environment}")

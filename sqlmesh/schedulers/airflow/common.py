@@ -107,6 +107,11 @@ class InvalidateEnvironmentResponse(PydanticModel):
     name: str
 
 
+class MaxIntervalEndResponse(PydanticModel):
+    environment: str
+    max_interval_end: t.Optional[int]
+
+
 def snapshot_key(snapshot: SnapshotIdLike) -> str:
     return snapshot_key_from_name_identifier(snapshot.name, snapshot.identifier)
 
