@@ -1798,9 +1798,9 @@ def test_incremental_unmanaged_validation():
 def test_custom_interval_unit():
     assert (
         load_sql_based_model(
-            d.parse("MODEL (name db.table, interval_unit MINUTE); SELECT a FROM tbl;")
+            d.parse("MODEL (name db.table, interval_unit FIVE_MINUTE); SELECT a FROM tbl;")
         ).interval_unit
-        == IntervalUnit.MINUTE
+        == IntervalUnit.FIVE_MINUTE
     )
 
     assert (
@@ -1834,10 +1834,10 @@ def test_custom_interval_unit():
     assert (
         load_sql_based_model(
             d.parse(
-                "MODEL (name db.table, cron '0 5 * * *', interval_unit 'minute'); SELECT a FROM tbl;"
+                "MODEL (name db.table, cron '0 5 * * *', interval_unit 'quarter_hour'); SELECT a FROM tbl;"
             )
         ).interval_unit
-        == IntervalUnit.MINUTE
+        == IntervalUnit.QUARTER_HOUR
     )
 
     with pytest.raises(
@@ -2134,7 +2134,7 @@ def test_scd_type_2_defaults():
                 unique_key id,
             ),
         );
-        SELECT 
+        SELECT
             1 as id,
             '2020-01-01' as ds,
             '2020-01-01' as test_updated_at,
@@ -2172,7 +2172,7 @@ def test_scd_type_2_overrides():
                 disable_restatement False,
             ),
         );
-        SELECT 
+        SELECT
             1 as id,
             '2020-01-01' as ds,
             '2020-01-01' as test_updated_at,

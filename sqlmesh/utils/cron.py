@@ -1,31 +1,20 @@
 from __future__ import annotations
 
 import typing as t
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from croniter import croniter
 from sqlglot.helper import first
 
-from sqlmesh.utils import ttl_cache
 from sqlmesh.utils.date import TimeLike, now, to_datetime
 
 
-@ttl_cache()
-def cron_next(cron: str, time: TimeLike) -> float:
-    return croniter(cron, to_datetime(time)).get_next()
-
-
-@ttl_cache()
-def cron_prev(cron: str, time: TimeLike) -> float:
-    return croniter(cron, to_datetime(time)).get_prev()
-
-
 class CroniterCache:
-    ESTIMATE_SAMPLES_NUM = 10
+    ESTIMATE_SAMPLES_NUM = 5
 
     def __init__(self, cron: str, time: t.Optional[TimeLike] = None):
         self.cron = cron
-        self.curr: TimeLike = now() if time is None else time
+        self.curr: datetime = to_datetime(now() if time is None else time)
         self._interval_seconds: t.Optional[int] = None
 
     @property
@@ -39,30 +28,30 @@ class CroniterCache:
         """
         if self._interval_seconds is None:
             seconds = set()
-            curr = to_datetime(self.curr)
+            curr = self.curr
 
             for _ in range(self.ESTIMATE_SAMPLES_NUM):
                 prev = curr
-                curr = to_datetime(cron_next(self.cron, curr))
+                curr = to_datetime(croniter(self.cron, curr).get_next())
                 seconds.add(curr - prev)
 
             if len(seconds) == 1:
-                self._interval_seconds = first(seconds).seconds
+                self._interval_seconds = int(first(seconds).total_seconds())
             else:
                 self._interval_seconds = 0
 
         return self._interval_seconds
 
-    def get_next(self, estimate: bool = False) -> float:
+    def get_next(self, estimate: bool = False) -> datetime:
         if estimate and self.interval_seconds:
-            self.curr = to_datetime(self.curr) + timedelta(seconds=self.interval_seconds)
+            self.curr = self.curr + timedelta(seconds=self.interval_seconds)
         else:
-            self.curr = cron_next(self.cron, self.curr)
-        return t.cast(float, self.curr)
+            self.curr = to_datetime(croniter(self.cron, self.curr).get_next())
+        return self.curr
 
-    def get_prev(self, estimate: bool = False) -> float:
+    def get_prev(self, estimate: bool = False) -> datetime:
         if estimate and self.interval_seconds:
-            self.curr = to_datetime(self.curr) - timedelta(seconds=self.interval_seconds)
+            self.curr = self.curr - timedelta(seconds=self.interval_seconds)
         else:
-            self.curr = cron_prev(self.cron, self.curr)
-        return t.cast(float, self.curr)
+            self.curr = to_datetime(croniter(self.cron, self.curr).get_prev())
+        return self.curr

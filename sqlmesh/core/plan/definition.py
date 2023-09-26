@@ -4,6 +4,7 @@ import logging
 import sys
 import typing as t
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
@@ -39,7 +40,6 @@ from sqlmesh.utils.date import (
     yesterday_ds,
 )
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
-from sqlmesh.utils.pydantic import PydanticModel
 
 logger = logging.getLogger(__name__)
 
@@ -783,7 +783,9 @@ class PlanStatus(str, Enum):
         return self == PlanStatus.FINISHED
 
 
-class SnapshotIntervals(PydanticModel, frozen=True):
+# millions of these can be created, pydantic has significant overhead
+@dataclass
+class SnapshotIntervals:
     snapshot_name: str
     intervals: Intervals
 
@@ -795,11 +797,12 @@ class SnapshotIntervals(PydanticModel, frozen=True):
         return format_intervals(self.merged_intervals, unit)
 
 
+@dataclass
 class LoadedSnapshotIntervals(SnapshotIntervals):
+    change_category: SnapshotChangeCategory
     interval_unit: t.Optional[IntervalUnit]
     node_name: str
     view_name: t.Optional[str] = None
-    change_category: SnapshotChangeCategory
 
     @classmethod
     def from_snapshot(cls, snapshot: Snapshot) -> LoadedSnapshotIntervals:
