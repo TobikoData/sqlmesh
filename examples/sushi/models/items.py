@@ -69,6 +69,12 @@ ITEMS = [
         "float_prop": 1.0,
         "bool_prop": True,
     },
+    session_properties={
+        "string_prop": "some_value",
+        "int_prop": 1,
+        "float_prop": 1.0,
+        "bool_prop": True,
+    },
 )
 def execute(
     context: ExecutionContext,
