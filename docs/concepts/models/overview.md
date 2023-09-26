@@ -130,7 +130,7 @@ MODEL (
 ```
 
 ### allow_partials
-- Indicates that this model can be executed for partial (incomplete) data intervals. Setting this to `true` means that the model may process a segment of input data that is missing some of the data points. Please note that setting this attribute to `true` results in the disregard of the [cron](#cron) attribute.
+- Indicates that this model can be executed for partial (incomplete) data intervals. By default, each model processes only complete intervals to prevent common mistakes caused by partial data. The size of the interval is determined by the model's [interval_unit](#interval_unit). Setting `allow_partials` to `true` overrides this behavior, indicating that the model may process a segment of input data that is missing some of the data points. Please note that setting this attribute to `true` results in the disregard of the [cron](#cron) attribute.
 
 ## Incremental Model Properties
 
