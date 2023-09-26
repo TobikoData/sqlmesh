@@ -129,6 +129,9 @@ MODEL (
 
 ```
 
+### allow_partials
+- Indicates that this model can be executed for partial (incomplete) data intervals. Setting this to `true` means that the model may process a segment of input data that is missing some of the data points. Please note that setting this attribute to `true` results in the disregard of the [cron](#cron) attribute.
+
 ## Incremental Model Properties
 
 For models that are incremental, the following parameters can be specified in the `kind`'s definition.
