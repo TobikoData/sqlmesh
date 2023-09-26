@@ -61,6 +61,17 @@ class HttpStateSync(StateSync):
         """
         return self._client.get_environments()
 
+    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
+        """Returns the max interval end for the given environment.
+
+        Args:
+            environment: The environment.
+
+        Returns:
+            A timestamp or None if no interval or environment exists.
+        """
+        return self._client.max_interval_end_for_environment(environment)
+
     def get_snapshots(
         self,
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],

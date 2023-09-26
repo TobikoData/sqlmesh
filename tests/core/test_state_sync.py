@@ -1226,3 +1226,39 @@ def test_cleanup_expired_views(
         call("default.c__test_environment", ignore_if_not_exists=True),
         call("default.d__test_environment", ignore_if_not_exists=True),
     ]
+
+
+def test_max_interval_end_for_environment(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot, "2023-01-02", "2023-01-02")
+
+    environment_name = "test_max_interval_end_for_environment"
+
+    assert state_sync.max_interval_end_for_environment(environment_name) is None
+
+    state_sync.promote(
+        Environment(
+            name=environment_name,
+            snapshots=[snapshot.table_info],
+            start_at="2023-01-01",
+            end_at="2023-01-02",
+            plan_id="test_plan_id",
+        )
+    )
+
+    assert state_sync.max_interval_end_for_environment(environment_name) == to_timestamp(
+        "2023-01-03"
+    )

@@ -126,6 +126,17 @@ class StateReader(abc.ABC):
         """
 
     @abc.abstractmethod
+    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
+        """Returns the max interval end for the given environment.
+
+        Args:
+            environment: The environment.
+
+        Returns:
+            A timestamp or None if no interval or environment exists.
+        """
+
+    @abc.abstractmethod
     def recycle(self) -> None:
         """Closes all open connections and releases all allocated resources associated with any thread
         except the calling one."""
