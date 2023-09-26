@@ -86,7 +86,7 @@ class SnapshotDagGenerator:
 
         with DAG(
             dag_id=dag_id,
-            schedule_interval=snapshot.model.cron,
+            schedule_interval=snapshot.node.cron,
             start_date=pendulum.instance(to_datetime(snapshot.unpaused_ts)),
             max_active_runs=1,
             catchup=True,
@@ -98,7 +98,7 @@ class SnapshotDagGenerator:
             ],
             default_args={
                 **DAG_DEFAULT_ARGS,
-                "email": snapshot.model.owner,
+                "email": snapshot.node.owner,
                 "email_on_failure": True,
             },
         ) as dag:
@@ -227,7 +227,7 @@ class SnapshotDagGenerator:
         self, new_snapshots: t.List[Snapshot], ddl_concurrent_tasks: int
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_creation_start")
-        end_task = EmptyOperator(task_id="snapshot_creation_end")
+        end_task = EmptyOperator(task_id="snapshot_creation_end", trigger_rule="none_failed")
 
         if not new_snapshots:
             start_task >> end_task
@@ -312,6 +312,7 @@ class SnapshotDagGenerator:
                         "environment": environment,
                         "unpaused_dt": request.unpaused_dt,
                     },
+                    trigger_rule="none_failed",
                 )
 
                 update_state_task >> migrate_tables_task
