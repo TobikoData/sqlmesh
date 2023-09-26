@@ -744,6 +744,7 @@ class _Model(ModelMeta, frozen=True):
             str(self.disable_restatement),
             self.project,
             str(self.allow_partials),
+            self.session_properties_.sql() if self.session_properties_ else None,
         ]
 
         for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
@@ -1926,4 +1927,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "references": _refs_to_sql,
     "hash_raw_query": exp.convert,
     "table_properties_": lambda value: value,
+    "session_properties_": lambda value: value,
 }
