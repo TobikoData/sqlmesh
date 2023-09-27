@@ -1004,7 +1004,7 @@ class SqlModel(_SqlBasedModel):
                 return {}
 
             self._column_descriptions = {
-                select.alias: "\n".join(comment.strip() for comment in select.comments)
+                select.alias_or_name: "\n".join(comment.strip() for comment in select.comments)
                 for select in query.selects
                 if select.comments
             }
