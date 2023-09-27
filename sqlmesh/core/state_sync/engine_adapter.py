@@ -731,11 +731,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             for table in tables + (self.seeds_table, self.intervals_table):
                 self.engine_adapter.drop_table(table)
         else:
-            if not any(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
+            if not all(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
                 raise SQLMeshError("There are no prior migrations to roll back to.")
-            for table in tables + (self.seeds_table, self.intervals_table):
-                if self.engine_adapter.table_exists(_backup_table_name(table)):
-                    self._restore_table(table, _backup_table_name(table))
+            for table in tables:
+                self._restore_table(table, _backup_table_name(table))
+
+            if self.engine_adapter.table_exists(_backup_table_name(self.seeds_table)):
+                self._restore_table(self.seeds_table, _backup_table_name(self.seeds_table))
+
+            if self.engine_adapter.table_exists(_backup_table_name(self.intervals_table)):
+                self._restore_table(self.intervals_table, _backup_table_name(self.intervals_table))
         logger.info("Migration rollback successful.")
 
     def _backup_state(self) -> None:
