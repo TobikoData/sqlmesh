@@ -84,7 +84,7 @@ setup(
             "pytest-mock",
             "pyspark>=3.4.0",
             "pytz",
-            "snowflake-connector-python[pandas,secure-local-storage]",
+            "snowflake-connector-python[pandas,secure-local-storage]>=3.0.2",
             "sqlalchemy-stubs",
             "tenacity==8.1.0",
             "types-croniter",
