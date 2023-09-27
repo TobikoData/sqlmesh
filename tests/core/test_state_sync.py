@@ -898,12 +898,35 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     state_sync._backup_state()
 
     state_sync.rollback()
-    restore_table_spy.assert_any_call("sqlmesh._snapshots", "sqlmesh._snapshots_backup")
-    restore_table_spy.assert_any_call("sqlmesh._environments", "sqlmesh._environments_backup")
-    restore_table_spy.assert_any_call("sqlmesh._versions", "sqlmesh._versions_backup")
-    assert not state_sync.engine_adapter.table_exists("sqlmesh._snapshots_backup")
-    assert not state_sync.engine_adapter.table_exists("sqlmesh._environments_backup")
-    assert not state_sync.engine_adapter.table_exists("sqlmesh._versions_backup")
+    restore_table_spy.assert_any_call(
+        f"{state_sync.schema}._snapshots", f"{state_sync.schema}._snapshots_backup"
+    )
+    restore_table_spy.assert_any_call(
+        f"{state_sync.schema}._environments", f"{state_sync.schema}._environments_backup"
+    )
+    restore_table_spy.assert_any_call(
+        f"{state_sync.schema}._versions", f"{state_sync.schema}._versions_backup"
+    )
+    assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._snapshots_backup")
+    assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._environments_backup")
+    assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._versions_backup")
+
+
+def test_first_migration_failure(duck_conn, mocker: MockerFixture) -> None:
+    state_sync = EngineAdapterStateSync(
+        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
+    )
+    mocker.patch.object(state_sync, "_migrate_rows", side_effect=Exception("mocked error"))
+    with pytest.raises(
+        SQLMeshError,
+        match="SQLMesh migration failed.",
+    ):
+        state_sync.migrate()
+    assert not state_sync.engine_adapter.table_exists(state_sync.snapshots_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.environments_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.versions_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.seeds_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.intervals_table)
 
 
 def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
