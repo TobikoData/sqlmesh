@@ -1,4 +1,5 @@
 import asyncio
+import mimetypes
 import pathlib
 
 from fastapi import FastAPI, Request
@@ -15,6 +16,12 @@ app = FastAPI()
 
 app.include_router(api_router, prefix="/api")
 WEB_DIRECTORY = pathlib.Path(__file__).parent.parent
+
+# Starlette uses mimetypes.guess_type to determine a file response's content type. Since this method
+# is not consistent across different computers, operating systems, etc., we enumerate some of the
+# more common ones we use here.
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
 
 
 @app.on_event("startup")
