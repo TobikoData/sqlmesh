@@ -12,6 +12,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+
+from sqlglot import exp
 from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.schema import MappingSchema
 
@@ -25,10 +27,12 @@ from sqlmesh.core.model import (
     ModelCache,
     OptimizedQueryCache,
     SeedModel,
+    SqlModel,
     create_external_model,
     load_sql_based_model,
 )
 from sqlmesh.core.model import model as model_registry
+from sqlmesh.core.model.definition import _Model
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
@@ -41,7 +45,11 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
 
 
+
 logger = logging.getLogger(__name__)
+
+SQLMESH_MOCKED_COLUMN = "__SQLMESH_MOCKED_COLUMN__"
+
 
 # TODO: consider moving this to context
 def update_model_schemas(
@@ -79,6 +87,23 @@ def update_model_schemas(
                     "SQLMesh requires all model names and references to have the same level of nesting. You can set schema and catalog in model_defaults."
                 )
             raise
+
+
+def with_mocked_dependencies(loaded_model: Model) -> Model:
+    if isinstance(loaded_model, SqlModel):
+        # We mock dependencies so they can be referenced in macros before they're loaded
+        loaded_model._query_renderer._models = UniqueKeyDict(
+            "mocked_models",
+            {
+                name: _Model(  # type: ignore
+                    name=name,
+                    columns_to_types_={SQLMESH_MOCKED_COLUMN: exp.DataType.build("unknown")},
+                )
+                for name in loaded_model.depends_on_ or set()
+            },
+        )
+
+    return loaded_model
 
 
 @dataclass
@@ -131,6 +156,15 @@ class Loader(abc.ABC):
 
         for model in models.values():
             self._add_model_to_dag(model)
+
+            if isinstance(model, SqlModel):
+                # Replace mocked models with the actual dependencies
+                renderer = model._query_renderer
+                renderer._cache = {}
+                renderer._models = UniqueKeyDict(
+                    "models",
+                    {name: models[name] for name in model.depends_on_ or set() if name in models},
+                )
 
         if update_schemas:
             update_model_schemas(
@@ -300,7 +334,8 @@ class SqlMeshLoader(Loader):
                             raise ConfigError(
                                 f"Failed to parse a model definition at '{path}': {ex}."
                             )
-                    return load_sql_based_model(
+
+                    loaded_model = load_sql_based_model(
                         expressions,
                         defaults=config.model_defaults.dict(),
                         macros=macros,
@@ -312,6 +347,7 @@ class SqlMeshLoader(Loader):
                         physical_schema_override=config.physical_schema_override,
                         project=config.project,
                     )
+                    return with_mocked_dependencies(loaded_model)
 
                 model = cache.get_or_load_model(path, _load)
                 models[model.name] = model
@@ -348,7 +384,7 @@ class SqlMeshLoader(Loader):
                         physical_schema_override=config.physical_schema_override,
                         project=config.project,
                     )
-                    models[model.name] = model
+                    models[model.name] = with_mocked_dependencies(model)
 
         return models
 

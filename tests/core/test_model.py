@@ -37,6 +37,7 @@ from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable
+from tests.utils.test_filesystem import create_temp_file
 
 
 def test_load(assert_exp_eq):
@@ -1330,6 +1331,93 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
             "_V"."Y" AS "Y"
           FROM (VALUES ('1', 2), ('2', 3)) AS "_V"("X", "Y")
         ) AS "MODEL1"
+        """,
+    )
+
+
+def test_reference_model_in_python_context(tmp_path, assert_exp_eq) -> None:
+    models_dir = Path("models")
+    macros_dir = Path("macros")
+
+    create_temp_file(
+        tmp_path,
+        Path(models_dir, "model1.py"),
+        """
+from sqlmesh.core.model import model
+from sqlglot import exp
+
+@model(name="model1", is_sql=True, kind="full")
+def model1_entrypoint(evaluator):
+    return exp.select("x", "y", "z").from_(
+        exp.values([("1", 2, 1.1), ("2", 3, 3.2)], "_v", ["x", "y", "z"])
+    )
+        """,
+    )
+    create_temp_file(
+        tmp_path,
+        Path(models_dir, "model2.py"),
+        """
+from sqlmesh.core.model import model
+
+@model(name="model2", is_sql=True, kind="full", depends_on=["model1"])
+def model2_entrypoint(evaluator):
+    cols = ", ".join(c for c in evaluator.models["model1"].columns_to_types if not c.startswith("z"))
+    return f"select {cols} from model1"
+        """,
+    )
+    create_temp_file(
+        tmp_path,
+        Path(models_dir, "model3.sql"),
+        """
+        MODEL (name model3, kind full, depends_on [model2]);
+
+        SELECT @apply_mask(model2, ['x']) FROM model2
+        """,
+    )
+    create_temp_file(
+        tmp_path,
+        Path(macros_dir, "macro.py"),
+        """
+import re
+from sqlmesh.core.macros import macro
+
+@macro()
+def apply_mask(evaluator, model_name, patterns):
+    patterns = [p.this for p in patterns.expressions]
+    return [
+        (
+            f"HASH({column}) AS {column}_digest"
+            if any(re.match(p, column) for p in patterns)
+            else column
+        )
+        for column in evaluator.models[model_name.sql()].columns_to_types
+    ]
+        """,
+    )
+
+    context = Context(paths=str(tmp_path), config=Config())
+    context.load()
+
+    assert_exp_eq(
+        context.render("model3"),
+        """
+        SELECT
+          HASH("model2"."x") AS "x_digest",
+          "model2"."y" AS "y"
+        FROM (
+          SELECT
+            "model1"."x" AS "x",
+            "model1"."y" AS "y"
+          FROM (
+            SELECT
+              "_v"."x" AS "x",
+              "_v"."y" AS "y",
+              "_v"."z" AS "z",
+            FROM (VALUES
+              ('1', 2, 1.1),
+              ('2', 3, 3.2)) AS "_v"("x", "y", "z")
+          ) AS "model1"
+        ) AS "model2"
         """,
     )
 

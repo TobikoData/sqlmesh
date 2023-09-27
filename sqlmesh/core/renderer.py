@@ -19,6 +19,7 @@ from sqlglot.schema import MappingSchema
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroEvaluator
+from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
     ConfigError,
@@ -32,6 +33,7 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env
 if t.TYPE_CHECKING:
     from sqlglot._typing import E
 
+    from sqlmesh.core.model import Model
     from sqlmesh.core.snapshot import Snapshot
 
 
@@ -69,6 +71,7 @@ class BaseExpressionRenderer:
         self._only_execution_time = only_execution_time
 
         self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.List[exp.Expression]] = {}
+        self._models: t.Optional[UniqueKeyDict[str, Model]] = None
 
     def _render(
         self,
@@ -140,6 +143,7 @@ class BaseExpressionRenderer:
                 self._dialect,
                 python_env=self._python_env,
                 jinja_env=jinja_env,
+                models=self._models,
             )
 
             for definition in self._macro_definitions:
