@@ -1384,9 +1384,6 @@ from sqlmesh.core.macros import macro
 @macro()
 def apply_mask(evaluator, model_name, patterns):
     patterns = [p.this for p in patterns.expressions]
-    if not evaluator.models[model_name.sql()].columns_to_types:
-        print(model_name.sql())
-        print(evaluator.models)
     return [
         (
             f"HASH({column}) AS {column}_digest"

@@ -539,7 +539,6 @@ class _Model(ModelMeta, frozen=True):
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
         """Returns the mapping of column names to types of this model."""
         if self.columns_to_types_ is None:
-            print("Wtf?")
             return None
         return {**self.columns_to_types_, **self.managed_columns}
 

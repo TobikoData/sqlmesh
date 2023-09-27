@@ -97,7 +97,7 @@ def with_mocked_dependencies(loaded_model: Model) -> Model:
             {
                 name: _Model(  # type: ignore
                     name=name,
-                    columns_to_types_={SQLMESH_MOCKED_COLUMN: exp.DataType.build("unknown")},
+                    columns={SQLMESH_MOCKED_COLUMN: exp.DataType.build("unknown")},
                 )
                 for name in loaded_model.depends_on_ or set()
             },
