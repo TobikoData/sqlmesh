@@ -5,6 +5,7 @@ import typing as t
 from fastapi import APIRouter, Body, Depends, Request, Response, status
 
 from sqlmesh.core.context import Context
+from sqlmesh.core.plan.definition import Plan
 from sqlmesh.utils.date import make_inclusive, to_ds
 from web.server import models
 from web.server.console import api_console
@@ -36,6 +37,21 @@ async def run_plan(
             origin="API -> plan -> run_plan",
         )
 
+    tracker, _ = get_plan_tracker(
+        context=context,
+        environment=environment,
+        plan_dates=plan_dates,
+        plan_options=plan_options,
+    )
+    return tracker
+
+
+def get_plan_tracker(
+    plan_options: models.PlanOptions,
+    context: Context = Depends(get_loaded_context),
+    environment: t.Optional[str] = Body(None),
+    plan_dates: t.Optional[models.PlanDates] = None,
+) -> t.Tuple[models.PlanOverviewStageTracker, Plan]:
     tracker = models.PlanOverviewStageTracker(environment=environment, plan_options=plan_options)
     api_console.start_plan_tracker(tracker)
     tracker_stage_validate = models.PlanStageValidation()
@@ -107,7 +123,7 @@ async def run_plan(
     tracker_stage_backfills.stop(success=True)
 
     api_console.stop_plan_tracker(tracker)
-    return tracker
+    return tracker, plan
 
 
 @router.post("/cancel")

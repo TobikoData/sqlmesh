@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import functools
 import io
 import typing as t
 
@@ -11,9 +10,9 @@ from fastapi import APIRouter, Body, Depends, Request
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
-from sqlmesh.utils.date import make_inclusive, to_ds
 from sqlmesh.utils.errors import PlanError
 from web.server import models
+from web.server.api.endpoints.plan import get_plan_tracker
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
@@ -44,82 +43,9 @@ async def apply(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-    tracker_overview = models.PlanOverviewStageTracker(
-        environment=environment, plan_options=plan_options
+    _, plan = get_plan_tracker(
+        context=context, environment=environment, plan_options=plan_options, plan_dates=plan_dates
     )
-    api_console.start_plan_tracker(tracker_overview)
-    tracker_stage_validate = models.PlanStageValidation()
-    tracker_overview.add_stage(models.PlanStage.validation, tracker_stage_validate)
-    plan_func = functools.partial(
-        context.plan,
-        environment=environment,
-        no_prompts=True,
-        include_unmodified=plan_options.include_unmodified,
-        start=plan_dates.start if plan_dates else None,
-        end=plan_dates.end if plan_dates else None,
-        skip_tests=plan_options.skip_tests,
-        no_gaps=plan_options.no_gaps,
-        restate_models=plan_options.restate_models,
-        create_from=plan_options.create_from,
-        skip_backfill=plan_options.skip_backfill,
-        forward_only=plan_options.forward_only,
-        no_auto_categorization=plan_options.no_auto_categorization,
-    )
-    request.app.state.task = plan_task = asyncio.create_task(run_in_executor(plan_func))
-    try:
-        plan = await plan_task
-        tracker_overview.start = plan.start
-        tracker_overview.end = plan.end
-        tracker_stage_validate.stop(success=True)
-
-    except PlanError:
-        tracker_stage_validate.stop(success=False)
-        api_console.stop_plan_tracker(tracker_overview, success=False)
-        raise ApiException(
-            message="Unable to apply a plan",
-            origin="API -> commands -> apply",
-        )
-
-    tracker_stage_changes = models.PlanStageChanges()
-    tracker_overview.add_stage(stage=models.PlanStage.changes, data=tracker_stage_changes)
-    if plan.context_diff.has_changes:
-        tracker_stage_changes.update(
-            {
-                "removed": set(plan.context_diff.removed_snapshots),
-                "added": plan.context_diff.added,
-                "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
-            }
-        )
-    tracker_stage_changes.stop(success=True)
-
-    tracker_stage_backfills = models.PlanStageBackfills()
-    tracker_overview.add_stage(stage=models.PlanStage.backfills, data=tracker_stage_backfills)
-    if plan.requires_backfill:
-        batches = context.scheduler().batches()
-        tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
-        tracker_stage_backfills.update(
-            {
-                "models": [
-                    models.BackfillDetails(
-                        model_name=interval.snapshot_name,
-                        view_name=plan.context_diff.snapshots[
-                            interval.snapshot_name
-                        ].qualified_view_name.for_environment(plan.environment.naming_info)
-                        if interval.snapshot_name in plan.context_diff.snapshots
-                        else interval.snapshot_name,
-                        interval=[
-                            tuple(to_ds(t) for t in make_inclusive(start, end))
-                            for start, end in interval.merged_intervals
-                        ][0],
-                        batches=tasks.get(interval.snapshot_name, 0),
-                    )
-                    for interval in plan.missing_intervals
-                ]
-            }
-        )
-    tracker_stage_backfills.stop(success=True)
-
-    api_console.stop_plan_tracker(tracker_overview, success=True)
 
     if categories is not None:
         for new, _ in plan.context_diff.modified_snapshots.values():
@@ -134,12 +60,6 @@ async def apply(
     if not plan.requires_backfill or plan_options.skip_backfill:
         try:
             await apply_task
-            # tracker_stage_backfill = models.PlanStageBackfill()
-            # tracker_apply.add_stage(models.PlanStage.backfill, tracker_stage_backfill)
-            # tracker_stage_backfill.stop(success=True)
-            # tracker_stage_promote = models.PlanStagePromote(total_tasks=1, num_tasks=1, target_environment=environment)
-            # tracker_apply.add_stage(models.PlanStage.promote, tracker_stage_promote)
-            # tracker_stage_promote.stop(success=True)
             api_console.stop_plan_tracker(tracker_apply, success=True)
         except PlanError as e:
             api_console.stop_plan_tracker(tracker_apply, success=False)
