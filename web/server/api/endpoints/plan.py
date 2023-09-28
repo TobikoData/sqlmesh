@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.post(
     "",
-    response_model=models.PlanApplyStageTracker,
+    response_model=models.PlanOverviewStageTracker,
     response_model_exclude_unset=True,
 )
 async def run_plan(
@@ -25,7 +25,7 @@ async def run_plan(
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: t.Optional[models.PlanOptions] = None,
-) -> models.PlanApplyStageTracker:
+) -> models.PlanOverviewStageTracker:
     """Get a plan for an environment."""
 
     plan_options = plan_options or models.PlanOptions()
@@ -36,10 +36,10 @@ async def run_plan(
             origin="API -> plan -> run_plan",
         )
 
-    tracker = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
-    api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
-    tracker_stage_validate = models.PlanApplyStageValidation()
-    tracker.add_stage(stage=models.PlanApplyStage.validation, data=tracker_stage_validate)
+    tracker = models.PlanOverviewStageTracker(environment=environment, plan_options=plan_options)
+    api_console.start_plan_tracker(tracker)
+    tracker_stage_validate = models.PlanStageValidation()
+    tracker.add_stage(stage=models.PlanStage.validation, data=tracker_stage_validate)
     try:
         plan = context.plan(
             environment=environment,
@@ -55,19 +55,21 @@ async def run_plan(
             forward_only=plan_options.forward_only,
             no_auto_categorization=plan_options.no_auto_categorization,
         )
+        tracker.start = plan.start
+        tracker.end = plan.end
         tracker_stage_validate.stop(success=True)
     except Exception:
         tracker_stage_validate.stop(success=False)
         tracker.stop(success=False)
-        api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
+        api_console.log_event_plan_apply()
         raise ApiException(
             message="Unable to run a plan",
             origin="API -> plan -> run_plan",
         )
 
+    tracker_stage_changes = models.PlanStageChanges()
+    tracker.add_stage(stage=models.PlanStage.changes, data=tracker_stage_changes)
     if plan.context_diff.has_changes:
-        tracker_stage_changes = models.PlanApplyStageChanges()
-        tracker.add_stage(stage=models.PlanApplyStage.changes, data=tracker_stage_changes)
         tracker_stage_changes.update(
             {
                 "removed": set(plan.context_diff.removed_snapshots),
@@ -75,11 +77,11 @@ async def run_plan(
                 "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
             }
         )
-        tracker_stage_changes.stop(success=True)
+    tracker_stage_changes.stop(success=True)
 
+    tracker_stage_backfills = models.PlanStageBackfills()
+    tracker.add_stage(stage=models.PlanStage.backfills, data=tracker_stage_backfills)
     if plan.requires_backfill:
-        tracker_stage_backfills = models.PlanApplyStageBackfills()
-        tracker.add_stage(stage=models.PlanApplyStage.backfills, data=tracker_stage_backfills)
         batches = context.scheduler().batches()
         tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
         tracker_stage_backfills.update(
@@ -102,10 +104,9 @@ async def run_plan(
                 ]
             }
         )
-        tracker_stage_backfills.stop(success=True)
+    tracker_stage_backfills.stop(success=True)
 
-    tracker.stop(success=True)
-    api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
+    api_console.stop_plan_tracker(tracker)
     return tracker
 
 
@@ -120,4 +121,10 @@ async def cancel_plan(
             message="Plan/apply is already running",
             origin="API -> plan -> cancel_plan",
         )
+    tracker = models.PlanCancelStageTracker()
+    api_console.start_plan_tracker(tracker)
+    tracker_stage_cancel = models.PlanStageCancel()
+    tracker.add_stage(stage=models.PlanStage.cancel, data=tracker_stage_cancel)
+    tracker_stage_cancel.stop(success=True)
+    api_console.stop_plan_tracker(tracker)
     response.status_code = status.HTTP_204_NO_CONTENT

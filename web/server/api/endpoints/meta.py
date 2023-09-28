@@ -16,7 +16,7 @@ def get_api_meta(
     request: Request,
 ) -> models.Meta:
     """Get the metadata"""
-    api_console.log_event_apply()
+    api_console.log_event_plan_apply()
     return models.Meta(
         version=_sqlmesh_version(),
         has_running_task=hasattr(request.app.state, "task") and not request.app.state.task.done(),

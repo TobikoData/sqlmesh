@@ -19,8 +19,9 @@ from web.server.exceptions import ApiException
 
 
 class ApiConsole(TerminalConsole):
-    task: t.Optional[asyncio.Task] = None
-    plan_stage_tracker: t.Optional[models.PlanApplyStageTracker] = None
+    plan_cancel_stage_tracker: t.Optional[models.PlanCancelStageTracker] = None
+    plan_apply_stage_tracker: t.Optional[models.PlanApplyStageTracker] = None
+    plan_overview_stage_tracker: t.Optional[models.PlanOverviewStageTracker] = None
 
     def __init__(self) -> None:
         super().__init__()
@@ -28,134 +29,179 @@ class ApiConsole(TerminalConsole):
         self.queue: asyncio.Queue = asyncio.Queue()
 
     def start_plan_evaluation(self, plan: Plan) -> None:
-        self.plan_stage_tracker = models.PlanApplyStageTracker(
-            environment=plan.environment.name)
-        self.log_event_apply()
+        self.plan_apply_stage_tracker = (
+            self.plan_apply_stage_tracker
+            or models.PlanApplyStageTracker(environment=plan.environment.name)
+        )
+        self.log_event_plan_apply()
 
     def stop_plan_evaluation(self) -> None:
-        if self.plan_stage_tracker:
-            self.plan_stage_tracker.stop(success=True)
-        self.log_event_apply()
-        self.plan_stage_tracker = None
+        if self.plan_apply_stage_tracker:
+            self.stop_plan_tracker(
+                tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_creation_progress(self, total_tasks: int) -> None:
-        if self.plan_stage_tracker:
-            self.plan_stage_tracker.add_stage(
-                models.PlanApplyStage.creation,
-                models.PlanApplyStageCreation(
-                    total_tasks=total_tasks, num_tasks=0),
+        if self.plan_apply_stage_tracker:
+            self.plan_apply_stage_tracker.add_stage(
+                models.PlanStage.creation,
+                models.PlanStageCreation(total_tasks=total_tasks, num_tasks=0),
             )
 
-        self.log_event_apply()
+        self.log_event_plan_apply()
 
     def update_creation_progress(self, num_tasks: int) -> None:
-        if self.plan_stage_tracker and self.plan_stage_tracker.creation:
-            self.plan_stage_tracker.creation.update(
-                {"num_tasks": self.plan_stage_tracker.creation.num_tasks + num_tasks}
+        if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.creation:
+            self.plan_apply_stage_tracker.creation.update(
+                {"num_tasks": self.plan_apply_stage_tracker.creation.num_tasks + num_tasks}
             )
 
-        self.log_event_apply()
+        self.log_event_plan_apply()
 
     def stop_creation_progress(self, success: bool = True) -> None:
-        if self.plan_stage_tracker and self.plan_stage_tracker.creation:
-            self.plan_stage_tracker.creation.stop(success=success)
+        if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.creation:
+            self.plan_apply_stage_tracker.creation.stop(success=success)
 
             if not success:
-                self.stop_plan_evaluation()
+                self.stop_plan_tracker(
+                    tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_restate_progress(self) -> None:
-        if self.plan_stage_tracker:
-            self.plan_stage_tracker.add_stage(
-                models.PlanApplyStage.restate, models.PlanApplyStageRestate()
+        if self.plan_apply_stage_tracker:
+            self.plan_apply_stage_tracker.add_stage(
+                models.PlanStage.restate, models.PlanStageRestate()
             )
 
-        self.log_event_apply()
+        self.log_event_plan_apply()
 
     def stop_restate_progress(self, success: bool) -> None:
-        if self.plan_stage_tracker and self.plan_stage_tracker.restate:
-            self.plan_stage_tracker.restate.stop(success=success)
+        if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.restate:
+            self.plan_apply_stage_tracker.restate.stop(success=success)
 
             if not success:
-                self.stop_plan_evaluation()
+                self.stop_plan_tracker(
+                    tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_evaluation_progress(
         self,
         batches: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
     ) -> None:
-        if self.plan_stage_tracker:
-            self.plan_stage_tracker.add_stage(
-                models.PlanApplyStage.backfill,
-                models.PlanApplyStageBackfill(
+        if self.plan_apply_stage_tracker:
+            tasks = {
+                snapshot.name: models.BackfillTask(
+                    completed=0,
+                    total=total_tasks,
+                    start=now_timestamp(),
+                    view_name=snapshot.qualified_view_name.for_environment(
+                        environment_naming_info),
+                )
+                for snapshot, total_tasks in batches.items()
+            }
+            self.plan_apply_stage_tracker.add_stage(
+                models.PlanStage.backfill,
+                models.PlanStageBackfill(
                     queue=set(),
-                    tasks={
-                        snapshot.name: models.BackfillTask(
-                            completed=0,
-                            total=total_tasks,
-                            start=now_timestamp(),
-                            view_name=snapshot.qualified_view_name.for_environment(
-                                environment_naming_info
-                            ),
-                        )
-                        for snapshot, total_tasks in batches.items()
-                    },
+                    tasks=tasks,
                 ),
             )
 
-        self.log_event_apply()
+        self.log_event_plan_apply()
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
-        if self.plan_stage_tracker and self.plan_stage_tracker.backfill:
-            self.plan_stage_tracker.backfill.queue.add(snapshot.name)
+        if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
+            self.plan_apply_stage_tracker.backfill.queue.add(snapshot.name)
 
-        self.log_event_apply()
+        self.log_event_plan_apply()
 
     def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_tasks: int) -> None:
-        if self.plan_stage_tracker and self.plan_stage_tracker.backfill:
-            task = self.plan_stage_tracker.backfill.tasks[snapshot.name]
+        if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
+            task = self.plan_apply_stage_tracker.backfill.tasks[snapshot.name]
             task.completed += num_tasks
             if task.completed >= task.total:
                 task.end = now_timestamp()
 
-            self.plan_stage_tracker.backfill.tasks[snapshot.name] = task
-            self.plan_stage_tracker.backfill.queue.remove(snapshot.name)
+            self.plan_apply_stage_tracker.backfill.tasks[snapshot.name] = task
+            self.plan_apply_stage_tracker.backfill.queue.remove(snapshot.name)
 
-        self.log_event_apply()
+        self.log_event_plan_apply()
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
-        if self.plan_stage_tracker and self.plan_stage_tracker.backfill:
-            self.plan_stage_tracker.backfill.queue.clear()
-            self.plan_stage_tracker.backfill.tasks = {}
-            self.plan_stage_tracker.backfill.stop(success=success)
+        if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
+            self.plan_apply_stage_tracker.backfill.stop(success=success)
 
             if not success:
-                self.stop_plan_evaluation()
+                self.stop_plan_tracker(
+                    tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
-        if self.plan_stage_tracker:
-            self.plan_stage_tracker.add_stage(
-                models.PlanApplyStage.promote,
-                models.PlanApplyStagePromote(
+        if self.plan_apply_stage_tracker:
+            self.plan_apply_stage_tracker.add_stage(
+                models.PlanStage.promote,
+                models.PlanStagePromote(
                     total_tasks=total_tasks, num_tasks=0, target_environment=environment
                 ),
             )
 
-        self.log_event_apply()
+        self.log_event_plan_apply()
 
     def update_promotion_progress(self, num_tasks: int) -> None:
-        if self.plan_stage_tracker and self.plan_stage_tracker.promote:
-            self.plan_stage_tracker.promote.update(
-                {"num_tasks": self.plan_stage_tracker.promote.num_tasks + num_tasks}
+        if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.promote:
+            self.plan_apply_stage_tracker.promote.update(
+                {"num_tasks": self.plan_apply_stage_tracker.promote.num_tasks + num_tasks}
             )
 
-        self.log_event_apply()
+        self.log_event_plan_apply()
 
     def stop_promotion_progress(self, success: bool = True) -> None:
-        if self.plan_stage_tracker and self.plan_stage_tracker.promote:
-            self.plan_stage_tracker.promote.stop(success=success)
+        if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.promote:
+            self.plan_apply_stage_tracker.promote.stop(success=success)
 
             if not success:
-                self.stop_plan_evaluation()
+                self.stop_plan_tracker(
+                    tracker=self.plan_apply_stage_tracker, success=True)
+
+    def start_plan_tracker(
+        self,
+        tracker: t.Union[
+            models.PlanApplyStageTracker,
+            models.PlanOverviewStageTracker,
+            models.PlanCancelStageTracker,
+        ],
+    ) -> None:
+        if isinstance(tracker, models.PlanApplyStageTracker):
+            self.plan_apply_stage_tracker = tracker
+            self.log_event_plan_apply()
+        elif isinstance(tracker, models.PlanOverviewStageTracker):
+            self.plan_overview_stage_tracker = tracker
+            self.log_event_plan_overview()
+        elif isinstance(tracker, models.PlanCancelStageTracker):
+            self.plan_cancel_stage_tracker = tracker
+            self.log_event_plan_cancel()
+
+    def stop_plan_tracker(
+        self,
+        tracker: t.Union[
+            models.PlanApplyStageTracker,
+            models.PlanOverviewStageTracker,
+            models.PlanCancelStageTracker,
+        ],
+        success: bool = True,
+    ) -> None:
+        if isinstance(tracker, models.PlanApplyStageTracker) and self.plan_apply_stage_tracker:
+            self.plan_apply_stage_tracker.stop(success=success)
+            self.log_event_plan_apply()
+            self.plan_apply_stage_tracker = None
+        elif (
+            isinstance(tracker, models.PlanOverviewStageTracker)
+            and self.plan_overview_stage_tracker
+        ):
+            self.plan_overview_stage_tracker.stop(success=success)
+            self.log_event_plan_overview()
+            self.plan_overview_stage_tracker = None
+        elif isinstance(tracker, models.PlanCancelStageTracker) and self.plan_cancel_stage_tracker:
+            self.plan_cancel_stage_tracker.stop(success=success)
+            self.log_event_plan_cancel()
+            self.plan_cancel_stage_tracker = None
 
     def _make_event(self, event: str, data: dict[str, t.Any]) -> ServerSentEvent:
         if isinstance(event, models.ConsoleEvent):
@@ -204,10 +250,25 @@ class ApiConsole(TerminalConsole):
             ).dict(),
         )
 
-    def log_event_apply(self) -> None:
+    def log_event_plan_apply(self) -> None:
         self.log_event(
             event=models.ConsoleEvent.plan_apply,
-            data=self.plan_stage_tracker.dict() if self.plan_stage_tracker else {},
+            data=self.plan_apply_stage_tracker.dict() if self.plan_apply_stage_tracker else {},
+        )
+
+    def log_event_plan_overview(self) -> None:
+        self.log_event(
+            event=models.ConsoleEvent.plan_overview,
+            data=self.plan_overview_stage_tracker.dict()
+            if self.plan_overview_stage_tracker
+            else {},
+        )
+
+    def log_event_plan_cancel(self) -> None:
+        self.log_event(
+            event=models.ConsoleEvent.plan_cancel,
+            data=self.plan_cancel_stage_tracker.dict(
+            ) if self.plan_cancel_stage_tracker else {},
         )
 
     def log_exception(self) -> None:

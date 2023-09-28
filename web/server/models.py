@@ -43,6 +43,8 @@ class ConsoleEvent(str, enum.Enum):
     """An enumeration of console events."""
 
     plan_apply = "plan-apply"
+    plan_overview = "plan-overview"
+    plan_cancel = "plan-cancel"
     tests = "tests"
 
 
@@ -54,7 +56,7 @@ class Status(str, enum.Enum):
     fail = "fail"
 
 
-class PlanApplyStage(str, enum.Enum):
+class PlanStage(str, enum.Enum):
     """An enumeration of plan apply stages."""
 
     validation = "validation"
@@ -64,6 +66,7 @@ class PlanApplyStage(str, enum.Enum):
     restate = "restate"
     backfill = "backfill"
     promote = "promote"
+    cancel = "cancel"
 
 
 class File(BaseModel):
@@ -101,6 +104,7 @@ class Directory(BaseModel):
 
 class Meta(BaseModel):
     version: str
+    has_running_task: bool = False
 
 
 class ChangeDirect(BaseModel):
@@ -282,10 +286,6 @@ class Query(BaseModel):
     sql: str
 
 
-class ApplyResponse(BaseModel):
-    type: ApplyType
-
-
 class ApiExceptionPayload(BaseModel):
     timestamp: int
     message: str
@@ -399,8 +399,8 @@ class BackfillTask(BaseModel):
     completed: int
     total: int
     view_name: str
-    start: TimeLike
-    end: t.Optional[TimeLike] = None
+    start: int
+    end: t.Optional[int] = None
 
 
 class TrackableMeta(BaseModel):
@@ -436,51 +436,64 @@ class Trackable(BaseModel):
             setattr(self, k, v)
 
 
-class PlanApplyStageValidation(Trackable):
+class PlanStageValidation(Trackable):
     pass
 
 
-class PlanApplyStageChanges(Trackable):
+class PlanStageCancel(Trackable):
+    pass
+
+
+class PlanStageChanges(Trackable):
     added: t.Optional[t.Set[str]] = None
     removed: t.Optional[t.Set[str]] = None
     modified: t.Optional[ModelsDiff] = None
 
 
-class PlanApplyStageBackfills(Trackable):
+class PlanStageBackfills(Trackable):
     models: t.Optional[t.List[BackfillDetails]] = None
 
 
-class PlanApplyStageCreation(Trackable):
+class PlanStageCreation(Trackable):
     total_tasks: int
     num_tasks: int
 
 
-class PlanApplyStageRestate(Trackable):
+class PlanStageRestate(Trackable):
     pass
 
 
-class PlanApplyStageBackfill(Trackable):
+class PlanStageBackfill(Trackable):
     queue: t.Set[str] = set()
     tasks: t.Dict[str, BackfillTask] = {}
 
 
-class PlanApplyStagePromote(Trackable):
+class PlanStagePromote(Trackable):
     total_tasks: int
     num_tasks: int
     target_environment: str
 
 
-class PlanApplyStageTracker(Trackable):
-    environment: str
+class PlanStageTracker(Trackable, PlanDates):
+    environment: t.Optional[str] = None
     plan_options: t.Optional[PlanOptions] = None
 
-    validation: t.Optional[PlanApplyStageValidation] = None
-    changes: t.Optional[PlanApplyStageChanges] = None
-    backfills: t.Optional[PlanApplyStageBackfills] = None
-    creation: t.Optional[PlanApplyStageCreation] = None
-    restate: t.Optional[PlanApplyStageRestate] = None
-    backfill: t.Optional[PlanApplyStageBackfill] = None
-    promote: t.Optional[PlanApplyStagePromote] = None
-
-    def add_stage(self, stage: PlanApplyStage, data: Trackable) -> None:
+    def add_stage(self, stage: PlanStage, data: Trackable) -> None:
         setattr(self, stage, data)
+
+
+class PlanOverviewStageTracker(PlanStageTracker):
+    validation: t.Optional[PlanStageValidation] = None
+    changes: t.Optional[PlanStageChanges] = None
+    backfills: t.Optional[PlanStageBackfills] = None
+
+
+class PlanApplyStageTracker(PlanStageTracker):
+    creation: t.Optional[PlanStageCreation] = None
+    restate: t.Optional[PlanStageRestate] = None
+    backfill: t.Optional[PlanStageBackfill] = None
+    promote: t.Optional[PlanStagePromote] = None
+
+
+class PlanCancelStageTracker(PlanStageTracker):
+    cancel: t.Optional[PlanStageCancel] = None

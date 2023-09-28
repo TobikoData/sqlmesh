@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, Depends, Request
 from sqlmesh.core.context import Context
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
+from sqlmesh.utils.date import make_inclusive, to_ds
 from sqlmesh.utils.errors import PlanError
 from web.server import models
 from web.server.console import api_console
@@ -25,7 +26,9 @@ from web.server.utils import (
 router = APIRouter()
 
 
-@router.post("/apply", response_model=models.ApplyResponse)
+@router.post(
+    "/apply", response_model=models.PlanApplyStageTracker, response_model_exclude_unset=True
+)
 async def apply(
     request: Request,
     context: Context = Depends(get_loaded_context),
@@ -33,7 +36,7 @@ async def apply(
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: t.Optional[models.PlanOptions] = None,
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
-) -> models.ApplyResponse:
+) -> models.PlanApplyStageTracker:
     """Apply a plan"""
     plan_options = plan_options or models.PlanOptions()
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
@@ -41,10 +44,12 @@ async def apply(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-    tracker = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
-    api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
-    tracker_stage_validate = models.PlanApplyStageValidation()
-    tracker.add_stage(models.PlanApplyStage.validation, tracker_stage_validate)
+    tracker_overview = models.PlanOverviewStageTracker(
+        environment=environment, plan_options=plan_options
+    )
+    api_console.start_plan_tracker(tracker_overview)
+    tracker_stage_validate = models.PlanStageValidation()
+    tracker_overview.add_stage(models.PlanStage.validation, tracker_stage_validate)
     plan_func = functools.partial(
         context.plan,
         environment=environment,
@@ -63,36 +68,87 @@ async def apply(
     request.app.state.task = plan_task = asyncio.create_task(run_in_executor(plan_func))
     try:
         plan = await plan_task
+        tracker_overview.start = plan.start
+        tracker_overview.end = plan.end
         tracker_stage_validate.stop(success=True)
-        tracker.stop(success=True)
+
     except PlanError:
         tracker_stage_validate.stop(success=False)
-        tracker.stop(success=False)
+        api_console.stop_plan_tracker(tracker_overview, success=False)
         raise ApiException(
             message="Unable to apply a plan",
             origin="API -> commands -> apply",
         )
-    finally:
-        api_console.log_event(event=models.ConsoleEvent.plan_apply, data=tracker.dict())
+
+    tracker_stage_changes = models.PlanStageChanges()
+    tracker_overview.add_stage(stage=models.PlanStage.changes, data=tracker_stage_changes)
+    if plan.context_diff.has_changes:
+        tracker_stage_changes.update(
+            {
+                "removed": set(plan.context_diff.removed_snapshots),
+                "added": plan.context_diff.added,
+                "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
+            }
+        )
+    tracker_stage_changes.stop(success=True)
+
+    tracker_stage_backfills = models.PlanStageBackfills()
+    tracker_overview.add_stage(stage=models.PlanStage.backfills, data=tracker_stage_backfills)
+    if plan.requires_backfill:
+        batches = context.scheduler().batches()
+        tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
+        tracker_stage_backfills.update(
+            {
+                "models": [
+                    models.BackfillDetails(
+                        model_name=interval.snapshot_name,
+                        view_name=plan.context_diff.snapshots[
+                            interval.snapshot_name
+                        ].qualified_view_name.for_environment(plan.environment.naming_info)
+                        if interval.snapshot_name in plan.context_diff.snapshots
+                        else interval.snapshot_name,
+                        interval=[
+                            tuple(to_ds(t) for t in make_inclusive(start, end))
+                            for start, end in interval.merged_intervals
+                        ][0],
+                        batches=tasks.get(interval.snapshot_name, 0),
+                    )
+                    for interval in plan.missing_intervals
+                ]
+            }
+        )
+    tracker_stage_backfills.stop(success=True)
+
+    api_console.stop_plan_tracker(tracker_overview, success=True)
 
     if categories is not None:
         for new, _ in plan.context_diff.modified_snapshots.values():
             if plan.is_new_snapshot(new) and new.name in categories:
                 plan.set_choice(new, categories[new.name])
 
+    tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
+    tracker_apply.start = plan.start
+    tracker_apply.end = plan.end
+    api_console.start_plan_tracker(tracker_apply)
     request.app.state.task = apply_task = asyncio.create_task(run_in_executor(context.apply, plan))
     if not plan.requires_backfill or plan_options.skip_backfill:
         try:
             await apply_task
+            # tracker_stage_backfill = models.PlanStageBackfill()
+            # tracker_apply.add_stage(models.PlanStage.backfill, tracker_stage_backfill)
+            # tracker_stage_backfill.stop(success=True)
+            # tracker_stage_promote = models.PlanStagePromote(total_tasks=1, num_tasks=1, target_environment=environment)
+            # tracker_apply.add_stage(models.PlanStage.promote, tracker_stage_promote)
+            # tracker_stage_promote.stop(success=True)
+            api_console.stop_plan_tracker(tracker_apply, success=True)
         except PlanError as e:
+            api_console.stop_plan_tracker(tracker_apply, success=False)
             raise ApiException(
                 message=str(e),
                 origin="API -> commands -> apply",
             )
 
-    return models.ApplyResponse(
-        type=models.ApplyType.backfill if plan.requires_backfill else models.ApplyType.virtual
-    )
+    return tracker_apply
 
 
 @router.post("/evaluate")
