@@ -977,7 +977,7 @@ class FullRefreshStrategy(MaterializableStrategy):
         self.adapter.replace_query(
             name,
             query_or_df,
-            columns_to_types=model.columns_to_types,
+            columns_to_types=model.columns_to_types if model.annotated else None,
             storage_format=model.storage_format,
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.interval_unit,
