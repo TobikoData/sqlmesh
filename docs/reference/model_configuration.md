@@ -35,6 +35,11 @@ The SQLMesh project-level configuration must contain the `model_defaults` key an
 
 The SQLMesh project-level `model_defaults` key supports all options in the [general model properties](#general-model-properties) table above except for `depends_on`.
 
+#### Default Schema / Catalog
+SQLMesh requires all model names and references to have the same level of nesting. For example if you decide to use catalog, all model names and references must use the fully qualified name a.b.c (catalog.schema.table).
+
+You can set schema and catalog in model_defaults if you want some models to not be fully qualified.
+
 ## Model kind properties
 
 Configuration options for kind-specific SQLMesh model properties. Learn more about model kinds at the [model kind concepts page](../concepts/models/model_kinds.md).

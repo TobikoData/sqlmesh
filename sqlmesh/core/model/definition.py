@@ -487,10 +487,17 @@ class _Model(ModelMeta, frozen=True):
                 return exp.cast(exp.Literal.string(time), time_column_type)
         return exp.convert(time)
 
-    def update_schema(self, schema: MappingSchema) -> None:
+    def update_schema(
+        self,
+        schema: MappingSchema,
+        default_schema: t.Optional[str] = None,
+        default_catalog: t.Optional[str] = None,
+    ) -> None:
         """Updates the schema for this model's dependencies based on the given mapping schema."""
         for dep in self.depends_on:
-            table = exp.to_table(dep)
+            table = d.set_default_schema_and_catalog(
+                dep, default_schema=default_schema, default_catalog=default_catalog
+            )
             mapping_schema = schema.find(table)
 
             if mapping_schema:
@@ -1010,8 +1017,15 @@ class SqlModel(_SqlBasedModel):
             }
         return self._column_descriptions
 
-    def update_schema(self, schema: MappingSchema) -> None:
-        super().update_schema(schema)
+    def update_schema(
+        self,
+        schema: MappingSchema,
+        default_schema: t.Optional[str] = None,
+        default_catalog: t.Optional[str] = None,
+    ) -> None:
+        super().update_schema(
+            schema, default_schema=default_schema, default_catalog=default_catalog
+        )
         self._columns_to_types = None
         self._query_renderer._optimized_cache = {}
 

@@ -4,6 +4,7 @@ import fnmatch
 import typing as t
 from pathlib import Path
 
+from sqlmesh.core.config import ModelDefaultsConfig
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.loader import update_model_schemas
 from sqlmesh.core.model import Model
@@ -18,12 +19,14 @@ class Selector:
         self,
         state_reader: StateReader,
         models: UniqueKeyDict[str, Model],
+        model_defaults: t.Dict[str, ModelDefaultsConfig],
         context_path: Path = Path("."),
         dag: t.Optional[DAG[str]] = None,
     ):
         self._state_reader = state_reader
         self._models = models
         self._context_path = context_path
+        self._model_defaults = model_defaults
 
         if dag is None:
             self._dag: DAG[str] = DAG()
@@ -87,7 +90,7 @@ class Selector:
                 models[name] = model
                 dag.add(model.name, model.depends_on)
 
-        update_model_schemas(dag, models, self._context_path)
+        update_model_schemas(dag, models, self._context_path, self._model_defaults)
 
         return models
 
