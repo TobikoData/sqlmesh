@@ -1,3 +1,4 @@
+import { isNotNil } from '@utils/index'
 import {
   createContext,
   type Dispatch,
@@ -6,37 +7,24 @@ import {
   useReducer,
 } from 'react'
 import {
-  type ContextEnvironmentBackfill,
-  type ContextEnvironmentEnd,
-  type ContextEnvironmentStart,
   type ModelsDiff,
   type ChangeDirect,
-  type ContextEnvironmentChanges,
   SnapshotChangeCategory,
+  type PlanDatesStart,
+  type PlanDatesEnd,
 } from '~/api/client'
-import { type PlanProgress } from '~/context/plan'
-import { isArrayEmpty, isArrayNotEmpty, isNil } from '~/utils'
-import { isModified } from './help'
 
 export const EnumPlanActions = {
+  PlanOptions: 'plan-options',
   ResetPlanOptions: 'reset-plan-options',
-  ResetBackfills: 'reset-backfills',
-  ResetChanges: 'reset-changes',
-  ResetTestsReport: 'reset-tests-report',
   Dates: 'dates',
   DateStart: 'date-start',
   DateEnd: 'date-end',
   Category: 'category',
-  Backfills: 'backfills',
-  BackfillProgress: 'backfill-progress',
-  Changes: 'changes',
-  PlanOptions: 'plan-options',
   External: 'external',
+  ResetTestsReport: 'reset-tests-report',
   TestsReportErrors: 'tests-report-errors',
   TestsReportMessages: 'tests-report-messages',
-  PlanChangesReport: 'plan-changes-report',
-  PlanValidateReport: 'plan-validate-report',
-  ApplyReport: 'apply-report',
 } as const
 
 export const EnumPlanChangeType = {
@@ -44,7 +32,7 @@ export const EnumPlanChangeType = {
   Remove: 'remove',
   Direct: 'direct',
   Indirect: 'indirect',
-  Metadata: 'metadata',
+  Default: 'default',
 } as const
 
 export const EnumCategoryType = {
@@ -80,22 +68,6 @@ interface PlanOptions {
   restate_models?: string
 }
 
-interface PlanChanges extends ContextEnvironmentChanges {
-  hasChanges: boolean
-  hasDirect: boolean
-  hasIndirect: boolean
-  hasMetadata: boolean
-  hasAdded: boolean
-  hasRemoved: boolean
-}
-
-interface PlanBackfills {
-  hasVirtualUpdate: boolean
-  hasBackfills: boolean
-  backfills: ContextEnvironmentBackfill[]
-  activeBackfill?: PlanProgress
-}
-
 export interface TestReportError {
   ok: boolean
   time: number
@@ -115,46 +87,19 @@ export interface TestReportMessage {
   message: string
 }
 
-export interface PlanChangesReport {
-  ok: boolean
-  timestamp: number
-  type: string
-  status: string
-}
-
-export interface PlanValidateReport {
-  ok: boolean
-  timestamp: number
-  type: string
-  status: string
-}
-
-export interface ApplyReport {
-  status: string
-}
-
-interface PlanDetails extends PlanOptions, PlanChanges, PlanBackfills {
-  start?: ContextEnvironmentStart
-  end?: ContextEnvironmentEnd
+interface PlanDetails extends PlanOptions {
+  start?: PlanDatesStart
+  end?: PlanDatesEnd
   virtualUpdateDescription: string
   isInitialPlanRun: boolean
   categories: Category[]
   change_categorization: Map<string, ChangeCategory>
-  planChangesReport: Map<string, PlanChangesReport>
-  planValidateReport: Map<string, PlanValidateReport>
-  applyReport: Map<string, ApplyReport>
   testsReportErrors?: TestReportError
   testsReportMessages?: TestReportMessage
 }
 
-type PlanAction =
-  | ({ type: PlanActions } & Partial<PlanDetails> &
-      Partial<ChangeCategory> & { modified?: ModelsDiff })
-  | {
-      planChangesReport?: PlanChangesReport
-      applyReport?: ApplyReport
-      planValidateReport?: PlanValidateReport
-    }
+type PlanAction = { type: PlanActions } & Partial<PlanDetails> &
+  Partial<ChangeCategory> & { modified?: ModelsDiff }
 
 const [defaultCategory, categories] = useCategories()
 const initial = {
@@ -176,34 +121,13 @@ const initial = {
   defaultCategory,
   change_categorization: new Map(),
 
-  hasChanges: false,
-  hasDirect: false,
-  hasIndirect: false,
-  hasMetadata: false,
-  hasAdded: false,
-  hasRemoved: false,
-
-  added: [],
-  removed: [],
-  modified: {
-    direct: [],
-    indirect: [],
-    metadata: [],
-  },
-
-  hasVirtualUpdate: false,
   virtualUpdateDescription:
     'All changes and their downstream dependencies can be fully previewed before they get promoted. If during plan creation no data gaps have been detected and only references to new model versions need to be updated, then such an update is referred to as a Virtual Update. Virtual Updates impose no additional runtime overhead or cost.',
-  activeBackfill: undefined,
-  hasBackfills: false,
-  backfills: [],
+
   isInitialPlanRun: false,
   errors: [],
   testsReportErrors: undefined,
   testsReportMessages: undefined,
-  planChangesReport: new Map(),
-  planValidateReport: new Map(),
-  applyReport: new Map(),
 }
 
 export const PlanContext = createContext<PlanDetails>(initial)
@@ -273,39 +197,6 @@ function reducer(
         Partial<PlanOptions>
       >({}, plan, newState as Partial<PlanOptions>)
     }
-    case EnumPlanActions.ResetBackfills: {
-      return Object.assign<Record<string, unknown>, PlanDetails, PlanBackfills>(
-        {},
-        plan,
-        {
-          hasVirtualUpdate: false,
-          activeBackfill: undefined,
-          hasBackfills: false,
-          backfills: [],
-        },
-      )
-    }
-    case EnumPlanActions.ResetChanges: {
-      return Object.assign<Record<string, unknown>, PlanDetails, PlanChanges>(
-        {},
-        plan,
-        {
-          hasChanges: false,
-          hasDirect: false,
-          hasIndirect: false,
-          hasMetadata: false,
-          hasAdded: false,
-          hasRemoved: false,
-          added: [],
-          removed: [],
-          modified: {
-            direct: [],
-            indirect: [],
-            metadata: [],
-          },
-        },
-      )
-    }
     case EnumPlanActions.Dates: {
       return Object.assign<
         Record<string, unknown>,
@@ -325,6 +216,7 @@ function reducer(
         isInitialPlanRun: newState.isInitialPlanRun ?? false,
       })
     }
+
     case EnumPlanActions.DateStart: {
       return Object.assign<
         Record<string, unknown>,
@@ -334,6 +226,7 @@ function reducer(
         start: newState.start,
       })
     }
+
     case EnumPlanActions.DateEnd: {
       return Object.assign<
         Record<string, unknown>,
@@ -341,30 +234,6 @@ function reducer(
         Pick<PlanDetails, 'end'>
       >({}, plan, {
         end: newState.end,
-      })
-    }
-    case EnumPlanActions.BackfillProgress: {
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        Pick<PlanDetails, 'activeBackfill'>
-      >({}, plan, {
-        activeBackfill: newState.activeBackfill,
-      })
-    }
-    case EnumPlanActions.Backfills: {
-      const backfills = (
-        newState as { backfills: ContextEnvironmentBackfill[] }
-      ).backfills
-
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        Pick<PlanDetails, 'backfills' | 'hasBackfills' | 'hasVirtualUpdate'>
-      >({}, plan, {
-        backfills: backfills ?? [],
-        hasBackfills: isArrayNotEmpty(backfills),
-        hasVirtualUpdate: isArrayEmpty(backfills),
       })
     }
 
@@ -399,52 +268,10 @@ function reducer(
       })
     }
 
-    case EnumPlanActions.PlanChangesReport: {
-      const report = newState.planChangesReport ?? plan.planChangesReport
-
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        Pick<PlanDetails, 'planChangesReport'>
-      >({}, plan, {
-        planChangesReport: isNil(report)
-          ? new Map()
-          : new Map(Object.entries(report)),
-      })
-    }
-
-    case EnumPlanActions.PlanValidateReport: {
-      const report = newState.planValidateReport ?? plan.planValidateReport
-
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        Pick<PlanDetails, 'planValidateReport'>
-      >({}, plan, {
-        planValidateReport: isNil(report)
-          ? new Map()
-          : new Map(Object.entries(report)),
-      })
-    }
-
-    case EnumPlanActions.ApplyReport: {
-      const report = newState.applyReport ?? plan.applyReport
-
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        Pick<PlanDetails, 'applyReport'>
-      >({}, plan, {
-        applyReport: isNil(report)
-          ? new Map()
-          : new Map(Object.entries(report)),
-      })
-    }
-
     case EnumPlanActions.Category: {
       const { change, category } = newState as ChangeCategory
 
-      if (change?.model_name != null) {
+      if (isNotNil(change?.model_name)) {
         plan.change_categorization.set(change.model_name, {
           category,
           change,
@@ -459,56 +286,7 @@ function reducer(
         change_categorization: new Map(plan.change_categorization),
       })
     }
-    case EnumPlanActions.Changes: {
-      const { modified, added = [], removed = [] } = newState
-      const hasChanges = [
-        isModified(modified),
-        isArrayNotEmpty(added),
-        isArrayNotEmpty(removed),
-      ].some(Boolean)
 
-      const change_categorization = new Map()
-
-      modified?.direct?.forEach(changeDirect => {
-        if (changeDirect?.model_name != null) {
-          const change_category = categories.find(
-            c => c.value === changeDirect.change_category,
-          )
-          change_categorization.set(changeDirect.model_name, {
-            change: changeDirect,
-            category: change_category ?? defaultCategory,
-          })
-        }
-      })
-
-      return Object.assign<
-        Record<string, unknown>,
-        PlanDetails,
-        PlanChanges,
-        { change_categorization: Map<string, ChangeCategory> }
-      >(
-        {},
-        plan,
-        {
-          modified: {
-            direct: modified?.direct ?? [],
-            indirect: modified?.indirect ?? [],
-            metadata: modified?.metadata ?? [],
-          },
-          added,
-          removed,
-          hasChanges,
-          hasDirect: isArrayNotEmpty(modified?.direct),
-          hasIndirect: isArrayNotEmpty(modified?.indirect),
-          hasMetadata: isArrayNotEmpty(modified?.metadata),
-          hasAdded: isArrayNotEmpty(added),
-          hasRemoved: isArrayNotEmpty(removed),
-        },
-        {
-          change_categorization,
-        },
-      )
-    }
     default: {
       return Object.assign({}, plan)
     }

@@ -4,17 +4,11 @@ import { EnumVariant } from '~/types/enum'
 import { Disclosure } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import ReportErrors from '@components/report/ReportErrors'
-import { EnumPlanAction, useStorePlan } from '@context/plan'
 
 export default function PlanHeader(): JSX.Element {
-  const planAction = useStorePlan(s => s.action)
-
   const environment = useStoreContext(s => s.environment)
 
-  const shouldShowBannerProdEnv =
-    planAction !== EnumPlanAction.Cancelling &&
-    environment.isInitial &&
-    environment.isDefault
+  const shouldShowBannerProdEnv = environment.isInitial && environment.isDefault
 
   return (
     <div className="flex flex-col pb-2 w-full">

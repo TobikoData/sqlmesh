@@ -8,7 +8,6 @@ import {
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { type ChangeDirect, type ChangeIndirect } from '~/api/client'
-import { EnumPlanState, useStorePlan } from '~/context/plan'
 import { Divider } from '../divider/Divider'
 import {
   type Category,
@@ -42,7 +41,7 @@ function PlanChangePreview({
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
         type === EnumPlanChangeType.Indirect && 'bg-warning-10',
-        type === 'metadata' && 'bg-neutral-5',
+        type === EnumPlanChangeType.Default && 'bg-neutral-5',
         className,
       )}
     >
@@ -58,7 +57,7 @@ function PlanChangePreview({
               'text-secondary-600 dark:text-secondary-300',
             type === EnumPlanChangeType.Indirect &&
               'text-warning-600 dark:text-warning-300',
-            type === EnumPlanChangeType.Metadata &&
+            type === EnumPlanChangeType.Default &&
               'text-neutral-600 dark:text-neutral-300',
           )}
         >
@@ -92,7 +91,7 @@ function PlanChangePreviewDefault({
               'text-secondary-600 dark:text-secondary-300',
             type === EnumPlanChangeType.Indirect &&
               'text-warning-600 dark:text-warning-300',
-            type === EnumPlanChangeType.Metadata &&
+            type === EnumPlanChangeType.Default &&
               'text-neutral-600 dark:text-neutral-300',
           )}
         >
@@ -195,16 +194,9 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
 
   const { change_categorization, categories } = usePlan()
 
-  const planState = useStorePlan(s => s.state)
-
   return (
     <RadioGroup
-      className={clsx(
-        'flex flex-col mt-2',
-        planState === EnumPlanState.Finished
-          ? 'opacity-50 cursor-not-allowed'
-          : 'cursor-pointer',
-      )}
+      className={clsx('flex flex-col mt-2')}
       value={change_categorization.get(change.model_name)?.category}
       onChange={(category: Category) => {
         dispatch({
@@ -213,7 +205,6 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
           change,
         })
       }}
-      disabled={planState === EnumPlanState.Finished}
     >
       {categories.map(category => (
         <RadioGroup.Option

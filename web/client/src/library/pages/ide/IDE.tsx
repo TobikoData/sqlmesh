@@ -1,24 +1,19 @@
-import React, { useEffect, lazy, Suspense } from 'react'
+import React, { useEffect, lazy } from 'react'
 import {
   useApiModels,
   useApiFiles,
   useApiEnvironments,
   useApiPlanRun,
 } from '../../../api'
-import {
-  EnumPlanState,
-  type PlanProgress,
-  useStorePlan,
-  type PlanTasks,
-} from '../../../context/plan'
+import { useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import {
   isArrayEmpty,
   isFalse,
   isNil,
   isNotNil,
-  isObject,
   isObjectEmpty,
+  isTrue,
 } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
@@ -27,7 +22,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
-import { type Directory, type Model } from '@api/client'
+import { Status, type Directory, type Model } from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
@@ -41,12 +36,14 @@ import {
   EnumFileExplorerChange,
   type FileExplorerChange,
 } from '@components/fileExplorer/context'
+import { type PlanOverviewTracker } from '@models/tracker-plan-overview'
+import { type PlanApplyTracker } from '@models/tracker-plan-apply'
+import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
 )
 const RunPlan = lazy(async () => await import('./RunPlan'))
-const ActivePlan = lazy(async () => await import('./ActivePlan'))
 const PlanSidebar = lazy(async () => await import('./PlanSidebar'))
 
 export default function PageIDE(): JSX.Element {
@@ -55,6 +52,8 @@ export default function PageIDE(): JSX.Element {
 
   const { removeError, addError } = useIDE()
 
+  const isRunningPlan = useStoreContext(s => s.isRunningPlan)
+  const setIsRunningPlan = useStoreContext(s => s.setIsRunningPlan)
   const showConfirmation = useStoreContext(s => s.showConfirmation)
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
   const confirmations = useStoreContext(s => s.confirmations)
@@ -69,10 +68,12 @@ export default function PageIDE(): JSX.Element {
     s => s.hasSynchronizedEnvironments,
   )
 
-  const planState = useStorePlan(s => s.state)
-  const activePlan = useStorePlan(s => s.activePlan)
-  const setState = useStorePlan(s => s.setState)
-  const setActivePlan = useStorePlan(s => s.setActivePlan)
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planApply = useStorePlan(s => s.planApply)
+  const planCancel = useStorePlan(s => s.planCancel)
+  const setPlanOverview = useStorePlan(s => s.setPlanOverview)
+  const setPlanApply = useStorePlan(s => s.setPlanApply)
+  const setPlanCancel = useStorePlan(s => s.setPlanCancel)
 
   const project = useStoreProject(s => s.project)
   const setProject = useStoreProject(s => s.setProject)
@@ -111,10 +112,17 @@ export default function PageIDE(): JSX.Element {
   )
 
   useEffect(() => {
-    const channelTasks = channel<PlanProgress>('tasks', updateTasks)
     const channelModels = channel<Model[]>('models', updateModels)
     const channelErrors = channel<ErrorIDE>('errors', displayErrors)
-    const channelPromote = channel<any>('promote-environment', handlePromote)
+    const channelPlanOverview = channel<any>(
+      'plan-overview',
+      updatePlanOverviewTracker,
+    )
+    const channelPlanApply = channel<any>('plan-apply', updatePlanApplyTracker)
+    const channelPlanCancel = channel<any>(
+      'plan-cancel',
+      updatePlanCancelTracker,
+    )
     const channelFile = channel<{
       changes: Array<{
         change: FileExplorerChange
@@ -209,11 +217,12 @@ export default function PageIDE(): JSX.Element {
       setProject(project)
     })
 
-    channelTasks.subscribe()
     channelModels.subscribe()
     channelErrors.subscribe()
-    channelPromote.subscribe()
+    channelPlanOverview.subscribe()
+    channelPlanApply.subscribe()
     channelFile.subscribe()
+    channelPlanCancel.subscribe()
 
     return () => {
       void cancelRequestModels()
@@ -221,11 +230,12 @@ export default function PageIDE(): JSX.Element {
       void cancelRequestEnvironments()
       void cancelRequestPlan()
 
-      channelTasks.unsubscribe()
       channelModels.unsubscribe()
       channelErrors.unsubscribe()
-      channelPromote.unsubscribe()
+      channelPlanOverview.unsubscribe()
+      channelPlanApply.unsubscribe()
       channelFile.unsubscribe()
+      channelPlanCancel.unsubscribe()
     }
   }, [])
 
@@ -255,7 +265,7 @@ export default function PageIDE(): JSX.Element {
 
     // This use case is happening when user refreshes the page
     // while plan is still applying
-    if (planState !== EnumPlanState.Applying) {
+    if (isFalse(isRunningPlan) && isFalse(planCancel.isCanceling)) {
       void planRun()
     }
   }, [dataEnvironments])
@@ -265,7 +275,7 @@ export default function PageIDE(): JSX.Element {
       void getEnvironments()
     }
 
-    if (hasSynchronizedEnvironments()) {
+    if (hasSynchronizedEnvironments() && isFalse(planCancel.isCanceling)) {
       void planRun()
     }
   }, [models])
@@ -274,6 +284,28 @@ export default function PageIDE(): JSX.Element {
     setShowConfirmation(confirmations.length > 0)
   }, [confirmations])
 
+  useEffect(() => {
+    const { promote, meta } = planApply
+
+    if (
+      isNotNil(promote) &&
+      isTrue(promote.meta?.done) &&
+      promote.meta?.status === Status.success
+    ) {
+      void getEnvironments()
+    }
+
+    if (isTrue(meta?.done)) {
+      if (meta?.status === Status.success) {
+        console.log('Plan Apply Tracking Done Successfully')
+      } else if (meta?.status === Status.fail) {
+        console.log('Plan Apply Tracking Failed')
+      } else {
+        console.log('Plan Apply Tracking Done but status is unknown')
+      }
+    }
+  }, [planApply])
+
   function updateModels(models?: Model[]): void {
     if (isNotNil(models)) {
       removeError(EnumErrorKey.Models)
@@ -281,40 +313,32 @@ export default function PageIDE(): JSX.Element {
     }
   }
 
-  function updateTasks(data?: PlanProgress): void {
-    if (isNil(data)) return
-
-    if (isFalse(isObject(data.tasks))) {
-      setState(EnumPlanState.Init)
-
-      return
-    }
-
-    const plan: PlanProgress = {
-      ok: data.ok,
-      tasks: data.tasks,
-      updated_at: data.updated_at ?? new Date().toISOString(),
-    }
-
-    setActivePlan(plan)
-
-    if (isFalse(data.ok)) {
-      setState(EnumPlanState.Failed)
-    } else if (isAllTasksCompleted(data.tasks)) {
-      setState(EnumPlanState.Finished)
-    } else {
-      setState(EnumPlanState.Applying)
-    }
-  }
-
   function displayErrors(data: ErrorIDE): void {
     addError(EnumErrorKey.General, data)
   }
 
-  function handlePromote(): void {
-    setActivePlan(undefined)
+  function updatePlanOverviewTracker(data: PlanOverviewTracker): void {
+    planOverview.update(data)
 
-    void getEnvironments()
+    setPlanOverview(planOverview)
+  }
+
+  function updatePlanCancelTracker(data: PlanCancelTracker): void {
+    planCancel.update(data)
+
+    setPlanCancel(planCancel)
+  }
+
+  function updatePlanApplyTracker(data: PlanApplyTracker): void {
+    if (isNotNil(data)) {
+      setIsRunningPlan(isFalse(data?.meta?.done))
+    } else {
+      setIsRunningPlan(false)
+    }
+
+    planApply.update(data, planOverview)
+
+    setPlanApply(planApply)
   }
 
   function restoreEditorTabsFromSaved(files: ModelFile[]): void {
@@ -369,9 +393,6 @@ export default function PageIDE(): JSX.Element {
         </div>
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
           <RunPlan />
-          <Suspense>
-            {activePlan != null && <ActivePlan plan={activePlan} />}
-          </Suspense>
           <ReportErrors />
         </div>
       </div>
@@ -433,8 +454,4 @@ export default function PageIDE(): JSX.Element {
       </ModalConfirmation>
     </Container.Page>
   )
-}
-
-function isAllTasksCompleted(tasks: PlanTasks = {}): boolean {
-  return Object.values(tasks).every(t => t.completed === t.total)
 }

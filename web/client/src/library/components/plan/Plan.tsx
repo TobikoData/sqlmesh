@@ -1,61 +1,41 @@
-import { useEffect, useState } from 'react'
-import { includes, isFalse, isNil } from '~/utils'
-import {
-  EnumPlanState,
-  EnumPlanAction,
-  useStorePlan,
-  EnumPlanApplyType,
-} from '~/context/plan'
+import { isFalse, isNil, isTrue } from '~/utils'
+import { EnumPlanAction, useStorePlan, type PlanAction } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
-import {
-  type ContextEnvironmentEnd,
-  type ContextEnvironmentStart,
-} from '~/api/client'
-import PlanWizard from './PlanWizard'
 import PlanHeader from './PlanHeader'
 import PlanActions from './PlanActions'
-import PlanWizardStepOptions from './PlanWizardStepOptions'
+import PlanOptions from './PlanOptions'
 import { EnumPlanActions, usePlan, usePlanDispatch } from './context'
-import PlanBackfillDates from './PlanBackfillDates'
-import { type ModelEnvironment } from '~/models/environment'
 import { useApplyPayload, usePlanPayload } from './hooks'
-import { useChannelEvents } from '@api/channels'
 import { EnumErrorKey, useIDE } from '~/library/pages/ide/context'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { EnumVariant } from '~/types/enum'
+import PlanApplyStageTracker from './PlanApplyStageTracker'
+import { useStoreContext } from '@context/context'
+import { useEffect, useState } from 'react'
 
 function Plan({
-  environment,
-  isInitialPlanRun,
-  initialStartDate,
-  initialEndDate,
   disabled,
   onClose,
 }: {
-  environment: ModelEnvironment
-  isInitialPlanRun: boolean
-  initialStartDate?: ContextEnvironmentStart
-  initialEndDate?: ContextEnvironmentEnd
   disabled: boolean
   onClose: () => void
 }): JSX.Element {
   const dispatch = usePlanDispatch()
-  const { errors, removeError } = useIDE()
+  const { removeError } = useIDE()
 
-  const { auto_apply, hasChanges, hasBackfills, hasVirtualUpdate } = usePlan()
+  const { auto_apply } = usePlan()
 
-  const planState = useStorePlan(s => s.state)
-  const planAction = useStorePlan(s => s.action)
-  const activePlan = useStorePlan(s => s.activePlan)
-  const setActivePlan = useStorePlan(s => s.setActivePlan)
-  const setPlanAction = useStorePlan(s => s.setAction)
-  const setPlanState = useStorePlan(s => s.setState)
+  const isRunningPlan = useStoreContext(s => s.isRunningPlan)
+  const environment = useStoreContext(s => s.environment)
 
-  const [isPlanRan, setIsPlanRan] = useState(false)
+  const planOverviewTracker = useStorePlan(s => s.planOverview)
+  const planApplyTracker = useStorePlan(s => s.planApply)
+  const planCancelTracker = useStorePlan(s => s.planCancel)
 
-  const channel = useChannelEvents()
+  const isInitialPlanRun =
+    isNil(environment?.isDefault) || isTrue(environment?.isDefault)
 
   const planPayload = usePlanPayload({ environment, isInitialPlanRun })
   const applyPayload = useApplyPayload({ isInitialPlanRun })
@@ -68,182 +48,50 @@ function Plan({
     useApiPlanApply(environment.name, applyPayload)
   const { refetch: cancelPlan } = useApiCancelPlan()
 
-  useEffect(() => {
-    const channelTests = channel('tests', updateTestsReport)
-    const channelPlanChangesReport = channel(
-      'plan-changes',
-      updatePlanChangesReport,
-    )
-    const channelPlanValidateReport = channel(
-      'plan-validate',
-      updatePlanValidateReport,
-    )
-    const channelApplyReport = channel('apply', updateApplyReport)
-
-    dispatch([
-      {
-        type: EnumPlanActions.Dates,
-        start: initialStartDate,
-        end: initialEndDate,
-      },
-    ])
-
-    channelTests?.subscribe()
-    channelPlanChangesReport?.subscribe()
-    channelPlanValidateReport?.subscribe()
-    channelApplyReport?.subscribe()
-
-    return () => {
-      void cancelRequestPlanRun()
-
-      channelTests?.unsubscribe()
-      channelPlanChangesReport?.unsubscribe()
-      channelPlanValidateReport?.unsubscribe()
-      channelApplyReport?.unsubscribe()
-    }
-  }, [])
-
-  useEffect(() => {
-    dispatch([
-      {
-        type: EnumPlanActions.External,
-        isInitialPlanRun,
-      },
-    ])
-
-    if (isInitialPlanRun) {
-      dispatch([
-        {
-          type: EnumPlanActions.PlanOptions,
-          skip_backfill: false,
-          forward_only: false,
-          no_auto_categorization: false,
-          no_gaps: false,
-          include_unmodified: true,
-        },
-      ])
-    }
-  }, [isInitialPlanRun])
+  const [planAction, setPlanAction] = useState<PlanAction>(EnumPlanAction.Run)
 
   useEffect(() => {
     if (
-      (isFalse(isPlanRan) && environment.isInitial) ||
-      includes(
-        [
-          EnumPlanState.Running,
-          EnumPlanState.Applying,
-          EnumPlanState.Cancelling,
-        ],
-        planState,
-      )
-    )
-      return
-
-    if (isFalse(isPlanRan)) {
-      setPlanAction(EnumPlanAction.Run)
-    } else if (
-      (isFalse(hasChanges || hasBackfills) && isFalse(hasVirtualUpdate)) ||
-      planState === EnumPlanState.Finished
+      planOverviewTracker.isFinished &&
+      (planApplyTracker.isFinished ||
+        (isFalse(planOverviewTracker.isVirtualUpdate) &&
+          isFalse(planOverviewTracker.isBackfillUpdate)))
     ) {
       setPlanAction(EnumPlanAction.Done)
-    } else if (planState === EnumPlanState.Failed) {
-      setPlanAction(EnumPlanAction.None)
+    } else if (isRunningPlan && planApplyTracker.isRunning) {
+      setPlanAction(EnumPlanAction.Applying)
+    } else if (isRunningPlan && planOverviewTracker.isRunning) {
+      setPlanAction(EnumPlanAction.Running)
+    } else if (
+      planOverviewTracker.isFinished &&
+      planOverviewTracker.isVirtualUpdate
+    ) {
+      setPlanAction(EnumPlanAction.ApplyVirtual)
+    } else if (
+      planOverviewTracker.isFinished &&
+      planOverviewTracker.isBackfillUpdate
+    ) {
+      setPlanAction(EnumPlanAction.ApplyBackfill)
+    } else if (planCancelTracker.isCanceling) {
+      setPlanAction(EnumPlanAction.Cancelling)
     } else {
-      setPlanAction(EnumPlanAction.Apply)
+      setPlanAction(EnumPlanAction.Run)
     }
-  }, [planState, isPlanRan, hasChanges, hasBackfills, hasVirtualUpdate])
-
-  useEffect(() => {
-    if (activePlan == null) return
-
-    dispatch({
-      type: EnumPlanActions.BackfillProgress,
-      activeBackfill: activePlan,
-    })
-  }, [activePlan])
-
-  useEffect(() => {
-    if (errors.size === 0) return
-
-    setActivePlan(undefined)
-    setPlanState(EnumPlanState.Failed)
-  }, [errors])
-
-  function updateTestsReport(data: any): void {
-    dispatch([
-      isNil(data.message)
-        ? {
-            type: EnumPlanActions.TestsReportErrors,
-            testsReportErrors: data,
-          }
-        : {
-            type: EnumPlanActions.TestsReportMessages,
-            testsReportMessages: data,
-          },
-    ])
-  }
-
-  function updatePlanChangesReport(data: any): void {
-    dispatch([
-      {
-        type: EnumPlanActions.PlanChangesReport,
-        planChangesReport: data,
-      },
-    ])
-  }
-
-  function updatePlanValidateReport(data: any): void {
-    dispatch([
-      {
-        type: EnumPlanActions.PlanValidateReport,
-        planValidateReport: data,
-      },
-    ])
-  }
-
-  function updateApplyReport(data: any): void {
-    dispatch([
-      {
-        type: EnumPlanActions.ApplyReport,
-        applyReport: data,
-      },
-    ])
-  }
+  }, [planOverviewTracker, planApplyTracker, isRunningPlan])
 
   function cleanUp(): void {
-    setIsPlanRan(false)
-
     dispatch([
       {
-        type: EnumPlanActions.ResetBackfills,
-      },
-      {
-        type: EnumPlanActions.ResetChanges,
-      },
-      {
-        type: EnumPlanActions.Dates,
-        start: initialStartDate,
-        end: initialEndDate,
-      },
-      {
         type: EnumPlanActions.ResetPlanOptions,
-      },
-      {
-        type: EnumPlanActions.PlanChangesReport,
-        planChangesReport: undefined,
-      },
-      {
-        type: EnumPlanActions.ApplyReport,
-        applyReport: undefined,
       },
     ])
   }
 
   function reset(): void {
-    setPlanAction(EnumPlanAction.Resetting)
+    planOverviewTracker.reset()
+    planApplyTracker.reset()
 
     cleanUp()
-    setPlanState(EnumPlanState.Init)
 
     setPlanAction(EnumPlanAction.Run)
   }
@@ -261,21 +109,12 @@ function Plan({
         type: EnumPlanActions.ResetTestsReport,
       },
     ])
-    setPlanState(EnumPlanState.Cancelling)
     setPlanAction(EnumPlanAction.Cancelling)
 
     let cancelAction
 
     if (planAction === EnumPlanAction.Applying) {
       cancelAction = cancelRequestPlanRun
-
-      channel('tests')?.unsubscribe()
-      channel('tasks')?.unsubscribe()
-      channel('apply')?.unsubscribe()
-      channel('plan-changes')?.unsubscribe()
-      channel('plan-validate')?.unsubscribe()
-
-      setActivePlan(undefined)
     } else {
       cancelAction = cancelRequestPlanApply
     }
@@ -284,7 +123,6 @@ function Plan({
     cancelPlan()
       .then(() => {
         setPlanAction(EnumPlanAction.Run)
-        setPlanState(EnumPlanState.Cancelled)
       })
       .catch(() => {
         reset()
@@ -292,43 +130,26 @@ function Plan({
   }
 
   function apply(): void {
-    setPlanAction(EnumPlanAction.Applying)
-    setPlanState(EnumPlanState.Applying)
-
     dispatch([
       {
         type: EnumPlanActions.ResetTestsReport,
       },
     ])
 
-    planApply()
-      .then(({ data }) => {
-        if (data?.type === EnumPlanApplyType.Virtual) {
-          setPlanState(EnumPlanState.Finished)
-        }
-      })
-      .catch(console.log)
+    planApply().catch(console.log)
   }
 
   function run(): void {
+    planApplyTracker.reset()
+
     dispatch([
       {
         type: EnumPlanActions.ResetTestsReport,
       },
     ])
-    setPlanAction(EnumPlanAction.Running)
-    setPlanState(EnumPlanState.Running)
 
     void planRun().then(({ data }) => {
       dispatch([
-        {
-          type: EnumPlanActions.Backfills,
-          backfills: data?.backfills,
-        },
-        {
-          type: EnumPlanActions.Changes,
-          ...data?.changes,
-        },
         {
           type: EnumPlanActions.Dates,
           start: data?.start,
@@ -336,24 +157,29 @@ function Plan({
         },
       ])
 
-      setIsPlanRan(true)
-      setPlanState(EnumPlanState.Init)
-
       if (auto_apply) {
         apply()
-      } else {
-        setPlanAction(EnumPlanAction.Apply)
       }
     })
   }
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden pt-6">
-      <PlanBlock hasDivider={true} />
+      <PlanHeader />
       <Divider />
-      <Plan.Actions
-        disabled={disabled}
+      <div className="w-full h-full px-4 overflow-y-scroll hover:scrollbar scrollbar--vertical">
+        {planAction === EnumPlanAction.Cancelling ? (
+          <CancellingPlanApply />
+        ) : planApplyTracker.isRunning || planOverviewTracker.isFinished ? (
+          <PlanApplyStageTracker />
+        ) : (
+          <PlanOptions className="w-full" />
+        )}
+      </div>
+      <Divider />
+      <PlanActions
         planAction={planAction}
+        disabled={disabled}
         apply={apply}
         run={run}
         cancel={cancel}
@@ -364,35 +190,9 @@ function Plan({
   )
 }
 
-Plan.Actions = PlanActions
-Plan.Header = PlanHeader
-Plan.Wizard = PlanWizard
-Plan.StepOptions = PlanWizardStepOptions
-Plan.BackfillDates = PlanBackfillDates
-
 export default Plan
 
-function PlanBlock({
-  hasDivider = false,
-}: {
-  hasDivider?: boolean
-}): JSX.Element {
-  const planAction = useStorePlan(s => s.action)
-
-  return (
-    <>
-      <Plan.Header />
-      {hasDivider && <Divider />}
-      {planAction === EnumPlanAction.Cancelling ? (
-        <CancellingPlanOrApply />
-      ) : (
-        <Plan.Wizard />
-      )}
-    </>
-  )
-}
-
-function CancellingPlanOrApply(): JSX.Element {
+function CancellingPlanApply(): JSX.Element {
   return (
     <div className="w-full h-full p-4">
       <div className="w-full h-full flex justify-center items-center p-4 bg-warning-10 rounded-lg overflow-hidden">

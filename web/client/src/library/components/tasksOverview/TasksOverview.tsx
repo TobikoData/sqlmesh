@@ -1,19 +1,14 @@
 import clsx from 'clsx'
 import React, { type RefObject, useMemo } from 'react'
-import {
-  EnumPlanState,
-  type PlanTaskStatus,
-  type PlanState,
-  type PlanTasks,
-} from '~/context/plan'
+import { type PlanTaskStatus, type PlanTasks } from '~/context/plan'
 import { isArrayNotEmpty, isNotNil, toDateFormat, toRatio } from '~/utils'
 import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
 import pluralize from 'pluralize'
 import { type EnvironmentName } from '~/models/environment'
-import { type ContextEnvironmentChanges } from '~/api/client'
 import { EnumPlanChangeType, type PlanChangeType } from '../plan/context'
 import Title from '@components/title/Title'
+import { type PlanStageChanges } from '@api/client'
 
 interface PropsTasks {
   tasks: PlanTasks
@@ -75,7 +70,6 @@ function TasksSummary({
   className,
   headline,
   environment,
-  planState,
   completed,
   total,
   updatedAt,
@@ -86,7 +80,6 @@ function TasksSummary({
   className?: string
   headline: string
   environment: EnvironmentName
-  planState: PlanState
   completed: number
   total: number
   completedBatches: number
@@ -102,7 +95,6 @@ function TasksSummary({
             <TaskHeadline
               headline={headline}
               environment={environment}
-              planState={planState}
             />
           </TaskDetailsInfo>
           <TaskDetailsProgress>
@@ -146,7 +138,7 @@ function TasksDetails({
   queue,
 }: {
   className?: string
-  changes?: ContextEnvironmentChanges
+  changes?: PlanStageChanges
   models: Array<[string, PlanTaskStatus]>
   queue?: string[]
   showBatches: boolean
@@ -391,11 +383,9 @@ function TaskHeadline({
   className,
   headline,
   environment,
-  planState,
 }: {
   headline: string
   environment?: EnvironmentName
-  planState?: PlanState
   className?: string
 }): JSX.Element {
   return (
@@ -407,12 +397,6 @@ function TaskHeadline({
         <small className="inline-block ml-1 px-2 py-[0.125rem] text-xs font-bold bg-neutral-10 rounded-md">
           {environment}
         </small>
-      )}
-      {isNotNil(planState) && planState !== EnumPlanState.Init && (
-        <>
-          <TaskDivider />
-          <small className="ml-1">{planState}</small>
-        </>
       )}
     </span>
   )
@@ -567,7 +551,7 @@ function TaskModelName({
         changeType === EnumPlanChangeType.Direct &&
           'text-secondary-500 dark:text-primary-500',
         changeType === EnumPlanChangeType.Indirect && 'text-warning-500',
-        changeType === EnumPlanChangeType.Metadata && 'text-prose',
+        changeType === EnumPlanChangeType.Default && 'text-prose',
         className,
       )}
     >
@@ -611,5 +595,5 @@ function getChangeType({
   if (changesModifiedIndirect.includes(modelName))
     return EnumPlanChangeType.Indirect
 
-  return EnumPlanChangeType.Metadata
+  return EnumPlanChangeType.Default
 }

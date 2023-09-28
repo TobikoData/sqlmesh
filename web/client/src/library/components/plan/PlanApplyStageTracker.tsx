@@ -6,11 +6,8 @@ import {
   ExclamationCircleIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { useCallback, useMemo } from 'react'
-import { type ContextEnvironmentBackfill } from '~/api/client'
+import { useMemo } from 'react'
 import {
-  EnumPlanState,
-  EnumPlanAction,
   useStorePlan,
   type PlanTasks,
   type PlanTaskStatus,
@@ -18,11 +15,12 @@ import {
 import {
   isArrayNotEmpty,
   isFalse,
-  isObjectNotEmpty,
   isNotNil,
   toRatio,
   isTrue,
   isNil,
+  toDateFormat,
+  isFalseOrNil,
 } from '../../../utils'
 import Spinner from '../logo/Spinner'
 import {
@@ -32,7 +30,6 @@ import {
   usePlan,
 } from './context'
 import { isModified } from './help'
-import Plan from './Plan'
 import PlanChangePreview from './PlanChangePreview'
 import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
 import Banner from '@components/banner/Banner'
@@ -42,130 +39,191 @@ import Title from '@components/title/Title'
 import ReportTestsErrors from '@components/report/ReportTestsErrors'
 import { Divider } from '@components/divider/Divider'
 import Progress from '@components/progress/Progress'
+import {
+  type PlanStageBackfill,
+  type PlanStageCreation,
+  type PlanStagePromote,
+  type PlanStageRestate,
+  type PlanStageBackfills,
+  type PlanStageChanges,
+  type PlanStageValidation,
+} from '@api/client'
+import { type PlanTrackerMeta } from '@models/tracker-plan'
 
-interface PropsPlanWizardStepMessage extends React.HTMLAttributes<HTMLElement> {
+interface PropsPlanStageMessage extends React.HTMLAttributes<HTMLElement> {
   hasSpinner?: boolean
   variant?: Variant
   index?: number
 }
 
-export default function PlanWizard(): JSX.Element {
-  const {
-    planChangesReport,
-    planValidateReport,
-    applyReport,
-    testsReportMessages,
-    testsReportErrors,
-  } = usePlan()
-  const planAction = useStorePlan(s => s.action)
+export default function PlanApplyStageTracker(): JSX.Element {
+  const { testsReportMessages, testsReportErrors } = usePlan()
+
+  const planApply = useStorePlan(s => s.planApply)
+  const planOverview = useStorePlan(s => s.planOverview)
+
+  const start = planApply.start ?? planOverview.start
+  const end = planApply.end ?? planOverview.end
+  const hasChanges = planApply.overview?.hasChanges ?? planOverview.hasChanges
+  const hasBackfills =
+    planApply.overview?.hasBackfills ?? planOverview.hasBackfills
+  const changes = planApply.changes ?? planOverview.changes
+  const backfills = planApply.backfills ?? planOverview.backfills
+  const validation = planApply.validation ?? planOverview.validation
+  const plan_options = planApply.plan_options ?? planOverview.plan_options
+  const isVirtualUpdate =
+    planApply.overview?.isVirtualUpdate ?? planOverview.isVirtualUpdate
+  const showStageEvaluate =
+    isNotNil(planApply.creation) ||
+    isNotNil(planApply.backfill) ||
+    isNotNil(planApply.promote)
+  const stageEvaluationStart =
+    planApply.creation?.meta?.start ??
+    planApply.backfill?.meta?.start ??
+    planApply.promote?.meta?.start
 
   return (
-    <div className="w-full h-full py-4 overflow-hidden">
-      <div className="w-full h-full px-4 overflow-y-scroll hover:scrollbar scrollbar--vertical">
-        {planAction === EnumPlanAction.Run ? (
-          <Plan.StepOptions className="w-full" />
-        ) : (
-          <>
-            {planChangesReport.has('plan') && (
-              <StepChanges report={planChangesReport}>
-                <PlanModelChanges />
-              </StepChanges>
-            )}
-            {isTrue(planChangesReport.get('skip_tests')) && (
-              <PlanWizardStepMessage variant={EnumVariant.Info}>
-                Tests Skipped
-              </PlanWizardStepMessage>
-            )}
-            {isNotNil(testsReportMessages) && (
-              <StepTestsCompleted report={testsReportMessages} />
-            )}
-            {isNotNil(testsReportErrors) && (
-              <StepTestsFailed report={testsReportErrors} />
-            )}
-            {planValidateReport.has('plan') && (
-              <StepValidate report={planValidateReport} />
-            )}
-            {isNil(testsReportErrors) && applyReport.has('evaluation') && (
-              <StepEvaluate report={applyReport}>
-                {applyReport.has('creation') && (
-                  <StepCreation report={applyReport} />
-                )}
-                {applyReport.has('restate') ? (
-                  <StepRestate report={applyReport} />
-                ) : (
-                  <PlanWizardStepMessage
-                    variant={EnumVariant.Info}
-                    className="mt-2"
-                  >
-                    No Models To Restate
-                  </PlanWizardStepMessage>
-                )}
-                {applyReport.has('backfill') && (
-                  <StepBackfill report={applyReport} />
-                )}
-                {applyReport.has('promotion') && (
-                  <StepPromote report={applyReport} />
-                )}
-              </StepEvaluate>
-            )}
-          </>
-        )}
-      </div>
+    <div className="py-4">
+      {isNotNil(start) && isNotNil(end) && (
+        <div className="flex justify-between items-center mb-4 whitespace-nowrap">
+          <small className="text-neutral-500 block px-4">
+            Start Date:&nbsp;<b>{toDateFormat(new Date(start))}</b>
+          </small>
+          <Divider />
+          <small className="text-neutral-500 block px-4">
+            End Date:&nbsp;<b>{toDateFormat(new Date(end))}</b>
+          </small>
+        </div>
+      )}
+      {isFalseOrNil(hasChanges) || isNil(changes) ? (
+        <PlanStageMessage
+          variant={EnumVariant.Info}
+          className="mt-2"
+        >
+          No Changes
+        </PlanStageMessage>
+      ) : (
+        <StageChanges report={changes} />
+      )}
+      {isFalseOrNil(hasBackfills) || isNil(backfills) ? (
+        <PlanStageMessage
+          variant={EnumVariant.Info}
+          className="mt-2"
+        >
+          No Backfills
+        </PlanStageMessage>
+      ) : (
+        <StageBackfills report={backfills} />
+      )}
+      {isTrue(plan_options?.skip_tests) && (
+        <PlanStageMessage
+          variant={EnumVariant.Info}
+          className="mt-2"
+        >
+          Tests Skipped
+        </PlanStageMessage>
+      )}
+      {isNotNil(testsReportMessages) && (
+        <StageTestsCompleted report={testsReportMessages} />
+      )}
+      {isNotNil(testsReportErrors) && (
+        <StageTestsFailed report={testsReportErrors} />
+      )}
+      {isNotNil(validation) && <StageValidate report={validation} />}
+      {isTrue(isVirtualUpdate) && (
+        <PlanVirtualUpdate isUpdated={isTrue(planApply.promote?.meta?.done)} />
+      )}
+      {isNil(testsReportErrors) && showStageEvaluate && (
+        <StageEvaluate
+          start={stageEvaluationStart}
+          end={planApply.promote?.meta?.end}
+        >
+          {isNotNil(planApply.creation) && (
+            <StageCreation report={planApply.creation} />
+          )}
+          {isNotNil(planApply.restate) ? (
+            <StageRestate report={planApply.restate} />
+          ) : (
+            <PlanStageMessage
+              variant={EnumVariant.Info}
+              className="mt-2"
+            >
+              No Models To Restate
+            </PlanStageMessage>
+          )}
+          {isNotNil(planApply.backfill) && isNotNil(planApply.environment) && (
+            <StageBackfill
+              backfill={planApply.backfill}
+              backfills={backfills}
+              isVirtualUpdate={isVirtualUpdate}
+              environment={planApply.environment}
+            />
+          )}
+          {isNotNil(planApply.promote) && (
+            <StagePromote report={planApply.promote} />
+          )}
+        </StageEvaluate>
+      )}
     </div>
   )
 }
 
-function StepChanges({
-  report,
-  children,
-}: {
-  report: Map<string, any>
-  children?: React.ReactNode
-}): JSX.Element {
-  const payload = report.get('plan')
-
+function StageChanges({ report }: { report: PlanStageChanges }): JSX.Element {
   return (
-    <Step
-      report={payload}
+    <Stage
+      meta={report.meta!}
       states={[
-        'Plan Changes Collected',
+        'Changes Collected',
         'Failed Getting Plan Changes',
         'Getting Plan Changes...',
       ]}
       isOpen={true}
-      panel={children}
-    >
-      {isNotNil(payload.backfills) && (
-        <p className="mb-0.5">
-          Backfills <b>{payload.backfills.length}</b>
-        </p>
-      )}
-      {isNotNil(payload.changes) && (
-        <>
-          <p className="mb-0.5">
-            Added <b>{payload.changes.added.length}</b>
-          </p>
-          <p className="mb-0.5">
-            Modified{' '}
-            <b>{Object.values(payload.changes.modified).flat().length}</b>
-          </p>
-          <p className="mb-0.5">
-            Removed <b>{payload.changes.removed.length}</b>
-          </p>
-        </>
-      )}
-    </Step>
+      panel={<PlanChanges />}
+    />
   )
 }
 
-function StepTestsCompleted({
+function StageBackfills({
+  report,
+}: {
+  report: PlanStageBackfills
+}): JSX.Element {
+  return (
+    <Stage
+      meta={report.meta!}
+      states={[
+        'Backfills Collected',
+        'Failed Getting Plan Backfills',
+        'Getting Plan Backfills...',
+      ]}
+      isOpen={true}
+      panel={
+        <PlanChangePreview
+          headline={`Models ${report.models?.length ?? 0}`}
+          type={EnumPlanChangeType.Default}
+        >
+          <PlanChangePreview.Default
+            type={EnumPlanChangeType.Default}
+            changes={
+              (report?.models?.map(
+                ({ model_name }: any) => model_name,
+              ) as string[]) ?? []
+            }
+          />
+        </PlanChangePreview>
+      }
+    />
+  )
+}
+
+function StageTestsCompleted({
   report,
 }: {
   report: TestReportMessage
 }): JSX.Element {
   return (
-    <Step
-      report={{
+    <Stage
+      meta={{
         status: 'success',
         ...report,
       }}
@@ -182,15 +240,19 @@ function StepTestsCompleted({
       }
     >
       <p className="mb-0.5">{report.message}</p>
-    </Step>
+    </Stage>
   )
 }
 
-function StepTestsFailed({ report }: { report: TestReportError }): JSX.Element {
+function StageTestsFailed({
+  report,
+}: {
+  report: TestReportError
+}): JSX.Element {
   return (
-    <Step
+    <Stage
       variant={EnumVariant.Danger}
-      report={{
+      meta={{
         status: 'fail',
         ...report,
       }}
@@ -207,41 +269,44 @@ function StepTestsFailed({ report }: { report: TestReportError }): JSX.Element {
       }
     >
       <ReportTestsErrors report={report} />
-    </Step>
+    </Stage>
   )
 }
 
-function StepValidate({ report }: { report: Map<string, any> }): JSX.Element {
-  const payload = report.get('plan')
-
+function StageValidate({
+  report,
+}: {
+  report: PlanStageValidation
+}): JSX.Element {
   return (
-    <Step
-      report={payload}
+    <Stage
+      meta={report.meta!}
       states={[
         'Plan Validated',
         'Plan Validation Failed',
         'Validating Plan...',
       ]}
+      showDetails={false}
     />
   )
 }
 
-function StepEvaluate({
-  report,
+function StageEvaluate({
+  start,
+  end,
   children,
 }: {
-  report: Map<string, any>
+  start?: number
+  end?: number
   children: React.ReactNode
 }): JSX.Element {
-  const payload = report.get('evaluation')
-
   return (
     <div className="pt-6 pb-2">
-      {isNotNil(payload.start_at) && (
+      {isNotNil(start) && (
         <>
           <small className="text-neutral-500 block px-4 mb-1">
             Evaluation started at{' '}
-            <b>{new Date(payload.start_at).toLocaleString()}</b>
+            <b>{toDateFormat(new Date(start), 'yyyy-mm-dd hh-mm-ss')}</b>
           </small>
           <Divider />
           <small className="text-neutral-500 block px-4 mt-1">
@@ -253,12 +318,12 @@ function StepEvaluate({
         </>
       )}
       <div className="py-2">{children}</div>
-      {isNotNil(payload.stop_at) && (
+      {isNotNil(end) && (
         <>
           <Divider />
           <small className="text-neutral-500 block px-4 mt-1">
             Evaluation stopped at{' '}
-            <b>{new Date(payload.stop_at).toLocaleString()}</b>
+            <b>{toDateFormat(new Date(end), 'yyyy-mm-dd hh-mm-ss')}</b>
           </small>
         </>
       )}
@@ -266,18 +331,16 @@ function StepEvaluate({
   )
 }
 
-function StepCreation({
+function StageCreation({
   report,
   isOpen,
 }: {
-  report: Map<string, any>
+  report: PlanStageCreation
   isOpen?: boolean
 }): JSX.Element {
-  const payload = report.get('creation')
-
   return (
-    <Step
-      report={payload}
+    <Stage
+      meta={report.meta!}
       states={[
         'Snapshot Tables Created',
         'Snapshot Tables Creation Failed',
@@ -285,7 +348,7 @@ function StepCreation({
       ]}
       isOpen={isOpen}
     >
-      {isNotNil(payload.total_tasks) && (
+      {isNotNil(report.total_tasks) && (
         <TasksOverview.Block>
           <TasksOverview.Task>
             <TasksOverview.TaskDetails>
@@ -294,33 +357,31 @@ function StepCreation({
               </TasksOverview.TaskInfo>
               <TasksOverview.DetailsProgress>
                 <TasksOverview.TaskSize
-                  completed={payload.total_tasks}
-                  total={payload.num_tasks}
+                  completed={report.total_tasks}
+                  total={report.num_tasks}
                   unit="task"
                 />
                 <TasksOverview.TaskDivider />
                 <TasksOverview.TaskProgress
-                  completed={payload.num_tasks}
-                  total={payload.total_tasks}
+                  completed={report.num_tasks}
+                  total={report.total_tasks}
                 />
               </TasksOverview.DetailsProgress>
             </TasksOverview.TaskDetails>
             <Progress
-              progress={toRatio(payload.num_tasks, payload.total_tasks)}
+              progress={toRatio(report.num_tasks, report.total_tasks)}
             />
           </TasksOverview.Task>
         </TasksOverview.Block>
       )}
-    </Step>
+    </Stage>
   )
 }
 
-function StepRestate({ report }: { report: Map<string, any> }): JSX.Element {
-  const payload = report.get('restate')
-
+function StageRestate({ report }: { report: PlanStageRestate }): JSX.Element {
   return (
-    <Step
-      report={payload}
+    <Stage
+      meta={report.meta!}
       states={[
         'Restate Models',
         'Restate Models Failed',
@@ -330,20 +391,18 @@ function StepRestate({ report }: { report: Map<string, any> }): JSX.Element {
   )
 }
 
-function StepBackfill({ report }: { report: Map<string, any> }): JSX.Element {
-  const {
-    backfills,
-    hasChanges,
-    hasBackfills,
-    activeBackfill,
-    modified,
-    added,
-    removed,
-    skip_backfill,
-    change_categorization,
-    hasVirtualUpdate,
-  } = usePlan()
-  const planState = useStorePlan(s => s.state)
+function StageBackfill({
+  environment,
+  backfill,
+  isVirtualUpdate,
+  backfills,
+}: {
+  environment: string
+  backfill: PlanStageBackfill
+  isVirtualUpdate: boolean
+  backfills?: PlanStageBackfills
+}): JSX.Element {
+  const { change_categorization } = usePlan()
 
   const categories = useMemo(
     () =>
@@ -367,126 +426,74 @@ function StepBackfill({ report }: { report: Map<string, any> }): JSX.Element {
     [change_categorization],
   )
 
-  const filterActiveBackfillsTasks = useCallback(
-    (tasks: PlanTasks): PlanTasks => {
-      return Object.entries(tasks).reduce(
-        (acc: PlanTasks, [taskModelName, task]) => {
-          const choices = categories[taskModelName]
-
-          const shouldExclude = choices != null ? choices.every(Boolean) : false
-
-          if (shouldExclude) return acc
-
-          acc[taskModelName] = task
-
-          return acc
-        },
-        {},
-      )
-    },
-    [categories],
-  )
-
-  const filterBackfillsTasks = useCallback(
-    (backfills: ContextEnvironmentBackfill[]): PlanTasks => {
-      return backfills.reduce((acc: PlanTasks, task) => {
-        const taskModelName = task.model_name
+  const tasks: PlanTasks = useMemo(
+    () =>
+      backfills?.models?.reduce((acc: PlanTasks, task) => {
+        const taskModelName = task.view_name
         const taskInterval = task.interval as [string, string]
         const taskBackfill: PlanTaskStatus = {
           completed: 0,
           total: task.batches,
           interval: taskInterval,
           view_name: task.view_name,
+          ...backfill?.tasks?.[taskModelName],
         }
-        const choices = categories[taskModelName]
 
-        const shouldExclude = choices != null ? choices.every(Boolean) : false
+        const choices = categories[taskModelName]
+        const shouldExclude = isNil(choices) ? false : choices.every(Boolean)
 
         if (shouldExclude) return acc
 
         acc[taskModelName] = taskBackfill
 
         return acc
-      }, {})
-    },
-    [categories],
+      }, {}) ?? {},
+    [backfill, backfills, change_categorization],
   )
-  const payload = report.get('backfill')
-  const tasks: PlanTasks = useMemo(
-    (): PlanTasks =>
-      isNil(payload?.tasks)
-        ? filterBackfillsTasks(backfills)
-        : filterActiveBackfillsTasks(payload?.tasks),
-    [backfills, change_categorization, activeBackfill],
-  )
-
-  const isFinished = planState === EnumPlanState.Finished
-  const hasNoChanges = [
-    hasChanges,
-    hasBackfills,
-    isObjectNotEmpty(tasks),
-  ].every(isFalse)
-
-  const showDetails =
-    (hasVirtualUpdate && isFalse(isFinished)) ||
-    (isFalse(hasNoChanges) &&
-      hasBackfills &&
-      isFalse(skip_backfill) &&
-      isArrayNotEmpty(Object.keys(tasks)))
-
-  const environment = report.get('environment')
 
   return (
-    <Step
-      report={payload}
+    <Stage
+      meta={backfill.meta!}
       states={[
         'Intervals Backfilled',
         'Intervals Backfilling Failed',
         'Backfilling Intervals...',
       ]}
-      showDetails={showDetails}
+      showDetails={true}
       isOpen={true}
     >
-      <TasksOverview tasks={payload.tasks}>
+      <TasksOverview tasks={tasks}>
         {({ total, completed, models, completedBatches, totalBatches }) => (
           <>
             <TasksOverview.Summary
               environment={environment}
-              planState={planState}
               headline="Target Environment"
               completed={completed}
               total={total}
               completedBatches={completedBatches}
               totalBatches={totalBatches}
-              updateType={hasVirtualUpdate ? 'Virtual' : 'Backfill'}
+              updateType={isVirtualUpdate ? 'Virtual' : 'Backfill'}
             />
             {isNotNil(models) && (
               <TasksOverview.Details
                 models={models}
-                queue={payload.queue}
-                changes={{
-                  modified,
-                  added,
-                  removed,
-                }}
-                showBatches={hasBackfills}
-                showVirtualUpdate={hasVirtualUpdate}
+                queue={backfill.queue}
+                showBatches={true}
+                showVirtualUpdate={isVirtualUpdate}
                 showProgress={true}
               />
             )}
           </>
         )}
       </TasksOverview>
-    </Step>
+    </Stage>
   )
 }
 
-function StepPromote({ report }: { report: Map<string, any> }): JSX.Element {
-  const payload = report.get('promotion')
-
+function StagePromote({ report }: { report: PlanStagePromote }): JSX.Element {
   return (
-    <Step
-      report={payload}
+    <Stage
+      meta={report.meta!}
       states={[
         'Environment Promoted',
         'Promotion Failed',
@@ -498,46 +505,48 @@ function StepPromote({ report }: { report: Map<string, any> }): JSX.Element {
           <TasksOverview.TaskDetails>
             <TasksOverview.TaskInfo>
               <TasksOverview.TaskHeadline
-                headline={`Promote Environment: ${payload.target_environment}`}
+                headline={`Promote Environment: ${report.target_environment}`}
               />
             </TasksOverview.TaskInfo>
             <TasksOverview.DetailsProgress>
               <TasksOverview.TaskSize
-                completed={payload.total_tasks}
-                total={payload.num_tasks}
+                completed={report.total_tasks}
+                total={report.num_tasks}
                 unit="task"
               />
               <TasksOverview.TaskDivider />
               <TasksOverview.TaskProgress
-                completed={payload.num_tasks}
-                total={payload.total_tasks}
+                completed={report.num_tasks}
+                total={report.total_tasks}
               />
             </TasksOverview.DetailsProgress>
           </TasksOverview.TaskDetails>
-          <Progress
-            progress={toRatio(payload.num_tasks, payload.total_tasks)}
-          />
+          <Progress progress={toRatio(report.num_tasks, report.total_tasks)} />
         </TasksOverview.Task>
       </TasksOverview.Block>
-    </Step>
+    </Stage>
   )
 }
 
-function PlanModelChanges(): JSX.Element {
-  const planAction = useStorePlan(s => s.action)
+function PlanChanges(): JSX.Element {
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planApply = useStorePlan(s => s.planApply)
 
-  const { hasChanges, modified, added, removed, hasVirtualUpdate } = usePlan()
+  const isRunning = planApply.overview?.isRunning ?? planOverview.isRunning
+  const hasChanges = planApply.overview?.hasChanges ?? planOverview.hasChanges
+  const changes = planApply.changes ?? planOverview.changes
+  const isVirtualUpdate =
+    planApply.overview?.isVirtualUpdate ?? planOverview.isVirtualUpdate
 
-  const isPlanRunning = planAction === EnumPlanAction.Running
   const shouldBeFullAndCenter =
-    (isFalse(hasChanges) &&
-      isFalse(isPlanRunning) &&
-      isFalse(hasVirtualUpdate)) ||
-    isPlanRunning
+    (isFalse(hasChanges) && isFalse(isRunning) && isFalse(isVirtualUpdate)) ||
+    isRunning
+
+  const { added = [], removed = [], modified = {} } = changes ?? {}
 
   return (
     <div className={clsx('w-full my-2', shouldBeFullAndCenter && 'h-[25vh]')}>
-      {isPlanRunning && (
+      {isRunning && (
         <Banner
           isFull
           isCenter
@@ -549,18 +558,18 @@ function PlanModelChanges(): JSX.Element {
           />
         </Banner>
       )}
-      {isFalse(hasChanges) && isFalse(isPlanRunning) && (
+      {isFalse(hasChanges) && isFalse(isRunning) && (
         <Banner
-          isFull={isFalse(hasVirtualUpdate)}
-          isCenter={isFalse(hasVirtualUpdate)}
+          isFull={isFalse(isVirtualUpdate)}
+          isCenter={isFalse(isVirtualUpdate)}
         >
           <Title
-            size={hasVirtualUpdate ? EnumSize.md : EnumSize.lg}
+            size={isVirtualUpdate ? EnumSize.md : EnumSize.lg}
             text="No Changes"
           />
         </Banner>
       )}
-      {hasChanges && isFalse(isPlanRunning) && (
+      {isTrue(hasChanges) && isFalse(isRunning) && (
         <>
           {(isArrayNotEmpty(added) || isArrayNotEmpty(removed)) && (
             <div className="flex">
@@ -616,10 +625,10 @@ function PlanModelChanges(): JSX.Element {
                 <PlanChangePreview
                   className="my-2 w-full"
                   headline="Modified Metadata"
-                  type={EnumPlanChangeType.Metadata}
+                  type={EnumPlanChangeType.Default}
                 >
                   <PlanChangePreview.Default
-                    type={EnumPlanChangeType.Metadata}
+                    type={EnumPlanChangeType.Default}
                     changes={modified?.metadata ?? []}
                   />
                 </PlanChangePreview>
@@ -632,13 +641,58 @@ function PlanModelChanges(): JSX.Element {
   )
 }
 
-function PlanWizardStepMessage({
+function PlanVirtualUpdate({
+  isUpdated = false,
+}: {
+  isUpdated: boolean
+}): JSX.Element {
+  const { virtualUpdateDescription } = usePlan()
+  return (
+    <Disclosure>
+      {({ open }) => (
+        <>
+          <Banner
+            className="my-2 flex items-center"
+            variant={isUpdated ? EnumVariant.Success : EnumVariant.Info}
+          >
+            <>
+              {isUpdated && <CheckCircleIcon className="w-6 mr-4" />}
+              <Title
+                className="w-full"
+                text={isUpdated ? 'Virtual Update Completed' : 'Virtual Update'}
+                size={EnumSize.sm}
+                variant={isUpdated ? EnumVariant.Success : EnumVariant.Info}
+              />
+            </>
+
+            <div className="flex items-center">
+              <Disclosure.Button className="flex items-center justify-between rounded-lg text-left text-sm">
+                {open ? (
+                  <MinusCircleIcon className="w-5" />
+                ) : (
+                  <PlusCircleIcon className="w-5" />
+                )}
+              </Disclosure.Button>
+            </div>
+          </Banner>
+          <Disclosure.Panel className="px-2 text-xs">
+            <div className="p-4 rounded-md bg-neutral-5">
+              {virtualUpdateDescription}
+            </div>
+          </Disclosure.Panel>
+        </>
+      )}
+    </Disclosure>
+  )
+}
+
+function PlanStageMessage({
   hasSpinner = false,
   variant = EnumVariant.Primary,
   index,
   children,
   className,
-}: PropsPlanWizardStepMessage): JSX.Element {
+}: PropsPlanStageMessage): JSX.Element {
   return (
     <Banner
       className={className}
@@ -647,7 +701,7 @@ function PlanWizardStepMessage({
       <span className="flex items-center w-full">
         {isNotNil(index) && (
           <span className="inline-block mr-3 font-black whitespace-nowrap">
-            Step {index}:
+            Stage {index}:
           </span>
         )}
         {hasSpinner && <Spinner className="w-4 h-4 mr-2" />}
@@ -657,8 +711,8 @@ function PlanWizardStepMessage({
   )
 }
 
-function Step({
-  report,
+function Stage({
+  meta,
   states = ['Success', 'Failed', 'Running'],
   isOpen = false,
   trigger,
@@ -667,7 +721,7 @@ function Step({
   showDetails = true,
 }: {
   variant?: Variant
-  report: Record<string, any>
+  meta: PlanTrackerMeta
   trigger?: React.ReactNode
   panel?: React.ReactNode
   children?: React.ReactNode
@@ -676,16 +730,16 @@ function Step({
   showDetails?: boolean
 }): JSX.Element {
   const variant =
-    report.status === 'success'
+    meta.status === 'success'
       ? EnumVariant.Success
-      : report.status === 'fail'
+      : meta.status === 'fail'
       ? EnumVariant.Danger
       : EnumVariant.Info
   const [titleSuccess, titleFail, titleDefault] = states
   const text =
-    report.status === 'success'
+    meta.status === 'success'
       ? titleSuccess
-      : report.status === 'fail'
+      : meta.status === 'fail'
       ? titleFail
       : titleDefault
 
@@ -699,13 +753,13 @@ function Step({
           >
             {isNil(trigger) ? (
               <>
-                {report.status === 'success' && (
+                {meta.status === 'success' && (
                   <CheckCircleIcon className="w-6 mr-4" />
                 )}
-                {report.status === 'fail' && (
+                {meta.status === 'fail' && (
                   <ExclamationCircleIcon className="w-6 mr-4" />
                 )}
-                {report.status === 'init' ? (
+                {meta.status === 'init' ? (
                   <Loading
                     text={text}
                     hasSpinner
@@ -714,12 +768,18 @@ function Step({
                     className="w-full"
                   />
                 ) : (
-                  <Title
-                    text={text}
-                    size={EnumSize.sm}
-                    variant={variant}
-                    className="w-full"
-                  />
+                  <span className="flex w-full items-baseline">
+                    <Title
+                      text={text}
+                      size={EnumSize.sm}
+                      variant={variant}
+                    />
+                    {isNotNil(meta.duration) && (
+                      <p className="text-xs text-neutral-400 inline-block ml-2">
+                        in <b>{meta.duration / 1000}</b> seconds
+                      </p>
+                    )}
+                  </span>
                 )}
               </>
             ) : (
@@ -738,23 +798,19 @@ function Step({
             )}
           </Banner>
           <Disclosure.Panel className={clsx('px-2 text-xs')}>
-            <div
-              className={clsx(
-                'p-4 rounded-md',
-                variant === EnumVariant.Danger
-                  ? 'bg-danger-10 text-danger-500'
-                  : 'bg-neutral-5',
-              )}
-            >
-              {isNotNil(report.start_at) && isNotNil(report.stop_at) && (
-                <p className="mb-2">
-                  {text} in <b>{(report.stop_at - report.start_at) / 1000}</b>{' '}
-                  seconds
-                </p>
-              )}
-              {children}
-            </div>
-            {report.status !== 'fail' && panel}
+            {isNotNil(children) && (
+              <div
+                className={clsx(
+                  'p-4 rounded-md',
+                  variant === EnumVariant.Danger
+                    ? 'bg-danger-10 text-danger-500'
+                    : 'bg-neutral-5',
+                )}
+              >
+                {children}
+              </div>
+            )}
+            {meta.status !== 'fail' && panel}
           </Disclosure.Panel>
         </>
       )}
