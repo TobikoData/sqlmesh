@@ -17,6 +17,7 @@ from sqlmesh.core.dialect import (
     MacroSQL,
     MacroStrReplace,
     MacroVar,
+    StagedFilePath,
 )
 from sqlmesh.utils import DECORATOR_RETURN_TYPE, UniqueKeyDict, registry_decorator
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
@@ -137,6 +138,12 @@ class MacroEvaluator:
 
             if isinstance(node, MacroVar):
                 changed = True
+                if node.name not in self.locals:
+                    if not isinstance(node.parent, StagedFilePath):
+                        raise SQLMeshError(f"Macro variable '{node.name}' does not exist.")
+
+                    return node
+
                 return exp.convert(_norm_env_value(self.locals[node.name]))
             if node.is_string:
                 text = node.this

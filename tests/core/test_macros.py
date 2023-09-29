@@ -5,7 +5,9 @@ from unittest import mock
 import pytest
 from sqlglot import exp, parse_one
 
+from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import MacroEvaluator, macro
+from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
 
 
@@ -75,6 +77,17 @@ def test_macro_var(macro_evaluator):
     ]:
         macro_evaluator.locals = {"x": k}
         assert macro_evaluator.transform(expression).sql() == v
+
+    # Check that macro vars are rendered as-is if they don't map to something in locals
+    e = parse_one("select * from @staged_table", dialect="snowflake")
+    assert e.find(StagedFilePath) is not None
+    assert macro_evaluator.transform(e).sql(dialect="snowflake") == e.sql(dialect="snowflake")
+
+    # Referencing a var that doesn't exist in the evaluator's scope should raise
+    with pytest.raises(SQLMeshError) as ex:
+        macro_evaluator.transform(parse_one("SELECT @y"))
+
+    assert "Macro variable 'y' does not exist." in str(ex.value)
 
 
 def test_macro_str_replace(macro_evaluator):
