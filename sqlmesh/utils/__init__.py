@@ -190,8 +190,16 @@ def str_to_bool(s: t.Optional[str]) -> bool:
     return s.lower() in ("true", "1", "t", "y", "yes", "on")
 
 
+_debug_mode_enabled: bool = False
+
+
+def enable_debug_mode() -> None:
+    global _debug_mode_enabled
+    _debug_mode_enabled = True
+
+
 def debug_mode_enabled() -> bool:
-    return str_to_bool(os.environ.get("SQLMESH_DEBUG"))
+    return _debug_mode_enabled or str_to_bool(os.environ.get("SQLMESH_DEBUG"))
 
 
 def ttl_cache(ttl: int = 60, maxsize: int = 128000) -> t.Callable:
