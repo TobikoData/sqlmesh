@@ -187,10 +187,6 @@ class BaseModelConfig(GeneralConfig):
         return Materialization.TABLE
 
     @property
-    def model_dialect(self) -> t.Optional[str]:
-        return None
-
-    @property
     def relation_info(self) -> AttributeDict[str, t.Any]:
         if self.model_materialization == Materialization.VIEW:
             relation_type = RelationType.View
@@ -246,7 +242,7 @@ class BaseModelConfig(GeneralConfig):
 
         return {
             "audits": [(test.name, {}) for test in self.tests],
-            "columns": column_types_to_sqlmesh(self.columns) or None,
+            "columns": column_types_to_sqlmesh(self.columns, context.dialect) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
             "depends_on": {model.sql_name for model in model_context.refs.values()}.union(
                 {source.sql_name for source in model_context.sources.values()}
