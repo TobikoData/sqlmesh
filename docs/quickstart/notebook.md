@@ -15,7 +15,7 @@ Import the SQLMesh library to load the notebook magic commands:
 
 Next, create a SQLMesh scaffold with the `%init` notebook magic, specifying a default SQL dialect for your models. The dialect should correspond to the dialect most of your models are written in; it can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
-In this example, we specify the `snowflake` dialect:
+In this example, we specify the `duckdb` dialect:
 
 ![Notebook output after project initiation](./notebook/nb-quickstart_init.png)
 
