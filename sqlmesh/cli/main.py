@@ -12,9 +12,11 @@ from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
-from sqlmesh.utils import debug_mode_enabled
+from sqlmesh.utils import debug_mode_enabled, enable_debug_mode
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
+
+logger = logging.getLogger(__name__)
 
 
 def _sqlmesh_version() -> str:
@@ -40,6 +42,11 @@ def _sqlmesh_version() -> str:
     is_flag=True,
     help="Ignore warnings.",
 )
+@click.option(
+    "--debug",
+    is_flag=True,
+    help="Enable debug mode.",
+)
 @click.pass_context
 @error_handler
 def cli(
@@ -48,6 +55,7 @@ def cli(
     config: t.Optional[str] = None,
     gateway: t.Optional[str] = None,
     ignore_warnings: bool = False,
+    debug: bool = False,
 ) -> None:
     """SQLMesh command line tool."""
     if ctx.invoked_subcommand == "version":
@@ -67,25 +75,33 @@ def cli(
     if "--help" in sys.argv:
         return
 
-    if debug_mode_enabled():
+    debug = debug or debug_mode_enabled()
+    if debug:
         import faulthandler
         import signal
+
+        enable_debug_mode()
 
         # Enable threadumps.
         faulthandler.enable()
         # Windows doesn't support register so we check for it here
         if hasattr(faulthandler, "register"):
             faulthandler.register(signal.SIGUSR1.value)
-        enable_logging(level=logging.DEBUG)
+        enable_logging(level=logging.DEBUG, write_to_file=True)
     elif ignore_warnings:
         logging.getLogger().setLevel(logging.ERROR)
 
-    context = Context(
-        paths=paths,
-        config=config,
-        gateway=gateway,
-        load=load,
-    )
+    try:
+        context = Context(
+            paths=paths,
+            config=config,
+            gateway=gateway,
+            load=load,
+        )
+    except Exception:
+        if debug:
+            logger.exception("Failed to initialize SQLMesh context")
+        raise
 
     if load and not context.models:
         raise click.ClickException(
