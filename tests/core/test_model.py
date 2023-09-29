@@ -2226,3 +2226,21 @@ def test_scd_type_2_overrides():
     assert scd_type_2_model.kind.is_materialized
     assert not scd_type_2_model.kind.forward_only
     assert not scd_type_2_model.kind.disable_restatement
+
+
+def test_model_allow_partials():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            allow_partials true,
+        );
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    assert model.allow_partials
+
+    assert "allow_partials TRUE" in model.render_definition()[0].sql()
