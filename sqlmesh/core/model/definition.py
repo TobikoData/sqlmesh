@@ -1928,4 +1928,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "hash_raw_query": exp.convert,
     "table_properties_": lambda value: value,
     "session_properties_": lambda value: value,
+    "allow_partials": exp.convert,
 }
