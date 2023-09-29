@@ -78,16 +78,20 @@ def test_macro_var(macro_evaluator):
         macro_evaluator.locals = {"x": k}
         assert macro_evaluator.transform(expression).sql() == v
 
-    # Check that macro vars are rendered as-is if they don't map to something in locals
-    e = parse_one("select * from @staged_table", dialect="snowflake")
+    # Check Snowflake-specific StagedFilePath / MacroVar behavior
+    e = parse_one("select @x from @path, @y", dialect="snowflake")
+    macro_evaluator.locals = {"x": parse_one("a"), "y": parse_one("t2")}
+
     assert e.find(StagedFilePath) is not None
-    assert macro_evaluator.transform(e).sql(dialect="snowflake") == e.sql(dialect="snowflake")
+    assert macro_evaluator.transform(e).sql(dialect="snowflake") == "SELECT a FROM @path, t2"
 
     # Referencing a var that doesn't exist in the evaluator's scope should raise
-    with pytest.raises(SQLMeshError) as ex:
-        macro_evaluator.transform(parse_one("SELECT @y"))
+    macro_evaluator.locals = {}
+    for dialect in ("", "snowflake"):
+        with pytest.raises(SQLMeshError) as ex:
+            macro_evaluator.transform(parse_one("SELECT @y", dialect=dialect))
 
-    assert "Macro variable 'y' is undefined." in str(ex.value)
+        assert "Macro variable 'y' is undefined." in str(ex.value)
 
 
 def test_macro_str_replace(macro_evaluator):
