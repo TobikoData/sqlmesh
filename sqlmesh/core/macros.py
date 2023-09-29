@@ -140,7 +140,7 @@ class MacroEvaluator:
                 changed = True
                 if node.name not in self.locals:
                     if not isinstance(node.parent, StagedFilePath):
-                        raise SQLMeshError(f"Macro variable '{node.name}' does not exist.")
+                        raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
 
                     return node
 

@@ -87,7 +87,7 @@ def test_macro_var(macro_evaluator):
     with pytest.raises(SQLMeshError) as ex:
         macro_evaluator.transform(parse_one("SELECT @y"))
 
-    assert "Macro variable 'y' does not exist." in str(ex.value)
+    assert "Macro variable 'y' is undefined." in str(ex.value)
 
 
 def test_macro_str_replace(macro_evaluator):
