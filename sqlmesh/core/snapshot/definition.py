@@ -1253,9 +1253,6 @@ def earliest_start_date(
     snapshots = list(snapshots)
     earliest = to_datetime(yesterday().date())
     if snapshots:
-        for snapshot in snapshots:
-            if not snapshot.parents and not snapshot.node.start:
-                cache[snapshot.name] = earliest
         return min(start_date(snapshot, snapshots, cache) or earliest for snapshot in snapshots)
     return earliest
 

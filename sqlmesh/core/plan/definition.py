@@ -71,6 +71,7 @@ class Plan:
         effective_from: The effective date from which to apply forward-only changes on production.
         include_unmodified: Indicates whether to include unmodified nodes in the target development environment.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
+        default_start: The default plan start to use if not specified.
         default_end: The default plan end to use if not specified.
     """
 
@@ -92,6 +93,7 @@ class Plan:
         auto_categorization_enabled: bool = True,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: bool = False,
+        default_start: t.Optional[TimeLike] = None,
         default_end: t.Optional[TimeLike] = None,
     ):
         self.context_diff = context_diff
@@ -109,7 +111,9 @@ class Plan:
         self.include_unmodified = include_unmodified
         self._restate_models = set(restate_models or [])
         self._effective_from: t.Optional[TimeLike] = None
-        self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
+        self._start = (
+            start if start or not (is_dev and forward_only) else (default_start or yesterday_ds())
+        )
         self._end = end if end or not is_dev else (default_end or now())
         self._execution_time = execution_time or now()
         self._apply = apply
