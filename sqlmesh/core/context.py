@@ -38,6 +38,7 @@ import gc
 import traceback
 import typing as t
 import unittest.result
+from datetime import timedelta
 from io import StringIO
 from pathlib import Path
 from types import MappingProxyType
@@ -89,7 +90,7 @@ from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds
+from sqlmesh.utils.date import TimeLike, now_ds, to_date
 from sqlmesh.utils.errors import (
     ConfigError,
     MissingDependencyError,
@@ -775,6 +776,7 @@ class Context(BaseContext):
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
         default_end = self.state_sync.max_interval_end_for_environment(c.PROD) if is_dev else None
+        default_start = to_date(default_end) - timedelta(days=1) if default_end else None
 
         plan = Plan(
             context_diff=self._context_diff(
@@ -797,6 +799,7 @@ class Context(BaseContext):
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
             include_unmodified=include_unmodified,
+            default_start=default_start,
             default_end=default_end,
         )
 

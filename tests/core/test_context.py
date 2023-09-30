@@ -1,5 +1,5 @@
 import pathlib
-from datetime import date
+from datetime import date, timedelta
 from tempfile import TemporaryDirectory
 from unittest.mock import call
 
@@ -19,7 +19,7 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
-from sqlmesh.utils.date import yesterday_ds
+from sqlmesh.utils.date import now, to_date, yesterday_ds
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
 
@@ -425,3 +425,16 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
         ],
         any_order=True,
     )
+
+
+def test_plan_default_end(sushi_context_pre_scheduling: Context):
+    prod_plan = sushi_context_pre_scheduling.plan("prod", no_prompts=True)
+    # Simulate that the prod is 3 days behind.
+    plan_end = to_date(now()) - timedelta(days=3)
+    prod_plan._end = plan_end
+    sushi_context_pre_scheduling.apply(prod_plan)
+
+    dev_plan = sushi_context_pre_scheduling.plan(
+        "test_env", no_prompts=True, include_unmodified=True, skip_backfill=True, auto_apply=True
+    )
+    assert dev_plan.end == plan_end
