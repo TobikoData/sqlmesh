@@ -438,3 +438,9 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
         "test_env", no_prompts=True, include_unmodified=True, skip_backfill=True, auto_apply=True
     )
     assert dev_plan.end == plan_end
+
+    forward_only_dev_plan = sushi_context_pre_scheduling.plan(
+        "test_env_forward_only", no_prompts=True, include_unmodified=True, forward_only=True
+    )
+    assert forward_only_dev_plan.end == plan_end
+    assert forward_only_dev_plan._start == plan_end
