@@ -90,23 +90,24 @@ class ModelTest(unittest.TestCase):
         for table in self.body.get("inputs", {}):
             self.engine_adapter.drop_view(table)
 
-    def assert_equal(self, df1: pd.DataFrame, df2: pd.DataFrame) -> None:
+    def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
         """Compare two DataFrames"""
-        df1 = df1.replace({np.nan: None, "nan": None})
-        df2 = df2.replace({np.nan: None, "nan": None})
+        expected = expected.astype(actual.dtypes.to_dict())
+        expected = expected.replace({np.nan: None, "nan": None})
+        actual = actual.replace({np.nan: None, "nan": None})
 
         try:
             pd.testing.assert_frame_equal(
-                df1.sort_index(axis=1),
-                df2.sort_index(axis=1),
+                expected.sort_index(axis=1),
+                actual.sort_index(axis=1),
                 check_dtype=False,
                 check_datetimelike_compat=True,
             )
         except AssertionError as e:
             diff = "\n".join(
                 difflib.ndiff(
-                    [str(x) for x in df1.to_dict("records")],
-                    [str(x) for x in df2.to_dict("records")],
+                    [str(x) for x in expected.to_dict("records")],
+                    [str(x) for x in actual.to_dict("records")],
                 )
             )
             e.args = (f"Data differs\n{diff}",)
