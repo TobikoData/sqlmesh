@@ -1,7 +1,7 @@
 import json
 import typing as t
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -11,6 +11,7 @@ from sqlglot import exp, to_column
 
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
+from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, parse_one
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
@@ -30,6 +31,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotFingerprint,
     categorize_change,
+    earliest_start_date,
     fingerprint_from_node,
     has_paused_forward_only,
 )
@@ -1239,3 +1241,14 @@ def test_multi_interval_merge(make_snapshot):
 
     assert b_start == to_timestamp("2023-01-01 00:15:00")
     assert b_end == to_timestamp("2023-01-01 00:45:00")
+
+
+def test_earliest_start_date(sushi_context: Context):
+    model_name = "sushi.waiter_names"
+    assert sushi_context.snapshots[model_name].node.start is None
+
+    cache: t.Dict[str, datetime] = {}
+    earliest_start_date(sushi_context.snapshots.values(), cache)
+
+    # Make sure that the default value for a snapshot with a missing start is not cached.
+    assert model_name not in cache
