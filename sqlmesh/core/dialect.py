@@ -19,6 +19,8 @@ from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
+SQLMESH_MACRO_PREFIX = "@"
+
 JSON_TYPE = exp.DataType.build("json")
 
 
@@ -147,7 +149,7 @@ def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expressio
 
 
 def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
-    if self._prev.text != "@":
+    if self._prev.text != SQLMESH_MACRO_PREFIX:
         return self._parse_parameter()
 
     index = self._index
@@ -333,7 +335,7 @@ def _parse_table_parts(self: Parser, schema: bool = False) -> exp.Table:
     table = self.__parse_table_parts(schema=schema)  # type: ignore
     table_arg = table.this
 
-    if isinstance(table_arg, exp.Var) and table_arg.name.startswith("@"):
+    if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
         return StagedFilePath(this=MacroVar(this=table_arg.name[1:]))
 
     return table
@@ -643,7 +645,7 @@ def extend_sqlglot() -> None:
             generators.add(dialect.Generator)
 
     for tokenizer in tokenizers:
-        tokenizer.VAR_SINGLE_TOKENS.update("@")
+        tokenizer.VAR_SINGLE_TOKENS.update(SQLMESH_MACRO_PREFIX)
 
     for parser in parsers:
         parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list, "METRIC": MetricAgg.from_arg_list})
