@@ -22,7 +22,9 @@ def yaml_to_columns(
     return columns
 
 
-def column_types_to_sqlmesh(columns: t.Dict[str, ColumnConfig]) -> t.Dict[str, exp.DataType]:
+def column_types_to_sqlmesh(
+    columns: t.Dict[str, ColumnConfig], dialect: t.Optional[str] = None
+) -> t.Dict[str, exp.DataType]:
     """
     Get the sqlmesh column types
 
@@ -30,7 +32,7 @@ def column_types_to_sqlmesh(columns: t.Dict[str, ColumnConfig]) -> t.Dict[str, e
         A dict of column name to exp.DataType
     """
     return {
-        name: parse_one(column.data_type, into=exp.DataType)
+        name: parse_one(column.data_type, into=exp.DataType, dialect=dialect or "")
         for name, column in columns.items()
         if column.enabled and column.data_type
     }

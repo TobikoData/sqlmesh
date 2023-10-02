@@ -29,7 +29,7 @@ from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
-from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig
+from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
 
@@ -143,30 +143,37 @@ def test_model_columns():
         table_name="bar",
         sql="SELECT * FROM baz",
         columns={
-            "address": ColumnConfig(
+            "ADDRESS": ColumnConfig(
                 name="address", data_type="text", description="Business address"
             ),
-            "zipcode": ColumnConfig(
+            "ZIPCODE": ColumnConfig(
                 name="zipcode", data_type="varchar(5)", description="Business zipcode"
+            ),
+            "DATE": ColumnConfig(
+                name="date", data_type="timestamp_ntz", description="Contract date"
             ),
         },
     )
 
     expected_column_types = {
-        "address": parse_one("text", into=exp.DataType),
-        "zipcode": parse_one("varchar(5)", into=exp.DataType),
+        "ADDRESS": parse_one("text", into=exp.DataType),
+        "ZIPCODE": parse_one("varchar(5)", into=exp.DataType),
+        "DATE": parse_one("timestamp_ntz", into=exp.DataType, dialect="snowflake"),
     }
     expected_column_descriptions = {
-        "address": "Business address",
-        "zipcode": "Business zipcode",
+        "ADDRESS": "Business address",
+        "ZIPCODE": "Business zipcode",
+        "DATE": "Contract date",
     }
 
-    assert column_types_to_sqlmesh(model.columns) == expected_column_types
+    assert column_types_to_sqlmesh(model.columns, "snowflake") == expected_column_types
     assert column_descriptions_to_sqlmesh(model.columns) == expected_column_descriptions
 
     context = DbtContext()
     context.project_name = "Foo"
-    context.target = DuckDbConfig(name="target", schema="foo")
+    context.target = SnowflakeConfig(
+        name="target", schema="test", database="test", account="foo", user="bar", password="baz"
+    )
     sqlmesh_model = model.to_sqlmesh(context)
     assert sqlmesh_model.columns_to_types == expected_column_types
     assert sqlmesh_model.column_descriptions == expected_column_descriptions
@@ -197,6 +204,8 @@ def test_seed_columns():
     }
 
     context = DbtContext()
+    context.project_name = "Foo"
+    context.target = DuckDbConfig(name="target", schema="test")
     sqlmesh_seed = seed.to_sqlmesh(context)
     assert sqlmesh_seed.columns_to_types == expected_column_types
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
