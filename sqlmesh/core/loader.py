@@ -33,6 +33,7 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
+from sqlmesh.utils.metaprogramming import Executable
 from sqlmesh.utils.yaml import YAML
 
 if t.TYPE_CHECKING:
@@ -255,6 +256,10 @@ class SqlMeshLoader(Loader):
 
         macros = macro.get_registry()
         macro.set_registry(standard_macros)
+
+        gateway_name = self._context.gateway or self._context.config.default_gateway_name
+        macros["gateway"] = Executable.value(gateway_name)
+        jinja_macros.add_globals({"gateway": gateway_name})
 
         return macros, jinja_macros
 

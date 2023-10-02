@@ -153,6 +153,14 @@ class Config(BaseConfig):
         return self.get_gateway(gateway_name).state_schema
 
     @property
+    def default_gateway_name(self) -> str:
+        if self.default_gateway:
+            return self.default_gateway
+        if "" in self.gateways:
+            return ""
+        return next(iter(self.gateways))
+
+    @property
     def dialect(self) -> t.Optional[str]:
         return self.model_defaults.dialect
 
