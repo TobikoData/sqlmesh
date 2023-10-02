@@ -188,3 +188,10 @@ Example enabling debug mode for the CLI command `sqlmesh plan`:
     PS> $env:SQLMESH_DEBUG=1
     PS> sqlmesh plan
     ```
+
+=== "MS CMD"
+
+    ```cmd
+    C:\> set SQLMESH_DEBUG=1
+    C:\> sqlmesh plan
+    ```
