@@ -147,6 +147,9 @@ def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expressio
 
 
 def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
+    if self._prev.text != "@":
+        return self._parse_parameter()
+
     index = self._index
     field = self._parse_primary() or self._parse_function(functions={}) or self._parse_id_var()
 
