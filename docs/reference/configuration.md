@@ -176,6 +176,15 @@ To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the 
 
 Example enabling debug mode for the CLI command `sqlmesh plan`:
 
-```bash
-$ SQLMESH_DEBUG=1 sqlmesh plan
-```
+=== "Bash"
+
+    ```bash
+    $ SQLMESH_DEBUG=1 sqlmesh plan
+    ```
+
+=== "MS Powershell"
+
+    ```powershell
+    PS> $env:SQLMESH_DEBUG=1
+    PS> sqlmesh plan
+    ```
