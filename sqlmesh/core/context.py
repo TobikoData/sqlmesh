@@ -320,7 +320,12 @@ class Context(BaseContext):
 
         self._models.update({model.name: model})
         self.dag.add(model.name, model.depends_on)
-        update_model_schemas(self.dag, self._models, self.path)
+        update_model_schemas(
+            self.dag,
+            self._models,
+            self.path,
+            {model.name: self.config_for_node(model).model_defaults},
+        )
 
         model.validate_definition()
 
@@ -762,7 +767,15 @@ class Context(BaseContext):
         if include_unmodified is None:
             include_unmodified = self.config.include_unmodified
 
-        model_selector = Selector(self.state_reader, self._models, self.path, dag=self.dag)
+        model_selector = Selector(
+            self.state_reader,
+            self._models,
+            {
+                model.name: self.config_for_node(model).model_defaults
+                for model in self.models.values()
+            },
+            self.path,
+        )
 
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:

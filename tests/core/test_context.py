@@ -5,7 +5,8 @@ from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import parse_one
+from sqlglot import MappingSchema, parse_one
+from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
 from sqlmesh.core.config import (
@@ -444,3 +445,35 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     )
     assert forward_only_dev_plan.end == plan_end
     assert forward_only_dev_plan._start == plan_end
+
+
+def test_default_schema_and_config(sushi_context_pre_scheduling) -> None:
+    context = sushi_context_pre_scheduling
+
+    with pytest.raises(SchemaError) as ex:
+        context.upsert_model(
+            load_sql_based_model(
+                parse(
+                    """
+            MODEL(name c);
+            SELECT x FROM a
+            """
+                )
+            )
+        )
+
+    context.config.model_defaults.schema_ = "schema"
+    c = load_sql_based_model(
+        parse(
+            """
+        MODEL(name c);
+        SELECT x FROM a
+        """
+        )
+    )
+    context.upsert_model(c)
+
+    c.update_schema(
+        MappingSchema({"a": {"col": "int"}}), default_schema="schema", default_catalog="catalog"
+    )
+    assert c.mapping_schema == {"catalog": {"schema": {"a": {"col": "int"}}}}
