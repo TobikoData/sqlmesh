@@ -10,6 +10,7 @@ from enum import Enum, auto
 import pandas as pd
 from sqlglot import Dialect, Generator, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
+from sqlglot.dialects.snowflake import Snowflake
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.tokens import Token
@@ -17,6 +18,8 @@ from sqlglot.tokens import Token
 from sqlmesh.core.constants import MAX_MODEL_DEFINITION_SIZE
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pandas import columns_to_types_from_df
+
+SQLMESH_MACRO_PREFIX = "@"
 
 JSON_TYPE = exp.DataType.build("json")
 
@@ -89,6 +92,10 @@ class MetricAgg(exp.AggFunc):
         return self.this.name
 
 
+class StagedFilePath(exp.Table):
+    """Represents paths to "staged files" in Snowflake."""
+
+
 def _scan_var(self: Tokenizer) -> None:
     param = False
     bracket = False
@@ -142,6 +149,9 @@ def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expressio
 
 
 def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
+    if self._prev.text != SQLMESH_MACRO_PREFIX:
+        return self._parse_parameter()
+
     index = self._index
     field = self._parse_primary() or self._parse_function(functions={}) or self._parse_id_var()
 
@@ -313,6 +323,22 @@ def _parse_types(
         parsed_type.meta["sql"] = self._find_sql(start, self._prev)
 
     return parsed_type
+
+
+# Only needed for Snowflake: its "staged file" syntax (@<path>) clashes with our macro
+# var syntax. By converting the Var representation to a MacroVar, we should be able to
+# handle both use cases: if there's no value in the MacroEvaluator's context for that
+# MacroVar, it'll render into @<path>, so it won't break staged file path references.
+#
+# See: https://docs.snowflake.com/en/user-guide/querying-stage
+def _parse_table_parts(self: Parser, schema: bool = False) -> exp.Table:
+    table = self.__parse_table_parts(schema=schema)  # type: ignore
+    table_arg = table.this
+
+    if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
+        return StagedFilePath(this=MacroVar(this=table_arg.name[1:]))
+
+    return table
 
 
 def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
@@ -619,7 +645,7 @@ def extend_sqlglot() -> None:
             generators.add(dialect.Generator)
 
     for tokenizer in tokenizers:
-        tokenizer.VAR_SINGLE_TOKENS.update("@")
+        tokenizer.VAR_SINGLE_TOKENS.update(SQLMESH_MACRO_PREFIX)
 
     for parser in parsers:
         parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list, "METRIC": MetricAgg.from_arg_list})
@@ -634,6 +660,9 @@ def extend_sqlglot() -> None:
                 {
                     Audit: lambda self, e: _sqlmesh_ddl_sql(self, e, "Audit"),
                     DColonCast: lambda self, e: f"{self.sql(e, 'this')}::{self.sql(e, 'to')}",
+                    Jinja: lambda self, e: e.name,
+                    JinjaQuery: lambda self, e: f"{JINJA_QUERY_BEGIN};\n{e.name}\n{JINJA_END};",
+                    JinjaStatement: lambda self, e: f"{JINJA_STATEMENT_BEGIN};\n{e.name.strip()}\n{JINJA_END};",
                     MacroDef: lambda self, e: f"@DEF({self.sql(e.this)}, {self.sql(e.expression)})",
                     MacroFunc: _macro_func_sql,
                     MacroStrReplace: lambda self, e: f"@{self.sql(e.this)}",
@@ -641,11 +670,9 @@ def extend_sqlglot() -> None:
                     MacroVar: lambda self, e: f"@{e.name}",
                     Metric: lambda self, e: _sqlmesh_ddl_sql(self, e, "METRIC"),
                     Model: lambda self, e: _sqlmesh_ddl_sql(self, e, "MODEL"),
-                    Jinja: lambda self, e: e.name,
-                    JinjaQuery: lambda self, e: f"{JINJA_QUERY_BEGIN};\n{e.name}\n{JINJA_END};",
-                    JinjaStatement: lambda self, e: f"{JINJA_STATEMENT_BEGIN};\n{e.name.strip()}\n{JINJA_END};",
                     ModelKind: _model_kind_sql,
                     PythonCode: lambda self, e: self.expressions(e, sep="\n", indent=False),
+                    StagedFilePath: lambda self, e: self.table_sql(e),
                 }
             )
 
@@ -661,6 +688,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_having)
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_types)
+    _override(Snowflake.Parser, _parse_table_parts)
 
 
 def select_from_values(
@@ -733,6 +761,21 @@ def pandas_to_sql(
         batch_size=batch_size,
         alias=alias,
     )
+
+
+def set_default_schema_and_catalog(
+    table: str | exp.Table,
+    default_schema: t.Optional[str],
+    default_catalog: t.Optional[str],
+) -> exp.Table:
+    table = exp.to_table(table)
+
+    if default_schema and not table.db:
+        table.set("db", exp.to_identifier(default_schema))
+    if default_catalog and not table.catalog:
+        table.set("catalog", exp.to_identifier(default_catalog))
+
+    return table
 
 
 def normalize_model_name(table: str | exp.Table | exp.Column, dialect: DialectType = None) -> str:

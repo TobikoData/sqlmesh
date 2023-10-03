@@ -8,7 +8,7 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import properties_validator
+from sqlmesh.core.model.common import bool_validator, properties_validator
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
@@ -51,10 +51,14 @@ class ModelMeta(_Node, extra="allow"):
     hash_raw_query: bool = False
     physical_schema_override: t.Optional[str] = None
     table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
+    session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
+    allow_partials: bool = False
+
     _table_properties: t.Dict[str, exp.Expression] = {}
 
+    _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
-    _table_properties_validator = properties_validator
+    _properties_validator = properties_validator
 
     @field_validator("audits", mode="before")
     @classmethod
@@ -328,6 +332,27 @@ class ModelMeta(_Node, extra="allow"):
             for expression in self.table_properties_.expressions:
                 self._table_properties[expression.this.name] = expression.expression
         return self._table_properties
+
+    @property
+    def session_properties(self) -> t.Dict[str, t.Union[exp.Expression | str | int | float | bool]]:
+        """A dictionary of session properties."""
+        if not self.session_properties_:
+            return {}
+
+        def _interpret_expr(
+            e: exp.Expression,
+        ) -> t.Union[exp.Expression | str | int | float | bool]:
+            if e.is_int:
+                return int(e.this)
+            if e.is_number:
+                return float(e.this)
+            if isinstance(e, (exp.Literal, exp.Boolean)):
+                return e.this
+            return e
+
+        return {
+            e.this.name: _interpret_expr(e.expression) for e in self.session_properties_.expressions
+        }
 
     @property
     def all_references(self) -> t.List[Reference]:

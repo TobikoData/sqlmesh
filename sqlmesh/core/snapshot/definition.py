@@ -564,9 +564,18 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
                 If it is a datetime object, then it is exclusive.
             is_dev: Indicates whether the given interval is being added while in development mode.
         """
-        intervals = self.dev_intervals if is_dev else self.intervals
+        if to_timestamp(start) > to_timestamp(end):
+            raise ValueError(
+                f"Attempted to add an Invalid interval ({start}, {end}) to snapshot {self.snapshot_id}"
+            )
 
-        intervals.append(self.inclusive_exclusive(start, end))
+        start_ts, end_ts = self.inclusive_exclusive(start, end, strict=False)
+        if start_ts == end_ts:
+            # Skipping partial interval.
+            return
+
+        intervals = self.dev_intervals if is_dev else self.intervals
+        intervals.append((start_ts, end_ts))
 
         if len(intervals) < 2:
             return
@@ -605,6 +614,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         strict: bool = True,
+        allow_partial: bool = False,
     ) -> Interval:
         """Transform the inclusive start and end into a [start, end) pair.
 
@@ -612,15 +622,19 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             start: The start date/time of the interval (inclusive)
             end: The end date/time of the interval (inclusive)
             strict: Whether to fail when the inclusive start is the same as the exclusive end.
+            allow_partial: Whether the interval can be partial or not.
+
         Returns:
             A [start, end) pair.
         """
         interval_unit = self.node.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
+        if start_ts < to_timestamp(start):
+            start_ts = to_timestamp(interval_unit.cron_next(start_ts))
 
         if is_date(end):
             end = to_datetime(end) + timedelta(days=1)
-        end_ts = to_timestamp(interval_unit.cron_floor(end))
+        end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
             raise ValueError(
@@ -684,22 +698,27 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             return []
 
         execution_time = execution_time or now()
-
+        allow_partials = self.is_model and self.model.allow_partials
         start_ts, end_ts = (
             to_timestamp(ts)
             for ts in self.inclusive_exclusive(
                 start,
                 end,
                 strict=False,
+                allow_partial=allow_partials,
             )
         )
 
         interval_unit = self.node.interval_unit
 
-        upper_bound_ts = to_timestamp(
-            self.node.cron_floor(execution_time) if not ignore_cron else execution_time
-        )
-        end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
+        if allow_partials:
+            upper_bound_ts = to_timestamp(execution_time)
+            end_ts = min(end_ts, upper_bound_ts)
+        else:
+            upper_bound_ts = to_timestamp(
+                self.node.cron_floor(execution_time) if not ignore_cron else execution_time
+            )
+            end_ts = min(end_ts, to_timestamp(interval_unit.cron_floor(upper_bound_ts)))
 
         croniter = interval_unit.croniter(start_ts)
         dates = [start_ts]
@@ -707,7 +726,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         # get all individual dates with the addition of extra lookback dates up to the execution date
         # when a model has lookback, we need to check all the intervals between itself and its lookback exist.
         while True:
-            ts = to_timestamp(croniter.get_next())
+            ts = to_timestamp(croniter.get_next(estimate=True))
 
             if ts < end_ts:
                 dates.append(ts)
@@ -718,7 +737,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         lookback = self.model.lookback if self.is_model else 0
 
         for _ in range(lookback):
-            ts = to_timestamp(croniter.get_next())
+            ts = to_timestamp(croniter.get_next(estimate=True))
             if ts < upper_bound_ts:
                 dates.append(ts)
             else:
@@ -732,7 +751,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             next_ts = (
                 dates[i + 1]
                 if i + 1 < len(dates)
-                else to_timestamp(interval_unit.cron_next(current_ts))
+                else min(to_timestamp(interval_unit.cron_next(current_ts)), upper_bound_ts)
             )
             compare_ts = seq_get(dates, i + lookback) or dates[-1]
 
@@ -828,9 +847,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if self.depends_on_past and start:
             if not snapshot_start:
                 raise SQLMeshError("Snapshot must have a start defined if it depends on past")
-            start_ts = to_timestamp(self.node.interval_unit.cron_floor(start))
+
+            interval_unit = self.node.interval_unit
+            start_ts = to_timestamp(interval_unit.cron_floor(start))
+
             if not self.intervals:
-                return to_timestamp(snapshot_start) >= start_ts
+                # The start date must be aligned by the interval unit.
+                snapshot_start_ts = to_timestamp(interval_unit.cron_floor(snapshot_start))
+                if snapshot_start_ts < to_timestamp(snapshot_start):
+                    snapshot_start_ts = to_timestamp(interval_unit.cron_next(snapshot_start_ts))
+                return snapshot_start_ts >= start_ts
             # Make sure that if there are missing intervals for this snapshot that they all occur at or after the
             # provided start_ts. Otherwise we know that we are doing a non-contiguous load and therefore this is not
             # a valid start.
@@ -1191,7 +1217,7 @@ def missing_intervals(
         snapshot_start_date = start_dt
         snapshot_end_date = end_date
         if interval:
-            snapshot_start_date, snapshot_end_date = interval
+            snapshot_start_date, snapshot_end_date = (to_datetime(i) for i in interval)
             snapshot = snapshot.copy()
             snapshot.intervals = snapshot.intervals.copy()
             snapshot.remove_interval(interval, execution_time)
@@ -1227,9 +1253,6 @@ def earliest_start_date(
     snapshots = list(snapshots)
     earliest = to_datetime(yesterday().date())
     if snapshots:
-        for snapshot in snapshots:
-            if not snapshot.parents and not snapshot.node.start:
-                cache[snapshot.name] = earliest
         return min(start_date(snapshot, snapshots, cache) or earliest for snapshot in snapshots)
     return earliest
 

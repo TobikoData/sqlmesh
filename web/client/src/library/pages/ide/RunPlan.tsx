@@ -3,6 +3,7 @@ import {
   ChevronDownIcon,
   CheckCircleIcon,
   MinusCircleIcon,
+  StarIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { useState, useEffect, Fragment, type MouseEvent } from 'react'
@@ -415,37 +416,47 @@ function SelectEnvironemnt({
                             )}
                           </span>
                         </div>
-                        {env.isLocal && env !== environment && (
-                          <Button
-                            className="!m-0 !px-2 bg-transparent hover:bg-transparent border-none"
-                            size={EnumSize.xs}
-                            variant={EnumVariant.Neutral}
-                            onClick={(e: MouseEvent) => {
-                              e.stopPropagation()
-
-                              removeLocalEnvironment(env)
-                            }}
-                          >
-                            <MinusCircleIcon className="w-4 text-neutral-500 dark:text-neutral-100" />
-                          </Button>
-                        )}
-                        {isFalse(env.isDefault) &&
-                          env !== environment &&
-                          env.isSynchronized &&
-                          isFalse(pinnedEnvironments.includes(env)) && (
-                            <Button
-                              className="!px-2 !my-0"
-                              size={EnumSize.xs}
-                              variant={EnumVariant.Danger}
-                              onClick={(e: MouseEvent) => {
-                                e.stopPropagation()
-
-                                deleteEnvironment(env)
-                              }}
-                            >
-                              Delete
-                            </Button>
+                        <div className="flex items-center">
+                          {env.isPinned && (
+                            <StarIcon
+                              title="Pinned"
+                              className="w-4 text-primary-500 dark:text-primary-100 mx-1"
+                            />
                           )}
+                          {env.isLocal &&
+                            isFalse(env.isPinned) &&
+                            env !== environment && (
+                              <Button
+                                className="!m-0 !px-2 bg-transparent hover:bg-transparent border-none"
+                                size={EnumSize.xs}
+                                variant={EnumVariant.Neutral}
+                                onClick={(e: MouseEvent) => {
+                                  e.stopPropagation()
+
+                                  removeLocalEnvironment(env)
+                                }}
+                              >
+                                <MinusCircleIcon className="w-4 text-neutral-500 dark:text-neutral-100" />
+                              </Button>
+                            )}
+                          {isFalse(env.isDefault) &&
+                            env !== environment &&
+                            env.isSynchronized &&
+                            isFalse(pinnedEnvironments.includes(env)) && (
+                              <Button
+                                className="!px-2 !my-0"
+                                size={EnumSize.xs}
+                                variant={EnumVariant.Danger}
+                                onClick={(e: MouseEvent) => {
+                                  e.stopPropagation()
+
+                                  deleteEnvironment(env)
+                                }}
+                              >
+                                Delete
+                              </Button>
+                            )}
+                        </div>
                       </div>
                     )}
                   </Menu.Item>

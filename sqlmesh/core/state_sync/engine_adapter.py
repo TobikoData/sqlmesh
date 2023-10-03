@@ -215,7 +215,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if name == c.PROD:
             raise SQLMeshError("Cannot invalidate the production environment.")
 
-        filter_expr = exp.to_column("name").eq(name)
+        filter_expr = exp.column("name").eq(name)
 
         self.engine_adapter.update_table(
             self.environments_table,
@@ -226,7 +226,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def delete_expired_environments(self) -> t.List[Environment]:
         now_ts = now_timestamp()
         filter_expr = exp.LTE(
-            this=exp.to_column("expiration_ts"),
+            this=exp.column("expiration_ts"),
             expression=exp.Literal.number(now_ts),
         )
 
@@ -249,19 +249,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
         self.engine_adapter.delete_from(
-            self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids, self.snapshots_table)
+            self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids)
         )
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         return {
             SnapshotId(name=name, identifier=identifier)
             for name, identifier in self.engine_adapter.fetchall(
-                exp.select(
-                    exp.to_column(f"{self.snapshots_table}.name"),
-                    exp.to_column(f"{self.snapshots_table}.identifier"),
-                )
+                exp.select("name", "identifier")
                 .from_(self.snapshots_table)
-                .where(self._snapshot_id_filter(snapshot_ids, self.snapshots_table)),
+                .where(self._snapshot_id_filter(snapshot_ids)),
                 quote_identifiers=True,
             )
         }
@@ -293,7 +290,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.delete_from(
             self.environments_table,
             where=exp.EQ(
-                this=exp.to_column("name"),
+                this=exp.column("name"),
                 expression=exp.Literal.string(environment.name),
             ),
         )
@@ -309,7 +306,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.engine_adapter.update_table(
             self.snapshots_table,
             {"snapshot": snapshot.json()},
-            where=self._snapshot_id_filter([snapshot.snapshot_id], self.snapshots_table),
+            where=self._snapshot_id_filter([snapshot.snapshot_id]),
             contains_json=True,
         )
 
@@ -362,24 +359,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
         query = (
-            exp.select(exp.to_column(f"{self.snapshots_table}.snapshot"))
-            .from_(self.snapshots_table)
-            .where(
-                self._snapshot_id_filter(snapshot_ids, self.snapshots_table)
-                if snapshot_ids
-                else None
-            )
+            exp.select(exp.column("snapshot", table="snapshots"))
+            .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
+            .where(self._snapshot_id_filter(snapshot_ids, "snapshots") if snapshot_ids else None)
         )
         if hydrate_seeds:
-            query = query.select(exp.to_column(f"{self.seeds_table}.content")).join(
-                self.seeds_table,
+            query = query.select(exp.column("content", table="seeds")).join(
+                exp.to_table(self.seeds_table).as_("seeds"),
                 on=exp.and_(
-                    *[
-                        exp.to_column(f"{self.snapshots_table}.{col}").eq(
-                            exp.to_column(f"{self.seeds_table}.{col}")
-                        )
-                        for col in ["name", "identifier"]
-                    ]
+                    exp.column("name", table="snapshots").eq(exp.column("name", table="seeds")),
+                    exp.column("identifier", table="snapshots").eq(
+                        exp.column("identifier", table="seeds")
+                    ),
                 ),
                 join_type="left",
             )
@@ -436,9 +427,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return []
 
         query = (
-            exp.select(exp.to_column(f"{self.snapshots_table}.snapshot"))
-            .from_(self.snapshots_table)
-            .where(self._snapshot_name_version_filter(snapshots, self.snapshots_table))
+            exp.select("snapshot")
+            .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
+            .where(self._snapshot_name_version_filter(snapshots))
         )
         if lock_for_update:
             query = query.lock(copy=False)
@@ -477,7 +468,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         row = self.engine_adapter.fetchone(
             self._environments_query(
                 where=exp.EQ(
-                    this=exp.to_column("name"),
+                    this=exp.column("name"),
                     expression=exp.Literal.string(environment),
                 ),
                 lock_for_update=lock_for_update,
@@ -500,13 +491,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         end: TimeLike,
         is_dev: bool = False,
     ) -> None:
-        logger.info("Adding interval for snapshot %s", snapshot.snapshot_id)
+        start_ts, end_ts = snapshot.inclusive_exclusive(start, end, strict=False)
+        if start_ts >= end_ts:
+            logger.info(
+                "Skipping partial interval (%s, %s) for snapshot %s",
+                start,
+                end,
+                snapshot.snapshot_id,
+            )
+            return
+
+        logger.info(
+            "Adding interval (%s, %s) for snapshot %s", start_ts, end_ts, snapshot.snapshot_id
+        )
 
         is_dev = snapshot.is_temporary_table(is_dev)
-
         self.engine_adapter.insert_append(
             self.intervals_table,
-            _intervals_to_df([(snapshot, snapshot.inclusive_exclusive(start, end))], is_dev, False),
+            _intervals_to_df([(snapshot, (start_ts, end_ts))], is_dev, False),
             columns_to_types=self._interval_columns_to_types,
         )
 
@@ -554,6 +556,21 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 self.intervals_table, exp.column("id").isin(*interval_ids)
             )
 
+    def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
+        env = self._get_environment(environment)
+        if not env:
+            return None
+
+        snapshot_filter = self._snapshot_name_version_filter(env.snapshots, "intervals")
+        query = (
+            exp.select(exp.func("MAX", exp.to_column("end_ts")))
+            .from_(exp.to_table(self.intervals_table).as_("intervals"))
+            .where(snapshot_filter, copy=False)
+            .where(exp.to_column("is_dev").not_(), copy=False)
+        )
+
+        return self.engine_adapter.fetchone(query, quote_identifiers=True)[0]
+
     def recycle(self) -> None:
         self.engine_adapter.recycle()
 
@@ -568,18 +585,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         query = (
             exp.select(
                 "id",
-                exp.to_column(f"{self.intervals_table}.name"),
-                exp.to_column(f"{self.intervals_table}.identifier"),
+                exp.column("name", table="intervals"),
+                exp.column("identifier", table="intervals"),
                 "version",
                 "start_ts",
                 "end_ts",
                 "is_dev",
                 "is_removed",
             )
-            .from_(self.intervals_table)
+            .from_(exp.to_table(self.intervals_table).as_("intervals"))
             .order_by(
-                exp.to_column(f"{self.intervals_table}.name"),
-                exp.to_column(f"{self.intervals_table}.identifier"),
+                exp.column("name", table="intervals"),
+                exp.column("identifier", table="intervals"),
                 "created_ts",
                 "is_removed",
             )
@@ -588,25 +605,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if uncompacted_only:
             query.join(
                 exp.select("name", "identifier")
-                .from_(self.intervals_table)
+                .from_(exp.to_table(self.intervals_table).as_("intervals"))
                 .where(exp.column("is_compacted").not_())
                 .distinct()
                 .subquery(alias="uncompacted"),
                 on=exp.and_(
-                    *[
-                        exp.to_column(f"{self.intervals_table}.{col}").eq(
-                            exp.column(col, table="uncompacted")
-                        )
-                        for col in ["name", "identifier"]
-                    ]
+                    exp.column("name", table="intervals").eq(
+                        exp.column("name", table="uncompacted")
+                    ),
+                    exp.column("identifier", table="intervals").eq(
+                        exp.column("identifier", table="uncompacted")
+                    ),
                 ),
                 copy=False,
             )
 
         if snapshots:
-            query.where(
-                self._snapshot_name_version_filter(snapshots, self.intervals_table), copy=False
-            )
+            query.where(self._snapshot_name_version_filter(snapshots, "intervals"), copy=False)
         elif snapshots is not None:
             return (set(), [])
 
@@ -710,16 +725,22 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """Rollback to the previous migration."""
         logger.info("Starting migration rollback.")
         tables = (self.snapshots_table, self.environments_table, self.versions_table)
-        if not any(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
-            raise SQLMeshError("There are no prior migrations to roll back to.")
-        for table in tables:
-            self._restore_table(table, _backup_table_name(table))
+        versions = self.get_versions(validate=False)
+        if versions.schema_version == 0:
+            # Clean up state tables
+            for table in tables + (self.seeds_table, self.intervals_table):
+                self.engine_adapter.drop_table(table)
+        else:
+            if not all(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
+                raise SQLMeshError("There are no prior migrations to roll back to.")
+            for table in tables:
+                self._restore_table(table, _backup_table_name(table))
 
-        if self.engine_adapter.table_exists(_backup_table_name(self.seeds_table)):
-            self._restore_table(self.seeds_table, _backup_table_name(self.seeds_table))
+            if self.engine_adapter.table_exists(_backup_table_name(self.seeds_table)):
+                self._restore_table(self.seeds_table, _backup_table_name(self.seeds_table))
 
-        if self.engine_adapter.table_exists(_backup_table_name(self.intervals_table)):
-            self._restore_table(self.intervals_table, _backup_table_name(self.intervals_table))
+            if self.engine_adapter.table_exists(_backup_table_name(self.intervals_table)):
+                self._restore_table(self.intervals_table, _backup_table_name(self.intervals_table))
         logger.info("Migration rollback successful.")
 
     def _backup_state(self) -> None:
@@ -869,7 +890,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.unpause_snapshots(updated_prod_environment.snapshots, now_timestamp())
 
     def _snapshot_id_filter(
-        self, snapshot_ids: t.Iterable[SnapshotIdLike], fq_table_name: str
+        self, snapshot_ids: t.Iterable[SnapshotIdLike], alias: t.Optional[str] = None
     ) -> t.Union[exp.In, exp.Boolean, exp.Condition]:
         if not snapshot_ids:
             return exp.false()
@@ -878,8 +899,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 exp.Tuple,
                 exp.convert(
                     (
-                        exp.to_column(f"{fq_table_name}.name"),
-                        exp.to_column(f"{fq_table_name}.identifier"),
+                        exp.column("name", table=alias),
+                        exp.column("identifier", table=alias),
                     )
                 ),
             ).isin(*[(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids])
@@ -887,15 +908,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return exp.or_(
                 *[
                     exp.and_(
-                        exp.to_column(f"{fq_table_name}.name").eq(snapshot_id.name),
-                        exp.to_column(f"{fq_table_name}.identifier").eq(snapshot_id.identifier),
+                        exp.column("name", table=alias).eq(snapshot_id.name),
+                        exp.column("identifier", table=alias).eq(snapshot_id.identifier),
                     )
                     for snapshot_id in snapshot_ids
                 ]
             )
 
     def _snapshot_name_version_filter(
-        self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike], fq_table_name: str
+        self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike], alias: str = "snapshots"
     ) -> t.Union[exp.In, exp.Boolean, exp.Condition]:
         if not snapshot_name_versions:
             return exp.false()
@@ -904,8 +925,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 exp.Tuple,
                 exp.convert(
                     (
-                        exp.to_column(f"{fq_table_name}.name"),
-                        exp.to_column(f"{fq_table_name}.version"),
+                        exp.column("name", table=alias),
+                        exp.column("version", table=alias),
                     )
                 ),
             ).isin(
@@ -918,8 +939,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return exp.or_(
                 *[
                     exp.and_(
-                        exp.to_column(f"{fq_table_name}.name").eq(snapshot_name_version.name),
-                        exp.to_column(f"{fq_table_name}.version").eq(snapshot_name_version.version),
+                        exp.column("name", table=alias).eq(snapshot_name_version.name),
+                        exp.column("version", table=alias).eq(snapshot_name_version.version),
                     )
                     for snapshot_name_version in snapshot_name_versions
                 ]

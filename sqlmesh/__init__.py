@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 import typing as t
+from datetime import datetime
 from enum import Enum
 
 from sqlmesh.core.dialect import extend_sqlglot
@@ -88,6 +89,9 @@ if runtime_env.is_notebook:
         pass
 
 
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+
+
 # SO: https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
 class CustomFormatter(logging.Formatter):
     """Custom logging formatter."""
@@ -97,14 +101,13 @@ class CustomFormatter(logging.Formatter):
     red = "\x1b[31;20m"
     bold_red = "\x1b[31;1m"
     reset = "\x1b[0m"
-    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
 
     FORMATS = {
-        logging.DEBUG: grey + log_format + reset,
-        logging.INFO: grey + log_format + reset,
-        logging.WARNING: yellow + log_format + reset,
-        logging.ERROR: red + log_format + reset,
-        logging.CRITICAL: bold_red + log_format + reset,
+        logging.DEBUG: grey + LOG_FORMAT + reset,
+        logging.INFO: grey + LOG_FORMAT + reset,
+        logging.WARNING: yellow + LOG_FORMAT + reset,
+        logging.ERROR: red + LOG_FORMAT + reset,
+        logging.CRITICAL: bold_red + LOG_FORMAT + reset,
     }
 
     def format(self, record: logging.LogRecord) -> str:
@@ -113,7 +116,7 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-def enable_logging(level: t.Optional[int] = None) -> None:
+def enable_logging(level: t.Optional[int] = None, write_to_file: bool = False) -> None:
     """Enable logging to send to stdout and color different levels"""
     level = level or (logging.DEBUG if debug_mode_enabled() else logging.INFO)
     logger = logging.getLogger()
@@ -123,3 +126,10 @@ def enable_logging(level: t.Optional[int] = None) -> None:
         handler.setLevel(level)
         handler.setFormatter(CustomFormatter())
         logger.addHandler(handler)
+
+        if write_to_file:
+            filename = f"sqlmesh_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
+            file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
+            file_handler.setLevel(level)
+            file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+            logger.addHandler(file_handler)

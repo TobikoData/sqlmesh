@@ -663,6 +663,8 @@ Each `.py` file containing a macro definition must import SQLMesh's `macro` deco
 
 Python macros are defined as regular python functions adorned with the SQLMesh `@macro()` decorator. The first argument to the function must be `evaluator`, which provides the macro evaluation context in which the macro function will run.
 
+Python macros will parse all arguments with SQLGlot before they are used in the function body. Therefore, the function code exclusively processes SQLGlot expressions and may need to extract the expression's attributes/contents for use.
+
 Python macro functions may return values of either `string` or SQLGlot `expression` types. SQLMesh will automatically parse returned strings into a SQLGlot expression after the function is executed so they can be incorporated into the model query's semantic representation.
 
 Macro functions may return a list of strings or expressions that all play the same role in the query (e.g., specifying column definitions). For example, a list containing multiple `CASE WHEN` statements would be incorporated into the query properly, but a list containing both `CASE WHEN` statements and a `WHERE` clause would not.
@@ -719,41 +721,54 @@ FROM table
 
 Macro functions are a convenient way to tidy model code by creating multiple outputs from one function call. Python macro functions do this by returning a list of strings or SQLGlot expressions.
 
-For example, we might want to create indicator variables from the values in a string column. We could do that with:
+For example, we might want to create indicator variables from the values in a string column. We can do that by passing in the name of column and a list of values for which it should create indicators, which we then interpolate into `CASE WHEN` statements.
+
+Because SQLMesh parses the input objects, they become SQLGLot expressions in the function body. Therefore, the function code **cannot** treat the input list as a regular Python list.
+
+Two things will happen to the input Python list before the function code is executed:
+
+1. Each of its entries will be parsed by SQLGlot. Different inputs are parsed into different SQLGlot expressions:
+    - Numbers are parsed into [`Literal` expressions](https://sqlglot.com/sqlglot/expressions.html#Literal)
+    - Quoted strings are parsed into [`Literal` expressions](https://sqlglot.com/sqlglot/expressions.html#Literal)
+    - Unquoted strings are parsed into [`Column` expressions](https://sqlglot.com/sqlglot/expressions.html#Column)
+
+2. The parsed entries will be contained in a SQLGlot [`Array` expression](https://sqlglot.com/sqlglot/expressions.html#Array), the SQL entity analogous to a Python list
+
+Because the input  `Array` expression named `values` is not a Python list, we cannot iterate over it directly - instead, we iterate over its `expressions` attribute with `values.expressions`:
 
 ```python linenums="1"
 from sqlmesh import macro
 
 @macro()
-def make_indicators(evaluator, string_column, string_values):
+def make_indicators(evaluator, string_column, values):
   cases = []
 
-  for value in string_values:
+  for value in values.expressions: # Iterate over `values.expressions`
     cases.append(f"CASE WHEN {string_column} = '{value}' THEN '{value}' ELSE NULL END AS {string_column}_{value}")
 
   return cases
 ```
 
-Note that the `CASE WHEN` string includes quotes around `'{value}'`.
-
-We could call this function in a model query to create `CASE WHEN` statements for the `vehicle` column values `truck` and `bus` like this:
+We call this function in a model query to create `CASE WHEN` statements for the `vehicle` column values `truck` and `bus` like this:
 
 ```sql linenums="1"
 SELECT
-@make_indicators('vehicle', ['truck', 'bus'])
+  @make_indicators(vehicle, [truck, bus])
 FROM table
 ```
 
-It would render to:
+Which renders to:
 
 ```sql linenums="1"
 SELECT
-CASE WHEN vehicle = 'truck' THEN 'truck' ELSE NULL END AS vehicle_truck,
-CASE WHEN vehicle = 'bus' THEN 'bus' ELSE NULL END AS vehicle_bus,
+  CASE WHEN vehicle = 'truck' THEN 'truck' ELSE NULL END AS vehicle_truck,
+  CASE WHEN vehicle = 'bus' THEN 'bus' ELSE NULL END AS vehicle_bus,
 FROM table
 ```
 
-Note that in the call `@make_indicators('vehicle', ['truck', 'bus'])`, all three strings are quoted. Those quotes do not propagate into the function body, so `CASE WHEN vehicle` does not include quotes around `vehicle`. Because the quotes aren't propagated, we had to include the quotes in `'{value}'` in the function definition.
+Note that in the call `@make_indicators(vehicle, [truck, bus])` none of the three values is quoted.
+
+Because they are unquoted, SQLGlot will parse them all as `Column` expressions. In the places we used single quotes when building the string (`'{value}'`), they will be single-quoted in the output. In the places we did not quote them (`{string_column} = ` and `{string_column}_{value}`), they will not.
 
 #### Accessing macro variable values
 
@@ -829,16 +844,16 @@ The function could then be called in a query:
 
 ```sql linenums="1"
 SELECT
-a
+  a
 FROM table
-WHERE @between_where('a', 1, 3)
+WHERE @between_where(a, 1, 3)
 ```
 
 And it would render to:
 
 ```sql linenums="1"
 SELECT
-a
+  a
 FROM table
 WHERE a BETWEEN 1 and 3
 ```
@@ -853,18 +868,9 @@ def between_where(evaluator, column, low_val, high_val):
     return column.between(low_val, high_val)
 ```
 
-A critical difference between the string and expression versions of `between_where()` is that the string version takes the column name as a quoted *string*, while the expression version does not:
+The methods are available because the `column` argument is parsed as a SQLGlot [Column expression](https://sqlglot.com/sqlglot/expressions.html#Column) when the macro function is executed.
 
-```sql linenums="1"
-SELECT
-a
-FROM table
-WHERE @between_where(a, 1, 3) -- column name `a` is not quoted in the function call
-```
-
-That is because the expression version requires `column` to be a SQLGlot [Column expression](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L1097).
-
-Column expressions are sub-classes of the [Condition class](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L666), so they have builder methods like [`between`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L769) and [`like`](https://github.com/tobymao/sqlglot/blob/910166c1d1d33e2110c26140e1916745dc2f1212/sqlglot/expressions.py#L779).
+Column expressions are sub-classes of the [Condition class](https://sqlglot.com/sqlglot/expressions.html#Condition), so they have builder methods like [`between`](https://sqlglot.com/sqlglot/expressions.html#Condition.between) and [`like`](https://sqlglot.com/sqlglot/expressions.html#Condition.like).
 
 ## Mixing macro systems
 

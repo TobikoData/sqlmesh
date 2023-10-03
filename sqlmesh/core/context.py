@@ -38,6 +38,7 @@ import gc
 import traceback
 import typing as t
 import unittest.result
+from datetime import timedelta
 from io import StringIO
 from pathlib import Path
 from types import MappingProxyType
@@ -89,7 +90,7 @@ from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now_ds
+from sqlmesh.utils.date import TimeLike, now_ds, to_date
 from sqlmesh.utils.errors import (
     ConfigError,
     MissingDependencyError,
@@ -319,7 +320,12 @@ class Context(BaseContext):
 
         self._models.update({model.name: model})
         self.dag.add(model.name, model.depends_on)
-        update_model_schemas(self.dag, self._models, self.path)
+        update_model_schemas(
+            self.dag,
+            self._models,
+            self.path,
+            {model.name: self.config_for_node(model).model_defaults},
+        )
 
         model.validate_definition()
 
@@ -745,6 +751,7 @@ class Context(BaseContext):
         """
         environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
+        is_dev = environment != c.PROD
 
         if skip_backfill and not no_gaps and environment == c.PROD:
             raise ConfigError(
@@ -760,11 +767,29 @@ class Context(BaseContext):
         if include_unmodified is None:
             include_unmodified = self.config.include_unmodified
 
+        model_selector = Selector(
+            self.state_reader,
+            self._models,
+            {
+                model.name: self.config_for_node(model).model_defaults
+                for model in self.models.values()
+            },
+            self.path,
+        )
+
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:
-            models_override = Selector(
-                self.state_reader, self._models, self.path, dag=self.dag
-            ).select_models(select_models, environment, fallback_env_name=create_from or c.PROD)
+            models_override = model_selector.select_models(
+                select_models, environment, fallback_env_name=create_from or c.PROD
+            )
+
+        if restate_models is not None:
+            restate_models = model_selector.expand_model_selections(restate_models)
+
+        # If no end date is specified, use the max interval end from prod
+        # to prevent unintended evaluation of the entire DAG.
+        default_end = self.state_sync.max_interval_end_for_environment(c.PROD) if is_dev else None
+        default_start = to_date(default_end) - timedelta(days=1) if default_end else None
 
         plan = Plan(
             context_diff=self._context_diff(
@@ -779,7 +804,7 @@ class Context(BaseContext):
             restate_models=restate_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
-            is_dev=environment != c.PROD,
+            is_dev=is_dev,
             forward_only=forward_only,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
@@ -787,6 +812,8 @@ class Context(BaseContext):
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
             include_unmodified=include_unmodified,
+            default_start=default_start,
+            default_end=default_end,
         )
 
         if not no_prompts:

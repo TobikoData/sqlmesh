@@ -204,7 +204,8 @@ def test_snapshots_exists(state_sync: EngineAdapterStateSync, snapshots: t.List[
 
 
 def get_snapshot_intervals(state_sync, snapshot):
-    return state_sync._get_snapshot_intervals([snapshot])[-1][0]
+    intervals = state_sync._get_snapshot_intervals([snapshot])[-1]
+    return intervals[0] if intervals else None
 
 
 def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
@@ -250,6 +251,29 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
     ]
     assert intervals.dev_intervals == [
         (to_timestamp("2020-01-16"), to_timestamp("2020-01-21")),
+    ]
+
+
+def test_add_interval_partial(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
+
+    state_sync.push_snapshots([snapshot])
+
+    state_sync.add_interval(snapshot, "2023-01-01", to_timestamp("2023-01-01") + 1000)
+    assert get_snapshot_intervals(state_sync, snapshot) is None
+
+    state_sync.add_interval(snapshot, "2023-01-01", to_timestamp("2023-01-02") + 1000)
+    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
     ]
 
 
@@ -874,12 +898,35 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     state_sync._backup_state()
 
     state_sync.rollback()
-    restore_table_spy.assert_any_call("sqlmesh._snapshots", "sqlmesh._snapshots_backup")
-    restore_table_spy.assert_any_call("sqlmesh._environments", "sqlmesh._environments_backup")
-    restore_table_spy.assert_any_call("sqlmesh._versions", "sqlmesh._versions_backup")
-    assert not state_sync.engine_adapter.table_exists("sqlmesh._snapshots_backup")
-    assert not state_sync.engine_adapter.table_exists("sqlmesh._environments_backup")
-    assert not state_sync.engine_adapter.table_exists("sqlmesh._versions_backup")
+    restore_table_spy.assert_any_call(
+        f"{state_sync.schema}._snapshots", f"{state_sync.schema}._snapshots_backup"
+    )
+    restore_table_spy.assert_any_call(
+        f"{state_sync.schema}._environments", f"{state_sync.schema}._environments_backup"
+    )
+    restore_table_spy.assert_any_call(
+        f"{state_sync.schema}._versions", f"{state_sync.schema}._versions_backup"
+    )
+    assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._snapshots_backup")
+    assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._environments_backup")
+    assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._versions_backup")
+
+
+def test_first_migration_failure(duck_conn, mocker: MockerFixture) -> None:
+    state_sync = EngineAdapterStateSync(
+        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
+    )
+    mocker.patch.object(state_sync, "_migrate_rows", side_effect=Exception("mocked error"))
+    with pytest.raises(
+        SQLMeshError,
+        match="SQLMesh migration failed.",
+    ):
+        state_sync.migrate()
+    assert not state_sync.engine_adapter.table_exists(state_sync.snapshots_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.environments_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.versions_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.seeds_table)
+    assert not state_sync.engine_adapter.table_exists(state_sync.intervals_table)
 
 
 def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
@@ -1202,3 +1249,39 @@ def test_cleanup_expired_views(
         call("default.c__test_environment", ignore_if_not_exists=True),
         call("default.d__test_environment", ignore_if_not_exists=True),
     ]
+
+
+def test_max_interval_end_for_environment(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+    )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    state_sync.push_snapshots([snapshot])
+
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-01")
+    state_sync.add_interval(snapshot, "2023-01-02", "2023-01-02")
+
+    environment_name = "test_max_interval_end_for_environment"
+
+    assert state_sync.max_interval_end_for_environment(environment_name) is None
+
+    state_sync.promote(
+        Environment(
+            name=environment_name,
+            snapshots=[snapshot.table_info],
+            start_at="2023-01-01",
+            end_at="2023-01-02",
+            plan_id="test_plan_id",
+        )
+    )
+
+    assert state_sync.max_interval_end_for_environment(environment_name) == to_timestamp(
+        "2023-01-03"
+    )

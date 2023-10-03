@@ -53,7 +53,7 @@ def test_select_models(mocker: MockerFixture, make_snapshot):
         update={"mapping_schema": added_model_schema}
     )
 
-    selector = Selector(state_reader_mock, local_models)
+    selector = Selector(state_reader_mock, local_models, {})
 
     _assert_models_equal(
         selector.select_models(["added_model"], env_name),
@@ -129,7 +129,7 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
     local_models[model.name] = model
 
-    selector = Selector(state_reader_mock, local_models)
+    selector = Selector(state_reader_mock, local_models, {})
 
     with pytest.raises(SQLMeshError):
         selector.select_models([model.name], "missing_env")

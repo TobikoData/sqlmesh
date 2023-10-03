@@ -2,6 +2,7 @@ import pathlib
 import shutil
 import typing as t
 from collections import Counter
+from datetime import timedelta
 
 import numpy as np
 import pandas as pd
@@ -675,7 +676,12 @@ def test_multi(mocker):
 def test_incremental_time_self_reference(
     mocker: MockerFixture, sushi_context: Context, sushi_data_validator: SushiDataValidator
 ):
+    start_ts = to_timestamp("1 week ago")
     start_date, end_date = to_date("1 week ago"), to_date("yesterday")
+    if to_timestamp(start_date) < start_ts:
+        # The start date must be aligned by the interval unit.
+        start_date += timedelta(days=1)
+
     df = sushi_context.engine_adapter.fetchdf("SELECT MIN(ds) FROM sushi.customer_revenue_lifetime")
     assert df.iloc[0, 0] == to_ds(start_date)
     df = sushi_context.engine_adapter.fetchdf("SELECT MAX(ds) FROM sushi.customer_revenue_lifetime")
@@ -684,7 +690,7 @@ def test_incremental_time_self_reference(
     plan = sushi_context.plan(
         restate_models=["sushi.customer_revenue_lifetime", "sushi.customer_revenue_by_day"],
         no_prompts=True,
-        start="1 week ago",
+        start=start_date,
         end="5 days ago",
     )
     assert sorted(plan.missing_intervals, key=lambda x: x.snapshot_name) == sorted(
@@ -692,7 +698,6 @@ def test_incremental_time_self_reference(
             SnapshotIntervals(
                 snapshot_name="sushi.customer_revenue_lifetime",
                 intervals=[
-                    (to_timestamp(to_date("1 week ago")), to_timestamp(to_date("6 days ago"))),
                     (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
                     (to_timestamp(to_date("5 days ago")), to_timestamp(to_date("4 days ago"))),
                     (to_timestamp(to_date("4 days ago")), to_timestamp(to_date("3 days ago"))),
@@ -704,7 +709,6 @@ def test_incremental_time_self_reference(
             SnapshotIntervals(
                 snapshot_name="sushi.customer_revenue_by_day",
                 intervals=[
-                    (to_timestamp(to_date("1 week ago")), to_timestamp(to_date("6 days ago"))),
                     (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
                 ],
             ),
@@ -716,9 +720,9 @@ def test_incremental_time_self_reference(
     num_batch_calls = Counter(
         [x[0][0] for x in sushi_context.console.update_snapshot_evaluation_progress.call_args_list]  # type: ignore
     )
-    # Validate that we made 7 calls to the customer_revenue_lifetime snapshot and 1 call to the customer_revenue_by_day snapshot
+    # Validate that we made 6 calls to the customer_revenue_lifetime snapshot and 1 call to the customer_revenue_by_day snapshot
     assert num_batch_calls == {
-        sushi_context.snapshots["sushi.customer_revenue_lifetime"]: 7,
+        sushi_context.snapshots["sushi.customer_revenue_lifetime"]: 6,
         sushi_context.snapshots["sushi.customer_revenue_by_day"]: 1,
     }
     # Validate that the results are the same as before the restate
@@ -910,7 +914,7 @@ def test_scd_type_2(tmp_path: pathlib.Path):
         ],
     )
     tomorrow = to_datetime("tomorrow")
-    context.run("prod", start=to_datetime("today"), end=tomorrow, execution_time=tomorrow)
+    context.run("prod", start=to_date("today"), end=tomorrow, execution_time=tomorrow)
     df_actual = get_current_df(context)
     df_expected = create_target_dataframe(
         [
@@ -941,7 +945,7 @@ def test_scd_type_2(tmp_path: pathlib.Path):
     two_days_from_now = to_datetime("in 2 days")
     context.run(
         "prod",
-        start=to_datetime("tomorrow"),
+        start=to_date("tomorrow"),
         end=two_days_from_now,
         execution_time=two_days_from_now,
     )

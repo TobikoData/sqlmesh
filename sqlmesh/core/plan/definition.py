@@ -4,6 +4,7 @@ import logging
 import sys
 import typing as t
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
@@ -39,7 +40,6 @@ from sqlmesh.utils.date import (
     yesterday_ds,
 )
 from sqlmesh.utils.errors import NoChangesPlanError, PlanError, SQLMeshError
-from sqlmesh.utils.pydantic import PydanticModel
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,8 @@ class Plan:
         effective_from: The effective date from which to apply forward-only changes on production.
         include_unmodified: Indicates whether to include unmodified nodes in the target development environment.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
+        default_start: The default plan start to use if not specified.
+        default_end: The default plan end to use if not specified.
     """
 
     def __init__(
@@ -91,6 +93,8 @@ class Plan:
         auto_categorization_enabled: bool = True,
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: bool = False,
+        default_start: t.Optional[TimeLike] = None,
+        default_end: t.Optional[TimeLike] = None,
     ):
         self.context_diff = context_diff
         self.override_start = start is not None
@@ -107,8 +111,10 @@ class Plan:
         self.include_unmodified = include_unmodified
         self._restate_models = set(restate_models or [])
         self._effective_from: t.Optional[TimeLike] = None
-        self._start = start if start or not (is_dev and forward_only) else yesterday_ds()
-        self._end = end if end or not is_dev else now()
+        self._start = (
+            start if start or not (is_dev and forward_only) else (default_start or yesterday_ds())
+        )
+        self._end = end if end or not is_dev else (default_end or now())
         self._execution_time = execution_time or now()
         self._apply = apply
         self.__missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
@@ -783,7 +789,9 @@ class PlanStatus(str, Enum):
         return self == PlanStatus.FINISHED
 
 
-class SnapshotIntervals(PydanticModel, frozen=True):
+# millions of these can be created, pydantic has significant overhead
+@dataclass
+class SnapshotIntervals:
     snapshot_name: str
     intervals: Intervals
 
@@ -795,11 +803,12 @@ class SnapshotIntervals(PydanticModel, frozen=True):
         return format_intervals(self.merged_intervals, unit)
 
 
+@dataclass
 class LoadedSnapshotIntervals(SnapshotIntervals):
+    change_category: SnapshotChangeCategory
     interval_unit: t.Optional[IntervalUnit]
     node_name: str
     view_name: t.Optional[str] = None
-    change_category: SnapshotChangeCategory
 
     @classmethod
     def from_snapshot(cls, snapshot: Snapshot) -> LoadedSnapshotIntervals:

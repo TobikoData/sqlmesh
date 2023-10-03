@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import importlib
 import linecache
+import logging
 import os
 import sys
 import types
@@ -11,12 +12,12 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlglot.errors import SqlglotError
+from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, load_multiple_audits
-from sqlmesh.core.dialect import parse
+from sqlmesh.core.dialect import parse, set_default_schema_and_catalog
 from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
@@ -35,13 +36,18 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
 from sqlmesh.utils.yaml import YAML
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.config import Config
+    from sqlmesh.core.config import Config, ModelDefaultsConfig
     from sqlmesh.core.context import Context
 
 
+logger = logging.getLogger(__name__)
+
 # TODO: consider moving this to context
 def update_model_schemas(
-    dag: DAG[str], models: UniqueKeyDict[str, Model], context_path: Path
+    dag: DAG[str],
+    models: UniqueKeyDict[str, Model],
+    context_path: Path,
+    model_defaults: t.Dict[str, ModelDefaultsConfig],
 ) -> None:
     schema = MappingSchema(normalize=False)
     optimized_query_cache: OptimizedQueryCache = OptimizedQueryCache(context_path / c.CACHE)
@@ -53,12 +59,25 @@ def update_model_schemas(
         if not model:
             continue
 
-        model.update_schema(schema)
-        optimized_query_cache.with_optimized_query(model)
+        default = model_defaults.get(name)
+        kwargs = {
+            "default_schema": default.schema_ if default else None,
+            "default_catalog": default.catalog if default else None,
+        }
+        table = set_default_schema_and_catalog(name, **kwargs)
+        try:
+            model.update_schema(schema, **kwargs)
+            optimized_query_cache.with_optimized_query(model)
 
-        columns_to_types = model.columns_to_types
-        if columns_to_types is not None:
-            schema.add_table(name, columns_to_types, dialect=model.dialect)
+            columns_to_types = model.columns_to_types
+            if columns_to_types is not None:
+                schema.add_table(table, columns_to_types, dialect=model.dialect)
+        except SchemaError as e:
+            if "nesting level:" in str(e):
+                logger.error(
+                    "SQLMesh requires all model names and references to have the same level of nesting. You can set schema and catalog in model_defaults."
+                )
+            raise
 
 
 @dataclass
@@ -113,7 +132,15 @@ class Loader(abc.ABC):
             self._add_model_to_dag(model)
 
         if update_schemas:
-            update_model_schemas(self._dag, models, self._context.path)
+            update_model_schemas(
+                self._dag,
+                models,
+                self._context.path,
+                {
+                    model.name: self._context.config_for_path(model._path).model_defaults
+                    for model in models.values()
+                },
+            )
             for model in models.values():
                 # The model definition can be validated correctly only after the schema is set.
                 model.validate_definition()

@@ -1,7 +1,7 @@
 import json
 import typing as t
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -11,6 +11,7 @@ from sqlglot import exp, to_column
 
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.config import AutoCategorizationMode, CategorizerConfig
+from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, parse_one
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import (
@@ -30,6 +31,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotFingerprint,
     categorize_change,
+    earliest_start_date,
     fingerprint_from_node,
     has_paused_forward_only,
 )
@@ -117,6 +119,7 @@ def test_json(snapshot: Snapshot):
             "grains": [],
             "references": [],
             "hash_raw_query": False,
+            "allow_partials": False,
         },
         "audits": [],
         "name": "name",
@@ -173,7 +176,7 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
     ]
     snapshot.add_interval("2018-12-31 23:59:59", "2020-01-31 12:00:01")
     assert snapshot.intervals == [
-        (to_timestamp("2018-12-31"), to_timestamp("2020-01-31")),
+        (to_timestamp("2019-01-01"), to_timestamp("2020-01-31")),
     ]
 
     new_snapshot = make_snapshot(snapshot.model)
@@ -181,7 +184,7 @@ def test_add_interval(snapshot: Snapshot, make_snapshot):
     new_snapshot.add_interval("2020-02-05", "2020-02-10")
     new_snapshot.merge_intervals(snapshot)
     assert new_snapshot.intervals == [
-        (to_timestamp("2018-12-31"), to_timestamp("2020-02-02")),
+        (to_timestamp("2019-01-01"), to_timestamp("2020-02-02")),
         (to_timestamp("2020-02-05"), to_timestamp("2020-02-11")),
     ]
 
@@ -196,6 +199,19 @@ def test_add_interval_dev(snapshot: Snapshot):
     snapshot.add_interval("2020-01-02", "2020-01-02", is_dev=True)
     assert snapshot.intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
     assert snapshot.dev_intervals == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
+
+
+def test_add_interval_partial(snapshot: Snapshot):
+    snapshot.add_interval("2023-01-01 00:00:00", "2023-01-01 23:59:59")
+    assert snapshot.intervals == []
+
+    snapshot.add_interval("2023-01-01 00:00:00", "2023-01-01 14:00:00")
+    assert snapshot.intervals == []
+
+    snapshot.add_interval("2023-01-01 15:00:00", "2023-01-03 00:00:00")
+    assert snapshot.intervals == [
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+    ]
 
 
 def test_missing_intervals(snapshot: Snapshot):
@@ -224,6 +240,32 @@ def test_missing_intervals(snapshot: Snapshot):
     assert snapshot.missing_intervals("2020-01-03 00:00:01", "2020-01-07 00:00:02") == [
         (to_timestamp("2020-01-06"), to_timestamp("2020-01-07")),
     ]
+
+
+def test_missing_intervals_partial(make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="test_model",
+            kind=IncrementalByTimeRangeKind(time_column=TimeColumn(column="ds")),
+            owner="owner",
+            cron="@daily",
+            query=parse_one("SELECT 1, ds FROM name"),
+            allow_partials=True,
+        )
+    )
+
+    start = "2023-01-01"
+    end_ts = to_timestamp(start) + 1000
+    assert snapshot.missing_intervals(start, end_ts) == [
+        (to_timestamp(start), to_timestamp("2023-01-02")),
+    ]
+    assert snapshot.missing_intervals(start, end_ts, execution_time=end_ts) == [
+        (to_timestamp(start), end_ts),
+    ]
+    assert snapshot.missing_intervals(start, start) == [
+        (to_timestamp(start), to_timestamp("2023-01-02")),
+    ]
+    assert snapshot.missing_intervals(start, start, execution_time=start, ignore_cron=True) == []
 
 
 def test_incremental_time_self_reference(make_snapshot):
@@ -397,7 +439,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     original_fingerprint = SnapshotFingerprint(
         data_hash="3811098861",
-        metadata_hash="1237394431",
+        metadata_hash="3858405978",
     )
 
     assert fingerprint == original_fingerprint
@@ -444,7 +486,7 @@ def test_fingerprint_seed_model():
 
     expected_fingerprint = SnapshotFingerprint(
         data_hash="3270932819",
-        metadata_hash="3585221762",
+        metadata_hash="1017437962",
     )
 
     model = load_sql_based_model(expressions, path=Path("./examples/sushi/models/test_model.sql"))
@@ -484,7 +526,7 @@ def test_fingerprint_jinja_macros(model: Model):
     )
     original_fingerprint = SnapshotFingerprint(
         data_hash="2864998504",
-        metadata_hash="1237394431",
+        metadata_hash="3858405978",
     )
 
     fingerprint = fingerprint_from_node(model, nodes={})
@@ -1145,6 +1187,7 @@ def test_is_valid_start(make_snapshot):
     assert snapshot.depends_on_past
     assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
     assert snapshot.is_valid_start("2023-01-01", "2023-01-02")
+    assert snapshot.is_valid_start("2023-01-02", "2023-01-01 10:00:00")
     assert not snapshot.is_valid_start("2023-01-02", "2023-01-01")
     snapshot.intervals = [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
     assert snapshot.is_valid_start("2023-01-01", "2023-01-01")
@@ -1162,3 +1205,50 @@ def test_qualified_view_name():
         QualifiedViewName(catalog="a-b", schema_name="c", table="d").for_environment(env)
         == '"a-b".c.d'
     )
+
+
+def test_multi_interval_merge(make_snapshot):
+    a = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            cron="@daily",
+            interval_unit="five_minute",
+            start="2023-01-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    a.add_interval("2023-01-01 00:05:00", "2023-01-01 00:51:00")
+    a_start, a_end = a.intervals[0]
+
+    assert a_start == to_timestamp("2023-01-01 00:05:00")
+    assert a_end == to_timestamp("2023-01-01 00:50:00")
+
+    b = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            cron="@daily",
+            interval_unit="quarter_hour",
+            start="2023-01-01",
+            query=parse_one("SELECT ds FROM parent.tbl"),
+        )
+    )
+
+    b.merge_intervals(a)
+    b_start, b_end = b.intervals[0]
+
+    assert b_start == to_timestamp("2023-01-01 00:15:00")
+    assert b_end == to_timestamp("2023-01-01 00:45:00")
+
+
+def test_earliest_start_date(sushi_context: Context):
+    model_name = "sushi.waiter_names"
+    assert sushi_context.snapshots[model_name].node.start is None
+
+    cache: t.Dict[str, datetime] = {}
+    earliest_start_date(sushi_context.snapshots.values(), cache)
+
+    # Make sure that the default value for a snapshot with a missing start is not cached.
+    assert model_name not in cache

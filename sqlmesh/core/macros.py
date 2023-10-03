@@ -12,11 +12,13 @@ from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
 
 from sqlmesh.core.dialect import (
+    SQLMESH_MACRO_PREFIX,
     MacroDef,
     MacroFunc,
     MacroSQL,
     MacroStrReplace,
     MacroVar,
+    StagedFilePath,
 )
 from sqlmesh.utils import DECORATOR_RETURN_TYPE, UniqueKeyDict, registry_decorator
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
@@ -25,7 +27,7 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_excepti
 
 
 class MacroStrTemplate(Template):
-    delimiter = "@"
+    delimiter = SQLMESH_MACRO_PREFIX
 
 
 EXPRESSIONS_NAME_MAP = {}
@@ -137,6 +139,12 @@ class MacroEvaluator:
 
             if isinstance(node, MacroVar):
                 changed = True
+                if node.name not in self.locals:
+                    if not isinstance(node.parent, StagedFilePath):
+                        raise SQLMeshError(f"Macro variable '{node.name}' is undefined.")
+
+                    return node
+
                 return exp.convert(_norm_env_value(self.locals[node.name]))
             if node.is_string:
                 text = node.this
@@ -306,7 +314,7 @@ def _norm_var_arg_lambda(
         if isinstance(node, (exp.Identifier, exp.Var)):
             if node.name in args and not isinstance(node.parent, exp.Column):
                 return args[node.name].copy()
-            if "@" in node.name:
+            if SQLMESH_MACRO_PREFIX in node.name:
                 return node.__class__(
                     this=evaluator.template(node.name, {k: v.name for k, v in args.items()})
                 )

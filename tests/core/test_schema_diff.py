@@ -41,7 +41,7 @@ def test_schema_diff_calculate():
     assert [x.sql() for x in alter_expressions] == [
         """ALTER TABLE apply_to_table DROP COLUMN price""",
         """ALTER TABLE apply_to_table ADD COLUMN new_column DOUBLE""",
-        """ALTER TABLE apply_to_table ALTER COLUMN name TYPE INT""",
+        """ALTER TABLE apply_to_table ALTER COLUMN name SET DATA TYPE INT""",
     ]
 
 
@@ -70,7 +70,7 @@ def test_schema_diff_calculate_type_transitions():
     assert [x.sql() for x in alter_expressions] == [
         """ALTER TABLE apply_to_table DROP COLUMN id""",
         """ALTER TABLE apply_to_table ADD COLUMN id BIGINT""",
-        """ALTER TABLE apply_to_table ALTER COLUMN ds TYPE INT""",
+        """ALTER TABLE apply_to_table ALTER COLUMN ds SET DATA TYPE INT""",
     ]
 
 

@@ -90,7 +90,7 @@ The state and test connections default to `connection`. The `connection` key may
 
 Configuration for a data warehouse connection.
 
-Most parameters are specific to the connection engine `type` - see [below](#engine-connection-configuration). The default data warehouse connection type is an in-memory DuckDB database.
+Most parameters are specific to the connection engine `type` - see [below](#engine-specific). The default data warehouse connection type is an in-memory DuckDB database.
 
 #### General
 
@@ -176,6 +176,22 @@ To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the 
 
 Example enabling debug mode for the CLI command `sqlmesh plan`:
 
-```bash
-$ SQLMESH_DEBUG=1 sqlmesh plan
-```
+=== "Bash"
+
+    ```bash
+    $ SQLMESH_DEBUG=1 sqlmesh plan
+    ```
+
+=== "MS Powershell"
+
+    ```powershell
+    PS> $env:SQLMESH_DEBUG=1
+    PS> sqlmesh plan
+    ```
+
+=== "MS CMD"
+
+    ```cmd
+    C:\> set SQLMESH_DEBUG=1
+    C:\> sqlmesh plan
+    ```

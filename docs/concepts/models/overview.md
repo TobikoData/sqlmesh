@@ -92,7 +92,7 @@ Name is ***required*** and must be ***unique***.
 - Cron is used to schedule your model to process or refresh at a certain interval. It uses [croniter](https://github.com/kiorky/croniter) under the hood, so expressions such as `@daily` can be used.
 
 ### interval_unit
-- Interval unit determines the granularity of data intervals for this model. By default the interval unit is automatically derived from the `cron` expression. Supported values are: `year`, `month`, `day`, `hour` and `minute`.
+- Interval unit determines the granularity of data intervals for this model. By default the interval unit is automatically derived from the `cron` expression. Supported values are: `year`, `month`, `day`, `hour`, `half_hour`, `quarter_hour`, and `five_minute`.
 
 ### tags
 - Tags are one or more labels used to organize your models.
@@ -128,6 +128,9 @@ MODEL (
 );
 
 ```
+
+### allow_partials
+- Indicates that this model can be executed for partial (incomplete) data intervals. By default, each model processes only complete intervals to prevent common mistakes caused by partial data. The size of the interval is determined by the model's [interval_unit](#interval_unit). Setting `allow_partials` to `true` overrides this behavior, indicating that the model may process a segment of input data that is missing some of the data points. Please note that setting this attribute to `true` results in the disregard of the [cron](#cron) attribute.
 
 ## Incremental Model Properties
 

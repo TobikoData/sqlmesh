@@ -1798,9 +1798,9 @@ def test_incremental_unmanaged_validation():
 def test_custom_interval_unit():
     assert (
         load_sql_based_model(
-            d.parse("MODEL (name db.table, interval_unit MINUTE); SELECT a FROM tbl;")
+            d.parse("MODEL (name db.table, interval_unit FIVE_MINUTE); SELECT a FROM tbl;")
         ).interval_unit
-        == IntervalUnit.MINUTE
+        == IntervalUnit.FIVE_MINUTE
     )
 
     assert (
@@ -1834,10 +1834,10 @@ def test_custom_interval_unit():
     assert (
         load_sql_based_model(
             d.parse(
-                "MODEL (name db.table, cron '0 5 * * *', interval_unit 'minute'); SELECT a FROM tbl;"
+                "MODEL (name db.table, cron '0 5 * * *', interval_unit 'quarter_hour'); SELECT a FROM tbl;"
             )
         ).interval_unit
-        == IntervalUnit.MINUTE
+        == IntervalUnit.QUARTER_HOUR
     )
 
     with pytest.raises(
@@ -1997,6 +1997,38 @@ def test_model_table_properties(sushi_context):
         )
 
 
+def test_model_session_properties(sushi_context):
+    assert sushi_context.models["sushi.items"].session_properties == {
+        "string_prop": "some_value",
+        "int_prop": 1,
+        "float_prop": 1.0,
+        "bool_prop": True,
+    }
+    model = load_sql_based_model(
+        d.parse(
+            """
+        MODEL (
+            name test_schema.test_model,
+            session_properties (
+                'spark.executor.cores' = 2,
+                'spark.executor.memory' = '1G',
+                some_bool = True,
+                some_float = 0.1,
+            )
+        );
+        SELECT a FROM tbl;
+        """
+        )
+    )
+
+    assert model.session_properties == {
+        "spark.executor.cores": 2,
+        "spark.executor.memory": "1G",
+        "some_bool": True,
+        "some_float": 0.1,
+    }
+
+
 def test_model_jinja_macro_rendering():
     expressions = d.parse(
         """
@@ -2134,7 +2166,7 @@ def test_scd_type_2_defaults():
                 unique_key id,
             ),
         );
-        SELECT 
+        SELECT
             1 as id,
             '2020-01-01' as ds,
             '2020-01-01' as test_updated_at,
@@ -2172,7 +2204,7 @@ def test_scd_type_2_overrides():
                 disable_restatement False,
             ),
         );
-        SELECT 
+        SELECT
             1 as id,
             '2020-01-01' as ds,
             '2020-01-01' as test_updated_at,
@@ -2194,3 +2226,21 @@ def test_scd_type_2_overrides():
     assert scd_type_2_model.kind.is_materialized
     assert not scd_type_2_model.kind.forward_only
     assert not scd_type_2_model.kind.disable_restatement
+
+
+def test_model_allow_partials():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            allow_partials true,
+        );
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+
+    assert model.allow_partials
+
+    assert "allow_partials TRUE" in model.render_definition()[0].sql()

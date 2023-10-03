@@ -123,7 +123,7 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     return [
       ...defaultKeymapsEditorTab,
       {
-        key: 'Shift-Enter',
+        key: 'Ctrl-Enter',
         preventDefault: true,
         run: debounceSync(() => {
           sendQuery()

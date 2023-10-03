@@ -13,7 +13,12 @@ from airflow.operators.python import PythonOperator
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.plan import PlanStatus
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotTableInfo
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotIdLike,
+    SnapshotTableInfo,
+)
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
@@ -61,12 +66,13 @@ class SnapshotDagGenerator:
         self._ddl_engine_operator_args = ddl_engine_operator_args or {}
         self._snapshots = snapshots
 
-    def generate_cadence_dags(self) -> t.List[DAG]:
-        return [
-            self._create_cadence_dag_for_snapshot(s)
-            for s in self._snapshots.values()
-            if s.unpaused_ts and not s.is_symbolic and not s.is_seed
-        ]
+    def generate_cadence_dags(self, snapshots: t.Iterable[SnapshotIdLike]) -> t.List[DAG]:
+        dags = []
+        for s in snapshots:
+            snapshot = self._snapshots[s.snapshot_id]
+            if snapshot.unpaused_ts and not snapshot.is_symbolic and not snapshot.is_seed:
+                dags.append(self._create_cadence_dag_for_snapshot(snapshot))
+        return dags
 
     def generate_plan_application_dag(self, spec: common.PlanDagSpec) -> DAG:
         return self._create_plan_application_dag(spec)
@@ -86,7 +92,7 @@ class SnapshotDagGenerator:
 
         with DAG(
             dag_id=dag_id,
-            schedule_interval=snapshot.model.cron,
+            schedule_interval=snapshot.node.cron,
             start_date=pendulum.instance(to_datetime(snapshot.unpaused_ts)),
             max_active_runs=1,
             catchup=True,
@@ -98,7 +104,7 @@ class SnapshotDagGenerator:
             ],
             default_args={
                 **DAG_DEFAULT_ARGS,
-                "email": snapshot.model.owner,
+                "email": snapshot.node.owner,
                 "email_on_failure": True,
             },
         ) as dag:
@@ -227,7 +233,7 @@ class SnapshotDagGenerator:
         self, new_snapshots: t.List[Snapshot], ddl_concurrent_tasks: int
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_creation_start")
-        end_task = EmptyOperator(task_id="snapshot_creation_end")
+        end_task = EmptyOperator(task_id="snapshot_creation_end", trigger_rule="none_failed")
 
         if not new_snapshots:
             start_task >> end_task
@@ -312,6 +318,7 @@ class SnapshotDagGenerator:
                         "environment": environment,
                         "unpaused_dt": request.unpaused_dt,
                     },
+                    trigger_rule="none_failed",
                 )
 
                 update_state_task >> migrate_tables_task

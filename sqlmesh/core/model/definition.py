@@ -487,10 +487,17 @@ class _Model(ModelMeta, frozen=True):
                 return exp.cast(exp.Literal.string(time), time_column_type)
         return exp.convert(time)
 
-    def update_schema(self, schema: MappingSchema) -> None:
+    def update_schema(
+        self,
+        schema: MappingSchema,
+        default_schema: t.Optional[str] = None,
+        default_catalog: t.Optional[str] = None,
+    ) -> None:
         """Updates the schema for this model's dependencies based on the given mapping schema."""
         for dep in self.depends_on:
-            table = exp.to_table(dep)
+            table = d.set_default_schema_and_catalog(
+                dep, default_schema=default_schema, default_catalog=default_catalog
+            )
             mapping_schema = schema.find(table)
 
             if mapping_schema:
@@ -743,6 +750,8 @@ class _Model(ModelMeta, frozen=True):
             str(self.forward_only),
             str(self.disable_restatement),
             self.project,
+            str(self.allow_partials),
+            self.session_properties_.sql() if self.session_properties_ else None,
         ]
 
         for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
@@ -1002,14 +1011,21 @@ class SqlModel(_SqlBasedModel):
                 return {}
 
             self._column_descriptions = {
-                select.alias: "\n".join(comment.strip() for comment in select.comments)
+                select.alias_or_name: "\n".join(comment.strip() for comment in select.comments)
                 for select in query.selects
                 if select.comments
             }
         return self._column_descriptions
 
-    def update_schema(self, schema: MappingSchema) -> None:
-        super().update_schema(schema)
+    def update_schema(
+        self,
+        schema: MappingSchema,
+        default_schema: t.Optional[str] = None,
+        default_catalog: t.Optional[str] = None,
+    ) -> None:
+        super().update_schema(
+            schema, default_schema=default_schema, default_catalog=default_catalog
+        )
         self._columns_to_types = None
         self._query_renderer._optimized_cache = {}
 
@@ -1925,4 +1941,6 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "references": _refs_to_sql,
     "hash_raw_query": exp.convert,
     "table_properties_": lambda value: value,
+    "session_properties_": lambda value: value,
+    "allow_partials": exp.convert,
 }

@@ -1,11 +1,12 @@
 import pathlib
-from datetime import date
+from datetime import date, timedelta
 from tempfile import TemporaryDirectory
 from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import parse_one
+from sqlglot import MappingSchema, parse_one
+from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
 from sqlmesh.core.config import (
@@ -19,7 +20,7 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
-from sqlmesh.utils.date import yesterday_ds
+from sqlmesh.utils.date import now, to_date, yesterday_ds
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
 
@@ -425,3 +426,54 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
         ],
         any_order=True,
     )
+
+
+def test_plan_default_end(sushi_context_pre_scheduling: Context):
+    prod_plan = sushi_context_pre_scheduling.plan("prod", no_prompts=True)
+    # Simulate that the prod is 3 days behind.
+    plan_end = to_date(now()) - timedelta(days=3)
+    prod_plan._end = plan_end
+    sushi_context_pre_scheduling.apply(prod_plan)
+
+    dev_plan = sushi_context_pre_scheduling.plan(
+        "test_env", no_prompts=True, include_unmodified=True, skip_backfill=True, auto_apply=True
+    )
+    assert dev_plan.end == plan_end
+
+    forward_only_dev_plan = sushi_context_pre_scheduling.plan(
+        "test_env_forward_only", no_prompts=True, include_unmodified=True, forward_only=True
+    )
+    assert forward_only_dev_plan.end == plan_end
+    assert forward_only_dev_plan._start == plan_end
+
+
+def test_default_schema_and_config(sushi_context_pre_scheduling) -> None:
+    context = sushi_context_pre_scheduling
+
+    with pytest.raises(SchemaError) as ex:
+        context.upsert_model(
+            load_sql_based_model(
+                parse(
+                    """
+            MODEL(name c);
+            SELECT x FROM a
+            """
+                )
+            )
+        )
+
+    context.config.model_defaults.schema_ = "schema"
+    c = load_sql_based_model(
+        parse(
+            """
+        MODEL(name c);
+        SELECT x FROM a
+        """
+        )
+    )
+    context.upsert_model(c)
+
+    c.update_schema(
+        MappingSchema({"a": {"col": "int"}}), default_schema="schema", default_catalog="catalog"
+    )
+    assert c.mapping_schema == {"catalog": {"schema": {"a": {"col": "int"}}}}

@@ -72,6 +72,7 @@ SELECT
 FROM
     {EXAMPLE_INCREMENTAL_MODEL_NAME}
 GROUP BY item_id
+ORDER BY item_id
 """
 
 EXAMPLE_INCREMENTAL_MODEL_DEF = f"""MODEL (
@@ -102,7 +103,7 @@ EXAMPLE_SEED_MODEL_DEF = f"""MODEL (
     columns (
         id INTEGER,
         item_id INTEGER,
-        ds DATE
+        ds TEXT
     ),
     grain [id, ds]
 );
