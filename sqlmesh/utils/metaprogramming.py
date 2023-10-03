@@ -304,7 +304,7 @@ class ExecutableKind(str, Enum):
 
 
 class Executable(PydanticModel):
-    payload: t.Any
+    payload: str
     kind: ExecutableKind = ExecutableKind.DEFINITION
     name: t.Optional[str] = None
     path: t.Optional[str] = None
@@ -325,6 +325,10 @@ class Executable(PydanticModel):
     @property
     def is_value(self) -> bool:
         return self.kind == ExecutableKind.VALUE
+
+    @classmethod
+    def value(cls, v: t.Any) -> Executable:
+        return Executable(payload=repr(v), kind=ExecutableKind.VALUE)
 
 
 def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable]:
@@ -370,7 +374,7 @@ def serialize_env(env: t.Dict[str, t.Any], path: Path) -> t.Dict[str, Executable
                 kind=ExecutableKind.IMPORT,
             )
         else:
-            serialized[k] = Executable(payload=repr(v), kind=ExecutableKind.VALUE)
+            serialized[k] = Executable.value(v)
 
     return serialized
 

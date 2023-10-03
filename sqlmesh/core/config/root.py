@@ -5,6 +5,7 @@ import typing as t
 import zlib
 
 from pydantic import Field
+from sqlglot.helper import first
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
@@ -122,7 +123,7 @@ class Config(BaseConfig):
                 if "" in self.gateways:
                     return self.gateways[""]
 
-                return next(iter(self.gateways.values()))
+                return first(self.gateways.values())
 
             if name not in self.gateways:
                 raise ConfigError(f"Missing gateway with name '{name}'.")
@@ -151,6 +152,14 @@ class Config(BaseConfig):
 
     def get_state_schema(self, gateway_name: t.Optional[str] = None) -> t.Optional[str]:
         return self.get_gateway(gateway_name).state_schema
+
+    @property
+    def default_gateway_name(self) -> str:
+        if self.default_gateway:
+            return self.default_gateway
+        if "" in self.gateways:
+            return ""
+        return first(self.gateways)
 
     @property
     def dialect(self) -> t.Optional[str]:

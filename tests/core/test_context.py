@@ -287,7 +287,7 @@ def test():
     context = Context(paths=str(tmp_path), config=config)
 
     assert ["db.actual_test"] == list(context.models)
-    assert "test" == list(context._macros)[-1]
+    assert "test" in context._macros
 
 
 def test_plan_apply(sushi_context) -> None:
@@ -477,3 +477,41 @@ def test_default_schema_and_config(sushi_context_pre_scheduling) -> None:
         MappingSchema({"a": {"col": "int"}}), default_schema="schema", default_catalog="catalog"
     )
     assert c.mapping_schema == {"catalog": {"schema": {"a": {"col": "int"}}}}
+
+
+def test_gateway_macro(sushi_context: Context) -> None:
+    sushi_context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+            MODEL(name sushi.test_gateway_macro);
+            SELECT @gateway AS gateway;
+            """
+            ),
+            macros=sushi_context._macros,
+        )
+    )
+
+    assert (
+        sushi_context.render("sushi.test_gateway_macro").sql()
+        == "SELECT 'in_memory' AS \"gateway\""
+    )
+
+    sushi_context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+            MODEL(name sushi.test_gateway_macro_jinja);
+            JINJA_QUERY_BEGIN;
+            SELECT '{{ gateway }}' AS gateway_jinja;
+            JINJA_END;
+            """
+            ),
+            jinja_macros=sushi_context._jinja_macros,
+        )
+    )
+
+    assert (
+        sushi_context.render("sushi.test_gateway_macro_jinja").sql()
+        == "SELECT 'in_memory' AS \"gateway_jinja\""
+    )
