@@ -37,6 +37,37 @@ The function takes an `ExecutionContext` that is able to run queries and to retr
 
 If the function output is too large, it can also be returned in chunks using Python generators.
 
+## `@model` specification
+
+The arguments provided in the `@model` specification have the same names as those provided in a SQL model's `MODEL` DDL.
+
+Most of the arguments are simply Python-formatted equivalents of the SQL version, but Python model `kind`s are specified with model kind objects. A model's `kind` object must be imported at the beginning of the model definition file before use in the model specification.
+
+Supported model kind objects include:
+
+- [ViewKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ViewKind)
+- [FullKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#FullKind)
+- [SeedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SeedKind)
+- [IncrementalByTimeRangeKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByTimeRangeKind)
+- [IncrementalByUniqueKeyKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByUniqueKeyKind)
+- [SCDType2Kind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2Kind)
+- [EmbeddedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#EmbeddedKind)
+- [ExternalKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ExternalKind)
+
+This example demonstrates how to specify an incremental by time range model kind in Python:
+
+```python linenums="1"
+from sqlmesh import ExecutionContext, model
+from sqlmesh.core.model import IncrementalByTimeRangeKind
+
+@model(
+    "docs_example.incremental_model",
+    kind=IncrementalByTimeRangeKind(
+        time_column="ds"
+    )
+)
+```
+
 ## Execution context
 Python models can do anything you want, but it is strongly recommended for all models to be [idempotent](../glossary.md#idempotency). Python models can fetch data from upstream models or even data outside of SQLMesh.
 
@@ -50,7 +81,7 @@ df = context.fetchdf("SELECT * FROM my_table")
 In order to fetch data from an upstream model, you first get the table name using `context`'s `table` method. This returns the appropriate table name for the current runtime [environment](../environments.md):
 
 ```python linenums="1"
-table = context.table("upstream_model")
+table = context.table("docs_example.upstream_model")
 df = context.fetchdf(f"SELECT * FROM {table}")
 ```
 
@@ -63,7 +94,7 @@ In this example, only `upstream_dependency` will be captured, while `another_dep
 ```python linenums="1"
 @model(
     "my_model.with_explicit_dependencies",
-    depends_on=["upstream_dependency"], # captured
+    depends_on=["docs_example.upstream_dependency"], # captured
 )
 def execute(
     context: ExecutionContext,
@@ -74,7 +105,7 @@ def execute(
 ) -> pd.DataFrame:
 
     # ignored due to @model dependency "upstream_dependency"
-    context.table("another_dependency")
+    context.table("docs_example.another_dependency")
 ```
 
 ## Examples
@@ -91,7 +122,7 @@ import pandas as pd
 from sqlmesh import ExecutionContext, model
 
 @model(
-    "basic",
+    "docs_example.basic",
     owner="janet",
     cron="@daily",
     columns={
@@ -123,7 +154,7 @@ import pandas as pd
 from sqlmesh import ExecutionContext, model
 
 @model(
-    "sql_pandas",
+    "docs_example.sql_pandas",
     columns={
         "id": "int",
         "name": "text",
@@ -161,7 +192,7 @@ from pyspark.sql import DataFrame, functions
 from sqlmesh import ExecutionContext, model
 
 @model(
-    "pyspark",
+    "docs_example.pyspark",
     columns={
         "id": "int",
         "name": "text",
@@ -194,7 +225,7 @@ This examples uses the Python generator `yield` to batch the model output:
 
 ```python linenums="1" hl_lines="20"
 @model(
-    "batching",
+    "docs_example.batching",
     columns={
         "id": "int",
     },
