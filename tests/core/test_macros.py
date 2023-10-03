@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 from sqlglot import exp, parse_one
 
-from sqlmesh.core.dialect import MacroVar, StagedFilePath
+from sqlmesh.core.dialect import StagedFilePath
 from sqlmesh.core.macros import MacroEvaluator, macro
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable, ExecutableKind
@@ -94,7 +94,9 @@ def test_macro_var(macro_evaluator):
         assert "Macro variable 'y' is undefined." in str(ex.value)
 
     # Parsing a "parameter" like Snowflake's $1 should not produce a MacroVar expression
-    assert parse_one("select $1", read="snowflake").find(MacroVar) is None
+    e = parse_one("select $1 from @path (file_format => bla.foo)", read="snowflake")
+    assert e.find(exp.Parameter) is e.selects[0]
+    assert e.sql(dialect="snowflake") == "SELECT $1 FROM @path (FILE_FORMAT => bla.foo)"
 
 
 def test_macro_str_replace(macro_evaluator):

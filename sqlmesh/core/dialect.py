@@ -336,7 +336,8 @@ def _parse_table_parts(self: Parser, schema: bool = False) -> exp.Table:
     table_arg = table.this
 
     if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
-        return StagedFilePath(this=MacroVar(this=table_arg.name[1:]))
+        table_arg.replace(MacroVar(this=table_arg.name[1:]))
+        return StagedFilePath(**table.args)
 
     return table
 
