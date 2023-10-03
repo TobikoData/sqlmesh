@@ -41,7 +41,7 @@ If the function output is too large, it can also be returned in chunks using Pyt
 
 The arguments provided in the `@model` specification have the same names as those provided in a SQL model's `MODEL` DDL.
 
-Most of the arguments are simply Python-formatted equivalents of the SQL version, but Python model `kind`s are specified with model kind objects. A model's `kind` object must be imported at the beginning of the model definition file before use in the model specification.
+Most of the arguments are simply Python-formatted equivalents of the SQL version, but Python model `kind`s are specified with model kind objects. All model kind arguments are listed in the [models configuration reference page](../reference/model_configuration.md#model-kind-properties). A model's `kind` object must be imported at the beginning of the model definition file before use in the model specification.
 
 Supported model kind objects include:
 

@@ -812,6 +812,8 @@ The default model kind is `VIEW` unless overridden with the `kind` key. For more
 
 Model kinds are required in each model file's `MODEL` DDL statement. They may optionally be used to specify a default kind in the model defaults configuration key.
 
+All model kind specification keys are listed in the [models configuration reference page](../reference/model_configuration.md#model-kind-properties).
+
 The `VIEW`, `FULL`, and `EMBEDDED` model kinds are specified by name only, while other models kinds require additional parameters and are provided with an array of parameters:
 
 === "YAML"
@@ -836,16 +838,7 @@ The `VIEW`, `FULL`, and `EMBEDDED` model kinds are specified by name only, while
     );
     ```
 
-Python model kinds are specified with model kind objects. Model kind objects include:
-
-- [ViewKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ViewKind)
-- [FullKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#FullKind)
-- [SeedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SeedKind)
-- [IncrementalByTimeRangeKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByTimeRangeKind)
-- [IncrementalByUniqueKeyKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByUniqueKeyKind)
-- [SCDType2Kind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2Kind)
-- [EmbeddedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#EmbeddedKind)
-- [ExternalKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ExternalKind)
+Python model kinds are specified with model kind objects. Python model kind objects have the same arguments as their SQL counterparts, listed in the [models configuration reference page](../reference/model_configuration.md#model-kind-properties).
 
 This example demonstrates how to specify an incremental by time range model kind in Python:
 
@@ -862,6 +855,8 @@ This example demonstrates how to specify an incremental by time range model kind
         )
     )
     ```
+
+Learn more about specifying Python models at the [Python models concepts page](../concepts/models/python_models.md#model-specification).
 
 ### Debug mode
 
