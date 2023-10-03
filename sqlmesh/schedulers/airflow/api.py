@@ -32,7 +32,7 @@ def check_authentication(func: t.Callable) -> t.Callable:
     return wrapper
 
 
-@sqlmesh_api_v1.post("/plans")
+@sqlmesh_api_v1.route("/plans", methods=["POST"])
 @csrf.exempt
 @check_authentication
 def apply_plan() -> Response:
@@ -48,7 +48,7 @@ def apply_plan() -> Response:
     return make_response(jsonify(request_id=spec.request_id), 201)
 
 
-@sqlmesh_api_v1.get("/environments/<name>")
+@sqlmesh_api_v1.route("/environments/<name>")
 @csrf.exempt
 @check_authentication
 def get_environment(name: str) -> Response:
@@ -59,7 +59,7 @@ def get_environment(name: str) -> Response:
     return _success(environment)
 
 
-@sqlmesh_api_v1.get("/environments")
+@sqlmesh_api_v1.route("/environments")
 @csrf.exempt
 @check_authentication
 def get_environments() -> Response:
@@ -68,7 +68,7 @@ def get_environments() -> Response:
     return _success(common.EnvironmentsResponse(environments=environments))
 
 
-@sqlmesh_api_v1.get("/environments/<name>/max_interval_end")
+@sqlmesh_api_v1.route("/environments/<name>/max_interval_end")
 @csrf.exempt
 @check_authentication
 def get_max_interval_end(name: str) -> Response:
@@ -80,7 +80,7 @@ def get_max_interval_end(name: str) -> Response:
         return _success(response)
 
 
-@sqlmesh_api_v1.delete("/environments/<name>")
+@sqlmesh_api_v1.route("/environments/<name>", methods=["DELETE"])
 @csrf.exempt
 @check_authentication
 def invalidate_environment(name: str) -> Response:
@@ -93,7 +93,7 @@ def invalidate_environment(name: str) -> Response:
     return _success(common.InvalidateEnvironmentResponse(name=name))
 
 
-@sqlmesh_api_v1.get("/snapshots")
+@sqlmesh_api_v1.route("/snapshots")
 @csrf.exempt
 @check_authentication
 def get_snapshots() -> Response:
@@ -114,7 +114,7 @@ def get_snapshots() -> Response:
         return _success(common.SnapshotsResponse(snapshots=snapshots))
 
 
-@sqlmesh_api_v1.get("/models")
+@sqlmesh_api_v1.route("/models")
 @csrf.exempt
 @check_authentication
 def nodes_exist() -> Response:
@@ -125,7 +125,7 @@ def nodes_exist() -> Response:
         return _success(common.ExistingModelsResponse(names=list(existing_models)))
 
 
-@sqlmesh_api_v1.get("/versions")
+@sqlmesh_api_v1.route("/versions")
 @csrf.exempt
 @check_authentication
 def get_versions() -> Response:
