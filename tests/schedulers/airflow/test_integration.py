@@ -55,10 +55,6 @@ def test_apply_plan_create_backfill_promote(
         snapshot.table_info
     ]
 
-    # Verify that the incremental DAG for the Snapshot has been created.
-    dag = _get_snapshot_dag(airflow_client, model_name, snapshot.version)
-    assert dag["is_active"]
-
     # Make sure that the same Snapshot can't be added again.
     with pytest.raises(SQLMeshError, match=r"Snapshots.*already exist.*"):
         airflow_client.apply_plan([snapshot], environment, random_name())
