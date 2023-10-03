@@ -1208,8 +1208,14 @@ def missing_intervals(
     """Returns all missing intervals given a collection of snapshots."""
     missing = {}
     cache: t.Dict[str, datetime] = {}
-    start_dt = to_datetime(start or earliest_start_date(snapshots, cache))
     end_date = end or now()
+    start_dt = (
+        to_datetime(start)
+        if start
+        else earliest_start_date(
+            snapshots, cache, default_value=to_date(end_date) - timedelta(days=1)
+        )
+    )
     restatements = restatements or {}
 
     for snapshot in snapshots:
@@ -1239,7 +1245,9 @@ def missing_intervals(
 
 
 def earliest_start_date(
-    snapshots: t.Iterable[Snapshot], cache: t.Optional[t.Dict[str, datetime]] = None
+    snapshots: t.Iterable[Snapshot],
+    cache: t.Optional[t.Dict[str, datetime]] = None,
+    default_value: t.Optional[TimeLike] = None,
 ) -> datetime:
     """Get the earliest start date from a collection of snapshots.
 
@@ -1251,7 +1259,7 @@ def earliest_start_date(
     """
     cache = {} if cache is None else cache
     snapshots = list(snapshots)
-    earliest = to_datetime(yesterday().date())
+    earliest = to_datetime(default_value or yesterday().date())
     if snapshots:
         return min(start_date(snapshot, snapshots, cache) or earliest for snapshot in snapshots)
     return earliest
