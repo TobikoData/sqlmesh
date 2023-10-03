@@ -24,21 +24,48 @@ SQLMesh takes a different approach by using time *intervals*.
 
 The first step to using time intervals is to create the set of all intervals based on the model's *start datetime* and *interval unit*. The start datetime specifies when time "begins" for the model, and interval unit specifies how finely time should be divided.
 
-For example, consider a model with a start datetime of 12am yesterday and an interval unit of 12 hours. We are working with the model today at 12pm.
+For example, consider a model with a start datetime of 12am two days ago that we are working with today at 12pm. This is illustrated in Figure 1:
 
-The model's set of intervals would have 3 entries: 1 for the first half of yesterday, 1 for the second half of yesterday, and one for today. This is illustrated in the top panel of Figure 1.
+![Illustration of model with start datetime of 12am two days ago that we are working with today at 12pm](./incremental_time/interval-example.png)
 
-If the model's interval unit was 1 hour, its set of time intervals would have 36 entries: 24 for each hour of yesterday and 12 for each hour today from 12am to 12pm. This is illustrated in the bottom panel of Figure 1.
+*__Figure 1: Illustration of model with start datetime of 12am two days ago that we are working with today at 12pm__*
 
-![Illustration of counting intervals over a 36 hour period with interval units of 12 hours and 1 hour](./incremental_time/interval-counting.png)
+<br>
 
-_Figure 1: Illustration of counting intervals over a 36 hour period with interval units of 12 hours and 1 hour_
+If the model's interval unit was 1 day, the model's set of intervals would have 3 entries:
 
-When we first execute and backfill the bottom model as part of a `sqlmesh plan` today at 12pm, SQLMesh calculates its set of 36 time intervals and records that all 36 of them were backfilled. It retains this information in the SQLMesh state tables for future use.
+- 1 for two days ago
+- 1 for yesterday
+- 1 for today
 
-If we `sqlmesh run` the model tomorrow at 12pm, SQLMesh calculates the set of all intervals as (24 for day 1) + (24 for day 2) + (12 for today 12am to 12pm) = 60 intervals.
+Today's interval is not yet complete because it's 12pm right now. This is illustrated in the top panel of Figure 2:
 
-It compares this set of 60 to the stored set of 36 that we already backfilled to identify the 24 un-processed intervals from 12pm yesterday to 12pm today. It then processes only those 24 intervals during today's run.
+![Illustration of counting intervals over a 36 hour period with interval units of 1 day and 1 hour](./incremental_time/interval-counting.png)
+
+*__Figure 2: Illustration of counting intervals over a 36 hour period with interval units of 1 day and 1 hour__*
+
+<br>
+
+If the model's interval unit was 1 hour instead, its set of time intervals would have 60 entries:
+
+- 24 for each hour of two days ago
+- 24 for each hour of yesterday
+- 12 for each hour today from 12am to 12pm
+
+All intervals are complete because it is 12pm (so the 11am interval has ended). This is illustrated in the bottom panel of Figure 2.
+
+When we first execute and backfill the bottom model as part of a `sqlmesh plan` today at 12pm, SQLMesh calculates its set of 60 time intervals and records that all 60 of them were backfilled. It retains this information in the SQLMesh state tables for future use.
+
+If we `sqlmesh run` the model *tomorrow* at 12pm, SQLMesh calculates the set of all intervals as:
+
+- 24 for two days ago
+- 24 for yesterday
+- 24 for today
+- 12 for tomorrow 12am to 12pm
+
+This gives a total of 84 intervals.
+
+It compares this set of 84 to the stored set of 60 that we already backfilled to identify the 24 un-processed intervals from 12pm yesterday to 12pm today. It then processes only those 24 intervals during today's run.
 
 ## Running `run`
 
@@ -66,7 +93,7 @@ This example shows an incremental by time model that could be added to the SQLMe
 MODEL (
     name sqlmesh_example.new_model,
     kind incremental_by_time_range (
-        time_column (ds, '%Y-%m-%d'), -- Time column is `ds`
+        time_column (ds, '%Y-%m-%d'), -- Time column `ds` with format '%Y-%m-%d'
     ),
 );
 
@@ -126,4 +153,4 @@ WHERE
     ds BETWEEN @start_ds and @end_ds
 ```
 
-Alternatively, all the changes contained in a plan can be classified as forward-only with a flag: `sqlmesh plan --forward-only`. Learn more about forward-only plans [here](../concepts/plans.md#forward-only-plans).
+Alternatively, all the changes contained in a *specific plan* can be classified as forward-only with a flag: `sqlmesh plan --forward-only`. A subsequent plan that did not include the forward-only flag would fully refresh the model's physical table. Learn more about forward-only plans [here](../concepts/plans.md#forward-only-plans).
