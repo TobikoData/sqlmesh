@@ -52,9 +52,13 @@ Configuration options for models of the [`VIEW` kind](../concepts/models/model_k
 | -------------- | ---------------------------------------------------------------------------------------------------- | :--: | :------: |
 | `materialized` | Whether views should be materialized (for engines supporting materialized views). (Default: `False`) | bool |    N     |
 
+Python model configuration object: [ViewKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#ViewKind)
+
 ### `FULL` models
 
 The [`FULL` model kind](../concepts/models/model_kinds.md#full) does not support any configuration options.
+
+Python model configuration object: [FullKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#FullKind)
 
 ### Incremental models
 
@@ -76,6 +80,8 @@ Configuration options for [incremental by time models](../concepts/models/model_
 | `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) | bool |    N     |
 | `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     | bool |    N     |
 
+Python model configuration object: [IncrementalByTimeRangeKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByTimeRangeKind)
+
 #### Incremental by unique key
 
 Configuration options for [incremental by unique key models](../concepts/models/model_kinds.md#incremental_by_unique_key).
@@ -86,6 +92,8 @@ Configuration options for [incremental by unique key models](../concepts/models/
 | `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `False`) |       bool       |    N     |
 | `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `False`)                     |       bool       |    N     |
 
+Python model configuration object: [IncrementalByUniqueKeyKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#IncrementalByUniqueKeyKind)
+
 ### `SEED` models
 
 Configuration options for [seed models](../concepts/models/model_kinds.md#seed).
@@ -93,6 +101,8 @@ Configuration options for [seed models](../concepts/models/model_kinds.md#seed).
 | Option | Description            | Type | Required |
 | ------ | ---------------------- | :--: | :------: |
 | `path` | Path to seed CSV file. | str  |    Y     |
+
+Python model configuration object: [SeedKind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SeedKind)
 
 ### SCD Type 2 models
 
@@ -106,3 +116,5 @@ Configuration options for [SCD Type 2 models](../concepts/models/model_kinds.md#
 | `updated_at_name`     | The model column containing each row's updated at date. (Default: `updated_at`)                                                        |    str    |    N     |
 | `forward_only`        | Whether the model's changes should always be classified as [forward-only](../concepts/plans.md#forward-only-change). (Default: `True`) |   bool    |    N     |
 | `disable_restatement` | Whether [restatements](../concepts/plans.md#restatement-plans) should be disabled for the model. (Default: `True`)                     |   bool    |    N     |
+
+Python model configuration object: [SCDType2Kind()](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh/core/model/kind.html#SCDType2Kind)
