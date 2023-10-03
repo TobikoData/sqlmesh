@@ -775,6 +775,8 @@ Example configuration specifying a Postgres default connection, in-memory DuckDB
 
 ### Models
 
+#### Model defaults
+
 The `model_defaults` key is **required** and must contain a value for the `dialect` key. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed. Other values are set automatically unless explicitly overridden in the model definition.
 
 All supported `model_defaults` keys are listed in the [models configuration reference page](../reference/model_configuration.md#model-defaults).
@@ -804,82 +806,82 @@ Example configuration:
     )
     ```
 
-#### Model Kind
-The default model kind is 'view' unless overridden with the `kind` key. For more information, refer to [model kinds](../concepts/models/model_kinds.md).
+The default model kind is `VIEW` unless overridden with the `kind` key. For more information on model kinds, refer to [model concepts page](../concepts/models/model_kinds.md).
 
-Example:
+#### Model Kinds
+
+Model kinds are required in each model file's `MODEL` DDL statement. They may optionally be used to specify a default kind in the model defaults configuration key.
+
+All model kind specification keys are listed in the [models configuration reference page](../reference/model_configuration.md#model-kind-properties).
+
+The `VIEW`, `FULL`, and `EMBEDDED` model kinds are specified by name only, while other models kinds require additional parameters and are provided with an array of parameters:
 
 === "YAML"
 
-    ```yaml linenums="1"
-    model_defaults:
-        dialect: snowflake
-        kind: full
+    `FULL` model only requires a name:
+
+    ```sql linenums="1"
+    MODEL(
+        name docs_example.full_model,
+        kind FULL
+    );
     ```
+
+    `INCREMENTAL_BY_TIME_RANGE` requires an array specifying the model's `time_column`:
+
+    ```sql linenums="1"
+    MODEL(
+        name docs_example.incremental_model,
+        kind INCREMENTAL_BY_TIME_RANGE (
+            time_column ds
+        )
+    );
+    ```
+
+Python model kinds are specified with model kind objects. Python model kind objects have the same arguments as their SQL counterparts, listed in the [models configuration reference page](../reference/model_configuration.md#model-kind-properties).
+
+This example demonstrates how to specify an incremental by time range model kind in Python:
 
 === "Python"
 
     ```python linenums="1"
-    from sqlmesh.core.config import Config, ModelDefaultsConfig
+    from sqlmesh import ExecutionContext, model
+    from sqlmesh.core.model import IncrementalByTimeRangeKind
 
-    config = Config(
-        model_defaults=ModelDefaultsConfig(
-            dialect="snowflake",
-            kind="full",
-        ),
+    @model(
+        "docs_example.incremental_model",
+        kind=IncrementalByTimeRangeKind(
+            time_column="ds"
+        )
     )
     ```
 
-If a kind requires additional parameters it can be provided as an object:
-
-=== "YAML"
-
-    ```yaml linenums="1"
-    model_defaults:
-        dialect: snowflake,
-        kind:
-            name: incremental_by_time_range
-            time_column: ds
-    ```
-
-=== "Python"
-
-    The Python `model_defaults` `kind` argument takes a model kind object with a value of:
-
-    - EmbeddedKind
-    - ExternalKind
-    - FullKind
-    - IncrementalByTimeRangeKind
-    - IncrementalByUniqueKeyKind
-    - IncrementalUnmanagedKind
-    - SeedKind
-    - ViewKind
-
-    ```python linenums="1"
-    from sqlmesh.core.config import (
-        Config,
-        ModelDefaultsConfig,
-        IncrementalByTimeRangeKind
-    )
-
-    config = Config(
-        model_defaults=ModelDefaultsConfig(
-            dialect="snowflake",
-            kind=IncrementalByTimeRangeKind(
-                time_column="ds",
-            ),
-        ),
-    )
-    ```
+Learn more about specifying Python models at the [Python models concepts page](../concepts/models/python_models.md#model-specification).
 
 ### Debug mode
 
-To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: `1`, `true`, `t`, `yes` or `y`.
+To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y".
 
-Enabling this mode ensures that full backtraces are printed when using CLI. Additionally, the default log level is set to `DEBUG` when this mode is enabled.
+Enabling this mode ensures that full backtraces are printed when using CLI. The default log level is set to `DEBUG` when this mode is enabled.
 
 Example enabling debug mode for the CLI command `sqlmesh plan`:
 
-```bash
-$ SQLMESH_DEBUG=1 sqlmesh plan
-```
+=== "Bash"
+
+    ```bash
+    $ SQLMESH_DEBUG=1 sqlmesh plan
+    ```
+
+=== "MS Powershell"
+
+    ```powershell
+    PS> $env:SQLMESH_DEBUG=1
+    PS> sqlmesh plan
+    ```
+
+=== "MS CMD"
+
+    ```cmd
+    C:\> set SQLMESH_DEBUG=1
+    C:\> sqlmesh plan
+    ```
