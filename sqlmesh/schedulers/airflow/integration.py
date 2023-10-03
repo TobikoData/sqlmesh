@@ -10,6 +10,7 @@ from airflow.operators.python import PythonOperator
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
+from sqlmesh.core import constants as c
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
@@ -107,7 +108,8 @@ class SQLMeshAirflow:
             stored_snapshots,
         )
 
-        cadence_dags = dag_generator.generate_cadence_dags()
+        prod_env = state_sync.get_environment(c.PROD)
+        cadence_dags = dag_generator.generate_cadence_dags(prod_env.snapshots) if prod_env else []
 
         plan_application_dags = [
             dag_generator.generate_plan_application_dag(s) for s in _get_plan_dag_specs()
