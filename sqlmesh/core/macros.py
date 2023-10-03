@@ -114,6 +114,8 @@ class MacroEvaluator:
                 self.macros[normalize_macro_name(k)] = self.env[v.name or k]
             elif v.is_import and getattr(self.env.get(k), "__sqlmesh_macro__", None):
                 self.macros[normalize_macro_name(k)] = self.env[k]
+            elif v.is_value:
+                self.locals[k] = self.env[k]
 
     def send(
         self, name: str, *args: t.Any

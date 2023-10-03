@@ -31,7 +31,8 @@ config = Config(
 
 # A configuration used for SQLMesh tests.
 test_config = Config(
-    default_connection=DuckDBConnectionConfig(),
+    gateways={"in_memory": GatewayConfig(connection=DuckDBConnectionConfig())},
+    default_gateway="in_memory",
     auto_categorize_changes=CategorizerConfig(sql=AutoCategorizationMode.SEMI),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
