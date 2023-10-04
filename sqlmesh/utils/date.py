@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 import typing as t
 import warnings
@@ -11,6 +12,7 @@ warnings.filterwarnings(
 from datetime import date, datetime, timedelta, timezone
 
 import dateparser
+from dateparser import freshness_date_parser
 from sqlglot import exp
 
 UTC = timezone.utc
@@ -146,8 +148,10 @@ def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> 
     if dt is None:
         raise ValueError(f"Could not convert `{value}` to datetime.")
 
-    if dt.tzinfo:
-        return dt if dt.tzinfo == UTC else dt.astimezone(UTC)
+    if dt.tzinfo and dt.tzinfo != UTC:
+        dt = dt.astimezone(UTC)
+    if is_catagorical_relative_expression(str(value)):
+        dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
     return dt.replace(tzinfo=UTC)
 
 
@@ -279,3 +283,16 @@ def time_like_to_str(time_like: TimeLike) -> str:
     if is_date(time_like):
         return to_ds(time_like)
     return to_ts(time_like)
+
+
+def is_catagorical_relative_expression(expression: str) -> bool:
+    # The Freshness Data Data Parser by default doesn't suppport plural units so we add the `s?` to the expression
+    freshness_date_parser.PATTERN = re.compile(
+        r"(\d+[.,]?\d*)\s*(%s)s?\b" % freshness_date_parser._UNITS, re.I | re.S | re.U  # type: ignore
+    )
+    if str(expression).lower() in {"today", "yesterday", "tomorrow"}:
+        return True
+    grain_kwargs = freshness_date_parser.FreshnessDateDataParser().get_kwargs(expression)
+    if not grain_kwargs:
+        return False
+    return not any(k in {"hours", "minutes", "seconds"} for k in grain_kwargs.keys())
