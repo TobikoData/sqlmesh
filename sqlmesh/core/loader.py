@@ -12,7 +12,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-
 from sqlglot import exp
 from sqlglot.errors import SchemaError, SqlglotError
 from sqlglot.schema import MappingSchema
