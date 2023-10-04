@@ -717,7 +717,7 @@ class MSSQLConnectionConfig(ConnectionConfig):
     appname: t.Optional[str] = None
     port: t.Optional[int] = 1433
     conn_properties: t.Optional[t.Union[t.Iterable[str], str]] = None
-    autocommit: t.Optional[bool] = False
+    autocommit: t.Optional[bool] = True
     tds_version: t.Optional[str] = None
 
     concurrent_tasks: int = 4
