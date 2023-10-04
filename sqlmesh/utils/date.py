@@ -12,7 +12,8 @@ warnings.filterwarnings(
 from datetime import date, datetime, timedelta, timezone
 
 import dateparser
-from dateparser import freshness_date_parser
+from dateparser import freshness_date_parser as freshness_date_parser_module
+from dateparser.freshness_date_parser import freshness_date_parser
 from sqlglot import exp
 
 UTC = timezone.utc
@@ -22,6 +23,14 @@ DATE_INT_FMT = "%Y%m%d"
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.scheduler import Interval
+
+
+# The Freshness Date Data Parser doesn't support plural units so we add the `s?` to the expression
+freshness_date_parser_module.PATTERN = re.compile(
+    r"(\d+[.,]?\d*)\s*(%s)s?\b" % freshness_date_parser_module._UNITS, re.I | re.S | re.U  # type: ignore
+)
+DAY_SHORTCUT_EXPRESSIONS = {"today", "yesterday", "tomorrow"}
+TIME_UNITS = {"hours", "minutes", "seconds"}
 
 
 def now(minute_floor: bool = True) -> datetime:
@@ -136,7 +145,11 @@ def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> 
             epoch = None
 
         if epoch is None:
-            dt = dateparser.parse(str(value), settings={"RELATIVE_BASE": relative_base or now()})
+            relative_base = relative_base or now()
+            expression = str(value)
+            if is_catagorical_relative_expression(expression):
+                relative_base = relative_base.replace(hour=0, minute=0, second=0, microsecond=0)
+            dt = dateparser.parse(expression, settings={"RELATIVE_BASE": relative_base})
         else:
             try:
                 dt = datetime.strptime(str(value), DATE_INT_FMT)
@@ -148,10 +161,8 @@ def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> 
     if dt is None:
         raise ValueError(f"Could not convert `{value}` to datetime.")
 
-    if dt.tzinfo and dt.tzinfo != UTC:
-        dt = dt.astimezone(UTC)
-    if is_catagorical_relative_expression(str(value)):
-        dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    if dt.tzinfo:
+        return dt if dt.tzinfo == UTC else dt.astimezone(UTC)
     return dt.replace(tzinfo=UTC)
 
 
@@ -286,13 +297,9 @@ def time_like_to_str(time_like: TimeLike) -> str:
 
 
 def is_catagorical_relative_expression(expression: str) -> bool:
-    # The Freshness Data Data Parser by default doesn't suppport plural units so we add the `s?` to the expression
-    freshness_date_parser.PATTERN = re.compile(
-        r"(\d+[.,]?\d*)\s*(%s)s?\b" % freshness_date_parser._UNITS, re.I | re.S | re.U  # type: ignore
-    )
-    if str(expression).lower() in {"today", "yesterday", "tomorrow"}:
+    if expression.strip().lower() in DAY_SHORTCUT_EXPRESSIONS:
         return True
-    grain_kwargs = freshness_date_parser.FreshnessDateDataParser().get_kwargs(expression)
+    grain_kwargs = freshness_date_parser.get_kwargs(expression)
     if not grain_kwargs:
         return False
-    return not any(k in {"hours", "minutes", "seconds"} for k in grain_kwargs.keys())
+    return not any(k in TIME_UNITS for k in grain_kwargs)
