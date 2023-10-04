@@ -72,13 +72,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
     def evaluate(self, plan: Plan) -> None:
-        snapshots = plan.snapshots
+        snapshots = {s.snapshot_id: s for s in plan.snapshots}
+        all_names = {s.name for s in plan.snapshots}
         if plan.is_dev:
-            before_promote_snapshots = {s.name for s in snapshots}
+            before_promote_snapshots = all_names
             after_promote_snapshots = set()
         else:
-            before_promote_snapshots = {s.name for s in snapshots if not s.is_paused_forward_only}
-            after_promote_snapshots = {s.name for s in snapshots if s.is_paused_forward_only}
+            before_promote_snapshots = {
+                s.name for s in snapshots.values() if can_evaluate_before_promote(s, snapshots)
+            }
+            after_promote_snapshots = all_names - before_promote_snapshots
 
         self._push(plan)
         self._restate(plan)
@@ -368,3 +371,11 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
 
         if stderr:
             raise SQLMeshError(f"Failed to submit a plan application request:\n{stderr}")
+
+
+def can_evaluate_before_promote(
+    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+) -> bool:
+    return not snapshot.is_paused_forward_only and not any(
+        snapshots[p_id].is_paused_forward_only for p_id in snapshot.parents
+    )
