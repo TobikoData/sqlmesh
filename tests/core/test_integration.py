@@ -698,6 +698,7 @@ def test_incremental_time_self_reference(
             SnapshotIntervals(
                 snapshot_name="sushi.customer_revenue_lifetime",
                 intervals=[
+                    (to_timestamp(to_date("7 days ago")), to_timestamp(to_date("6 days ago"))),
                     (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
                     (to_timestamp(to_date("5 days ago")), to_timestamp(to_date("4 days ago"))),
                     (to_timestamp(to_date("4 days ago")), to_timestamp(to_date("3 days ago"))),
@@ -709,6 +710,7 @@ def test_incremental_time_self_reference(
             SnapshotIntervals(
                 snapshot_name="sushi.customer_revenue_by_day",
                 intervals=[
+                    (to_timestamp(to_date("7 days ago")), to_timestamp(to_date("6 days ago"))),
                     (to_timestamp(to_date("6 days ago")), to_timestamp(to_date("5 days ago"))),
                 ],
             ),
@@ -720,9 +722,9 @@ def test_incremental_time_self_reference(
     num_batch_calls = Counter(
         [x[0][0] for x in sushi_context.console.update_snapshot_evaluation_progress.call_args_list]  # type: ignore
     )
-    # Validate that we made 6 calls to the customer_revenue_lifetime snapshot and 1 call to the customer_revenue_by_day snapshot
+    # Validate that we made 7 calls to the customer_revenue_lifetime snapshot and 1 call to the customer_revenue_by_day snapshot
     assert num_batch_calls == {
-        sushi_context.snapshots["sushi.customer_revenue_lifetime"]: 6,
+        sushi_context.snapshots["sushi.customer_revenue_lifetime"]: 7,
         sushi_context.snapshots["sushi.customer_revenue_by_day"]: 1,
     }
     # Validate that the results are the same as before the restate
