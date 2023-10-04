@@ -15,7 +15,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
 )
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import now, to_date, to_ds, to_timestamp
+from sqlmesh.utils.date import now, to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import PlanError
 
 
@@ -63,8 +63,8 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     )
 
     expected_start = to_date("2022-01-01")
-    expected_end = to_date("2022-01-02")
-    expected_interval_end = to_timestamp(to_date("2022-01-03"))
+    expected_end = to_date("2022-01-03")
+    expected_interval_end = to_timestamp(to_date("2022-01-04"))
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a}
@@ -342,6 +342,12 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     assert plan.missing_intervals[0].snapshot_name == snapshot_a.name
     assert plan.start == to_timestamp("2022-01-01")
 
+    # Test inference from existing intervals
+    context_diff_mock.snapshots = {"b": snapshot_b}
+    plan = Plan(context_diff_mock)
+    assert not plan.missing_intervals
+    assert plan.start == to_datetime("2022-01-01")
+
 
 def test_auto_categorization(make_snapshot, mocker: MockerFixture):
     snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
@@ -392,33 +398,6 @@ def test_auto_categorization_missing_schema_downstream(make_snapshot, mocker: Mo
 
     assert updated_snapshot.version
     assert updated_snapshot.change_category == SnapshotChangeCategory.BREAKING
-
-
-def test_end_from_missing_instead_of_now(make_snapshot, mocker: MockerFixture):
-    snapshot_a = make_snapshot(
-        SqlModel(
-            name="a",
-            query=parse_one("select 1, ds"),
-            kind=IncrementalByTimeRangeKind(time_column="ds"),
-        )
-    )
-
-    context_diff_mock = mocker.Mock()
-    context_diff_mock.snapshots = {"a": snapshot_a}
-    context_diff_mock.added = set()
-    context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {snapshot_a.snapshot_id: snapshot_a}
-
-    start_mock = mocker.patch("sqlmesh.core.snapshot.definition.earliest_start_date")
-    start_mock.return_value = to_ds("2022-01-01")
-    now_mock = mocker.patch("sqlmesh.core.plan.definition.now")
-    now_mock.return_value = to_ds("2022-01-30")
-    snapshot_a.add_interval("2022-01-01", "2022-01-05")
-
-    plan = Plan(context_diff_mock, is_dev=True)
-    assert plan.start == to_timestamp("2022-01-06")
-    assert plan.end == to_date("2022-01-29")
 
 
 def test_broken_references(make_snapshot, mocker: MockerFixture):
