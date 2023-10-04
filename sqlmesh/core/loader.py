@@ -45,10 +45,9 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import Context
 
 
-
 logger = logging.getLogger(__name__)
 
-SQLMESH_MOCKED_COLUMN = "__SQLMESH_MOCKED_COLUMN__"
+SQLMESH_MOCKED_STAR = "__SQLMESH_MOCKED_STAR__"
 
 
 # TODO: consider moving this to context
@@ -96,7 +95,7 @@ def with_mocked_dependencies(loaded_model: Model) -> Model:
             "mocked_models",
             {
                 name: _Model(  # type: ignore
-                    name=name, columns={SQLMESH_MOCKED_COLUMN: exp.DataType.build("unknown")}
+                    name=name, columns={SQLMESH_MOCKED_STAR: exp.DataType.build("unknown")}
                 )
                 for name in loaded_model.depends_on_ or set()
             },
