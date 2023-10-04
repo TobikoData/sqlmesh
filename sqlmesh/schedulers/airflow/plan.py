@@ -4,6 +4,7 @@ import typing as t
 
 from sqlmesh.core import scheduler
 from sqlmesh.core.environment import Environment
+from sqlmesh.core.plan import can_evaluate_before_promote
 from sqlmesh.core.snapshot import SnapshotTableInfo
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.schedulers.airflow import common
@@ -59,11 +60,11 @@ def create_plan_dag_spec(
 
     backfill_intervals_per_snapshot = [
         common.BackfillIntervalsPerSnapshot(
-            snapshot_id=snapshot.snapshot_id,
+            snapshot_id=s.snapshot_id,
             intervals=intervals,
-            before_promote=request.is_dev or not snapshot.is_paused_forward_only,
+            before_promote=request.is_dev or can_evaluate_before_promote(s, all_snapshots),
         )
-        for snapshot, intervals in backfill_batches.items()
+        for s, intervals in backfill_batches.items()
     ]
 
     return common.PlanDagSpec(
