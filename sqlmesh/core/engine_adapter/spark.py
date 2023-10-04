@@ -12,11 +12,7 @@ from sqlmesh.core.engine_adapter.base import (
     InsertOverwriteStrategy,
     SourceQuery,
 )
-from sqlmesh.core.engine_adapter.shared import (
-    DataObject,
-    DataObjectType,
-    TransactionType,
-)
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import classproperty, nullsafe_join
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -402,5 +398,5 @@ class SparkEngineAdapter(EngineAdapter):
             exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
         ]
 
-    def supports_transactions(self, transaction_type: TransactionType) -> bool:
+    def supports_transactions(self) -> bool:
         return False

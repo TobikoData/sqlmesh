@@ -11,11 +11,7 @@ from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.engine_adapter.base import SourceQuery
 from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
-from sqlmesh.core.engine_adapter.shared import (
-    DataObject,
-    DataObjectType,
-    TransactionType,
-)
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils.date import to_datetime
@@ -478,7 +474,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             columns_to_types,
         )
 
-    def supports_transactions(self, transaction_type: TransactionType) -> bool:
+    def supports_transactions(self) -> bool:
         return False
 
     def _db_call(self, func: t.Callable[..., t.Any], *args: t.Any, **kwargs: t.Any) -> t.Any:

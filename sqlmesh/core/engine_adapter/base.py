@@ -26,7 +26,7 @@ from sqlglot.helper import ensure_list
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import select_from_values_for_batch_range
-from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape
@@ -538,7 +538,7 @@ class EngineAdapter:
         """
         Performs the required alter statements to change the current table into the structure of the target table.
         """
-        with self.transaction(TransactionType.DDL):
+        with self.transaction():
             for alter_expression in self.SCHEMA_DIFFER.compare_columns(
                 current_table_name,
                 self.columns(current_table_name),
@@ -1204,13 +1204,12 @@ class EngineAdapter:
     @contextlib.contextmanager
     def transaction(
         self,
-        transaction_type: TransactionType = TransactionType.DML,
         condition: t.Optional[bool] = None,
     ) -> t.Iterator[None]:
         """A transaction context manager."""
         if (
             self._connection_pool.is_transaction_active
-            or not self.supports_transactions(transaction_type)
+            or not self.supports_transactions()
             or (condition is not None and not condition)
         ):
             yield
@@ -1224,8 +1223,8 @@ class EngineAdapter:
         else:
             self._connection_pool.commit()
 
-    def supports_transactions(self, transaction_type: TransactionType) -> bool:
-        """Whether or not the engine adapter supports transactions for the given transaction type."""
+    def supports_transactions(self) -> bool:
+        """Whether or not the engine adapter supports transactions."""
         return True
 
     @contextlib.contextmanager
@@ -1295,7 +1294,7 @@ class EngineAdapter:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types=columns_to_types, target_table=name
         )
-        with self.transaction(TransactionType.DDL):
+        with self.transaction():
             table = self._get_temp_table(name)
             if table.db:
                 self.create_schema(table.db)

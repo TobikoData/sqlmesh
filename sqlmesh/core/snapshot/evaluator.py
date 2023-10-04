@@ -32,7 +32,7 @@ from sqlglot import exp, select
 from sqlglot.executor import execute
 
 from sqlmesh.core.audit import Audit, AuditResult
-from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.model import IncrementalUnmanagedKind, Model, SCDType2Kind, ViewKind
 from sqlmesh.core.snapshot import (
@@ -160,11 +160,7 @@ class SnapshotEvaluator:
             **common_render_kwargs,
         )
 
-        with self.adapter.transaction(
-            transaction_type=TransactionType.DDL
-            if model.kind.is_view or model.kind.is_full
-            else TransactionType.DML
-        ), self.adapter.session():
+        with self.adapter.transaction(), self.adapter.session():
             if not limit:
                 self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
@@ -418,7 +414,7 @@ class SnapshotEvaluator:
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
-        with self.adapter.transaction(TransactionType.DDL), self.adapter.session():
+        with self.adapter.transaction(), self.adapter.session():
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
             if is_dev and not snapshot.previous_versions:
