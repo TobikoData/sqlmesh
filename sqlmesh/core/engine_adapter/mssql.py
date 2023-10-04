@@ -127,13 +127,18 @@ class MSSQLEngineAdapter(
         MsSql doesn't support CASCADE clause and drops schemas unconditionally.
         """
         if cascade:
-            # Note: Assumes all objects in the schema are captured by the `_get_data_objects` call and can be dropped
-            # with a `drop_table` call.
             objects = self._get_data_objects(schema_name)
             for obj in objects:
-                self.drop_table(
-                    ".".join([obj.catalog, obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
-                )
+                if obj.type == DataObjectType.VIEW:
+                    # In MSSQL you can't provide a catalog to DROP VIEW
+                    # https://stackoverflow.com/questions/32828034/sql-server-2008-r2-create-alter-view-does-not-allow-specifying-the-database-n
+                    self.drop_view(
+                        ".".join([obj.schema_name, obj.name]), ignore_if_not_exists=ignore_if_not_exists  # type: ignore
+                    )
+                else:
+                    self.drop_table(
+                        ".".join([obj.catalog, obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
+                    )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
     def _df_to_source_queries(
