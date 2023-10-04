@@ -67,6 +67,7 @@ setup(
             "dbt-core",
             "dbt-duckdb>=1.4.2",
             "Faker",
+            "freezegun",
             "google-auth",
             "isort==5.10.1",
             "mkdocs-include-markdown-plugin==4.0.3",
