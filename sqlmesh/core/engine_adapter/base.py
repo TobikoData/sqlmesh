@@ -1262,14 +1262,15 @@ class EngineAdapter:
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
 
-        for e in ensure_list(expressions):
-            sql = (
-                self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
-                if isinstance(e, exp.Expression)
-                else e
-            )
-            logger.debug(f"Executing SQL:\n{sql}")
-            self.cursor.execute(sql, **kwargs)
+        with self.transaction():
+            for e in ensure_list(expressions):
+                sql = (
+                    self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
+                    if isinstance(e, exp.Expression)
+                    else e
+                )
+                logger.debug(f"Executing SQL:\n{sql}")
+                self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager
     def temp_table(
