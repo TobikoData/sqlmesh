@@ -445,19 +445,21 @@ def ide(
 @click.option(
     "--host",
     type=str,
+    default="127.0.0.1",
     help="Bind socket to this host. Default: 127.0.0.1",
 )
 @click.option(
     "--port",
     type=int,
+    default=8000,
     help="Bind socket to this port. Default: 8000",
 )
-@click.pass_obj
+@click.pass_context
 @error_handler
 def ui(
-    obj: Context,
-    host: t.Optional[str],
-    port: t.Optional[int],
+    ctx: click.Context,
+    host: str,
+    port: int,
 ) -> None:
     """Start a browser-based SQLMesh UI."""
     try:
@@ -467,9 +469,10 @@ def ui(
             "Missing UI dependencies. Run `pip install 'sqlmesh[web]'` to install them."
         ) from e
 
-    host = host or "127.0.0.1"
-    port = 8000 if port is None else port
-    os.environ["PROJECT_PATH"] = str(obj.path)
+    os.environ["PROJECT_PATH"] = str(ctx.obj.path)
+    if ctx.parent:
+        os.environ["CONFIG"] = ctx.parent.params.get("config") or ""
+        os.environ["GATEWAY"] = ctx.parent.params.get("gateway") or ""
     uvicorn.run(
         "web.server.main:app",
         host=host,
