@@ -306,7 +306,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         snapshot.updated_ts = now_timestamp()
         self.engine_adapter.update_table(
             self.snapshots_table,
-            {"snapshot": snapshot.json()},
+            {"snapshot": _snapshot_to_json(snapshot)},
             where=self._snapshot_id_filter([snapshot.snapshot_id]),
             contains_json=True,
         )
@@ -1000,7 +1000,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "name": snapshot.name,
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
-                "snapshot": snapshot.json(exclude={"intervals", "dev_intervals"}),
+                "snapshot": _snapshot_to_json(snapshot),
                 "kind_name": snapshot.model_kind_name.value if snapshot.model_kind_name else None,
             }
             for snapshot in snapshots
@@ -1033,3 +1033,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
 
 def _backup_table_name(table_name: str) -> str:
     return f"{table_name}_backup"
+
+
+def _snapshot_to_json(snapshot: Snapshot) -> str:
+    return snapshot.json(exclude={"intervals", "dev_intervals"})

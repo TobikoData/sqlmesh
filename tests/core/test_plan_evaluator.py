@@ -125,18 +125,21 @@ def test_mwaa_evaluator(sushi_plan: Plan, mocker: MockerFixture):
 
     state_sync_mock = mocker.Mock()
 
-    plan_dag_spec_json = """{"request_id": "test_request_id"}"""
-
     plan_dag_spec_mock = mocker.Mock()
-    plan_dag_spec_mock.json.return_value = plan_dag_spec_json
 
     create_plan_dag_spec_mock = mocker.patch("sqlmesh.schedulers.airflow.plan.create_plan_dag_spec")
     create_plan_dag_spec_mock.return_value = plan_dag_spec_mock
 
+    plan_dag_state_mock = mocker.Mock()
+    mocker.patch(
+        "sqlmesh.schedulers.airflow.plan.PlanDagState.from_state_sync",
+        return_value=plan_dag_state_mock,
+    )
+
     evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
     evaluator.evaluate(sushi_plan)
 
-    mwaa_client_mock.set_variable.assert_called_once_with(mocker.ANY, plan_dag_spec_json)
+    plan_dag_state_mock.add_dag_spec.assert_called_once_with(plan_dag_spec_mock)
 
     mwaa_client_mock.wait_for_dag_run_completion.assert_called_once()
     mwaa_client_mock.wait_for_first_dag_run.assert_called_once()

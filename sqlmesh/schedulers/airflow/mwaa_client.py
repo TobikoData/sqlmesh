@@ -21,19 +21,6 @@ class MWAAClient(BaseAirflowClient):
             {"Authorization": f"Bearer {auth_token}", "Content-Type": "text/plain"}
         )
 
-    def set_variable(self, key: str, value: str) -> t.Tuple[str, str]:
-        """Sets the Airflow variable.
-
-        Args:
-            key: The name of the variable.
-            value: The value of the variable.
-
-        Returns:
-            A tuple of stdout and stderr from the MWAA CLI.
-        """
-        value = value.replace("\\", "\\\\").replace('"', '\\"')
-        return self._post(f'variables set {key} "{value}"')
-
     def get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
         dag_runs = self._list_dag_runs(dag_id)
         if dag_runs:
