@@ -26,6 +26,7 @@ get_context_lock = asyncio.Lock()
 class Settings(BaseSettings):
     project_path: Path = Path("examples/sushi")
     config: str = ""
+    gateway: str = ""
 
 
 @lru_cache()
@@ -34,10 +35,10 @@ def get_settings() -> Settings:
 
 
 @lru_cache()
-def _get_context(path: str | Path, config: str) -> Context:
+def _get_context(path: str | Path, config: str, gateway: str) -> Context:
     from web.server.main import api_console
 
-    return Context(paths=str(path), config=config, console=api_console, load=False)
+    return Context(paths=str(path), config=config, console=api_console, gateway=gateway, load=False)
 
 
 @lru_cache()
@@ -56,8 +57,9 @@ def _get_path_mappings(context: Context) -> dict[Path, FileType]:
 
 
 @lru_cache()
-def _get_loaded_context(path: str | Path, config: str) -> Context:
-    context = _get_context(path, config)
+def _get_loaded_context(path: str | Path, config: str, gateway: str) -> Context:
+    print(config)
+    context = _get_context(path, config, gateway)
     context.load()
     return context
 
@@ -93,7 +95,11 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Cont
     try:
         async with get_context_lock:
             return await loop.run_in_executor(
-                None, _get_loaded_context, settings.project_path, settings.config
+                None,
+                _get_loaded_context,
+                settings.project_path,
+                settings.config,
+                settings.gateway,
             )
     except Exception:
         raise ApiException(
@@ -105,7 +111,7 @@ async def get_loaded_context(settings: Settings = Depends(get_settings)) -> Cont
 async def get_context(settings: Settings = Depends(get_settings)) -> Context:
     try:
         async with get_context_lock:
-            return _get_context(settings.project_path, settings.config)
+            return _get_context(settings.project_path, settings.config, settings.gateway)
     except Exception:
         raise ApiException(
             message="Unable to create a context",
