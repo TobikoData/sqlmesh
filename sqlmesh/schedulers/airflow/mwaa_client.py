@@ -31,7 +31,7 @@ class MWAAClient(BaseAirflowClient):
         Returns:
             A tuple of stdout and stderr from the MWAA CLI.
         """
-        value=value.replace('\\', '\\\\').replace('"', '\\"')
+        value = value.replace('\\', '\\\\').replace('"', '\\"')
         return self._post(f'variables set {key} "{value}"')
 
     def get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
