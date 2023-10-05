@@ -71,9 +71,8 @@ class PlanDagState:
             )
         ]
 
-    def delete_dag_specs(self, dag_ids: t.Iterable[str]) -> None:
+    def delete_dag_specs(self, dag_ids: t.Collection[str]) -> None:
         """Deletes the DAG specs with the given DAG IDs."""
-        dag_ids = list(dag_ids)
         if not dag_ids:
             return
         self.engine_adapter.delete_from(
