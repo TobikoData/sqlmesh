@@ -14,18 +14,6 @@ def migrate(state_sync):  # type: ignore
     if schema:
         snapshots_table = f"{schema}.{snapshots_table}"
 
-    def _convert_schema_types(schema):
-        if not schema:
-            return schema
-
-        for k, v in schema.items():
-            if isinstance(v, dict):
-                _convert_schema_types(v)
-            else:
-                schema[k] = parse_one(v).sql(dialect=engine_adapter.dialect)
-
-        return schema
-
     new_snapshots = []
     for name, identifier, version, snapshot, kind_name in engine_adapter.fetchall(
         exp.select("name", "identifier", "version", "snapshot", "kind_name").from_(snapshots_table),
@@ -36,7 +24,7 @@ def migrate(state_sync):  # type: ignore
 
         mapping_schema = node.get("mapping_schema")
         if mapping_schema:
-            node["mapping_schema"] = _convert_schema_types(mapping_schema)
+            node["mapping_schema"] = _convert_schema_types(mapping_schema, node["dialect"])
 
         new_snapshots.append(
             {
@@ -66,3 +54,15 @@ def migrate(state_sync):  # type: ignore
             contains_json=True,
         )
 
+
+def _convert_schema_types(schema, dialect):  # type: ignore
+    if not schema:
+        return schema
+
+    for k, v in schema.items():
+        if isinstance(v, dict):
+            _convert_schema_types(v, dialect)
+        else:
+            schema[k] = parse_one(v).sql(dialect=dialect)
+
+    return schema
