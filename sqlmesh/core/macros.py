@@ -26,7 +26,10 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.model import Model
+    from sqlmesh.core.snapshot import Snapshot
+
+
+SQLMESH_MOCKED_STAR = "__SQLMESH_MOCKED_STAR__"
 
 
 class MacroStrTemplate(Template):
@@ -102,7 +105,7 @@ class MacroEvaluator:
         dialect: str = "",
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         jinja_env: t.Optional[Environment] = None,
-        models: t.Optional[UniqueKeyDict[str, Model]] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -111,7 +114,12 @@ class MacroEvaluator:
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
-        self.models = models or UniqueKeyDict("models")
+
+        self._models = {
+            name: snapshot.node
+            for name, snapshot in (snapshots or {}).items()
+            if snapshot.node.is_model
+        }
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -265,6 +273,20 @@ class MacroEvaluator:
             del jinja_env_methods["self"]
             self._jinja_env = JinjaMacroRegistry().build_environment(**jinja_env_methods)
         return self._jinja_env
+
+    def columns_to_types(self, model_name: str) -> t.Dict[str, exp.DataType]:
+        """Returns the columns-to-types mapping corresponding to the specified model."""
+        if not self._models:
+            return {SQLMESH_MOCKED_STAR: exp.DataType.build("unknown")}
+
+        if model_name not in self._models:
+            raise SQLMeshError(f"Model '{model_name}' not found in the macro evaluator's context.")
+
+        columns_to_types = self._models[model_name].columns_to_types  # type: ignore
+        if columns_to_types is None:
+            raise SQLMeshError(f"Missing 'columns' meta field for model '{model_name}'.")
+
+        return columns_to_types
 
 
 class macro(registry_decorator):

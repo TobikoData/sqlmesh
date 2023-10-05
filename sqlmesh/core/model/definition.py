@@ -22,7 +22,7 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.macros import MacroRegistry, macro
+from sqlmesh.core.macros import SQLMESH_MOCKED_STAR, MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
@@ -995,7 +995,7 @@ class SqlModel(_SqlBasedModel):
                 return None
             self._columns_to_types = d.extract_columns_to_types(query)
 
-        if "*" in self._columns_to_types:
+        if "*" in self._columns_to_types or SQLMESH_MOCKED_STAR in self._columns_to_types:
             return None
 
         return {**self._columns_to_types, **self.managed_columns}
