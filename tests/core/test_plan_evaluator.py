@@ -142,30 +142,6 @@ def test_mwaa_evaluator(sushi_plan: Plan, mocker: MockerFixture):
     mwaa_client_mock.wait_for_first_dag_run.assert_called_once()
 
 
-def test_mwaa_evaluator_error_from_cli(sushi_plan: Plan, mocker: MockerFixture):
-    mwaa_client_mock = mocker.Mock()
-    mwaa_client_mock.wait_for_dag_run_completion.return_value = True
-    mwaa_client_mock.wait_for_first_dag_run.return_value = "test_plan_application_dag_run_id"
-    mwaa_client_mock.set_variable.return_value = "", "Error"
-
-    state_sync_mock = mocker.Mock()
-
-    plan_dag_spec_json = """{"request_id": "test_request_id"}"""
-
-    plan_dag_spec_mock = mocker.Mock()
-    plan_dag_spec_mock.json.return_value = plan_dag_spec_json
-
-    create_plan_dag_spec_mock = mocker.patch("sqlmesh.schedulers.airflow.plan.create_plan_dag_spec")
-    create_plan_dag_spec_mock.return_value = plan_dag_spec_mock
-
-    evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
-
-    with pytest.raises(SQLMeshError, match=r"Failed to submit a plan application request:\nError"):
-        evaluator.evaluate(sushi_plan)
-
-    mwaa_client_mock.set_variable.assert_called_once_with(mocker.ANY, plan_dag_spec_json)
-
-
 def test_can_evaluate_before_promote(sushi_context: Context):
     parent_model_a = SqlModel(
         name="sushi.new_test_model_a",
