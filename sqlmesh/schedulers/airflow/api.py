@@ -5,14 +5,13 @@ import typing as t
 from functools import wraps
 
 from airflow.api_connexion import security
-from airflow.models import Variable
 from airflow.www.app import csrf
 from flask import Blueprint, Response, jsonify, make_response, request
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.snapshot import SnapshotId, SnapshotNameVersion
 from sqlmesh.schedulers.airflow import common, util
-from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
+from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -40,12 +39,10 @@ def apply_plan() -> Response:
         plan = common.PlanApplicationRequest.parse_obj(request.json or {})
         with util.scoped_state_sync() as state_sync:
             spec = create_plan_dag_spec(plan, state_sync)
+            PlanDagState.from_state_sync(state_sync).add_dag_spec(spec)
+            return make_response(jsonify(request_id=spec.request_id), 201)
     except Exception as ex:
         return _error(str(ex))
-
-    Variable.set(common.plan_dag_spec_key(spec.request_id), spec.json())
-
-    return make_response(jsonify(request_id=spec.request_id), 201)
 
 
 @sqlmesh_api_v1.route("/environments/<name>")
