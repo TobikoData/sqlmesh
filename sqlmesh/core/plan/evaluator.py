@@ -14,6 +14,7 @@ At a high level, when a plan is evaluated, SQLMesh will:
 Refer to `sqlmesh.core.plan`.
 """
 import abc
+import logging
 import typing as t
 
 from sqlmesh.core.console import Console, get_console
@@ -37,6 +38,8 @@ from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
+
+logger = logging.getLogger(__name__)
 
 
 class PlanEvaluator(abc.ABC):
@@ -370,7 +373,7 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
         )
 
         if stderr:
-            raise SQLMeshError(f"Failed to submit a plan application request:\n{stderr}")
+            logger.warning("MWAA CLI stderr:\n%s", stderr)
 
 
 def can_evaluate_before_promote(
