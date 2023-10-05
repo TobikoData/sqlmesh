@@ -41,6 +41,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     DIALECT = "bigquery"
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
+    SUPPORTS_TRANSACTIONS = False
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
 
@@ -473,9 +474,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             table_name,
             columns_to_types,
         )
-
-    def supports_transactions(self) -> bool:
-        return False
 
     def _db_call(self, func: t.Callable[..., t.Any], *args: t.Any, **kwargs: t.Any) -> t.Any:
         return func(

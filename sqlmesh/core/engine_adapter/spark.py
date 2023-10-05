@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 class SparkEngineAdapter(EngineAdapter):
     DIALECT = "spark"
     ESCAPE_JSON = True
+    SUPPORTS_TRANSACTIONS = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
 
     @property
@@ -397,6 +398,3 @@ class SparkEngineAdapter(EngineAdapter):
         return [
             exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
         ]
-
-    def supports_transactions(self) -> bool:
-        return False

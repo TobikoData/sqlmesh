@@ -117,6 +117,7 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
+    SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
@@ -1209,7 +1210,7 @@ class EngineAdapter:
         """A transaction context manager."""
         if (
             self._connection_pool.is_transaction_active
-            or not self.supports_transactions()
+            or not self.SUPPORTS_TRANSACTIONS
             or (condition is not None and not condition)
         ):
             yield
@@ -1222,10 +1223,6 @@ class EngineAdapter:
             raise e
         else:
             self._connection_pool.commit()
-
-    def supports_transactions(self) -> bool:
-        """Whether or not the engine adapter supports transactions."""
-        return True
 
     @contextlib.contextmanager
     def session(self) -> t.Iterator[None]:

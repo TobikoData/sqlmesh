@@ -16,6 +16,7 @@ if t.TYPE_CHECKING:
 
 class DuckDBEngineAdapter(LogicalMergeMixin):
     DIALECT = "duckdb"
+    SUPPORTS_TRANSACTIONS = False
 
     def _df_to_source_queries(
         self,
