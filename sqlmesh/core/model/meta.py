@@ -8,7 +8,11 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import bool_validator, properties_validator
+from sqlmesh.core.model.common import (
+    bool_validator,
+    parse_expressions,
+    properties_validator,
+)
 from sqlmesh.core.model.kind import (
     IncrementalByUniqueKeyKind,
     ModelKind,
@@ -139,27 +143,9 @@ class ModelMeta(_Node, extra="allow"):
     def _partition_by_validator(
         cls, v: t.Any, values: t.Dict[str, t.Any]
     ) -> t.List[exp.Expression]:
-        dialect = values.get("dialect")
-
-        if isinstance(v, (exp.Tuple, exp.Array)):
-            partitions: t.List[exp.Expression] = v.expressions
-        elif isinstance(v, exp.Expression):
-            partitions = [v]
-        else:
-            partitions = [
-                d.parse_one(entry, dialect=dialect) if isinstance(entry, str) else entry
-                for entry in ensure_list(v)
-            ]
-
-        partitions = [
-            normalize_identifiers(
-                exp.to_column(expr.name) if isinstance(expr, exp.Identifier) else expr
-            )
-            for expr in partitions
-        ]
+        partitions = parse_expressions(cls, v, values)
 
         for partition in partitions:
-            partition.meta["dialect"] = dialect
             num_cols = len(list(partition.find_all(exp.Column)))
 
             error_msg: t.Optional[str] = None
@@ -289,7 +275,7 @@ class ModelMeta(_Node, extra="allow"):
         return getattr(self.kind, "time_column", None)
 
     @property
-    def unique_key(self) -> t.List[str]:
+    def unique_key(self) -> t.List[exp.Expression]:
         if isinstance(self.kind, (IncrementalByUniqueKeyKind, SCDType2Kind)):
             return self.kind.unique_key
         return []

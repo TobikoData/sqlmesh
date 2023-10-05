@@ -23,7 +23,7 @@ class LogicalMergeMixin(EngineAdapter):
         target_table: TableName,
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        unique_key: t.Sequence[str],
+        unique_key: t.Sequence[exp.Expression],
     ) -> None:
         """
         Merge implementation for engine adapters that do not support merge natively.
