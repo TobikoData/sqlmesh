@@ -5,7 +5,7 @@ from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import MappingSchema, parse_one
+from sqlglot import MappingSchema, exp, parse_one
 from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
@@ -474,9 +474,11 @@ def test_default_schema_and_config(sushi_context_pre_scheduling) -> None:
     context.upsert_model(c)
 
     c.update_schema(
-        MappingSchema({"a": {"col": "int"}}), default_schema="schema", default_catalog="catalog"
+        MappingSchema({"a": {"col": exp.DataType.build("int")}}),
+        default_schema="schema",
+        default_catalog="catalog",
     )
-    assert c.mapping_schema == {"catalog": {"schema": {"a": {"col": "int"}}}}
+    assert c.mapping_schema == {"catalog": {"schema": {"a": {"col": "INT"}}}}
 
 
 def test_gateway_macro(sushi_context: Context) -> None:
