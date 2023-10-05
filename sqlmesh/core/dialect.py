@@ -814,6 +814,19 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
     }
 
 
+def add_table(node: exp.Expression, table: str) -> exp.Expression:
+    """Add a table to all columns in an expression."""
+
+    def _transform(node: exp.Expression) -> exp.Expression:
+        if isinstance(node, exp.Column) and not node.table:
+            return exp.column(node.this, table=table)
+        if isinstance(node, exp.Identifier):
+            return exp.column(node, table=table)
+        return node
+
+    return node.transform(_transform)
+
+
 def transform_values(
     values: t.Tuple[t.Any, ...], columns_to_types: t.Dict[str, exp.DataType]
 ) -> t.Iterator[t.Any]:

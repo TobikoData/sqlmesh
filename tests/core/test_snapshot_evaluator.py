@@ -918,7 +918,7 @@ def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
             "valid_from": exp.DataType.build("TIMESTAMP"),
             "valid_to": exp.DataType.build("TIMESTAMP"),
         },
-        unique_key=["id"],
+        unique_key=[exp.to_column("id")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",

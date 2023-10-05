@@ -406,7 +406,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
         },
-        unique_key=["id"],
+        unique_key=[exp.to_identifier("id")],
     )
     sql_calls = _to_sql_calls(execute_mock, identify=False)
     assert sql_calls == [
@@ -442,7 +442,7 @@ def test_merge(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("INT"),
         },
-        unique_key=["id"],
+        unique_key=[exp.to_identifier("id")],
     )
 
     sql_calls = _to_sql_calls(execute_mock, identify=False)
