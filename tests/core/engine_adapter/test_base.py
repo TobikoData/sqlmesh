@@ -733,7 +733,7 @@ def test_merge_upsert(make_mocked_engine_adapter: t.Callable):
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
         },
-        unique_key=["id"],
+        unique_key=[exp.to_identifier("id")],
     )
     adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
@@ -750,7 +750,7 @@ def test_merge_upsert(make_mocked_engine_adapter: t.Callable):
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
         },
-        unique_key=["id", "ts"],
+        unique_key=[exp.column("id"), exp.column("ts")],
     )
     adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
@@ -771,7 +771,7 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
         },
-        unique_key=["id"],
+        unique_key=[exp.to_identifier("id")],
     )
     adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
@@ -788,7 +788,7 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
         },
-        unique_key=["id", "ts"],
+        unique_key=[exp.to_identifier("id"), exp.to_identifier("ts")],
     )
     adapter.cursor.execute.assert_called_once_with(
         'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT CAST("id" AS INT) AS "id", CAST("ts" AS TIMESTAMP) AS "ts", CAST("val" AS INT) AS "val" FROM (VALUES (1, 4), (2, 5), (3, 6)) AS "t"("id", "ts", "val")) AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" '
@@ -805,7 +805,7 @@ def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
         source_table=t.cast(
             exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM source")
         ),
-        unique_key=["id"],
+        unique_key=[exp.func("COALESCE", "id", "''")],
         valid_from_name="test_valid_from",
         valid_to_name="test_valid_to",
         updated_at_name="test_updated_at",
@@ -826,8 +826,8 @@ def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
             """
 CREATE OR REPLACE TABLE "target" AS
 WITH "source" AS (
-  SELECT
-    DISTINCT ON ("id")
+  SELECT DISTINCT ON (COALESCE("id", ''))
+    TRUE AS "_exists",
     "id",
     "name",
     "price",
@@ -872,84 +872,87 @@ WITH "source" AS (
     "static"."test_valid_to"
   FROM "static"
   LEFT JOIN "latest"
-    ON "static"."id" = "latest"."id"
+    ON COALESCE("static"."id", '') = COALESCE("latest"."id", '')
   WHERE
     "latest"."test_valid_to" IS NULL
 ), "latest_deleted" AS (
   SELECT
-    "id",
+    TRUE AS "_exists",
+    COALESCE("id", '') AS "_key0",
     MAX("test_valid_to") AS "test_valid_to"
   FROM "deleted"
   GROUP BY
-    "id"
+    COALESCE("id", '')
 ), "joined" AS (
   SELECT
+    "source"."_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
     "latest"."test_updated_at" AS "t_test_updated_at",
     "latest"."test_valid_from" AS "t_test_valid_from",
     "latest"."test_valid_to" AS "t_test_valid_to",
-    "source"."id" AS "s_id",
-    "source"."name" AS "s_name",
-    "source"."price" AS "s_price",
-    "source"."test_updated_at" AS "s_test_updated_at"
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price",
+    "source"."test_updated_at" AS "test_updated_at"
   FROM "latest"
   LEFT JOIN "source"
-    ON "latest"."id" = "source"."id"
+    ON COALESCE("latest"."id", '') = COALESCE("source"."id", '')
   UNION
   SELECT
+    "source"."_exists",
     "latest"."id" AS "t_id",
     "latest"."name" AS "t_name",
     "latest"."price" AS "t_price",
     "latest"."test_updated_at" AS "t_test_updated_at",
     "latest"."test_valid_from" AS "t_test_valid_from",
     "latest"."test_valid_to" AS "t_test_valid_to",
-    "source"."id" AS "s_id",
-    "source"."name" AS "s_name",
-    "source"."price" AS "s_price",
-    "source"."test_updated_at" AS "s_test_updated_at"
+    "source"."id" AS "id",
+    "source"."name" AS "name",
+    "source"."price" AS "price",
+    "source"."test_updated_at" AS "test_updated_at"
   FROM "latest"
   RIGHT JOIN "source"
-    ON "latest"."id" = "source"."id"
+    ON COALESCE("latest"."id", '') = COALESCE("source"."id", '')
 ), "updated_rows" AS (
   SELECT
-    COALESCE("t_id", "s_id") AS "id",
-    COALESCE("t_name", "s_name") AS "name",
-    COALESCE("t_price", "s_price") AS "price",
-    COALESCE("t_test_updated_at", "s_test_updated_at") AS "test_updated_at",
+    COALESCE("joined"."t_id", "joined"."id") AS "id",
+    COALESCE("joined"."t_name", "joined"."name") AS "name",
+    COALESCE("joined"."t_price", "joined"."price") AS "price",
+    COALESCE("joined"."t_test_updated_at", "joined"."test_updated_at") AS "test_updated_at",
     CASE
-      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."id" IS NULL
+      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."_exists" IS NULL
       THEN CASE
-        WHEN "latest_deleted"."test_valid_to" > "s_test_updated_at"
+        WHEN "latest_deleted"."test_valid_to" > "test_updated_at"
         THEN "latest_deleted"."test_valid_to"
-        ELSE "s_test_updated_at"
+        ELSE "test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
       THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
-      WHEN "s_test_updated_at" > "t_test_updated_at"
-      THEN "s_test_updated_at"
-      WHEN "s_id" IS NULL
+      WHEN "test_updated_at" > "t_test_updated_at"
+      THEN "test_updated_at"
+      WHEN "joined"."_exists" IS NULL
       THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
   LEFT JOIN "latest_deleted"
-    ON "joined"."s_id" = "latest_deleted"."id"
+    ON COALESCE("joined"."id", '') = "latest_deleted"."_key0"
 ), "inserted_rows" AS (
   SELECT
-    "s_id" AS "id",
-    "s_name" AS "name",
-    "s_price" AS "price",
-    "s_test_updated_at" AS "test_updated_at",
-    "s_test_updated_at" AS "test_valid_from",
+    "id",
+    "name",
+    "price",
+    "test_updated_at",
+    "test_updated_at" AS "test_valid_from",
     CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
-    NOT "t_id" IS NULL AND NOT "s_id" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
+    "test_updated_at" > "t_test_updated_at"
 )
 SELECT
   *
@@ -982,7 +985,7 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.scd_type_2(
         target_table="target",
         source_table=df,
-        unique_key=["id1", "id2"],
+        unique_key=[exp.column("id1"), exp.column("id2")],
         valid_from_name="test_valid_from",
         valid_to_name="test_valid_to",
         updated_at_name="test_updated_at",
@@ -1004,8 +1007,8 @@ def test_merge_scd_type_2_pandas(make_mocked_engine_adapter: t.Callable):
             """
 CREATE OR REPLACE TABLE "target" AS
 WITH "source" AS (
-  SELECT
-    DISTINCT ON ("id1", "id2")
+  SELECT DISTINCT ON ("id1", "id2")
+    TRUE AS "_exists",
     "id1",
     "id2",
     "name",
@@ -1065,8 +1068,9 @@ WITH "source" AS (
     "latest"."test_valid_to" IS NULL
 ), "latest_deleted" AS (
   SELECT
-    "id1",
-    "id2",
+    TRUE AS "_exists",
+    "id1" AS "_key0",
+    "id2" AS "_key1",
     MAX("test_valid_to") AS "test_valid_to"
   FROM "deleted"
   GROUP BY
@@ -1074,6 +1078,7 @@ WITH "source" AS (
     "id2"
 ), "joined" AS (
   SELECT
+    "source"."_exists",
     "latest"."id1" AS "t_id1",
     "latest"."id2" AS "t_id2",
     "latest"."name" AS "t_name",
@@ -1081,16 +1086,17 @@ WITH "source" AS (
     "latest"."test_updated_at" AS "t_test_updated_at",
     "latest"."test_valid_from" AS "t_test_valid_from",
     "latest"."test_valid_to" AS "t_test_valid_to",
-    "source"."id1" AS "s_id1",
-    "source"."id2" AS "s_id2",
-    "source"."name" AS "s_name",
-    "source"."price" AS "s_price",
-    "source"."test_updated_at" AS "s_test_updated_at"
+    "source"."id1" AS "id1",
+    "source"."id2" AS "id2",
+    "source"."name" AS "name",
+    "source"."price" AS "price",
+    "source"."test_updated_at" AS "test_updated_at"
   FROM "latest"
   LEFT JOIN "source"
     ON "latest"."id1" = "source"."id1" AND "latest"."id2" = "source"."id2"
   UNION
   SELECT
+    "source"."_exists",
     "latest"."id1" AS "t_id1",
     "latest"."id2" AS "t_id2",
     "latest"."name" AS "t_name",
@@ -1098,55 +1104,55 @@ WITH "source" AS (
     "latest"."test_updated_at" AS "t_test_updated_at",
     "latest"."test_valid_from" AS "t_test_valid_from",
     "latest"."test_valid_to" AS "t_test_valid_to",
-    "source"."id1" AS "s_id1",
-    "source"."id2" AS "s_id2",
-    "source"."name" AS "s_name",
-    "source"."price" AS "s_price",
-    "source"."test_updated_at" AS "s_test_updated_at"
+    "source"."id1" AS "id1",
+    "source"."id2" AS "id2",
+    "source"."name" AS "name",
+    "source"."price" AS "price",
+    "source"."test_updated_at" AS "test_updated_at"
   FROM "latest"
   RIGHT JOIN "source"
     ON "latest"."id1" = "source"."id1" AND "latest"."id2" = "source"."id2"
 ), "updated_rows" AS (
   SELECT
-    COALESCE("t_id1", "s_id1") AS "id1",
-    COALESCE("t_id2", "s_id2") AS "id2",
-    COALESCE("t_name", "s_name") AS "name",
-    COALESCE("t_price", "s_price") AS "price",
-    COALESCE("t_test_updated_at", "s_test_updated_at") AS "test_updated_at",
+    COALESCE("joined"."t_id1", "joined"."id1") AS "id1",
+    COALESCE("joined"."t_id2", "joined"."id2") AS "id2",
+    COALESCE("joined"."t_name", "joined"."name") AS "name",
+    COALESCE("joined"."t_price", "joined"."price") AS "price",
+    COALESCE("joined"."t_test_updated_at", "joined"."test_updated_at") AS "test_updated_at",
     CASE
-      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."id1" IS NULL
+      WHEN "t_test_valid_from" IS NULL AND NOT "latest_deleted"."_exists" IS NULL
       THEN CASE
-        WHEN "latest_deleted"."test_valid_to" > "s_test_updated_at"
+        WHEN "latest_deleted"."test_valid_to" > "test_updated_at"
         THEN "latest_deleted"."test_valid_to"
-        ELSE "s_test_updated_at"
+        ELSE "test_updated_at"
       END
       WHEN "t_test_valid_from" IS NULL
       THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_from"
     END AS "test_valid_from",
     CASE
-      WHEN "s_test_updated_at" > "t_test_updated_at"
-      THEN "s_test_updated_at"
-      WHEN "s_id1" IS NULL
+      WHEN "test_updated_at" > "t_test_updated_at"
+      THEN "test_updated_at"
+      WHEN "joined"."_exists" IS NULL
       THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
       ELSE "t_test_valid_to"
     END AS "test_valid_to"
   FROM "joined"
   LEFT JOIN "latest_deleted"
-    ON "joined"."s_id1" = "latest_deleted"."id1"
-    AND "joined"."s_id2" = "latest_deleted"."id2"
+    ON "joined"."id1" = "latest_deleted"."_key0"
+    AND "joined"."id2" = "latest_deleted"."_key1"
 ), "inserted_rows" AS (
   SELECT
-    "s_id1" AS "id1",
-    "s_id2" AS "id2",
-    "s_name" AS "name",
-    "s_price" AS "price",
-    "s_test_updated_at" AS "test_updated_at",
-    "s_test_updated_at" AS "test_valid_from",
+    "id1",
+    "id2",
+    "name",
+    "price",
+    "test_updated_at",
+    "test_updated_at" AS "test_valid_from",
     CAST(NULL AS TIMESTAMP) AS "test_valid_to"
   FROM "joined"
   WHERE
-    NOT "t_id1" IS NULL AND NOT "s_id1" IS NULL AND "s_test_updated_at" > "t_test_updated_at"
+    "test_updated_at" > "t_test_updated_at"
 )
 SELECT
   *
