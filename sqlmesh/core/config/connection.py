@@ -676,7 +676,10 @@ class MySQLConnectionConfig(ConnectionConfig):
 
     type_: Literal["mysql"] = Field(alias="type", default="mysql")
 
-    _cursor_kwargs = {"buffered": True}
+    @property
+    def _cursor_kwargs(self) -> t.Optional[t.Dict[str, t.Any]]:
+        """Key-value arguments that will be passed during cursor construction."""
+        return {"buffered": True}
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
