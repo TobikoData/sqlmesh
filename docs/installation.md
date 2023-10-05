@@ -1,5 +1,7 @@
 # Installation
 
+This page provides instructions for installing SQLMesh on your computer.
+
 ## Python virtual environment
 
 It is recommended, but not required, that you use a python virtual environment with SQLMesh.
@@ -51,5 +53,13 @@ Other extras are required to use specific SQL engines:
 Multiple extras can be installed at once, as in `pip install "sqlmesh[web,slack]"`.
 
 ## Next steps
-* Jump right in with the [quickstart example project](quick_start.md).
-* Have an existing dbt project? Install the dbt extra and [check out SQLMesh's dbt adapter](./integrations/dbt.md).
+
+Now that you've installed SQLMesh, it's time to get started with the SQLMesh example project.
+
+SQLMesh has three user interfaces - choose one for the example project and jump right in:
+
+- [Command line interface (CLI)](./quickstart/cli.md)
+- [Notebook interface](./quickstart/notebook.md)
+- [Browser UI graphical interface](./quickstart/ui.md)
+
+Have an existing dbt project you want to run? Install the dbt extra and [check out SQLMesh's dbt adapter](./integrations/dbt.md).
