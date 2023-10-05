@@ -22,7 +22,7 @@ def test_set_variable(mocker: MockerFixture):
 
     set_variable_mock.assert_called_once_with(
         "https://test_airflow_host/aws_mwaa/cli",
-        data="variables set test_key 'test_value'",
+        data='variables set test_key "test_value"',
     )
 
 
