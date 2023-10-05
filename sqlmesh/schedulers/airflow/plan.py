@@ -13,16 +13,15 @@ from sqlmesh.core.snapshot import SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.core.state_sync.base import DelegatingStateSync
 from sqlmesh.schedulers.airflow import common
-from sqlmesh.utils import nullsafe_join
 from sqlmesh.utils.date import now, now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
 class PlanDagState:
-    def __init__(self, engine_adapter: EngineAdapter, schema: t.Optional[str]):
+    def __init__(self, engine_adapter: EngineAdapter, plan_dags_table: str):
         self.engine_adapter = engine_adapter
 
-        self._plan_dags_table = nullsafe_join(".", schema, "_plan_dags")
+        self._plan_dags_table = plan_dags_table
         self._plan_dag_columns_to_types = {
             "request_id": exp.DataType.build("text"),
             "dag_id": exp.DataType.build("text"),
@@ -35,7 +34,7 @@ class PlanDagState:
             state_sync = state_sync.state_sync
         if not isinstance(state_sync, EngineAdapterStateSync):
             raise SQLMeshError(f"Unsupported state sync {state_sync.__class__.__name__}")
-        return cls(state_sync.engine_adapter, state_sync.schema)
+        return cls(state_sync.engine_adapter, state_sync.plan_dags_table)
 
     def add_dag_spec(self, spec: common.PlanDagSpec) -> None:
         """Adds a new DAG spec to the state.
