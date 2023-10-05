@@ -330,6 +330,7 @@ Congratulations, you've now conquered the basics of using SQLMesh!
 
 From here, you can:
 
+* [Learn more about SQLMesh notebook commands](../reference/notebook.md)
 * [Set up a connection to a database or SQL engine](../guides/connections.md)
 * [Learn more about SQLMesh concepts](../concepts/overview.md)
 * [Join our Slack community](https://tobikodata.com/slack)
