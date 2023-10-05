@@ -303,6 +303,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
+        snapshot.updated_ts = now_timestamp()
         self.engine_adapter.update_table(
             self.snapshots_table,
             {"snapshot": snapshot.json()},
