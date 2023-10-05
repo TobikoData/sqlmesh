@@ -152,8 +152,7 @@ class CommonStateSyncMixin(StateSync):
             else [existing_table_infos[name] for name in missing_models]
         )
         if removed and not environment_suffix_target_changed:
-            removed_snapshots = self._get_snapshots(removed).values()
-            for removed_snapshot in removed_snapshots:
+            for removed_snapshot in self._get_snapshots(removed).values():
                 # Update the updated_at attribute.
                 self._update_snapshot(removed_snapshot)
 
