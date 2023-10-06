@@ -12,11 +12,7 @@ from sqlmesh.core.engine_adapter.base import (
     InsertOverwriteStrategy,
     SourceQuery,
 )
-from sqlmesh.core.engine_adapter.shared import (
-    DataObject,
-    DataObjectType,
-    TransactionType,
-)
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils import classproperty, nullsafe_join
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -40,6 +36,7 @@ logger = logging.getLogger(__name__)
 class SparkEngineAdapter(EngineAdapter):
     DIALECT = "spark"
     ESCAPE_JSON = True
+    SUPPORTS_TRANSACTIONS = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
 
     @property
@@ -401,6 +398,3 @@ class SparkEngineAdapter(EngineAdapter):
         return [
             exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
         ]
-
-    def supports_transactions(self, transaction_type: TransactionType) -> bool:
-        return False

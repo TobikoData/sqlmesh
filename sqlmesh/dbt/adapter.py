@@ -9,7 +9,7 @@ from dbt.contracts.relation import Policy
 from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
 
-from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
@@ -282,7 +282,7 @@ class RuntimeAdapter(BaseAdapter):
 
         if auto_begin:
             # TODO: This could be a bug. I think dbt leaves the transaction open while we close immediately.
-            with self.engine_adapter.transaction(TransactionType.DML):
+            with self.engine_adapter.transaction():
                 resp = exec_func(expression)
         else:
             resp = exec_func(expression)

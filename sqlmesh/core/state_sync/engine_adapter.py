@@ -29,7 +29,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
@@ -755,7 +755,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.plan_dags_table,
         ):
             if self.engine_adapter.table_exists(table):
-                with self.engine_adapter.transaction(TransactionType.DDL):
+                with self.engine_adapter.transaction():
                     backup_name = _backup_table_name(table)
                     self.engine_adapter.drop_table(backup_name)
                     self.engine_adapter.ctas(
@@ -950,8 +950,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
 
     @contextlib.contextmanager
-    def _transaction(self, transaction_type: TransactionType) -> t.Generator[None, None, None]:
-        with self.engine_adapter.transaction(transaction_type=transaction_type):
+    def _transaction(self) -> t.Iterator[None]:
+        with self.engine_adapter.transaction():
             yield
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import typing as t
 
 from sqlmesh.core.engine_adapter.mixins import (
-    CommitOnExecuteMixin,
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
@@ -15,7 +14,6 @@ if t.TYPE_CHECKING:
 
 
 class MySQLEngineAdapter(
-    CommitOnExecuteMixin,
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
@@ -54,8 +52,8 @@ class MySQLEngineAdapter(
                 null AS catalog_name,
                 table_name AS name,
                 table_schema AS schema_name,
-                CASE 
-                    WHEN table_type = 'BASE TABLE' THEN 'table' 
+                CASE
+                    WHEN table_type = 'BASE TABLE' THEN 'table'
                     WHEN table_type = 'VIEW' THEN 'view'
                     ELSE table_type
                 END AS type
