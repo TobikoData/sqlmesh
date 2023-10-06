@@ -722,23 +722,37 @@ def test_alter_table(
     adapter.cursor.execute.assert_has_calls([call(x) for x in expected])
 
 
-def test_merge_upsert(make_mocked_engine_adapter: t.Callable):
+def test_merge_upsert(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
     adapter.merge(
         target_table="target",
-        source_table=t.cast(exp.Select, parse_one("SELECT id, ts, val FROM source")),
+        source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
         columns_to_types={
-            "id": exp.DataType.Type.INT,
+            "ID": exp.DataType.Type.INT,
             "ts": exp.DataType.Type.TIMESTAMP,
             "val": exp.DataType.Type.INT,
         },
-        unique_key=[exp.to_identifier("id")],
+        unique_key=[exp.to_identifier("ID", quoted=True)],
     )
-    adapter.cursor.execute.assert_called_once_with(
-        'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "source") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" '
-        'WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" '
-        'WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")'
+
+    assert_exp_eq(
+        adapter.cursor.execute.call_args[0][0],
+        """
+MERGE INTO "target" AS "__MERGE_TARGET__" USING (
+  SELECT
+    "ID",
+    "ts",
+    "val"
+  FROM "source"
+) AS "__MERGE_SOURCE__"
+  ON "__MERGE_TARGET__"."ID" = "__MERGE_SOURCE__"."ID"
+  WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."ID" = "__MERGE_SOURCE__"."ID",
+    "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts",
+    "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val"
+  WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val")
+    VALUES ("__MERGE_SOURCE__"."ID", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")
+""",
     )
 
     adapter.cursor.reset_mock()
