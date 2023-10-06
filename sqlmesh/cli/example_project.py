@@ -3,6 +3,7 @@ from enum import Enum
 from pathlib import Path
 
 import click
+from sqlglot import Dialect
 
 
 class ProjectTemplate(Enum):
@@ -12,7 +13,6 @@ class ProjectTemplate(Enum):
 
 
 def _gen_config(dialect: t.Optional[str], template: ProjectTemplate) -> str:
-
     default_configs = {
         ProjectTemplate.DEFAULT: f"""gateways:
     local:
@@ -194,6 +194,9 @@ def _create_folders(target_folders: t.Sequence[Path]) -> None:
 
 
 def _create_config(config_path: Path, dialect: t.Optional[str], template: ProjectTemplate) -> None:
+    if dialect:
+        Dialect.get_or_raise(dialect)
+
     project_config = _gen_config(dialect, template)
 
     _write_file(

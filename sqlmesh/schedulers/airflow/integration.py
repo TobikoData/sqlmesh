@@ -15,6 +15,7 @@ from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow.operators import targets
+from sqlmesh.schedulers.airflow.plan import PlanDagState
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,9 @@ class SQLMeshAirflow:
         """
         with util.scoped_state_sync() as state_sync:
             stored_snapshots = state_sync.get_snapshots(None)
+            plan_dag_specs = PlanDagState.from_state_sync(state_sync).get_dag_specs()
+            # TODO: Remove this once all DAG specs are moved into the internal state (after about 1 week)
+            plan_dag_specs += _get_plan_dag_specs_from_variables()
 
         dag_generator = SnapshotDagGenerator(
             self._engine_operator,
@@ -112,7 +116,7 @@ class SQLMeshAirflow:
         cadence_dags = dag_generator.generate_cadence_dags(prod_env.snapshots) if prod_env else []
 
         plan_application_dags = [
-            dag_generator.generate_plan_application_dag(s) for s in _get_plan_dag_specs()
+            dag_generator.generate_plan_application_dag(s) for s in plan_dag_specs
         ]
 
         system_dags = [
@@ -187,6 +191,8 @@ def _janitor_task(
             ttl=plan_application_dag_ttl, session=session
         )
         logger.info("Deleting expired Plan Application DAGs: %s", plan_application_dag_ids)
+        PlanDagState.from_state_sync(state_sync).delete_dag_specs(plan_application_dag_ids)
+        # TODO: Remove this once all DAG specs are moved into the internal state (after about 1 week)
         util.delete_variables(
             {common.plan_dag_spec_key_from_dag_id(dag_id) for dag_id in plan_application_dag_ids},
             session=session,
@@ -197,7 +203,7 @@ def _janitor_task(
 
 
 @provide_session
-def _get_plan_dag_specs(
+def _get_plan_dag_specs_from_variables(
     session: Session = util.PROVIDED_SESSION,
 ) -> t.List[common.PlanDagSpec]:
     records = (

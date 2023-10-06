@@ -721,7 +721,7 @@ class _Model(ModelMeta, frozen=True):
             data.append(self.kind.time_column.column)
             data.append(self.kind.time_column.format)
         elif isinstance(self.kind, IncrementalByUniqueKeyKind):
-            data.extend(self.kind.unique_key)
+            data.extend((k.sql() for k in self.kind.unique_key))
 
         return data  # type: ignore
 
