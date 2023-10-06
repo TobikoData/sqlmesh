@@ -63,7 +63,7 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
     }
 
     adapter.cursor.execute.assert_called_once_with(
-        """SELECT "column_name", "data_type", "character_maximum_length", "numeric_precision", "numeric_scale" FROM "master"."information_schema"."columns" WHERE "table_name" = 'table' AND "table_schema" = 'db';"""
+        """SELECT "column_name", "data_type", "character_maximum_length", "numeric_precision", "numeric_scale" FROM "information_schema"."columns" WHERE "table_name" = 'table' AND "table_schema" = 'db';"""
     )
 
 
@@ -74,7 +74,7 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
     resp = adapter.table_exists("db.table")
     adapter.cursor.execute.assert_called_once_with(
         """SELECT 1 """
-        """FROM "master"."information_schema"."tables" """
+        """FROM "information_schema"."tables" """
         """WHERE "table_name" = 'table' AND "table_schema" = 'db';"""
     )
     assert resp
@@ -266,7 +266,7 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table';""",
+        """SELECT 1 FROM "information_schema"."tables" WHERE "table_name" = 'test_table';""",
         'TRUNCATE TABLE "test_table"',
         'INSERT INTO "test_table" ("a") SELECT "a" FROM "tbl";',
     ]
@@ -291,7 +291,7 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     )
 
     assert to_sql_calls(adapter) == [
-        """SELECT 1 FROM "master"."information_schema"."tables" WHERE "table_name" = 'test_table';""",
+        """SELECT 1 FROM "information_schema"."tables" WHERE "table_name" = 'test_table';""",
         f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "b" INTEGER)');""",
         'TRUNCATE TABLE "test_table"',
         f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}";',
