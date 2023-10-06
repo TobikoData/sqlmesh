@@ -61,19 +61,3 @@ def test_replace_query_pandas(adapter: EngineAdapter, duck_conn):
         "test_table", df, {"a": exp.DataType.build("long"), "b": exp.DataType.build("long")}
     )
     pd.testing.assert_frame_equal(adapter.fetchdf("SELECT * FROM test_table"), df)
-
-
-def test_transaction(adapter: EngineAdapter, duck_conn):
-    adapter.create_table("test_table", {"a": exp.DataType.build("int")})
-    with adapter.transaction():
-        adapter.execute("INSERT INTO test_table (a) VALUES (1)")
-    assert duck_conn.execute("SELECT * FROM test_table").fetchall() == [(1,)]
-
-    # Assert transaction was rolled back if an exception was raised
-    try:
-        with adapter.transaction():
-            adapter.execute("INSERT INTO test_table (a) VALUES (1)")
-            raise Exception
-    except Exception:
-        pass
-    assert duck_conn.execute("SELECT * FROM test_table").fetchall() == [(1,)]

@@ -26,7 +26,7 @@ from sqlglot.helper import ensure_list
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import add_table, select_from_values_for_batch_range
-from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape
@@ -117,6 +117,7 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
+    SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
@@ -538,7 +539,7 @@ class EngineAdapter:
         """
         Performs the required alter statements to change the current table into the structure of the target table.
         """
-        with self.transaction(TransactionType.DDL):
+        with self.transaction():
             for alter_expression in self.SCHEMA_DIFFER.compare_columns(
                 current_table_name,
                 self.columns(current_table_name),
@@ -1216,13 +1217,12 @@ class EngineAdapter:
     @contextlib.contextmanager
     def transaction(
         self,
-        transaction_type: TransactionType = TransactionType.DML,
         condition: t.Optional[bool] = None,
     ) -> t.Iterator[None]:
         """A transaction context manager."""
         if (
             self._connection_pool.is_transaction_active
-            or not self.supports_transactions(transaction_type)
+            or not self.SUPPORTS_TRANSACTIONS
             or (condition is not None and not condition)
         ):
             yield
@@ -1235,10 +1235,6 @@ class EngineAdapter:
             raise e
         else:
             self._connection_pool.commit()
-
-    def supports_transactions(self, transaction_type: TransactionType) -> bool:
-        """Whether or not the engine adapter supports transactions for the given transaction type."""
-        return True
 
     @contextlib.contextmanager
     def session(self) -> t.Iterator[None]:
@@ -1275,14 +1271,15 @@ class EngineAdapter:
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
 
-        for e in ensure_list(expressions):
-            sql = (
-                self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
-                if isinstance(e, exp.Expression)
-                else e
-            )
-            logger.debug(f"Executing SQL:\n{sql}")
-            self.cursor.execute(sql, **kwargs)
+        with self.transaction():
+            for e in ensure_list(expressions):
+                sql = (
+                    self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
+                    if isinstance(e, exp.Expression)
+                    else e
+                )
+                logger.debug(f"Executing SQL:\n{sql}")
+                self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager
     def temp_table(
@@ -1307,7 +1304,7 @@ class EngineAdapter:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types=columns_to_types, target_table=name
         )
-        with self.transaction(TransactionType.DDL):
+        with self.transaction():
             table = self._get_temp_table(name)
             if table.db:
                 self.create_schema(table.db)
