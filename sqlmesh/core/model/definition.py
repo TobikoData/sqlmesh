@@ -504,7 +504,7 @@ class _Model(ModelMeta, frozen=True):
                 nested_set(
                     self.mapping_schema,
                     tuple(str(part) for part in table.parts),
-                    {k: str(v) for k, v in mapping_schema.items()},
+                    {k: v.sql(dialect=self.dialect) for k, v in mapping_schema.items()},  # type: ignore
                 )
             else:
                 # Reset the entire mapping if at least one upstream dependency is missing from the mapping
@@ -721,7 +721,7 @@ class _Model(ModelMeta, frozen=True):
             data.append(self.kind.time_column.column)
             data.append(self.kind.time_column.format)
         elif isinstance(self.kind, IncrementalByUniqueKeyKind):
-            data.extend(self.kind.unique_key)
+            data.extend((k.sql() for k in self.kind.unique_key))
 
         return data  # type: ignore
 
