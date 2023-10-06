@@ -1248,16 +1248,30 @@ def test_parse(assert_exp_eq):
 CONST = "bar"
 
 
-def test_python_model_deps() -> None:
-    @model(name="my_model", kind="full", columns={"foo": "int"})
+def test_python_model(assert_exp_eq) -> None:
+    @model(name="my_model", kind="full", columns={'"COL"': "int"})
     def my_model(context, **kwargs):
         context.table("foo")
         context.table(model_name=CONST + ".baz")
 
-    assert model.get_registry()["my_model"].model(
+    m = model.get_registry()["my_model"].model(
         module_path=Path("."),
         path=Path("."),
-    ).depends_on == {"foo", "bar.baz"}
+    )
+
+    assert m.depends_on == {"foo", "bar.baz"}
+    assert m.columns_to_types == {"COL": exp.DataType.build("int")}
+    assert_exp_eq(
+        m.ctas_query(),
+        """
+SELECT
+  CAST(NULL AS INT) AS "COL"
+FROM (VALUES
+  (1)) AS t(dummy)
+WHERE
+  FALSE
+	""",
+    )
 
 
 def test_python_models_returning_sql(assert_exp_eq) -> None:
@@ -2163,11 +2177,11 @@ def test_scd_type_2_defaults():
         MODEL (
             name db.table,
             kind SCD_TYPE_2 (
-                unique_key id,
+                unique_key "ID",
             ),
         );
         SELECT
-            1 as id,
+            1 as "ID",
             '2020-01-01' as ds,
             '2020-01-01' as test_updated_at,
             '2020-01-01' as test_valid_from,
@@ -2176,7 +2190,16 @@ def test_scd_type_2_defaults():
         """
     )
     scd_type_2_model = load_sql_based_model(view_model_expressions)
-    assert scd_type_2_model.unique_key == [exp.to_column("id")]
+    assert scd_type_2_model.unique_key == [exp.to_column("ID", quoted=True)]
+    assert scd_type_2_model.columns_to_types == {
+        "ID": exp.DataType.build("int"),
+        "ds": exp.DataType.build("varchar"),
+        "test_updated_at": exp.DataType.build("varchar"),
+        "test_valid_from": exp.DataType.build("varchar"),
+        "test_valid_to": exp.DataType.build("varchar"),
+        "valid_from": exp.DataType.build("TIMESTAMP"),
+        "valid_to": exp.DataType.build("TIMESTAMP"),
+    }
     assert scd_type_2_model.managed_columns == {
         "valid_from": exp.DataType.build("TIMESTAMP"),
         "valid_to": exp.DataType.build("TIMESTAMP"),

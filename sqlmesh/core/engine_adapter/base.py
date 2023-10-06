@@ -1130,10 +1130,7 @@ class EngineAdapter:
             source=False,
             then=exp.Update(
                 expressions=[
-                    exp.EQ(
-                        this=exp.column(col, MERGE_TARGET_ALIAS),
-                        expression=exp.column(col, MERGE_SOURCE_ALIAS),
-                    )
+                    exp.column(col, MERGE_TARGET_ALIAS).eq(exp.column(col, MERGE_SOURCE_ALIAS))
                     for col in columns_to_types
                 ],
             ),
