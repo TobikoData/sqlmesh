@@ -59,5 +59,8 @@ ADD setup.py /opt/sqlmesh/setup.py
 RUN mkdir /opt/sqlmesh/sqlmesh
 RUN chown -R airflow /opt/sqlmesh
 USER airflow
+
+# Pin the Pydantic dependency
+RUN pip install "pydantic[email]>=1.10.7,<2.0.0"
 RUN cd /opt/sqlmesh && pip install -e .
 RUN pip install dbt-core

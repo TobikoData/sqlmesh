@@ -9,13 +9,12 @@ from sqlglot import exp
 from sqlglot.time import format_time
 
 from sqlmesh.core import dialect as d
-from sqlmesh.core.model.common import parse_properties
+from sqlmesh.core.model.common import parse_expressions, parse_properties
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import (
     PydanticModel,
     SQLGlotBool,
-    SQLGlotListOfStrings,
     SQLGlotPositiveInt,
     SQLGlotString,
     field_validator,
@@ -104,15 +103,7 @@ class ModelKindName(str, ModelKindMixin, Enum):
         return self
 
 
-def _unique_key_validator(v: t.Any) -> t.List[str]:
-    if isinstance(v, exp.Identifier):
-        return [v.name]
-    if isinstance(v, (exp.Tuple, exp.Array)):
-        return [e.name for e in v.expressions]
-    return [i.name if isinstance(i, exp.Identifier) else str(i) for i in v]
-
-
-unique_key_validator = field_validator("unique_key", mode="before")(_unique_key_validator)
+_unique_key_validator = field_validator("unique_key", mode="before")(parse_expressions)
 
 
 class _ModelKind(PydanticModel, ModelKindMixin):
@@ -216,7 +207,8 @@ class IncrementalByTimeRangeKind(_Incremental):
 
 class IncrementalByUniqueKeyKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
-    unique_key: SQLGlotListOfStrings
+    unique_key: t.List[exp.Expression]
+    _unique_key_validator = _unique_key_validator
 
 
 class IncrementalUnmanagedKind(_ModelKind):
@@ -281,13 +273,14 @@ class FullKind(_ModelKind):
 
 class SCDType2Kind(_ModelKind):
     name: Literal[ModelKindName.SCD_TYPE_2] = ModelKindName.SCD_TYPE_2
-    unique_key: SQLGlotListOfStrings
+    unique_key: t.List[exp.Expression]
     valid_from_name: SQLGlotString = "valid_from"
     valid_to_name: SQLGlotString = "valid_to"
     updated_at_name: SQLGlotString = "updated_at"
 
     forward_only: SQLGlotBool = True
     disable_restatement: SQLGlotBool = True
+    _unique_key_validator = _unique_key_validator
 
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:

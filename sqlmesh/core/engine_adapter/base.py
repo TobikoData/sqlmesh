@@ -25,8 +25,8 @@ from sqlglot.errors import ErrorLevel
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
-from sqlmesh.core.dialect import select_from_values_for_batch_range
-from sqlmesh.core.engine_adapter.shared import DataObject, TransactionType
+from sqlmesh.core.dialect import add_table, select_from_values_for_batch_range
+from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape
@@ -117,6 +117,7 @@ class EngineAdapter:
     DEFAULT_BATCH_SIZE = 10000
     DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
+    SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.DELETE_INSERT
     SUPPORTS_MATERIALIZED_VIEWS = False
@@ -538,7 +539,7 @@ class EngineAdapter:
         """
         Performs the required alter statements to change the current table into the structure of the target table.
         """
-        with self.transaction(TransactionType.DDL):
+        with self.transaction():
             for alter_expression in self.SCHEMA_DIFFER.compare_columns(
                 current_table_name,
                 self.columns(current_table_name),
@@ -911,7 +912,7 @@ class EngineAdapter:
         self,
         target_table: TableName,
         source_table: QueryOrDF,
-        unique_key: t.Sequence[str],
+        unique_key: t.Sequence[exp.Expression],
         valid_from_name: str,
         valid_to_name: str,
         updated_at_name: str,
@@ -937,7 +938,7 @@ class EngineAdapter:
                 exp.Select()  # type: ignore
                 .with_(
                     "source",
-                    exp.select(*unmanaged_columns)
+                    exp.select(exp.true().as_("_exists"), *unmanaged_columns)
                     .distinct(*unique_key)
                     .from_(source_query.subquery("raw_source")),  # type: ignore
                 )
@@ -964,8 +965,8 @@ class EngineAdapter:
                         "latest",
                         on=exp.and_(
                             *[
-                                exp.column(col, table="static").eq(exp.column(col, table="latest"))
-                                for col in unique_key
+                                add_table(key, "static").eq(add_table(key, "latest"))
+                                for key in unique_key
                             ]
                         ),
                         join_type="left",
@@ -976,7 +977,8 @@ class EngineAdapter:
                 .with_(
                     "latest_deleted",
                     exp.select(
-                        *unique_key,
+                        exp.true().as_("_exists"),
+                        *(part.as_(f"_key{i}") for i, part in enumerate(unique_key)),
                         f"MAX({valid_to_name}) AS {valid_to_name}",
                     )
                     .from_("deleted")
@@ -987,34 +989,43 @@ class EngineAdapter:
                 .with_(
                     "joined",
                     exp.select(
-                        *(f"latest.{col} AS t_{col}" for col in columns_to_types),
-                        *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
+                        exp.column("_exists", table="source"),
+                        *(
+                            exp.column(col, table="latest").as_(f"t_{col}")
+                            for col in columns_to_types
+                        ),
+                        *(exp.column(col, table="source").as_(col) for col in unmanaged_columns),
                     )
                     .from_("latest")
                     .join(
                         "source",
                         on=exp.and_(
                             *[
-                                exp.column(col, table="latest").eq(exp.column(col, table="source"))
-                                for col in unique_key
+                                add_table(key, "latest").eq(add_table(key, "source"))
+                                for key in unique_key
                             ]
                         ),
                         join_type="left",
                     )
                     .union(
                         exp.select(
-                            *(f"latest.{col} AS t_{col}" for col in columns_to_types),
-                            *(f"source.{col} AS s_{col}" for col in unmanaged_columns),
+                            exp.column("_exists", table="source"),
+                            *(
+                                exp.column(col, table="latest").as_(f"t_{col}")
+                                for col in columns_to_types
+                            ),
+                            *(
+                                exp.column(col, table="source").as_(col)
+                                for col in unmanaged_columns
+                            ),
                         )
                         .from_("latest")
                         .join(
                             "source",
                             on=exp.and_(
                                 *[
-                                    exp.column(col, table="latest").eq(
-                                        exp.column(col, table="source")
-                                    )
-                                    for col in unique_key
+                                    add_table(key, "latest").eq(add_table(key, "source"))
+                                    for key in unique_key
                                 ]
                             ),
                             join_type="right",
@@ -1025,15 +1036,22 @@ class EngineAdapter:
                 .with_(
                     "updated_rows",
                     exp.select(
-                        *(f"COALESCE(t_{col}, s_{col}) as {col}" for col in unmanaged_columns),
+                        *(
+                            exp.func(
+                                "COALESCE",
+                                exp.column(f"t_{col}", table="joined"),
+                                exp.column(col, table="joined"),
+                            ).as_(col)
+                            for col in unmanaged_columns
+                        ),
                         f"""
                         CASE
                             WHEN t_{valid_from_name} IS NULL
-                                 AND latest_deleted.{unique_key[0]} IS NOT NULL
+                                 AND latest_deleted._exists IS NOT NULL
                             THEN CASE
-                                    WHEN latest_deleted.{valid_to_name} > s_{updated_at_name}
+                                    WHEN latest_deleted.{valid_to_name} > {updated_at_name}
                                     THEN latest_deleted.{valid_to_name}
-                                    ELSE s_{updated_at_name}
+                                    ELSE {updated_at_name}
                                  END
                             WHEN t_{valid_from_name} IS NULL
                             THEN {self._to_utc_timestamp('1970-01-01 00:00:00+00:00')}
@@ -1041,9 +1059,9 @@ class EngineAdapter:
                         END AS {valid_from_name}""",
                         f"""
                         CASE
-                            WHEN s_{updated_at_name} > t_{updated_at_name}
-                            THEN s_{updated_at_name}
-                            WHEN s_{unique_key[0]} IS NULL
+                            WHEN {updated_at_name} > t_{updated_at_name}
+                            THEN {updated_at_name}
+                            WHEN joined._exists IS NULL
                             THEN {self._to_utc_timestamp(to_ts(execution_time))}
                             ELSE t_{valid_to_name}
                         END AS {valid_to_name}""",
@@ -1053,10 +1071,10 @@ class EngineAdapter:
                         "latest_deleted",
                         on=exp.and_(
                             *[
-                                exp.column(f"s_{col}", table="joined").eq(
-                                    exp.column(col, table="latest_deleted")
+                                add_table(part, "joined").eq(
+                                    exp.column(f"_key{i}", "latest_deleted")
                                 )
-                                for col in unique_key
+                                for i, part in enumerate(unique_key)
                             ]
                         ),
                         join_type="left",
@@ -1066,14 +1084,12 @@ class EngineAdapter:
                 .with_(
                     "inserted_rows",
                     exp.select(
-                        *(f"s_{col} as {col}" for col in unmanaged_columns),
-                        f"s_{updated_at_name} as {valid_from_name}",
+                        *unmanaged_columns,
+                        f"{updated_at_name} as {valid_from_name}",
                         f"{self._to_utc_timestamp(exp.null())} as {valid_to_name}",
                     )
                     .from_("joined")
-                    .where(
-                        f"t_{unique_key[0]} IS NOT NULL AND s_{unique_key[0]} IS NOT NULL AND s_{updated_at_name} > t_{updated_at_name}"
-                    ),
+                    .where(f"{updated_at_name} > t_{updated_at_name}"),
                 )
                 .select("*")
                 .from_("static")
@@ -1097,7 +1113,7 @@ class EngineAdapter:
         target_table: TableName,
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        unique_key: t.Sequence[str],
+        unique_key: t.Sequence[exp.Expression],
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table
@@ -1105,10 +1121,7 @@ class EngineAdapter:
         columns_to_types = columns_to_types or self.columns(target_table)
         on = exp.and_(
             *(
-                exp.EQ(
-                    this=exp.column(part, MERGE_TARGET_ALIAS),
-                    expression=exp.column(part, MERGE_SOURCE_ALIAS),
-                )
+                add_table(part, MERGE_TARGET_ALIAS).eq(add_table(part, MERGE_SOURCE_ALIAS))
                 for part in unique_key
             )
         )
@@ -1204,13 +1217,12 @@ class EngineAdapter:
     @contextlib.contextmanager
     def transaction(
         self,
-        transaction_type: TransactionType = TransactionType.DML,
         condition: t.Optional[bool] = None,
     ) -> t.Iterator[None]:
         """A transaction context manager."""
         if (
             self._connection_pool.is_transaction_active
-            or not self.supports_transactions(transaction_type)
+            or not self.SUPPORTS_TRANSACTIONS
             or (condition is not None and not condition)
         ):
             yield
@@ -1223,10 +1235,6 @@ class EngineAdapter:
             raise e
         else:
             self._connection_pool.commit()
-
-    def supports_transactions(self, transaction_type: TransactionType) -> bool:
-        """Whether or not the engine adapter supports transactions for the given transaction type."""
-        return True
 
     @contextlib.contextmanager
     def session(self) -> t.Iterator[None]:
@@ -1263,14 +1271,15 @@ class EngineAdapter:
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
 
-        for e in ensure_list(expressions):
-            sql = (
-                self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
-                if isinstance(e, exp.Expression)
-                else e
-            )
-            logger.debug(f"Executing SQL:\n{sql}")
-            self.cursor.execute(sql, **kwargs)
+        with self.transaction():
+            for e in ensure_list(expressions):
+                sql = (
+                    self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
+                    if isinstance(e, exp.Expression)
+                    else e
+                )
+                logger.debug(f"Executing SQL:\n{sql}")
+                self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager
     def temp_table(
@@ -1295,7 +1304,7 @@ class EngineAdapter:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             query_or_df, columns_to_types=columns_to_types, target_table=name
         )
-        with self.transaction(TransactionType.DDL):
+        with self.transaction():
             table = self._get_temp_table(name)
             if table.db:
                 self.create_schema(table.db)

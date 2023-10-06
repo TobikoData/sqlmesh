@@ -31,9 +31,7 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    make_inclusive_end,
     now,
-    to_date,
     to_datetime,
     to_timestamp,
     validate_date_range,
@@ -144,7 +142,13 @@ class Plan:
     def start(self) -> TimeLike:
         """Returns the start of the plan or the earliest date of all snapshots."""
         if not self.override_start and not self._missing_intervals:
-            return earliest_start_date(self.snapshots)
+            earliest_start = earliest_start_date(self.snapshots)
+            earliest_interval_starts = [s.intervals[0][0] for s in self.snapshots if s.intervals]
+            return (
+                min(earliest_start, to_datetime(min(earliest_interval_starts)))
+                if earliest_interval_starts
+                else earliest_start
+            )
         return self._start or (
             min(
                 start
@@ -166,40 +170,10 @@ class Plan:
         self.__missing_intervals = None
         self._refresh_dag_and_ignored_snapshots()
 
-    @classmethod
-    def _get_end_date(cls, end_and_units: t.List[t.Tuple[int, IntervalUnit]]) -> TimeLike:
-        if end_and_units:
-            end, unit = max(end_and_units)
-
-            if unit.is_date_granularity:
-                return to_date(make_inclusive_end(end))
-            return end
-        return now()
-
     @property
     def end(self) -> TimeLike:
         """Returns the end of the plan or now."""
-        if not self._end or not self.override_end:
-            if self._missing_intervals:
-                return self._get_end_date(
-                    [
-                        (end, snapshot.node.interval_unit)
-                        for snapshot in self.snapshots
-                        if (snapshot.name, snapshot.version_get_or_generate())
-                        in self._missing_intervals
-                        for _, end in self._missing_intervals[
-                            (snapshot.name, snapshot.version_get_or_generate())
-                        ]
-                    ]
-                )
-            return self._get_end_date(
-                [
-                    (snapshot.intervals[-1][1], snapshot.node.interval_unit)
-                    for snapshot in self.snapshots
-                    if snapshot.intervals
-                ]
-            )
-        return self._end
+        return self._end or now()
 
     @end.setter
     def end(self, new_end: TimeLike) -> None:

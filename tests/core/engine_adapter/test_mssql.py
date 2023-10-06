@@ -223,7 +223,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("int"),
         },
-        unique_key=["id"],
+        unique_key=[exp.to_identifier("id")],
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
         f'"__temp_target_{temp_table_uuid.hex}"',
@@ -246,7 +246,7 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
             "ts": exp.DataType.build("TIMESTAMP"),
             "val": exp.DataType.build("int"),
         },
-        unique_key=["id", "ts"],
+        unique_key=[exp.to_identifier("id"), exp.to_column("ts")],
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
         f'"__temp_target_{temp_table_uuid.hex}"',

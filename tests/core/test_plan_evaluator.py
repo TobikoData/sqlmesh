@@ -3,14 +3,16 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import FullKind, SqlModel, ViewKind
+from sqlmesh.core.model import FullKind, IncrementalByTimeRangeKind, SqlModel, ViewKind
 from sqlmesh.core.plan import (
     AirflowPlanEvaluator,
     BuiltInPlanEvaluator,
     MWAAPlanEvaluator,
     Plan,
+    can_evaluate_before_promote,
 )
 from sqlmesh.core.snapshot import SnapshotChangeCategory
+from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -123,42 +125,79 @@ def test_mwaa_evaluator(sushi_plan: Plan, mocker: MockerFixture):
 
     state_sync_mock = mocker.Mock()
 
-    plan_dag_spec_json = """{"request_id": "test_request_id"}"""
-
     plan_dag_spec_mock = mocker.Mock()
-    plan_dag_spec_mock.json.return_value = plan_dag_spec_json
 
     create_plan_dag_spec_mock = mocker.patch("sqlmesh.schedulers.airflow.plan.create_plan_dag_spec")
     create_plan_dag_spec_mock.return_value = plan_dag_spec_mock
 
+    plan_dag_state_mock = mocker.Mock()
+    mocker.patch(
+        "sqlmesh.schedulers.airflow.plan.PlanDagState.from_state_sync",
+        return_value=plan_dag_state_mock,
+    )
+
     evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
     evaluator.evaluate(sushi_plan)
 
-    mwaa_client_mock.set_variable.assert_called_once_with(mocker.ANY, plan_dag_spec_json)
+    plan_dag_state_mock.add_dag_spec.assert_called_once_with(plan_dag_spec_mock)
 
     mwaa_client_mock.wait_for_dag_run_completion.assert_called_once()
     mwaa_client_mock.wait_for_first_dag_run.assert_called_once()
 
 
-def test_mwaa_evaluator_error_from_cli(sushi_plan: Plan, mocker: MockerFixture):
-    mwaa_client_mock = mocker.Mock()
-    mwaa_client_mock.wait_for_dag_run_completion.return_value = True
-    mwaa_client_mock.wait_for_first_dag_run.return_value = "test_plan_application_dag_run_id"
-    mwaa_client_mock.set_variable.return_value = "", "Error"
+def test_can_evaluate_before_promote(sushi_context: Context):
+    parent_model_a = SqlModel(
+        name="sushi.new_test_model_a",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        cron="@daily",
+        start="2020-01-01",
+        query=parse_one("SELECT 1::INT AS one, '2023-01-01' as ds"),
+    )
+    parent_model_b = SqlModel(
+        name="sushi.new_test_model_b",
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        cron="@daily",
+        start="2020-01-01",
+        query=parse_one("SELECT 2::INT AS two, '2023-01-01' as ds"),
+    )
+    child_model = SqlModel(
+        name="sushi.new_test_model_child",
+        kind=FullKind(),
+        start="2020-01-01",
+        query=parse_one("SELECT one, two FROM sushi.new_test_model_a, sushi.new_test_model_b"),
+    )
 
-    state_sync_mock = mocker.Mock()
+    sushi_context.upsert_model(parent_model_a)
+    sushi_context.upsert_model(parent_model_b)
+    sushi_context.upsert_model(child_model)
 
-    plan_dag_spec_json = """{"request_id": "test_request_id"}"""
+    snapshots = sushi_context.snapshots
 
-    plan_dag_spec_mock = mocker.Mock()
-    plan_dag_spec_mock.json.return_value = plan_dag_spec_json
+    parent_snapshot_a = snapshots[parent_model_a.name]
+    parent_snapshot_b = snapshots[parent_model_b.name]
+    child_snapshot = snapshots[child_model.name]
 
-    create_plan_dag_spec_mock = mocker.patch("sqlmesh.schedulers.airflow.plan.create_plan_dag_spec")
-    create_plan_dag_spec_mock.return_value = plan_dag_spec_mock
+    all_snapshots = {
+        s.snapshot_id: s for s in [parent_snapshot_a, parent_snapshot_b, child_snapshot]
+    }
 
-    evaluator = MWAAPlanEvaluator(mwaa_client_mock, state_sync_mock)
+    parent_snapshot_a.change_category = SnapshotChangeCategory.BREAKING
+    parent_snapshot_b.change_category = SnapshotChangeCategory.BREAKING
+    child_snapshot.change_category = SnapshotChangeCategory.BREAKING
+    assert can_evaluate_before_promote(child_snapshot, all_snapshots)
 
-    with pytest.raises(SQLMeshError, match=r"Failed to submit a plan application request:\nError"):
-        evaluator.evaluate(sushi_plan)
+    parent_snapshot_a.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    parent_snapshot_b.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    assert not can_evaluate_before_promote(child_snapshot, all_snapshots)
 
-    mwaa_client_mock.set_variable.assert_called_once_with(mocker.ANY, plan_dag_spec_json)
+    parent_snapshot_a.unpaused_ts = now_timestamp()
+    assert not can_evaluate_before_promote(child_snapshot, all_snapshots)
+
+    parent_snapshot_b.unpaused_ts = now_timestamp()
+    assert can_evaluate_before_promote(child_snapshot, all_snapshots)
+
+    child_snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    assert not can_evaluate_before_promote(child_snapshot, all_snapshots)
+
+    child_snapshot.unpaused_ts = now_timestamp()
+    assert can_evaluate_before_promote(child_snapshot, all_snapshots)

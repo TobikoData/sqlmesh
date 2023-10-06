@@ -29,7 +29,7 @@ from sqlglot import exp
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import ModelAudit
 from sqlmesh.core.console import Console, get_console
-from sqlmesh.core.engine_adapter import EngineAdapter, TransactionType
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import ModelKindName, SeedModel
 from sqlmesh.core.snapshot import (
@@ -85,6 +85,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.environments_table = nullsafe_join(".", self.schema, "_environments")
         self.seeds_table = nullsafe_join(".", self.schema, "_seeds")
         self.intervals_table = nullsafe_join(".", self.schema, "_intervals")
+        self.plan_dags_table = nullsafe_join(".", self.schema, "_plan_dags")
         self.versions_table = nullsafe_join(".", self.schema, "_versions")
 
         self._snapshot_columns_to_types = {
@@ -303,9 +304,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
+        snapshot.updated_ts = now_timestamp()
         self.engine_adapter.update_table(
             self.snapshots_table,
-            {"snapshot": snapshot.json()},
+            {"snapshot": _snapshot_to_json(snapshot)},
             where=self._snapshot_id_filter([snapshot.snapshot_id]),
             contains_json=True,
         )
@@ -725,10 +727,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         """Rollback to the previous migration."""
         logger.info("Starting migration rollback.")
         tables = (self.snapshots_table, self.environments_table, self.versions_table)
+        optional_tables = (self.seeds_table, self.intervals_table, self.plan_dags_table)
         versions = self.get_versions(validate=False)
         if versions.schema_version == 0:
             # Clean up state tables
-            for table in tables + (self.seeds_table, self.intervals_table):
+            for table in tables + optional_tables:
                 self.engine_adapter.drop_table(table)
         else:
             if not all(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
@@ -736,11 +739,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             for table in tables:
                 self._restore_table(table, _backup_table_name(table))
 
-            if self.engine_adapter.table_exists(_backup_table_name(self.seeds_table)):
-                self._restore_table(self.seeds_table, _backup_table_name(self.seeds_table))
+            for optional_table in optional_tables:
+                if self.engine_adapter.table_exists(_backup_table_name(optional_table)):
+                    self._restore_table(optional_table, _backup_table_name(optional_table))
 
-            if self.engine_adapter.table_exists(_backup_table_name(self.intervals_table)):
-                self._restore_table(self.intervals_table, _backup_table_name(self.intervals_table))
         logger.info("Migration rollback successful.")
 
     def _backup_state(self) -> None:
@@ -750,9 +752,10 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.versions_table,
             self.seeds_table,
             self.intervals_table,
+            self.plan_dags_table,
         ):
             if self.engine_adapter.table_exists(table):
-                with self.engine_adapter.transaction(TransactionType.DDL):
+                with self.engine_adapter.transaction():
                     backup_name = _backup_table_name(table)
                     self.engine_adapter.drop_table(backup_name)
                     self.engine_adapter.ctas(
@@ -947,8 +950,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
 
     @contextlib.contextmanager
-    def _transaction(self, transaction_type: TransactionType) -> t.Generator[None, None, None]:
-        with self.engine_adapter.transaction(transaction_type=transaction_type):
+    def _transaction(self) -> t.Iterator[None]:
+        with self.engine_adapter.transaction():
             yield
 
 
@@ -999,7 +1002,7 @@ def _snapshots_to_df(snapshots: t.Iterable[Snapshot]) -> pd.DataFrame:
                 "name": snapshot.name,
                 "identifier": snapshot.identifier,
                 "version": snapshot.version,
-                "snapshot": snapshot.json(exclude={"intervals", "dev_intervals"}),
+                "snapshot": _snapshot_to_json(snapshot),
                 "kind_name": snapshot.model_kind_name.value if snapshot.model_kind_name else None,
             }
             for snapshot in snapshots
@@ -1032,3 +1035,7 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
 
 def _backup_table_name(table_name: str) -> str:
     return f"{table_name}_backup"
+
+
+def _snapshot_to_json(snapshot: Snapshot) -> str:
+    return snapshot.json(exclude={"intervals", "dev_intervals"})

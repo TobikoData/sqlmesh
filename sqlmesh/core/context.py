@@ -388,6 +388,7 @@ class Context(BaseContext):
             gc.disable()
             project = self._loader.load(self, update_schemas)
             self._macros = project.macros
+            self._jinja_macros = project.jinja_macros
             self._models = project.models
             self._metrics = project.metrics
             self._standalone_audits.clear()

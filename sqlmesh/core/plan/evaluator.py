@@ -14,6 +14,7 @@ At a high level, when a plan is evaluated, SQLMesh will:
 Refer to `sqlmesh.core.plan`.
 """
 import abc
+import logging
 import typing as t
 
 from sqlmesh.core.console import Console, get_console
@@ -37,6 +38,8 @@ from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import SQLMeshError
+
+logger = logging.getLogger(__name__)
 
 
 class PlanEvaluator(abc.ABC):
@@ -72,13 +75,16 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
     def evaluate(self, plan: Plan) -> None:
-        snapshots = plan.snapshots
+        snapshots = {s.snapshot_id: s for s in plan.snapshots}
+        all_names = {s.name for s in plan.snapshots}
         if plan.is_dev:
-            before_promote_snapshots = {s.name for s in snapshots}
+            before_promote_snapshots = all_names
             after_promote_snapshots = set()
         else:
-            before_promote_snapshots = {s.name for s in snapshots if not s.is_paused_forward_only}
-            after_promote_snapshots = {s.name for s in snapshots if s.is_paused_forward_only}
+            before_promote_snapshots = {
+                s.name for s in snapshots.values() if can_evaluate_before_promote(s, snapshots)
+            }
+            after_promote_snapshots = all_names - before_promote_snapshots
 
         self._push(plan)
         self._restate(plan)
@@ -344,7 +350,7 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
         return self._mwaa_client
 
     def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
-        from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
+        from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
 
         plan_application_request = airflow_common.PlanApplicationRequest(
             new_snapshots=list(plan.new_snapshots),
@@ -361,10 +367,12 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
             forward_only=plan.forward_only,
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
+        PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
 
-        _, stderr = self._mwaa_client.set_variable(
-            airflow_common.plan_dag_spec_key(plan_request_id), plan_dag_spec.json()
-        )
 
-        if stderr:
-            raise SQLMeshError(f"Failed to submit a plan application request:\n{stderr}")
+def can_evaluate_before_promote(
+    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
+) -> bool:
+    return not snapshot.is_paused_forward_only and not any(
+        snapshots[p_id].is_paused_forward_only for p_id in snapshot.parents
+    )

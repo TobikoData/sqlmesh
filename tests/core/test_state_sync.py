@@ -437,6 +437,8 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     assert not promotion_result.removed
     assert not promotion_result.removed_environment_naming_info
 
+    prev_snapshot_c_updated_ts = snapshot_c.updated_ts
+
     promotion_result = promote_snapshots(
         state_sync,
         [snapshot_a, snapshot_b],
@@ -446,6 +448,10 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     assert set(promotion_result.removed) == {snapshot_c.table_info}
     assert promotion_result.removed_environment_naming_info
     assert promotion_result.removed_environment_naming_info.suffix_target.is_schema
+    assert (
+        state_sync.get_snapshots([snapshot_c])[snapshot_c.snapshot_id].updated_ts
+        > prev_snapshot_c_updated_ts
+    )
 
     snapshot_d = make_snapshot(
         SqlModel(

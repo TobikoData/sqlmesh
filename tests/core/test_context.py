@@ -5,7 +5,7 @@ from unittest.mock import call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import MappingSchema, parse_one
+from sqlglot import MappingSchema, exp, parse_one
 from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
@@ -20,7 +20,7 @@ from sqlmesh.core.dialect import parse
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
-from sqlmesh.utils.date import now, to_date, yesterday_ds
+from sqlmesh.utils.date import make_inclusive_end, now, to_date, yesterday_ds
 from sqlmesh.utils.errors import ConfigError
 from tests.utils.test_filesystem import create_temp_file
 
@@ -287,7 +287,7 @@ def test():
     context = Context(paths=str(tmp_path), config=config)
 
     assert ["db.actual_test"] == list(context.models)
-    assert "test" == list(context._macros)[-1]
+    assert "test" in context._macros
 
 
 def test_plan_apply(sushi_context) -> None:
@@ -438,12 +438,12 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     dev_plan = sushi_context_pre_scheduling.plan(
         "test_env", no_prompts=True, include_unmodified=True, skip_backfill=True, auto_apply=True
     )
-    assert dev_plan.end == plan_end
+    assert to_date(make_inclusive_end(dev_plan.end)) == plan_end
 
     forward_only_dev_plan = sushi_context_pre_scheduling.plan(
         "test_env_forward_only", no_prompts=True, include_unmodified=True, forward_only=True
     )
-    assert forward_only_dev_plan.end == plan_end
+    assert to_date(make_inclusive_end(forward_only_dev_plan.end)) == plan_end
     assert forward_only_dev_plan._start == plan_end
 
 
@@ -474,6 +474,46 @@ def test_default_schema_and_config(sushi_context_pre_scheduling) -> None:
     context.upsert_model(c)
 
     c.update_schema(
-        MappingSchema({"a": {"col": "int"}}), default_schema="schema", default_catalog="catalog"
+        MappingSchema({"a": {"col": exp.DataType.build("int")}}),
+        default_schema="schema",
+        default_catalog="catalog",
     )
-    assert c.mapping_schema == {"catalog": {"schema": {"a": {"col": "int"}}}}
+    assert c.mapping_schema == {"catalog": {"schema": {"a": {"col": "INT"}}}}
+
+
+def test_gateway_macro(sushi_context: Context) -> None:
+    sushi_context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+            MODEL(name sushi.test_gateway_macro);
+            SELECT @gateway AS gateway;
+            """
+            ),
+            macros=sushi_context._macros,
+        )
+    )
+
+    assert (
+        sushi_context.render("sushi.test_gateway_macro").sql()
+        == "SELECT 'in_memory' AS \"gateway\""
+    )
+
+    sushi_context.upsert_model(
+        load_sql_based_model(
+            parse(
+                """
+            MODEL(name sushi.test_gateway_macro_jinja);
+            JINJA_QUERY_BEGIN;
+            SELECT '{{ gateway }}' AS gateway_jinja;
+            JINJA_END;
+            """
+            ),
+            jinja_macros=sushi_context._jinja_macros,
+        )
+    )
+
+    assert (
+        sushi_context.render("sushi.test_gateway_macro_jinja").sql()
+        == "SELECT 'in_memory' AS \"gateway_jinja\""
+    )

@@ -128,7 +128,8 @@ def enable_logging(level: t.Optional[int] = None, write_to_file: bool = False) -
         logger.addHandler(handler)
 
         if write_to_file:
-            filename = f"sqlmesh_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
+            os.makedirs("logs", exist_ok=True)
+            filename = f"logs/sqlmesh_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
             file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
             file_handler.setLevel(level)
             file_handler.setFormatter(logging.Formatter(LOG_FORMAT))

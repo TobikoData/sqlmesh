@@ -22,7 +22,7 @@ def wait_for_airflow(airflow_client: AirflowClient):
 @pytest.mark.integration
 @pytest.mark.airflow_integration
 def test_sushi(mocker: MockerFixture, is_docker: bool):
-    start = to_date(now() - timedelta(days=6))
+    start = to_date(now() - timedelta(days=7))
     end = now()
 
     airflow_config = "airflow_config_docker" if is_docker else "airflow_config"

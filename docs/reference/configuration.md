@@ -172,7 +172,9 @@ For example, you might have a specific connection where your tests should run re
 
 ## Debug mode
 
-To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y". Enabling this mode ensures that full backtraces are printed when using CLI. The default log level is set to `DEBUG` when this mode is enabled.
+To enable debug mode set the `SQLMESH_DEBUG` environment variable to one of the following values: "1", "true", "t", "yes" or "y".
+
+Enabling this mode ensures that full backtraces are printed when using CLI. The default log level is set to `DEBUG` when this mode is enabled.
 
 Example enabling debug mode for the CLI command `sqlmesh plan`:
 

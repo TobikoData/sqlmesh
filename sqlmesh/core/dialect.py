@@ -336,7 +336,8 @@ def _parse_table_parts(self: Parser, schema: bool = False) -> exp.Table:
     table_arg = table.this
 
     if isinstance(table_arg, exp.Var) and table_arg.name.startswith(SQLMESH_MACRO_PREFIX):
-        return StagedFilePath(this=MacroVar(this=table_arg.name[1:]))
+        table_arg.replace(MacroVar(this=table_arg.name[1:]))
+        return StagedFilePath(**table.args)
 
     return table
 
@@ -811,6 +812,19 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
         for table in scope.tables
         if not isinstance(table.this, exp.Func) and exp.table_name(table) not in scope.cte_sources
     }
+
+
+def add_table(node: exp.Expression, table: str) -> exp.Expression:
+    """Add a table to all columns in an expression."""
+
+    def _transform(node: exp.Expression) -> exp.Expression:
+        if isinstance(node, exp.Column) and not node.table:
+            return exp.column(node.this, table=table)
+        if isinstance(node, exp.Identifier):
+            return exp.column(node, table=table)
+        return node
+
+    return node.transform(_transform)
 
 
 def transform_values(

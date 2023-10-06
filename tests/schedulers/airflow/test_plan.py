@@ -9,6 +9,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.config import EnvironmentSuffixTarget
+from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.model import (
     IncrementalByTimeRangeKind,
@@ -24,7 +25,7 @@ from sqlmesh.core.snapshot import (
     SnapshotTableInfo,
 )
 from sqlmesh.schedulers.airflow import common
-from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
+from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
@@ -381,3 +382,45 @@ def test_create_plan_dag_spec_unbounded_end(
 
     state_sync_mock.get_snapshots.assert_called_once()
     state_sync_mock.get_environment.assert_called_once()
+
+
+def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name):
+    environment_name = random_name()
+    plan_dag_spec = common.PlanDagSpec(
+        request_id="test_request_id",
+        environment_naming_info=EnvironmentNamingInfo(
+            name=environment_name, suffix_target=EnvironmentSuffixTarget.SCHEMA
+        ),
+        new_snapshots=[],
+        backfill_intervals_per_snapshot=[],
+        promoted_snapshots=[snapshot.table_info],
+        demoted_snapshots=[],
+        start=to_timestamp("2022-01-02"),
+        end=None,
+        unpaused_dt=None,
+        no_gaps=True,
+        plan_id="test_plan_id",
+        previous_plan_id=None,
+        notification_targets=[],
+        backfill_concurrent_tasks=1,
+        ddl_concurrent_tasks=1,
+        users=[],
+        is_dev=False,
+        forward_only=True,
+        dag_start_ts=to_timestamp("2023-01-01"),
+    )
+
+    plan_dag_state = PlanDagState.from_state_sync(sushi_context.state_sync)
+
+    assert not plan_dag_state.get_dag_specs()
+
+    plan_dag_state.add_dag_spec(plan_dag_spec)
+    assert plan_dag_state.get_dag_specs() == [plan_dag_spec]
+
+    plan_dag_state.delete_dag_specs([])
+    assert plan_dag_state.get_dag_specs() == [plan_dag_spec]
+
+    plan_dag_state.delete_dag_specs(
+        [common.plan_application_dag_id(environment_name, "test_request_id")]
+    )
+    assert not plan_dag_state.get_dag_specs()

@@ -6,26 +6,6 @@ from pytest_mock.plugin import MockerFixture
 from sqlmesh.schedulers.airflow.mwaa_client import MWAAClient
 
 
-def test_set_variable(mocker: MockerFixture):
-    set_variable_response_mock = mocker.Mock()
-    set_variable_response_mock.json.return_value = {
-        "stdout": "",
-        "stderr": "",
-    }
-    set_variable_response_mock.status_code = 200
-    set_variable_mock = mocker.patch("requests.Session.post")
-    set_variable_mock.return_value = set_variable_response_mock
-
-    client = MWAAClient("https://test_airflow_host", "test_token")
-
-    client.set_variable("test_key", "test_value")
-
-    set_variable_mock.assert_called_once_with(
-        "https://test_airflow_host/aws_mwaa/cli",
-        data="variables set test_key 'test_value'",
-    )
-
-
 def test_get_first_dag_run_id(mocker: MockerFixture):
     list_runs_response_mock = mocker.Mock()
     list_runs_response_mock.json.return_value = {
