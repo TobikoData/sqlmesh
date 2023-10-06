@@ -90,7 +90,7 @@ Configuration options for all incremental models.
 
 #### Incremental by time range
 
-Configuration options for [incremental by time models](../concepts/models/model_kinds.md#incremental_by_time_range).
+Configuration options for [`INCREMENTAL_BY_TIME_RANGE` models](../concepts/models/model_kinds.md#incremental_by_time_range).
 
 | Option                | Description                                                                                                                             | Type | Required |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | :--: | :------: |
@@ -103,7 +103,7 @@ Python model configuration object: [IncrementalByTimeRangeKind()](https://sqlmes
 
 #### Incremental by unique key
 
-Configuration options for [incremental by unique key models](../concepts/models/model_kinds.md#incremental_by_unique_key).
+Configuration options for [`INCREMENTAL_BY_UNIQUE_KEY` models](../concepts/models/model_kinds.md#incremental_by_unique_key).
 
 | Option                | Description                                                                                                                             |       Type       | Required |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | :--------------: | :------: |
@@ -115,7 +115,7 @@ Python model configuration object: [IncrementalByUniqueKeyKind()](https://sqlmes
 
 ### `SEED` models
 
-Configuration options for [seed models](../concepts/models/model_kinds.md#seed).
+Configuration options for [`SEED` models](../concepts/models/model_kinds.md#seed).
 
 | Option | Description            | Type | Required |
 | ------ | ---------------------- | :--: | :------: |
@@ -125,7 +125,7 @@ Python model configuration object: [SeedKind()](https://sqlmesh.readthedocs.io/e
 
 ### SCD Type 2 models
 
-Configuration options for [SCD Type 2 models](../concepts/models/model_kinds.md#scd-type-2).
+Configuration options for [`SCD_TYPE_2` models](../concepts/models/model_kinds.md#scd-type-2).
 
 | Option                | Description                                                                                                                            |   Type    | Required |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | :-------: | :------: |

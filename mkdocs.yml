@@ -12,16 +12,21 @@ nav:
       - quickstart/notebook.md
       - quickstart/ui.md
   - Guides:
-    - guides/projects.md
-    - guides/models.md
-    - guides/testing.md
-    - guides/scheduling.md
-    - guides/connections.md
-    - guides/multi_repo.md
-    - guides/migrations.md
-    - guides/notifications.md
-    - guides/tablediff.md
-    - guides/configuration.md
+    - Project structure:
+      - guides/projects.md
+      - guides/multi_repo.md
+    - Project setup:
+      - guides/configuration.md
+      - guides/connections.md
+      - guides/scheduling.md
+      - guides/notifications.md
+      - guides/migrations.md
+    - Project content:
+      - guides/models.md
+      - guides/incremental_time.md
+      - guides/testing.md
+    - SQLMesh tools:
+      - guides/tablediff.md
   - Concepts:
     - concepts/overview.md
     - Development:
