@@ -350,7 +350,7 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
         return self._mwaa_client
 
     def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
-        from sqlmesh.schedulers.airflow.plan import create_plan_dag_spec
+        from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
 
         plan_application_request = airflow_common.PlanApplicationRequest(
             new_snapshots=list(plan.new_snapshots),
@@ -367,13 +367,7 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
             forward_only=plan.forward_only,
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
-
-        _, stderr = self._mwaa_client.set_variable(
-            airflow_common.plan_dag_spec_key(plan_request_id), plan_dag_spec.json()
-        )
-
-        if stderr:
-            logger.warning("MWAA CLI stderr:\n%s", stderr)
+        PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
 
 
 def can_evaluate_before_promote(

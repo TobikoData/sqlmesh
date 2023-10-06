@@ -2176,7 +2176,7 @@ def test_scd_type_2_defaults():
         """
     )
     scd_type_2_model = load_sql_based_model(view_model_expressions)
-    assert scd_type_2_model.unique_key == ["id"]
+    assert scd_type_2_model.unique_key == [exp.to_column("id")]
     assert scd_type_2_model.managed_columns == {
         "valid_from": exp.DataType.build("TIMESTAMP"),
         "valid_to": exp.DataType.build("TIMESTAMP"),
@@ -2196,7 +2196,7 @@ def test_scd_type_2_overrides():
         MODEL (
             name db.table,
             kind SCD_TYPE_2 (
-                unique_key [id, ds],
+                unique_key ["iD", COALESCE("ds", '')],
                 updated_at_name test_updated_at,
                 valid_from_name test_valid_from,
                 valid_to_name test_valid_to,
@@ -2205,7 +2205,7 @@ def test_scd_type_2_overrides():
             ),
         );
         SELECT
-            1 as id,
+            1 as "iD",
             '2020-01-01' as ds,
             '2020-01-01' as test_updated_at,
             '2020-01-01' as test_valid_from,
@@ -2214,7 +2214,10 @@ def test_scd_type_2_overrides():
         """
     )
     scd_type_2_model = load_sql_based_model(view_model_expressions)
-    assert scd_type_2_model.unique_key == ["id", "ds"]
+    assert scd_type_2_model.unique_key == [
+        exp.column("iD", quoted=True),
+        exp.func("COALESCE", '"ds"', "''"),
+    ]
     assert scd_type_2_model.managed_columns == {
         "test_valid_from": exp.DataType.build("TIMESTAMP"),
         "test_valid_to": exp.DataType.build("TIMESTAMP"),

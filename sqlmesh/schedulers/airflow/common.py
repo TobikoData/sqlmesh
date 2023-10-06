@@ -68,17 +68,17 @@ class PlanDagSpec(PydanticModel):
     promoted_snapshots: t.List[SnapshotTableInfo]
     demoted_snapshots: t.List[SnapshotTableInfo]
     start: TimeLike
-    end: t.Optional[TimeLike]
-    unpaused_dt: t.Optional[TimeLike]
+    end: t.Optional[TimeLike] = None
+    unpaused_dt: t.Optional[TimeLike] = None
     no_gaps: bool
     plan_id: str
-    previous_plan_id: t.Optional[str]
+    previous_plan_id: t.Optional[str] = None
     notification_targets: t.List[NotificationTarget]
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
     users: t.List[User]
     is_dev: bool
-    forward_only: t.Optional[bool]
+    forward_only: t.Optional[bool] = None
     environment_expiration_ts: t.Optional[int] = None
     dag_start_ts: t.Optional[int] = None
 
@@ -141,10 +141,6 @@ def dag_id_for_name_version(name: str, version: str) -> str:
 
 def plan_application_dag_id(environment: str, request_id: str) -> str:
     return f"sqlmesh_plan_application__{environment}__{request_id}"
-
-
-def environment_key(env: str) -> str:
-    return f"{ENV_KEY_PREFIX}__{env}"
 
 
 def plan_dag_spec_key(request_id: str) -> str:

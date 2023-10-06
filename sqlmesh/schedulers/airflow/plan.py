@@ -2,14 +2,82 @@ from __future__ import annotations
 
 import typing as t
 
+import pandas as pd
+from sqlglot import exp
+
 from sqlmesh.core import scheduler
+from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import can_evaluate_before_promote
 from sqlmesh.core.snapshot import SnapshotTableInfo
-from sqlmesh.core.state_sync import StateSync
+from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
+from sqlmesh.core.state_sync.base import DelegatingStateSync
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now, now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
+
+
+class PlanDagState:
+    def __init__(self, engine_adapter: EngineAdapter, plan_dags_table: str):
+        self.engine_adapter = engine_adapter
+
+        self._plan_dags_table = plan_dags_table
+        self._plan_dag_columns_to_types = {
+            "request_id": exp.DataType.build("text"),
+            "dag_id": exp.DataType.build("text"),
+            "dag_spec": exp.DataType.build("text"),
+        }
+
+    @classmethod
+    def from_state_sync(cls, state_sync: StateSync) -> PlanDagState:
+        while isinstance(state_sync, DelegatingStateSync):
+            state_sync = state_sync.state_sync
+        if not isinstance(state_sync, EngineAdapterStateSync):
+            raise SQLMeshError(f"Unsupported state sync {state_sync.__class__.__name__}")
+        return cls(state_sync.engine_adapter, state_sync.plan_dags_table)
+
+    def add_dag_spec(self, spec: common.PlanDagSpec) -> None:
+        """Adds a new DAG spec to the state.
+
+        Args:
+            spec: the plan DAG spec to add.
+        """
+        df = pd.DataFrame(
+            [
+                {
+                    "request_id": spec.request_id,
+                    "dag_id": common.plan_application_dag_id(
+                        spec.environment_naming_info.name, spec.request_id
+                    ),
+                    "dag_spec": spec.json(),
+                }
+            ]
+        )
+        self.engine_adapter.insert_append(
+            self._plan_dags_table,
+            df,
+            columns_to_types=self._plan_dag_columns_to_types,
+            contains_json=True,
+        )
+
+    def get_dag_specs(self) -> t.List[common.PlanDagSpec]:
+        """Returns all DAG specs in the state."""
+        query = exp.select("dag_spec").from_(self._plan_dags_table)
+        return [
+            common.PlanDagSpec.parse_raw(row[0])
+            for row in self.engine_adapter.fetchall(
+                query, ignore_unsupported_errors=True, quote_identifiers=True
+            )
+        ]
+
+    def delete_dag_specs(self, dag_ids: t.Collection[str]) -> None:
+        """Deletes the DAG specs with the given DAG IDs."""
+        if not dag_ids:
+            return
+        self.engine_adapter.delete_from(
+            self._plan_dags_table,
+            where=exp.column("dag_id").isin(*dag_ids),
+        )
 
 
 def create_plan_dag_spec(

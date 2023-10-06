@@ -129,7 +129,7 @@ class TestContext:
         return self._format_df(data)
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        return self._format_df(data)
+        return self._format_df(data, include_tz=self.dialect in ("spark", "databricks"))
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
         return normalize_identifiers(
@@ -501,7 +501,7 @@ def test_merge(ctx: TestContext):
         table,
         ctx.input_data(input_data),
         columns_to_types=None,
-        unique_key=["id"],
+        unique_key=[exp.to_identifier("id")],
     )
     results = ctx.get_metadata_results()
     assert len(results.views) == 0
@@ -523,7 +523,7 @@ def test_merge(ctx: TestContext):
             table,
             ctx.input_data(merge_data),
             columns_to_types=None,
-            unique_key=["id"],
+            unique_key=[exp.to_identifier("id")],
         )
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
@@ -572,7 +572,7 @@ def test_scd_type_2(ctx: TestContext):
     ctx.engine_adapter.scd_type_2(
         table,
         ctx.input_data(input_data, input_schema),
-        unique_key=["id"],
+        unique_key=[exp.to_identifier("id")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",
@@ -631,7 +631,7 @@ def test_scd_type_2(ctx: TestContext):
     ctx.engine_adapter.scd_type_2(
         table,
         ctx.input_data(current_data, input_schema),
-        unique_key=["id"],
+        unique_key=[exp.to_identifier("id")],
         valid_from_name="valid_from",
         valid_to_name="valid_to",
         updated_at_name="updated_at",

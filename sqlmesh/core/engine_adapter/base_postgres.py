@@ -4,12 +4,8 @@ import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.mixins import CommitOnExecuteMixin
-from sqlmesh.core.engine_adapter.shared import (
-    DataObject,
-    DataObjectType,
-    TransactionType,
-)
+from sqlmesh.core.engine_adapter.mixins import EngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -17,7 +13,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 
-class BasePostgresEngineAdapter(CommitOnExecuteMixin):
+class BasePostgresEngineAdapter(EngineAdapter):
     COLUMNS_TABLE = "information_schema.columns"
 
     def columns(
@@ -85,7 +81,7 @@ class BasePostgresEngineAdapter(CommitOnExecuteMixin):
 
         Reference: https://www.postgresql.org/docs/current/sql-createview.html
         """
-        with self.transaction(TransactionType.DDL):
+        with self.transaction():
             if replace:
                 self.drop_view(view_name, materialized=materialized)
             super().create_view(

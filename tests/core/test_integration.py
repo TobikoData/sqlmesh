@@ -828,7 +828,7 @@ def test_scd_type_2(tmp_path: pathlib.Path):
                 [
                     ("customer_id", "int32"),
                     ("status", "object"),
-                    ("updated_at", "datetime64[ns]"),
+                    ("updated_at", "datetime64[us]"),
                 ],
             ),
         )
@@ -842,9 +842,9 @@ def test_scd_type_2(tmp_path: pathlib.Path):
                 [
                     ("customer_id", "int32"),
                     ("status", "object"),
-                    ("updated_at", "datetime64[ns]"),
-                    ("valid_from", "datetime64[ns]"),
-                    ("valid_to", "datetime64[ns]"),
+                    ("updated_at", "datetime64[us]"),
+                    ("valid_from", "datetime64[us]"),
+                    ("valid_to", "datetime64[us]"),
                 ],
             ),
         )

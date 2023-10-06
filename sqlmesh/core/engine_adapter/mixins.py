@@ -6,7 +6,7 @@ import typing as t
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter, SourceQuery, TransactionType
+from sqlmesh.core.engine_adapter.base import EngineAdapter, SourceQuery
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -23,7 +23,7 @@ class LogicalMergeMixin(EngineAdapter):
         target_table: TableName,
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
-        unique_key: t.Sequence[str],
+        unique_key: t.Sequence[exp.Expression],
     ) -> None:
         """
         Merge implementation for engine adapters that do not support merge natively.
@@ -42,7 +42,7 @@ class LogicalMergeMixin(EngineAdapter):
         unique_exp = exp.func("CONCAT_WS", "'__SQLMESH_DELIM__'", *unique_key)
         column_names = list(columns_to_types or [])
 
-        with self.transaction(TransactionType.DML):
+        with self.transaction():
             self.ctas(temp_table, source_table, columns_to_types=columns_to_types, exists=False)
             self.execute(
                 exp.delete(target_table).where(
@@ -77,7 +77,7 @@ class LogicalReplaceQueryMixin(EngineAdapter):
 
         if not self.table_exists(table_name):
             return self.ctas(table_name, query_or_df, columns_to_types, exists=False, **kwargs)
-        with self.transaction(TransactionType.DDL):
+        with self.transaction():
             # TODO: remove quote_identifiers when sqlglot has an expression to represent TRUNCATE
             source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
                 query_or_df, columns_to_types, table_name
@@ -123,30 +123,6 @@ class PandasNativeFetchDFSupportMixin(EngineAdapter):
         )
         logger.debug(f"Executing SQL:\n{sql}")
         return read_sql_query(sql, self._connection_pool.get())
-
-
-class CommitOnExecuteMixin(EngineAdapter):
-    def execute(
-        self,
-        expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
-        ignore_unsupported_errors: bool = False,
-        quote_identifiers: bool = True,
-        **kwargs: t.Any,
-    ) -> None:
-        """
-        To make sure that inserts and updates take effect we need to commit explicitly unless the
-        statement is executed as part of an active transaction.
-
-        Reference: https://www.psycopg.org/psycopg3/docs/basic/transactions.html
-        """
-        super().execute(
-            expressions,
-            ignore_unsupported_errors=ignore_unsupported_errors,
-            quote_identifiers=quote_identifiers,
-            **kwargs,
-        )
-        if not self._connection_pool.is_transaction_active:
-            self._connection_pool.commit()
 
 
 class InsertOverwriteWithMergeMixin(EngineAdapter):
