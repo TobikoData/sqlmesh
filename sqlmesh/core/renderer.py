@@ -399,7 +399,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 schema = MappingSchema(None, dialect=self._dialect, normalize=False)
                 break
 
-        should_optimize = not query.selects[0].name.upper() == SQLMESH_MOCKED_STAR and (
+        should_optimize = query.selects[0].name.upper() != SQLMESH_MOCKED_STAR and (
             not schema.empty or not dependencies
         )
 
