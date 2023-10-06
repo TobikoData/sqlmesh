@@ -17,7 +17,7 @@ To add a model:
 
         MODEL (
             name sqlmesh_example.new_model,
-            kind incremental_by_time_range (
+            kind INCREMENTAL_BY_TIME_RANGE (
                 time_column (ds, '%Y-%m-%d'),
             ),
         );
