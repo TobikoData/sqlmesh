@@ -4,13 +4,12 @@ repo_name: TobikoData/sqlmesh
 nav:
   - "Overview": index.md
   - Get started:
+    - quick_start.md
     - prerequisites.md
     - installation.md
-    - Quick Start:
-      - quick_start.md
-      - quickstart/cli.md
-      - quickstart/notebook.md
-      - quickstart/ui.md
+    - quickstart/cli.md
+    - quickstart/notebook.md
+    - quickstart/ui.md
   - Guides:
     - guides/projects.md
     - guides/models.md
@@ -48,15 +47,6 @@ nav:
       - concepts/architecture/snapshots.md
       - concepts/architecture/serialization.md
     - concepts/glossary.md
-  - Reference:
-    - API:
-      - reference/overview.md
-      - reference/cli.md
-      - reference/notebook.md
-      - reference/python.md
-    - Configuration:
-      - reference/configuration.md
-      - reference/model_configuration.md
   - Integrations:
     - "Overview": integrations/overview.md
     - Tools:
@@ -78,7 +68,15 @@ nav:
     - comparisons.md
     - development.md
   - "FAQ": faq/faq.md
-  - API: _readthedocs/html/sqlmesh.html
+  - Reference:
+    - API:
+      - reference/overview.md
+      - reference/cli.md
+      - reference/notebook.md
+      - reference/python.md
+    - Configuration:
+      - reference/configuration.md
+      - reference/model_configuration.md
 theme:
   name: material
   logo: sqlmesh.png
