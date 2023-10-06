@@ -948,7 +948,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             )
 
     @contextlib.contextmanager
-    def _transaction(self) -> t.Generator[None, None, None]:
+    def _transaction(self) -> t.Iterator[None]:
         with self.engine_adapter.transaction():
             yield
 
