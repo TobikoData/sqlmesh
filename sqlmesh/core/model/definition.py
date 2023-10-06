@@ -245,7 +245,7 @@ class _Model(ModelMeta, frozen=True):
         """
         return exp.select(
             *(
-                exp.cast(exp.Null(), column_type, copy=False).as_(name, copy=False)
+                exp.cast(exp.Null(), column_type, copy=False).as_(name, copy=False, quoted=True)
                 for name, column_type in (self.columns_to_types or {}).items()
             ),
             copy=False,
