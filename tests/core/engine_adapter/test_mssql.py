@@ -1,6 +1,7 @@
 # type: ignore
 import typing as t
 import uuid
+from unittest import mock
 
 import pandas as pd
 from pytest_mock.plugin import MockerFixture
@@ -9,6 +10,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.engine_adapter.mssql import MSSQLEngineAdapter
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils.date import to_ds
 from tests.core.engine_adapter import to_sql_calls
 
@@ -321,3 +323,57 @@ def test_create_index(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with(
         """IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = object_id('test_table') AND name = 'test_index') EXEC('CREATE INDEX "test_index" ON "test_table"("cola", "colb")');"""
     )
+
+
+def test_get_data_objects(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
+    adapter.cursor.fetchall.return_value = [("test_catalog", "test_table", "test_schema", "TABLE")]
+    adapter.cursor.description = [["catalog_name"], ["name"], ["schema_name"], ["type"]]
+    adapter._get_data_objects("test_schema", catalog_name="test_catalog")
+
+    adapter.cursor.fetchone.return_value = ["test_catalog"]
+    adapter._get_data_objects("test_schema")
+
+    assert to_sql_calls(adapter) == [
+        """
+            SELECT
+                'test_catalog' AS catalog_name,
+                TABLE_NAME AS name,
+                TABLE_SCHEMA AS schema_name,
+                CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
+            FROM test_catalog.INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA LIKE '%test_schema%'
+        """,
+        "select DB_NAME()",
+        """
+            SELECT
+                'test_catalog' AS catalog_name,
+                TABLE_NAME AS name,
+                TABLE_SCHEMA AS schema_name,
+                CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
+            FROM test_catalog.INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA LIKE '%test_schema%'
+        """,
+    ]
+
+
+def test_drop_schema(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
+    adapter._get_data_objects = mock.Mock()
+    adapter._get_data_objects.return_value = [
+        DataObject(
+            catalog="test_catalog",
+            schema="test_schema",
+            name="test_view",
+            type=DataObjectType.from_str("VIEW"),
+        )
+    ]
+
+    adapter.drop_schema("test_schema", cascade=True)
+
+    assert to_sql_calls(adapter) == [
+        """DROP VIEW IF EXISTS "test_schema"."test_view";""",
+        """DROP SCHEMA IF EXISTS "test_schema";""",
+    ]
