@@ -51,8 +51,8 @@ This section describes how to adapt dbt's incremental models to run on sqlmesh a
 
 SQLMesh supports two approaches to implement [idempotent](../concepts/glossary.md#idempotency) incremental loads:
 
-* Using merge (with the sqlmesh [`incremental_by_unique_key` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key))
-* Using insert-overwrite/delete+insert (with the sqlmesh [`incremental_by_time_range` model kind](../concepts/models/model_kinds.md#incremental_by_time_range))
+* Using merge (with the sqlmesh [`INCREMENTAL_BY_UNIQUE_KEY` model kind](../concepts/models/model_kinds.md#incremental_by_unique_key))
+* Using insert-overwrite/delete+insert (with the sqlmesh [`INCREMENTAL_BY_TIME_RANGE` model kind](../concepts/models/model_kinds.md#incremental_by_time_range))
 
 #### Incremental by unique key
 

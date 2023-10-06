@@ -92,7 +92,7 @@ This example shows an incremental by time model that could be added to the SQLMe
 ``` sql linenums="1"
 MODEL (
     name sqlmesh_example.new_model,
-    kind incremental_by_time_range (
+    kind INCREMENTAL_BY_TIME_RANGE (
         time_column (ds, '%Y-%m-%d'), -- Time column `ds` with format '%Y-%m-%d'
     ),
 );
@@ -139,7 +139,7 @@ This example configures the model in the previous example to be forward only:
 ``` sql linenums="1"
 MODEL (
     name sqlmesh_example.new_model,
-    kind incremental_by_time_range (
+    kind INCREMENTAL_BY_TIME_RANGE (
         time_column (ds, '%Y-%m-%d'),
     ),
     forward_only true -- All changes will be forward only
