@@ -208,7 +208,7 @@ The model kinds described so far cause the output of a model query to be materia
 
 The `VIEW` kind is different, because no data is actually written during model execution. Instead, a non-materialized view (or "virtual table") is created or replaced based on the model's query.
 
-**Note:** View is the default model kind if kind is not specified.
+**Note:** `VIEW` is the default model kind if kind is not specified.
 
 **Note:** With this kind, the model's query is evaluated every time the model is referenced in a downstream query. This may incur undesirable compute cost and time in cases where the model's query is compute-intensive, or when the model is referenced in many downstream queries.
 
