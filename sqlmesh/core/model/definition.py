@@ -363,6 +363,53 @@ class _Model(ModelMeta, frozen=True):
         """
         return []
 
+    def render_signals(
+        self,
+        *,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+    ) -> t.List[t.Dict[str, str | int | float | bool]]:
+        """Renders external; signals defined for this model.
+
+        Args:
+            start: The start datetime to render. Defaults to epoch start.
+            end: The end datetime to render. Defaults to epoch start.
+            execution_time: The date/time time reference to use for execution time.
+
+        Returns:
+            The list of rendered expressions.
+        """
+
+        def _create_renderer(expression: exp.Expression) -> ExpressionRenderer:
+            return ExpressionRenderer(
+                expression,
+                self.dialect,
+                [],
+                path=self._path,
+                jinja_macro_registry=self.jinja_macros,
+                python_env=self.python_env,
+                only_execution_time=False,
+            )
+
+        def _render(e: exp.Expression) -> str | int | float | bool:
+            rendered_exprs = _create_renderer(e).render(
+                start=start, end=end, execution_time=execution_time
+            )
+            if len(rendered_exprs) != 1:
+                raise SQLMeshError(f"Expected one expression but got {len(rendered_exprs)}")
+
+            rendered = rendered_exprs[0]
+            if rendered.is_int:
+                return int(rendered.this)
+            if rendered.is_number:
+                return float(rendered.this)
+            if isinstance(rendered, (exp.Literal, exp.Boolean)):
+                return rendered.this
+            return rendered.sql(dialect=self.dialect)
+
+        return [{t.this.name: _render(t.expression) for t in signal} for signal in self.signals]
+
     def ctas_query(self, **render_kwarg: t.Any) -> exp.Subqueryable:
         """Return a dummy query to do a CTAS.
 
@@ -1957,4 +2004,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "table_properties_": lambda value: value,
     "session_properties_": lambda value: value,
     "allow_partials": exp.convert,
+    "signals": lambda values: exp.Tuple(expressions=values),
 }

@@ -11,6 +11,7 @@ from sqlmesh.core import dialect as d
 from sqlmesh.core.model.common import (
     bool_validator,
     parse_expressions,
+    parse_properties,
     properties_validator,
 )
 from sqlmesh.core.model.kind import (
@@ -57,6 +58,7 @@ class ModelMeta(_Node, extra="allow"):
     table_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="table_properties")
     session_properties_: t.Optional[exp.Tuple] = Field(default=None, alias="session_properties")
     allow_partials: bool = False
+    signals: t.List[exp.Tuple] = []
 
     _table_properties: t.Dict[str, exp.Expression] = {}
 
@@ -229,6 +231,28 @@ class ModelMeta(_Node, extra="allow"):
             refs.append(v)
 
         return refs
+
+    @field_validator("signals", mode="before")
+    @field_validator_v1_args
+    def _signals_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Any:
+        if v is None:
+            return []
+
+        if isinstance(v, str):
+            dialect = values.get("dialect")
+            v = d.parse_one(v, dialect=dialect)
+
+        if isinstance(v, (exp.Array, exp.Paren, exp.Tuple)):
+            tuples: t.List[exp.Expression] = (
+                [v.unnest()] if isinstance(v, exp.Paren) else v.expressions
+            )
+            signals = [parse_properties(cls, t, values) for t in tuples]
+        elif isinstance(v, list):
+            signals = [parse_properties(cls, t, values) for t in v]
+        else:
+            raise ConfigError(f"Unexpected signals '{v}'")
+
+        return signals
 
     @model_validator(mode="before")
     def _pre_root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
