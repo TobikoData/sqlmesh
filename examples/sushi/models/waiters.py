@@ -12,6 +12,7 @@ from sqlmesh.core.model import EmbeddedKind
     kind=EmbeddedKind(),
     owner="jen",
     cron="@daily",
+    depends_on=["sushi.orders"],
 )
 def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
     """

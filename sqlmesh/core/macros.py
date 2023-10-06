@@ -26,6 +26,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core.model import Model
     from sqlmesh.core.snapshot import Snapshot
 
 
@@ -106,6 +107,7 @@ class MacroEvaluator:
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         jinja_env: t.Optional[Environment] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        models: t.Optional[UniqueKeyDict[str, Model]] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -115,7 +117,7 @@ class MacroEvaluator:
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
 
-        self._models = {
+        self._models = models or {
             name: snapshot.node
             for name, snapshot in (snapshots or {}).items()
             if snapshot.node.is_model

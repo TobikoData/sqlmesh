@@ -985,20 +985,31 @@ class SqlModel(_SqlBasedModel):
             return None
         return any(isinstance(expression, exp.Star) for expression in query.expressions)
 
-    @property
-    def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
+    def _set_columns_to_types(
+        self, render: bool = True, **kwargs: t.Any
+    ) -> t.Optional[t.Dict[str, exp.DataType]]:
         if self.columns_to_types_ is not None:
             self._columns_to_types = self.columns_to_types_
-        elif self._columns_to_types is None:
-            query = self._query_renderer.render()
+        elif self._columns_to_types is None or render:
+            query = self._query_renderer.render(**kwargs)
             if query is None:
                 return None
+
             self._columns_to_types = d.extract_columns_to_types(query)
 
-        if "*" in self._columns_to_types or SQLMESH_MOCKED_STAR in self._columns_to_types:
+        return self._columns_to_types
+
+    @property
+    def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
+        columns_to_types = self._set_columns_to_types(render=False)
+        if (
+            columns_to_types is None
+            or "*" in columns_to_types
+            or (SQLMESH_MOCKED_STAR in columns_to_types)
+        ):
             return None
 
-        return {**self._columns_to_types, **self.managed_columns}
+        return {**columns_to_types, **self.managed_columns}
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
