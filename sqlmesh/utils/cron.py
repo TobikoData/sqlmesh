@@ -27,16 +27,16 @@ class CroniterCache:
         to substitute for the cron call.
         """
         if self._interval_seconds is None:
-            seconds = set()
+            deltas = set()
             curr = self.curr
 
             for _ in range(self.ESTIMATE_SAMPLES_NUM):
                 prev = curr
-                curr = to_datetime(croniter(self.cron, curr).get_next())
-                seconds.add(curr - prev)
+                curr = to_datetime(croniter(self.cron, curr).get_next() * 1000)
+                deltas.add(curr - prev)
 
-            if len(seconds) == 1:
-                self._interval_seconds = int(first(seconds).total_seconds())
+            if len(deltas) == 1:
+                self._interval_seconds = int(first(deltas).total_seconds())
             else:
                 self._interval_seconds = 0
 
@@ -46,12 +46,12 @@ class CroniterCache:
         if estimate and self.interval_seconds:
             self.curr = self.curr + timedelta(seconds=self.interval_seconds)
         else:
-            self.curr = to_datetime(croniter(self.cron, self.curr).get_next())
+            self.curr = to_datetime(croniter(self.cron, self.curr).get_next() * 1000)
         return self.curr
 
     def get_prev(self, estimate: bool = False) -> datetime:
         if estimate and self.interval_seconds:
             self.curr = self.curr - timedelta(seconds=self.interval_seconds)
         else:
-            self.curr = to_datetime(croniter(self.cron, self.curr).get_prev())
+            self.curr = to_datetime(croniter(self.cron, self.curr).get_prev() * 1000)
         return self.curr
