@@ -7,6 +7,7 @@ import zlib
 from pydantic import Field
 from sqlglot.helper import first
 
+from sqlmesh.cicd.config import CICDBotConfig
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
 from sqlmesh.core.config.base import BaseConfig, UpdateStrategy
@@ -80,6 +81,7 @@ class Config(BaseConfig):
         default=EnvironmentSuffixTarget.default
     )
     default_target_environment: str = c.PROD
+    cicd_bot: t.Optional[CICDBotConfig] = None
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,

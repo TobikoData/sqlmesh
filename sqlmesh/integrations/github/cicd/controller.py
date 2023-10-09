@@ -21,8 +21,14 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import LoadedSnapshotIntervals, Plan
 from sqlmesh.core.user import User
+from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.utils.date import now
-from sqlmesh.utils.errors import CICDBotError, PlanError
+from sqlmesh.utils.errors import (
+    CICDBotError,
+    NoChangesPlanError,
+    PlanError,
+    UncategorizedPlanError,
+)
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -37,6 +43,10 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.config import Config
 
 logger = logging.getLogger(__name__)
+
+
+class TestFailure(Exception):
+    pass
 
 
 class PullRequestInfo(PydanticModel):
@@ -161,12 +171,6 @@ class MergeStateStatus(str, Enum):
     @property
     def is_unstable(self) -> bool:
         return self == MergeStateStatus.UNSTABLE
-
-
-class MergeMethod(str, Enum):
-    MERGE = "merge"
-    SQUASH = "squash"
-    REBASE = "rebase"
 
 
 class BotCommand(Enum):
@@ -310,6 +314,10 @@ class GithubController:
         )
 
     @property
+    def deploy_command_enabled(self) -> bool:
+        return self.bot_config.enable_deploy_command
+
+    @property
     def is_comment_added(self) -> bool:
         return self._event.is_comment_added
 
@@ -355,11 +363,12 @@ class GithubController:
         if not self._pr_plan:
             self._pr_plan = self._context.plan(
                 environment=self.pr_environment_name,
-                skip_backfill=True,
                 auto_apply=False,
                 no_prompts=True,
-                no_auto_categorization=True,
                 skip_tests=True,
+                categorizer_config=self.bot_config.auto_categorize_changes,
+                start=self.bot_config.default_pr_start,
+                skip_backfill=self.bot_config.skip_pr_backfill,
             )
         return self._pr_plan
 
@@ -371,8 +380,8 @@ class GithubController:
                 auto_apply=False,
                 no_gaps=True,
                 no_prompts=True,
-                no_auto_categorization=True,
                 skip_tests=True,
+                categorizer_config=self.bot_config.auto_categorize_changes,
             )
         return self._prod_plan
 
@@ -389,7 +398,13 @@ class GithubController:
             )
         return self._prod_plan_with_gaps
 
-    def _get_plan_summary(self, plan: Plan) -> str:
+    @property
+    def bot_config(self) -> GithubCICDBotConfig:
+        return self._context.config.cicd_bot or GithubCICDBotConfig(
+            auto_categorize_changes=self._context.auto_categorize_changes
+        )
+
+    def get_plan_summary(self, plan: Plan) -> str:
         try:
             # Clear out any output that might exist from prior steps
             self._console.clear_captured_outputs()
@@ -489,7 +504,7 @@ class GithubController:
         plan_summary = f"""<details>
   <summary>Prod Plan Being Applied</summary>
 
-{self._get_plan_summary(self.prod_plan)}
+{self.get_plan_summary(self.prod_plan)}
 </details>
 
 """
@@ -499,11 +514,12 @@ class GithubController:
         )
         self._context.apply(self.prod_plan)
 
-    def delete_pr_environment(self) -> None:
+    def try_invalidate_pr_environment(self) -> None:
         """
         Marks the PR environment for garbage collection.
         """
-        self._context.invalidate_environment(self.pr_environment_name)
+        if self.bot_config.invalidate_environment_after_deploy:
+            self._context.invalidate_environment(self.pr_environment_name)
 
     def get_loaded_snapshot_intervals(self) -> t.List[LoadedSnapshotIntervals]:
         return self.prod_plan_with_gaps.loaded_snapshot_intervals
@@ -570,19 +586,21 @@ class GithubController:
         status: GithubCheckStatus,
         conclusion: t.Optional[GithubCheckConclusion] = None,
         result: t.Optional[unittest.result.TestResult] = None,
-        failed_output: t.Optional[str] = None,
+        output: t.Optional[str] = None,
     ) -> None:
         """
         Updates the status of tests for code in the PR
         """
 
         def conclusion_handler(
-            _: GithubCheckConclusion, result: unittest.result.TestResult, failed_output: str
+            _: GithubCheckConclusion, result: unittest.result.TestResult, output: str
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if not result:
                 return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
+            # Clear out console
+            self._console.consume_captured_output()
             self._console.log_test_results(
-                result, failed_output or "", self._context._test_engine_adapter.dialect
+                result, output, self._context._test_engine_adapter.dialect
             )
             test_summary = self._console.consume_captured_output()
             test_title = "Tests Passed" if result.wasSuccessful() else "Tests Failed"
@@ -604,9 +622,7 @@ class GithubController:
                 }[status],
                 None,
             ),
-            conclusion_handler=functools.partial(
-                conclusion_handler, result=result, failed_output=failed_output
-            ),
+            conclusion_handler=functools.partial(conclusion_handler, result=result, output=output),
         )
 
     def update_required_approval_check(
@@ -622,12 +638,17 @@ class GithubController:
             test_summary = f"**List of possible required approvers:**\n"
             for user in self._required_approvers:
                 test_summary += f"- `{user.github_username or user.username}`\n"
+
             title = (
                 f"Obtained approval from required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers_with_approval])}"
                 if conclusion.is_success
                 else "Need a Required Approval"
             )
             return conclusion, title, test_summary
+
+        # If we get a skip that means required approvers is not configured therefore it does not need to be displayed
+        if conclusion and conclusion.is_skipped:
+            return
 
         self._update_check_handler(
             check_name="SQLMesh - Has Required Approval",
@@ -644,16 +665,28 @@ class GithubController:
         )
 
     def update_pr_environment_check(
-        self, status: GithubCheckStatus, conclusion: t.Optional[GithubCheckConclusion] = None
-    ) -> None:
+        self,
+        status: GithubCheckStatus,
+        exception: t.Optional[Exception] = None,
+    ) -> t.Optional[GithubCheckConclusion]:
         """
         Updates the status of the merge commit for the PR environment.
         """
+        conclusion: t.Optional[GithubCheckConclusion] = None
+        if isinstance(exception, (NoChangesPlanError, TestFailure)):
+            conclusion = GithubCheckConclusion.SKIPPED
+        elif isinstance(exception, UncategorizedPlanError):
+            conclusion = GithubCheckConclusion.ACTION_REQUIRED
+        elif exception:
+            conclusion = GithubCheckConclusion.FAILURE
+        elif status.is_completed:
+            conclusion = GithubCheckConclusion.SUCCESS
+
         check_title_static = "PR Virtual Data Environment: "
         check_title = check_title_static + self.pr_environment_name
 
         def conclusion_handler(
-            conclusion: GithubCheckConclusion,
+            conclusion: GithubCheckConclusion, exception: t.Optional[Exception]
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if conclusion.is_success:
                 pr_affected_models = self.get_loaded_snapshot_intervals()
@@ -687,11 +720,17 @@ class GithubController:
                     dedup_regex=rf"- {check_title_static}.*",
                 )
             else:
+                if isinstance(exception, NoChangesPlanError):
+                    skip_reason = "No changes were detected compared to the prod environment."
+                elif isinstance(exception, TestFailure):
+                    skip_reason = "Unit Test(s) Failed so skipping PR creation"
+                else:
+                    skip_reason = "A prior stage failed resulting in skipping PR creation."
                 conclusion_to_summary = {
-                    GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
-                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
+                    GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
+                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. This is an unexpected error.\n**Exception:**\n{exception}",
                     GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
-                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
+                    GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` locally to apply these changes. If you want the bot to automatically categorize changes, then check documentation (https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information.",
                 }
                 summary = conclusion_to_summary.get(
                     conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
@@ -709,31 +748,78 @@ class GithubController:
                     GithubCheckStatus.IN_PROGRESS: f":rocket: Creating or Updating PR Environment `{self.pr_environment_name}`",
                 }[status],
             ),
-            conclusion_handler=conclusion_handler,
+            conclusion_handler=functools.partial(conclusion_handler, exception=exception),
+        )
+        return conclusion
+
+    def update_prod_plan_preview_check(
+        self,
+        status: GithubCheckStatus,
+        conclusion: t.Optional[GithubCheckConclusion] = None,
+        summary: t.Optional[str] = None,
+    ) -> None:
+        """
+        Updates the status of the merge commit for the prod plan preview.
+        """
+
+        def conclusion_handler(
+            conclusion: GithubCheckConclusion, summary: t.Optional[str] = None
+        ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
+            conclusion_to_title = {
+                GithubCheckConclusion.SUCCESS: "Prod Plan Preview",
+                GithubCheckConclusion.CANCELLED: "Cancelled generating prod plan preview",
+                GithubCheckConclusion.SKIPPED: "Skipped generating prod plan preview since PR was not synchronized",
+                GithubCheckConclusion.FAILURE: "Failed to generate prod plan preview",
+            }
+            title = conclusion_to_title.get(
+                conclusion, f"Got an unexpected conclusion: {conclusion.value}"
+            )
+            if conclusion.is_success and summary:
+                summary = "**Preview of Prod Plan**\n" + summary
+            return conclusion, title, summary
+
+        self._update_check_handler(
+            check_name="SQLMesh - Prod Plan Preview",
+            status=status,
+            conclusion=conclusion,
+            status_handler=lambda status: (
+                {
+                    GithubCheckStatus.IN_PROGRESS: "Generating Prod Plan",
+                    GithubCheckStatus.QUEUED: "Waiting to Generate Prod Plan",
+                }[status],
+                None,
+            ),
+            conclusion_handler=functools.partial(conclusion_handler, summary=summary),
         )
 
     def update_prod_environment_check(
-        self, status: GithubCheckStatus, conclusion: t.Optional[GithubCheckConclusion] = None
+        self,
+        status: GithubCheckStatus,
+        conclusion: t.Optional[GithubCheckConclusion] = None,
+        skip_reason: t.Optional[str] = None,
     ) -> None:
         """
         Updates the status of the merge commit for the prod environment.
         """
 
         def conclusion_handler(
-            conclusion: GithubCheckConclusion,
+            conclusion: GithubCheckConclusion, skip_reason: t.Optional[str] = None
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             conclusion_to_title = {
                 GithubCheckConclusion.SUCCESS: "Deployed to Prod",
                 GithubCheckConclusion.CANCELLED: "Cancelled deploying to prod",
-                GithubCheckConclusion.SKIPPED: "Skipped deploying to prod since dependencies were not met",
+                GithubCheckConclusion.SKIPPED: skip_reason,
                 GithubCheckConclusion.FAILURE: "Failed to deploy to prod",
             }
-            title = conclusion_to_title.get(
-                conclusion, f"Got an unexpected conclusion: {conclusion.value}"
+            title = (
+                conclusion_to_title.get(conclusion)
+                or f"Got an unexpected conclusion: {conclusion.value}"
             )
-            plan_preview_summary = "**Preview of Prod Plan**\n"
-            plan_preview_summary += self._get_plan_summary(self.prod_plan)
-            return conclusion, title, plan_preview_summary
+            if conclusion.is_skipped:
+                summary = title
+            else:
+                summary = "**Generated Prod Plan**\n" + self.get_plan_summary(self.prod_plan)
+            return conclusion, title, summary
 
         self._update_check_handler(
             check_name="SQLMesh - Prod Environment Synced",
@@ -746,20 +832,24 @@ class GithubController:
                 }[status],
                 None,
             ),
-            conclusion_handler=conclusion_handler,
+            conclusion_handler=functools.partial(conclusion_handler, skip_reason=skip_reason),
         )
 
-    def merge_pr(self, merge_method: MergeMethod) -> None:
+    def try_merge_pr(self) -> None:
         """
-        Merges the PR using the provided merge_method
+        Merges the PR using the merge method defined in the bot config. If one is not defined then a merge is not
+        performed
         """
-        self._pull_request.merge(merge_method=merge_method.value)
+        if self.bot_config.merge_method:
+            self._pull_request.merge(merge_method=self.bot_config.merge_method.value)
 
-    def get_command_from_comment(self, namespace: t.Optional[str] = None) -> BotCommand:
+    def get_command_from_comment(self) -> BotCommand:
         """
         Gets the command from the comment
         """
         if not self._event.is_comment_added:
             return BotCommand.INVALID
         assert self._event.pull_request_comment_body is not None
-        return BotCommand.from_comment_body(self._event.pull_request_comment_body, namespace)
+        return BotCommand.from_comment_body(
+            self._event.pull_request_comment_body, self.bot_config.command_namespace
+        )

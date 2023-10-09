@@ -32,3 +32,30 @@ class CategorizerConfig(BaseConfig):
     python: AutoCategorizationMode = AutoCategorizationMode.OFF
     sql: AutoCategorizationMode = AutoCategorizationMode.FULL
     seed: AutoCategorizationMode = AutoCategorizationMode.FULL
+
+    @classmethod
+    def all_off(cls) -> CategorizerConfig:
+        return cls(
+            external=AutoCategorizationMode.OFF,
+            python=AutoCategorizationMode.OFF,
+            sql=AutoCategorizationMode.OFF,
+            seed=AutoCategorizationMode.OFF,
+        )
+
+    @classmethod
+    def all_semi(cls) -> CategorizerConfig:
+        return cls(
+            external=AutoCategorizationMode.SEMI,
+            python=AutoCategorizationMode.SEMI,
+            sql=AutoCategorizationMode.SEMI,
+            seed=AutoCategorizationMode.SEMI,
+        )
+
+    @classmethod
+    def all_full(cls) -> CategorizerConfig:
+        return cls(
+            external=AutoCategorizationMode.FULL,
+            python=AutoCategorizationMode.FULL,
+            sql=AutoCategorizationMode.FULL,
+            seed=AutoCategorizationMode.FULL,
+        )

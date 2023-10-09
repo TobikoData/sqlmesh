@@ -41,6 +41,10 @@ class NoChangesPlanError(PlanError):
     pass
 
 
+class UncategorizedPlanError(PlanError):
+    pass
+
+
 class MissingContextException(Exception):
     pass
 
