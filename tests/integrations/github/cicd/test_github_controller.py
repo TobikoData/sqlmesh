@@ -5,12 +5,10 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.user import User, UserRole
-from sqlmesh.integrations.github.cicd.controller import (
-    BotCommand,
-    MergeMethod,
-    MergeStateStatus,
-)
+from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
+from sqlmesh.integrations.github.cicd.controller import BotCommand, MergeStateStatus
 from tests.integrations.github.cicd.fixtures import MockIssueComment
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
@@ -217,10 +215,29 @@ def test_pr_plan(github_client, make_controller):
     )
     assert controller.pr_plan.environment.name == "hello_world_2"
     assert controller.pr_plan.skip_backfill
-    assert not controller.pr_plan.auto_categorization_enabled
     assert not controller.pr_plan.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
+    assert controller.pr_plan.categorizer_config == controller._context.auto_categorize_changes
+
+
+def test_pr_plan_auto_categorization(github_client, make_controller):
+    custom_categorizer_config = CategorizerConfig.all_semi()
+    default_start = "1 week ago"
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            auto_categorize_changes=custom_categorizer_config, default_pr_start=default_start
+        ),
+    )
+    assert controller.pr_plan.environment.name == "hello_world_2"
+    assert controller.pr_plan.skip_backfill
+    assert not controller.pr_plan.no_gaps
+    assert not controller._context.apply.called
+    assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
+    assert controller.pr_plan.categorizer_config == custom_categorizer_config
+    assert controller.pr_plan.start == default_start
 
 
 def test_prod_plan(github_client, make_controller):
@@ -230,10 +247,31 @@ def test_prod_plan(github_client, make_controller):
 
     assert controller.prod_plan.environment.name == c.PROD
     assert not controller.prod_plan.skip_backfill
-    assert not controller.prod_plan.auto_categorization_enabled
     assert controller.prod_plan.no_gaps
     assert not controller._context.apply.called
     assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
+    assert controller.prod_plan.categorizer_config == controller._context.auto_categorize_changes
+
+
+def test_prod_plan_auto_categorization(github_client, make_controller):
+    custom_categorizer_config = CategorizerConfig.all_off()
+    default_pr_start = "1 week ago"
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            auto_categorize_changes=custom_categorizer_config, default_pr_start=default_pr_start
+        ),
+    )
+
+    assert controller.prod_plan.environment.name == c.PROD
+    assert not controller.prod_plan.skip_backfill
+    assert controller.prod_plan.no_gaps
+    assert not controller._context.apply.called
+    assert controller._context._run_plan_tests.call_args == call(skip_tests=True)
+    assert controller.prod_plan.categorizer_config == custom_categorizer_config
+    # default PR start should be ignored for prod plans
+    assert controller.prod_plan.start != default_pr_start
 
 
 def test_prod_plan_with_gaps(github_client, make_controller):
@@ -362,22 +400,45 @@ def test_deploy_to_prod_dirty_pr(github_client, make_controller):
         controller.deploy_to_prod()
 
 
-def test_delete_pr_environment(github_client, make_controller, mocker: MockerFixture):
-    controller = make_controller(
+def test_try_invalidate_pr_environment(github_client, make_controller, mocker: MockerFixture):
+    invalidate_controller = make_controller(
         "tests/fixtures/github/pull_request_synchronized.json", github_client
     )
-    controller._context._state_sync = mock_state_sync = mocker.MagicMock()
-    controller.delete_pr_environment()
-    mock_state_sync.invalidate_environment.assert_called_once_with("hello_world_2")
+    invalidate_controller._context._state_sync = mocker.MagicMock()
+    invalidate_controller.try_invalidate_pr_environment()
+    invalidate_controller._context._state_sync.invalidate_environment.assert_called_once_with(
+        "hello_world_2"
+    )
+
+    no_invalidate_controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(invalidate_environment_after_deploy=False),
+    )
+    no_invalidate_controller._context._state_sync = mocker.MagicMock()
+    no_invalidate_controller.try_invalidate_pr_environment()
+
+    assert not no_invalidate_controller._context._state_sync.invalidate_environment.called
 
 
-def test_merge_pr(github_client, make_controller, mocker: MockerFixture):
-    controller = make_controller(
+def test_try_merge_pr(github_client, make_controller, mocker: MockerFixture):
+    no_merge_controller = make_controller(
         "tests/fixtures/github/pull_request_synchronized.json", github_client
     )
-    controller._pull_request = mocker.MagicMock()
-    controller.merge_pr(merge_method=MergeMethod.MERGE)
-    assert controller._pull_request.method_calls == [call.merge(merge_method=MergeMethod.MERGE)]
+    no_merge_controller._pull_request = mocker.MagicMock()
+    no_merge_controller.try_merge_pr()
+    assert not no_merge_controller._pull_request.merge.called
+
+    merge_controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(merge_method=MergeMethod.SQUASH),
+    )
+    merge_controller._pull_request = mocker.MagicMock()
+    merge_controller.try_merge_pr()
+    assert merge_controller._pull_request.method_calls == [
+        call.merge(merge_method=MergeMethod.SQUASH)
+    ]
 
 
 bot_command_parsing_params = [
@@ -434,5 +495,11 @@ bot_command_parsing_params = [
 def test_bot_command_parsing(
     action, comment, namespace, command, github_client, make_controller, make_event_issue_comment
 ):
-    controller = make_controller(make_event_issue_comment(action, comment), github_client)
-    assert controller.get_command_from_comment(namespace) == command
+    controller = make_controller(
+        make_event_issue_comment(action, comment),
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            command_namespace=namespace, enable_deploy_command=True, merge_method=MergeMethod.SQUASH
+        ),
+    )
+    assert controller.get_command_from_comment() == command

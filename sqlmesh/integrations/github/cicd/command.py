@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import typing as t
 
 import click
 
@@ -9,24 +8,11 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCheckConclusion,
     GithubCheckStatus,
     GithubController,
-    MergeMethod,
+    TestFailure,
 )
 from sqlmesh.utils.errors import CICDBotError, PlanError
 
 logger = logging.getLogger(__name__)
-
-
-merge_method_option = click.option(
-    "--merge-method",
-    type=click.Choice(MergeMethod),  # type: ignore
-    help="Enables merging PR after successfully deploying to production using the provided method.",
-)
-
-delete_option = click.option(
-    "--delete",
-    is_flag=True,
-    help="Delete the PR environment after successfully deploying to production",
-)
 
 
 @click.group(no_args_is_help=True)
@@ -68,13 +54,13 @@ def check_required_approvers(ctx: click.Context) -> None:
 def _run_tests(controller: GithubController) -> bool:
     controller.update_test_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
-        result, failed_output = controller.run_tests()
+        result, output = controller.run_tests()
         controller.update_test_check(
             status=GithubCheckStatus.COMPLETED,
             # Conclusion will be updated with final status based on test results
             conclusion=GithubCheckConclusion.NEUTRAL,
             result=result,
-            failed_output=failed_output,
+            output=output,
         )
         return result.wasSuccessful()
     except Exception:
@@ -95,15 +81,17 @@ def _update_pr_environment(controller: GithubController) -> bool:
     controller.update_pr_environment_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
         controller.update_pr_environment()
-        controller.update_pr_environment_check(
-            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SUCCESS
+        conclusion = controller.update_pr_environment_check(status=GithubCheckStatus.COMPLETED)
+        return conclusion is not None and conclusion.is_success
+    except Exception as e:
+        conclusion = controller.update_pr_environment_check(
+            status=GithubCheckStatus.COMPLETED, exception=e
         )
-        return True
-    except PlanError:
-        controller.update_pr_environment_check(
-            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.ACTION_REQUIRED
+        return (
+            conclusion is not None
+            and not conclusion.is_failure
+            and not conclusion.is_action_required
         )
-        return False
 
 
 @github.command()
@@ -113,21 +101,43 @@ def update_pr_environment(ctx: click.Context) -> None:
     _update_pr_environment(ctx.obj["github"])
 
 
-def _deploy_production(
-    controller: GithubController,
-    merge_method: t.Optional[MergeMethod],
-    delete_environment_after_deploy: bool = True,
-) -> bool:
+def _gen_prod_plan(controller: GithubController) -> bool:
+    controller.update_prod_plan_preview_check(status=GithubCheckStatus.IN_PROGRESS)
+    try:
+        plan_summary = controller.get_plan_summary(controller.prod_plan)
+        controller.update_prod_plan_preview_check(
+            status=GithubCheckStatus.COMPLETED,
+            conclusion=GithubCheckConclusion.SUCCESS,
+            summary=plan_summary,
+        )
+        return bool(plan_summary)
+    except Exception as e:
+        controller.update_prod_plan_preview_check(
+            status=GithubCheckStatus.COMPLETED,
+            conclusion=GithubCheckConclusion.FAILURE,
+            summary=str(e),
+        )
+        return False
+
+
+@github.command()
+@click.pass_context
+def gen_prod_plan(ctx: click.Context) -> None:
+    """Generates the production plan"""
+    controller = ctx.obj["github"]
+    controller.update_prod_plan_preview_check(status=GithubCheckStatus.IN_PROGRESS)
+    _gen_prod_plan(controller)
+
+
+def _deploy_production(controller: GithubController) -> bool:
     controller.update_prod_environment_check(status=GithubCheckStatus.IN_PROGRESS)
     try:
         controller.deploy_to_prod()
         controller.update_prod_environment_check(
             status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SUCCESS
         )
-        if merge_method:
-            controller.merge_pr(merge_method=merge_method)
-        if delete_environment_after_deploy:
-            controller.delete_pr_environment()
+        controller.try_merge_pr()
+        controller.try_invalidate_pr_environment()
         return True
     except PlanError:
         controller.update_prod_environment_check(
@@ -137,27 +147,22 @@ def _deploy_production(
 
 
 @github.command()
-@merge_method_option
-@delete_option
 @click.pass_context
-def deploy_production(
-    ctx: click.Context, merge_method: t.Optional[MergeMethod], delete: bool
-) -> None:
+def deploy_production(ctx: click.Context) -> None:
     """Deploys the production environment"""
-    _deploy_production(
-        ctx.obj["github"], merge_method=merge_method, delete_environment_after_deploy=delete
-    )
+    _deploy_production(ctx.obj["github"])
 
 
-def _run_all(
-    controller: GithubController,
-    merge_method: t.Optional[MergeMethod],
-    delete: bool,
-    command_namespace: t.Optional[str] = None,
-) -> None:
+def _run_all(controller: GithubController) -> None:
     has_required_approval = False
+    is_auto_deploying_prod = (
+        controller.deploy_command_enabled or controller.do_required_approval_check
+    )
     if controller.is_comment_added:
-        command = controller.get_command_from_comment(command_namespace)
+        if not controller.deploy_command_enabled:
+            # We aren't using commands so we can just return
+            return
+        command = controller.get_command_from_comment()
         if command.is_invalid:
             # Probably a comment unrelated to SQLMesh so we do nothing
             return
@@ -166,41 +171,70 @@ def _run_all(
         else:
             raise CICDBotError(f"Unsupported command: {command}")
     controller.update_pr_environment_check(status=GithubCheckStatus.QUEUED)
-    controller.update_prod_environment_check(status=GithubCheckStatus.QUEUED)
+    controller.update_prod_plan_preview_check(status=GithubCheckStatus.QUEUED)
     controller.update_test_check(status=GithubCheckStatus.QUEUED)
+    if is_auto_deploying_prod:
+        controller.update_prod_environment_check(status=GithubCheckStatus.QUEUED)
     tests_passed = _run_tests(controller)
-    if not has_required_approval and controller.do_required_approval_check:
-        controller.update_required_approval_check(status=GithubCheckStatus.QUEUED)
-        has_required_approval = _check_required_approvers(controller)
-    else:
-        controller.update_required_approval_check(
-            status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SKIPPED
+    if controller.do_required_approval_check:
+        if has_required_approval:
+            controller.update_required_approval_check(
+                status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SKIPPED
+            )
+        else:
+            controller.update_required_approval_check(status=GithubCheckStatus.QUEUED)
+            has_required_approval = _check_required_approvers(controller)
+    if not tests_passed:
+        controller.update_pr_environment_check(
+            status=GithubCheckStatus.COMPLETED,
+            exception=TestFailure(),
         )
+        controller.update_prod_plan_preview_check(
+            status=GithubCheckStatus.COMPLETED,
+            conclusion=GithubCheckConclusion.SKIPPED,
+            summary="Unit Test(s) Failed so skipping creating prod plan",
+        )
+        if is_auto_deploying_prod:
+            controller.update_prod_environment_check(
+                status=GithubCheckStatus.COMPLETED,
+                conclusion=GithubCheckConclusion.SKIPPED,
+                skip_reason="Unit Test(s) Failed so skipping deploying to production",
+            )
+        return
     pr_environment_updated = _update_pr_environment(controller)
-    if tests_passed and has_required_approval and pr_environment_updated:
-        _deploy_production(
-            controller, merge_method=merge_method, delete_environment_after_deploy=delete
-        )
+    prod_plan_generated = False
+    if pr_environment_updated:
+        prod_plan_generated = _gen_prod_plan(controller)
     else:
-        controller.update_prod_environment_check(
+        controller.update_prod_plan_preview_check(
             status=GithubCheckStatus.COMPLETED, conclusion=GithubCheckConclusion.SKIPPED
+        )
+    if tests_passed and has_required_approval and pr_environment_updated and prod_plan_generated:
+        _deploy_production(controller)
+    elif is_auto_deploying_prod:
+        if not has_required_approval:
+            skip_reason = (
+                "Skipped Deploying to Production because a required approver has not approved"
+            )
+        elif not pr_environment_updated:
+            skip_reason = (
+                "Skipped Deploying to Production because the PR environment was not updated"
+            )
+        elif not prod_plan_generated:
+            skip_reason = (
+                "Skipped Deploying to Production because the production plan could not be generated"
+            )
+        else:
+            skip_reason = "Skipped Deploying to Production for an unknown reason"
+        controller.update_prod_environment_check(
+            status=GithubCheckStatus.COMPLETED,
+            conclusion=GithubCheckConclusion.SKIPPED,
+            skip_reason=skip_reason,
         )
 
 
 @github.command()
-@merge_method_option
-@delete_option
-@click.option(
-    "--command_namespace",
-    type=str,
-    help="Namespace to use for SQLMesh commands. For example if you provide `#SQLMesh` as a value then commands will be expected in the format of `#SQLMesh/<command>`.",
-)
 @click.pass_context
-def run_all(
-    ctx: click.Context,
-    merge_method: t.Optional[MergeMethod],
-    delete: bool,
-    command_namespace: t.Optional[str],
-) -> None:
+def run_all(ctx: click.Context) -> None:
     """Runs all the commands in the correct order."""
-    return _run_all(ctx.obj["github"], merge_method, delete, command_namespace)
+    return _run_all(ctx.obj["github"])

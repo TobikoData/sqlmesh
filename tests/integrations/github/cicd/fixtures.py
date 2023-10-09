@@ -3,6 +3,7 @@ import typing as t
 import pytest
 from pytest_mock.plugin import MockerFixture
 
+from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
 from sqlmesh.integrations.github.cicd.controller import (
     GithubController,
     GithubEvent,
@@ -62,14 +63,22 @@ def make_controller(mocker: MockerFixture) -> t.Callable:
         client: Github,
         *,
         merge_state_status: MergeStateStatus = MergeStateStatus.CLEAN,
+        bot_config: t.Optional[GithubCICDBotConfig] = None,
+        mock_out_context: bool = True,
     ) -> GithubController:
-        mocker.patch("sqlmesh.core.context.Context.apply", mocker.MagicMock())
-        mocker.patch("sqlmesh.core.context.Context._run_plan_tests", mocker.MagicMock())
-        mocker.patch("sqlmesh.core.context.Context._run_tests", mocker.MagicMock())
+        if mock_out_context:
+            mocker.patch("sqlmesh.core.context.Context.apply", mocker.MagicMock())
+            mocker.patch("sqlmesh.core.context.Context._run_plan_tests", mocker.MagicMock())
+            mocker.patch("sqlmesh.core.context.Context._run_tests", mocker.MagicMock())
         mocker.patch(
             "sqlmesh.integrations.github.cicd.controller.GithubController._get_merge_state_status",
             mocker.MagicMock(side_effect=lambda: merge_state_status),
         )
+        if bot_config:
+            mocker.patch(
+                "sqlmesh.integrations.github.cicd.controller.GithubController.bot_config",
+                bot_config,
+            )
         return GithubController(
             paths=["examples/sushi"],
             token="abc",

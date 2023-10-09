@@ -48,7 +48,12 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, StandaloneAudit
-from sqlmesh.core.config import Config, load_config_from_paths, load_config_from_yaml
+from sqlmesh.core.config import (
+    CategorizerConfig,
+    Config,
+    load_config_from_paths,
+    load_config_from_yaml,
+)
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
@@ -96,6 +101,7 @@ from sqlmesh.utils.errors import (
     MissingDependencyError,
     PlanError,
     SQLMeshError,
+    UncategorizedPlanError,
 )
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
@@ -711,6 +717,7 @@ class Context(BaseContext):
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
         select_models: t.Optional[t.Collection[str]] = None,
+        categorizer_config: t.Optional[CategorizerConfig] = None,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -743,9 +750,11 @@ class Context(BaseContext):
             no_auto_categorization: Indicates whether to disable automatic categorization of model
                 changes (breaking / non-breaking). If not provided, then the corresponding configuration
                 option determines the behavior.
+            categorizer_config: The configuration for the categorizer. Uses the categorizer configuration defined in the
+                project config by default.
             effective_from: The effective date from which to apply forward-only changes on production.
             include_unmodified: Indicates whether to include unmodified models in the target development environment.
-            model_selections: A list of model selection strings to filter the models that should be included into this plan.
+            select_models: A list of model selection strings to filter the models that should be included into this plan.
 
         Returns:
             The populated Plan object.
@@ -809,7 +818,7 @@ class Context(BaseContext):
             forward_only=forward_only,
             environment_ttl=environment_ttl,
             environment_suffix_target=self.config.environment_suffix_target,
-            categorizer_config=self.auto_categorize_changes,
+            categorizer_config=categorizer_config or self.auto_categorize_changes,
             auto_categorization_enabled=not no_auto_categorization,
             effective_from=effective_from,
             include_unmodified=include_unmodified,
@@ -840,7 +849,7 @@ class Context(BaseContext):
         ):
             return
         if plan.uncategorized:
-            raise PlanError("Can't apply a plan with uncategorized changes.")
+            raise UncategorizedPlanError("Can't apply a plan with uncategorized changes.")
         self.notification_target_manager.notify(
             NotificationEvent.APPLY_START, environment=plan.environment.name
         )
