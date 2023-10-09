@@ -1094,8 +1094,10 @@ class SqlModel(_SqlBasedModel):
             # Can't determine if there's a breaking change if we can't render the query.
             return None
 
-        matchings = [] if previous_query is this_query else [(previous_query, this_query)]
-        edits = diff(previous_query, this_query, matchings=matchings)
+        if previous_query is this_query:
+            return False
+
+        edits = diff(previous_query, this_query, matchings=[(previous_query, this_query)])
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}
 
         for edit in edits:
