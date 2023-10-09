@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import typing as t
 from functools import lru_cache
 from pathlib import Path
 
@@ -26,7 +27,7 @@ get_context_lock = asyncio.Lock()
 class Settings(BaseSettings):
     project_path: Path = Path("examples/sushi")
     config: str = ""
-    gateway: str = ""
+    gateway: t.Optional[str] = None
 
 
 @lru_cache()
