@@ -52,9 +52,9 @@ async def column_lineage(
     try:
         node = lineage(
             column=column_name,
-            sql=context.models[model_name].render_query_or_raise(),
+            sql=context.models[model_name].render_query_or_raise(models=context.models),
             sources={
-                model: context.models[model].render_query_or_raise()
+                model: context.models[model].render_query_or_raise(models=context.models)
                 for model in context.dag.upstream(model_name)
                 if model in context.models
             },
