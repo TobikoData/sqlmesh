@@ -18,7 +18,6 @@ from sqlglot import exp
 
 UTC = timezone.utc
 TimeLike = t.Union[date, datetime, str, int, float]
-MILLIS_THRESHOLD = time.time() + 100 * 365 * 24 * 3600
 DATE_INT_FMT = "%Y%m%d"
 
 if t.TYPE_CHECKING:
@@ -122,8 +121,7 @@ def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> 
     """Converts a value into a UTC datetime object.
 
     Args:
-        value: A variety of date formats. If the value is number-like, it is assumed to be millisecond epochs
-        if it is larger than MILLIS_THRESHOLD.
+        value: A variety of date formats. If the value is number-like, it is assumed to be millisecond epochs.
         relative_base: The datetime to reference for time expressions that are using relative terms
 
     Raises:
@@ -154,9 +152,7 @@ def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> 
             try:
                 dt = datetime.strptime(str(value), DATE_INT_FMT)
             except ValueError:
-                dt = datetime.fromtimestamp(
-                    epoch / 1000.0 if epoch > MILLIS_THRESHOLD else epoch, tz=UTC
-                )
+                dt = datetime.fromtimestamp(epoch / 1000.0, tz=UTC)
 
     if dt is None:
         raise ValueError(f"Could not convert `{value}` to datetime.")
@@ -169,8 +165,7 @@ def to_datetime(value: TimeLike, relative_base: t.Optional[datetime] = None) -> 
 def to_date(value: TimeLike, relative_base: t.Optional[datetime] = None) -> date:
     """Converts a value into a UTC date object
     Args:
-        value: A variety of date formats. If the value is number-like, it is assumed to be millisecond epochs
-        if it is larger than MILLIS_THRESHOLD.
+        value: A variety of date formats. If the value is number-like, it is assumed to be millisecond epochs.
         relative_base: The datetime to reference for time expressions that are using relative terms
 
     Raises:

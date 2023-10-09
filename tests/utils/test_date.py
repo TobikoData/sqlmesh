@@ -19,13 +19,14 @@ def test_to_datetime() -> None:
     assert to_datetime("2020-01-01T05:00:00+05:00") == target
     assert to_datetime("2020-01-01") == target
     assert to_datetime(datetime(2020, 1, 1)) == target
-    assert to_datetime("1577836800") == target
-    assert to_datetime(1577836800) == target
-    assert to_datetime(1577836800.0) == target
     assert to_datetime(1577836800000) == target
     assert to_datetime(20200101) == target
     assert to_datetime("20200101") == target
     assert to_datetime("0") == datetime(1970, 1, 1, tzinfo=UTC)
+
+    target = datetime(1971, 1, 1).replace(tzinfo=UTC)
+    assert to_datetime("1971-01-01") == target
+    assert to_datetime("31536000000") == target
 
 
 @pytest.mark.parametrize(
