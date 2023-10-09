@@ -31,10 +31,10 @@ def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
     FROM sushi.orders AS o
     WHERE @incremental_by_ds(ds)
     """
-    blacklist = {"id", "customer_id", "start_ts", "end_ts"}
+    excluded = {"id", "customer_id", "start_ts", "end_ts"}
     projections = []
     for column, dtype in evaluator.columns_to_types("sushi.orders").items():
-        if column not in blacklist:
+        if column not in excluded:
             projections.append(f"{column}::{dtype}")
 
     return (
