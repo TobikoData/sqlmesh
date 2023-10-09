@@ -472,7 +472,7 @@ class SnapshotEvaluator:
         is_dev: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        table_name = snapshot.table_name(is_dev=is_dev, for_read=True)
+        table_name = snapshot.table_name_for_mapping(is_dev=is_dev)
         _evaluation_strategy(snapshot, self.adapter).promote(
             snapshot.qualified_view_name, environment_naming_info, table_name, snapshot
         )
