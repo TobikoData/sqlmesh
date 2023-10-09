@@ -1,5 +1,7 @@
 # GitHub Actions CI/CD Bot
 
+<iframe width="704" height="396" src="https://www.youtube.com/embed/TkGT1vVZItU?si=gpnJeWefRN4qT4hi" title="Bot Overview" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+
 The GitHub Actions CI/CD Bot enables teams to automate their SQLMesh projects using GitHub Actions. It can be configured to perform the following things:
 
 * Automatically run unit tests on PRs
@@ -58,7 +60,7 @@ Next checkout the [Core Bot Behavior Configuration Guide](#core-bot-behavior-con
 
 ## Core Bot Behavior Configuration Guide
 
-There are two fundamental ways the bot can be configured: synchronized or desynchronized production code and data. 
+There are two fundamental ways the bot can be configured: synchronized or desynchronized production code and data.
 
 ### Synchronized vs. Desynchronized Deployments
 
