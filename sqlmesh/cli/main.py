@@ -471,8 +471,12 @@ def ui(
 
     os.environ["PROJECT_PATH"] = str(ctx.obj.path)
     if ctx.parent:
-        os.environ["CONFIG"] = ctx.parent.params.get("config") or ""
-        os.environ["GATEWAY"] = ctx.parent.params.get("gateway") or ""
+        config = ctx.parent.params.get("config")
+        gateway = ctx.parent.params.get("gateway")
+        if config:
+            os.environ["CONFIG"] = config
+        if gateway:
+            os.environ["GATEWAY"] = gateway
     uvicorn.run(
         "web.server.main:app",
         host=host,
