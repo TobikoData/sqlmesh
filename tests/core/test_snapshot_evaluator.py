@@ -23,6 +23,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotEvaluator
+from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
 
@@ -189,6 +190,48 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
         parse_one(
             f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
         ),
+    )
+
+
+def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(time_column="a"),
+        query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot.version = "test_version"
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"), is_dev=True)
+
+    snapshot.unpaused_ts = to_timestamp("2023-01-01")
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"), is_dev=True)
+
+    adapter_mock.create_schema.assert_has_calls(
+        [
+            call("test_schema__test_env", catalog_name=None),
+            call("test_schema__test_env", catalog_name=None),
+        ]
+    )
+    adapter_mock.create_view.assert_has_calls(
+        [
+            call(
+                "test_schema__test_env.test_model",
+                parse_one(
+                    f"SELECT * FROM sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__temp"
+                ),
+            ),
+            call(
+                "test_schema__test_env.test_model",
+                parse_one(
+                    "SELECT * FROM sqlmesh__test_schema.test_schema__test_model__test_version"
+                ),
+            ),
+        ]
     )
 
 
