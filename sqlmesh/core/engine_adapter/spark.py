@@ -271,11 +271,17 @@ class SparkEngineAdapter(EngineAdapter):
     ) -> t.List[DataObject]:
         target = nullsafe_join(".", catalog_name, schema_name)
         sql = f"SHOW TABLE EXTENDED IN {target} LIKE '*'"
-        results = (
-            self.fetch_pyspark_df(sql).collect()
-            if self._use_spark_session
-            else self.fetchdf(sql).to_dict("records")
-        )
+        try:
+            results = (
+                self.fetch_pyspark_df(sql).collect()
+                if self._use_spark_session
+                else self.fetchdf(sql).to_dict("records")
+            )
+        # Improvement: Figure out all the different exceptions we could get from executing a query either with or
+        # without a Spark Session. In addition Databricks would need to be updated to handle it's own exceptions.
+        # Therefore just doing except Exception for now.
+        except Exception:
+            return []
         return [
             DataObject(
                 catalog=catalog_name,
