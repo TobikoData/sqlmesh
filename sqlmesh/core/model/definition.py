@@ -17,7 +17,6 @@ from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
-from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
@@ -1028,8 +1027,10 @@ class SqlModel(_SqlBasedModel):
             schema, default_schema=default_schema, default_catalog=default_catalog
         )
 
-        mocked_star = normalize_identifiers(SQLMESH_MOCKED_STAR, dialect=self.dialect)
-        if mocked_star.name in (self.columns_to_types or {}):
+        query = self._query_renderer.render(optimize=False)
+        if isinstance(query, exp.Subqueryable) and any(
+            name.upper() == SQLMESH_MOCKED_STAR for name in query.named_selects
+        ):
             # We reset the unoptimized query cache here as well to allow the model's query
             # to be re-rendered so that the MacroEvaluator can resolve columns_to_types calls
             # and get rid of the mocked star column
