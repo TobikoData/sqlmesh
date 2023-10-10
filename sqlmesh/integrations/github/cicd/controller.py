@@ -13,6 +13,7 @@ from typing import List
 
 import requests
 from hyperscript import Element, h
+from rich.console import Console
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
@@ -288,7 +289,7 @@ class GithubController:
         self._prod_plan: t.Optional[Plan] = None
         self._prod_plan_with_gaps: t.Optional[Plan] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
-        self._console = MarkdownConsole()
+        self._console = MarkdownConsole(console=Console(no_color=True))
         self._client: Github = client or Github(
             base_url=os.environ["GITHUB_API_URL"],
             login_or_token=self._token,
