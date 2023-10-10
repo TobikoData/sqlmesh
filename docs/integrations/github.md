@@ -45,7 +45,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
       - name: Checkout PR branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: refs/pull/${{ github.event.issue.pull_request && github.event.issue.number || github.event.pull_request.number  }}/merge
       - name: Install SQLMesh + Dependencies
@@ -230,7 +230,7 @@ jobs:
   sqlmesh:
     steps:
     - name: Checkout PR branch
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       # Add if statement so we don't checkout merged PR but instead main branch
       if: github.event.pull_request.merged == false
       with:
@@ -404,7 +404,7 @@ jobs:
         with:
           python-version: '3.9'
       - name: Checkout PR branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: refs/pull/${{ github.event.issue.pull_request && github.event.issue.number || github.event.pull_request.number  }}/merge
       - name: Install Dependencies
