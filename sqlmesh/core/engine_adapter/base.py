@@ -29,7 +29,7 @@ from sqlmesh.core.dialect import add_table, select_from_values_for_batch_range
 from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import double_escape, nullsafe_join
+from sqlmesh.utils import double_escape
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
 from sqlmesh.utils.errors import SQLMeshError
@@ -636,9 +636,7 @@ class EngineAdapter:
         try:
             self.execute(
                 exp.Create(
-                    this=exp.to_table(
-                        nullsafe_join(".", catalog_name, schema_name), dialect=self.dialect
-                    ),
+                    this=exp.table_(schema_name, catalog_name),
                     kind="SCHEMA",
                     exists=ignore_if_exists,
                 )
@@ -654,7 +652,7 @@ class EngineAdapter:
         """Drop a schema from a name or qualified table name."""
         self.execute(
             exp.Drop(
-                this=exp.to_table(schema_name, dialect=self.dialect),
+                this=exp.table_(schema_name.split(".")[0]),
                 kind="SCHEMA",
                 exists=ignore_if_not_exists,
                 cascade=cascade,

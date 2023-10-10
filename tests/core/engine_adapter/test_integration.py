@@ -320,8 +320,12 @@ def test_drop_schema(ctx: TestContext):
     schema = normalize_identifiers(
         exp.to_identifier(TEST_SCHEMA), dialect=ctx.engine_adapter.dialect
     ).sql(dialect=ctx.engine_adapter.dialect)
-    ctx.engine_adapter.create_schema(schema)
+    ctx.engine_adapter.drop_schema(schema, cascade=True)
+    results = ctx.get_metadata_results()
+    assert len(results.tables) == 0
+    assert len(results.views) == 0
 
+    ctx.engine_adapter.create_schema(schema)
     view = ctx.table("test_view")
     view_query = exp.Select().select(exp.Literal.number(1).as_("one"))
     ctx.engine_adapter.create_view(view, view_query, ctx.columns_to_types)
