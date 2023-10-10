@@ -652,7 +652,7 @@ class EngineAdapter:
         """Drop a schema from a name or qualified table name."""
         self.execute(
             exp.Drop(
-                this=exp.to_identifier(schema_name.split(".")[0]),
+                this=exp.table_(schema_name.split(".")[0]),
                 kind="SCHEMA",
                 exists=ignore_if_not_exists,
                 cascade=cascade,

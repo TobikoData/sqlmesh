@@ -89,9 +89,16 @@ class SnowflakeEngineAdapter(EngineAdapter):
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
+        from snowflake.connector.errors import ProgrammingError
+
         target = nullsafe_join(".", catalog_name, schema_name)
         sql = f"SHOW TERSE OBJECTS IN {target}"
-        df = self.fetchdf(sql, quote_identifiers=True)
+        try:
+            df = self.fetchdf(sql, quote_identifiers=True)
+        except ProgrammingError as e:
+            if "Object does not exist" in str(e):
+                return []
+            raise e
         if df.empty:
             return []
         return [
