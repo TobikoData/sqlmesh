@@ -190,13 +190,13 @@ class MSSQLEngineAdapter(
             FROM {catalog_name}.INFORMATION_SCHEMA.TABLES
             WHERE TABLE_SCHEMA LIKE '%{schema_name}%'
         """
-        results = self.fetchall(query)
+        results = self.fetchall(query, quote_identifiers=True)
         return [
             DataObject(
-                catalog=row[0],  # type: ignore
-                schema=row[2],  # type: ignore
-                name=row[1],  # type: ignore
-                type=DataObjectType.from_str(row[3]),  # type: ignore
+                catalog=row[0],
+                schema=row[2],
+                name=row[1],
+                type=DataObjectType.from_str(row[3]),
             )
             for row in results
         ]
