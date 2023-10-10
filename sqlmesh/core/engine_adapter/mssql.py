@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import logging
 import typing as t
-from typing import Literal, overload
+from typing import overload
 
 import pandas as pd
 from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
 from sqlglot.errors import ErrorLevel
 from sqlglot.optimizer.qualify_columns import quote_identifiers
+from typing_extensions import Literal
 
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport, SourceQuery
 from sqlmesh.core.engine_adapter.mixins import (
