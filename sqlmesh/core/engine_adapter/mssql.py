@@ -41,7 +41,6 @@ class MSSQLEngineAdapter(
     """
 
     DIALECT: str = "tsql"
-    DEFAULT_CATALOG_NAME = "master"
     SUPPORTS_TUPLE_IN = False
     SUPPORTS_MATERIALIZED_VIEWS = False
 
@@ -54,7 +53,6 @@ class MSSQLEngineAdapter(
 
         table = exp.to_table(table_name)
 
-        catalog_name = table.catalog or self.DEFAULT_CATALOG_NAME
         sql = (
             exp.select(
                 "column_name",
@@ -63,7 +61,7 @@ class MSSQLEngineAdapter(
                 "numeric_precision",
                 "numeric_scale",
             )
-            .from_(f"{catalog_name}.information_schema.columns")
+            .from_(f"information_schema.columns")
             .where(f"table_name = '{table.name}'")
         )
         database_name = table.db
@@ -100,10 +98,9 @@ class MSSQLEngineAdapter(
         """MsSql doesn't support describe so we query information_schema."""
         table = exp.to_table(table_name)
 
-        catalog_name = table.catalog or self.DEFAULT_CATALOG_NAME
         sql = (
             exp.select("1")
-            .from_(f"{catalog_name}.information_schema.tables")
+            .from_(f"information_schema.tables")
             .where(f"table_name = '{table.alias_or_name}'")
         )
         database_name = table.db
@@ -127,13 +124,17 @@ class MSSQLEngineAdapter(
         MsSql doesn't support CASCADE clause and drops schemas unconditionally.
         """
         if cascade:
-            # Note: Assumes all objects in the schema are captured by the `_get_data_objects` call and can be dropped
-            # with a `drop_table` call.
             objects = self._get_data_objects(schema_name)
             for obj in objects:
-                self.drop_table(
-                    ".".join([obj.catalog, obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
-                )
+                # _get_data_objects is catalog-specific, so these can't accidentally drop view/tables in another catalog
+                if obj.type == DataObjectType.VIEW:
+                    self.drop_view(
+                        ".".join([obj.schema_name, obj.name]), ignore_if_not_exists=ignore_if_not_exists  # type: ignore
+                    )
+                else:
+                    self.drop_table(
+                        ".".join([obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
+                    )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
 
     def _df_to_source_queries(
@@ -176,7 +177,8 @@ class MSSQLEngineAdapter(
         """
         Returns all the data objects that exist in the given schema and catalog.
         """
-        catalog_name = f"[{catalog_name}]" if catalog_name else self.DEFAULT_CATALOG_NAME
+        if not catalog_name:
+            catalog_name = self.fetchone("select DB_NAME()")[0]
         query = f"""
             SELECT
                 '{catalog_name}' AS catalog_name,
