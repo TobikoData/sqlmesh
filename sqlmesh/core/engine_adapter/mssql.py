@@ -213,7 +213,7 @@ class MSSQLEngineAdapter(
     def execute_and_fetch(
         self,
         expression: t.Union[str, exp.Expression],
-        fetch: Literal["all"] = ...,
+        fetch_one: Literal[False] = ...,
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = True,
         **kwargs: t.Any,
@@ -224,7 +224,7 @@ class MSSQLEngineAdapter(
     def execute_and_fetch(
         self,
         expression: t.Union[str, exp.Expression],
-        fetch: Literal["one"],
+        fetch_one: Literal[True],
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = True,
         **kwargs: t.Any,
@@ -234,7 +234,7 @@ class MSSQLEngineAdapter(
     def execute_and_fetch(
         self,
         expression: t.Union[str, exp.Expression],
-        fetch: str = "all",
+        fetch_one: bool = False,
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = True,
         **kwargs: t.Any,
@@ -253,7 +253,7 @@ class MSSQLEngineAdapter(
             logger.debug(f"Executing SQL:\n{sql}")
             self.cursor.execute(sql, **kwargs)
 
-            if fetch == "one":
+            if fetch_one:
                 return self.cursor.fetchone()
 
             return self.cursor.fetchall()
@@ -269,7 +269,7 @@ class MSSQLEngineAdapter(
             query,
             ignore_unsupported_errors=ignore_unsupported_errors,
             quote_identifiers=quote_identifiers,
-            fetch="one",
+            fetch_one=True,
         )
 
     def fetchall(
@@ -283,5 +283,5 @@ class MSSQLEngineAdapter(
             query,
             ignore_unsupported_errors=ignore_unsupported_errors,
             quote_identifiers=quote_identifiers,
-            fetch="all",
+            fetch_one=False,
         )
