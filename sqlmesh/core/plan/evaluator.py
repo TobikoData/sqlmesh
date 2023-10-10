@@ -134,10 +134,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to source snapshots from.
         """
         snapshot_id_to_snapshot = {s.snapshot_id: s for s in plan.snapshots}
-        new_model_count = len([s for s in plan.new_snapshots if s.is_model])
+        new_model_snapshot_count = len([s for s in plan.new_snapshots if s.is_model])
 
-        if new_model_count > 0:
-            self.console.start_creation_progress(new_model_count)
+        if new_model_snapshot_count > 0:
+            self.console.start_creation_progress(new_model_snapshot_count)
 
         def on_complete(snapshot: SnapshotInfoLike) -> None:
             self.console.update_creation_progress(1)
