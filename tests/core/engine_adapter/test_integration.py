@@ -315,6 +315,21 @@ def test_materialized_view(ctx: TestContext):
     assert len(results.materialized_views) == 0
 
 
+def test_drop_schema(ctx: TestContext):
+    ctx.columns_to_types = {"one": "int"}
+    ctx.init()
+    ctx.engine_adapter.create_schema("test_schema")
+
+    view = ctx.table("test_view")
+    view_query = exp.Select().select(exp.Literal.number(1).as_("one"))
+    ctx.engine_adapter.create_view(view, view_query, ctx.columns_to_types)
+
+    ctx.engine_adapter.drop_schema("test_schema", cascade=True)
+    results = ctx.get_metadata_results()
+    assert len(results.tables) == 0
+    assert len(results.views) == 0
+
+
 def test_replace_query(ctx: TestContext):
     ctx.engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
     ctx.init()
