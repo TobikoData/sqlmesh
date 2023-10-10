@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import typing as t
+from typing import Literal, overload
 
 import pandas as pd
 from pandas.api.types import is_datetime64_dtype  # type: ignore
@@ -208,6 +209,55 @@ class MSSQLEngineAdapter(
         sql = super()._to_sql(expression, quote=quote, **kwargs)
         return f"{sql};"
 
+    @overload
+    def execute_and_fetch(
+        self,
+        expression: t.Union[str, exp.Expression],
+        fetch: Literal["all"] = ...,
+        ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = True,
+        **kwargs: t.Any,
+    ) -> t.List[t.Tuple]:
+        ...
+
+    @overload
+    def execute_and_fetch(
+        self,
+        expression: t.Union[str, exp.Expression],
+        fetch: Literal["one"],
+        ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = True,
+        **kwargs: t.Any,
+    ) -> t.Tuple:
+        ...
+
+    def execute_and_fetch(
+        self,
+        expression: t.Union[str, exp.Expression],
+        fetch: str = "all",
+        ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = True,
+        **kwargs: t.Any,
+    ) -> t.Union[t.List[t.Tuple], t.Tuple]:
+        """Execute a sql query."""
+        to_sql_kwargs = (
+            {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
+        )
+
+        with self.transaction():
+            sql = (
+                self._to_sql(expression, quote=quote_identifiers, **to_sql_kwargs)
+                if isinstance(expression, exp.Expression)
+                else expression
+            )
+            logger.debug(f"Executing SQL:\n{sql}")
+            self.cursor.execute(sql, **kwargs)
+
+            if fetch == "one":
+                return self.cursor.fetchone()
+
+            return self.cursor.fetchall()
+
     def fetchone(
         self,
         query: t.Union[exp.Expression, str],
@@ -215,20 +265,12 @@ class MSSQLEngineAdapter(
         quote_identifiers: bool = False,
     ) -> t.Tuple:
         """Execute a sql query and fetch one result."""
-        to_sql_kwargs = (
-            {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
+        return self.execute_and_fetch(
+            query,
+            ignore_unsupported_errors=ignore_unsupported_errors,
+            quote_identifiers=quote_identifiers,
+            fetch="one",
         )
-
-        with self.transaction():
-            sql = (
-                self._to_sql(query, quote=quote_identifiers, **to_sql_kwargs)
-                if isinstance(query, exp.Expression)
-                else query
-            )
-            logger.debug(f"Executing SQL:\n{sql}")
-            self.cursor.execute(sql)
-
-            return self.cursor.fetchone()
 
     def fetchall(
         self,
@@ -237,17 +279,9 @@ class MSSQLEngineAdapter(
         quote_identifiers: bool = False,
     ) -> t.List[t.Tuple]:
         """Execute a sql query and fetch all results."""
-        to_sql_kwargs = (
-            {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
+        return self.execute_and_fetch(
+            query,
+            ignore_unsupported_errors=ignore_unsupported_errors,
+            quote_identifiers=quote_identifiers,
+            fetch="all",
         )
-
-        with self.transaction():
-            sql = (
-                self._to_sql(query, quote=quote_identifiers, **to_sql_kwargs)
-                if isinstance(query, exp.Expression)
-                else query
-            )
-            logger.debug(f"Executing SQL:\n{sql}")
-            self.cursor.execute(sql)
-
-            return self.cursor.fetchall()
