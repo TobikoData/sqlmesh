@@ -30,8 +30,14 @@ def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
     FROM sushi.orders AS o
     WHERE @incremental_by_ds(ds)
     """
+    excluded = {"id", "customer_id", "start_ts", "end_ts"}
+    projections = []
+    for column, dtype in evaluator.columns_to_types("sushi.orders").items():
+        if column not in excluded:
+            projections.append(f"{column}::{dtype}")
+
     return (
-        exp.select("waiter_id::int as waiter_id", "ds::text as ds")
+        exp.select(*projections)
         .from_("sushi.orders AS o")
         .where(incremental_by_ds(evaluator, exp.to_column("ds")))
         .distinct()
