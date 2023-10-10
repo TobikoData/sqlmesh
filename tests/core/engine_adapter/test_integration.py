@@ -700,3 +700,26 @@ def test_scd_type_2(ctx: TestContext):
             ]
         ),
     )
+
+
+def test_fetch(ctx: TestContext):
+    ctx.init()
+    table = ctx.table("test_table")
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.ctas(table, ctx.input_data(input_data))
+
+    assert ctx.engine_adapter.fetchone(exp.select("*").from_(table)) == (1, "2022-01-01")
+    assert ctx.engine_adapter.fetchall(exp.select("*").from_(table)) == [
+        (1, "2022-01-01"),
+        (2, "2022-01-02"),
+        (3, "2022-01-03"),
+    ]
+    ctx._compare_dfs(
+        ctx.engine_adapter.fetchdf(exp.select("*").from_(table)), ctx.output_data(input_data)
+    )
