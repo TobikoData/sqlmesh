@@ -1028,8 +1028,8 @@ class SqlModel(_SqlBasedModel):
         )
 
         query = self._query_renderer.render(optimize=False)
-        if isinstance(query, exp.Expression) and any(
-            select.output_name.upper() == SQLMESH_MOCKED_STAR for select in query.selects
+        if isinstance(query, exp.Subqueryable) and any(
+            name.upper() == SQLMESH_MOCKED_STAR for name in query.named_selects
         ):
             # We reset the unoptimized query cache here as well to allow the model's query
             # to be re-rendered so that the MacroEvaluator can resolve columns_to_types calls
