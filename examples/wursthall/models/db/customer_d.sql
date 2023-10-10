@@ -18,3 +18,4 @@ SELECT DISTINCT
 FROM src.customer_details
 WHERE
   register_ds BETWEEN @start_ds AND @end_ds
+ORDER BY customer_id
