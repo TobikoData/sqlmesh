@@ -417,7 +417,13 @@ class QueryRenderer(BaseExpressionRenderer):
                             "*",
                             "",
                         ):
-                            select.replace(exp.alias_(select, select.output_name))
+                            alias = exp.alias_(select, select.output_name)
+                            comments = alias.this.comments
+                            if comments:
+                                alias.add_comments(comments)
+                                comments.clear()
+
+                            select.replace(alias)
 
         return annotate_types(query, schema=schema)
 
