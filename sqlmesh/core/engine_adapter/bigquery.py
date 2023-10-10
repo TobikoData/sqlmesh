@@ -541,21 +541,24 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
+        from google.api_core.exceptions import NotFound
         from google.cloud.bigquery import DatasetReference
 
         dataset_ref = DatasetReference(
             project=catalog_name or self.client.project, dataset_id=schema_name
         )
-        all_tables = self._db_call(self.client.list_tables, dataset=dataset_ref)
-        return [
-            DataObject(
-                catalog=table.project,
-                schema=table.dataset_id,
-                name=table.table_id,
-                type=DataObjectType.from_str(table.table_type),
-            )
-            for table in all_tables
-        ]
+        try:
+            return [
+                DataObject(
+                    catalog=table.project,
+                    schema=table.dataset_id,
+                    name=table.table_id,
+                    type=DataObjectType.from_str(table.table_type),
+                )
+                for table in self._db_call(self.client.list_tables, dataset=dataset_ref)
+            ]
+        except NotFound:
+            return []
 
     @property
     def _query_data(self) -> t.Any:
