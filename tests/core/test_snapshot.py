@@ -129,6 +129,7 @@ def test_json(snapshot: Snapshot):
         "updated_ts": 1663891973000,
         "version": snapshot.fingerprint.to_version(),
         "migrated": False,
+        "non_revertible": False,
     }
 
 

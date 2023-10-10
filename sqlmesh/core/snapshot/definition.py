@@ -392,6 +392,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             this snapshot is evaluated on a recurring basis. None indicates that this snapshot is paused.
         effective_from: The timestamp which indicates when this snapshot should be considered effective.
             Applicable for forward-only snapshots only.
+        migrated: Whether or not this snapshot has been created as a result of migration.
+        non_revertible: Whether or not this snapshot can be used to revert its model to a previous version.
     """
 
     name: str
@@ -413,6 +415,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     unpaused_ts: t.Optional[int] = None
     effective_from: t.Optional[TimeLike] = None
     migrated: bool = False
+    non_revertible: bool = False
 
     @field_validator("ttl")
     @classmethod

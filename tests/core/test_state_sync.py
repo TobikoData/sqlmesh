@@ -756,8 +756,10 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
             query=parse_one("select 1, ds"),
             cron="@daily",
         ),
-        version="a",
     )
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.version = "a"
+
     assert not snapshot.unpaused_ts
     state_sync.push_snapshots([snapshot])
 
@@ -769,9 +771,11 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     assert actual_snapshot.unpaused_ts == to_timestamp(unpaused_dt)
 
     new_snapshot = make_snapshot(
-        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily"),
-        version="a",
+        SqlModel(name="test_snapshot", query=parse_one("select 2, ds"), cron="@daily")
     )
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = "a"
+
     assert not new_snapshot.unpaused_ts
     state_sync.push_snapshots([new_snapshot])
     state_sync.unpause_snapshots([new_snapshot], unpaused_dt)
@@ -779,6 +783,9 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     actual_snapshots = state_sync.get_snapshots([snapshot, new_snapshot])
     assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
     assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(unpaused_dt)
+
+    assert actual_snapshots[snapshot.snapshot_id].non_revertible
+    assert not actual_snapshots[new_snapshot.snapshot_id].non_revertible
 
 
 def test_unpause_snapshots_remove_intervals(

@@ -35,6 +35,7 @@ from __future__ import annotations
 import abc
 import collections
 import gc
+import logging
 import traceback
 import typing as t
 import unittest.result
@@ -110,9 +111,13 @@ if t.TYPE_CHECKING:
     from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
+    from sqlmesh.core.snapshot import Node
 
     ModelOrSnapshot = t.Union[str, Model, Snapshot]
     NodeOrSnapshot = t.Union[str, Model, StandaloneAudit, Snapshot]
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseContext(abc.ABC):
@@ -1240,7 +1245,6 @@ class Context(BaseContext):
             else {}
         )
 
-        fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
         local_nodes = {**(models_override or self._models), **self._standalone_audits}
         nodes = local_nodes.copy()
         audits = self._audits.copy()
@@ -1255,26 +1259,44 @@ class Context(BaseContext):
                         if name not in audits:
                             audits[name] = audit
 
-        snapshots = {}
+        def _nodes_to_snapshots(nodes: t.Dict[str, Node]) -> t.Dict[str, Snapshot]:
+            snapshots: t.Dict[str, Snapshot] = {}
+            fingerprint_cache: t.Dict[str, SnapshotFingerprint] = {}
 
-        for node in nodes.values():
-            if node.name not in local_nodes and node.name in remote_snapshots:
-                snapshot = remote_snapshots[node.name]
-                ttl = snapshot.ttl
-            else:
-                config = self.config_for_node(node)
-                ttl = config.snapshot_ttl
+            for node in nodes.values():
+                if node.name not in local_nodes and node.name in remote_snapshots:
+                    snapshot = remote_snapshots[node.name]
+                    ttl = snapshot.ttl
+                else:
+                    config = self.config_for_node(node)
+                    ttl = config.snapshot_ttl
 
-            snapshot = Snapshot.from_node(
-                node,
-                nodes=nodes,
-                audits=audits,
-                cache=fingerprint_cache,
-                ttl=ttl,
-            )
-            snapshots[node.name] = snapshot
+                snapshot = Snapshot.from_node(
+                    node,
+                    nodes=nodes,
+                    audits=audits,
+                    cache=fingerprint_cache,
+                    ttl=ttl,
+                )
+                snapshots[node.name] = snapshot
+            return snapshots
 
+        snapshots = _nodes_to_snapshots(nodes)
         stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
+
+        non_revertible_snapshot_names = {
+            s.name for s in stored_snapshots.values() if s.name in local_nodes and s.non_revertible
+        }
+        if non_revertible_snapshot_names:
+            for name in non_revertible_snapshot_names:
+                snapshot_id = snapshots[name].snapshot_id
+                logger.info(
+                    "Found a non-revertible snapshot %s. Restamping the model...", snapshot_id
+                )
+                node = local_nodes[name]
+                nodes[name] = node.copy(update={"stamp": f"revert to {snapshot_id.identifier}"})
+            snapshots = _nodes_to_snapshots(nodes)
+            stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
 
         for snapshot in stored_snapshots.values():
             # Keep the original model instance to preserve the query cache.
