@@ -273,7 +273,7 @@ class MacroEvaluator:
 
         columns_to_types = self._schema.find(exp.to_table(model_name))
         if columns_to_types is None:
-            raise SQLMeshError(f"Model '{model_name}' not found in the macro evaluator's context.")
+            raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
 
         return columns_to_types  # type: ignore
 
