@@ -6,7 +6,6 @@ from pathlib import Path
 from sqlglot import exp
 
 from sqlmesh.core.model.definition import Model, SqlModel
-from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.cache import FileCache
 from sqlmesh.utils.hashing import crc32
 from sqlmesh.utils.pydantic import PydanticModel
@@ -77,19 +76,16 @@ class OptimizedQueryCache:
             path, OptimizedQueryCacheEntry, prefix="optimized_query"
         )
 
-    def with_optimized_query(
-        self, model: Model, models: t.Optional[UniqueKeyDict[str, Model]] = None
-    ) -> bool:
+    def with_optimized_query(self, model: Model) -> bool:
         """Adds an optimized query to the model's in-memory cache.
 
         Args:
             model: The model to add the optimized query to.
-            models: The loaded models, useful for rendering purposes.
         """
         if not isinstance(model, SqlModel):
             return False
 
-        unoptimized_query = model.render_query(optimize=False, models=models)
+        unoptimized_query = model.render_query(optimize=False)
         if unoptimized_query is None:
             return False
 
@@ -99,7 +95,7 @@ class OptimizedQueryCache:
             model._query_renderer.update_cache(cache_entry.optimized_rendered_query, optimized=True)
             return True
 
-        optimized_query = model.render_query(optimize=True, models=models)
+        optimized_query = model.render_query(optimize=True)
         if optimized_query is not None:
             new_entry = OptimizedQueryCacheEntry(optimized_rendered_query=optimized_query)
             self._file_cache.put(model.name, entry_id, new_entry)

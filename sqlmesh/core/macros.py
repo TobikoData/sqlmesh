@@ -10,6 +10,7 @@ from sqlglot import Generator, exp
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
+from sqlglot.schema import MappingSchema
 
 from sqlmesh.core.dialect import (
     SQLMESH_MACRO_PREFIX,
@@ -24,11 +25,6 @@ from sqlmesh.utils import DECORATOR_RETURN_TYPE, UniqueKeyDict, registry_decorat
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
-
-if t.TYPE_CHECKING:
-    from sqlmesh.core.model import Model
-    from sqlmesh.core.snapshot import Snapshot
-
 
 SQLMESH_MOCKED_STAR = "__SQLMESH_MOCKED_STAR__"
 
@@ -106,8 +102,7 @@ class MacroEvaluator:
         dialect: str = "",
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         jinja_env: t.Optional[Environment] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        models: t.Optional[UniqueKeyDict[str, Model]] = None,
+        schema: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -116,12 +111,7 @@ class MacroEvaluator:
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
-
-        self._models = models or {
-            name: snapshot.node
-            for name, snapshot in (snapshots or {}).items()
-            if snapshot.node.is_model
-        }
+        self._schema = MappingSchema(schema, dialect=dialect, normalize=False) if schema else {}
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -278,17 +268,14 @@ class MacroEvaluator:
 
     def columns_to_types(self, model_name: str) -> t.Dict[str, exp.DataType]:
         """Returns the columns-to-types mapping corresponding to the specified model."""
-        if not self._models:
+        if not isinstance(self._schema, MappingSchema):
             return {SQLMESH_MOCKED_STAR: exp.DataType.build("unknown")}
 
-        if model_name not in self._models:
+        columns_to_types = self._schema.find(exp.to_table(model_name))
+        if columns_to_types is None:
             raise SQLMeshError(f"Model '{model_name}' not found in the macro evaluator's context.")
 
-        columns_to_types = self._models[model_name].columns_to_types  # type: ignore
-        if columns_to_types is None:
-            raise SQLMeshError(f"Missing 'columns' meta field for model '{model_name}'.")
-
-        return columns_to_types
+        return columns_to_types  # type: ignore
 
 
 class macro(registry_decorator):

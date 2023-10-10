@@ -13,13 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from sqlglot.errors import SchemaError, SqlglotError
-from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, load_multiple_audits
 from sqlmesh.core.dialect import parse, set_default_schema_and_catalog
-from sqlmesh.core.macros import SQLMESH_MOCKED_STAR, MacroRegistry, macro
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.metric import Metric, MetricMeta, expand_metrics, load_metric_ddl
 from sqlmesh.core.model import (
     Model,
@@ -70,13 +69,9 @@ def update_model_schemas(
         table = set_default_schema_and_catalog(name, **kwargs)
         try:
             model.update_schema(schema, **kwargs)
-            optimized_query_cache.with_optimized_query(model, models=models)
+            optimized_query_cache.with_optimized_query(model)
 
             columns_to_types = model.columns_to_types
-            mocked_star = normalize_identifiers(SQLMESH_MOCKED_STAR, dialect=model.dialect)
-            if mocked_star.name in (columns_to_types or {}):
-                columns_to_types = model._set_columns_to_types(models=models)
-
             if columns_to_types is not None:
                 schema.add_table(table, columns_to_types, dialect=model.dialect)
         except SchemaError as e:

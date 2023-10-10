@@ -17,6 +17,7 @@ from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
@@ -985,31 +986,20 @@ class SqlModel(_SqlBasedModel):
             return None
         return any(isinstance(expression, exp.Star) for expression in query.expressions)
 
-    def _set_columns_to_types(
-        self, render: bool = True, **kwargs: t.Any
-    ) -> t.Optional[t.Dict[str, exp.DataType]]:
-        if self.columns_to_types_ is not None:
-            self._columns_to_types = self.columns_to_types_
-        elif self._columns_to_types is None or render:
-            query = self._query_renderer.render(**kwargs)
-            if query is None:
-                return None
-
-            self._columns_to_types = d.extract_columns_to_types(query)
-
-        return self._columns_to_types
-
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
-        columns_to_types = self._set_columns_to_types(render=False)
-        if (
-            columns_to_types is None
-            or "*" in columns_to_types
-            or (SQLMESH_MOCKED_STAR in columns_to_types)
-        ):
+        if self.columns_to_types_ is not None:
+            self._columns_to_types = self.columns_to_types_
+        elif self._columns_to_types is None:
+            query = self._query_renderer.render()
+            if query is None:
+                return None
+            self._columns_to_types = d.extract_columns_to_types(query)
+
+        if "*" in self._columns_to_types:
             return None
 
-        return {**columns_to_types, **self.managed_columns}
+        return {**self._columns_to_types, **self.managed_columns}
 
     @property
     def column_descriptions(self) -> t.Dict[str, str]:
@@ -1037,6 +1027,14 @@ class SqlModel(_SqlBasedModel):
         super().update_schema(
             schema, default_schema=default_schema, default_catalog=default_catalog
         )
+
+        mocked_star = normalize_identifiers(SQLMESH_MOCKED_STAR, dialect=self.dialect)
+        if mocked_star.name in (self.columns_to_types or {}):
+            # We reset the unoptimized query cache here as well to allow the model's query
+            # to be re-rendered so that the MacroEvaluator can resolve columns_to_types calls
+            # and get rid of the mocked star column
+            self._query_renderer._cache = {}
+
         self._columns_to_types = None
         self._query_renderer._optimized_cache = {}
 
@@ -1093,9 +1091,6 @@ class SqlModel(_SqlBasedModel):
         if previous_query is None or this_query is None:
             # Can't determine if there's a breaking change if we can't render the query.
             return None
-
-        if previous_query is this_query:
-            return False
 
         edits = diff(previous_query, this_query, matchings=[(previous_query, this_query)])
         inserted_expressions = {e.expression for e in edits if isinstance(e, Insert)}

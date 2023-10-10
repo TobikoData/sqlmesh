@@ -18,8 +18,7 @@ from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.macros import SQLMESH_MOCKED_STAR, MacroEvaluator
-from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.core.macros import MacroEvaluator
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
     ConfigError,
@@ -33,7 +32,6 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env
 if t.TYPE_CHECKING:
     from sqlglot._typing import E
 
-    from sqlmesh.core.model import Model
     from sqlmesh.core.snapshot import Snapshot
 
 
@@ -50,6 +48,7 @@ class BaseExpressionRenderer:
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_execution_time: bool = False,
+        schema: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -58,10 +57,9 @@ class BaseExpressionRenderer:
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
         self._only_execution_time = only_execution_time
+        self.schema = {} if schema is None else schema
 
-        self._cache: t.Dict[
-            t.Tuple[datetime, datetime, datetime, bool], t.List[exp.Expression]
-        ] = {}
+        self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.List[exp.Expression]] = {}
 
     def _render(
         self,
@@ -89,8 +87,8 @@ class BaseExpressionRenderer:
             The rendered expressions.
         """
 
-        cache_key = self._cache_key(start, end, execution_time, snapshots, kwargs.get("models"))
-        start_dt, end_dt, execution_dt, *_ = cache_key
+        cache_key = self._cache_key(start, end, execution_time)
+        start_dt, end_dt, execution_dt = cache_key
         if cache_key not in self._cache:
             expressions = [self._expression]
 
@@ -133,8 +131,7 @@ class BaseExpressionRenderer:
                 self._dialect,
                 python_env=self._python_env,
                 jinja_env=jinja_env,
-                snapshots=snapshots,
-                models=kwargs.get("models"),
+                schema=self.schema,
             )
 
             for definition in self._macro_definitions:
@@ -206,13 +203,10 @@ class BaseExpressionRenderer:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        models: t.Optional[UniqueKeyDict[str, Model]] = None,
-    ) -> t.Tuple[datetime, datetime, datetime, bool]:
+    ) -> t.Tuple[datetime, datetime, datetime]:
         return (
             *make_inclusive(start or c.EPOCH, end or c.EPOCH),
             to_datetime(execution_time or c.EPOCH),
-            bool(snapshots or models),
         )
 
 
@@ -274,15 +268,12 @@ class QueryRenderer(BaseExpressionRenderer):
             jinja_macro_registry=jinja_macro_registry,
             python_env=python_env,
             only_execution_time=only_execution_time,
+            schema=schema,
         )
 
         self._model_name = model_name
 
-        self._optimized_cache: t.Dict[
-            t.Tuple[datetime, datetime, datetime, bool], exp.Expression
-        ] = {}
-
-        self.schema = {} if schema is None else schema
+        self._optimized_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
 
     def render(
         self,
@@ -316,7 +307,7 @@ class QueryRenderer(BaseExpressionRenderer):
         Returns:
             The rendered expression.
         """
-        cache_key = self._cache_key(start, end, execution_time, snapshots, kwargs.get("models"))
+        cache_key = self._cache_key(start, end, execution_time)
 
         if not optimize or cache_key not in self._optimized_cache:
             try:
@@ -399,9 +390,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 schema = MappingSchema(None, dialect=self._dialect, normalize=False)
                 break
 
-        should_optimize = query.selects[0].name.upper() != SQLMESH_MOCKED_STAR and (
-            not schema.empty or not dependencies
-        )
+        should_optimize = not schema.empty or not dependencies
 
         try:
             if should_optimize:
