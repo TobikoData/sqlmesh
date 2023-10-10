@@ -112,22 +112,22 @@ def test_load(assert_exp_eq):
         d.parse_one("DROP TABLE x"),
     ]
     assert model.depends_on == {"db.other_table"}
-    assert_exp_eq(
-        model.render_query(),
-        """
-    SELECT
-      TRY_CAST(1 AS INT) AS "a",
-      TRY_CAST(2 AS DOUBLE) AS "b",
-      TRY_CAST("c" AS BOOLEAN) AS "c",
-      TRY_CAST(1 AS INT) AS "d", /* d */
-      TRY_CAST(2 AS DOUBLE) AS "e", /* e */
-      TRY_CAST("f" AS BOOLEAN) AS "f", /* f */
-      TRY_CAST(1 + 1 AS INT) AS "g",
-    FROM "db"."other_table" AS "t1"
-    LEFT JOIN "db"."table" AS "t2"
-      ON "t1"."a" = "t2"."a"
-    """,
+
+    assert (
+        model.render_query().sql(pretty=True, dialect="spark")
+        == """SELECT
+  CAST(1 AS INT) AS `a`,
+  CAST(2 AS DOUBLE) AS `b`,
+  CAST(`c` AS BOOLEAN) AS `c`,
+  CAST(1 AS INT) AS `d`, /* d */
+  CAST(2 AS DOUBLE) AS `e`, /* e */
+  CAST(`f` AS BOOLEAN) AS `f`, /* f */
+  CAST(1 + 1 AS INT) AS `g`
+FROM `db`.`other_table` AS `t1`
+LEFT JOIN `db`.`table` AS `t2`
+  ON `t1`.`a` = `t2`.`a`"""
     )
+
     assert model.tags == ["tag_foo", "tag_bar"]
     assert [r.dict() for r in model.all_references] == [
         {"model_name": "db.table", "expression": d.parse_one("[a, b]"), "unique": True},
