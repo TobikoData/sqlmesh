@@ -985,7 +985,7 @@ def test_lookback():
     assert to_timestamp(model.lookback_start("Jan 1 2020")) == to_timestamp("Jan 1 2018")
 
 
-def test_render_query(assert_exp_eq):
+def test_render_query(assert_exp_eq, sushi_context):
     model = SqlModel(
         name="test",
         cron="1 0 * * *",
@@ -1038,6 +1038,18 @@ def test_render_query(assert_exp_eq):
     assert_exp_eq(
         model.render_query(),
         'SELECT COUNT(DISTINCT "a") FILTER (WHERE "b" > 0) AS "c" FROM "x" AS "x"',
+    )
+
+    assert_exp_eq(
+        sushi_context.models["sushi.waiters"].render_query().sql(),
+        """
+        SELECT DISTINCT
+          CAST("o"."waiter_id" AS INT) AS "waiter_id",
+          CAST("o"."ds" AS TEXT) AS "ds"
+        FROM "sushi"."orders" AS "o"
+        WHERE
+          "o"."ds" <= '1970-01-01' AND "o"."ds" >= '1970-01-01'
+        """,
     )
 
 

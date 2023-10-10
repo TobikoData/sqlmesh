@@ -43,6 +43,7 @@ if t.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 # TODO: consider moving this to context
 def update_model_schemas(
     dag: DAG[str],
@@ -300,6 +301,7 @@ class SqlMeshLoader(Loader):
                             raise ConfigError(
                                 f"Failed to parse a model definition at '{path}': {ex}."
                             )
+
                     return load_sql_based_model(
                         expressions,
                         defaults=config.model_defaults.dict(),
