@@ -40,9 +40,9 @@ If the model's interval unit was 1 day, the model's set of intervals would have 
 
 Today's interval is not yet complete because it's 12pm right now. This is illustrated in the top panel of Figure 2:
 
-![Illustration of counting intervals over a 36 hour period with interval units of 1 day and 1 hour](./incremental_time/interval-counting.png)
+![Illustration of counting intervals over a 60 hour period with interval units of 1 day and 1 hour](./incremental_time/interval-counting.png)
 
-*__Figure 2: Illustration of counting intervals over a 36 hour period with interval units of 1 day and 1 hour__*
+*__Figure 2: Illustration of counting intervals over a 60 hour period with interval units of 1 day and 1 hour__*
 
 <br>
 
