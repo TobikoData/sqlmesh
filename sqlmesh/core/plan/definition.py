@@ -107,12 +107,17 @@ class Plan:
         self.categorizer_config = categorizer_config or CategorizerConfig()
         self.auto_categorization_enabled = auto_categorization_enabled
         self.include_unmodified = include_unmodified
+
+        self.__snapshot_mapping: t.Optional[t.Dict[str, Snapshot]] = None
+        self.__dag: t.Optional[DAG[str]] = None
+
+        self._start = start
+        if not self._start and is_dev and (forward_only or self._has_paused_forward_only()):
+            self._start = default_start or yesterday_ds()
+
+        self._end = end if end or not is_dev else (default_end or now())
         self._restate_models = set(restate_models or [])
         self._effective_from: t.Optional[TimeLike] = None
-        self._start = (
-            start if start or not (is_dev and forward_only) else (default_start or yesterday_ds())
-        )
-        self._end = end if end or not is_dev else (default_end or now())
         self._execution_time = execution_time or now()
         self._apply = apply
         self.__missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
@@ -215,7 +220,15 @@ class Plan:
     @property
     def _snapshot_mapping(self) -> t.Dict[str, Snapshot]:
         """Gets a mapping of snapshot name to snapshot."""
-        return self.__snapshot_mapping
+        return self.__snapshot_mapping or self.context_diff.snapshots
+
+    @property
+    def _dag(self) -> DAG[str]:
+        if self.__dag is None:
+            self.__dag = DAG()
+            for name, snapshot in self._snapshot_mapping.items():
+                self.__dag.add(name, snapshot.node.depends_on)
+        return self.__dag
 
     @property
     def new_snapshots(self) -> t.List[Snapshot]:
@@ -649,7 +662,7 @@ class Plan:
     def _refresh_dag_and_ignored_snapshots(self) -> None:
         self._restatements = {}
         (
-            self._dag,
+            self.__dag,
             self._snapshots,
             self._new_snapshots,
             self.__snapshot_mapping,
@@ -714,6 +727,12 @@ class Plan:
             filtered_snapshot_mapping,
             ignored_snapshot_names,
         )
+
+    def _has_paused_forward_only(self) -> bool:
+        for name, snapshot in self._snapshot_mapping.items():
+            if snapshot.is_paused_forward_only or self._is_forward_only_model(name):
+                return True
+        return False
 
     def _is_forward_only_model(self, model_name: str) -> bool:
         def _is_forward_only_expected(snapshot: Snapshot) -> bool:

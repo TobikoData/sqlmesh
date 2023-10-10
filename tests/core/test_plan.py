@@ -633,8 +633,9 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     context_diff_mock.previous_plan_id = "previous_plan_id"
     context_diff_mock.directly_modified.side_effect = lambda name: name == "a"
 
-    plan = Plan(context_diff_mock, is_dev=True)
+    plan = Plan(context_diff_mock, is_dev=True, default_start="2023-01-01")
     assert plan.indirectly_modified == {"a": {"b", "c"}}
+    assert plan.start == "2023-01-01"
 
     assert len(plan.directly_modified) == 1
     assert plan.directly_modified[0].snapshot_id == updated_snapshot_a.snapshot_id
@@ -666,7 +667,8 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
     context_diff_mock.environment = "test_dev"
     context_diff_mock.previous_plan_id = "previous_plan_id"
 
-    Plan(context_diff_mock)
+    plan = Plan(context_diff_mock, is_dev=True, default_start="2023-01-01")
+    assert plan.start == "2023-01-01"
     assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
