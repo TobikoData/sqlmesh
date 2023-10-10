@@ -38,17 +38,6 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _dates(
-    start: t.Optional[TimeLike] = None,
-    end: t.Optional[TimeLike] = None,
-    execution_time: t.Optional[TimeLike] = None,
-) -> t.Tuple[datetime, datetime, datetime]:
-    return (
-        *make_inclusive(start or c.EPOCH, end or c.EPOCH),
-        to_datetime(execution_time or c.EPOCH),
-    )
-
-
 class BaseExpressionRenderer:
     def __init__(
         self,
@@ -59,6 +48,7 @@ class BaseExpressionRenderer:
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_execution_time: bool = False,
+        schema: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -67,6 +57,7 @@ class BaseExpressionRenderer:
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
         self._only_execution_time = only_execution_time
+        self.schema = {} if schema is None else schema
 
         self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.List[exp.Expression]] = {}
 
@@ -96,7 +87,7 @@ class BaseExpressionRenderer:
             The rendered expressions.
         """
 
-        cache_key = _dates(start, end, execution_time)
+        cache_key = self._cache_key(start, end, execution_time)
         start_dt, end_dt, execution_dt = cache_key
         if cache_key not in self._cache:
             expressions = [self._expression]
@@ -140,6 +131,7 @@ class BaseExpressionRenderer:
                 self._dialect,
                 python_env=self._python_env,
                 jinja_env=jinja_env,
+                schema=self.schema,
             )
 
             for definition in self._macro_definitions:
@@ -174,7 +166,7 @@ class BaseExpressionRenderer:
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
-        self._cache[_dates(start, end, execution_time)] = [expression]
+        self._cache[self._cache_key(start, end, execution_time)] = [expression]
 
     def _resolve_tables(
         self,
@@ -205,6 +197,17 @@ class BaseExpressionRenderer:
                 execution_time=execution_time,
                 **kwargs,
             )
+
+    def _cache_key(
+        self,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+        execution_time: t.Optional[TimeLike] = None,
+    ) -> t.Tuple[datetime, datetime, datetime]:
+        return (
+            *make_inclusive(start or c.EPOCH, end or c.EPOCH),
+            to_datetime(execution_time or c.EPOCH),
+        )
 
 
 class ExpressionRenderer(BaseExpressionRenderer):
@@ -265,13 +268,12 @@ class QueryRenderer(BaseExpressionRenderer):
             jinja_macro_registry=jinja_macro_registry,
             python_env=python_env,
             only_execution_time=only_execution_time,
+            schema=schema,
         )
 
         self._model_name = model_name
 
         self._optimized_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
-
-        self.schema = {} if schema is None else schema
 
     def render(
         self,
@@ -305,7 +307,7 @@ class QueryRenderer(BaseExpressionRenderer):
         Returns:
             The rendered expression.
         """
-        cache_key = _dates(start, end, execution_time)
+        cache_key = self._cache_key(start, end, execution_time)
 
         if not optimize or cache_key not in self._optimized_cache:
             try:
@@ -367,7 +369,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 expression, start=start, end=end, execution_time=execution_time, **kwargs
             )
         else:
-            self._optimized_cache[_dates(start, end, execution_time)] = expression
+            self._optimized_cache[self._cache_key(start, end, execution_time)] = expression
 
     def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
@@ -417,7 +419,13 @@ class QueryRenderer(BaseExpressionRenderer):
                             "*",
                             "",
                         ):
-                            select.replace(exp.alias_(select, select.output_name))
+                            alias = exp.alias_(select, select.output_name)
+                            comments = alias.this.comments
+                            if comments:
+                                alias.add_comments(comments)
+                                comments.clear()
+
+                            select.replace(alias)
 
         return annotate_types(query, schema=schema)
 
