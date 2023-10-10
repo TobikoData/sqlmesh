@@ -275,7 +275,7 @@ class MacroEvaluator:
         if columns_to_types is None:
             raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
 
-        return columns_to_types  # type: ignore
+        return columns_to_types
 
 
 class macro(registry_decorator):
