@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import logging
 import typing as t
 
 import pandas as pd
 from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
+from sqlglot.errors import ErrorLevel
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport, SourceQuery
@@ -17,6 +19,8 @@ from sqlmesh.core.engine_adapter.mixins import (
     PandasNativeFetchDFSupportMixin,
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+
+logger = logging.getLogger(__name__)
 
 if t.TYPE_CHECKING:
     import pymssql
@@ -68,8 +72,7 @@ class MSSQLEngineAdapter(
         if database_name:
             sql = sql.where(f"table_schema = '{database_name}'")
 
-        self.execute(sql)
-        columns_raw = self.cursor.fetchall()
+        columns_raw = self.fetchall(sql, quote_identifiers=True)
 
         def build_var_length_col(row: tuple) -> tuple:
             var_len_chars = ("binary", "varbinary", "char", "varchar", "nchar", "nvarchar")
@@ -107,9 +110,7 @@ class MSSQLEngineAdapter(
         if database_name:
             sql = sql.where(f"table_schema = '{database_name}'")
 
-        self.execute(sql)
-
-        result = self.cursor.fetchone()
+        result = self.fetchone(sql, quote_identifiers=True)
 
         return result[0] == 1 if result else False
 
@@ -178,7 +179,7 @@ class MSSQLEngineAdapter(
         Returns all the data objects that exist in the given schema and catalog.
         """
         if not catalog_name:
-            catalog_name = self.fetchone("select DB_NAME()")[0]
+            catalog_name = self.fetchone("select DB_NAME()", quote_identifiers=True)[0]
         query = f"""
             SELECT
                 '{catalog_name}' AS catalog_name,
@@ -188,15 +189,15 @@ class MSSQLEngineAdapter(
             FROM {catalog_name}.INFORMATION_SCHEMA.TABLES
             WHERE TABLE_SCHEMA LIKE '%{schema_name}%'
         """
-        dataframe: pd.DataFrame = self.fetchdf(query)
+        results = self.fetchall(query)
         return [
             DataObject(
-                catalog=row.catalog_name,  # type: ignore
-                schema=row.schema_name,  # type: ignore
-                name=row.name,  # type: ignore
-                type=DataObjectType.from_str(row.type),  # type: ignore
+                catalog=row[0],  # type: ignore
+                schema=row[2],  # type: ignore
+                name=row[1],  # type: ignore
+                type=DataObjectType.from_str(row[3]),  # type: ignore
             )
-            for row in dataframe.itertuples()
+            for row in results
         ]
 
     def _truncate_table(self, table_name: TableName) -> str:
@@ -206,3 +207,47 @@ class MSSQLEngineAdapter(
     def _to_sql(self, expression: exp.Expression, quote: bool = True, **kwargs: t.Any) -> str:
         sql = super()._to_sql(expression, quote=quote, **kwargs)
         return f"{sql};"
+
+    def fetchone(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = False,
+    ) -> t.Tuple:
+        """Execute a sql query and fetch one result."""
+        to_sql_kwargs = (
+            {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
+        )
+
+        with self.transaction():
+            sql = (
+                self._to_sql(query, quote=quote_identifiers, **to_sql_kwargs)
+                if isinstance(query, exp.Expression)
+                else query
+            )
+            logger.debug(f"Executing SQL:\n{sql}")
+            self.cursor.execute(sql)
+
+            return self.cursor.fetchone()
+
+    def fetchall(
+        self,
+        query: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+        quote_identifiers: bool = False,
+    ) -> t.List[t.Tuple]:
+        """Execute a sql query and fetch all results."""
+        to_sql_kwargs = (
+            {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
+        )
+
+        with self.transaction():
+            sql = (
+                self._to_sql(query, quote=quote_identifiers, **to_sql_kwargs)
+                if isinstance(query, exp.Expression)
+                else query
+            )
+            logger.debug(f"Executing SQL:\n{sql}")
+            self.cursor.execute(sql)
+
+            return self.cursor.fetchall()
