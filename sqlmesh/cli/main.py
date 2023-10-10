@@ -411,36 +411,6 @@ def info(obj: Context) -> None:
     obj.print_info()
 
 
-@cli.command("ide")
-@click.option(
-    "--host",
-    type=str,
-    help="Bind socket to this host. Default: 127.0.0.1",
-)
-@click.option(
-    "--port",
-    type=int,
-    help="Bind socket to this port. Default: 8000",
-)
-@click.pass_context
-@error_handler
-def ide(
-    ctx: click.Context,
-    host: t.Optional[str],
-    port: t.Optional[int],
-) -> None:
-    """
-    Start a browser-based SQLMesh IDE.
-
-    WARNING: soft-deprecated, please use `sqlmesh ui` instead.
-    """
-    click.echo(
-        click.style("WARNING", fg="yellow") + ":  soft-deprecated, please use `sqlmesh ui` instead."
-    )
-
-    ctx.forward(ui)
-
-
 @cli.command("ui")
 @click.option(
     "--host",
