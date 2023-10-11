@@ -112,6 +112,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                 "version": snapshot.version,
                 "change_category": snapshot.change_category,
                 "migrated": False,
+                "unrestorable": False,
             }
         ],
         "environment": {
