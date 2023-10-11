@@ -9,7 +9,8 @@ from sqlglot.errors import ErrorLevel
 from sqlglot.helper import ensure_list
 from sqlglot.transforms import remove_precision_parameterized_types
 
-from sqlmesh.core.engine_adapter.base import SourceQuery
+from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.base import CatalogSupport, SourceQuery
 from sqlmesh.core.engine_adapter.mixins import InsertOverwriteWithMergeMixin
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.core.node import IntervalUnit
@@ -26,7 +27,7 @@ if t.TYPE_CHECKING:
     from google.cloud.bigquery.job.base import _AsyncJob as BigQueryQueryResult
     from google.cloud.bigquery.table import Table as BigQueryTable
 
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
@@ -44,6 +45,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_CLONING = True
+    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
 
     # SQL is not supported for adding columns to structs: https://cloud.google.com/bigquery/docs/managing-table-schemas#api_1
     # Can explore doing this with the API in the future
@@ -131,10 +133,17 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
     def _is_session_active(self) -> bool:
         return self._session_id is not None
 
+    def get_current_catalog(self) -> t.Optional[str]:
+        """Returns the catalog name of the current connection."""
+        return self.client.project
+
+    def set_current_catalog(self, catalog: str) -> None:
+        """Sets the catalog name of the current connection."""
+        self.client.project = catalog
+
     def create_schema(
         self,
-        schema_name: str,
-        catalog_name: t.Optional[str] = None,
+        schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
     ) -> None:
@@ -144,7 +153,6 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         try:
             super().create_schema(
                 schema_name,
-                catalog_name=catalog_name,
                 ignore_if_exists=ignore_if_exists,
                 warn_on_error=False,
             )
@@ -535,18 +543,16 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             self.cursor._set_rowcount(query_results)
             self.cursor._set_description(query_results.schema)
 
-    def _get_data_objects(
-        self, schema_name: str, catalog_name: t.Optional[str] = None
-    ) -> t.List[DataObject]:
+    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
         from google.api_core.exceptions import NotFound
         from google.cloud.bigquery import DatasetReference
 
-        dataset_ref = DatasetReference(
-            project=catalog_name or self.client.project, dataset_id=schema_name
-        )
+        schema = to_schema(schema_name)
+        catalog_name = schema.catalog or self.get_current_catalog()
+        dataset_ref = DatasetReference(project=catalog_name, dataset_id=schema.db)
         try:
             return [
                 DataObject(

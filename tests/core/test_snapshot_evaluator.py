@@ -7,6 +7,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse, parse_one, select
 
 from sqlmesh.core.audit import StandaloneAudit
+from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.environment import EnvironmentNamingInfo
@@ -132,7 +133,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     adapter_mock.create_schema.assert_has_calls(
         [
-            call("sqlmesh__test_schema", catalog_name=None),
+            call(to_schema("sqlmesh__test_schema")),
         ]
     )
 
@@ -184,7 +185,7 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
-    adapter_mock.create_schema.assert_called_once_with("test_schema__test_env", catalog_name=None)
+    adapter_mock.create_schema.assert_called_once_with(to_schema("test_schema__test_env"))
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         parse_one(
@@ -213,8 +214,8 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
 
     adapter_mock.create_schema.assert_has_calls(
         [
-            call("test_schema__test_env", catalog_name=None),
-            call("test_schema__test_env", catalog_name=None),
+            call(to_schema("test_schema__test_env")),
+            call(to_schema("test_schema__test_env")),
         ]
     )
     adapter_mock.create_view.assert_has_calls(
@@ -482,7 +483,7 @@ def test_promote_model_info(mocker: MockerFixture, make_snapshot):
 
     evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
 
-    adapter_mock.create_schema.assert_called_once_with("test_schema__test_env", catalog_name=None)
+    adapter_mock.create_schema.assert_called_once_with(to_schema("test_schema__test_env"))
     adapter_mock.create_view.assert_called_once_with(
         "test_schema__test_env.test_model",
         parse_one(f"SELECT * FROM physical_schema.test_schema__test_model__{snapshot.version}"),

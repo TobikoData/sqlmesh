@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import datetime
 from functools import wraps
 
+from sqlmesh.core.dialect import schema_
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
     Snapshot,
@@ -33,13 +34,20 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
     expired_table_environments = [
         environment for environment in environments if environment.suffix_target.is_table
     ]
-    for expired_schema in {
-        snapshot.qualified_view_name.schema_for_environment(environment.naming_info)
+    for expired_catalog, expired_schema in {
+        (
+            snapshot.qualified_view_name.catalog,
+            snapshot.qualified_view_name.schema_for_environment(environment.naming_info),
+        )
         for environment in expired_schema_environments
         for snapshot in environment.snapshots
         if snapshot.is_model
     }:
-        adapter.drop_schema(expired_schema, ignore_if_not_exists=True, cascade=True)
+        adapter.drop_schema(
+            schema_(expired_schema, expired_catalog),
+            ignore_if_not_exists=True,
+            cascade=True,
+        )
     for expired_view in {
         snapshot.qualified_view_name.for_environment(environment.naming_info)
         for environment in expired_table_environments

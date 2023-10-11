@@ -10,7 +10,7 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import EnvironmentSuffixTarget
-from sqlmesh.core.dialect import parse_one
+from sqlmesh.core.dialect import parse_one, schema_
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import (
@@ -1256,7 +1256,7 @@ def test_cleanup_expired_views(
     assert adapter.drop_schema.called
     assert adapter.drop_view.called
     assert adapter.drop_schema.call_args_list == [
-        call("default__test_environment", ignore_if_not_exists=True, cascade=True)
+        call(schema_("default__test_environment"), ignore_if_not_exists=True, cascade=True)
     ]
     assert sorted(adapter.drop_view.call_args_list) == [
         call("default.c__test_environment", ignore_if_not_exists=True),

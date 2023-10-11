@@ -16,7 +16,7 @@ from sqlmesh.core.config import (
     SnowflakeConnectionConfig,
 )
 from sqlmesh.core.context import Context
-from sqlmesh.core.dialect import parse
+from sqlmesh.core.dialect import parse, schema_
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import load_sql_based_model
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
@@ -411,10 +411,13 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     sushi_context._state_sync = state_sync_mock
     sushi_context._run_janitor()
     # Assert that the schemas are dropped just twice for the schema based environment
-    assert sorted(adapter_mock.drop_schema.call_args_list) == [
-        call("raw__test_environment", ignore_if_not_exists=True, cascade=True),
-        call("sushi__test_environment", ignore_if_not_exists=True, cascade=True),
-    ]
+    adapter_mock.drop_schema.assert_has_calls(
+        [
+            call(schema_("raw__test_environment"), cascade=True, ignore_if_not_exists=True),
+            call(schema_("sushi__test_environment"), cascade=True, ignore_if_not_exists=True),
+        ],
+        any_order=True,
+    )
     # Assert that the views are dropped for each snapshot just once and make sure that the name used is the
     # view name with the environment as a suffix
     # TODO: It appears we try to drop views for external models which shouldn't hurt but we should fix this

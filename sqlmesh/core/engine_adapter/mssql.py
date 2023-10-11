@@ -10,19 +10,21 @@ from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
-from sqlmesh.core.engine_adapter.base import EngineAdapterWithIndexSupport, SourceQuery
+from sqlmesh.core.engine_adapter.base import (
+    CatalogSupport,
+    EngineAdapterWithIndexSupport,
+    SourceQuery,
+)
 from sqlmesh.core.engine_adapter.mixins import (
     InsertOverwriteWithMergeMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 
 if t.TYPE_CHECKING:
-    import pymssql
-
-    from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF, Query
+    from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core.engine_adapter._typing import DF, Query, QueryOrDF
 
 
 class MSSQLEngineAdapter(
@@ -43,7 +45,9 @@ class MSSQLEngineAdapter(
     DIALECT: str = "tsql"
     SUPPORTS_TUPLE_IN = False
     SUPPORTS_MATERIALIZED_VIEWS = False
+    CATALOG_SUPPORT = CatalogSupport.REQUIRES_SET_CATALOG
 
+    @set_catalog()
     def columns(
         self,
         table_name: TableName,
@@ -110,12 +114,21 @@ class MSSQLEngineAdapter(
 
         return result[0] == 1 if result else False
 
-    @property
-    def connection(self) -> pymssql.Connection:
-        return self.cursor.connection
+    def get_current_catalog(self) -> t.Optional[str]:
+        result = self.fetchone("SELECT DB_NAME()")
+        if result:
+            return result[0]
+        return None
 
+    def set_current_catalog(self, catalog_name: str) -> None:
+        self.execute(exp.Use(this=exp.to_identifier(catalog_name)))
+
+    @set_catalog()
     def drop_schema(
-        self, schema_name: str, ignore_if_not_exists: bool = True, cascade: bool = False
+        self,
+        schema_name: SchemaName,
+        ignore_if_not_exists: bool = True,
+        cascade: bool = False,
     ) -> None:
         """
         MsSql doesn't support CASCADE clause and drops schemas unconditionally.
@@ -133,6 +146,33 @@ class MSSQLEngineAdapter(
                         ".".join([obj.schema_name, obj.name]), exists=ignore_if_not_exists  # type: ignore
                     )
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=False)
+
+    @set_catalog()
+    def create_view(
+        self,
+        view_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        replace: bool = True,
+        materialized: bool = False,
+        **create_kwargs: t.Any,
+    ) -> None:
+        super().create_view(
+            view_name,
+            query_or_df,
+            columns_to_types=columns_to_types,
+            replace=replace,
+            materialized=materialized,
+            **create_kwargs,
+        )
+
+    @set_catalog()
+    def drop_view(
+        self, view_name: TableName, ignore_if_not_exists: bool = True, materialized: bool = False
+    ) -> None:
+        super().drop_view(
+            view_name, ignore_if_not_exists=ignore_if_not_exists, materialized=materialized
+        )
 
     def _df_to_source_queries(
         self,
@@ -166,23 +206,19 @@ class MSSQLEngineAdapter(
             )
         ]
 
-    def _get_data_objects(
-        self,
-        schema_name: str,
-        catalog_name: t.Optional[str] = None,
-    ) -> t.List[DataObject]:
+    @set_catalog()
+    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and catalog.
         """
-        if not catalog_name:
-            catalog_name = self.fetchone("select DB_NAME()")[0]
+        catalog_name = self.get_current_catalog()
         query = f"""
             SELECT
                 '{catalog_name}' AS catalog_name,
                 TABLE_NAME AS name,
                 TABLE_SCHEMA AS schema_name,
                 CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
-            FROM {catalog_name}.INFORMATION_SCHEMA.TABLES
+            FROM INFORMATION_SCHEMA.TABLES
             WHERE TABLE_SCHEMA LIKE '%{schema_name}%'
         """
         dataframe: pd.DataFrame = self.fetchdf(query)
