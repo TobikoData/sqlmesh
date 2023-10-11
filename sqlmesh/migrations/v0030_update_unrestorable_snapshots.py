@@ -1,4 +1,4 @@
-"""Update non-revertible snapshots."""
+"""Update unrestorable snapshots."""
 import json
 import typing as t
 from collections import defaultdict
@@ -34,7 +34,7 @@ def migrate(state_sync: t.Any) -> None:
                 and snapshot["change_category"] != 3
                 and not snapshot.get("unpaused_ts")
             ):
-                snapshot["non_revertible"] = True
+                snapshot["unrestorable"] = True
             new_snapshots.append(
                 {
                     "name": name,

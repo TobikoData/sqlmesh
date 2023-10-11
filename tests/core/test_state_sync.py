@@ -784,8 +784,8 @@ def test_unpause_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     assert not actual_snapshots[snapshot.snapshot_id].unpaused_ts
     assert actual_snapshots[new_snapshot.snapshot_id].unpaused_ts == to_timestamp(unpaused_dt)
 
-    assert actual_snapshots[snapshot.snapshot_id].non_revertible
-    assert not actual_snapshots[new_snapshot.snapshot_id].non_revertible
+    assert actual_snapshots[snapshot.snapshot_id].unrestorable
+    assert not actual_snapshots[new_snapshot.snapshot_id].unrestorable
 
 
 def test_unpause_snapshots_remove_intervals(

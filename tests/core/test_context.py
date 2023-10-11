@@ -519,11 +519,11 @@ def test_gateway_macro(sushi_context: Context) -> None:
     )
 
 
-def test_non_revertible_snapshot(sushi_context: Context) -> None:
+def test_unrestorable_snapshot(sushi_context: Context) -> None:
     model_v1 = load_sql_based_model(
         parse(
             """
-        MODEL(name sushi.test_non_revertible);
+        MODEL(name sushi.test_unrestorable);
         SELECT 1 AS one;
         """
         )
@@ -531,7 +531,7 @@ def test_non_revertible_snapshot(sushi_context: Context) -> None:
     model_v2 = load_sql_based_model(
         parse(
             """
-        MODEL(name sushi.test_non_revertible);
+        MODEL(name sushi.test_unrestorable);
         SELECT 2 AS two;
         """
         )
@@ -539,14 +539,14 @@ def test_non_revertible_snapshot(sushi_context: Context) -> None:
 
     sushi_context.upsert_model(model_v1)
     sushi_context.plan(auto_apply=True, no_prompts=True)
-    model_v1_old_snapshot = sushi_context.snapshots["sushi.test_non_revertible"]
+    model_v1_old_snapshot = sushi_context.snapshots["sushi.test_unrestorable"]
 
     sushi_context.upsert_model(model_v2)
     sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
 
     sushi_context.upsert_model(model_v1)
     sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
-    model_v1_new_snapshot = sushi_context.snapshots["sushi.test_non_revertible"]
+    model_v1_new_snapshot = sushi_context.snapshots["sushi.test_unrestorable"]
 
     assert (
         model_v1_new_snapshot.node.stamp

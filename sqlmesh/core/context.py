@@ -1284,14 +1284,14 @@ class Context(BaseContext):
         snapshots = _nodes_to_snapshots(nodes)
         stored_snapshots = self.state_reader.get_snapshots(snapshots.values())
 
-        non_revertible_snapshot_names = {
-            s.name for s in stored_snapshots.values() if s.name in local_nodes and s.non_revertible
+        unrestorable_snapshot_names = {
+            s.name for s in stored_snapshots.values() if s.name in local_nodes and s.unrestorable
         }
-        if non_revertible_snapshot_names:
-            for name in non_revertible_snapshot_names:
+        if unrestorable_snapshot_names:
+            for name in unrestorable_snapshot_names:
                 snapshot_id = snapshots[name].snapshot_id
                 logger.info(
-                    "Found a non-revertible snapshot %s. Restamping the model...", snapshot_id
+                    "Found a unrestorable snapshot %s. Restamping the model...", snapshot_id
                 )
                 node = local_nodes[name]
                 nodes[name] = node.copy(update={"stamp": f"revert to {snapshot_id.identifier}"})
