@@ -609,9 +609,6 @@ class TerminalConsole(Console):
             if effective_from:
                 plan.effective_from = effective_from
 
-        if plan.is_dev and plan.effective_from:
-            plan.set_start(plan.effective_from)
-
     def _prompt_backfill(self, plan: Plan, auto_apply: bool) -> None:
         is_forward_only_dev = plan.is_dev and plan.forward_only
         backfill_or_preview = "preview" if is_forward_only_dev else "backfill"

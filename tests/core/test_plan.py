@@ -333,7 +333,7 @@ def test_start_inference(make_snapshot, mocker: MockerFixture):
     context_diff_mock.added = set()
     context_diff_mock.removed_snapshots = set()
     context_diff_mock.modified_snapshots = {}
-    context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
+    context_diff_mock.new_snapshots = {}
 
     snapshot_b.add_interval("2022-01-01", now())
 

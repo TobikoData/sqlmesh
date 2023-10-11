@@ -771,7 +771,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             category: The change category to assign to this snapshot.
         """
-        assert not self.intervals  # a snapshot that has been processed should not be recategorized
         is_forward_only = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,

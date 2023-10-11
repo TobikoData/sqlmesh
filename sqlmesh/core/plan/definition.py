@@ -167,9 +167,6 @@ class Plan:
     @start.setter
     def start(self, new_start: TimeLike) -> None:
         self._ensure_valid_date_range(new_start, self._end)
-        self.set_start(new_start)
-
-    def set_start(self, new_start: TimeLike) -> None:
         self._start = new_start
         self.override_start = True
         self.__missing_intervals = None
@@ -371,6 +368,7 @@ class Plan:
         # Invalidate caches.
         self._categorized = None
         self._uncategorized = None
+        self.__missing_intervals = None
 
     @property
     def effective_from(self) -> t.Optional[TimeLike]:
@@ -393,6 +391,9 @@ class Plan:
             effective_from: The effective date to set.
         """
         self._set_effective_from(effective_from)
+        if effective_from and self.is_dev and not self.override_start:
+            self._start = effective_from
+            self._refresh_dag_and_ignored_snapshots()
 
     def _set_effective_from(self, effective_from: t.Optional[TimeLike]) -> None:
         if not self.forward_only:
@@ -410,21 +411,17 @@ class Plan:
     @property
     def _missing_intervals(self) -> t.Dict[t.Tuple[str, str], Intervals]:
         if self.__missing_intervals is None:
-            # we need previous snapshots because this method is cached and users have the option
-            # to choose non-breaking / forward only. this will change the version of the snapshot on the fly
-            # thus changing the missing intervals. additionally we replace any snapshots with the old copies
-            # because they have intervals and the ephemeral ones don't
             old_snapshots = {
                 (old.name, old.version_get_or_generate()): old
                 for _, old in self.context_diff.modified_snapshots.values()
             }
 
             for new in self.context_diff.new_snapshots.values():
+                new.intervals = []
+                new.dev_intervals = []
                 old = old_snapshots.get((new.name, new.version_get_or_generate()))
                 if not old:
                     continue
-                new.intervals = []
-                new.dev_intervals = []
                 new.merge_intervals(old)
                 if new.is_forward_only:
                     new.dev_intervals = new.intervals.copy()
