@@ -56,6 +56,19 @@ Other extras are required to use specific SQL engines, like Bigquery or Postgres
 
 Multiple extras can be installed at once, as in `pip install "sqlmesh[web,slack]"`.
 
+## Pydantic v2
+SQLMesh supports Pydantic v2, but since v2 is relatively new, v1 is the version installed by default. If you would like to use Pydantic v2, you can by installing it after installing SQLMesh.
+
+```bash
+pip install --upgrade pydantic
+```
+
+Pip may issue a warning about dependency conflicts, but SQLMesh should still function fine. Furthermore, if you are using the SQLMesh UI, you will also need to install pydantic-settings.
+
+```bash
+pip install --upgrade pydantic-settings
+```
+
 ## Next steps
 
 Now that you've installed SQLMesh, it's time to get started with the SQLMesh example project.

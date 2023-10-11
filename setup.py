@@ -42,11 +42,11 @@ setup(
         "ipywidgets",
         "jinja2",
         "pandas<2.1.0",
-        "pydantic[email]",
+        "pydantic[email]>=1.10.7,<2.0.0",
         "requests",
         "rich",
         "ruamel.yaml",
-        "sqlglot~=18.11.0",
+        "sqlglot~=18.12.0",
     ],
     extras_require={
         "bigquery": [
@@ -78,7 +78,6 @@ setup(
             "pdoc",
             "psycopg2-binary",
             "pyarrow>=10.0.1,<10.1.0",
-            "pydantic[email]>=1.10.7,<2.0.0",
             "PyGithub",
             "pytest",
             "pytest-asyncio",

@@ -504,7 +504,7 @@ class _Model(ModelMeta, frozen=True):
                 nested_set(
                     self.mapping_schema,
                     tuple(str(part) for part in table.parts),
-                    {k: v.sql(dialect=self.dialect) for k, v in mapping_schema.items()},  # type: ignore
+                    {k: v.sql(dialect=self.dialect) for k, v in mapping_schema.items()},
                 )
             else:
                 # Reset the entire mapping if at least one upstream dependency is missing from the mapping
