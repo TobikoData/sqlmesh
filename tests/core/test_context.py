@@ -517,3 +517,40 @@ def test_gateway_macro(sushi_context: Context) -> None:
         sushi_context.render("sushi.test_gateway_macro_jinja").sql()
         == "SELECT 'in_memory' AS \"gateway_jinja\""
     )
+
+
+def test_unrestorable_snapshot(sushi_context: Context) -> None:
+    model_v1 = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_unrestorable);
+        SELECT 1 AS one;
+        """
+        )
+    )
+    model_v2 = load_sql_based_model(
+        parse(
+            """
+        MODEL(name sushi.test_unrestorable);
+        SELECT 2 AS two;
+        """
+        )
+    )
+
+    sushi_context.upsert_model(model_v1)
+    sushi_context.plan(auto_apply=True, no_prompts=True)
+    model_v1_old_snapshot = sushi_context.snapshots["sushi.test_unrestorable"]
+
+    sushi_context.upsert_model(model_v2)
+    sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
+
+    sushi_context.upsert_model(model_v1)
+    sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
+    model_v1_new_snapshot = sushi_context.snapshots["sushi.test_unrestorable"]
+
+    assert (
+        model_v1_new_snapshot.node.stamp
+        == f"revert to {model_v1_old_snapshot.snapshot_id.identifier}"
+    )
+    assert model_v1_old_snapshot.snapshot_id != model_v1_new_snapshot.snapshot_id
+    assert model_v1_old_snapshot.fingerprint != model_v1_new_snapshot.fingerprint
