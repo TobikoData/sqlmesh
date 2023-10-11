@@ -276,6 +276,17 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
+    def refresh_snapshot_intervals(self, snapshots: t.Collection[Snapshot]) -> t.List[Snapshot]:
+        """Updates given snapshots with latest intervals from the state.
+
+        Args:
+            snapshots: The snapshots to refresh.
+
+        Returns:
+            The updated snapshots.
+        """
+
+    @abc.abstractmethod
     def promote(self, environment: Environment, no_gaps: bool = False) -> PromotionResult:
         """Update the environment to reflect the current state.
 

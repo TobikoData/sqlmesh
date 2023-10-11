@@ -537,11 +537,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             snapshot_ids = ", ".join(str(s.snapshot_id) for s, _ in snapshot_intervals)
             logger.info("Removing interval for snapshots: %s", snapshot_ids)
 
-        self.engine_adapter.insert_append(
-            self.intervals_table,
-            _intervals_to_df(snapshot_intervals, is_dev=False, is_removed=True),
-            columns_to_types=self._interval_columns_to_types,
-        )
+        for is_dev in (True, False):
+            self.engine_adapter.insert_append(
+                self.intervals_table,
+                _intervals_to_df(snapshot_intervals, is_dev=is_dev, is_removed=True),
+                columns_to_types=self._interval_columns_to_types,
+            )
 
     @transactional()
     def compact_intervals(self) -> None:
@@ -557,6 +558,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             self.engine_adapter.delete_from(
                 self.intervals_table, exp.column("id").isin(*interval_ids)
             )
+
+    def refresh_snapshot_intervals(self, snapshots: t.Collection[Snapshot]) -> t.List[Snapshot]:
+        if not snapshots:
+            return []
+
+        _, intervals = self._get_snapshot_intervals(snapshots)
+        for s in snapshots:
+            s.intervals = []
+            s.dev_intervals = []
+        return Snapshot.hydrate_with_intervals_by_version(snapshots, intervals)
 
     def max_interval_end_for_environment(self, environment: str) -> t.Optional[int]:
         env = self._get_environment(environment)

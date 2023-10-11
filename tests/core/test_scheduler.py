@@ -114,9 +114,6 @@ def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot
     )
     snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
     mock_state_sync = mocker.MagicMock()
-    mock_state_sync.get_snapshots.return_value = {
-        unique_by_key_snapshot.snapshot_id: unique_by_key_snapshot
-    }
     scheduler = Scheduler(
         snapshots=[unique_by_key_snapshot],
         snapshot_evaluator=snapshot_evaluator,
@@ -129,6 +126,7 @@ def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot
         # Depends on no one
         (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-07"))): set(),
     }
+    mock_state_sync.refresh_snapshot_intervals.assert_called_once()
 
 
 def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapshot):
@@ -148,21 +146,19 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
             query=parse_one("SELECT id, @end_ds as ds FROM name"),
         ),
     )
-    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
-    mock_state_sync = mocker.MagicMock()
-    mock_state_sync.get_snapshots.return_value = {
-        incremental_self_snapshot.snapshot_id: incremental_self_snapshot
-    }
     incremental_self_snapshot.add_interval("2023-01-02", "2023-01-02")
     incremental_self_snapshot.add_interval("2023-01-05", "2023-01-05")
+
+    snapshot_evaluator = SnapshotEvaluator(adapter=mocker.MagicMock(), ddl_concurrent_tasks=1)
     scheduler = Scheduler(
-        snapshots=[],
+        snapshots=[incremental_self_snapshot],
         snapshot_evaluator=snapshot_evaluator,
-        state_sync=mock_state_sync,
+        state_sync=mocker.MagicMock(),
         max_workers=2,
     )
     batches = scheduler.batches(start, end, end, is_dev=False)
     dag = scheduler._dag(batches)
+
     assert dag.graph == {
         # Only run one day at a time and each day relies on the previous days
         (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))): set(),

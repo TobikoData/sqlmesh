@@ -112,7 +112,7 @@ class Plan:
         self.__dag: t.Optional[DAG[str]] = None
 
         self._start = start
-        if not self._start and is_dev and (forward_only or self._has_paused_forward_only()):
+        if not self._start and is_dev and forward_only:
             self._start = default_start or yesterday_ds()
 
         self._end = end if end or not is_dev else (default_end or now())
@@ -168,10 +168,10 @@ class Plan:
     def start(self, new_start: TimeLike) -> None:
         self._ensure_valid_date_range(new_start, self._end)
         self.set_start(new_start)
-        self.override_start = True
 
     def set_start(self, new_start: TimeLike) -> None:
         self._start = new_start
+        self.override_start = True
         self.__missing_intervals = None
         self._refresh_dag_and_ignored_snapshots()
 
@@ -414,28 +414,30 @@ class Plan:
             # to choose non-breaking / forward only. this will change the version of the snapshot on the fly
             # thus changing the missing intervals. additionally we replace any snapshots with the old copies
             # because they have intervals and the ephemeral ones don't
-            snapshots = {
-                (snapshot.name, snapshot.version_get_or_generate()): snapshot
-                for snapshot in self.snapshots
+            old_snapshots = {
+                (old.name, old.version_get_or_generate()): old
+                for _, old in self.context_diff.modified_snapshots.values()
             }
 
-            for new, old in self.context_diff.modified_snapshots.values():
-                # Never override forward-only snapshots to preserve the effect
-                # of the effective_from setting. Instead re-merge the intervals.
-                if not new.is_forward_only:
-                    snapshots[(old.name, old.version_get_or_generate())] = old
-                else:
-                    new.intervals = []
-                    new.merge_intervals(old)
+            for new in self.context_diff.new_snapshots.values():
+                old = old_snapshots.get((new.name, new.version_get_or_generate()))
+                if not old:
+                    continue
+                new.intervals = []
+                new.dev_intervals = []
+                new.merge_intervals(old)
+                if new.is_forward_only:
+                    new.dev_intervals = new.intervals.copy()
 
             self.__missing_intervals = {
                 (snapshot.name, snapshot.version_get_or_generate()): missing
                 for snapshot, missing in missing_intervals(
-                    snapshots.values(),
+                    self.snapshots,
                     start=self._start,
                     end=self._end,
                     execution_time=self._execution_time,
                     restatements=self.restatements,
+                    is_dev=self.is_dev,
                     ignore_cron=True,
                 ).items()
             }
@@ -727,12 +729,6 @@ class Plan:
             filtered_snapshot_mapping,
             ignored_snapshot_names,
         )
-
-    def _has_paused_forward_only(self) -> bool:
-        for name, snapshot in self._snapshot_mapping.items():
-            if snapshot.is_paused_forward_only or self._is_forward_only_model(name):
-                return True
-        return False
 
     def _is_forward_only_model(self, model_name: str) -> bool:
         def _is_forward_only_expected(snapshot: Snapshot) -> bool:

@@ -10,9 +10,10 @@ from sqlmesh.core.plan import (
     MWAAPlanEvaluator,
     Plan,
     can_evaluate_before_promote,
+    update_intervals_for_new_snapshots,
 )
 from sqlmesh.core.snapshot import SnapshotChangeCategory
-from sqlmesh.utils.date import now_timestamp
+from sqlmesh.utils.date import now_timestamp, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -201,3 +202,38 @@ def test_can_evaluate_before_promote(sushi_context: Context):
 
     child_snapshot.unpaused_ts = now_timestamp()
     assert can_evaluate_before_promote(child_snapshot, all_snapshots)
+
+
+@pytest.mark.parametrize(
+    "change_category", [SnapshotChangeCategory.BREAKING, SnapshotChangeCategory.FORWARD_ONLY]
+)
+def test_update_intervals_for_new_snapshots(
+    sushi_context: Context,
+    mocker: MockerFixture,
+    change_category: SnapshotChangeCategory,
+    make_snapshot,
+):
+    model = SqlModel(
+        name="sushi.new_test_model",
+        query=parse_one("SELECT 1::INT AS one"),
+    )
+    snapshot = make_snapshot(model)
+    snapshot.change_category = change_category
+
+    snapshot.add_interval("2023-01-01", "2023-01-01")
+
+    state_sync_mock = mocker.Mock()
+    state_sync_mock.refresh_snapshot_intervals.return_value = [snapshot]
+
+    update_intervals_for_new_snapshots([snapshot], state_sync_mock)
+
+    state_sync_mock.refresh_snapshot_intervals.assert_called_once_with([snapshot])
+
+    if change_category == SnapshotChangeCategory.FORWARD_ONLY:
+        assert snapshot.dev_intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+        state_sync_mock.add_interval.assert_called_once_with(
+            snapshot, to_timestamp("2023-01-01"), to_timestamp("2023-01-02"), is_dev=True
+        )
+    else:
+        assert not snapshot.dev_intervals
+        state_sync_mock.add_interval.assert_not_called()

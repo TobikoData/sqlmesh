@@ -15,7 +15,7 @@ from sqlmesh.core.snapshot import (
     SnapshotFingerprint,
 )
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import now, to_date, to_datetime, to_timestamp
+from sqlmesh.utils.date import now, to_date, to_datetime, to_timestamp, yesterday_ds
 from sqlmesh.utils.errors import PlanError
 
 
@@ -424,6 +424,7 @@ def test_effective_from(make_snapshot, mocker: MockerFixture):
     snapshot.add_interval("2023-01-01", "2023-03-01")
 
     updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds FROM b")))
+    updated_snapshot.previous_versions = snapshot.all_versions
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": updated_snapshot}
@@ -633,9 +634,8 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
     context_diff_mock.previous_plan_id = "previous_plan_id"
     context_diff_mock.directly_modified.side_effect = lambda name: name == "a"
 
-    plan = Plan(context_diff_mock, is_dev=True, default_start="2023-01-01")
+    plan = Plan(context_diff_mock, is_dev=True)
     assert plan.indirectly_modified == {"a": {"b", "c"}}
-    assert plan.start == "2023-01-01"
 
     assert len(plan.directly_modified) == 1
     assert plan.directly_modified[0].snapshot_id == updated_snapshot_a.snapshot_id
@@ -667,8 +667,7 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
     context_diff_mock.environment = "test_dev"
     context_diff_mock.previous_plan_id = "previous_plan_id"
 
-    plan = Plan(context_diff_mock, is_dev=True, default_start="2023-01-01")
-    assert plan.start == "2023-01-01"
+    Plan(context_diff_mock, is_dev=True)
     assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
 
@@ -1043,3 +1042,15 @@ def test_dev_plan_depends_past(make_snapshot, mocker: MockerFixture):
     assert [x.name for x in dev_plan_start_ahead_of_model.new_snapshots] == ["b"]
     assert len(dev_plan_start_ahead_of_model.ignored_snapshot_names) == 2
     assert sorted(list(dev_plan_start_ahead_of_model.ignored_snapshot_names)) == ["a", "a_child"]
+
+
+def test_restatement_intervals_after_updating_start(sushi_context: Context):
+    plan = sushi_context.plan(no_prompts=True, restate_models=["sushi.waiter_revenue_by_day"])
+    restatement_interval = plan.restatements["sushi.waiter_revenue_by_day"]
+    assert restatement_interval[0] == to_timestamp(plan.start)
+
+    new_start = yesterday_ds()
+    plan.start = new_start
+    new_restatement_interval = plan.restatements["sushi.waiter_revenue_by_day"]
+    assert new_restatement_interval[0] == to_timestamp(new_start)
+    assert new_restatement_interval != restatement_interval

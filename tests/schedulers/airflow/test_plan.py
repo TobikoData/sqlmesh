@@ -136,6 +136,7 @@ def test_create_plan_dag_spec(
     state_sync_mock.get_snapshots.return_value = {}
     state_sync_mock.get_environment.return_value = old_environment
     state_sync_mock.get_snapshot_intervals.return_value = []
+    state_sync_mock.refresh_snapshot_intervals.return_value = []
 
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now_timestamp",
@@ -174,6 +175,8 @@ def test_create_plan_dag_spec(
 
     state_sync_mock.get_snapshots.assert_called_once()
     state_sync_mock.get_environment.assert_called_once()
+    state_sync_mock.refresh_snapshot_intervals.assert_called_once()
+    list(state_sync_mock.refresh_snapshot_intervals.call_args_list[0][0][0]) == [the_snapshot]
 
 
 @pytest.mark.airflow
@@ -254,6 +257,7 @@ def test_restatement(
             dev_intervals=[],
         )
     ]
+    state_sync_mock.refresh_snapshot_intervals.return_value = [the_snapshot]
     now_value = "2022-01-09T23:59:59+00:00"
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now", side_effect=lambda: to_datetime(now_value)
@@ -292,6 +296,7 @@ def test_restatement(
 
     state_sync_mock.get_snapshots.assert_called_once()
     state_sync_mock.get_environment.assert_called_once()
+    state_sync_mock.refresh_snapshot_intervals.assert_called_once()
 
 
 @pytest.mark.airflow
@@ -377,11 +382,13 @@ def test_create_plan_dag_spec_unbounded_end(
     }
     state_sync_mock.get_environment.return_value = None
     state_sync_mock.get_snapshot_intervals.return_value = []
+    state_sync_mock.refresh_snapshot_intervals.return_value = []
 
     create_plan_dag_spec(plan_request, state_sync_mock)
 
     state_sync_mock.get_snapshots.assert_called_once()
     state_sync_mock.get_environment.assert_called_once()
+    state_sync_mock.refresh_snapshot_intervals.assert_called_once()
 
 
 def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name):
