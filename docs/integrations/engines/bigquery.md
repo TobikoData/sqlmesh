@@ -46,7 +46,7 @@ pip install "sqlmesh[bigquery]"
 
 ### Connection info
 
-The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target BigQuery account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) and [GCP connection](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/connections/gcp.html)for more details. The goal is to create a working GCP connection on Airflow. The only difference is that you should use the `sqlmesh_google_cloud_bigquery_default` (by default) connection ID instead of the `google_cloud_default` one in the Airflow guide.
+The operator requires an [Airflow connection](https://airflow.apache.org/docs/apache-airflow/stable/howto/connection.html) to determine the target BigQuery account. Please see [GoogleBaseHook](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/_api/airflow/providers/google/common/hooks/base_google/index.html#airflow.providers.google.common.hooks.base_google.GoogleBaseHook) and [GCP connection](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/connections/gcp.html)for more details. Use the `sqlmesh_google_cloud_bigquery_default` (by default) connection ID instead of the `google_cloud_default` one in the Airflow guide.
 
 By default, the connection ID is set to `sqlmesh_google_cloud_bigquery_default`, but it can be overridden using the `engine_operator_args` parameter to the `SQLMeshAirflow` instance as in the example below:
 ```python linenums="1"
@@ -54,6 +54,20 @@ sqlmesh_airflow = SQLMeshAirflow(
     "bigquery",
     engine_operator_args={
         "bigquery_conn_id": "<Connection ID>"
+    },
+)
+```
+
+#### Optional Arguments
+
+* `location`: Sets the default location for datasets and tables. If not set, BigQuery defaults to US for new datasets. See `location` in [Connection options](#connection-options) for more details.
+
+```python linenums="1"
+sqlmesh_airflow = SQLMeshAirflow(
+    "bigquery",
+    engine_operator_args={
+        "bigquery_conn_id": "<Connection ID>",
+        "location": "<location>"
     },
 )
 ```

@@ -31,6 +31,7 @@ class SQLMeshBigQueryHook(GoogleBaseHook, DbApiHook):
         gcp_conn_id: str = default_conn_name,
         delegate_to: str | None = None,
         impersonation_chain: str | t.Sequence[str] | None = None,
+        location: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> None:
         GoogleBaseHook.__init__(
@@ -39,9 +40,11 @@ class SQLMeshBigQueryHook(GoogleBaseHook, DbApiHook):
             delegate_to=delegate_to,
             impersonation_chain=impersonation_chain,
         )
+        self.location = location
 
     def get_conn(self) -> Connection:
         """Returns a BigQuery DBAPI connection object."""
+        from google.api_core.client_info import ClientInfo
         from google.cloud.bigquery import Client
         from google.cloud.bigquery.dbapi import Connection
 
@@ -50,5 +53,10 @@ class SQLMeshBigQueryHook(GoogleBaseHook, DbApiHook):
             creds, project_id = self._get_credentials_and_project_id()  # type: ignore
         except AttributeError:
             creds, project_id = self.get_credentials_and_project_id()  # type: ignore
-        client = Client(project=project_id, credentials=creds)
+        client = Client(
+            project=project_id,
+            credentials=creds,
+            location=self.location,
+            client_info=ClientInfo(user_agent="sqlmesh"),
+        )
         return Connection(client=client)
