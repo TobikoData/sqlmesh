@@ -162,7 +162,7 @@ class StateReader(abc.ABC):
                     f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). Please run a migration ('sqlmesh migrate' command)."
                 )
             raise SQLMeshError(
-                f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote). Please upgrade {lib} ('pip install {lib.lower()} --upgrade' command)."
+                f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote). Please upgrade {lib} ('pip install \"{lib.lower()}=={remote}\"' command)."
             )
 
         if SCHEMA_VERSION < versions.schema_version:
