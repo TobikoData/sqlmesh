@@ -1167,12 +1167,13 @@ class EngineAdapter:
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
     ) -> t.Tuple:
-        self.execute(
-            query,
-            ignore_unsupported_errors=ignore_unsupported_errors,
-            quote_identifiers=quote_identifiers,
-        )
-        return self.cursor.fetchone()
+        with self.transaction():
+            self.execute(
+                query,
+                ignore_unsupported_errors=ignore_unsupported_errors,
+                quote_identifiers=quote_identifiers,
+            )
+            return self.cursor.fetchone()
 
     def fetchall(
         self,
@@ -1180,19 +1181,21 @@ class EngineAdapter:
         ignore_unsupported_errors: bool = False,
         quote_identifiers: bool = False,
     ) -> t.List[t.Tuple]:
-        self.execute(
-            query,
-            ignore_unsupported_errors=ignore_unsupported_errors,
-            quote_identifiers=quote_identifiers,
-        )
-        return self.cursor.fetchall()
+        with self.transaction():
+            self.execute(
+                query,
+                ignore_unsupported_errors=ignore_unsupported_errors,
+                quote_identifiers=quote_identifiers,
+            )
+            return self.cursor.fetchall()
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:
         """Fetches a DataFrame that can be either Pandas or PySpark from the cursor"""
-        self.execute(query, quote_identifiers=quote_identifiers)
-        return self.cursor.fetchdf()
+        with self.transaction():
+            self.execute(query, quote_identifiers=quote_identifiers)
+            return self.cursor.fetchdf()
 
     def fetchdf(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

@@ -61,15 +61,14 @@ class MSSQLEngineAdapter(
                 "numeric_precision",
                 "numeric_scale",
             )
-            .from_(f"information_schema.columns")
+            .from_("information_schema.columns")
             .where(f"table_name = '{table.name}'")
         )
         database_name = table.db
         if database_name:
             sql = sql.where(f"table_schema = '{database_name}'")
 
-        self.execute(sql)
-        columns_raw = self.cursor.fetchall()
+        columns_raw = self.fetchall(sql, quote_identifiers=True)
 
         def build_var_length_col(row: tuple) -> tuple:
             var_len_chars = ("binary", "varbinary", "char", "varchar", "nchar", "nvarchar")
@@ -100,16 +99,14 @@ class MSSQLEngineAdapter(
 
         sql = (
             exp.select("1")
-            .from_(f"information_schema.tables")
+            .from_("information_schema.tables")
             .where(f"table_name = '{table.alias_or_name}'")
         )
         database_name = table.db
         if database_name:
             sql = sql.where(f"table_schema = '{database_name}'")
 
-        self.execute(sql)
-
-        result = self.cursor.fetchone()
+        result = self.fetchone(sql, quote_identifiers=True)
 
         return result[0] == 1 if result else False
 
