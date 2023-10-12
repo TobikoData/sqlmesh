@@ -84,11 +84,3 @@ default_scheduler:
     type: mwaa
     environment: <The MWAA Environment Name>
 ```
-
-Alternatively, the Airflow Webserver URL and the MWAA CLI token can be provided directly instead of the environment name:
-```yaml linenums="1"
-default_scheduler:
-    type: mwaa
-    airflow_url: https://<Airflow Webserver Host>/
-    auth_token: <The MWAA CLI Token>
-```

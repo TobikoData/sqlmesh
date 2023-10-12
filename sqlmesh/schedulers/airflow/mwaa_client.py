@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import typing as t
 from urllib.parse import urljoin
 
@@ -9,17 +10,23 @@ from requests import Session
 
 from sqlmesh.core.console import Console
 from sqlmesh.schedulers.airflow.client import BaseAirflowClient, raise_for_status
+from sqlmesh.utils.date import now_timestamp
 from sqlmesh.utils.errors import NotFoundError
+
+logger = logging.getLogger(__name__)
+
+
+TOKEN_TTL_MS = 30 * 1000
 
 
 class MWAAClient(BaseAirflowClient):
-    def __init__(self, airflow_url: str, auth_token: str, console: t.Optional[Console] = None):
+    def __init__(self, environment: str, console: t.Optional[Console] = None):
+        airflow_url, auth_token = url_and_auth_token_for_environment(environment)
         super().__init__(airflow_url, console)
 
-        self._session = Session()
-        self._session.headers.update(
-            {"Authorization": f"Bearer {auth_token}", "Content-Type": "text/plain"}
-        )
+        self._environment = environment
+        self._last_token_refresh_ts = now_timestamp()
+        self.__session: Session = _create_session(auth_token)
 
     def get_first_dag_run_id(self, dag_id: str) -> t.Optional[str]:
         dag_runs = self._list_dag_runs(dag_id)
@@ -49,9 +56,26 @@ class MWAAClient(BaseAirflowClient):
         cli_stderr = base64.b64decode(response_body["stderr"]).decode("utf8").strip()
         return cli_stdout, cli_stderr
 
+    @property
+    def _session(self) -> Session:
+        current_ts = now_timestamp()
+        if current_ts - self._last_token_refresh_ts > TOKEN_TTL_MS:
+            _, auth_token = url_and_auth_token_for_environment(self._environment)
+            self.__session = _create_session(auth_token)
+            self._last_token_refresh_ts = current_ts
+        return self.__session
+
+
+def _create_session(auth_token: str) -> Session:
+    session = Session()
+    session.headers.update({"Authorization": f"Bearer {auth_token}", "Content-Type": "text/plain"})
+    return session
+
 
 def url_and_auth_token_for_environment(environment_name: str) -> t.Tuple[str, str]:
     import boto3
+
+    logger.info("Fetching the MWAA CLI token")
 
     client = boto3.client("mwaa")
     cli_token = client.create_cli_token(Name=environment_name)
