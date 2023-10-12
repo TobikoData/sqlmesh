@@ -7,6 +7,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 import pytest
+from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 from sqlglot.expressions import DataType
@@ -54,6 +55,364 @@ def plan_choice(plan: Plan, choice: SnapshotChangeCategory) -> None:
     for snapshot in plan.snapshots:
         if not snapshot.version:
             plan.set_choice(snapshot, choice)
+
+
+@freeze_time("2023-01-08 15:00:00")
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_forward_only_plan_with_effective_date(mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi", mocker)
+    context.apply(plan)
+
+    model_name = "sushi.waiter_revenue_by_day"
+    model = context.models[model_name]
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True, forward_only=True)
+    assert len(plan.new_snapshots) == 2
+    assert (
+        plan.context_diff.snapshots[model_name].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert plan.start == to_date("2023-01-07")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        ),
+    ]
+
+    plan.effective_from = "2023-01-05"
+    # Default start should be set to effective_from
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    plan.start = "2023-01-06"
+    # Start override should take precedence
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    plan.effective_from = "2023-01-04"
+    # Start should remain unchanged
+    assert plan.start == "2023-01-06"
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+    )
+    assert dev_df["ds"].tolist() == ["2023-01-06", "2023-01-07"]
+
+    prod_plan = context.plan(no_prompts=True, skip_tests=True)
+    # Make sure that the previously set effective_from is respected
+    assert prod_plan.start == to_timestamp("2023-01-04")
+    assert prod_plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(prod_plan)
+
+    prod_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY ds"
+    )
+    assert prod_df["ds"].tolist() == ["2023-01-04", "2023-01-05", "2023-01-06", "2023-01-07"]
+
+
+@freeze_time("2023-01-08 15:00:00")
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_forward_only_model_regular_plan(mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi", mocker)
+    context.apply(plan)
+
+    model_name = "sushi.waiter_revenue_by_day"
+
+    model = context.models[model_name]
+    model = add_projection_to_model(t.cast(SqlModel, model))
+    forward_only_kind = model.kind.copy(update={"forward_only": True})
+    model = model.copy(update={"kind": forward_only_kind})
+
+    context.upsert_model(model)
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    assert len(plan.new_snapshots) == 2
+    assert (
+        plan.context_diff.snapshots[model_name].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert plan.start == to_datetime("2023-01-01")
+    assert not plan.missing_intervals
+
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+    )
+    assert not dev_df["ds"].tolist()
+
+    # Run a restatement plan to preview changes
+    plan = context.plan("dev", no_prompts=True, skip_tests=True, restate_models=[model_name])
+    plan.start = "2023-01-06"
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    # Make sure that changed start is reflected in missing intervals
+    plan.start = "2023-01-07"
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+    )
+    assert dev_df["ds"].tolist() == ["2023-01-07"]
+
+    # Promote changes to prod
+    prod_plan = context.plan(no_prompts=True, skip_tests=True)
+    assert not prod_plan.missing_intervals
+
+    context.apply(prod_plan)
+
+    # The change was applied in a forward-only manner so no values in the new column should be populated
+    prod_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY ds"
+    )
+    assert not prod_df["ds"].tolist()
+
+
+@freeze_time("2023-01-08 15:00:00")
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi", mocker)
+    context.apply(plan)
+
+    model_name = "sushi.waiter_revenue_by_day"
+
+    model = context.models[model_name]
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    assert len(plan.new_snapshots) == 2
+    assert (
+        plan.context_diff.snapshots[model_name].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    )
+    assert plan.start == to_timestamp("2023-01-01")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    # Change the category to BREAKING
+    plan.set_choice(plan.context_diff.snapshots[model_name], SnapshotChangeCategory.BREAKING)
+    assert (
+        plan.context_diff.snapshots[model_name].change_category == SnapshotChangeCategory.BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.INDIRECT_BREAKING
+    )
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    # Change the category back to NON_BREAKING
+    plan.set_choice(plan.context_diff.snapshots[model_name], SnapshotChangeCategory.NON_BREAKING)
+    assert (
+        plan.context_diff.snapshots[model_name].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    )
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name=model_name,
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+    )
+    assert dev_df["ds"].tolist() == [
+        "2023-01-01",
+        "2023-01-02",
+        "2023-01-03",
+        "2023-01-04",
+        "2023-01-05",
+        "2023-01-06",
+        "2023-01-07",
+    ]
+
+    # Promote changes to prod
+    prod_plan = context.plan(no_prompts=True, skip_tests=True)
+    assert not prod_plan.missing_intervals
+
+    context.apply(prod_plan)
+    prod_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY ds"
+    )
+    assert prod_df["ds"].tolist() == [
+        "2023-01-01",
+        "2023-01-02",
+        "2023-01-03",
+        "2023-01-04",
+        "2023-01-05",
+        "2023-01-06",
+        "2023-01-07",
+    ]
 
 
 @pytest.mark.integration
@@ -1141,3 +1500,11 @@ def start(context: Context) -> TimeLike:
     env = context.state_sync.get_environment("prod")
     assert env
     return env.start_at
+
+
+def add_projection_to_model(model: SqlModel) -> SqlModel:
+    kwargs = {
+        **model.dict(),
+        "query": model.query.select(exp.Literal.number(1).as_("one")),  # type: ignore
+    }
+    return SqlModel.parse_obj(kwargs)
