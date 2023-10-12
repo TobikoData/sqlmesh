@@ -11,10 +11,10 @@ from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter.base import QueryOrDF, SourceQuery
 
 
@@ -100,16 +100,23 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin,
             self.rename_table(temp_table, target_table)
             self.drop_table(old_table)
 
-    def _get_data_objects(
-        self, schema_name: str, catalog_name: t.Optional[str] = None
-    ) -> t.List[DataObject]:
+    def get_current_catalog(self) -> t.Optional[str]:
+        result = self.fetchone("SELECT current_database()")
+        if result:
+            return result[0]
+        return None
+
+    def set_current_catalog(self, catalog_name: str) -> None:
+        self.cursor.connection._database = catalog_name
+
+    @set_catalog()
+    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-        catalog_name = f"'{catalog_name}'" if catalog_name else "NULL"
         query = f"""
             SELECT
-                {catalog_name} AS catalog_name,
+                null AS catalog_name,
                 tablename AS name,
                 schemaname AS schema_name,
                 'TABLE' AS type
@@ -117,7 +124,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin,
             WHERE schemaname ILIKE '{schema_name}'
             UNION ALL
             SELECT
-                {catalog_name} AS catalog_name,
+                null AS catalog_name,
                 viewname AS name,
                 schemaname AS schema_name,
                 'VIEW' AS type
@@ -126,7 +133,7 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin,
             AND definition not ilike '%create materialized view%'
             UNION ALL
             SELECT
-                {catalog_name} AS catalog_name,
+                null AS catalog_name,
                 viewname AS name,
                 schemaname AS schema_name,
                 'MATERIALIZED_VIEW' AS type

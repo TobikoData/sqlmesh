@@ -23,6 +23,12 @@ class PostgresEngineAdapter(
     DIALECT = "postgres"
     SUPPORTS_INDEXES = True
 
+    def get_current_catalog(self) -> t.Optional[str]:
+        result = self.fetchone("SELECT current_catalog")
+        if result:
+            return result[0]
+        return None
+
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> DF:

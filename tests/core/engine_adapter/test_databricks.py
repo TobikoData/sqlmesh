@@ -35,3 +35,10 @@ def test_clone_table(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with(
         "CREATE TABLE `target_table` SHALLOW CLONE `source_table`"
     )
+
+
+def test_set_current_catalog(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    adapter.set_current_catalog("test_catalog")
+
+    assert to_sql_calls(adapter) == ["USE CATALOG `test_catalog`"]

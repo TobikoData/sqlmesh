@@ -325,36 +325,60 @@ def test_create_index(make_mocked_engine_adapter: t.Callable):
     )
 
 
-def test_get_data_objects(make_mocked_engine_adapter: t.Callable):
+def test_drop_schema_with_catalog(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
-    adapter.cursor.fetchall.return_value = [("test_catalog", "test_table", "test_schema", "TABLE")]
-    adapter.cursor.description = [["catalog_name"], ["name"], ["schema_name"], ["type"]]
-    adapter._get_data_objects("test_schema", catalog_name="test_catalog")
+    adapter.get_current_catalog = mocker.MagicMock(return_value="other_catalog")
 
-    adapter.cursor.fetchone.return_value = ["test_catalog"]
-    adapter._get_data_objects("test_schema")
+    adapter.drop_schema("catalog.schema")
 
     assert to_sql_calls(adapter) == [
+        'USE "catalog";',
+        'DROP SCHEMA IF EXISTS "schema";',
+        'USE "other_catalog";',
+    ]
+
+
+def test_get_data_objects_catalog(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+    original_set_current_catalog = adapter.set_current_catalog
+    local_state = {}
+
+    def set_local_catalog(catalog, local_state):
+        original_set_current_catalog(catalog)
+        local_state["catalog"] = catalog
+
+    adapter.get_current_catalog = mocker.MagicMock(
+        side_effect=lambda: local_state.get("catalog", "other_catalog")
+    )
+    adapter.set_current_catalog = mocker.MagicMock(
+        side_effect=lambda x: set_local_catalog(x, local_state)
+    )
+    adapter.cursor.fetchall.return_value = [("test_catalog", "test_table", "test_schema", "TABLE")]
+    adapter.cursor.description = [["catalog_name"], ["name"], ["schema_name"], ["type"]]
+    result = adapter._get_data_objects("test_catalog.test_schema")
+
+    assert result == [
+        DataObject(
+            catalog="test_catalog",
+            schema="test_schema",
+            name="test_table",
+            type=DataObjectType.from_str("TABLE"),
+        )
+    ]
+
+    assert to_sql_calls(adapter) == [
+        'USE "test_catalog";',
         """
             SELECT
                 'test_catalog' AS catalog_name,
                 TABLE_NAME AS name,
                 TABLE_SCHEMA AS schema_name,
                 CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
-            FROM test_catalog.INFORMATION_SCHEMA.TABLES
+            FROM INFORMATION_SCHEMA.TABLES
             WHERE TABLE_SCHEMA LIKE '%test_schema%'
         """,
-        "select DB_NAME()",
-        """
-            SELECT
-                'test_catalog' AS catalog_name,
-                TABLE_NAME AS name,
-                TABLE_SCHEMA AS schema_name,
-                CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS type
-            FROM test_catalog.INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA LIKE '%test_schema%'
-        """,
+        'USE "other_catalog";',
     ]
 
 

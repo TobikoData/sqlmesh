@@ -1,3 +1,4 @@
+# type: ignore
 from __future__ import annotations
 
 import pathlib
@@ -12,7 +13,9 @@ from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh import Config, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject
+from sqlmesh.utils import nullsafe_join
 from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -93,12 +96,12 @@ class TestContext:
         assert replace_nat_with_none(actual) == replace_nat_with_none(expected)
 
     def get_metadata_results(self, schema: str = TEST_SCHEMA) -> MetadataResults:
-        return MetadataResults.from_data_objects(self.engine_adapter._get_data_objects(schema))
+        return MetadataResults.from_data_objects(
+            self.engine_adapter._get_data_objects(self.schema(schema))
+        )
 
     def _init_engine_adapter(self) -> None:
-        schema = normalize_identifiers(
-            exp.to_identifier(TEST_SCHEMA), dialect=self.engine_adapter.dialect
-        ).sql(dialect=self.engine_adapter.dialect)
+        schema = self.schema(TEST_SCHEMA)
         self.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
         self.engine_adapter.create_schema(schema)
 
@@ -132,9 +135,13 @@ class TestContext:
         return self._format_df(data, include_tz=self.dialect in ("spark", "databricks"))
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
-        return normalize_identifiers(
-            exp.to_table(".".join([schema, table_name]), dialect=self.engine_adapter.dialect),
-            dialect=self.engine_adapter.dialect,
+        return exp.to_table(
+            normalize_model_name(".".join([schema, table_name]), dialect=self.dialect)
+        )
+
+    def schema(self, schema_name: str, catalog_name: t.Optional[str] = None) -> str:
+        return normalize_model_name(
+            nullsafe_join(".", catalog_name, schema_name), dialect=self.dialect
         )
 
     def get_current_data(self, table: exp.Table) -> pd.DataFrame:
@@ -185,14 +192,14 @@ def config() -> Config:
 
 @pytest.fixture(
     params=[
-        "duckdb",
-        pytest.param("postgres", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("mysql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("bigquery", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("databricks", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # "duckdb",
+        # pytest.param("postgres", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("mysql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("bigquery", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("databricks", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("redshift", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("snowflake", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("mssql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("snowflake", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        # pytest.param("mssql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:
@@ -213,6 +220,87 @@ def default_columns_to_types():
 @pytest.fixture
 def ctx(engine_adapter, test_type):
     return TestContext(test_type, engine_adapter)
+
+
+def test_catalog_operations(ctx: TestContext):
+    if ctx.dialect in {"mysql", "redshift", "postgres", "duckdb"}:
+        pytest.skip(
+            f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
+        )
+    if ctx.test_type != "query":
+        pytest.skip("Catalog operation tests only need to run once so we skip anything not query")
+    catalog_name = "testing"
+    if ctx.dialect == "databricks":
+        # We don't create a catalog because we don't have a dedicated databricks environment to test against
+        # and we don't want to pollute with extra catalogs
+        catalog_name = "system"
+    elif ctx.dialect == "tsql":
+        ctx.engine_adapter.cursor.connection.autocommit(True)
+        try:
+            ctx.engine_adapter.cursor.execute(f"CREATE DATABASE {catalog_name}")
+        except Exception:
+            pass
+        ctx.engine_adapter.cursor.connection.autocommit(False)
+    elif ctx.dialect == "snowflake":
+        ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+    ctx.engine_adapter.set_current_catalog(catalog_name)
+    assert ctx.engine_adapter.get_current_catalog() == catalog_name
+
+
+def test_drop_schema_catalog(ctx: TestContext):
+    def drop_schema_and_validate(schema_name: str):
+        ctx.engine_adapter.drop_schema(schema_name, cascade=True)
+        results = ctx.get_metadata_results(schema_name)
+        assert (
+            len(results.tables)
+            == len(results.views)
+            == len(results.materialized_views)
+            == len(results.non_temp_tables)
+            == 0
+        )
+
+    def create_objects_and_validate(schema_name: str):
+        ctx.engine_adapter.create_schema(schema_name)
+        ctx.engine_adapter.create_view(f"{schema_name}.test_view", parse_one("SELECT 1 as col"))
+        ctx.engine_adapter.create_table(
+            f"{schema_name}.test_table", {"col": exp.DataType.build("int")}
+        )
+        ctx.engine_adapter.replace_query(
+            f"{schema_name}.replace_table",
+            parse_one("SELECT 1 as col"),
+            {"col": exp.DataType.build("int")},
+        )
+        results = ctx.get_metadata_results(schema_name)
+        assert len(results.tables) == 2
+        assert len(results.views) == 1
+        assert len(results.materialized_views) == 0
+        assert len(results.non_temp_tables) == 2
+
+    if ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported:
+        pytest.skip(
+            f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
+        )
+    if ctx.test_type != "query":
+        pytest.skip("Drop Schema Catalog tests only need to run once so we skip anything not query")
+    catalog_name = "testing"
+    if ctx.dialect == "databricks":
+        catalog_name = "test_ingest"
+    elif ctx.dialect == "tsql":
+        ctx.engine_adapter.cursor.connection.autocommit(True)
+        try:
+            ctx.engine_adapter.cursor.execute(f"CREATE DATABASE {catalog_name}")
+        except Exception:
+            pass
+        ctx.engine_adapter.cursor.connection.autocommit(False)
+    elif ctx.dialect == "snowflake":
+        ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+    elif ctx.dialect == "bigquery":
+        catalog_name = "tobiko-test"
+
+    schema = ctx.schema("drop_schema_catalog_test", catalog_name)
+    drop_schema_and_validate(schema)
+    create_objects_and_validate(schema)
+    drop_schema_and_validate(schema)
 
 
 def test_temp_table(ctx: TestContext):

@@ -9,6 +9,7 @@ from google.cloud import bigquery
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
+from sqlglot.helper import ensure_list
 
 import sqlmesh.core.dialect as d
 from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
@@ -560,3 +561,60 @@ def test_select_partitions_expr():
         )
         == "SELECT MAX(CAST(partition_id AS INT64)) FROM `test_schema`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = 'test_table' AND NOT partition_id IS NULL AND partition_id <> '__NULL__'"
     )
+
+
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        (
+            {
+                "schema_name": "test_schema",
+            },
+            "DROP SCHEMA IF EXISTS `test_schema`",
+        ),
+        (
+            {
+                "schema_name": "test_schema",
+                "ignore_if_not_exists": False,
+            },
+            "DROP SCHEMA `test_schema`",
+        ),
+        (
+            {
+                "schema_name": "test_schema",
+                "cascade": True,
+            },
+            "DROP SCHEMA IF EXISTS `test_schema` CASCADE",
+        ),
+        (
+            {
+                "schema_name": "test_schema",
+                "cascade": True,
+                "ignore_if_not_exists": False,
+            },
+            "DROP SCHEMA `test_schema` CASCADE",
+        ),
+        (
+            {
+                "schema_name": "test_catalog.test_schema",
+                "ignore_if_not_exists": True,
+                "cascade": True,
+            },
+            "DROP SCHEMA IF EXISTS `test_catalog`.`test_schema` CASCADE",
+        ),
+    ],
+)
+def test_drop_schema(
+    kwargs, expected, make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
+
+    execute_mock = mocker.patch(
+        "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
+    )
+
+    adapter.drop_schema(**kwargs)
+
+    sql_calls = _to_sql_calls(execute_mock)
+
+    assert sql_calls == ensure_list(expected)

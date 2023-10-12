@@ -25,18 +25,23 @@ from sqlglot.errors import ErrorLevel
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
-from sqlmesh.core.dialect import add_table, select_from_values_for_batch_range
-from sqlmesh.core.engine_adapter.shared import DataObject
+from sqlmesh.core.dialect import (
+    add_table,
+    schema_,
+    select_from_values_for_batch_range,
+    to_schema,
+)
+from sqlmesh.core.engine_adapter.shared import DataObject, set_catalog
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import double_escape
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
 from sqlmesh.utils.pandas import columns_to_types_from_df
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import (
         DF,
         PySparkDataFrame,
@@ -74,6 +79,28 @@ class InsertOverwriteStrategy(Enum):
     @property
     def requires_condition(self) -> bool:
         return self.is_replace_where or self.is_delete_insert
+
+
+class CatalogSupport(Enum):
+    UNSUPPORTED = 1
+    REQUIRES_SET_CATALOG = 2
+    FULL_SUPPORT = 3
+
+    @property
+    def is_unsupported(self) -> bool:
+        return self == CatalogSupport.UNSUPPORTED
+
+    @property
+    def is_requires_set_catalog(self) -> bool:
+        return self == CatalogSupport.REQUIRES_SET_CATALOG
+
+    @property
+    def is_full_support(self) -> bool:
+        return self == CatalogSupport.FULL_SUPPORT
+
+    @property
+    def is_supported(self) -> bool:
+        return self.is_requires_set_catalog or self.is_full_support
 
 
 class SourceQuery:
@@ -115,7 +142,6 @@ class EngineAdapter:
 
     DIALECT = ""
     DEFAULT_BATCH_SIZE = 10000
-    DEFAULT_SQL_GEN_KWARGS: t.Dict[str, str | bool | int] = {}
     ESCAPE_JSON = False
     SUPPORTS_TRANSACTIONS = True
     SUPPORTS_INDEXES = False
@@ -125,6 +151,7 @@ class EngineAdapter:
     SUPPORTS_CLONING = False
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
+    CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
 
     def __init__(
         self,
@@ -266,6 +293,14 @@ class EngineAdapter:
     def close(self) -> t.Any:
         """Closes all open connections and releases all allocated resources."""
         self._connection_pool.close_all()
+
+    def get_current_catalog(self) -> t.Optional[str]:
+        """Returns the catalog name of the current connection."""
+        raise NotImplementedError()
+
+    def set_current_catalog(self, catalog: str) -> None:
+        """Sets the catalog name of the current connection."""
+        raise NotImplementedError()
 
     def replace_query(
         self,
@@ -516,7 +551,10 @@ class EngineAdapter:
                 this=exp.to_table(target_table_name),
                 kind="TABLE",
                 replace=replace,
-                clone=exp.Clone(this=exp.to_table(source_table_name), **(clone_kwargs or {})),
+                clone=exp.Clone(
+                    this=exp.to_table(source_table_name),
+                    **(clone_kwargs or {}),
+                ),
                 **kwargs,
             )
         )
@@ -625,10 +663,10 @@ class EngineAdapter:
                 )
             )
 
+    @set_catalog()
     def create_schema(
         self,
-        schema_name: str,
-        catalog_name: t.Optional[str] = None,
+        schema_name: SchemaName,
         ignore_if_exists: bool = True,
         warn_on_error: bool = True,
     ) -> None:
@@ -636,7 +674,7 @@ class EngineAdapter:
         try:
             self.execute(
                 exp.Create(
-                    this=exp.table_(schema_name, catalog_name),
+                    this=to_schema(schema_name),
                     kind="SCHEMA",
                     exists=ignore_if_exists,
                 )
@@ -646,13 +684,16 @@ class EngineAdapter:
                 raise
             logger.warning("Failed to create schema '%s': %s", schema_name, e)
 
+    @set_catalog()
     def drop_schema(
-        self, schema_name: str, ignore_if_not_exists: bool = True, cascade: bool = False
+        self,
+        schema_name: SchemaName,
+        ignore_if_not_exists: bool = True,
+        cascade: bool = False,
     ) -> None:
-        """Drop a schema from a name or qualified table name."""
         self.execute(
             exp.Drop(
-                this=exp.table_(schema_name.split(".")[0]),
+                this=to_schema(schema_name),
                 kind="SCHEMA",
                 exists=ignore_if_not_exists,
                 cascade=cascade,
@@ -672,6 +713,7 @@ class EngineAdapter:
             )
         )
 
+    @set_catalog()
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
     ) -> t.Dict[str, exp.DataType]:
@@ -687,6 +729,7 @@ class EngineAdapter:
             )
         }
 
+    @set_catalog()
     def table_exists(self, table_name: TableName) -> bool:
         try:
             self.execute(exp.Describe(this=exp.to_table(table_name), kind="TABLE"))
@@ -926,6 +969,8 @@ class EngineAdapter:
         columns_to_types = columns_to_types or self.columns(target_table)
         if valid_from_name not in columns_to_types or valid_to_name not in columns_to_types:
             columns_to_types = self.columns(target_table)
+        if not columns_to_types:
+            raise SQLMeshError(f"Could not get columns_to_types. Does {target_table} exist?")
         if updated_at_name not in columns_to_types:
             raise SQLMeshError(
                 f"Column {updated_at_name} not found in {target_table}. Table must contain an `updated_at` timestamp for SCD Type 2"
@@ -1154,11 +1199,20 @@ class EngineAdapter:
                     match_expressions=[when_matched, when_not_matched],
                 )
 
+    @set_catalog()
     def rename_table(
         self,
         old_table_name: TableName,
         new_table_name: TableName,
     ) -> None:
+        new_table = exp.to_table(new_table_name)
+        if new_table.catalog:
+            old_table = exp.to_table(old_table_name)
+            catalog = old_table.catalog or self.get_current_catalog()
+            if catalog != new_table.catalog:
+                raise UnsupportedCatalogOperationError(
+                    "Tried to rename table across catalogs which is not supported"
+                )
         self.execute(exp.rename_table(old_table_name, new_table_name))
 
     def fetchone(
@@ -1307,7 +1361,7 @@ class EngineAdapter:
         with self.transaction():
             table = self._get_temp_table(name)
             if table.db:
-                self.create_schema(table.db)
+                self.create_schema(schema_(table.args["db"], table.args.get("catalog")))
             self._create_table_from_source_queries(
                 table, source_queries, columns_to_types, exists=True, **kwargs
             )
@@ -1346,7 +1400,6 @@ class EngineAdapter:
             "dialect": self.dialect,
             "pretty": False,
             "comments": False,
-            **self.DEFAULT_SQL_GEN_KWARGS,
             **self.sql_gen_kwargs,
             **kwargs,
         }
@@ -1356,13 +1409,10 @@ class EngineAdapter:
 
         return expression.sql(**sql_gen_kwargs)  # type: ignore
 
-    def _get_data_objects(
-        self, schema_name: str, catalog_name: t.Optional[str] = None
-    ) -> t.List[DataObject]:
+    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
-
         raise NotImplementedError()
 
     def _get_temp_table(
