@@ -688,6 +688,46 @@ def test_schema_diff_calculate_type_transitions():
                 support_nested_operations=True,
             ),
         ),
+        # ############
+        # Coerce Tests
+        # ############
+        # Single coercion results in no operation
+        (
+            "STRUCT<id INT, name STRING, revenue FLOAT>",
+            "STRUCT<id INT, name STRING, revenue INT>",
+            [],
+            dict(
+                support_positional_add=True,
+                support_nested_operations=True,
+                support_coercing_compatible_types=True,
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("FLOAT")},
+                },
+            ),
+        ),
+        # Coercion with an alter results in a single alter
+        (
+            "STRUCT<id INT, name STRING, revenue FLOAT, total INT>",
+            "STRUCT<id INT, name STRING, revenue INT, total FLOAT>",
+            [
+                TableAlterOperation.alter_type(
+                    TableAlterColumn.primitive("total"),
+                    "FLOAT",
+                    current_type="INT",
+                    # Note that the resulting table struct will not match what we defined as the desired
+                    # result since it could be coerced
+                    expected_table_struct="STRUCT<id INT, name STRING, revenue FLOAT, total FLOAT>",
+                )
+            ],
+            dict(
+                support_positional_add=False,
+                support_nested_operations=True,
+                support_coercing_compatible_types=True,
+                compatible_types={
+                    exp.DataType.build("INT"): {exp.DataType.build("FLOAT")},
+                },
+            ),
+        ),
     ],
 )
 def test_struct_diff(
