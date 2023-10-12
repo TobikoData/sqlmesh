@@ -6,7 +6,7 @@ import typing as t
 import pandas as pd
 from sqlglot import Dialect, exp
 
-from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.base import CatalogSupport, InsertOverwriteStrategy
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty
@@ -30,6 +30,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         support_nested_operations=True,
         array_element_selector="element",
     )
+    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
 
     def __init__(
         self,
@@ -109,14 +110,14 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             if catalog:
                 from py4j.protocol import Py4JError
 
-                # Note: Spark 3.4+ Only API
                 try:
-                    self.spark.catalog.setCurrentCatalog(catalog)
+                    # Note: Spark 3.4+ Only API
+                    super().set_current_catalog(catalog)
                 # If `setCurrentCatalog` should work for both non-unity and Unity single user
                 # clusters. If it fails then we try `USE CATALOG` which is Unity only but works
                 # across all clusters
                 except Py4JError:
-                    self.spark.sql(f"USE CATALOG {catalog}")
+                    self.set_current_catalog(catalog)
             self._spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         return self._spark
 
@@ -146,6 +147,15 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         if not isinstance(df, pd.DataFrame):
             return df.toPandas()
         return df
+
+    def get_current_catalog(self) -> t.Optional[str]:
+        result = self.fetchone("SELECT current_catalog()")
+        if result:
+            return result[0]
+        return None
+
+    def set_current_catalog(self, catalog_name: str) -> None:
+        self.execute(exp.Use(this=exp.to_identifier(catalog_name), kind="CATALOG"))
 
     def clone_table(
         self,

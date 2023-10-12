@@ -6,22 +6,22 @@ import pandas as pd
 from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import EngineAdapter, SourceQuery
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-from sqlmesh.utils import nullsafe_join
+from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.engine_adapter.base import CatalogSupport, EngineAdapter, SourceQuery
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import DF, Query
 
 
 class SnowflakeEngineAdapter(EngineAdapter):
-    DEFAULT_SQL_GEN_KWARGS = {"identify": False}
     DIALECT = "snowflake"
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CLONING = True
+    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
 
     def _df_to_source_queries(
         self,
@@ -83,16 +83,14 @@ class SnowflakeEngineAdapter(EngineAdapter):
             columns = self.cursor._result_set.batches[0].column_names
             return pd.DataFrame([dict(zip(columns, row)) for row in rows])
 
-    def _get_data_objects(
-        self, schema_name: str, catalog_name: t.Optional[str] = None
-    ) -> t.List[DataObject]:
+    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
+    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
         from snowflake.connector.errors import ProgrammingError
 
-        target = nullsafe_join(".", catalog_name, schema_name)
-        sql = f"SHOW TERSE OBJECTS IN {target}"
+        sql = f'SHOW TERSE OBJECTS IN "{to_schema(schema_name).sql(dialect=self.dialect)}"'
         try:
             df = self.fetchdf(sql, quote_identifiers=True)
         except ProgrammingError as e:
@@ -110,3 +108,32 @@ class SnowflakeEngineAdapter(EngineAdapter):
             )
             for row in df[["database_name", "schema_name", "name", "kind"]].itertuples()
         ]
+
+    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
+    def create_schema(
+        self,
+        schema_name: SchemaName,
+        ignore_if_exists: bool = True,
+        warn_on_error: bool = True,
+    ) -> None:
+        super().create_schema(
+            schema_name, ignore_if_exists=ignore_if_exists, warn_on_error=warn_on_error
+        )
+
+    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
+    def drop_schema(
+        self,
+        schema_name: SchemaName,
+        ignore_if_not_exists: bool = True,
+        cascade: bool = False,
+    ) -> None:
+        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=cascade)
+
+    def get_current_catalog(self) -> t.Optional[str]:
+        result = self.fetchone("SELECT CURRENT_DATABASE()")
+        if result:
+            return result[0]
+        return None
+
+    def set_current_catalog(self, catalog: str) -> None:
+        self.execute(exp.Use(this=exp.to_identifier(catalog)))

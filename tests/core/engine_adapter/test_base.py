@@ -8,11 +8,13 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse_one
+from sqlglot.helper import ensure_list
 
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
 from sqlmesh.utils.date import to_ds
+from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from tests.core.engine_adapter import to_sql_calls
 
 
@@ -99,15 +101,16 @@ def test_create_schema(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     adapter.create_schema("test_schema")
     adapter.create_schema("test_schema", ignore_if_exists=False)
-    adapter.create_schema("test_schema", catalog_name="test_catalog")
 
     adapter.cursor.execute.assert_has_calls(
         [
             call('CREATE SCHEMA IF NOT EXISTS "test_schema"'),
             call('CREATE SCHEMA "test_schema"'),
-            call('CREATE SCHEMA IF NOT EXISTS "test_catalog"."test_schema"'),
         ]
     )
+
+    with pytest.raises(UnsupportedCatalogOperationError):
+        adapter.create_schema("test_catalog.test_schema")
 
 
 def test_columns(make_mocked_engine_adapter: t.Callable):
@@ -1295,3 +1298,58 @@ def test_drop_view(make_mocked_engine_adapter: t.Callable):
         'DROP VIEW IF EXISTS "test_view"',
         'DROP MATERIALIZED VIEW IF EXISTS "test_view"',
     ]
+
+
+@pytest.mark.parametrize(
+    "kwargs, expected",
+    [
+        (
+            {
+                "schema_name": "test_schema",
+            },
+            'DROP SCHEMA IF EXISTS "test_schema"',
+        ),
+        (
+            {
+                "schema_name": "test_schema",
+                "ignore_if_not_exists": False,
+            },
+            'DROP SCHEMA "test_schema"',
+        ),
+        (
+            {
+                "schema_name": "test_schema",
+                "cascade": True,
+            },
+            'DROP SCHEMA IF EXISTS "test_schema" CASCADE',
+        ),
+        (
+            {
+                "schema_name": "test_schema",
+                "cascade": True,
+                "ignore_if_not_exists": False,
+            },
+            'DROP SCHEMA "test_schema" CASCADE',
+        ),
+    ],
+)
+def test_drop_schema(kwargs, expected, make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.drop_schema(**kwargs)
+
+    assert to_sql_calls(adapter) == ensure_list(expected)
+
+
+def test_drop_schema_catalog(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    with pytest.raises(UnsupportedCatalogOperationError):
+        adapter.drop_schema("test_catalog.test_schema")
+
+
+def test_get_current_catalog(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    with pytest.raises(NotImplementedError):
+        adapter.get_current_catalog()

@@ -9,6 +9,7 @@ from dbt.contracts.relation import Policy
 from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
 
+from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
@@ -212,7 +213,7 @@ class RuntimeAdapter(BaseAdapter):
 
         assert schema_relation.schema is not None
         data_objects = self.engine_adapter._get_data_objects(
-            schema_name=schema_relation.schema, catalog_name=schema_relation.database
+            schema_(schema_relation.schema, schema_relation.database)
         )
         relations = [
             self.relation_type.create(

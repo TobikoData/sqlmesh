@@ -7,19 +7,21 @@ from functools import partial
 import pandas as pd
 from sqlglot import exp
 
+from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base import (
+    CatalogSupport,
     EngineAdapter,
     InsertOverwriteStrategy,
     SourceQuery,
 )
-from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
-from sqlmesh.utils import classproperty, nullsafe_join
+from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
+from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from pyspark.sql import types as spark_types
 
-    from sqlmesh.core._typing import TableName
+    from sqlmesh.core._typing import SchemaName, TableName
     from sqlmesh.core.engine_adapter._typing import (
         DF,
         PySparkDataFrame,
@@ -38,6 +40,7 @@ class SparkEngineAdapter(EngineAdapter):
     ESCAPE_JSON = True
     SUPPORTS_TRANSACTIONS = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
+    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
 
     @property
     def spark(self) -> PySparkSession:
@@ -266,11 +269,10 @@ class SparkEngineAdapter(EngineAdapter):
             self._fetch_native_df(query, quote_identifiers=quote_identifiers)
         )
 
-    def _get_data_objects(
-        self, schema_name: str, catalog_name: t.Optional[str] = None
-    ) -> t.List[DataObject]:
-        target = nullsafe_join(".", catalog_name, schema_name)
-        sql = f"SHOW TABLE EXTENDED IN {target} LIKE '*'"
+    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
+    def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
+        schema_name = to_schema(schema_name).sql(dialect=self.dialect)
+        sql = f"SHOW TABLE EXTENDED IN {schema_name} LIKE '*'"
         try:
             results = (
                 self.fetch_pyspark_df(sql).collect()
@@ -284,7 +286,7 @@ class SparkEngineAdapter(EngineAdapter):
             return []
         return [
             DataObject(
-                catalog=catalog_name,
+                catalog=self.get_current_catalog(),
                 schema=schema_name,
                 name=row["tableName"],
                 type=DataObjectType.VIEW
@@ -293,6 +295,34 @@ class SparkEngineAdapter(EngineAdapter):
             )
             for row in results  # type: ignore
         ]
+
+    def get_current_catalog(self) -> t.Optional[str]:
+        # Spark 3.4+ API
+        return self.spark.catalog.currentCatalog()
+
+    def set_current_catalog(self, catalog_name: str) -> None:
+        # Spark 3.4+ API
+        self.spark.catalog.setCurrentCatalog(catalog_name)
+
+    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
+    def create_schema(
+        self,
+        schema_name: SchemaName,
+        ignore_if_exists: bool = True,
+        warn_on_error: bool = True,
+    ) -> None:
+        super().create_schema(
+            schema_name, ignore_if_exists=ignore_if_exists, warn_on_error=warn_on_error
+        )
+
+    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
+    def drop_schema(
+        self,
+        schema_name: SchemaName,
+        ignore_if_not_exists: bool = True,
+        cascade: bool = False,
+    ) -> None:
+        super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=cascade)
 
     def replace_query(
         self,

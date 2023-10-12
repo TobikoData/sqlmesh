@@ -839,3 +839,35 @@ def transform_values(
             yield exp.func("PARSE_JSON", f"'{value}'")
         else:
             yield value
+
+
+def to_schema(sql_path: str | exp.Table) -> exp.Table:
+    if isinstance(sql_path, exp.Table) and sql_path.this is None:
+        return sql_path
+    table = exp.to_table(sql_path.copy() if isinstance(sql_path, exp.Table) else sql_path)
+    table.set("catalog", table.args.get("db"))
+    table.set("db", table.args.get("this"))
+    table.set("this", None)
+    return table
+
+
+def schema_(
+    db: exp.Identifier | str,
+    catalog: t.Optional[exp.Identifier | str] = None,
+    quoted: t.Optional[bool] = None,
+) -> exp.Table:
+    """Build a Schema.
+
+    Args:
+        db: Database name.
+        catalog: Catalog name.
+        quoted: Whether to force quotes on the schema's identifiers.
+
+    Returns:
+        The new Schema instance.
+    """
+    return exp.Table(
+        this=None,
+        db=exp.to_identifier(db, quoted=quoted) if db else None,
+        catalog=exp.to_identifier(catalog, quoted=quoted) if catalog else None,
+    )

@@ -32,6 +32,7 @@ from sqlglot import exp, select
 from sqlglot.executor import execute
 
 from sqlmesh.core.audit import Audit, AuditResult
+from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.model import IncrementalUnmanagedKind, Model, SCDType2Kind, ViewKind
@@ -575,12 +576,13 @@ class SnapshotEvaluator:
 
     def _create_schemas(self, tables: t.Iterable[t.Union[exp.Table, str]]) -> None:
         table_exprs = [exp.to_table(t) for t in tables]
-        unique_schemas = {(t.db, t.args.get("catalog")) for t in table_exprs if t and t.db}
+        unique_schemas = {(t.args["db"], t.args.get("catalog")) for t in table_exprs if t and t.db}
         # Create schemas sequentially, since some engines (eg. Postgres) may not support concurrent creation
         # of schemas with the same name.
-        for schema, catalog in unique_schemas:
+        for schema_name, catalog in unique_schemas:
+            schema = schema_(schema_name, catalog)
             logger.info("Creating schema '%s'", schema)
-            self.adapter.create_schema(schema, catalog_name=catalog)
+            self.adapter.create_schema(schema)
 
 
 def _evaluation_strategy(snapshot: SnapshotInfoLike, adapter: EngineAdapter) -> EvaluationStrategy:

@@ -10,7 +10,7 @@ import pandas as pd
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.dialect import normalize_model_name
+from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
 from sqlmesh.utils.errors import SQLMeshError
@@ -81,7 +81,9 @@ class ModelTest(unittest.TestCase):
             table = exp.to_table(table_name)
 
             if table.db:
-                self.engine_adapter.create_schema(table.db, catalog_name=table.catalog)
+                self.engine_adapter.create_schema(
+                    schema_(table.args["db"], table.args.get("catalog"))
+                )
 
             self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
 

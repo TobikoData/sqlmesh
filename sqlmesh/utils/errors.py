@@ -111,6 +111,14 @@ class ParsetimeAdapterCallError(SQLMeshError):
     pass
 
 
+class EngineAdapterError(SQLMeshError):
+    pass
+
+
+class UnsupportedCatalogOperationError(EngineAdapterError):
+    pass
+
+
 def raise_config_error(
     msg: str,
     location: t.Optional[str | Path] = None,
