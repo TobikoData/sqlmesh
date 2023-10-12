@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from enum import Enum
 from functools import reduce
 from string import Template
 
@@ -27,6 +28,12 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
 SQLMESH_MOCKED_STAR = "__SQLMESH_MOCKED_STAR__"
+
+
+class RuntimeStage(Enum):
+    LOADING = "loading"
+    CREATING = "creating"
+    EVALUATING = "evaluating"
 
 
 class MacroStrTemplate(Template):
@@ -103,11 +110,11 @@ class MacroEvaluator:
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         jinja_env: t.Optional[Environment] = None,
         schema: t.Optional[t.Dict[str, t.Any]] = None,
-        evaluating: bool = False,
+        runtime_stage: RuntimeStage = RuntimeStage.LOADING,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
-        self.locals: t.Dict[str, t.Any] = {"evaluating": evaluating}
+        self.locals: t.Dict[str, t.Any] = {"runtime_stage": runtime_stage}
         self.env = {**ENV, "self": self}
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env

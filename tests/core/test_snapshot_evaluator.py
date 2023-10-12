@@ -11,7 +11,7 @@ from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.environment import EnvironmentNamingInfo
-from sqlmesh.core.macros import macro
+from sqlmesh.core.macros import RuntimeStage, macro
 from sqlmesh.core.model import (
     FullKind,
     IncrementalByTimeRangeKind,
@@ -146,6 +146,43 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         clustered_by=[],
         table_properties={},
     )
+
+
+def test_evaluation_stage(capsys, mocker, adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    @macro()
+    def increment_stage_counter(evaluator) -> None:
+        # Hack which allows us to intercept the different runtime stage values
+        print(f"RuntimeStage value: {evaluator.locals['runtime_stage'].value}")
+
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind FULL,
+            );
+
+            @increment_stage_counter();
+
+            SELECT 1 AS a;
+            """
+        ),
+        macros=macro.get_registry(),
+    )
+
+    capsys.readouterr()
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert f"RuntimeStage value: {RuntimeStage.LOADING.value}" in capsys.readouterr().out
+
+    evaluator.create([snapshot], {})
+    assert f"RuntimeStage value: {RuntimeStage.CREATING.value}" in capsys.readouterr().out
+
+    evaluator.evaluate(snapshot, "2020-01-01", "2020-01-02", "2020-01-02", snapshots={})
+    assert f"RuntimeStage value: {RuntimeStage.EVALUATING.value}" in capsys.readouterr().out
 
 
 def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):

@@ -35,6 +35,7 @@ from sqlmesh.core.audit import Audit, AuditResult
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
+from sqlmesh.core.macros import RuntimeStage
 from sqlmesh.core.model import IncrementalUnmanagedKind, Model, SCDType2Kind, ViewKind
 from sqlmesh.core.snapshot import (
     QualifiedViewName,
@@ -158,7 +159,7 @@ class SnapshotEvaluator:
             engine_adapter=self.adapter,
             snapshots=snapshots,
             is_dev=is_dev,
-            evaluating=True,
+            runtime_stage=RuntimeStage.EVALUATING,
             **common_render_kwargs,
         )
 
@@ -412,6 +413,7 @@ class SnapshotEvaluator:
             engine_adapter=self.adapter,
             snapshots=parent_snapshots_by_name,
             is_dev=is_dev,
+            runtime_stage=RuntimeStage.CREATING,
         )
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
