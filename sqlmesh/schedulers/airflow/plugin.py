@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 import typing as t
 
@@ -19,8 +20,14 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
 
     @classmethod
     def on_load(cls, *args: t.Any, **kwargs: t.Any) -> None:
+        if os.environ.get("MWAA_AIRFLOW_COMPONENT", "").lower() == "webserver":
+            # When using MWAA, the Webserver instance might not have access to the external state database.
+            logger.info("MWAA Webserver instance detected. Skipping SQLMesh state migration...")
+            return
+
         with util.scoped_state_sync() as state_sync:
             try:
+                logger.info("Migrating SQLMesh state ...")
                 state_sync.migrate()
             except Exception as ex:
                 # This method is called once for each Gunicorn worker spawned by the Airflow Webserver,
