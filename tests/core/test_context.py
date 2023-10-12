@@ -11,6 +11,7 @@ from sqlglot.errors import SchemaError
 import sqlmesh.core.constants
 from sqlmesh.core.config import (
     Config,
+    DatabricksConnectionConfig,
     EnvironmentSuffixTarget,
     ModelDefaultsConfig,
     SnowflakeConnectionConfig,
@@ -557,3 +558,102 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
     )
     assert model_v1_old_snapshot.snapshot_id != model_v1_new_snapshot.snapshot_id
     assert model_v1_old_snapshot.fingerprint != model_v1_new_snapshot.fingerprint
+
+
+def test_default_catalog_connections(mocker: MockerFixture):
+    context = Context(paths="examples/sushi")
+    assert context.config.model_defaults.catalog is None
+    assert context.config.default_connection.supports_catalogs is False
+    # Verify that setting default catalog against an engine that doesn't support catalogs raises
+    config = Config(model_defaults=ModelDefaultsConfig(catalog="catalog"))
+    with pytest.raises(
+        ConfigError,
+        match="A default catalog of `catalog` was provided but catalogs are not supported for this connection: DuckDBEngineAdapter",
+    ):
+        Context(paths="examples/sushi", config=config)
+
+    mock_factory = mocker.MagicMock()
+    mocker.patch.object(DatabricksConnectionConfig, "_connection_factory", mock_factory)
+
+    # Verify that not providing catalog in either results in no catalog being passed to the connection
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto"),
+        default_connection=DatabricksConnectionConfig(
+            server_hostname="test", http_path="test", access_token="test"
+        ),
+    )
+    context = Context(paths="examples/sushi", config=config)
+    # Execute the mock so we can evaluate properties passed in
+    context.engine_adapter._connection_pool._connection_factory()  # type: ignore
+    assert mock_factory.call_args[1].get("catalog") is None
+    assert context.config.model_defaults.catalog is None
+    mock_factory.reset_mock()
+
+    # Verify that providing a default catalog gets passed into the connection
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto", catalog="catalog"),
+        default_connection=DatabricksConnectionConfig(
+            server_hostname="test", http_path="test", access_token="test"
+        ),
+    )
+    context = Context(paths="examples/sushi", config=config)
+    # Execute the mock so we can evaluate properties passed in
+    context.engine_adapter._connection_pool._connection_factory()  # type: ignore
+    assert mock_factory.call_args[1].get("catalog") == "catalog"
+    assert context.config.model_defaults.catalog == "catalog"
+    mock_factory.reset_mock()
+
+    # Verify that providing a catalog into a connection that is updates model defaults to have that catalog
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto"),
+        default_connection=DatabricksConnectionConfig(
+            server_hostname="test", http_path="test", access_token="test", catalog="catalog"
+        ),
+    )
+    context = Context(paths="examples/sushi", config=config)
+    # Execute the mock so we can evaluate properties passed in
+    context.engine_adapter._connection_pool._connection_factory()  # type: ignore
+    assert mock_factory.call_args[1].get("catalog") == "catalog"
+    assert config.model_defaults.catalog == "catalog"
+    mock_factory.reset_mock()
+
+    # Verify that providing a default catalog and connection catalog that are the same raises no error
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto", catalog="catalog"),
+        default_connection=DatabricksConnectionConfig(
+            server_hostname="test", http_path="test", access_token="test", catalog="catalog"
+        ),
+    )
+    context = Context(paths="examples/sushi", config=config)
+    # Execute the mock so we can evaluate properties passed in
+    context.engine_adapter._connection_pool._connection_factory()  # type: ignore
+    assert mock_factory.call_args[1].get("catalog") == "catalog"
+    assert context.config.model_defaults.catalog == "catalog"
+    mock_factory.reset_mock()
+
+    # Verify that providing a default catalog and connection catalog that are different raises an error
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto", catalog="catalog"),
+        default_connection=DatabricksConnectionConfig(
+            server_hostname="test", http_path="test", access_token="test", catalog="catalog2"
+        ),
+    )
+    with pytest.raises(
+        ConfigError,
+        match="A default catalog of `catalog` was provided but the connection catalog is `catalog2`\nRemove the connection catalog and let default catalog set this for the connection.",
+    ):
+        Context(paths="examples/sushi", config=config)
+
+    snow_mock_factory = mocker.MagicMock()
+    mocker.patch.object(SnowflakeConnectionConfig, "_connection_factory", snow_mock_factory)
+    # Verify that providing a catalog into a connection with a property that isn't `catalog` gets assigned properly
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto", catalog="catalog"),
+        default_connection=SnowflakeConnectionConfig(account="test", user="test", password="test"),
+    )
+    context = Context(paths="examples/sushi", config=config)
+    # Execute the mock so we can evaluate properties passed in
+    context.engine_adapter._connection_pool._connection_factory()  # type: ignore
+    assert snow_mock_factory.call_args[1].get("database") == "catalog"
+    assert "catalog" not in snow_mock_factory.call_args[1]
+    assert context.config.model_defaults.catalog == "catalog"

@@ -58,13 +58,41 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         """Key-value arguments that will be passed during cursor construction."""
         return None
 
-    def create_engine_adapter(self) -> EngineAdapter:
+    @property
+    def supports_catalogs(self) -> bool:
+        """Whether this connection supports catalogs"""
+        return self._engine_adapter.CATALOG_SUPPORT.is_supported
+
+    @property
+    def catalog_field(self) -> str:
+        """The catalog field for this connection"""
+        raise NotImplementedError()
+
+    def get_catalog(self) -> t.Optional[str]:
+        """The catalog for this connection"""
+        if self.supports_catalogs:
+            return getattr(self, self.catalog_field)
+        return None
+
+    def create_engine_adapter(self, default_catalog: t.Optional[str] = None) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
+        if default_catalog and not self.supports_catalogs:
+            raise ConfigError(
+                f"A default catalog of `{default_catalog}` was provided but catalogs are not supported for this connection: {self._engine_adapter.__name__}"
+            )
+        if default_catalog:
+            connection_catalog = self.get_catalog()
+            if connection_catalog and connection_catalog != default_catalog:
+                raise ConfigError(
+                    f"A default catalog of `{default_catalog}` was provided but the connection catalog is `{connection_catalog}`\nRemove the connection catalog and let default catalog set this for the connection."
+                )
+
         return self._engine_adapter(
             lambda: self._connection_factory(
                 **{
                     **self._static_connection_kwargs,
                     **{k: v for k, v in self.dict().items() if k in self._connection_kwargs_keys},
+                    **({self.catalog_field: default_catalog} if default_catalog else {}),
                 }
             ),
             multithreaded=self.concurrent_tasks > 1,
@@ -132,6 +160,10 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     type_: Literal["snowflake"] = Field(alias="type", default="snowflake")
 
     _concurrent_tasks_validator = concurrent_tasks_validator
+
+    @property
+    def catalog_field(self) -> str:
+        return "database"
 
     @model_validator(mode="before")
     @classmethod
@@ -242,7 +274,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
         from sqlmesh import runtime_env
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
-        if values["type"] != "databricks" or runtime_env.is_databricks:
+        if runtime_env.is_databricks:
             return values
         server_hostname, http_path, access_token = (
             values.get("server_hostname"),
@@ -264,6 +296,10 @@ class DatabricksConnectionConfig(ConnectionConfig):
             values["session_configuration"] = {}
         values["session_configuration"]["spark.sql.sources.partitionOverwriteMode"] = "dynamic"
         return values
+
+    @property
+    def catalog_field(self) -> str:
+        return "catalog"
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -392,6 +428,10 @@ class BigQueryConnectionConfig(ConnectionConfig):
     concurrent_tasks: int = 1
 
     type_: Literal["bigquery"] = Field(alias="type", default="bigquery")
+
+    @property
+    def catalog_field(self) -> str:
+        return "project"
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -587,6 +627,12 @@ class RedshiftConnectionConfig(ConnectionConfig):
 
     type_: Literal["redshift"] = Field(alias="type", default="redshift")
 
+    # Currently Redshift will return unsupported and this won't do anything until
+    # Redshift engine adapter is updated to handle switching between catalogs
+    @property
+    def catalog_field(self) -> str:
+        return "database"
+
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
@@ -728,6 +774,10 @@ class MSSQLConnectionConfig(ConnectionConfig):
     type_: Literal["mssql"] = Field(alias="type", default="mssql")
 
     @property
+    def catalog_field(self) -> str:
+        return "database"
+
+    @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
             "host",
@@ -761,12 +811,16 @@ class SparkConnectionConfig(ConnectionConfig):
     """
 
     config_dir: t.Optional[str] = None
-    catalog: t.Optional[str] = None
+    catalog_: t.Optional[str] = Field(alias="catalog", default=None)
     config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: int = 4
 
     type_: Literal["spark"] = Field(alias="type", default="spark")
+
+    @property
+    def catalog_field(self) -> str:
+        return "catalog"
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:

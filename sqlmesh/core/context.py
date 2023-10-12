@@ -274,7 +274,12 @@ class Context(BaseContext):
 
         connection_config = self.config.get_connection(self.gateway)
         self.concurrent_tasks = concurrent_tasks or connection_config.concurrent_tasks
-        self._engine_adapter = engine_adapter or connection_config.create_engine_adapter()
+        self._engine_adapter = engine_adapter or connection_config.create_engine_adapter(
+            default_catalog=self.config.model_defaults.catalog
+        )
+        engine_default_catalog = connection_config.get_catalog()
+        if engine_default_catalog:
+            self.config.model_defaults.catalog = engine_default_catalog
 
         test_connection_config = self.config.get_test_connection(self.gateway)
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
