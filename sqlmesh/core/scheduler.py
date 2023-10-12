@@ -15,7 +15,6 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
-    SnapshotIdLike,
     earliest_start_date,
     missing_intervals,
 )
@@ -44,7 +43,7 @@ class Scheduler:
     The scheduler comes equipped with a simple ThreadPoolExecutor based evaluation engine.
 
     Args:
-        snapshots: A collection of snapshots/ids.
+        snapshots: A collection of snapshots.
         snapshot_evaluator: The snapshot evaluator to execute queries.
         state_sync: The state sync to pull saved snapshots.
         max_workers: The maximum number of parallel queries to run.
@@ -53,7 +52,7 @@ class Scheduler:
 
     def __init__(
         self,
-        snapshots: t.Iterable[SnapshotIdLike],
+        snapshots: t.Iterable[Snapshot],
         snapshot_evaluator: SnapshotEvaluator,
         state_sync: StateSync,
         max_workers: int = 1,
@@ -61,7 +60,7 @@ class Scheduler:
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
     ):
         self.state_sync = state_sync
-        self.snapshots = self.state_sync.get_snapshots(snapshots)
+        self.snapshots = {s.snapshot_id: s for s in snapshots}
         self.snapshot_per_version = _resolve_one_snapshot_per_version(self.snapshots.values())
         self.snapshot_evaluator = snapshot_evaluator
         self.max_workers = max_workers
@@ -106,6 +105,8 @@ class Scheduler:
         snapshots: t.Collection[Snapshot] = self.snapshot_per_version.values()
         if selected_snapshots is not None:
             snapshots = [s for s in snapshots if s.name in selected_snapshots]
+
+        self.state_sync.refresh_snapshot_intervals(snapshots)
 
         return compute_interval_params(
             snapshots,

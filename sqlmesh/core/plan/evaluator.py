@@ -86,6 +86,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             }
             after_promote_snapshots = all_names - before_promote_snapshots
 
+        update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
+
         self._push(plan)
         self._restate(plan)
         self._backfill(plan, before_promote_snapshots)
@@ -377,3 +379,13 @@ def can_evaluate_before_promote(
     return not snapshot.is_paused_forward_only and not any(
         snapshots[p_id].is_paused_forward_only for p_id in snapshot.parents
     )
+
+
+def update_intervals_for_new_snapshots(
+    snapshots: t.Collection[Snapshot], state_sync: StateSync
+) -> None:
+    for snapshot in state_sync.refresh_snapshot_intervals(snapshots):
+        if snapshot.is_forward_only:
+            snapshot.dev_intervals = snapshot.intervals.copy()
+            for start, end in snapshot.dev_intervals:
+                state_sync.add_interval(snapshot, start, end, is_dev=True)
