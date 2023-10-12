@@ -148,7 +148,7 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
-def test_evaluation_stage(capsys, mocker, adapter_mock, make_snapshot):
+def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
     @macro()
