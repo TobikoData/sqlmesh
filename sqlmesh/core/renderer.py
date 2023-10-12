@@ -18,7 +18,7 @@ from sqlglot.schema import MappingSchema
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.macros import MacroEvaluator
+from sqlmesh.core.macros import MacroEvaluator, RuntimeStage
 from sqlmesh.utils.date import TimeLike, date_dict, make_inclusive, to_datetime
 from sqlmesh.utils.errors import (
     ConfigError,
@@ -33,6 +33,8 @@ if t.TYPE_CHECKING:
     from sqlglot._typing import E
 
     from sqlmesh.core.snapshot import Snapshot
+
+CacheKey = t.Tuple[datetime, datetime, datetime, RuntimeStage]
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +61,7 @@ class BaseExpressionRenderer:
         self._only_execution_time = only_execution_time
         self.schema = {} if schema is None else schema
 
-        self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.List[exp.Expression]] = {}
+        self._cache: t.Dict[CacheKey, t.List[exp.Expression]] = {}
 
     def _render(
         self,
@@ -69,6 +71,7 @@ class BaseExpressionRenderer:
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         is_dev: bool = False,
+        runtime_stage: t.Optional[RuntimeStage] = None,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
         """Renders a expression, expanding macros with provided kwargs
@@ -77,18 +80,19 @@ class BaseExpressionRenderer:
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             execution_time: The date/time time reference to use for execution time.
-            kwargs: Additional kwargs to pass to the renderer.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             is_dev: Indicates whether the rendering happens in the development mode and temporary
                 tables / table clones should be used where applicable.
+            runtime_stage: Indicates the current runtime stage, for example if we're still loading the project, etc.
+            kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
             The rendered expressions.
         """
 
-        cache_key = self._cache_key(start, end, execution_time)
-        start_dt, end_dt, execution_dt = cache_key
+        cache_key = self._cache_key(start, end, execution_time, runtime_stage)
+        start_dt, end_dt, execution_dt, runtime_stage = cache_key
         if cache_key not in self._cache:
             expressions = [self._expression]
 
@@ -132,6 +136,7 @@ class BaseExpressionRenderer:
                 python_env=self._python_env,
                 jinja_env=jinja_env,
                 schema=self.schema,
+                runtime_stage=runtime_stage,
             )
 
             for definition in self._macro_definitions:
@@ -203,10 +208,12 @@ class BaseExpressionRenderer:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-    ) -> t.Tuple[datetime, datetime, datetime]:
+        runtime_stage: t.Optional[RuntimeStage] = None,
+    ) -> CacheKey:
         return (
             *make_inclusive(start or c.EPOCH, end or c.EPOCH),
             to_datetime(execution_time or c.EPOCH),
+            runtime_stage or RuntimeStage.LOADING,
         )
 
 
@@ -273,7 +280,7 @@ class QueryRenderer(BaseExpressionRenderer):
 
         self._model_name = model_name
 
-        self._optimized_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
+        self._optimized_cache: t.Dict[CacheKey, exp.Expression] = {}
 
     def render(
         self,
@@ -285,6 +292,7 @@ class QueryRenderer(BaseExpressionRenderer):
         is_dev: bool = False,
         expand: t.Iterable[str] = tuple(),
         optimize: bool = True,
+        runtime_stage: t.Optional[RuntimeStage] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Subqueryable]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.
@@ -302,12 +310,13 @@ class QueryRenderer(BaseExpressionRenderer):
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
             optimize: Whether to optimize the query.
+            runtime_stage: Indicates the current runtime stage, for example if we're still loading the project, etc.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
             The rendered expression.
         """
-        cache_key = self._cache_key(start, end, execution_time)
+        cache_key = self._cache_key(start, end, execution_time, runtime_stage)
 
         if not optimize or cache_key not in self._optimized_cache:
             try:
