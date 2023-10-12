@@ -411,6 +411,7 @@ class SnapshotEvaluator:
             engine_adapter=self.adapter,
             snapshots=parent_snapshots_by_name,
             is_dev=is_dev,
+            execute=True,
         )
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)

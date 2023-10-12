@@ -59,7 +59,9 @@ class BaseExpressionRenderer:
         self._only_execution_time = only_execution_time
         self.schema = {} if schema is None else schema
 
-        self._cache: t.Dict[t.Tuple[datetime, datetime, datetime], t.List[exp.Expression]] = {}
+        self._cache: t.Dict[
+            t.Tuple[datetime, datetime, datetime, bool], t.List[exp.Expression]
+        ] = {}
 
     def _render(
         self,
@@ -87,8 +89,8 @@ class BaseExpressionRenderer:
             The rendered expressions.
         """
 
-        cache_key = self._cache_key(start, end, execution_time)
-        start_dt, end_dt, execution_dt = cache_key
+        cache_key = self._cache_key(start, end, execution_time, kwargs.get("execute"))
+        start_dt, end_dt, execution_dt, execute = cache_key
         if cache_key not in self._cache:
             expressions = [self._expression]
 
@@ -132,6 +134,7 @@ class BaseExpressionRenderer:
                 python_env=self._python_env,
                 jinja_env=jinja_env,
                 schema=self.schema,
+                execute=execute,
             )
 
             for definition in self._macro_definitions:
@@ -166,7 +169,9 @@ class BaseExpressionRenderer:
         execution_time: t.Optional[TimeLike] = None,
         **kwargs: t.Any,
     ) -> None:
-        self._cache[self._cache_key(start, end, execution_time)] = [expression]
+        self._cache[self._cache_key(start, end, execution_time, kwargs.get("execute"))] = [
+            expression
+        ]
 
     def _resolve_tables(
         self,
@@ -203,10 +208,12 @@ class BaseExpressionRenderer:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-    ) -> t.Tuple[datetime, datetime, datetime]:
+        execute: t.Optional[bool] = None,
+    ) -> t.Tuple[datetime, datetime, datetime, bool]:
         return (
             *make_inclusive(start or c.EPOCH, end or c.EPOCH),
             to_datetime(execution_time or c.EPOCH),
+            bool(execute),
         )
 
 
@@ -273,7 +280,9 @@ class QueryRenderer(BaseExpressionRenderer):
 
         self._model_name = model_name
 
-        self._optimized_cache: t.Dict[t.Tuple[datetime, datetime, datetime], exp.Expression] = {}
+        self._optimized_cache: t.Dict[
+            t.Tuple[datetime, datetime, datetime, bool], exp.Expression
+        ] = {}
 
     def render(
         self,
@@ -307,7 +316,7 @@ class QueryRenderer(BaseExpressionRenderer):
         Returns:
             The rendered expression.
         """
-        cache_key = self._cache_key(start, end, execution_time)
+        cache_key = self._cache_key(start, end, execution_time, kwargs.get("execute"))
 
         if not optimize or cache_key not in self._optimized_cache:
             try:
@@ -369,7 +378,9 @@ class QueryRenderer(BaseExpressionRenderer):
                 expression, start=start, end=end, execution_time=execution_time, **kwargs
             )
         else:
-            self._optimized_cache[self._cache_key(start, end, execution_time)] = expression
+            self._optimized_cache[
+                self._cache_key(start, end, execution_time, kwargs.get("execute"))
+            ] = expression
 
     def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
