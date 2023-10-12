@@ -103,11 +103,11 @@ class MacroEvaluator:
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         jinja_env: t.Optional[Environment] = None,
         schema: t.Optional[t.Dict[str, t.Any]] = None,
-        execute: t.Optional[bool] = None,
+        evaluating: t.Optional[bool] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
-        self.locals: t.Dict[str, t.Any] = {"execute": bool(execute)}
+        self.locals: t.Dict[str, t.Any] = {"evaluating": bool(evaluating)}
         self.env = {**ENV, "self": self}
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env

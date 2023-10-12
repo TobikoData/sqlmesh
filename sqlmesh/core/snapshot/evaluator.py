@@ -158,6 +158,7 @@ class SnapshotEvaluator:
             engine_adapter=self.adapter,
             snapshots=snapshots,
             is_dev=is_dev,
+            evaluating=True,
             **common_render_kwargs,
         )
 
@@ -411,7 +412,6 @@ class SnapshotEvaluator:
             engine_adapter=self.adapter,
             snapshots=parent_snapshots_by_name,
             is_dev=is_dev,
-            execute=True,
         )
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
