@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import logging
 import typing as t
+from collections import defaultdict
 from enum import Enum, auto
 
 from sqlglot import exp
 from sqlglot.helper import ensure_list, seq_get
 
 from sqlmesh.utils.pydantic import PydanticModel
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
+
+logger = logging.getLogger(__name__)
 
 
 class TableAlterOperationType(Enum):
@@ -292,6 +299,9 @@ class SchemaDiffer(PydanticModel):
     support_nested_operations: bool = False
     array_element_selector: str = ""
     compatible_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
+    support_coercing_compatible_types: bool = False
+
+    _coerceable_types: t.Dict[exp.DataType, t.Set[exp.DataType]] = {}
 
     @classmethod
     def _dict_to_struct(cls, value: t.Dict[str, exp.DataType]) -> exp.DataType:
@@ -303,11 +313,35 @@ class SchemaDiffer(PydanticModel):
             nested=True,
         )
 
+    @property
+    def coerceable_types(self) -> t.Dict[exp.DataType, t.Set[exp.DataType]]:
+        if not self._coerceable_types:
+            if not self.support_coercing_compatible_types or not self.compatible_types:
+                return {}
+            coerceable_types = defaultdict(set)
+            for source_type, target_types in self.compatible_types.items():
+                for target_type in target_types:
+                    coerceable_types[target_type].add(source_type)
+            self._coerceable_types = coerceable_types
+        return self._coerceable_types
+
     def _is_compatible_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
         if current_type == new_type:
             return True
         if current_type in self.compatible_types:
             return new_type in self.compatible_types[current_type]
+        return False
+
+    def _is_coerceable_type(self, current_type: exp.DataType, new_type: exp.DataType) -> bool:
+        if not self.support_coercing_compatible_types:
+            return False
+        if current_type in self.coerceable_types:
+            is_coerceable = new_type in self.coerceable_types[current_type]
+            if is_coerceable:
+                logger.warning(
+                    f"Coercing type {current_type} to {new_type} which means an alter will not be performed and therefore the resulting table structure will not match what is in the query.\nUpdate your model to cast the value to {current_type} type in order to remove this warning.",
+                )
+            return is_coerceable
         return False
 
     def _get_matching_kwarg(
@@ -438,7 +472,9 @@ class SchemaDiffer(PydanticModel):
                         new_array_type,
                         root_struct,
                     )
-        if self._is_compatible_type(current_type, new_type):
+        if self._is_coerceable_type(current_type, new_type):
+            return []
+        elif self._is_compatible_type(current_type, new_type):
             struct.expressions.pop(pos)
             struct.expressions.insert(pos, new_kwarg)
             col_pos = (
@@ -535,7 +571,7 @@ class SchemaDiffer(PydanticModel):
 
     def compare_columns(
         self,
-        table_name: t.Union[str, exp.Table],
+        table_name: TableName,
         current: t.Dict[str, exp.DataType],
         new: t.Dict[str, exp.DataType],
     ) -> t.List[exp.AlterTable]:
