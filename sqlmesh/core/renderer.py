@@ -208,7 +208,7 @@ class BaseExpressionRenderer:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        evaluating: t.Optional[bool] = None,
+        evaluating: bool = False,
     ) -> CacheKey:
         return (
             *make_inclusive(start or c.EPOCH, end or c.EPOCH),
