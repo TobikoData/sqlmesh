@@ -1002,7 +1002,7 @@ def apply_to_environment(
         include_unmodified=True,
     )
     if environment != c.PROD:
-        plan.set_start(plan_start or start(context))
+        plan.start = plan_start or start(context)
 
     if choice:
         plan_choice(plan, choice)

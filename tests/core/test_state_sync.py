@@ -315,6 +315,26 @@ def test_remove_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Ca
     ]
 
 
+def test_refresh_snapshot_intervals(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+) -> None:
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            cron="@daily",
+            query=parse_one("select 1, ds"),
+        ),
+        version="a",
+    )
+
+    state_sync.push_snapshots([snapshot])
+    state_sync.add_interval(snapshot, "2023-01-01", "2023-01-01")
+    assert not snapshot.intervals
+
+    state_sync.refresh_snapshot_intervals([snapshot])
+    assert snapshot.intervals == [(to_timestamp("2023-01-01"), to_timestamp("2023-01-02"))]
+
+
 def test_get_snapshot_intervals(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:

@@ -8,7 +8,10 @@ from sqlglot import exp
 from sqlmesh.core import scheduler
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.plan import can_evaluate_before_promote
+from sqlmesh.core.plan import (
+    can_evaluate_before_promote,
+    update_intervals_for_new_snapshots,
+)
 from sqlmesh.core.snapshot import SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.core.state_sync.base import DelegatingStateSync
@@ -94,6 +97,8 @@ def create_plan_dag_spec(
             "Make sure your code base is up to date and try re-creating the plan"
         )
 
+    update_intervals_for_new_snapshots(new_snapshots.values(), state_sync)
+
     if request.environment.end_at:
         end = request.environment.end_at
         unpaused_dt = None
@@ -104,14 +109,17 @@ def create_plan_dag_spec(
         unpaused_dt = end
 
     if request.restatements:
+        intervals_to_remove = [
+            (s, request.restatements[s.name])
+            for s in all_snapshots.values()
+            if s.name in request.restatements and s.snapshot_id not in new_snapshots
+        ]
         state_sync.remove_interval(
-            [
-                (s, request.restatements[s.name])
-                for s in all_snapshots.values()
-                if s.name in request.restatements and s.snapshot_id not in new_snapshots
-            ],
+            intervals_to_remove,
             remove_shared_versions=not request.is_dev,
         )
+        for s, interval in intervals_to_remove:
+            all_snapshots[s.snapshot_id].remove_interval(interval)
 
     if not request.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(

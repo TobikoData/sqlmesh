@@ -691,11 +691,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
-        intervals = (
-            self.dev_intervals
-            if is_dev and self.is_forward_only and self.is_paused
-            else self.intervals
-        )
+        intervals = self.dev_intervals if is_dev and self.is_paused_forward_only else self.intervals
 
         if self.is_symbolic or (self.is_seed and intervals):
             return []
@@ -775,7 +771,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             category: The change category to assign to this snapshot.
         """
-        assert not self.intervals  # a snapshot that has been processed should not be recategorized
         is_forward_only = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,

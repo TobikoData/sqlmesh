@@ -21,12 +21,11 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotFingerprint,
-    SnapshotIntervals,
     SnapshotTableInfo,
 )
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
-from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
+from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -136,6 +135,7 @@ def test_create_plan_dag_spec(
     state_sync_mock.get_snapshots.return_value = {}
     state_sync_mock.get_environment.return_value = old_environment
     state_sync_mock.get_snapshot_intervals.return_value = []
+    state_sync_mock.refresh_snapshot_intervals.return_value = []
 
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now_timestamp",
@@ -174,23 +174,20 @@ def test_create_plan_dag_spec(
 
     state_sync_mock.get_snapshots.assert_called_once()
     state_sync_mock.get_environment.assert_called_once()
+    state_sync_mock.refresh_snapshot_intervals.assert_called_once()
+    list(state_sync_mock.refresh_snapshot_intervals.call_args_list[0][0][0]) == [the_snapshot]
 
 
 @pytest.mark.airflow
 @pytest.mark.parametrize(
-    "the_snapshot, intervals_after_restatement, expected_intervals",
+    "the_snapshot, expected_intervals",
     [
         (
             lazy_fixture("snapshot"),
-            [
-                (to_timestamp("2022-01-01"), to_timestamp("2022-01-02")),
-                (to_timestamp("2022-01-04"), to_timestamp("2022-01-08")),
-            ],
             [(to_datetime("2022-01-02"), to_datetime("2022-01-04"))],
         ),
         (
             lazy_fixture("depends_on_past_snapshot"),
-            [(to_timestamp("2022-01-01"), to_timestamp("2022-01-02"))],
             [
                 (to_datetime("2022-01-02"), to_datetime("2022-01-03")),
                 (to_datetime("2022-01-03"), to_datetime("2022-01-04")),
@@ -202,7 +199,6 @@ def test_restatement(
     mocker: MockerFixture,
     monkeypatch: MonkeyPatch,
     the_snapshot: Snapshot,
-    intervals_after_restatement,
     expected_intervals: t.List[t.Tuple[datetime, datetime]],
     random_name,
 ):
@@ -210,10 +206,12 @@ def test_restatement(
     new_environment = Environment(
         name=environment_name,
         snapshots=[the_snapshot.table_info],
-        start_at="2022-01-02",
-        end_at="2022-01-03",
+        start_at="2022-01-01",
+        end_at="2022-01-07",
         plan_id="test_plan_id",
     )
+
+    the_snapshot.add_interval("2022-01-01", "2022-01-07")
 
     plan_request = common.PlanApplicationRequest(
         request_id="test_request_id",
@@ -223,8 +221,8 @@ def test_restatement(
         skip_backfill=False,
         restatements={
             the_snapshot.name: (
-                to_timestamp(to_date("2022-01-02")),
-                to_timestamp(to_date("2022-01-04")),
+                to_timestamp("2022-01-02"),
+                to_timestamp("2022-01-04"),
             )
         },
         notification_targets=[],
@@ -245,15 +243,8 @@ def test_restatement(
     state_sync_mock = mocker.Mock()
     state_sync_mock.get_snapshots.return_value = {the_snapshot.snapshot_id: the_snapshot}
     state_sync_mock.get_environment.return_value = old_environment
-    state_sync_mock.get_snapshot_intervals.return_value = [
-        SnapshotIntervals(
-            name=the_snapshot.name,
-            identifier=the_snapshot.identifier,
-            version=the_snapshot.version,
-            intervals=intervals_after_restatement,
-            dev_intervals=[],
-        )
-    ]
+    state_sync_mock.refresh_snapshot_intervals.return_value = [the_snapshot]
+
     now_value = "2022-01-09T23:59:59+00:00"
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now", side_effect=lambda: to_datetime(now_value)
@@ -261,6 +252,7 @@ def test_restatement(
         "sqlmesh.schedulers.airflow.plan.now_timestamp", side_effect=lambda: to_timestamp(now_value)
     ):
         plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
+
     assert plan_spec == common.PlanDagSpec(
         request_id="test_request_id",
         environment_naming_info=EnvironmentNamingInfo(
@@ -275,8 +267,8 @@ def test_restatement(
         ],
         promoted_snapshots=[the_snapshot.table_info],
         demoted_snapshots=[],
-        start="2022-01-02",
-        end="2022-01-03",
+        start="2022-01-01",
+        end="2022-01-07",
         unpaused_dt=None,
         no_gaps=True,
         plan_id="test_plan_id",
@@ -292,6 +284,17 @@ def test_restatement(
 
     state_sync_mock.get_snapshots.assert_called_once()
     state_sync_mock.get_environment.assert_called_once()
+    state_sync_mock.refresh_snapshot_intervals.assert_called_once()
+
+    state_sync_mock.remove_interval.assert_called_once_with(
+        [(the_snapshot, (to_timestamp("2022-01-02"), to_timestamp("2022-01-04")))],
+        remove_shared_versions=True,
+    )
+
+    assert the_snapshot.intervals == [
+        (to_timestamp("2022-01-01"), to_timestamp("2022-01-02")),
+        (to_timestamp("2022-01-04"), to_timestamp("2022-01-08")),
+    ]
 
 
 @pytest.mark.airflow
@@ -377,11 +380,13 @@ def test_create_plan_dag_spec_unbounded_end(
     }
     state_sync_mock.get_environment.return_value = None
     state_sync_mock.get_snapshot_intervals.return_value = []
+    state_sync_mock.refresh_snapshot_intervals.return_value = []
 
     create_plan_dag_spec(plan_request, state_sync_mock)
 
     state_sync_mock.get_snapshots.assert_called_once()
     state_sync_mock.get_environment.assert_called_once()
+    state_sync_mock.refresh_snapshot_intervals.assert_called_once()
 
 
 def test_plan_dag_state(snapshot: Snapshot, sushi_context: Context, random_name):
