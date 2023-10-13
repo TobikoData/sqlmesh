@@ -124,7 +124,10 @@ def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot
     dag = scheduler._dag(batches)
     assert dag.graph == {
         # Depends on no one
-        (unique_by_key_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-07"))): set(),
+        (
+            unique_by_key_snapshot,
+            ((to_datetime("2023-01-01"), to_datetime("2023-01-07")), 0),
+        ): set(),
     }
     mock_state_sync.refresh_snapshot_intervals.assert_called_once()
 
@@ -161,17 +164,35 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
 
     assert dag.graph == {
         # Only run one day at a time and each day relies on the previous days
-        (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))): set(),
-        (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))): {
-            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02")))
+        (
+            incremental_self_snapshot,
+            ((to_datetime("2023-01-01"), to_datetime("2023-01-02")), 0),
+        ): set(),
+        (incremental_self_snapshot, ((to_datetime("2023-01-03"), to_datetime("2023-01-04")), 1)): {
+            (incremental_self_snapshot, ((to_datetime("2023-01-01"), to_datetime("2023-01-02")), 0))
         },
-        (incremental_self_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))): {
-            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
-            (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
+        (incremental_self_snapshot, ((to_datetime("2023-01-04"), to_datetime("2023-01-05")), 2)): {
+            (
+                incremental_self_snapshot,
+                ((to_datetime("2023-01-01"), to_datetime("2023-01-02")), 0),
+            ),
+            (
+                incremental_self_snapshot,
+                ((to_datetime("2023-01-03"), to_datetime("2023-01-04")), 1),
+            ),
         },
-        (incremental_self_snapshot, (to_datetime("2023-01-06"), to_datetime("2023-01-07"))): {
-            (incremental_self_snapshot, (to_datetime("2023-01-01"), to_datetime("2023-01-02"))),
-            (incremental_self_snapshot, (to_datetime("2023-01-03"), to_datetime("2023-01-04"))),
-            (incremental_self_snapshot, (to_datetime("2023-01-04"), to_datetime("2023-01-05"))),
+        (incremental_self_snapshot, ((to_datetime("2023-01-06"), to_datetime("2023-01-07")), 3)): {
+            (
+                incremental_self_snapshot,
+                ((to_datetime("2023-01-01"), to_datetime("2023-01-02")), 0),
+            ),
+            (
+                incremental_self_snapshot,
+                ((to_datetime("2023-01-03"), to_datetime("2023-01-04")), 1),
+            ),
+            (
+                incremental_self_snapshot,
+                ((to_datetime("2023-01-04"), to_datetime("2023-01-05")), 2),
+            ),
         },
     }

@@ -263,6 +263,8 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
             if not plan_application_succeeded:
                 raise SQLMeshError("Plan application failed.")
 
+            self.console.log_success("The plan has been applied successfully")
+
     @property
     def client(self) -> BaseAirflowClient:
         raise NotImplementedError
