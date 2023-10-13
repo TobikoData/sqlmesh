@@ -23,14 +23,20 @@ from sqlmesh.core.state_sync import StateSync
 from sqlmesh.utils import format_exception
 from sqlmesh.utils.concurrency import concurrent_apply_to_dag
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.date import TimeLike, now, to_datetime, validate_date_range
+from sqlmesh.utils.date import (
+    TimeLike,
+    now,
+    now_timestamp,
+    to_datetime,
+    validate_date_range,
+)
 from sqlmesh.utils.errors import AuditError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 Interval = t.Tuple[datetime, datetime]
 Batch = t.List[Interval]
 SnapshotToBatches = t.Dict[Snapshot, Batch]
-SchedulingUnit = t.Tuple[Snapshot, Interval]
+SchedulingUnit = t.Tuple[Snapshot, t.Tuple[Interval, int]]
 
 
 class Scheduler:
@@ -246,12 +252,20 @@ class Scheduler:
 
         def evaluate_node(node: SchedulingUnit) -> None:
             assert execution_time
-            snapshot, (start, end) = node
+
+            snapshot, ((start, end), batch_idx) = node
             self.console.start_snapshot_evaluation_progress(snapshot)
+
+            execution_start_ts = now_timestamp()
+            evaluation_duration_ms: t.Optional[int] = None
+
             try:
                 self.evaluate(snapshot, start, end, execution_time, is_dev=is_dev)
+                evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
-                self.console.update_snapshot_evaluation_progress(snapshot, 1)
+                self.console.update_snapshot_evaluation_progress(
+                    snapshot, batch_idx, evaluation_duration_ms
+                )
 
         try:
             with self.snapshot_evaluator.concurrent_context():
@@ -297,23 +311,25 @@ class Scheduler:
             if not intervals:
                 continue
             upstream_dependencies = [
-                (self.snapshots[p_sid], interval)
+                (self.snapshots[p_sid], (interval, i))
                 for p_sid in snapshot.parents
                 if p_sid in self.snapshots
-                for interval in intervals_per_snapshot_version.get(
-                    (
-                        self.snapshots[p_sid].name,
-                        self.snapshots[p_sid].version_get_or_generate(),
-                    ),
-                    [],
+                for i, interval in enumerate(
+                    intervals_per_snapshot_version.get(
+                        (
+                            self.snapshots[p_sid].name,
+                            self.snapshots[p_sid].version_get_or_generate(),
+                        ),
+                        [],
+                    )
                 )
             ]
             for i, interval in enumerate(intervals):
-                dag.add((snapshot, interval), upstream_dependencies)
+                dag.add((snapshot, (interval, i)), upstream_dependencies)
                 if snapshot.depends_on_past:
                     dag.add(
-                        (snapshot, interval),
-                        [(snapshot, _interval) for _interval in intervals[:i]],
+                        (snapshot, (interval, i)),
+                        [(snapshot, (_interval, _i)) for _i, _interval in enumerate(intervals[:i])],
                     )
         return dag
 

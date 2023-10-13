@@ -55,10 +55,12 @@ class ApiConsole(TerminalConsole):
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         pass
 
-    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
         """Update snapshot evaluation progress."""
         if self.current_task_status:
-            self.current_task_status[snapshot.name]["completed"] += num_batches
+            self.current_task_status[snapshot.name]["completed"] += 1
             if (
                 self.current_task_status[snapshot.name]["completed"]
                 >= self.current_task_status[snapshot.name]["total"]
