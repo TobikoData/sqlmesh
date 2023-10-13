@@ -64,9 +64,12 @@ def test_manifest_helper():
 
     assert helper.seeds()["waiter_names"].path == Path("seeds/waiter_names.csv")
 
-    assert helper.sources()["streaming.items"].sql_name == "raw.items"
-    assert helper.sources()["streaming.orders"].sql_name == "raw.orders"
-    assert helper.sources()["streaming.order_items"].sql_name == "raw.order_items"
+    assert helper.sources()["streaming.items"].table_name == "items"
+    assert helper.sources()["streaming.items"].schema_ == "raw"
+    assert helper.sources()["streaming.orders"].table_name == "orders"
+    assert helper.sources()["streaming.orders"].schema_ == "raw"
+    assert helper.sources()["streaming.order_items"].table_name == "order_items"
+    assert helper.sources()["streaming.order_items"].schema_ == "raw"
 
 
 def test_tests_referencing_disabled_models():

@@ -2,7 +2,7 @@
 from sqlglot import exp
 
 
-def migrate(state_sync):  # type: ignore
+def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     versions_table = "_versions"
     if state_sync.schema:

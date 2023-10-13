@@ -23,6 +23,10 @@ class MySQLEngineAdapter(
     ESCAPE_JSON = True
     SUPPORTS_INDEXES = True
 
+    def get_current_catalog(self) -> t.Optional[str]:
+        """Returns the catalog name of the current connection."""
+        return None
+
     def create_index(
         self,
         table_name: TableName,

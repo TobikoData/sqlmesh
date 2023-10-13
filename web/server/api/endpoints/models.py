@@ -41,6 +41,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
 
     for model in context.models.values():
         type = _get_model_type(model)
+        default_catalog = model.default_catalog
         dialect = model.dialect if model.dialect else "Default"
         time_column = (
             f"{model.time_column.column} | {model.time_column.format}"
@@ -100,6 +101,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
                 description=model.description,
                 sql=query.sql(pretty=True, dialect=model.dialect),
                 type=type,
+                default_catalog=default_catalog,
             )
         )
 

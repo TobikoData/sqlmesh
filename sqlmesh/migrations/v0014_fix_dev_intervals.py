@@ -1,7 +1,7 @@
 """Fix snapshot intervals that have been erroneously marked as dev."""
 
 
-def migrate(state_sync):  # type: ignore
+def migrate(state_sync, **kwargs):  # type: ignore
     schema = state_sync.schema
     intervals_table = "_intervals"
     if schema:

@@ -7,7 +7,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse, parse_one, select
 
 from sqlmesh.core.audit import ModelAudit, StandaloneAudit
-from sqlmesh.core.dialect import to_schema
+from sqlmesh.core.dialect import schema_, to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import (
     MERGE_SOURCE_ALIAS,
@@ -253,6 +253,33 @@ def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     )
 
 
+def test_promote_default_catalog(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    model = SqlModel(
+        name="test_schema.test_model",
+        kind=IncrementalByTimeRangeKind(time_column="a"),
+        storage_format="parquet",
+        query=parse_one("SELECT a FROM tbl WHERE ds BETWEEN @start_ds and @end_ds"),
+        default_catalog="test_catalog",
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
+
+    adapter_mock.create_schema.assert_called_once_with(
+        schema_("test_schema__test_env", "test_catalog")
+    )
+    adapter_mock.create_view.assert_called_once_with(
+        "test_catalog.test_schema__test_env.test_model",
+        parse_one(
+            f"SELECT * FROM test_catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
+        ),
+    )
+
+
 def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -326,7 +353,7 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     snapshot = create_and_cleanup("catalog.test_schema.test_model", True)
     adapter_mock.drop_table.assert_called_once_with(
-        f"catalog.sqlmesh__test_schema.catalog__test_schema__test_model__{snapshot.fingerprint.to_version()}__temp"
+        f"catalog.sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__temp"
     )
     adapter_mock.reset_mock()
 
@@ -742,7 +769,7 @@ def test_audit_unversioned(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     with pytest.raises(
         ConfigError,
-        match="Cannot audit 'db.model' because it has not been versioned yet. Apply a plan first.",
+        match="""Cannot audit '"db"."model"' because it has not been versioned yet. Apply a plan first.""",
     ):
         evaluator.audit(snapshot=snapshot, snapshots={})
 

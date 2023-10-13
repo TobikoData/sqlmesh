@@ -1,0 +1,5 @@
+- name: raw.demographics
+  description: Table containing demographics information
+  columns:
+    customer_id: int
+    zip: text

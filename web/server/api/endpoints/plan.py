@@ -126,7 +126,7 @@ def _get_plan_changes(plan: Plan) -> t.Dict[str, t.Any]:
     """Get plan changes"""
     return {
         "removed": set(plan.context_diff.removed_snapshots),
-        "added": plan.context_diff.added,
+        "added": list(plan.context_diff.added),
         "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
     }
 
@@ -138,17 +138,17 @@ def _get_plan_backfills(context: Context, plan: Plan) -> t.Dict[str, t.Any]:
     return {
         "models": [
             models.BackfillDetails(
-                model_name=interval.snapshot_name,
+                model_name=interval.snapshot_id.name,
                 view_name=plan.context_diff.snapshots[
-                    interval.snapshot_name
+                    interval.snapshot_id
                 ].qualified_view_name.for_environment(plan.environment_naming_info)
-                if interval.snapshot_name in plan.context_diff.snapshots
-                else interval.snapshot_name,
+                if interval.snapshot_id in plan.context_diff.snapshots
+                else interval.snapshot_id,
                 interval=[
                     tuple(to_ds(t) for t in make_inclusive(start, end))
                     for start, end in interval.merged_intervals
                 ][0],
-                batches=tasks.get(interval.snapshot_name, 0),
+                batches=tasks.get(interval.snapshot_id.name, 0),
             )
             for interval in plan.missing_intervals
         ]

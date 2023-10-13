@@ -1253,6 +1253,10 @@
           "sql": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
             "title": "Sql"
+          },
+          "default_catalog": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Default Catalog"
           }
         },
         "type": "object",
@@ -1400,9 +1404,8 @@
             "default": []
           },
           "metadata": {
-            "items": { "type": "string" },
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
             "type": "array",
-            "uniqueItems": true,
             "title": "Metadata",
             "default": []
           }
@@ -1704,9 +1707,8 @@
           "added": {
             "anyOf": [
               {
-                "items": { "type": "string" },
-                "type": "array",
-                "uniqueItems": true
+                "items": { "$ref": "#/components/schemas/SnapshotId" },
+                "type": "array"
               },
               { "type": "null" }
             ],
@@ -1715,9 +1717,8 @@
           "removed": {
             "anyOf": [
               {
-                "items": { "type": "string" },
-                "type": "array",
-                "uniqueItems": true
+                "items": { "$ref": "#/components/schemas/SnapshotId" },
+                "type": "array"
               },
               { "type": "null" }
             ],
@@ -1988,6 +1989,10 @@
             "type": "array",
             "title": "Previous Versions",
             "default": []
+          },
+          "base_table_name_override": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Base Table Name Override"
           },
           "version": { "type": "string", "title": "Version" },
           "physical_schema": { "type": "string", "title": "Physical Schema" },

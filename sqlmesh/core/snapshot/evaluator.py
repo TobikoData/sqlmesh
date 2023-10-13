@@ -68,7 +68,7 @@ class SnapshotEvaluator:
 
     Args:
         adapter: The adapter that interfaces with the execution engine.
-        ddl_concurrent_task: The number of concurrent tasks used for DDL
+        ddl_concurrent_tasks: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
     """
 
@@ -332,7 +332,7 @@ class SnapshotEvaluator:
             table_mapping = kwargs.get("table_mapping") or {}
             table_mapping[snapshot.name] = wap_table_name
             kwargs["table_mapping"] = table_mapping
-            kwargs["this_model"] = exp.to_table(wap_table_name)
+            kwargs["this_model"] = exp.to_table(wap_table_name, dialect=self.adapter.dialect)
 
         results = []
 
@@ -407,7 +407,7 @@ class SnapshotEvaluator:
             start: The start datetime to render.
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time.
-            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
+            snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
             limit: If limit is not None, the query will not be persisted but evaluated and returned as a dataframe.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             kwargs: Additional kwargs to pass to the renderer.
@@ -486,7 +486,13 @@ class SnapshotEvaluator:
                 self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             queries_or_dfs = model.render(
-                context=ExecutionContext(self.adapter, snapshots, deployability_index),
+                context=ExecutionContext(
+                    self.adapter,
+                    snapshots,
+                    deployability_index,
+                    default_dialect=model.dialect,
+                    default_catalog=model.default_catalog,
+                ),
                 **common_render_kwargs,
             )
 
@@ -602,9 +608,14 @@ class SnapshotEvaluator:
     def _migrate_snapshot(
         self, snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
     ) -> None:
-        if not snapshot.is_paused or snapshot.change_category not in (
-            SnapshotChangeCategory.FORWARD_ONLY,
-            SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+        if (
+            not snapshot.is_paused
+            or snapshot.change_category
+            not in (
+                SnapshotChangeCategory.FORWARD_ONLY,
+                SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            )
+            or not snapshot.is_model
         ):
             return
 
@@ -626,10 +637,11 @@ class SnapshotEvaluator:
         deployability_index: DeployabilityIndex,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
-        _evaluation_strategy(snapshot, self.adapter).promote(
-            snapshot.qualified_view_name, environment_naming_info, table_name, snapshot
-        )
+        if snapshot.is_model:
+            table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
+            _evaluation_strategy(snapshot, self.adapter).promote(
+                snapshot.qualified_view_name, environment_naming_info, table_name, snapshot
+            )
 
         if on_complete is not None:
             on_complete(snapshot)

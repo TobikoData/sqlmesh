@@ -21,7 +21,6 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.dbt.basemodel import BaseModelConfig, Materialization
 from sqlmesh.dbt.common import SqlStr, extract_jinja_config, sql_str_validator
-from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator
 
@@ -145,12 +144,13 @@ class ModelConfig(BaseModelConfig):
     def model_materialization(self) -> Materialization:
         return Materialization(self.materialized.lower())
 
-    def model_kind(self, target: TargetConfig) -> ModelKind:
+    def model_kind(self, context: DbtContext) -> ModelKind:
         """
         Get the sqlmesh ModelKind
         Returns:
             The sqlmesh ModelKind
         """
+        target = context.target
         materialization = self.model_materialization
         if materialization == Materialization.TABLE:
             return FullKind()
@@ -172,7 +172,7 @@ class ModelConfig(BaseModelConfig):
                     logger.warning(
                         "SQLMesh incremental by time strategy is not compatible with '%s' incremental strategy in model '%s'. Supported strategies include %s.",
                         strategy,
-                        self.sql_name,
+                        self.canonical_name(context),
                         collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
                     )
 
@@ -190,14 +190,14 @@ class ModelConfig(BaseModelConfig):
                     and strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
                 ):
                     raise ConfigError(
-                        f"{self.sql_name}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
+                        f"{self.canonical_name(context)}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key, **incremental_kwargs)
 
             logger.warning(
                 "Using unmanaged incremental materialization for model '%s'. Some features might not be available. Consider adding either a time_column (%s) or a unique_key (%s) configuration to mitigate this",
-                self.sql_name,
+                self.canonical_name(context),
                 collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
                 collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(["none"])),
             )
@@ -231,8 +231,7 @@ class ModelConfig(BaseModelConfig):
         self._sql_no_config = SqlStr(no_config)
         self._sql_embedded_config = SqlStr(embedded_config)
 
-    @property
-    def _big_query_partition_by_expr(self) -> exp.Expression:
+    def _big_query_partition_by_expr(self, context: DbtContext) -> exp.Expression:
         assert isinstance(self.partition_by, dict)
         data_type = self.partition_by["data_type"].lower()
         field = d.parse_one(self.partition_by["field"], dialect="bigquery")
@@ -242,7 +241,7 @@ class ModelConfig(BaseModelConfig):
         if data_type == "int64":
             if "range" not in self.partition_by:
                 raise ConfigError(
-                    f"Range is required for int64 partitioning in model '{self.sql_name}'."
+                    f"Range is required for int64 partitioning in model '{self.canonical_name(context)}'."
                 )
 
             range_ = self.partition_by["range"]
@@ -277,16 +276,13 @@ class ModelConfig(BaseModelConfig):
             optional_kwargs["partitioned_by"] = (
                 [exp.to_column(val) for val in self.partition_by]
                 if isinstance(self.partition_by, list)
-                else self._big_query_partition_by_expr
+                else self._big_query_partition_by_expr(context)
             )
 
         if self.cluster_by:
             optional_kwargs["clustered_by"] = [
                 d.parse_one(c, dialect=dialect).name for c in self.cluster_by
             ]
-
-        if not context.target:
-            raise ConfigError(f"Target required to load '{self.sql_name}' into SQLMesh.")
 
         model_kwargs = self.sqlmesh_model_kwargs(context)
         if self.sql_header:
@@ -307,10 +303,10 @@ class ModelConfig(BaseModelConfig):
                 model_kwargs["table_properties"] = table_properties
 
         return create_sql_model(
-            self.sql_name,
+            self.canonical_name(context),
             query,
             dialect=dialect,
-            kind=self.model_kind(context.target),
+            kind=self.model_kind(context),
             start=self.start,
             **optional_kwargs,
             **model_kwargs,

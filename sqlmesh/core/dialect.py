@@ -837,38 +837,44 @@ def pandas_to_sql(
     )
 
 
-def set_default_schema_and_catalog(
+def set_default_catalog(
     table: str | exp.Table,
-    default_schema: t.Optional[str],
     default_catalog: t.Optional[str],
 ) -> exp.Table:
     table = exp.to_table(table)
 
-    if default_schema and not table.db:
-        table.set("db", exp.to_identifier(default_schema))
-    if default_catalog and not table.catalog:
-        table.set("catalog", exp.to_identifier(default_catalog))
+    if default_catalog and not table.catalog and table.db:
+        table.set("catalog", exp.parse_identifier(default_catalog))
 
     return table
 
 
 def normalize_model_name(
     table: str | exp.Table | exp.Column,
+    default_catalog: t.Optional[str],
     dialect: DialectType = None,
-    column_is_table: bool = False,
 ) -> str:
     if isinstance(table, exp.Column):
-        if column_is_table:
-            table = exp.table_(table.this, db=table.args.get("table"), catalog=table.args.get("db"))
-        else:
-            table = exp.table_(*reversed(table.parts[:-1]))  # type: ignore
+        table = exp.table_(table.this, db=table.args.get("table"), catalog=table.args.get("db"))
     else:
+        # We are relying on sqlglot's flexible parsing here to accept quotes from other dialects.
+        # Ex: I have a a normalized name of '"my_table"' but the dialect is spark and therefore we should
+        # expect spark quotes to be backticks ('`') instead of double quotes ('"'). sqlglot today is flexible
+        # and will still parse this correctly and we rely on that.
         table = exp.to_table(table, dialect=dialect)
 
-    return exp.table_name(normalize_identifiers(table, dialect=dialect))
+    table = set_default_catalog(table, default_catalog)
+    # An alternative way to do this is the following: exp.table_name(table, dialect=dialect, identify=True)
+    # This though would result in the names being normalized to the target dialect AND the quotes while the below
+    # approach just normalizes the names.
+    # By just normalizing names and using sqlglot dialect for quotes this makes it easier for dialects that have
+    # compatible normalization strategies but incompatible quoting to still work together without user hassle
+    return exp.table_name(normalize_identifiers(table, dialect=dialect), identify=True)
 
 
-def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Set[str]:
+def find_tables(
+    expression: exp.Expression, default_catalog: t.Optional[str], dialect: DialectType = None
+) -> t.Set[str]:
     """Find all tables referenced in a query.
 
     Caches the result in the meta field 'tables'.
@@ -882,11 +888,10 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
     """
     if TABLES_META not in expression.meta:
         expression.meta[TABLES_META] = {
-            normalize_model_name(table, dialect=dialect)
+            normalize_model_name(table, default_catalog=default_catalog, dialect=dialect)
             for scope in traverse_scope(expression)
             for table in scope.tables
-            if not isinstance(table.this, exp.Func)
-            and exp.table_name(table) not in scope.cte_sources
+            if table.name not in scope.cte_sources
         }
     return expression.meta[TABLES_META]
 

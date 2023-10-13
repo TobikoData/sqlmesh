@@ -137,7 +137,9 @@ def create_tables(
     snapshots_by_id = {s.snapshot_id: s for s in command_payload.snapshots}
     target_snapshots = [snapshots_by_id[sid] for sid in command_payload.target_snapshot_ids]
     evaluator.create(
-        target_snapshots, snapshots_by_id, deployability_index=command_payload.deployability_index
+        target_snapshots,
+        snapshots_by_id,
+        deployability_index=command_payload.deployability_index,
     )
 
 

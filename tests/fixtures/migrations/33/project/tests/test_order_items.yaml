@@ -1,0 +1,72 @@
+test_order_items:
+  model: sushi.order_items
+  inputs:
+    sushi.orders:
+      - id: 1
+        customer_id: 1
+        waiter_id: 1
+        start_ts: 1641002340
+        end_ts: 1641004140
+        event_date: 2022-01-01
+      - id: 2
+        customer_id: 1
+        waiter_id: 2
+        start_ts: 1641007740
+        end_ts: 1641009540
+        event_date: 2022-01-01
+    sushi.items:
+      - id: 1
+        name: ahi
+        price: 1.23
+        event_date: 2022-01-01
+      - id: 2
+        name: aji
+        price: 2.34
+        event_date: 2022-01-01
+      - id: 3
+        name: amaebi
+        price: 2.34
+        event_date: 2022-01-01
+      - id: 4
+        name: anago
+        price: 2.34
+        event_date: 2022-01-01
+      - id: 5
+        name: aoyagi
+        price: 2.34
+        event_date: 2022-01-01
+  outputs:
+    query:
+      - id: 1
+        order_id: 1
+        item_id: 2
+        quantity: 4
+        event_date: 2022-01-01
+      - id: 2
+        order_id: 2
+        item_id: 3
+        quantity: 7
+        event_date: 2022-01-01
+      - id: 1
+        order_id: 2
+        item_id: 2
+        quantity: 8
+        event_date: 2022-01-01
+      - id: 0
+        order_id: 2
+        item_id: 1
+        quantity: 9
+        event_date: 2022-01-01
+      - id: 4
+        order_id: 2
+        item_id: 5
+        quantity: 9
+        event_date: 2022-01-01
+      - id: 3
+        order_id: 2
+        item_id: 4
+        quantity: 5
+        event_date: 2022-01-01
+  vars:
+    start: 2022-01-01
+    end: 2022-01-01

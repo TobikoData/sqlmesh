@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import typing as t
+
+from sqlmesh import Model
 from sqlmesh.core.context import ExecutionContext
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.model import Model
-from sqlmesh.core.test.definition import _test_fixture_name
+from sqlmesh.core.test.definition import _fully_qualified_test_fixture_name
+from sqlmesh.utils import UniqueKeyDict
 
 
 class TestExecutionContext(ExecutionContext):
@@ -17,13 +20,20 @@ class TestExecutionContext(ExecutionContext):
     def __init__(
         self,
         engine_adapter: EngineAdapter,
-        models: dict[str, Model],
+        models: UniqueKeyDict[str, Model],
+        default_dialect: t.Optional[str],
+        default_catalog: t.Optional[str] = None,
     ):
         self.is_dev = True
         self._engine_adapter = engine_adapter
-        self.__model_tables = {k: _test_fixture_name(k) for k in models}
+        self.__model_tables = {
+            name: _fully_qualified_test_fixture_name(name, model.dialect)
+            for name, model in models.items()
+        }
+        self._default_catalog = default_catalog
+        self._default_dialect = default_dialect
 
     @property
-    def _model_tables(self) -> dict[str, str]:
+    def _model_tables(self) -> t.Dict[str, str]:
         """Returns a mapping of model names to tables."""
         return self.__model_tables

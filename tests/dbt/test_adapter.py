@@ -11,6 +11,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
 from sqlmesh.core.dialect import schema_
+from sqlmesh.core.snapshot import SnapshotId
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import SnowflakeConfig
 from sqlmesh.utils.errors import ConfigError
@@ -71,6 +72,7 @@ def test_normalization(
 
     adapter_mock = mocker.MagicMock()
     adapter_mock.dialect = "snowflake"
+    adapter_mock.default_catalog = "test"
 
     context.target = SnowflakeConfig(
         account="test",
@@ -84,11 +86,11 @@ def test_normalization(
     renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
     # bla and bob will be normalized to uppercase since we're dealing with Snowflake
-    schema_bla = schema_("BLA")
-    relation_bla_bob = exp.table_("BOB", db="BLA")
+    schema_bla = schema_("BLA", "TEST", quoted=True)
+    relation_bla_bob = exp.table_("BOB", db="BLA", catalog="TEST", quoted=True)
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock._get_data_objects.assert_has_calls([call(schema_bla)])
+    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
 
     renderer(
         "{%- set relation = api.Relation.create(schema='bla') -%}"
@@ -108,16 +110,18 @@ def test_normalization(
     )
     adapter_mock.drop_table.assert_has_calls([call(relation_bla_bob)])
 
-    select_star_query: exp.Select = exp.maybe_parse("SELECT * FROM t", dialect="snowflake")
+    expected_star_query: exp.Select = exp.maybe_parse(
+        'SELECT * FROM "T" as "T"', dialect="snowflake"
+    )
 
     # The following call to run_query won't return dataframes and so we're expected to
     # raise in adapter.execute right before returning from the method
     with pytest.raises(AssertionError):
         renderer("{{ run_query('SELECT * FROM t') }}")
-    adapter_mock.fetchdf.assert_has_calls([call(select_star_query, quote_identifiers=False)])
+    adapter_mock.fetchdf.assert_has_calls([call(expected_star_query, quote_identifiers=False)])
 
     renderer("{% call statement('something') %} {{ 'SELECT * FROM t' }} {% endcall %}")
-    adapter_mock.execute.assert_has_calls([call(select_star_query, quote_identifiers=False)])
+    adapter_mock.execute.assert_has_calls([call(expected_star_query, quote_identifiers=False)])
 
     # Enforce case-sensitivity for database object names
     setattr(
@@ -137,7 +141,7 @@ def test_normalization(
         "{%- set relation = api.Relation.create(schema='bla', identifier='bob') -%}"
         "{{ adapter.drop_relation(relation) }}"
     )
-    adapter_mock.drop_table.assert_has_calls([call(exp.table_("bob", db="bla", quoted=True))])
+    adapter_mock.drop_table.assert_has_calls([call(relation_bla_bob)])
 
 
 def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Callable):
@@ -153,10 +157,13 @@ def test_adapter_map_snapshot_tables(
     sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
 ):
     snapshot_mock = mocker.Mock()
-    snapshot_mock.name = "test_db.test_model"
+    snapshot_mock.name = '"memory"."test_db"."test_model"'
     snapshot_mock.version = "1"
     snapshot_mock.is_symbolic = False
-    snapshot_mock.table_name.return_value = "sqlmesh.test_db__test_model"
+    snapshot_mock.table_name.return_value = '"memory"."sqlmesh"."test_db__test_model"'
+    snapshot_mock.snapshot_id = SnapshotId(
+        name='"memory"."test_db"."test_model"', identifier="12345"
+    )
 
     context = sushi_test_project.context
     assert context.target
@@ -164,15 +171,16 @@ def test_adapter_map_snapshot_tables(
     renderer = runtime_renderer(
         context,
         engine_adapter=engine_adapter,
-        snapshots={"test_db.test_model": snapshot_mock},
+        snapshots={snapshot_mock.snapshot_id: snapshot_mock},
         test_model=BaseRelation.create(schema="test_db", identifier="test_model"),
         foo_bar=BaseRelation.create(schema="foo", identifier="bar"),
+        default_catalog="memory",
     )
 
     engine_adapter.create_schema("foo")
     engine_adapter.create_schema("sqlmesh")
     engine_adapter.create_table(
-        table_name="sqlmesh.test_db__test_model",
+        table_name='"memory"."sqlmesh"."test_db__test_model"',
         columns_to_types={"baz": exp.DataType.build("int")},
     )
     engine_adapter.create_table(

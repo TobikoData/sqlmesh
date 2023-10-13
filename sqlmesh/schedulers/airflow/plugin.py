@@ -28,7 +28,7 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
         with util.scoped_state_sync() as state_sync:
             try:
                 logger.info("Migrating SQLMesh state ...")
-                state_sync.migrate()
+                state_sync.migrate(default_catalog=None)
             except Exception as ex:
                 # This method is called once for each Gunicorn worker spawned by the Airflow Webserver,
                 # which leads to SQLMesh schema being initialized concurrently from multiple processes.
@@ -37,4 +37,4 @@ class SqlmeshAirflowPlugin(AirflowPlugin):
                 # the schema initialization once as a workaround.
                 logger.warning("Failed to initialize the SQLMesh State Sync: %s. Retrying...", ex)
                 time.sleep(1)
-                state_sync.migrate()
+                state_sync.migrate(default_catalog=None)

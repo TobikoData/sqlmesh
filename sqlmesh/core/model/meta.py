@@ -8,8 +8,11 @@ from sqlglot.helper import ensure_collection, ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.model.common import (
     bool_validator,
+    default_catalog_validator,
+    depends_on_validator,
     parse_expressions,
     parse_properties,
     properties_validator,
@@ -47,6 +50,7 @@ class ModelMeta(_Node, extra="allow"):
     storage_format: t.Optional[str] = None
     partitioned_by_: t.List[exp.Expression] = Field(default=[], alias="partitioned_by")
     clustered_by: t.List[str] = []
+    default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     columns_to_types_: t.Optional[t.Dict[str, exp.DataType]] = Field(default=None, alias="columns")
     column_descriptions_: t.Optional[t.Dict[str, str]] = None
@@ -60,14 +64,17 @@ class ModelMeta(_Node, extra="allow"):
     allow_partials: bool = False
     signals: t.List[exp.Tuple] = []
 
+    _fqn: t.Optional[str] = None
+    _fully_qualified_table: t.Optional[exp.Table] = None
     _table_properties: t.Dict[str, exp.Expression] = {}
 
     _bool_validator = bool_validator
     _model_kind_validator = model_kind_validator
     _properties_validator = properties_validator
+    _default_catalog_validator = default_catalog_validator
+    _depends_on_validator = depends_on_validator
 
     @field_validator("audits", mode="before")
-    @classmethod
     def _audits_validator(cls, v: t.Any) -> t.Any:
         def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
             kwargs = {}
@@ -136,7 +143,6 @@ class ModelMeta(_Node, extra="allow"):
         return v
 
     @field_validator("dialect", "storage_format", mode="before")
-    @classmethod
     def _string_validator(cls, v: t.Any) -> t.Optional[str]:
         return str_or_exp_to_str(v)
 
@@ -185,25 +191,6 @@ class ModelMeta(_Node, extra="allow"):
                 columns_to_types[normalize_identifiers(k, dialect=dialect).name] = expr
 
             return columns_to_types
-
-        return v
-
-    @field_validator("depends_on_", mode="before")
-    @field_validator_v1_args
-    def _depends_on_validator(cls, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
-        dialect = values.get("dialect")
-
-        if isinstance(v, (exp.Array, exp.Tuple)):
-            return {
-                d.normalize_model_name(
-                    table.name if table.is_string else table.sql(dialect=dialect), dialect=dialect
-                )
-                for table in v.expressions
-            }
-        if isinstance(v, exp.Expression):
-            return {d.normalize_model_name(v.sql(dialect=dialect), dialect=dialect)}
-        if hasattr(v, "__iter__") and not isinstance(v, str):
-            return {d.normalize_model_name(name, dialect=dialect) for name in v}
 
         return v
 
@@ -271,7 +258,6 @@ class ModelMeta(_Node, extra="allow"):
     @model_validator_v1_args
     def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         values = cls._kind_validator(values)
-        values = cls._normalize_name(values)
         return values
 
     @classmethod
@@ -294,11 +280,6 @@ class ModelMeta(_Node, extra="allow"):
                     normalize_identifiers(key, dialect=dialect) for key in kind.unique_key
                 ]
 
-        return values
-
-    @classmethod
-    def _normalize_name(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        values["name"] = d.normalize_model_name(values["name"], dialect=values.get("dialect"))
         return values
 
     @property
@@ -392,3 +373,22 @@ class ModelMeta(_Node, extra="allow"):
         if isinstance(self.kind, IncrementalByUniqueKeyKind):
             return self.kind.when_matched
         return None
+
+    @property
+    def catalog(self) -> t.Optional[str]:
+        """Returns the catalog of a model."""
+        return self.fully_qualified_table.catalog
+
+    @property
+    def fully_qualified_table(self) -> exp.Table:
+        if not self._fully_qualified_table:
+            self._fully_qualified_table = exp.to_table(self.fqn)
+        return self._fully_qualified_table
+
+    @property
+    def fqn(self) -> str:
+        if self._fqn is None:
+            self._fqn = normalize_model_name(
+                self.name, default_catalog=self.default_catalog, dialect=self.dialect
+            )
+        return self._fqn

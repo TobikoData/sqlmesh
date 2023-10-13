@@ -8,6 +8,8 @@ import {
   type PlanStageChangesAdded,
   type PlanStageChangesModified,
   type PlanStageChangesRemoved,
+  type ModelsDiff,
+  type SnapshotId,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
 import { isArrayNotEmpty, isNil } from '@utils/index'
@@ -80,7 +82,7 @@ export class ModelPlanOverviewTracker
     return this._current?.changes?.modified?.indirect
   }
 
-  get metadata(): Optional<string[]> {
+  get metadata(): Optional<SnapshotId[]> {
     return this._current?.changes?.modified?.metadata
   }
 
