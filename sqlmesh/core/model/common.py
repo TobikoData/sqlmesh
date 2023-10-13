@@ -6,7 +6,7 @@ from sqlglot import exp
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.dialect import parse_one
+from sqlmesh.core.dialect import normalize_model_name, parse_one
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.pydantic import field_validator, field_validator_v1_args
@@ -109,6 +109,43 @@ def parse_properties(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.Opt
     return properties
 
 
+def default_catalog(cls: t.Type, v: t.Any) -> t.Optional[str]:
+    if v is None:
+        return None
+    if isinstance(v, exp.Expression):
+        return v.meta.get("sql") or v.sql()
+    return str(v)
+
+
+@field_validator_v1_args
+def depends_on(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.Optional[t.Set[str]]:
+    dialect = values.get("dialect")
+    default_catalog = values.get("default_catalog")
+
+    if isinstance(v, (exp.Array, exp.Tuple)):
+        return {
+            normalize_model_name(
+                table.name if table.is_string else table.sql(dialect=dialect),
+                default_catalog=default_catalog,
+                dialect=dialect,
+            )
+            for table in v.expressions
+        }
+    if isinstance(v, exp.Expression):
+        return {
+            normalize_model_name(
+                v.sql(dialect=dialect), default_catalog=default_catalog, dialect=dialect
+            )
+        }
+    if hasattr(v, "__iter__") and not isinstance(v, str):
+        return {
+            normalize_model_name(name, default_catalog=default_catalog, dialect=dialect)
+            for name in v
+        }
+
+    return v
+
+
 expression_validator = field_validator(
     "query",
     "expressions_",
@@ -138,3 +175,17 @@ properties_validator = field_validator(
     mode="before",
     check_fields=False,
 )(parse_properties)
+
+
+default_catalog_validator = field_validator(
+    "default_catalog",
+    mode="before",
+    check_fields=False,
+)(default_catalog)
+
+
+depends_on_validator = field_validator(
+    "depends_on_",
+    mode="before",
+    check_fields=False,
+)(depends_on)

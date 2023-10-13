@@ -53,7 +53,7 @@ def test_drop_schema(kwargs, expected, make_mocked_engine_adapter: t.Callable):
 def test_drop_schema_with_catalog(make_mocked_engine_adapter: t.Callable, mocker: MockFixture):
     adapter = make_mocked_engine_adapter(PostgresEngineAdapter)
 
-    adapter.get_current_catalog = mocker.MagicMock(return_value="test_catalog")
+    adapter.get_current_catalog = mocker.MagicMock(return_value="other_catalog")
 
     with pytest.raises(UnsupportedCatalogOperationError):
         adapter.drop_schema("test_catalog.test_schema")

@@ -335,7 +335,7 @@ def create_builtin_globals(
             },
             relation_type=api.Relation,
             quote_policy=api.quote_policy,
-            snapshots=jinja_globals.get("snapshots", {}),
+            snapshots=jinja_globals.get("snapshots", set()),
             table_mapping=jinja_globals.get("table_mapping", {}),
             deployability_index=jinja_globals.get("deployability_index"),
         )

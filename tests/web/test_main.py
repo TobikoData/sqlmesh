@@ -520,7 +520,7 @@ FROM (
     CAST(NULL AS TEXT) AS ds
   FROM (VALUES
     (1)) AS t(dummy)
-) AS o /* source: sushi.orders */
+) AS o /* source: memory.sushi.orders */
 WHERE
   o.ds <= '1970-01-01' AND o.ds >= '1970-01-01'""",
                 "expression": "CAST(o.ds AS TEXT) AS ds",

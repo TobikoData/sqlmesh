@@ -217,10 +217,10 @@ def test_seed_columns():
     assert sqlmesh_seed.column_descriptions == expected_column_descriptions
 
 
-@pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
-def test_hooks(sushi_test_dbt_context: Context, model: str):
+@pytest.mark.parametrize("model_fqn", ["memory.sushi.waiters", "memory.sushi.waiter_names"])
+def test_hooks(sushi_test_dbt_context: Context, model_fqn: str):
     engine_adapter = sushi_test_dbt_context.engine_adapter
-    waiters = sushi_test_dbt_context.models[model]
+    waiters = sushi_test_dbt_context.models[model_fqn]
 
     logger = logging.getLogger("sqlmesh.dbt.builtin")
     with patch.object(logger, "debug") as mock_logger:
@@ -261,6 +261,7 @@ def test_schema_jinja(sushi_test_project: Project, assert_exp_eq):
         name="model",
         package_name="package",
         schema="sushi",
+        alias="table",
         sql="SELECT 1 AS one FROM {{ schema }}",
     )
     context = sushi_test_project.context
@@ -289,6 +290,7 @@ def test_model_this(assert_exp_eq, sushi_test_project: Project):
     model_config = ModelConfig(
         name="model",
         package_name="package",
+        schema="schema",
         alias="test",
         sql="SELECT 1 AS one FROM {{ this.identifier }}",
     )
@@ -499,6 +501,7 @@ def test_parsetime_adapter_call(
         name="model",
         package_name="package",
         alias="test",
+        schema="sushi",
         sql="""
             {% set results = run_query('select 1 as one') %}
             SELECT {{ results.columns[0].values()[0] }} AS one FROM {{ this.identifier }}
@@ -597,6 +600,7 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
         name="model",
         package_name="package",
         schema="sushi",
+        alias="some_table",
         sql="""
         SELECT 1 AS one FROM tbl_a
         {% if is_incremental() %}
@@ -691,7 +695,9 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
 
 def test_snapshot_json_payload():
     sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
-    snapshot_json = json.loads(_snapshot_to_json(sushi_context.snapshots["sushi.top_waiters"]))
+    snapshot_json = json.loads(
+        _snapshot_to_json(sushi_context.get_snapshot("sushi.top_waiters", raise_if_missing=True))
+    )
     assert snapshot_json["node"]["jinja_macros"]["global_objs"]["target"] == {
         "type": "duckdb",
         "name": "in_memory",

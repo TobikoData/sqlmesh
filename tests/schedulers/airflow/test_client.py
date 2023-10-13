@@ -79,6 +79,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "clustered_by": [],
                     "cron": "@daily",
                     "dialect": "",
+                    "fqn_": "test_model",
                     "pre_statements": ["@DEF(key, " "'value')"],
                     "kind": {
                         "name": "INCREMENTAL_BY_TIME_RANGE",
@@ -122,6 +123,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
             "snapshots": [
                 {
                     "fingerprint": snapshot.fingerprint.dict(),
+                    "fqn": "test_model",
                     "name": "test_model",
                     "node_type": NodeType.MODEL,
                     "previous_versions": [],

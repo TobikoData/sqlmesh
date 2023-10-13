@@ -24,6 +24,16 @@ def model() -> Model:
     )
 
 
+@pytest.fixture
+def model_default_catalog() -> Model:
+    return create_sql_model(
+        "db.test_model",
+        parse_one("SELECT a, b, ds"),
+        kind=IncrementalByTimeRangeKind(time_column="ds"),
+        default_catalog="test_catalog",
+    )
+
+
 def test_load(assert_exp_eq):
     expressions = parse(
         """
@@ -97,6 +107,63 @@ def test_load_standalone(assert_exp_eq):
         db.table
     WHERE
         col IS NULL
+    """,
+    )
+
+
+def test_load_standalone_default_catalog(assert_exp_eq):
+    expressions = parse(
+        """
+        Audit (
+            name my_audit,
+            dialect spark,
+            blocking false,
+            standalone true,
+            cron '@hourly',
+            owner 'Sally',
+        );
+
+        SELECT
+            *
+        FROM
+            db.table
+        WHERE
+            col IS NULL
+    """
+    )
+
+    audit = load_audit(
+        expressions, path="/path/to/audit", dialect="duckdb", default_catalog="test_catalog"
+    )
+    assert isinstance(audit, StandaloneAudit)
+    assert audit.dialect == "spark"
+    assert audit.blocking is False
+    assert audit.skip is False
+    assert audit.cron == "@hourly"
+    assert audit.owner == "Sally"
+    assert audit.default_catalog == "test_catalog"
+    assert audit.name == "my_audit"
+    assert audit.fqn == "my_audit"
+    assert_exp_eq(
+        audit.query,
+        """
+    SELECT
+        *
+    FROM
+        db.table
+    WHERE
+        col IS NULL
+    """,
+    )
+    assert_exp_eq(
+        audit.render_query(audit),
+        """
+    SELECT
+        *
+    FROM
+        "test_catalog"."db"."table" AS "table"
+    WHERE
+        "col" IS NULL
     """,
     )
 
@@ -339,6 +406,26 @@ def test_not_null_audit(model: Model):
     assert (
         rendered_query_a_and_b.sql()
         == """SELECT * FROM (SELECT * FROM "db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL OR "b" IS NULL"""
+    )
+
+
+def test_not_null_audit_default_catalog(model_default_catalog: Model):
+    rendered_query_a = builtin.not_null_audit.render_query(
+        model_default_catalog,
+        columns=[exp.to_column("a")],
+    )
+    assert (
+        rendered_query_a.sql()
+        == """SELECT * FROM (SELECT * FROM "test_catalog"."db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL"""
+    )
+
+    rendered_query_a_and_b = builtin.not_null_audit.render_query(
+        model_default_catalog,
+        columns=[exp.to_column("a"), exp.to_column("b")],
+    )
+    assert (
+        rendered_query_a_and_b.sql()
+        == """SELECT * FROM (SELECT * FROM "test_catalog"."db"."test_model" AS "test_model" WHERE "ds" BETWEEN '1970-01-01' AND '1970-01-01') AS "_q_0" WHERE "a" IS NULL OR "b" IS NULL"""
     )
 
 

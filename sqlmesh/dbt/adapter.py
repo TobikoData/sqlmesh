@@ -279,6 +279,7 @@ class RuntimeAdapter(BaseAdapter):
         )
 
         expression = parse_one(sql, read=self.engine_adapter.dialect)
+
         expression = exp.replace_tables(expression, self.table_mapping, copy=False)
 
         if auto_begin:
@@ -313,6 +314,8 @@ class RuntimeAdapter(BaseAdapter):
     ) -> exp.Table:
         name = normalize_model_name(
             exp.table_(identifier or "", db=schema, catalog=database),
+            # We know that all relations have a database therefore default catalog is not needed
+            default_catalog=None,
             dialect=self.engine_adapter.dialect,
         )
         if name not in self.table_mapping:
@@ -325,7 +328,11 @@ class RuntimeAdapter(BaseAdapter):
 
     def _relation_to_table(self, relation: BaseRelation) -> exp.Table:
         assert relation.identifier is not None
-        return exp.table_(relation.identifier, db=relation.schema, catalog=relation.database)
+        return exp.table_(
+            relation.identifier,
+            db=relation.schema,
+            catalog=relation.database,
+        )
 
     def _normalize(self, table: exp.Table) -> exp.Table:
         if self.quote_policy.identifier and isinstance(table.this, exp.Identifier):

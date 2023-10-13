@@ -48,7 +48,7 @@ def state_sync(duck_conn):
     state_sync = EngineAdapterStateSync(
         create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
     )
-    state_sync.migrate()
+    state_sync.migrate(default_catalog=None)
     return state_sync
 
 
@@ -1015,7 +1015,7 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
     ):
         state_sync.get_versions()
 
-    state_sync.migrate()
+    state_sync.migrate(default_catalog=None)
 
     # migration version is behind, always raise
     state_sync._update_versions(schema_version=SCHEMA_VERSION + 1)
@@ -1077,7 +1077,7 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> N
 
     migrate_rows_mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._migrate_rows")
     backup_state_mock = mocker.patch("sqlmesh.core.state_sync.EngineAdapterStateSync._backup_state")
-    state_sync.migrate()
+    state_sync.migrate(default_catalog=None)
     migrate_rows_mock.assert_not_called()
     backup_state_mock.assert_not_called()
 
@@ -1086,7 +1086,7 @@ def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> N
         create_engine_adapter(duckdb.connect, "duckdb"), schema=c.SQLMESH
     )
 
-    state_sync.migrate()
+    state_sync.migrate(default_catalog=None)
     migrate_rows_mock.assert_called_once()
     backup_state_mock.assert_called_once()
     assert state_sync.get_versions() == Versions(
@@ -1134,7 +1134,7 @@ def test_first_migration_failure(duck_conn, mocker: MockerFixture) -> None:
         SQLMeshError,
         match="SQLMesh migration failed.",
     ):
-        state_sync.migrate()
+        state_sync.migrate(default_catalog=None)
     assert not state_sync.engine_adapter.table_exists(state_sync.snapshots_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.environments_table)
     assert not state_sync.engine_adapter.table_exists(state_sync.versions_table)
@@ -1147,7 +1147,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
-        pd.read_json("tests/fixtures/migrations/snapshots.json"),
+        pd.read_json("tests/fixtures/migrations/0/snapshots.json"),
         columns_to_types={
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
@@ -1158,7 +1158,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 
     state_sync.engine_adapter.replace_query(
         "sqlmesh._environments",
-        pd.read_json("tests/fixtures/migrations/environments.json"),
+        pd.read_json("tests/fixtures/migrations/0/environments.json"),
         columns_to_types={
             "name": exp.DataType.build("text"),
             "snapshots": exp.DataType.build("text"),
@@ -1173,7 +1173,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
     old_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     old_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
 
-    state_sync.migrate(skip_backup=True)
+    state_sync.migrate(default_catalog=None, skip_backup=True)
 
     new_snapshots = state_sync.engine_adapter.fetchdf("select * from sqlmesh._snapshots")
     new_environments = state_sync.engine_adapter.fetchdf("select * from sqlmesh._environments")
@@ -1218,7 +1218,7 @@ def test_migrate_rows(state_sync: EngineAdapterStateSync, mocker: MockerFixture)
 def test_backup_state(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
-        pd.read_json("tests/fixtures/migrations/snapshots.json"),
+        pd.read_json("tests/fixtures/migrations/0/snapshots.json"),
         columns_to_types={
             "name": exp.DataType.build("text"),
             "identifier": exp.DataType.build("text"),
@@ -1243,7 +1243,7 @@ def test_restore_snapshots_table(state_sync: EngineAdapterStateSync) -> None:
     }
     state_sync.engine_adapter.replace_query(
         "sqlmesh._snapshots",
-        pd.read_json("tests/fixtures/migrations/snapshots.json"),
+        pd.read_json("tests/fixtures/migrations/0/snapshots.json"),
         columns_to_types=snapshot_columns_to_types,
     )
 

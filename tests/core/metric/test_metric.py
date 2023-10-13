@@ -139,17 +139,17 @@ def test_expand_metrics():
 
 
 def test_get_measure_and_dim_tables():
-    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x)"), "") == ("a", ())
-    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x + a.y)"), "") == ("a", ())
-    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x + b.y)"), "") == ("a", ("b",))
-    assert _get_measure_and_dim_tables(d.parse_one("c.z + SUM(a.x)"), "") == ("a", ("c",))
-    assert _get_measure_and_dim_tables(d.parse_one("SUM(IF(c.z = 'dim', a.x, 0))"), "") == (
+    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x)"), None, "") == ("a", ())
+    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x + a.y)"), None, "") == ("a", ())
+    assert _get_measure_and_dim_tables(d.parse_one("SUM(a.x + b.y)"), None, "") == ("a", ("b",))
+    assert _get_measure_and_dim_tables(d.parse_one("c.z + SUM(a.x)"), None, "") == ("a", ("c",))
+    assert _get_measure_and_dim_tables(d.parse_one("SUM(IF(c.z = 'dim', a.x, 0))"), None, "") == (
         "a",
         ("c",),
     )
     assert _get_measure_and_dim_tables(
-        d.parse_one("SUM(IF(c.z = 'dim' AND b.y > 0, (a.x + a.x) + 3, 0))"), ""
+        d.parse_one("SUM(IF(c.z = 'dim' AND b.y > 0, (a.x + a.x) + 3, 0))"), None, ""
     ) == ("a", ("c", "b"))
     assert _get_measure_and_dim_tables(
-        d.parse_one("SUM(CASE b.y WHEN 1 THEN a.x ELSE 0 END)"), ""
+        d.parse_one("SUM(CASE b.y WHEN 1 THEN a.x ELSE 0 END)"), None, ""
     ) == ("a", ("b",))

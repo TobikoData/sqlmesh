@@ -6,6 +6,7 @@ import {
   type ChangeIndirect,
   type ChangeDirect,
   type ModelsDiff,
+  type SnapshotId,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
 import { isArrayNotEmpty, isNil, isNotNil, isTrue } from '@utils/index'
@@ -54,11 +55,11 @@ export class ModelPlanOverviewTracker
     return this._current?.backfills?.models
   }
 
-  get added(): Optional<string[]> {
+  get added(): Optional<SnapshotId[]> {
     return this._current?.changes?.added
   }
 
-  get removed(): Optional<string[]> {
+  get removed(): Optional<SnapshotId[]> {
     return this._current?.changes?.removed
   }
 
@@ -74,7 +75,7 @@ export class ModelPlanOverviewTracker
     return this._current?.changes?.modified?.indirect
   }
 
-  get metadata(): Optional<string[]> {
+  get metadata(): Optional<SnapshotId[]> {
     return this._current?.changes?.modified?.metadata
   }
 

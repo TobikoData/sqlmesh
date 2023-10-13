@@ -1097,7 +1097,8 @@
           },
           "description": { "type": "string", "title": "Description" },
           "details": { "$ref": "#/components/schemas/ModelDetails" },
-          "sql": { "type": "string", "title": "Sql" }
+          "sql": { "type": "string", "title": "Sql" },
+          "default_catalog": { "type": "string", "title": "Default Catalog" }
         },
         "type": "object",
         "required": ["name", "path", "dialect", "type", "columns"],
@@ -1199,9 +1200,8 @@
             "default": []
           },
           "metadata": {
-            "items": { "type": "string" },
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
             "type": "array",
-            "uniqueItems": true,
             "title": "Metadata",
             "default": []
           }
@@ -1419,15 +1419,13 @@
         "properties": {
           "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "added": {
-            "items": { "type": "string" },
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
             "type": "array",
-            "uniqueItems": true,
             "title": "Added"
           },
           "removed": {
-            "items": { "type": "string" },
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
             "type": "array",
-            "uniqueItems": true,
             "title": "Removed"
           },
           "modified": { "$ref": "#/components/schemas/ModelsDiff" }
@@ -1678,6 +1676,7 @@
             "$ref": "#/components/schemas/SnapshotChangeCategory"
           },
           "kind_name": { "$ref": "#/components/schemas/ModelKindName" },
+          "model_fqn": { "type": "string", "title": "Model Fqn" },
           "node_type": {
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"

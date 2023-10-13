@@ -77,7 +77,7 @@ def test_model_to_sqlmesh_fields():
         database="database",
         materialized=Materialization.INCREMENTAL,
         description="test model",
-        sql="SELECT 1 AS a FROM foo",
+        sql="SELECT 1 AS a FROM foo.table",
         start="Jan 1 2023",
         partition_by=["a"],
         cluster_by=["a", '"b"'],
@@ -98,7 +98,7 @@ def test_model_to_sqlmesh_fields():
     assert isinstance(model, SqlModel)
     assert model.name == "database.custom.model"
     assert model.description == "test model"
-    assert model.render_query_or_raise().sql() == 'SELECT 1 AS "a" FROM "foo" AS "foo"'
+    assert model.render_query_or_raise().sql() == 'SELECT 1 AS "a" FROM "foo"."table" AS "table"'
     assert model.start == "Jan 1 2023"
     assert [col.sql() for col in model.partitioned_by] == ["a"]
     assert model.clustered_by == ["a", "b"]
@@ -233,7 +233,7 @@ def test_variables(assert_exp_eq, sushi_test_project):
     context = sushi_test_project.context
     context.variables = defined_variables
 
-    model_config = ModelConfig(alias="test", sql="SELECT {{ var('foo') }}")
+    model_config = ModelConfig(alias="sushi.test", sql="SELECT {{ var('foo') }}")
 
     kwargs = {"context": context}
 

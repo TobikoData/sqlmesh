@@ -7,7 +7,11 @@ import {
   ArrowPathRoundedSquareIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { type ChangeDirect, type ChangeIndirect } from '~/api/client'
+import {
+  type SnapshotId,
+  type ChangeDirect,
+  type ChangeIndirect,
+} from '~/api/client'
 import { Divider } from '../divider/Divider'
 import {
   type Category,
@@ -74,13 +78,13 @@ function PlanChangePreviewDefault({
   type,
 }: {
   type: PlanChangeType
-  changes: string[]
+  changes: SnapshotId[]
 }): JSX.Element {
   return (
     <ul>
       {changes.map(change => (
         <li
-          key={change}
+          key={change.name}
           className={clsx(
             'flex items-center px-1 leading-5 mb-1',
             type === EnumPlanChangeType.Add &&
@@ -103,7 +107,7 @@ function PlanChangePreviewDefault({
             <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
           )}
           <small className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden">
-            {change}
+            {change.name}
           </small>
         </li>
       ))}

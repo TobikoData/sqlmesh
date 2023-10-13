@@ -429,7 +429,7 @@ def test_json_serde():
 
 
 def test_column_descriptions(sushi_context, assert_exp_eq):
-    assert sushi_context.models["sushi.customer_revenue_by_day"].column_descriptions == {
+    assert sushi_context.models["memory.sushi.customer_revenue_by_day"].column_descriptions == {
         "customer_id": "Customer id",
         "revenue": "Revenue from orders made by this customer",
         "ds": "Date",
@@ -448,7 +448,7 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
         FROM table
     """
     )
-    model = load_sql_based_model(expressions)
+    model = load_sql_based_model(expressions, default_catalog="memory")
 
     assert_exp_eq(
         model.query,
@@ -809,7 +809,7 @@ def test_audits():
 
 
 def test_description(sushi_context):
-    assert sushi_context.models["sushi.orders"].description == "Table of sushi orders."
+    assert sushi_context.models["memory.sushi.orders"].description == "Table of sushi orders."
 
 
 def test_render_definition():
@@ -1049,12 +1049,12 @@ def test_render_query(assert_exp_eq, sushi_context):
     )
 
     assert_exp_eq(
-        sushi_context.models["sushi.waiters"].render_query().sql(),
+        sushi_context.models["memory.sushi.waiters"].render_query().sql(),
         """
         SELECT DISTINCT
           CAST("o"."waiter_id" AS INT) AS "waiter_id",
           CAST("o"."ds" AS TEXT) AS "ds"
-        FROM "sushi"."orders" AS "o"
+        FROM "memory"."sushi"."orders" AS "o"
         WHERE
           "o"."ds" <= '1970-01-01' AND "o"."ds" >= '1970-01-01'
         """,
@@ -1313,7 +1313,7 @@ WHERE
 
 def test_python_model_depends_on() -> None:
     @model(
-        name="model_with_depends_on", kind="full", columns={'"COL"': "int"}, depends_on=["foo.bar"]
+        name="model_with_depends_on", kind="full", columns={'"COL"': "int"}, depends_on={"foo.bar"}
     )
     def my_model(context, **kwargs):
         context.table("foo")
@@ -1374,7 +1374,12 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
     assert isinstance(model2.query, d.MacroFunc)
     assert model2.depends_on == {"MODEL1"}
     assert_exp_eq(
-        context.render("model2", expand=["model1"]),
+        context.render(
+            "model2",
+            expand=[
+                d.normalize_model_name("model1", context.default_catalog, context.config.dialect)
+            ],
+        ),
         """
         SELECT
           "MODEL1"."X" AS "X",
@@ -1414,6 +1419,7 @@ def test_star_expansion(assert_exp_eq) -> None:
             ) AS t (id, item_id, ds)
         """
         ),
+        default_catalog=context.default_catalog,
     )
 
     model2 = load_sql_based_model(
@@ -1424,6 +1430,7 @@ def test_star_expansion(assert_exp_eq) -> None:
         SELECT * FROM db.model1 AS model1
         """
         ),
+        default_catalog=context.default_catalog,
     )
 
     model3 = load_sql_based_model(
@@ -1434,6 +1441,7 @@ def test_star_expansion(assert_exp_eq) -> None:
             SELECT * FROM db.model2 AS model2
         """
         ),
+        default_catalog=context.default_catalog,
     )
 
     context.upsert_model(model1)
@@ -1496,30 +1504,30 @@ def test_star_expansion(assert_exp_eq) -> None:
     )
 
     snapshots = context.snapshots
-    snapshots["db.model1"].categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshots["db.model2"].categorize_as(SnapshotChangeCategory.BREAKING)
-    snapshots["db.model3"].categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshots["memory.db.model1"].categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshots["memory.db.model2"].categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshots["memory.db.model3"].categorize_as(SnapshotChangeCategory.BREAKING)
 
     assert_exp_eq(
-        context.models["db.model2"].render_query(snapshots=snapshots),
+        snapshots["memory.db.model2"].model.render_query(snapshots=snapshots),
         f"""
-        SELECT
-          "model1"."id" AS "id",
-          "model1"."item_id" AS "item_id",
-          "model1"."ds" AS "ds"
-        FROM "sqlmesh__db"."db__model1__{snapshots['db.model1'].version}" AS "model1"
-        """,
+            SELECT
+              "model1"."id" AS "id",
+              "model1"."item_id" AS "item_id",
+              "model1"."ds" AS "ds"
+            FROM "memory"."sqlmesh__db"."db__model1__{snapshots['memory.db.model1'].version}" AS "model1"
+            """,
     )
 
     assert_exp_eq(
-        context.models["db.model3"].render_query(snapshots=snapshots),
+        context.models["memory.db.model3"].render_query(snapshots=snapshots),
         f"""
-        SELECT
-          "model2"."id" AS "id",
-          "model2"."item_id" AS "item_id",
-          "model2"."ds" AS "ds"
-        FROM "sqlmesh__db"."db__model2__{snapshots['db.model2'].version}" AS "model2"
-        """,
+            SELECT
+              "model2"."id" AS "id",
+              "model2"."item_id" AS "item_id",
+              "model2"."ds" AS "ds"
+            FROM "memory"."sqlmesh__db"."db__model2__{snapshots['memory.db.model2'].version}" AS "model2"
+            """,
     )
 
 
@@ -1536,6 +1544,7 @@ def test_case_sensitivity(assert_exp_eq):
             """
         ),
         dialect="snowflake",
+        default_catalog=context.default_catalog,
     )
 
     # Ensure that when manually specifying dependencies, they're normalized correctly
@@ -1548,13 +1557,14 @@ def test_case_sensitivity(assert_exp_eq):
             """
         ),
         dialect="snowflake",
+        default_catalog=context.default_catalog,
     )
 
     context.upsert_model(source)
     context.upsert_model(downstream)
 
     assert_exp_eq(
-        context.render("example.model"),
+        context.render("memory.example.model"),
         """
         SELECT
           JSON_EXTRACT_PATH_TEXT("SOURCE"."payload", 'field') AS "new_field",
@@ -2172,7 +2182,7 @@ def test_model_table_properties() -> None:
 
 
 def test_model_session_properties(sushi_context):
-    assert sushi_context.models["sushi.items"].session_properties == {
+    assert sushi_context.models["memory.sushi.items"].session_properties == {
         "string_prop": "some_value",
         "int_prop": 1,
         "float_prop": 1.0,
@@ -2512,3 +2522,326 @@ def test_signals():
         "signals ((table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string')"
         in model.render_definition()[0].sql()
     )
+
+
+def test_default_catalog_sql(assert_exp_eq):
+    """
+    If a default catalog changes then we only want this to effect hashing if the model itself was effected
+    because a previously unqualified reference is now qualified.
+    We also make sure that model name is not affected by default catalog.
+    """
+    HASH_WITH_CATALOG = "2961459665"
+
+    # Test setting default catalog doesn't change hash if it matches existing logic
+    expressions = d.parse(
+        """
+        MODEL (
+            name catalog.db.table
+        );
+        SELECT x
+        FROM catalog.db.source
+        """
+    )
+
+    model = load_sql_based_model(expressions, default_catalog="catalog")
+    assert model.default_catalog == "catalog"
+    assert model.name == "catalog.db.table"
+    assert model.fqn == "catalog.db.table"
+
+    assert_exp_eq(
+        model.render_query(),
+        """
+        SELECT
+          "x" AS "x"
+          FROM "catalog"."db"."source" AS "source"
+        """,
+    )
+
+    assert model.data_hash == HASH_WITH_CATALOG
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name catalog.db.table,
+        );
+        SELECT x
+        FROM catalog.db.source
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.default_catalog is None
+    assert model.name == "catalog.db.table"
+    assert model.fqn == "catalog.db.table"
+
+    assert_exp_eq(
+        model.render_query(),
+        """
+        SELECT
+          "x" AS "x"
+          FROM "catalog"."db"."source" AS "source"
+        """,
+    )
+
+    assert model.data_hash == HASH_WITH_CATALOG
+
+    # Test setting default catalog to a different catalog but everything if fully qualified then no hash change
+    expressions = d.parse(
+        """
+        MODEL (
+            name catalog.db.table
+        );
+        SELECT x
+        FROM catalog.db.source
+        """
+    )
+
+    model = load_sql_based_model(expressions, default_catalog="other_catalog")
+    assert model.default_catalog == "other_catalog"
+    assert model.name == "catalog.db.table"
+    assert model.fqn == "catalog.db.table"
+
+    assert_exp_eq(
+        model.render_query(),
+        """
+        SELECT
+          "x" AS "x"
+          FROM "catalog"."db"."source" AS "source"
+        """,
+    )
+
+    assert model.data_hash == HASH_WITH_CATALOG
+
+    # test that hash changes if model contains a non-fully-qualified reference
+    expressions = d.parse(
+        """
+        MODEL (
+            name catalog.db.table
+        );
+        SELECT x
+        FROM db.source
+        """
+    )
+
+    model = load_sql_based_model(expressions, default_catalog="other_catalog")
+    assert model.default_catalog == "other_catalog"
+    assert model.name == "catalog.db.table"
+    assert model.fqn == "catalog.db.table"
+
+    assert model.data_hash == "1219137124"
+
+    # test that hash changes if the only change to a model is it's fully qualified name
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+        );
+        SELECT x
+        FROM catalog.db.source
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.default_catalog is None
+    assert model.name == "db.table"
+    assert model.fqn == "db.table"
+
+    assert model.data_hash == "3100514156"
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table
+        );
+        SELECT x
+        FROM catalog.db.source
+        """
+    )
+
+    model = load_sql_based_model(expressions, default_catalog="catalog")
+    assert model.default_catalog == "catalog"
+    assert model.name == "db.table"
+    assert model.fqn == "catalog.db.table"
+
+    assert model.data_hash == HASH_WITH_CATALOG
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name table
+        );
+        SELECT x
+        FROM source
+        """
+    )
+
+    model = load_sql_based_model(expressions, default_catalog="catalog")
+    assert model.default_catalog == "catalog"
+    assert model.name == "table"
+    assert model.fqn == "table"
+
+    assert model.data_hash == "1309955101"
+
+
+def test_default_catalog_python():
+    HASH_WITH_CATALOG = "2868148493"
+
+    @model(name="db.table", kind="full", columns={'"COL"': "int"})
+    def my_model(context, **kwargs):
+        context.table("dependency.table")
+
+    m = model.get_registry()["db.table"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert m.default_catalog is None
+    assert m.name == "db.table"
+    assert m.fqn == "db.table"
+    assert m.depends_on == {"dependency.table"}
+
+    assert m.data_hash == "3241366367"
+
+    m = model.get_registry()["db.table"].model(
+        module_path=Path("."),
+        path=Path("."),
+        default_catalog="catalog",
+    )
+
+    assert m.default_catalog == "catalog"
+    assert m.name == "db.table"
+    assert m.fqn == "catalog.db.table"
+    assert m.depends_on == {"catalog.dependency.table"}
+
+    # This ideally would be `m.data_hash == HASH_WITH_CATALOG`. The reason it is not is because when we hash
+    # the python function we make the hash out of the actual logic of the function which means `context.table("dependency.table")`
+    # is used when really is should be `context.table("catalog.dependency.table")`.
+    assert m.data_hash == "81574919"
+
+    @model(name="catalog.db.table", kind="full", columns={'"COL"': "int"})
+    def my_model(context, **kwargs):
+        context.table("catalog.dependency.table")
+
+    m = model.get_registry()["catalog.db.table"].model(
+        module_path=Path("."),
+        path=Path("."),
+        default_catalog="other_catalog",
+    )
+
+    assert m.default_catalog == "other_catalog"
+    assert m.name == "catalog.db.table"
+    assert m.fqn == "catalog.db.table"
+    assert m.depends_on == {"catalog.dependency.table"}
+
+    assert m.data_hash == HASH_WITH_CATALOG
+
+    @model(name="catalog.db.table2", kind="full", columns={'"COL"': "int"})
+    def my_model(context, **kwargs):
+        context.table("dependency.table")
+
+    m = model.get_registry()["catalog.db.table2"].model(
+        module_path=Path("."),
+        path=Path("."),
+        default_catalog="other_catalog",
+    )
+
+    assert m.default_catalog == "other_catalog"
+    assert m.name == "catalog.db.table2"
+    assert m.fqn == "catalog.db.table2"
+    assert m.depends_on == {"other_catalog.dependency.table"}
+
+    assert m.data_hash == "3894343957"
+
+    @model(name="table", kind="full", columns={'"COL"': "int"})
+    def my_model(context, **kwargs):
+        context.table("table2")
+
+    m = model.get_registry()["table"].model(
+        module_path=Path("."),
+        path=Path("."),
+        default_catalog="catalog",
+    )
+
+    assert m.default_catalog == "catalog"
+    assert m.name == "table"
+    assert m.fqn == "table"
+    assert m.depends_on == {"table2"}
+
+    assert m.data_hash == "2479007645"
+
+
+def test_default_catalog_external_model():
+    HASH_WITH_CATALOG = "997150691"
+
+    model = create_external_model("db.table", columns={"a": "int", "limit": "int"})
+    assert model.default_catalog is None
+    assert model.name == "db.table"
+    assert model.fqn == "db.table"
+
+    assert model.data_hash == "2494440967"
+
+    model = create_external_model(
+        "db.table", columns={"a": "int", "limit": "int"}, default_catalog="catalog"
+    )
+    assert model.default_catalog == "catalog"
+    assert model.name == "db.table"
+    assert model.fqn == "catalog.db.table"
+
+    assert model.data_hash == HASH_WITH_CATALOG
+
+    model = create_external_model(
+        "catalog.db.table", columns={"a": "int", "limit": "int"}, default_catalog="other_catalog"
+    )
+    assert model.default_catalog == "other_catalog"
+    assert model.name == "catalog.db.table"
+    assert model.fqn == "catalog.db.table"
+
+    assert model.data_hash == HASH_WITH_CATALOG
+
+    # Verify schemaless table gets nothing applied
+    model = create_external_model(
+        "table", columns={"a": "int", "limit": "int"}, default_catalog="catalog"
+    )
+
+    assert model.default_catalog == "catalog"
+    assert model.name == "table"
+    assert model.fqn == "table"
+
+    assert model.data_hash == "371607835"
+
+
+def test_user_cannot_set_default_catalog():
+    expressions = d.parse(
+        f"""
+        MODEL (
+            name db.table,
+            default_catalog some_catalog
+        );
+
+        SELECT 1::int AS a, 2::int AS b, 3 AS c, 4 as d;
+    """
+    )
+
+    with pytest.raises(ConfigError, match="`default_catalog` cannot be set on a per-model basis"):
+        load_sql_based_model(expressions)
+
+    with pytest.raises(ConfigError, match="`default_catalog` cannot be set on a per-model basis"):
+
+        @model(name="db.table", kind="full", columns={'"COL"': "int"}, default_catalog="catalog")
+        def my_model(context, **kwargs):
+            context.table("dependency.table")
+
+
+def test_depends_on_default_catalog_python():
+    @model(name="some.table", kind="full", columns={'"COL"': "int"}, depends_on={"other.table"})
+    def my_model(context, **kwargs):
+        context.table("dependency.table")
+
+    m = model.get_registry()["some.table"].model(
+        module_path=Path("."),
+        path=Path("."),
+        default_catalog="catalog",
+    )
+
+    assert m.default_catalog == "catalog"
+    assert m.depends_on == {"catalog.other.table"}

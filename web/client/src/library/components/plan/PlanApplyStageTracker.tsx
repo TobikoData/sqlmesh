@@ -45,6 +45,7 @@ import {
   SnapshotChangeCategory,
   type PlanOverviewStageTrackerStart,
   type PlanOverviewStageTrackerEnd,
+  type SnapshotId,
 } from '@api/client'
 import { type PlanTrackerMeta } from '@models/tracker-plan'
 import { type Tests, useStoreProject } from '@context/project'
@@ -209,9 +210,9 @@ function StageBackfills({
           <PlanChangePreview.Default
             type={EnumPlanChangeType.Default}
             changes={
-              (report?.models?.map(
-                ({ model_name }: any) => model_name,
-              ) as string[]) ?? []
+              (report?.models?.map(({ model_name }: any) => ({
+                name: model_name,
+              })) as SnapshotId[]) ?? []
             }
           />
         </PlanChangePreview>

@@ -180,7 +180,7 @@ class EngineAdapter:
             connection_factory, multithreaded, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
         )
         self.sql_gen_kwargs = sql_gen_kwargs or {}
-        self.default_catalog = default_catalog
+        self._default_catalog = default_catalog
         self._extra_config = kwargs
 
     @property
@@ -218,6 +218,12 @@ class EngineAdapter:
             exp.alias_(exp.cast(column, to=kind), column, copy=False)
             for column, kind in columns_to_types.items()
         ]
+
+    @property
+    def default_catalog(self) -> t.Optional[str]:
+        if self.CATALOG_SUPPORT.is_unsupported:
+            return None
+        return self._default_catalog or self.get_current_catalog()
 
     def _get_source_queries(
         self,

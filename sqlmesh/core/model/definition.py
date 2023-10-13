@@ -47,6 +47,7 @@ from sqlmesh.utils.metaprogramming import (
 )
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.audit import ModelAudit
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
@@ -146,7 +147,7 @@ class _Model(ModelMeta, frozen=True):
             execution_time: The date/time time reference to use for execution time.
 
         Returns:
-            A generator which yields eiether a query object or one of the supported dataframe objects.
+            A generator which yields either a query object or one of the supported dataframe objects.
         """
         yield self.render_query_or_raise(
             start=start,
@@ -167,6 +168,8 @@ class _Model(ModelMeta, frozen=True):
         expressions = []
         comment = None
         for field_name, field_info in ModelMeta.all_field_infos().items():
+            if field_name == "fqn_":
+                continue
             field_value = getattr(self, field_name)
 
             if field_value != field_info.default:
@@ -231,7 +234,7 @@ class _Model(ModelMeta, frozen=True):
             start: The start datetime to render. Defaults to epoch start.
             end: The end datetime to render. Defaults to epoch start.
             execution_time: The date/time time reference to use for execution time.
-            snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+            snapshots: All upstream snapshots (by fqn) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
@@ -301,7 +304,7 @@ class _Model(ModelMeta, frozen=True):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        snapshots: t.Optional[t.Collection[Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
@@ -333,7 +336,7 @@ class _Model(ModelMeta, frozen=True):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        snapshots: t.Optional[t.Collection[Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
@@ -536,14 +539,10 @@ class _Model(ModelMeta, frozen=True):
     def update_schema(
         self,
         schema: MappingSchema,
-        default_schema: t.Optional[str] = None,
-        default_catalog: t.Optional[str] = None,
     ) -> None:
         """Updates the schema for this model's dependencies based on the given mapping schema."""
         for dep in self.depends_on:
-            table = d.set_default_schema_and_catalog(
-                dep, default_schema=default_schema, default_catalog=default_catalog
-            )
+            table = exp.to_table(dep)
             mapping_schema = schema.find(table)
 
             if mapping_schema:
@@ -599,7 +598,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def view_name(self) -> str:
-        return exp.to_table(self.name).name
+        return self.fully_qualified_table.name
 
     @property
     def python_env(self) -> t.Dict[str, Executable]:
@@ -607,7 +606,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def schema_name(self) -> str:
-        return exp.to_table(self.name).db or c.DEFAULT_SCHEMA
+        return self.fully_qualified_table.db or c.DEFAULT_SCHEMA
 
     @property
     def physical_schema(self) -> str:
@@ -634,7 +633,10 @@ class _Model(ModelMeta, frozen=True):
             query = self.render_query(optimize=False)
             if query is None:
                 return False
-            return self.name in d.find_tables(query, dialect=self.dialect)
+            tables = d.find_tables(
+                query, default_catalog=self.default_catalog, dialect=self.dialect
+            )
+            return self.fqn in tables
 
         return self._depends_on_past
 
@@ -737,6 +739,9 @@ class _Model(ModelMeta, frozen=True):
             self.stamp,
             self.physical_schema,
             str(self.interval_unit) if self.interval_unit is not None else None,
+            # We use fqn here instead of default catalog because if a user sets a default catalog but that
+            # same catalog that is already being used in the model then we don't want the hash to change
+            self.fqn,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -853,7 +858,7 @@ class _SqlBasedModel(_Model):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        snapshots: t.Optional[t.Collection[Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
@@ -877,7 +882,7 @@ class _SqlBasedModel(_Model):
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        snapshots: t.Optional[t.Collection[Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
         deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
@@ -931,6 +936,7 @@ class _SqlBasedModel(_Model):
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
                 only_execution_time=self.kind.only_execution_time,
+                default_catalog=self.default_catalog,
             )
         return self.__statement_renderers[expression_key]
 
@@ -1023,9 +1029,11 @@ class SqlModel(_SqlBasedModel):
 
             query = self.render_query(optimize=False)
             if query is not None:
-                self._depends_on |= d.find_tables(query, dialect=self.dialect)
+                self._depends_on |= d.find_tables(
+                    query, default_catalog=self.default_catalog, dialect=self.dialect
+                )
 
-            self._depends_on -= {self.name}
+            self._depends_on -= {self.fqn}
         return self._depends_on
 
     @property
@@ -1063,12 +1071,8 @@ class SqlModel(_SqlBasedModel):
     def update_schema(
         self,
         schema: MappingSchema,
-        default_schema: t.Optional[str] = None,
-        default_catalog: t.Optional[str] = None,
     ) -> None:
-        super().update_schema(
-            schema, default_schema=default_schema, default_catalog=default_catalog
-        )
+        super().update_schema(schema)
         self._columns_to_types = None
         self._query_renderer._optimized_cache = {}
 
@@ -1149,11 +1153,12 @@ class SqlModel(_SqlBasedModel):
                 self.dialect,
                 self.macro_definitions,
                 schema=self.mapping_schema,
-                model_name=self.name,
+                model_fqn=self.fqn,
                 path=self._path,
                 jinja_macro_registry=self.jinja_macros,
                 python_env=self.python_env,
                 only_execution_time=self.kind.only_execution_time,
+                default_catalog=self.default_catalog,
             )
         return self.__query_renderer
 
@@ -1327,6 +1332,9 @@ class SeedModel(_SqlBasedModel):
         if not isinstance(previous, SeedModel):
             return None
 
+        if previous.fqn != self.fqn:
+            return True
+
         new_columns = set(self.column_hashes)
         old_columns = set(previous.column_hashes)
 
@@ -1412,6 +1420,8 @@ class PythonModel(_Model):
         return True
 
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
+        if previous.fqn != self.fqn:
+            return True
         return None
 
     @property
@@ -1432,6 +1442,10 @@ class ExternalModel(_Model):
     def is_breaking_change(self, previous: Model) -> t.Optional[bool]:
         if not isinstance(previous, ExternalModel):
             return None
+        # If the default catalog has changed between models then we want to consider that breaking since
+        # that means we could be pointing to a different source.
+        if previous.fqn != self.fqn:
+            return True
         if not previous.columns_to_types_or_raise.items() - self.columns_to_types_or_raise.items():
             return False
         return None
@@ -1452,6 +1466,7 @@ def load_sql_based_model(
     python_env: t.Optional[t.Dict[str, Executable]] = None,
     dialect: t.Optional[str] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+    default_catalog: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Load a model from a parsed SQLMesh model SQL file.
@@ -1497,6 +1512,11 @@ def load_sql_based_model(
     name = meta_fields.pop("name", "")
     if not name:
         raise_config_error("Model must have a name", path)
+    if "default_catalog" in meta_fields:
+        raise_config_error(
+            "`default_catalog` cannot be set on a per-model basis. It must be set at the connection level or in Airflow.",
+            path,
+        )
 
     jinja_macro_references: t.Set[MacroReference] = {
         r
@@ -1518,6 +1538,7 @@ def load_sql_based_model(
         jinja_macros=jinja_macros,
         jinja_macro_references=jinja_macro_references,
         physical_schema_override=physical_schema_override,
+        default_catalog=default_catalog,
         **meta_fields,
     )
 
@@ -1550,7 +1571,7 @@ def load_sql_based_model(
 
 
 def create_sql_model(
-    name: str,
+    name: TableName,
     query: exp.Expression,
     *,
     pre_statements: t.Optional[t.List[exp.Expression]] = None,
@@ -1579,11 +1600,11 @@ def create_sql_model(
         path: An optional path to the model definition file.
         module_path: The python module path to serialize macros for.
         time_column_format: The default time column format to use if no model time column is configured.
+            The format must adhere to Python's strftime codes.
         macros: The custom registry of macros. If not provided the default registry will be used.
         python_env: The custom Python environment for macros. If not provided the environment will be constructed
             from the macro registry.
         dialect: The default dialect if no model dialect is configured.
-            The format must adhere to Python's strftime codes.
     """
     if not isinstance(query, (exp.Subqueryable, d.JinjaQuery, d.MacroFunc)):
         # Users are not expected to pass in a single MacroFunc instance for a model's query;
@@ -1624,7 +1645,7 @@ def create_sql_model(
 
 
 def create_seed_model(
-    name: str,
+    name: TableName,
     seed_kind: SeedKind,
     *,
     dialect: t.Optional[str] = None,
@@ -1695,11 +1716,13 @@ def create_python_model(
     entrypoint: str,
     python_env: t.Dict[str, Executable],
     *,
+    dialect: t.Optional[str] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
     depends_on: t.Optional[t.Set[str]] = None,
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
+    default_catalog: t.Optional[str] = None,
     **kwargs: t.Any,
 ) -> Model:
     """Creates a Python model.
@@ -1717,10 +1740,14 @@ def create_python_model(
     # Find dependencies for python models by parsing code if they are not explicitly defined
     # Also remove self-references that are found
     depends_on = (
-        _parse_depends_on(entrypoint, python_env) - {name}
+        _parse_depends_on(entrypoint, python_env, default_catalog, dialect=dialect)
         if depends_on is None and python_env is not None
         else depends_on
     )
+    if depends_on:
+        # This means a user provided the depends on and they may have defined it using a list instead
+        # of a set so we make sure it is a set first and then remove self-references
+        depends_on = set(depends_on) - {name}
     return _create_model(
         PythonModel,
         name,
@@ -1731,12 +1758,13 @@ def create_python_model(
         entrypoint=entrypoint,
         python_env=python_env,
         physical_schema_override=physical_schema_override,
+        default_catalog=default_catalog,
         **kwargs,
     )
 
 
 def create_external_model(
-    name: str,
+    name: TableName,
     *,
     dialect: t.Optional[str] = None,
     path: Path = Path(),
@@ -1762,7 +1790,7 @@ def create_external_model(
 
 def _create_model(
     klass: t.Type[_Model],
-    name: str,
+    name: TableName,
     *,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
     path: Path = Path(),
@@ -1892,7 +1920,12 @@ def _python_env(
     return serialized_env
 
 
-def _parse_depends_on(model_func: str, python_env: t.Dict[str, Executable]) -> t.Set[str]:
+def _parse_depends_on(
+    model_func: str,
+    python_env: t.Dict[str, Executable],
+    default_catalog: t.Optional[str],
+    dialect: t.Optional[str] = None,
+) -> t.Set[str]:
     """Parses the source of a model function and finds upstream dependencies based on calls to context."""
     env = prepare_env(python_env)
     depends_on = set()
@@ -1994,4 +2027,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "session_properties_": lambda value: value,
     "allow_partials": exp.convert,
     "signals": lambda values: exp.Tuple(expressions=values),
+    "default_catalog": exp.to_identifier,
 }

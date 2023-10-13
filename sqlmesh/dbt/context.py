@@ -187,6 +187,12 @@ class DbtContext:
         self._target = value
         self._jinja_environment = None
 
+    @property
+    def default_catalog(self) -> str:
+        # REMOVE
+        assert self._target is not None
+        return self._target.database
+
     def render(self, source: str, **kwargs: t.Any) -> str:
         return self.jinja_environment.from_string(source).render(**kwargs)
 

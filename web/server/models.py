@@ -10,9 +10,10 @@ from sqlglot import exp
 from watchfiles import Change
 
 from sqlmesh.core.context_diff import ContextDiff
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
+from sqlmesh.core.snapshot.definition import SnapshotChangeCategory, SnapshotId
 from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import (
     PYDANTIC_MAJOR_VERSION,
@@ -122,7 +123,7 @@ class ChangeIndirect(BaseModel):
 class ModelsDiff(BaseModel):
     direct: t.List[ChangeDirect] = []
     indirect: t.List[ChangeIndirect] = []
-    metadata: t.Set[str] = set()
+    metadata: t.List[SnapshotId] = []
 
     @classmethod
     def get_modified_snapshots(
@@ -132,34 +133,29 @@ class ModelsDiff(BaseModel):
         """Get the modified snapshots for a environment."""
 
         indirect = [
-            ChangeIndirect(
-                model_name=current.name, direct=[parent.name for parent in current.parents]
-            )
-            for current, _ in context_diff.modified_snapshots.values()
-            if context_diff.indirectly_modified(current.name)
+            ChangeIndirect(model_name=name, direct=[parent.name for parent in current.parents])
+            for name, (current, _) in context_diff.modified_snapshots.items()
+            if context_diff.indirectly_modified(name)
         ]
         direct: t.List[ChangeDirect] = []
         metadata = set()
 
-        for snapshot_name in context_diff.modified_snapshots:
-            current, _ = context_diff.modified_snapshots[snapshot_name]
-            if context_diff.directly_modified(snapshot_name):
+        for name, (current, _) in context_diff.modified_snapshots.items():
+            if context_diff.directly_modified(name):
                 direct.append(
                     ChangeDirect(
-                        model_name=snapshot_name,
-                        diff=context_diff.text_diff(snapshot_name),
+                        model_name=name,
+                        diff=context_diff.text_diff(name),
                         indirect=[
-                            change.model_name
-                            for change in indirect
-                            if snapshot_name in change.direct
+                            change.model_name for change in indirect if name in change.direct
                         ],
                         change_category=current.change_category,
                     )
                 )
-            elif context_diff.indirectly_modified(snapshot_name):
+            elif context_diff.indirectly_modified(name):
                 continue
-            elif context_diff.metadata_updated(snapshot_name):
-                metadata.add(snapshot_name)
+            elif context_diff.metadata_updated(name):
+                metadata.add(current.snapshot_id)
 
         direct_change_model_names = [change.model_name for change in direct]
         indirect_change_model_names = [change.model_name for change in indirect]
@@ -176,7 +172,7 @@ class ModelsDiff(BaseModel):
         return ModelsDiff(
             direct=direct,
             indirect=indirect,
-            metadata=metadata,
+            metadata=list(metadata),
         )
 
 
@@ -241,6 +237,11 @@ class Model(BaseModel):
     description: t.Optional[str] = None
     details: t.Optional[ModelDetails] = None
     sql: t.Optional[str] = None
+    default_catalog: t.Optional[str] = None
+
+    @property
+    def fqn(self) -> str:
+        return normalize_model_name(self.name, self.default_catalog, self.dialect)
 
 
 class RenderInput(BaseModel):
@@ -445,8 +446,9 @@ class PlanStageCancel(Trackable):
 
 
 class PlanStageChanges(Trackable):
-    added: t.Optional[t.Set[str]] = None
-    removed: t.Optional[t.Set[str]] = None
+    # can't have a set of pydantic models: https://github.com/pydantic/pydantic/issues/1090
+    added: t.Optional[t.List[SnapshotId]] = None
+    removed: t.Optional[t.List[SnapshotId]] = None
     modified: t.Optional[ModelsDiff] = None
 
 

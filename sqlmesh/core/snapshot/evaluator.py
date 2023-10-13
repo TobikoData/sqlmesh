@@ -403,7 +403,7 @@ class SnapshotEvaluator:
             start: The start datetime to render.
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time.
-            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
+            snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
             limit: If limit is not None, the query will not be persisted but evaluated and returned as a dataframe.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             kwargs: Additional kwargs to pass to the renderer.
@@ -482,7 +482,9 @@ class SnapshotEvaluator:
                 self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             queries_or_dfs = model.render(
-                context=ExecutionContext(self.adapter, snapshots, deployability_index),
+                context=ExecutionContext(
+                    self.adapter, snapshots, deployability_index, model.default_catalog
+                ),
                 **common_render_kwargs,
             )
 
@@ -535,9 +537,9 @@ class SnapshotEvaluator:
             return
 
         parent_snapshots_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+            snapshots[p_sid].fqn: snapshots[p_sid] for p_sid in snapshot.parents
         }
-        parent_snapshots_by_name[snapshot.name] = snapshot
+        parent_snapshots_by_name[snapshot.fqn] = snapshot
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         is_snapshot_deployable = deployability_index.is_deployable(snapshot)
@@ -605,9 +607,9 @@ class SnapshotEvaluator:
             return
 
         parent_snapshots_by_name = {
-            snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
+            snapshots[p_sid].fqn: snapshots[p_sid] for p_sid in snapshot.parents
         }
-        parent_snapshots_by_name[snapshot.name] = snapshot
+        parent_snapshots_by_name[snapshot.fqn] = snapshot
 
         tmp_table_name = snapshot.table_name(is_deployable=False)
         target_table_name = snapshot.table_name()

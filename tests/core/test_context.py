@@ -2,16 +2,17 @@ import logging
 import pathlib
 from datetime import date, timedelta
 from tempfile import TemporaryDirectory
-from unittest.mock import call, patch
+from unittest.mock import PropertyMock, call, patch
 
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import MappingSchema, exp, parse_one
+from sqlglot import parse_one
 from sqlglot.errors import SchemaError
 
 import sqlmesh.core.constants
 from sqlmesh.core.config import (
     Config,
+    DuckDBConnectionConfig,
     EnvironmentSuffixTarget,
     ModelDefaultsConfig,
     SnowflakeConnectionConfig,
@@ -70,19 +71,17 @@ def test_custom_macros(sushi_context):
 
 
 def test_dag(sushi_context):
-    assert set(sushi_context.dag.upstream("sushi.customer_revenue_by_day")) == {
-        "sushi.items",
-        "sushi.orders",
-        "sushi.order_items",
+    assert set(sushi_context.dag.upstream("memory.sushi.customer_revenue_by_day")) == {
+        "memory.sushi.items",
+        "memory.sushi.orders",
+        "memory.sushi.order_items",
     }
 
 
 def test_render(sushi_context, assert_exp_eq):
-    snapshot = sushi_context.snapshots["sushi.waiter_revenue_by_day"]
-
     assert_exp_eq(
         sushi_context.render(
-            snapshot.model,
+            "sushi.waiter_revenue_by_day",
             start=date(2021, 1, 1),
             end=date(2021, 1, 1),
             expand=True,
@@ -135,16 +134,16 @@ def test_render(sushi_context, assert_exp_eq):
     # unpushed render should not expand
     unpushed = Context(paths="examples/sushi")
     assert_exp_eq(
-        unpushed.render(snapshot.name),
+        unpushed.render("sushi.waiter_revenue_by_day"),
         f"""
         SELECT
           CAST("o"."waiter_id" AS INT) AS "waiter_id", /* Waiter id */
           CAST(SUM("oi"."quantity" * "i"."price") AS DOUBLE) AS "revenue", /* Revenue from orders taken by this waiter */
           CAST("o"."ds" AS TEXT) AS "ds" /* Date */
-        FROM "sushi"."orders" AS "o"
-        LEFT JOIN "sushi"."order_items" AS "oi"
+        FROM "memory"."sushi"."orders" AS "o"
+        LEFT JOIN "memory"."sushi"."order_items" AS "oi"
           ON "o"."ds" = "oi"."ds" AND "o"."id" = "oi"."order_id"
-        LEFT JOIN "sushi"."items" AS "i"
+        LEFT JOIN "memory"."sushi"."items" AS "i"
           ON "oi"."ds" = "i"."ds" AND "oi"."item_id" = "i"."id"
         WHERE
           "o"."ds" <= '1970-01-01' AND "o"."ds" >= '1970-01-01'
@@ -261,7 +260,7 @@ def test():
     )
     context = Context(paths=str(tmp_path), config=config)
 
-    assert ["db.actual_test"] == list(context.models)
+    assert ["memory.db.actual_test"] == list(context.models)
     assert "test" in context._macros
 
 
@@ -390,8 +389,14 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     # Assert that the schemas are dropped just twice for the schema based environment
     adapter_mock.drop_schema.assert_has_calls(
         [
-            call(schema_("raw__test_environment"), cascade=True, ignore_if_not_exists=True),
-            call(schema_("sushi__test_environment"), cascade=True, ignore_if_not_exists=True),
+            call(
+                schema_("raw__test_environment", "memory"), cascade=True, ignore_if_not_exists=True
+            ),
+            call(
+                schema_("sushi__test_environment", "memory"),
+                cascade=True,
+                ignore_if_not_exists=True,
+            ),
         ],
         any_order=True,
     )
@@ -401,8 +406,11 @@ def test_janitor(sushi_context, mocker: MockerFixture) -> None:
     assert adapter_mock.drop_view.call_count == 14
     adapter_mock.drop_view.assert_has_calls(
         [
-            call("raw.demographics__test_environment", ignore_if_not_exists=True),
-            call("sushi.waiter_as_customer_by_day__test_environment", ignore_if_not_exists=True),
+            call("memory.raw.demographics__test_environment", ignore_if_not_exists=True),
+            call(
+                "memory.sushi.waiter_as_customer_by_day__test_environment",
+                ignore_if_not_exists=True,
+            ),
         ],
         any_order=True,
     )
@@ -427,10 +435,10 @@ def test_plan_default_end(sushi_context_pre_scheduling: Context):
     assert forward_only_dev_plan._start == plan_end
 
 
-def test_default_schema_and_config(sushi_context_pre_scheduling) -> None:
+def test_schema_error_no_default(sushi_context_pre_scheduling) -> None:
     context = sushi_context_pre_scheduling
 
-    with pytest.raises(SchemaError) as ex:
+    with pytest.raises(SchemaError):
         context.upsert_model(
             load_sql_based_model(
                 parse(
@@ -441,24 +449,6 @@ def test_default_schema_and_config(sushi_context_pre_scheduling) -> None:
                 )
             )
         )
-
-    context.config.model_defaults.schema_ = "schema"
-    c = load_sql_based_model(
-        parse(
-            """
-        MODEL(name c);
-        SELECT x FROM a
-        """
-        )
-    )
-    context.upsert_model(c)
-
-    c.update_schema(
-        MappingSchema({"a": {"col": exp.DataType.build("int")}}),
-        default_schema="schema",
-        default_catalog="catalog",
-    )
-    assert c.mapping_schema == {"catalog": {"schema": {"a": {"col": "INT"}}}}
 
 
 def test_gateway_macro(sushi_context: Context) -> None:
@@ -471,6 +461,7 @@ def test_gateway_macro(sushi_context: Context) -> None:
             """
             ),
             macros=sushi_context._macros,
+            default_catalog=sushi_context.default_catalog,
         )
     )
 
@@ -490,6 +481,7 @@ def test_gateway_macro(sushi_context: Context) -> None:
             """
             ),
             jinja_macros=sushi_context._jinja_macros,
+            default_catalog=sushi_context.default_catalog,
         )
     )
 
@@ -506,7 +498,8 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
         MODEL(name sushi.test_unrestorable);
         SELECT 1 AS one;
         """
-        )
+        ),
+        default_catalog=sushi_context.default_catalog,
     )
     model_v2 = load_sql_based_model(
         parse(
@@ -514,19 +507,24 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
         MODEL(name sushi.test_unrestorable);
         SELECT 2 AS two;
         """
-        )
+        ),
+        default_catalog=sushi_context.default_catalog,
     )
 
     sushi_context.upsert_model(model_v1)
     sushi_context.plan(auto_apply=True, no_prompts=True)
-    model_v1_old_snapshot = sushi_context.snapshots["sushi.test_unrestorable"]
+    model_v1_old_snapshot = sushi_context.get_snapshot(
+        "sushi.test_unrestorable", raise_if_missing=True
+    )
 
     sushi_context.upsert_model(model_v2)
     sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
 
     sushi_context.upsert_model(model_v1)
     sushi_context.plan(auto_apply=True, no_prompts=True, forward_only=True)
-    model_v1_new_snapshot = sushi_context.snapshots["sushi.test_unrestorable"]
+    model_v1_new_snapshot = sushi_context.get_snapshot(
+        "memory.sushi.test_unrestorable", raise_if_missing=True
+    )
 
     assert (
         model_v1_new_snapshot.node.stamp
@@ -534,3 +532,20 @@ def test_unrestorable_snapshot(sushi_context: Context) -> None:
     )
     assert model_v1_old_snapshot.snapshot_id != model_v1_new_snapshot.snapshot_id
     assert model_v1_old_snapshot.fingerprint != model_v1_new_snapshot.fingerprint
+
+
+def test_default_catalog_connections(mocker: MockerFixture):
+    with patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
+        PropertyMock(return_value=None),
+    ):
+        context = Context(paths="examples/sushi")
+        assert context.default_catalog is None
+
+    # Verify that providing a catalog gets set as default catalog
+    config = Config(
+        model_defaults=ModelDefaultsConfig(dialect="presto"),
+        default_connection=DuckDBConnectionConfig(catalogs={"catalog": ":memory:"}),
+    )
+    context = Context(paths="examples/sushi", config=config)
+    assert context.default_catalog == "catalog"

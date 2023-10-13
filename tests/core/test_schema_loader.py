@@ -20,6 +20,7 @@ def test_create_external_models(tmpdir, assert_exp_eq):
     config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()))
     context = Context(paths=[tmpdir], config=config)
 
+    # `fruits` is used by DuckDB in the upcoming select query
     fruits = pd.DataFrame(
         [
             {"id": 1, "name": "apple"},
@@ -41,12 +42,13 @@ def test_create_external_models(tmpdir, assert_exp_eq):
 
         SELECT name FROM sushi.raw_fruits
     """,
-        )
+        ),
+        default_catalog="memory",
     )
 
     context.upsert_model(model)
     context.create_external_models()
-    assert context.models["sushi.fruits"].columns_to_types == {
+    assert context.models["memory.sushi.fruits"].columns_to_types == {
         "name": exp.DataType.build("UNKNOWN")
     }
     context.load()
@@ -61,11 +63,12 @@ def test_create_external_models(tmpdir, assert_exp_eq):
 
         SELECT * FROM sushi.raw_fruits
     """,
-        )
+        ),
+        default_catalog="memory",
     )
 
     context.upsert_model(model)
-    raw_fruits = context.models["sushi.raw_fruits"]
+    raw_fruits = context.models["memory.sushi.raw_fruits"]
     assert raw_fruits.kind.is_symbolic
     assert raw_fruits.kind.is_external
     assert raw_fruits.columns_to_types == {
@@ -73,10 +76,10 @@ def test_create_external_models(tmpdir, assert_exp_eq):
         "name": exp.DataType.build("VARCHAR"),
     }
 
-    snapshot = context.snapshots["sushi.raw_fruits"]
+    snapshot = context.get_snapshot("sushi.raw_fruits", raise_if_missing=True)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    fruits = context.models["sushi.fruits"]
+    fruits = context.models["memory.sushi.fruits"]
     assert not fruits.kind.is_symbolic
     assert not fruits.kind.is_external
     assert fruits.columns_to_types == {
@@ -89,38 +92,40 @@ def test_create_external_models(tmpdir, assert_exp_eq):
         SELECT
           "raw_fruits"."id" AS "id",
           "raw_fruits"."name" AS "name"
-        FROM "sushi"."raw_fruits" AS "raw_fruits"
+        FROM "memory"."sushi"."raw_fruits" AS "raw_fruits"
         """,
     )
     # rerunning create external models should refetch existing external models
     context.create_external_models()
     context.load()
-    assert context.models["sushi.raw_fruits"]
+    assert context.models["memory.sushi.raw_fruits"]
 
 
-def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
+def test_no_internal_model_conversion(tmp_path: Path, make_snapshot, mocker: MockerFixture):
     engine_adapter_mock = mocker.Mock()
     engine_adapter_mock.columns.return_value = {
         "b": exp.DataType.build("text"),
         "a": exp.DataType.build("bigint"),
     }
 
-    state_reader_mock = mocker.Mock()
-    state_reader_mock.nodes_exist.return_value = {"model_b"}
-
     model_a = SqlModel(name="a", query=parse_one("select * FROM model_b, tbl_c"))
     model_b = SqlModel(name="b", query=parse_one("select * FROM `tbl-d`", read="bigquery"))
+    snapshot_b = make_snapshot(SqlModel(name="model_b", query=parse_one("select * FROM tbl_c")))
+
+    state_reader_mock = mocker.Mock()
+    state_reader_mock.nodes_exist.return_value = {snapshot_b.name}
 
     schema_file = tmp_path / c.SCHEMA_YAML
     create_schema_file(
         schema_file,
-        {
+        {  # type: ignore
             "a": model_a,
             "b": model_b,
         },
         engine_adapter_mock,
         state_reader_mock,
         "bigquery",
+        default_catalog=None,
     )
 
     with open(schema_file, "r") as fd:
@@ -145,7 +150,7 @@ def test_missing_table(tmp_path: Path):
     logger = logging.getLogger("sqlmesh.core.schema_loader")
     with patch.object(logger, "warning") as mock_logger:
         create_schema_file(
-            schema_file, {"a": model}, context.engine_adapter, context.state_reader, ""
+            schema_file, {"a": model}, context.engine_adapter, context.state_reader, "", default_catalog=context.default_catalog  # type: ignore
         )
     assert "Unable to get schema for 'tbl_source'" in mock_logger.call_args[0][0]
 

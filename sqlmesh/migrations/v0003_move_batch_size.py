@@ -4,7 +4,7 @@ import json
 from sqlglot import exp
 
 
-def migrate(state_sync):  # type: ignore
+def migrate(state_sync, **kwargs):  # type: ignore
     snapshots_table = "_snapshots"
     if state_sync.schema:
         snapshots_table = f"{state_sync.schema}.{snapshots_table}"

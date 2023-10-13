@@ -125,6 +125,7 @@ def test_create_plan_dag_spec(
         change_category=SnapshotChangeCategory.BREAKING,
         kind_name=ModelKindName.FULL,
         node_type=NodeType.MODEL,
+        fqn="test_schema.deleted_model",
     )
     old_environment = Environment(
         name=environment_name,
@@ -227,7 +228,7 @@ def test_restatement(
         no_gaps=True,
         skip_backfill=False,
         restatements={
-            the_snapshot.name: (
+            the_snapshot.snapshot_id: (
                 to_timestamp("2022-01-02"),
                 to_timestamp("2022-01-04"),
             )

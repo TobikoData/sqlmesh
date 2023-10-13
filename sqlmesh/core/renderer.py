@@ -51,6 +51,7 @@ class BaseExpressionRenderer:
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_execution_time: bool = False,
         schema: t.Optional[t.Dict[str, t.Any]] = None,
+        default_catalog: t.Optional[str] = None,
     ):
         self._expression = expression
         self._dialect = dialect
@@ -59,6 +60,7 @@ class BaseExpressionRenderer:
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
         self._only_execution_time = only_execution_time
+        self._default_catalog = default_catalog
         self.schema = {} if schema is None else schema
 
         self._cache: t.Dict[CacheKey, t.List[exp.Expression]] = {}
@@ -110,6 +112,7 @@ class BaseExpressionRenderer:
                 snapshots=(snapshots or {}),
                 table_mapping=table_mapping,
                 deployability_index=deployability_index,
+                default_catalog=self._default_catalog,
             )
 
             if isinstance(self._expression, d.Jinja):
@@ -147,6 +150,7 @@ class BaseExpressionRenderer:
                     runtime_stage=runtime_stage,
                 ),
                 snapshots=snapshots,
+                default_catalog=self._default_catalog,
             )
 
             for definition in self._macro_definitions:
@@ -211,16 +215,19 @@ class BaseExpressionRenderer:
             snapshots = snapshots or {}
             table_mapping = table_mapping or {}
             mapping = {**to_table_mapping(snapshots.values(), deployability_index), **table_mapping}
-            expand = {d.normalize_model_name(name, dialect=self._dialect) for name in expand} | {
-                name for name, snapshot in snapshots.items() if snapshot.is_embedded
+            expand = set(expand) | {
+                fqn for fqn, snapshot in snapshots.items() if snapshot.is_embedded
             }
 
             if expand:
+                model_mapping = {
+                    fqn: snapshot.model for fqn, snapshot in snapshots.items() if snapshot.is_model
+                }
 
                 def _expand(node: exp.Expression) -> exp.Expression:
                     if isinstance(node, exp.Table) and snapshots:
                         name = exp.table_name(node)
-                        model = snapshots[name].model if name in snapshots else None
+                        model = model_mapping.get(name)
                         if (
                             name in expand
                             and model
@@ -311,11 +318,12 @@ class QueryRenderer(BaseExpressionRenderer):
         dialect: str,
         macro_definitions: t.List[d.MacroDef],
         schema: t.Optional[t.Dict[str, t.Any]] = None,
-        model_name: t.Optional[str] = None,
+        model_fqn: t.Optional[str] = None,
         path: Path = Path(),
         jinja_macro_registry: t.Optional[JinjaMacroRegistry] = None,
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         only_execution_time: bool = False,
+        default_catalog: t.Optional[str] = None,
     ):
         super().__init__(
             expression=query,
@@ -326,9 +334,10 @@ class QueryRenderer(BaseExpressionRenderer):
             python_env=python_env,
             only_execution_time=only_execution_time,
             schema=schema,
+            default_catalog=default_catalog,
         )
 
-        self._model_name = model_name
+        self._model_fqn = model_fqn
 
         self._optimized_cache: t.Dict[CacheKey, exp.Expression] = {}
 
@@ -437,7 +446,9 @@ class QueryRenderer(BaseExpressionRenderer):
         original = query
         failure = False
         missing_deps = set()
-        all_deps = d.find_tables(query, dialect=self._dialect) - {self._model_name}
+        all_deps = d.find_tables(
+            query, default_catalog=self._default_catalog, dialect=self._dialect
+        ) - {self._model_fqn}
         should_optimize = not schema.empty or not all_deps
 
         for dep in all_deps:
@@ -445,23 +456,31 @@ class QueryRenderer(BaseExpressionRenderer):
                 should_optimize = False
                 missing_deps.add(dep)
 
-        if self._model_name and not should_optimize and any(s.is_star for s in query.selects):
+        if self._model_fqn and not should_optimize and any(s.is_star for s in query.selects):
             deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
 
             logger.warning(
                 f"SELECT * cannot be expanded due to missing schema(s) for model(s): {deps}. "
                 "Run `sqlmesh create_external_models` and / or make sure that the model "
-                f"'{self._model_name}' can be rendered at parse time.",
+                f"'{self._model_fqn}' can be rendered at parse time.",
             )
 
         try:
             if should_optimize:
                 query = query.copy()
-                simplify(qualify(query, dialect=self._dialect, schema=schema, infer_schema=False))
+                simplify(
+                    qualify(
+                        query,
+                        dialect=self._dialect,
+                        schema=schema,
+                        infer_schema=False,
+                        catalog=self._default_catalog,
+                    )
+                )
         except SqlglotError as ex:
             failure = True
             logger.error(
-                "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_name
+                "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_fqn
             )
         finally:
             if failure or not should_optimize:

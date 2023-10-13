@@ -27,12 +27,14 @@ class Rewriter:
         join_type: str = "FULL",
         semantic_schema: str = "__semantic",
         semantic_table: str = "__table",
+        default_catalog: t.Optional[str] = None,
     ):
         self.graph = graph
         self.metrics = metrics
         self.dialect = dialect
         self.join_type = join_type
         self.semantic_name = f"{semantic_schema}.{semantic_table}"
+        self.default_catalog = default_catalog
 
     def rewrite(self, expression: exp.Expression) -> exp.Expression:
         for select in list(expression.find_all(exp.Select)):
@@ -70,7 +72,9 @@ class Rewriter:
         group_by = group.expressions if group else []
 
         mapping = {
-            remove_namespace(exp.table_name(source.assert_is(exp.Table))): name
+            remove_namespace(
+                exp.table_name(source.assert_is(exp.Table)), default_catalog=self.default_catalog
+            ): name
             for name, source in Scope(select).references
             if name != base_alias
         }
@@ -79,7 +83,7 @@ class Rewriter:
 
         for i, (name, (aggs, joins)) in enumerate(sources.items()):
             source: exp.Expression = exp.to_table(name)
-            table_name = remove_namespace(name)
+            table_name = remove_namespace(name, default_catalog=self.default_catalog)
 
             if not isinstance(source, exp.Select):
                 source = exp.Select().from_(
@@ -131,7 +135,7 @@ class Rewriter:
         mapping: t.Dict[str, str],
     ) -> exp.Select:
         grain = [e.copy() for e in group_by]
-        table_name = remove_namespace(name)
+        table_name = remove_namespace(name, default_catalog=self.default_catalog)
         mapping = {v: k for k, v in mapping.items()}
 
         for expr in grain:
@@ -144,9 +148,17 @@ class Rewriter:
                     elif models:
                         t = mapping.get(node.table)
                         model = next(
-                            (model for model in models if remove_namespace(model) == t), models[0]
+                            (
+                                model
+                                for model in models
+                                if remove_namespace(model, default_catalog=self.default_catalog)
+                                == t
+                            ),
+                            models[0],
                         )
-                        node.args["table"] = exp.to_identifier(t or remove_namespace(model))
+                        node.args["table"] = exp.to_identifier(
+                            t or remove_namespace(model, default_catalog=self.default_catalog)
+                        )
                         if model not in joins:
                             joins[model] = None
 
@@ -155,8 +167,12 @@ class Rewriter:
             for i in range(len(path) - 1):
                 a_ref = path[i]
                 b_ref = path[i + 1]
-                a_model_alias = remove_namespace(a_ref.model_name)
-                b_model_alias = remove_namespace(b_ref.model_name)
+                a_model_alias = remove_namespace(
+                    a_ref.model_name, default_catalog=self.default_catalog
+                )
+                b_model_alias = remove_namespace(
+                    b_ref.model_name, default_catalog=self.default_catalog
+                )
 
                 a = a_ref.expression.copy()
                 a.set("table", exp.to_identifier(a_model_alias))
@@ -192,8 +208,11 @@ def rewrite(
     graph: ReferenceGraph,
     metrics: t.Dict[str, Metric],
     dialect: t.Optional[str] = "",
+    default_catalog: t.Optional[str] = None,
 ) -> exp.Expression:
-    rewriter = Rewriter(graph=graph, metrics=metrics, dialect=dialect)
+    rewriter = Rewriter(
+        graph=graph, metrics=metrics, dialect=dialect, default_catalog=default_catalog
+    )
 
     return optimize(
         d.parse_one(sql, dialect=dialect) if isinstance(sql, str) else sql,

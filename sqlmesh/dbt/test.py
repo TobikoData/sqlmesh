@@ -151,6 +151,7 @@ class TestConfig(GeneralConfig):
                 ),
                 tags=self.tags,
                 hash_raw_query=True,
+                default_catalog=context.default_catalog,
                 **self.sqlmesh_config_kwargs,
             )
         else:

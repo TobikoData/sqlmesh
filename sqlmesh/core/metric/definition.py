@@ -56,22 +56,24 @@ def expand_metrics(metas: UniqueKeyDict[str, MetricMeta]) -> UniqueKeyDict[str, 
 
 
 @t.overload
-def remove_namespace(expression: str) -> str:
+def remove_namespace(expression: str, default_catalog: t.Optional[str]) -> str:
     ...
 
 
 @t.overload
-def remove_namespace(expression: exp.Column, dialect: str) -> str:
+def remove_namespace(expression: exp.Column, default_catalog: t.Optional[str], dialect: str) -> str:
     ...
 
 
-def remove_namespace(expression: str | exp.Column, dialect: t.Optional[str] = None) -> str:
+def remove_namespace(
+    expression: str | exp.Column, default_catalog: t.Optional[str], dialect: t.Optional[str] = None
+) -> str:
     """Given a column or a string, rewrite table namespaces like catalog.db to catalog__db"""
 
     if not isinstance(expression, str):
         assert dialect is not None
         expression = first(
-            d.normalize_model_name(column, dialect=dialect)
+            d.normalize_model_name(column, default_catalog=default_catalog, dialect=dialect)
             for column in expression.find_all(exp.Column)
             if column.table
         )
@@ -86,6 +88,7 @@ class MetricMeta(PydanticModel, frozen=True):
     expression: exp.Expression
     description: t.Optional[str] = None
     owner: t.Optional[str] = None
+    default_catalog: t.Optional[str] = None
 
     _path: Path = Path()
 
@@ -167,10 +170,12 @@ class Metric(MetricMeta, frozen=True):
         """
         return {
             t.cast(exp.Expression, agg.parent).transform(
-                lambda node: exp.column(node.this, table=remove_namespace(node, self.dialect))
+                lambda node: exp.column(
+                    node.this, table=remove_namespace(node, self.default_catalog, self.dialect)
+                )
                 if isinstance(node, exp.Column) and node.table
                 else node
-            ): _get_measure_and_dim_tables(agg, self.dialect)
+            ): _get_measure_and_dim_tables(agg, self.default_catalog, self.dialect)
             for agg in self.expanded.find_all(exp.AggFunc)
         }
 
@@ -194,7 +199,9 @@ def _raise_metric_config_error(msg: str, path: Path) -> None:
     raise ConfigError(f"{msg}. '{path}'")
 
 
-def _get_measure_and_dim_tables(expression: exp.Expression, dialect: str) -> MeasureAndDimTables:
+def _get_measure_and_dim_tables(
+    expression: exp.Expression, default_catalog: t.Optional[str], dialect: str
+) -> MeasureAndDimTables:
     """Finds all the table references in a metric definition.
 
     Additionally ensure than the first table returned is the 'measure' or numeric value being aggregated.
@@ -216,7 +223,7 @@ def _get_measure_and_dim_tables(expression: exp.Expression, dialect: str) -> Mea
 
     for node, _, key in expression.walk():
         if isinstance(node, exp.Column) and node.table:
-            table = d.normalize_model_name(node, dialect=dialect)
+            table = d.normalize_model_name(node, default_catalog=default_catalog, dialect=dialect)
             tables[table] = True
 
             if not measure_table and is_measure(node):

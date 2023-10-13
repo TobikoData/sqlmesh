@@ -103,7 +103,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
 
     Args:
         snapshot: The snapshot which should be evaluated.
-        parent_snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
+        parent_snapshots: All upstream snapshots to use for expansion and mapping of physical locations.
         start: The start of the interval to evaluate.
         end: The end of the interval to evaluate.
         execution_time: The date/time time reference to use for execution time. Defaults to now.

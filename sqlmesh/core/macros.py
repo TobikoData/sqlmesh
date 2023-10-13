@@ -117,6 +117,7 @@ class MacroEvaluator:
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
+        default_catalog: t.Optional[str] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -129,6 +130,7 @@ class MacroEvaluator:
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
         self._snapshots = snapshots if snapshots is not None else {}
+        self._default_catalog = default_catalog
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -305,7 +307,12 @@ class MacroEvaluator:
     def get_snapshot(self, model_name: TableName | exp.Column) -> t.Optional[Snapshot]:
         """Returns the snapshot that corresponds to the given model name."""
         return self._snapshots.get(
-            normalize_model_name(model_name, dialect=self.dialect, column_is_table=True)
+            normalize_model_name(
+                model_name,
+                default_catalog=self._default_catalog,
+                dialect=self.dialect,
+                column_is_table=True,
+            )
         )
 
     def resolve_tables(self, query: exp.Expression) -> exp.Expression:

@@ -6,6 +6,7 @@ from pathlib import Path
 from shutil import rmtree
 from tempfile import TemporaryDirectory
 from unittest import mock
+from unittest.mock import PropertyMock
 
 import duckdb
 import pytest
@@ -39,6 +40,7 @@ class DuckDBMetadata:
         qualified_tables = self.qualified_tables
         for table in qualified_tables:
             table.set("db", None)
+            table.set("catalog", None)
         return qualified_tables
 
     @property
@@ -46,7 +48,7 @@ class DuckDBMetadata:
         return [
             exp.to_table(x, dialect="duckdb")
             for x in self._get_single_col(
-                f"SELECT table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND {self._system_schema_filter('table_schema')}",
+                f"SELECT table_catalog || '.' || table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND {self._system_schema_filter('table_schema')}",
                 "qualified_name",
             )
         ]
@@ -56,6 +58,7 @@ class DuckDBMetadata:
         qualified_views = self.qualified_views
         for view in qualified_views:
             view.set("db", None)
+            view.set("catalog", None)
         return qualified_views
 
     @property
@@ -63,7 +66,7 @@ class DuckDBMetadata:
         return [
             exp.to_table(x, dialect="duckdb")
             for x in self._get_single_col(
-                f"SELECT table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'VIEW' AND {self._system_schema_filter('table_schema')}",
+                f"SELECT table_catalog || '.' || table_schema || '.' || table_name as qualified_name FROM information_schema.tables WHERE table_type = 'VIEW' AND {self._system_schema_filter('table_schema')}",
                 "qualified_name",
             )
         ]
@@ -71,7 +74,7 @@ class DuckDBMetadata:
     @property
     def schemas(self) -> t.List[str]:
         return self._get_single_col(
-            f"SELECT schema_name FROM information_schema.schemata WHERE catalog_name = 'memory' and {self._system_schema_filter('schema_name')}",
+            f"SELECT schema_name FROM information_schema.schemata WHERE catalog_name = '{self.engine_adapter.get_current_catalog()}' and {self._system_schema_filter('schema_name')}",
             "schema_name",
         )
 
@@ -180,8 +183,13 @@ def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
 
 
 @pytest.fixture()
-def sushi_default_catalog(mocker: MockerFixture) -> Context:
-    context, plan = init_and_plan_context("examples/sushi", mocker, "local_catalogs")
+def sushi_no_default_catalog(mocker: MockerFixture) -> Context:
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.base.EngineAdapter.default_catalog",
+        PropertyMock(return_value=None),
+    )
+    context, plan = init_and_plan_context("examples/sushi", mocker)
+    assert context.default_catalog is None
     context.apply(plan)
     return context
 

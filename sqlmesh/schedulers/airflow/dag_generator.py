@@ -555,7 +555,7 @@ class SnapshotDagGenerator:
         deployability_index: t.Optional[DeployabilityIndex] = None,
         plan_id: t.Optional[str] = None,
     ) -> BaseOperator:
-        parent_snapshots = {sid.name: snapshots[sid] for sid in snapshot.parents}
+        parent_snapshots = [snapshots[sid] for sid in snapshot.parents]
 
         return self._engine_operator(
             **self._engine_operator_args,

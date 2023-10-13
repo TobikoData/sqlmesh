@@ -4,7 +4,7 @@ import fnmatch
 import typing as t
 from pathlib import Path
 
-from sqlmesh.core.config import ModelDefaultsConfig
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.loader import update_model_schemas
 from sqlmesh.core.model import Model
@@ -19,19 +19,21 @@ class Selector:
         self,
         state_reader: StateReader,
         models: UniqueKeyDict[str, Model],
-        model_defaults: t.Dict[str, ModelDefaultsConfig],
         context_path: Path = Path("."),
         dag: t.Optional[DAG[str]] = None,
+        default_catalog: t.Optional[str] = None,
+        dialect: t.Optional[str] = None,
     ):
         self._state_reader = state_reader
         self._models = models
         self._context_path = context_path
-        self._model_defaults = model_defaults
+        self._default_catalog = default_catalog
+        self._dialect = dialect
 
         if dag is None:
             self._dag: DAG[str] = DAG()
-            for model in models.values():
-                self._dag.add(model.name, model.depends_on)
+            for fqn, model in models.items():
+                self._dag.add(fqn, model.depends_on)
         else:
             self._dag = dag
 
@@ -64,7 +66,7 @@ class Selector:
             )
 
         env_models = {
-            s.name: s.model
+            s.fqn: s.model
             for s in self._state_reader.get_snapshots(
                 target_env.snapshots, hydrate_seeds=True
             ).values()
@@ -74,8 +76,9 @@ class Selector:
 
         dag: DAG[str] = DAG()
         models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-        all_model_names = set(self._models) | set(env_models)
-        for name in all_model_names:
+
+        all_model_fqns = set(self._models) | set(env_models)
+        for name in all_model_fqns:
             model: t.Optional[Model] = None
             if name not in all_selected_models and name in env_models:
                 # Unselected modified or added model.
@@ -87,10 +90,10 @@ class Selector:
             if model:
                 # model.copy() can't be used here due to a cached state that can be a part of a model instance.
                 model = type(model).parse_obj(model.dict(exclude={"mapping_schema"}))
-                models[name] = model
-                dag.add(model.name, model.depends_on)
+                models[model.fqn] = model
+                dag.add(model.fqn, model.depends_on)
 
-        update_model_schemas(dag, models, self._context_path, self._model_defaults)
+        update_model_schemas(dag, models, self._context_path)
 
         return models
 
@@ -126,10 +129,11 @@ class Selector:
                 include_downstream = True
 
             if "*" in selection:
-                for name in self._models:
-                    if fnmatch.fnmatch(name, selection):
-                        _add_model(name, include_upstream, include_downstream)
+                for model in self._models.values():
+                    if fnmatch.fnmatch(model.name, selection):
+                        _add_model(model.fqn, include_upstream, include_downstream)
             else:
-                _add_model(selection, include_upstream, include_downstream)
+                model_fqn = normalize_model_name(selection, self._default_catalog, self._dialect)
+                _add_model(model_fqn, include_upstream, include_downstream)
 
         return result

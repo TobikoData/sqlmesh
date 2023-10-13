@@ -21,6 +21,7 @@ from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ class DbtLoader(Loader):
     def _load_models(
         self, macros: MacroRegistry, jinja_macros: JinjaMacroRegistry
     ) -> UniqueKeyDict[str, Model]:
-        models: UniqueKeyDict = UniqueKeyDict("models")
+        models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
 
         project = self._load_project()
         context = project.context.copy()
@@ -101,7 +102,7 @@ class DbtLoader(Loader):
                 sqlmesh_model = cache.get_or_load_model(
                     model.path, lambda: self._to_sqlmesh(model, context)
                 )
-                models[sqlmesh_model.name] = sqlmesh_model
+                models[sqlmesh_model.fqn] = sqlmesh_model
 
         models.update(self._load_external_models())
 
@@ -138,6 +139,8 @@ class DbtLoader(Loader):
             ),
             variables=self._variables,
         )
+        if self._project.context.default_catalog != self._context.default_catalog:
+            raise ConfigError("Project default catalog does not match context default catalog")
         for path in self._project.project_files:
             self._track_file(path)
 

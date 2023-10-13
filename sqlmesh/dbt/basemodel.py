@@ -238,7 +238,6 @@ class BaseModelConfig(GeneralConfig):
                 **model_context.jinja_globals,  # type: ignore
             }
         )
-
         return {
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns, context.dialect) or None,
@@ -253,6 +252,7 @@ class BaseModelConfig(GeneralConfig):
             "post_statements": [d.jinja_statement(hook.sql) for hook in self.post_hook],
             "tags": self.tags,
             "physical_schema_override": context.sqlmesh_config.physical_schema_override,
+            "default_catalog": context.default_catalog,
             **self.sqlmesh_config_kwargs,
         }
 

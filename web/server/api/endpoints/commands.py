@@ -118,7 +118,7 @@ async def render(
     context: Context = Depends(get_loaded_context),
 ) -> models.Query:
     """Renders a model's query, optionally expanding referenced models"""
-    snapshot = context.snapshots.get(options.model)
+    snapshot = context.get_snapshot(options.model, raise_if_missing=False)
 
     if not snapshot:
         raise ApiException(
@@ -158,6 +158,9 @@ async def test(
             tests=[str(context.path / test)] if test else None, verbose=verbose, stream=test_output
         )
     except Exception:
+        import traceback
+
+        traceback.print_exc()
         raise ApiException(
             message="Unable to run tests",
             origin="API -> commands -> test",

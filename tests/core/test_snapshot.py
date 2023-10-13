@@ -104,6 +104,7 @@ def test_json(snapshot: Snapshot):
             "mapping_schema": {},
             "start": "2020-01-01",
             "dialect": "spark",
+            "fqn_": "name",
             "name": "name",
             "partitioned_by": [],
             "project": "",
@@ -513,7 +514,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="3271791330",
+        data_hash="3716731950",
         metadata_hash="1583920325",
     )
 
@@ -571,7 +572,7 @@ def test_fingerprint_seed_model():
     )
 
     expected_fingerprint = SnapshotFingerprint(
-        data_hash="3369758245",
+        data_hash="1288520162",
         metadata_hash="3176816456",
     )
 
@@ -610,7 +611,7 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="3383317328",
+        data_hash="2104798344",
         metadata_hash="1583920325",
     )
 
@@ -700,6 +701,23 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     assert (
         fully_qualified_snapshot.table_name()
         == f'"my-catalog".sqlmesh__db.my_catalog__db__table__{fully_qualified_snapshot.version}'
+    )
+    # Ensure that default catalog is ignored if there is already a catalog defined on the snapshot
+    assert (
+        fully_qualified_snapshot.table_name(is_deployable=True)
+        == f'"my-catalog".sqlmesh__db.my_catalog__db__table__{fully_qualified_snapshot.version}'
+    )
+    non_fully_qualified_snapshot = make_snapshot(
+        SqlModel(
+            name="db.table", query=parse_one("select 1, ds"), default_catalog='"other-catalog"'
+        )
+    )
+    non_fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    # The default catalog is used for determining the location of the physical table but it is not used in the table
+    # name itself.
+    assert (
+        non_fully_qualified_snapshot.table_name(is_deployable=True)
+        == f'"other-catalog".sqlmesh__db.db__table__{non_fully_qualified_snapshot.version}'
     )
 
 
@@ -1296,7 +1314,7 @@ def test_multi_interval_merge(make_snapshot):
 
 def test_earliest_start_date(sushi_context: Context):
     model_name = "sushi.waiter_names"
-    assert sushi_context.snapshots[model_name].node.start is None
+    assert sushi_context.get_snapshot(model_name, raise_if_missing=True).node.start is None
 
     cache: t.Dict[str, datetime] = {}
     earliest_start_date(sushi_context.snapshots.values(), cache)

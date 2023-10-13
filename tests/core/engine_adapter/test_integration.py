@@ -141,12 +141,16 @@ class TestContext:
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
         return exp.to_table(
-            normalize_model_name(".".join([schema, table_name]), dialect=self.dialect)
+            normalize_model_name(
+                ".".join([schema, table_name]), default_catalog=None, dialect=self.dialect
+            )
         )
 
     def schema(self, schema_name: str, catalog_name: t.Optional[str] = None) -> str:
         return normalize_model_name(
-            ".".join(p for p in (catalog_name, schema_name) if p), dialect=self.dialect
+            ".".join(p for p in (catalog_name, schema_name) if p),
+            default_catalog=None,
+            dialect=self.dialect,
         )
 
     def get_current_data(self, table: exp.Table) -> pd.DataFrame:

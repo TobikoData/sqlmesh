@@ -13,7 +13,12 @@ from sqlglot.optimizer.qualify_columns import quote_identifiers
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
 from sqlmesh.core.macros import MacroRegistry, macro
-from sqlmesh.core.model.common import bool_validator, expression_validator
+from sqlmesh.core.model.common import (
+    bool_validator,
+    default_catalog_validator,
+    depends_on_validator,
+    expression_validator,
+)
 from sqlmesh.core.model.definition import _Model, _python_env, _single_value_or_tuple
 from sqlmesh.core.node import _Node
 from sqlmesh.core.renderer import QueryRenderer
@@ -196,7 +201,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
 
         node = snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node
         this_model = kwargs.pop("this_model", None) or (
-            node.name
+            node.fqn
             if isinstance(snapshot_or_node, _Node)
             else t.cast(Snapshot, snapshot_or_node).table_name(
                 deployability_index.is_deployable(snapshot_or_node)
@@ -249,6 +254,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
             jinja_macro_registry=self.jinja_macros,
             python_env=model.python_env,
             only_execution_time=model.kind.only_execution_time,
+            default_catalog=model.default_catalog,
         )
 
 
@@ -269,6 +275,7 @@ class StandaloneAudit(_Node, AuditMixin):
     defaults: t.Dict[str, exp.Expression] = {}
     expressions_: t.Optional[t.List[exp.Expression]] = Field(default=None, alias="expressions")
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
+    default_catalog: t.Optional[str] = None
     depends_on_: t.Optional[t.Set[str]] = Field(default=None, alias="depends_on")
     hash_raw_query: bool = False
     python_env_: t.Optional[t.Dict[str, Executable]] = Field(default=None, alias="python_env")
@@ -283,6 +290,8 @@ class StandaloneAudit(_Node, AuditMixin):
     _bool_validator = bool_validator
     _string_validator = audit_string_validator
     _map_validator = audit_map_validator
+    _default_catalog_validator = default_catalog_validator
+    _depends_on_validator = depends_on_validator
 
     @model_validator(mode="after")
     @model_validator_v1_args
@@ -299,7 +308,9 @@ class StandaloneAudit(_Node, AuditMixin):
 
             query = self.render_query(self)
             if query is not None:
-                self._depends_on |= d.find_tables(query, dialect=self.dialect)
+                self._depends_on |= d.find_tables(
+                    query, default_catalog=self.default_catalog, dialect=self.dialect
+                )
 
             self._depends_on -= {self.name}
         return self._depends_on
@@ -340,6 +351,7 @@ class StandaloneAudit(_Node, AuditMixin):
             *sorted(self.tags),
             str(self.sorted_python_env),
             self.stamp,
+            self.fqn,
         ]
 
         query = self.query if self.hash_raw_query else self.render_query(self) or self.query
@@ -438,6 +450,7 @@ class StandaloneAudit(_Node, AuditMixin):
             path=self._path or Path(),
             jinja_macro_registry=self.jinja_macros,
             python_env=self.python_env,
+            default_catalog=self.default_catalog,
         )
 
 
@@ -464,6 +477,7 @@ def load_audit(
     macros: t.Optional[MacroRegistry] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     dialect: t.Optional[str] = None,
+    default_catalog: t.Optional[str] = None,
 ) -> Audit:
     """Load an audit from a parsed SQLMesh audit file.
 
@@ -534,11 +548,16 @@ def load_audit(
         extra_kwargs["jinja_macros"] = (jinja_macros or JinjaMacroRegistry()).trim(
             jinja_macro_refrences
         )
+        extra_kwargs["default_catalog"] = default_catalog
 
     dialect = meta_fields.pop("dialect", dialect)
     try:
         audit = audit_class(
-            query=query, expressions=statements, dialect=dialect, **meta_fields, **extra_kwargs
+            query=query,
+            expressions=statements,
+            dialect=dialect,
+            **extra_kwargs,
+            **meta_fields,
         )
     except Exception as ex:
         _raise_config_error(str(ex), path)
@@ -555,6 +574,7 @@ def load_multiple_audits(
     macros: t.Optional[MacroRegistry] = None,
     jinja_macros: t.Optional[JinjaMacroRegistry] = None,
     dialect: t.Optional[str] = None,
+    default_catalog: t.Optional[str] = None,
 ) -> t.Generator[Audit, None, None]:
     audit_block: t.List[exp.Expression] = []
     for expression in expressions:
@@ -567,6 +587,7 @@ def load_multiple_audits(
                     macros=macros,
                     jinja_macros=jinja_macros,
                     dialect=dialect,
+                    default_catalog=default_catalog,
                 )
                 audit_block.clear()
         audit_block.append(expression)
@@ -574,6 +595,7 @@ def load_multiple_audits(
         expressions=audit_block,
         path=path,
         dialect=dialect,
+        default_catalog=default_catalog,
     )
 
 
@@ -597,4 +619,5 @@ META_FIELD_CONVERTER: t.Dict[str, t.Callable] = {
     "depends_on_": lambda value: exp.Tuple(expressions=sorted(value)),
     "tags": _single_value_or_tuple,
     "hash_raw_query": exp.convert,
+    "default_catalog": exp.to_identifier,
 }

@@ -139,6 +139,7 @@ class SQLMeshMagics(Magics):
                 dialect=config.dialect,
                 time_column_format=config.time_column_format,
                 physical_schema_override=self._context.config.physical_schema_override,
+                default_catalog=self._context.default_catalog,
             )
 
             if loaded.name == args.model:

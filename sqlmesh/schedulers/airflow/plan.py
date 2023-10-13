@@ -108,9 +108,9 @@ def create_plan_dag_spec(
 
     if request.restatements:
         intervals_to_remove = [
-            (s, request.restatements[s.name])
+            (s, request.restatements[s.snapshot_id])
             for s in all_snapshots.values()
-            if s.name in request.restatements and s.snapshot_id not in new_snapshots
+            if s.snapshot_id in request.restatements and s.snapshot_id not in new_snapshots
         ]
         state_sync.remove_interval(
             intervals_to_remove,

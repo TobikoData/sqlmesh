@@ -35,6 +35,7 @@ def full_model_without_ctes(request) -> SqlModel:
                 default_dialect=dialect,
             ),
             dialect=dialect,
+            default_catalog="memory",
         ),
     )
 
@@ -60,6 +61,7 @@ def full_model_with_single_cte(request) -> SqlModel:
                 default_dialect=dialect,
             ),
             dialect=dialect,
+            default_catalog="memory",
         ),
     )
 
@@ -88,6 +90,7 @@ def full_model_with_two_ctes(request) -> SqlModel:
                 default_dialect=dialect,
             ),
             dialect=dialect,
+            default_catalog="memory",
         ),
     )
 
@@ -106,6 +109,7 @@ def _create_test(
         engine_adapter=context._test_engine_adapter,
         dialect=context.config.dialect,
         path=None,
+        default_catalog=context.default_catalog,
     )
 
 
@@ -299,6 +303,7 @@ def test_partial_inputs(sushi_context: Context) -> None:
                     SELECT id, name FROM source;
                     """,
                 ),
+                default_catalog=sushi_context.default_catalog,
             ),
         ),
     )
@@ -372,6 +377,7 @@ def test_empty_rows(sushi_context: Context) -> None:
                     SELECT id FROM sushi.items;
                     """,
                 ),
+                default_catalog=sushi_context.default_catalog,
             )
         ),
     )
@@ -417,7 +423,7 @@ test_foo:
     normalized_body = _create_test(body, "test_foo", full_model_without_ctes, context).body
 
     expected_body = {
-        "model": "SUSHI.FOO",
+        "model": "MEMORY.SUSHI.FOO",
         "inputs": {"RAW": [{"ID": 1}]},
         "outputs": {
             "ctes": {"SOURCE": [{"ID": 1}], "RENAMED": [{"FID": 1}]},

@@ -73,7 +73,7 @@ def evaluate(
         command_payload = EvaluateCommandPayload.parse_raw(command_payload)
 
     parent_snapshots = command_payload.parent_snapshots
-    parent_snapshots[command_payload.snapshot.name] = command_payload.snapshot
+    parent_snapshots[command_payload.snapshot.fqn] = command_payload.snapshot
 
     wap_id = evaluator.evaluate(
         command_payload.snapshot,
@@ -137,7 +137,9 @@ def create_tables(
     snapshots_by_id = {s.snapshot_id: s for s in command_payload.snapshots}
     target_snapshots = [snapshots_by_id[sid] for sid in command_payload.target_snapshot_ids]
     evaluator.create(
-        target_snapshots, snapshots_by_id, deployability_index=command_payload.deployability_index
+        target_snapshots,
+        snapshots_by_id,
+        deployability_index=command_payload.deployability_index,
     )
 
 

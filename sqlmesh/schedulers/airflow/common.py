@@ -47,7 +47,7 @@ class PlanApplicationRequest(PydanticModel):
     environment: Environment
     no_gaps: bool
     skip_backfill: bool
-    restatements: t.Dict[str, SnapshotInterval]
+    restatements: t.Dict[SnapshotId, SnapshotInterval]
     notification_targets: t.List[NotificationTarget]
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
@@ -56,8 +56,8 @@ class PlanApplicationRequest(PydanticModel):
     forward_only: bool
     models_to_backfill: t.Optional[t.Set[str]]
 
-    def is_selected_for_backfill(self, model_name: str) -> bool:
-        return self.models_to_backfill is None or model_name in self.models_to_backfill
+    def is_selected_for_backfill(self, model_fqn: str) -> bool:
+        return self.models_to_backfill is None or model_fqn in self.models_to_backfill
 
 
 class BackfillIntervalsPerSnapshot(PydanticModel):

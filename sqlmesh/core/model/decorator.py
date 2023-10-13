@@ -42,6 +42,9 @@ class model(registry_decorator):
             for call in calls
         ]
 
+        if "default_catalog" in kwargs:
+            raise ConfigError("`default_catalog` cannot be set on a per-model basis.")
+
         self.columns = {
             column_name: column_type
             if isinstance(column_type, exp.DataType)
@@ -59,6 +62,7 @@ class model(registry_decorator):
         time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT,
         physical_schema_override: t.Optional[t.Dict[str, str]] = None,
         project: str = "",
+        default_catalog: t.Optional[str] = None,
     ) -> Model:
         """Get the model registered by this function."""
         env: t.Dict[str, t.Any] = {}
@@ -73,6 +77,7 @@ class model(registry_decorator):
             python_env=serialize_env(env, path=module_path),
             physical_schema_override=physical_schema_override,
             project=project,
+            default_catalog=default_catalog,
             **self.kwargs,
         )
 
@@ -88,4 +93,6 @@ class model(registry_decorator):
                 self.name, query, module_path=module_path, dialect=dialect, **common_kwargs
             )
 
-        return create_python_model(self.name, entrypoint, columns=self.columns, **common_kwargs)
+        return create_python_model(
+            self.name, entrypoint, dialect=dialect, columns=self.columns, **common_kwargs
+        )

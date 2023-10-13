@@ -113,9 +113,9 @@ def set_catalog(
             expression.set("catalog", None)
             container[key] = expression  # type: ignore
             if catalog_support.is_single_catalog_only:
-                if catalog_name != engine_adapter.default_catalog:
+                if catalog_name != engine_adapter._default_catalog:
                     raise UnsupportedCatalogOperationError(
-                        f"{engine_adapter.dialect} requires that all catalog operations be against a single catalog: {engine_adapter.default_catalog}"
+                        f"{engine_adapter.dialect} requires that all catalog operations be against a single catalog: {engine_adapter._default_catalog}"
                     )
                 return func(*list_args, **kwargs)
             # Set the catalog name on the engine adapter if needed
