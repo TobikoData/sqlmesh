@@ -44,7 +44,7 @@ setup(
         "pandas<2.1.0",
         "pydantic[email]>=1.10.7,<2.0.0",
         "requests",
-        "rich",
+        "rich[jupyter]",
         "ruamel.yaml",
         "sqlglot~=18.12.0",
     ],
