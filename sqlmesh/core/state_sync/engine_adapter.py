@@ -363,7 +363,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         query = (
             exp.select(exp.column("snapshot", table="snapshots"))
             .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
-            .where(self._snapshot_id_filter(snapshot_ids, "snapshots") if snapshot_ids else None)
+            .where(
+                None
+                if snapshot_ids is None
+                else self._snapshot_id_filter(snapshot_ids, "snapshots")
+            )
         )
         if hydrate_seeds:
             query = query.select(exp.column("content", table="seeds")).join(
@@ -411,7 +415,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def _get_snapshots_with_same_version(
         self,
-        snapshots: t.Iterable[SnapshotNameVersionLike],
+        snapshots: t.Collection[SnapshotNameVersionLike],
         lock_for_update: bool = False,
     ) -> t.List[Snapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
@@ -906,7 +910,11 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     def _snapshot_id_filter(
         self, snapshot_ids: t.Iterable[SnapshotIdLike], alias: t.Optional[str] = None
     ) -> t.Union[exp.In, exp.Boolean, exp.Condition]:
-        if not snapshot_ids:
+        name_identifiers = {
+            (snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids
+        }
+
+        if not name_identifiers:
             return exp.false()
         elif self.engine_adapter.SUPPORTS_TUPLE_IN:
             return t.cast(
@@ -917,22 +925,24 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         exp.column("identifier", table=alias),
                     )
                 ),
-            ).isin(*[(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids])
+            ).isin(*name_identifiers)
         else:
             return exp.or_(
                 *[
                     exp.and_(
-                        exp.column("name", table=alias).eq(snapshot_id.name),
-                        exp.column("identifier", table=alias).eq(snapshot_id.identifier),
+                        exp.column("name", table=alias).eq(name),
+                        exp.column("identifier", table=alias).eq(identifier),
                     )
-                    for snapshot_id in snapshot_ids
+                    for name, identifier in name_identifiers
                 ]
             )
 
     def _snapshot_name_version_filter(
         self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike], alias: str = "snapshots"
     ) -> t.Union[exp.In, exp.Boolean, exp.Condition]:
-        if not snapshot_name_versions:
+        name_versions = {(s.name, s.version) for s in snapshot_name_versions}
+
+        if not name_versions:
             return exp.false()
         elif self.engine_adapter.SUPPORTS_TUPLE_IN:
             return t.cast(
@@ -943,20 +953,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                         exp.column("version", table=alias),
                     )
                 ),
-            ).isin(
-                *[
-                    (snapshot_name_version.name, snapshot_name_version.version)
-                    for snapshot_name_version in snapshot_name_versions
-                ]
-            )
+            ).isin(*name_versions)
         else:
             return exp.or_(
                 *[
                     exp.and_(
-                        exp.column("name", table=alias).eq(snapshot_name_version.name),
-                        exp.column("version", table=alias).eq(snapshot_name_version.version),
+                        exp.column("name", table=alias).eq(name),
+                        exp.column("version", table=alias).eq(version),
                     )
-                    for snapshot_name_version in snapshot_name_versions
+                    for name, version in name_versions
                 ]
             )
 
