@@ -71,7 +71,9 @@ class Console(abc.ABC):
         """Starts the snapshot evaluation progress."""
 
     @abc.abstractmethod
-    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
         """Updates the snapshot evaluation progress."""
 
     @abc.abstractmethod
@@ -263,19 +265,29 @@ class TerminalConsole(Console):
                 total=self.evaluation_model_batches[snapshot],
             )
 
-    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
         """Update the snapshot evaluation progress."""
-        if self.evaluation_total_progress and self.evaluation_model_progress:
+        if (
+            self.evaluation_total_progress
+            and self.evaluation_model_progress
+            and self.evaluation_progress_live
+        ):
+            total_batches = self.evaluation_model_batches[snapshot]
+
+            if duration_ms:
+                self.evaluation_progress_live.console.print(
+                    f"[{batch_idx + 1}/{total_batches}] {snapshot.name} [green]finished[/green] in {(duration_ms / 1000.0):.2f}s"
+                )
+
             self.evaluation_total_progress.update(
-                self.evaluation_total_task or TaskID(0), refresh=True, advance=num_batches
+                self.evaluation_total_task or TaskID(0), refresh=True, advance=1
             )
 
             model_task_id = self.evaluation_model_tasks[snapshot.name]
-            self.evaluation_model_progress.update(model_task_id, refresh=True, advance=num_batches)
-            if (
-                self.evaluation_model_progress._tasks[model_task_id].completed
-                >= self.evaluation_model_batches[snapshot]
-            ):
+            self.evaluation_model_progress.update(model_task_id, refresh=True, advance=1)
+            if self.evaluation_model_progress._tasks[model_task_id].completed >= total_batches:
                 self.evaluation_model_progress.remove_task(model_task_id)
 
     def stop_evaluation_progress(self, success: bool = True) -> None:
@@ -1318,11 +1330,13 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
             self.evaluation_batch_progress[snapshot.name] = (view_name, 0)
             print(f"Starting '{view_name}', Total batches: {self.evaluation_batches[snapshot]}")
 
-    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_batches: int) -> None:
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
         view_name, loaded_batches = self.evaluation_batch_progress[snapshot.name]
         total_batches = self.evaluation_batches[snapshot]
 
-        loaded_batches += num_batches
+        loaded_batches += 1
         self.evaluation_batch_progress[snapshot.name] = (view_name, loaded_batches)
 
         finished_loading = loaded_batches == total_batches
