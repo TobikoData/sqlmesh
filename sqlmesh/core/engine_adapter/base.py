@@ -1159,6 +1159,7 @@ class EngineAdapter:
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
+        when_matched: t.Optional[exp.When] = None,
     ) -> None:
         source_queries, columns_to_types = self._get_source_queries_and_columns_to_types(
             source_table, columns_to_types, target_table=target_table
@@ -1170,16 +1171,17 @@ class EngineAdapter:
                 for part in unique_key
             )
         )
-        when_matched = exp.When(
-            matched=True,
-            source=False,
-            then=exp.Update(
-                expressions=[
-                    exp.column(col, MERGE_TARGET_ALIAS).eq(exp.column(col, MERGE_SOURCE_ALIAS))
-                    for col in columns_to_types
-                ],
-            ),
-        )
+        if not when_matched:
+            when_matched = exp.When(
+                matched=True,
+                source=False,
+                then=exp.Update(
+                    expressions=[
+                        exp.column(col, MERGE_TARGET_ALIAS).eq(exp.column(col, MERGE_SOURCE_ALIAS))
+                        for col in columns_to_types
+                    ],
+                ),
+            )
         when_not_matched = exp.When(
             matched=False,
             source=False,

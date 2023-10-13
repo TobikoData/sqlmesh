@@ -115,7 +115,7 @@ If a key is missing in the model's table, the new data row is inserted; otherwis
 * There is at most one record associated with each unique key.
 * It is appropriate to upsert records, so existing records can be overridden by new arrivals when their keys match.
 
-A [Slowly Changing Dimension](../glossary.md#slowly-changing-dimension-scd) (SCD) is one approach that fits this description well.
+A [Slowly Changing Dimension](../glossary.md#slowly-changing-dimension-scd) (SCD) is one approach that fits this description well. See the [SCD Type 2](#scd-type-2) model kind for a specific model kind for SCD Type 2 models.
 
 The name of the unique key column must be provided as part of the `MODEL` DDL, as in this example:
 ```sql linenums="1" hl_lines="3-5"
@@ -155,6 +155,43 @@ WHERE
 ```
 
 **Note:** Models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are inherently [non-idempotent](../glossary.md#idempotency), which should be taken into consideration during data [restatement](../plans.md#restatement-plans).
+
+### Unique Key Expressions
+
+The `unique_key` values can either be column names or SQL expressions. For example, if you wanted to create a key that is based on the coalesce of a value then you could do the following:
+
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name db.employees,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key (COALESCE("ds", ''))
+  )
+);
+```
+
+### When Matched Expression
+
+The logic to use when updating columns when a match occurs (the source and target match on the given keys) by default updates all the columns. This can be overriden with custom logic like below:
+    
+```sql linenums="1" hl_lines="4"
+MODEL (
+  name db.employees,
+  kind INCREMENTAL_BY_UNIQUE_KEY (
+    unique_key name,
+    when_matched WHEN MATCHED THEN UPDATE SET target.salary = COALESCE(source.salary, target.salary)
+  )
+);
+```
+
+The `source` and `target` aliases are required when using the `when_matched` expression in order to distinguish between the source and target columns.
+
+**Note**: `when_matched` is only available on engines that support the `MERGE` statement. Currently supported engines include:
+
+* BigQuery
+* Databricks
+* Postgres
+* Snowflake
+* Spark
 
 ### Materialization strategy
 Depending on the target engine, models of the `INCREMENTAL_BY_UNIQUE_KEY` kind are materialized using the following strategies:

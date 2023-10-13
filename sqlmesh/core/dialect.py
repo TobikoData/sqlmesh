@@ -294,15 +294,17 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     if not key:
         return None
 
-    if self._match(TokenType.L_PAREN):
-        value: t.Optional[exp.Expression] = self.expression(
+    name = key.name.lower()
+    if name == "when_matched":
+        value: t.Optional[exp.Expression] = self._parse_when_matched()[0]
+    elif self._match(TokenType.L_PAREN):
+        value = self.expression(
             exp.Tuple, expressions=self._parse_csv(lambda: _parse_prop_value(self))
         )
         self._match_r_paren()
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
 
-    name = key.name.lower()
     if name == "path" and value:
         # Make sure if we get a windows path that it is converted to posix
         value = exp.Literal.string(value.this.replace("\\", "/"))
