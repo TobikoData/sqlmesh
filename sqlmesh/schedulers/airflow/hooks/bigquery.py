@@ -29,10 +29,9 @@ class SQLMeshBigQueryHook(GoogleBaseHook, DbApiHook):
     def __init__(
         self,
         gcp_conn_id: str = default_conn_name,
-        delegate_to: str | None = None,
-        impersonation_chain: str | t.Sequence[str] | None = None,
+        delegate_to: t.Optional[str] = None,
+        impersonation_chain: t.Optional[t.Union[str, t.Sequence[str]]] = None,
         location: t.Optional[str] = None,
-        **kwargs: t.Any,
     ) -> None:
         GoogleBaseHook.__init__(
             self,

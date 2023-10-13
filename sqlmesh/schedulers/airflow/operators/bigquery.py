@@ -22,16 +22,26 @@ class SQLMeshBigQueryOperator(BaseOperator):
         *,
         target: BaseTarget,
         bigquery_conn_id: str = SQLMeshBigQueryHook.default_conn_name,
+        delegate_to: str | None = None,
+        impersonation_chain: str | t.Sequence[str] | None = None,
+        location: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> None:
         super().__init__(**kwargs)
         self._target = target
         self._bigquery_conn_id = bigquery_conn_id
-        self._hook_params = kwargs
+        self._delegate_to = delegate_to
+        self._impersonation_chain = impersonation_chain
+        self._location = location
 
     def get_db_hook(self) -> SQLMeshBigQueryHook:
         """Gets the BigQuery Hook which contains the DB API connection object"""
-        return SQLMeshBigQueryHook(self._bigquery_conn_id, **self._hook_params)
+        return SQLMeshBigQueryHook(
+            self._bigquery_conn_id,
+            delegate_to=self._delegate_to,
+            impersonation_chain=self._impersonation_chain,
+            location=self._location,
+        )
 
     def execute(self, context: Context) -> None:
         """Executes the desired target against the configured BigQuery connection"""
