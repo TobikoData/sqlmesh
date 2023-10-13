@@ -9,7 +9,11 @@ from sqlglot import parse, parse_one, select
 from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
-from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.base import (
+    MERGE_SOURCE_ALIAS,
+    MERGE_TARGET_ALIAS,
+    InsertOverwriteStrategy,
+)
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.macros import RuntimeStage, macro
 from sqlmesh.core.model import (
@@ -1006,6 +1010,64 @@ def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
         start="2020-01-01",
         end="2020-01-02",
         execution_time="2020-01-02",
+    )
+
+
+def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+    model = load_sql_based_model(
+        parse(  # type: ignore
+            """
+            MODEL (
+                name test_schema.test_model,
+                kind INCREMENTAL_BY_UNIQUE_KEY (
+                    unique_key [id],
+                    when_matched WHEN MATCHED THEN UPDATE SET target.name = source.name, target.updated_at = COALESCE(source.updated_at, target.updated_at)
+                )
+            );
+
+            SELECT id::int, name::string, updated_at::timestamp FROM tbl;
+            """
+        )
+    )
+
+    snapshot = make_snapshot(model)
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    evaluator.evaluate(
+        snapshot,
+        "2020-01-01",
+        "2020-01-02",
+        "2020-01-02",
+        snapshots={},
+    )
+
+    adapter_mock.merge.assert_called_once_with(
+        snapshot.table_name(),
+        model.render_query(),
+        columns_to_types={
+            "id": exp.DataType.build("INT"),
+            "name": exp.DataType.build("STRING"),
+            "updated_at": exp.DataType.build("TIMESTAMP"),
+        },
+        unique_key=[exp.to_column("id")],
+        when_matched=exp.When(
+            matched=True,
+            source=False,
+            then=exp.Update(
+                expressions=[
+                    exp.column("name", MERGE_TARGET_ALIAS).eq(
+                        exp.column("name", MERGE_SOURCE_ALIAS)
+                    ),
+                    exp.column("updated_at", MERGE_TARGET_ALIAS).eq(
+                        exp.Coalesce(
+                            this=exp.column("updated_at", MERGE_SOURCE_ALIAS),
+                            expressions=[exp.column("updated_at", MERGE_TARGET_ALIAS)],
+                        )
+                    ),
+                ],
+            ),
+        ),
     )
 
 

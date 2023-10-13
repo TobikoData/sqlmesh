@@ -925,6 +925,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
             query_or_df,
             columns_to_types=model.columns_to_types,
             unique_key=model.unique_key,
+            when_matched=model.when_matched,
         )
 
     def append(
@@ -942,6 +943,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
             query_or_df,
             columns_to_types=model.columns_to_types,
             unique_key=model.unique_key,
+            when_matched=model.when_matched,
         )
 
 

@@ -814,6 +814,53 @@ def test_merge_upsert_pandas(make_mocked_engine_adapter: t.Callable):
     )
 
 
+def test_merge_when_matched(make_mocked_engine_adapter: t.Callable, assert_exp_eq):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    adapter.merge(
+        target_table="target",
+        source_table=t.cast(exp.Select, parse_one('SELECT "ID", ts, val FROM source')),
+        columns_to_types={
+            "ID": exp.DataType.Type.INT,
+            "ts": exp.DataType.Type.TIMESTAMP,
+            "val": exp.DataType.Type.INT,
+        },
+        unique_key=[exp.to_identifier("ID", quoted=True)],
+        when_matched=exp.When(
+            matched=True,
+            source=False,
+            then=exp.Update(
+                expressions=[
+                    exp.column("val", "__MERGE_TARGET__").eq(exp.column("val", "__MERGE_SOURCE__")),
+                    exp.column("ts", "__MERGE_TARGET__").eq(
+                        exp.Coalesce(
+                            this=exp.column("ts", "__MERGE_SOURCE__"),
+                            expressions=[exp.column("ts", "__MERGE_TARGET__")],
+                        )
+                    ),
+                ],
+            ),
+        ),
+    )
+
+    assert_exp_eq(
+        adapter.cursor.execute.call_args[0][0],
+        """
+MERGE INTO "target" AS "__MERGE_TARGET__" USING (
+  SELECT
+    "ID",
+    "ts",
+    "val"
+  FROM "source"
+) AS "__MERGE_SOURCE__"
+  ON "__MERGE_TARGET__"."ID" = "__MERGE_SOURCE__"."ID"
+  WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val", "__MERGE_TARGET__"."ts" = COALESCE("__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."ts")
+  WHEN NOT MATCHED THEN INSERT ("ID", "ts", "val")
+    VALUES ("__MERGE_SOURCE__"."ID", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val")
+""",
+    )
+
+
 def test_scd_type_2(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
 
