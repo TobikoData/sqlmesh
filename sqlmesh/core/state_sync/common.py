@@ -224,7 +224,7 @@ class CommonStateSyncMixin(StateSync):
 
     @transactional()
     def unpause_snapshots(
-        self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
+        self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
         current_ts = now()
 
@@ -335,7 +335,7 @@ class CommonStateSyncMixin(StateSync):
     @abc.abstractmethod
     def _get_snapshots_with_same_version(
         self,
-        snapshots: t.Iterable[SnapshotNameVersionLike],
+        snapshots: t.Collection[SnapshotNameVersionLike],
         lock_for_update: bool = False,
     ) -> t.List[Snapshot]:
         """Fetches all snapshots that share the same version as the snapshots.
