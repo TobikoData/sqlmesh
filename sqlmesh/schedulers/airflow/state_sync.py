@@ -263,7 +263,7 @@ class HttpStateSync(StateSync):
         )
 
     def unpause_snapshots(
-        self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
+        self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
         """Unpauses target snapshots.
 

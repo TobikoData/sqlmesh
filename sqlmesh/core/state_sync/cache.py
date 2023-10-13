@@ -50,7 +50,7 @@ class CachingStateSync(DelegatingStateSync):
         snapshot_ids: t.Optional[t.Iterable[SnapshotIdLike]],
         hydrate_seeds: bool = False,
     ) -> t.Dict[SnapshotId, Snapshot]:
-        if not snapshot_ids:
+        if snapshot_ids is None:
             return self.state_sync.get_snapshots(snapshot_ids, hydrate_seeds)
 
         existing = {}
@@ -144,7 +144,7 @@ class CachingStateSync(DelegatingStateSync):
         self.state_sync.remove_interval(snapshot_intervals, execution_time, remove_shared_versions)
 
     def unpause_snapshots(
-        self, snapshots: t.Iterable[SnapshotInfoLike], unpaused_dt: TimeLike
+        self, snapshots: t.Collection[SnapshotInfoLike], unpaused_dt: TimeLike
     ) -> None:
         self.snapshot_cache.clear()
         self.state_sync.unpause_snapshots(snapshots, unpaused_dt)

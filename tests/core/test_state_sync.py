@@ -1318,3 +1318,13 @@ def test_max_interval_end_for_environment(
     assert state_sync.max_interval_end_for_environment(environment_name) == to_timestamp(
         "2023-01-03"
     )
+
+
+def test_get_snapshots(mocker):
+    mock = mocker.MagicMock()
+    cache = CachingStateSync(mock)
+    cache.get_snapshots([])
+    mock.get_snapshots.assert_not_called()
+
+    cache.get_snapshots(None)
+    mock.get_snapshots.assert_called()
