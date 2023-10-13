@@ -18,6 +18,7 @@ from sqlmesh.utils.pydantic import (
     SQLGlotPositiveInt,
     SQLGlotString,
     field_validator,
+    field_validator_v1_args,
     model_validator,
     model_validator_v1_args,
 )
@@ -208,7 +209,38 @@ class IncrementalByTimeRangeKind(_Incremental):
 class IncrementalByUniqueKeyKind(_Incremental):
     name: Literal[ModelKindName.INCREMENTAL_BY_UNIQUE_KEY] = ModelKindName.INCREMENTAL_BY_UNIQUE_KEY
     unique_key: t.List[exp.Expression]
+    when_matched: t.Optional[exp.When] = None
+
     _unique_key_validator = _unique_key_validator
+
+    @field_validator("when_matched", mode="before")
+    @field_validator_v1_args
+    def _when_matched_validator(
+        cls, v: t.Optional[exp.When], values: t.Dict[str, t.Any]
+    ) -> t.Optional[exp.When]:
+        def replace_table_references(expression: exp.Expression) -> exp.Expression:
+            from sqlmesh.core.engine_adapter.base import (
+                MERGE_SOURCE_ALIAS,
+                MERGE_TARGET_ALIAS,
+            )
+
+            if isinstance(expression, exp.Column):
+                if expression.table.lower() == "target":
+                    expression.set(
+                        "table",
+                        exp.to_identifier(MERGE_TARGET_ALIAS),
+                    )
+                elif expression.table.lower() == "source":
+                    expression.set(
+                        "table",
+                        exp.to_identifier(MERGE_SOURCE_ALIAS),
+                    )
+            return expression
+
+        if not v:
+            return v
+        v.meta["dialect"] = values.get("dialect")
+        return v.transform(replace_table_references)
 
 
 class IncrementalUnmanagedKind(_ModelKind):

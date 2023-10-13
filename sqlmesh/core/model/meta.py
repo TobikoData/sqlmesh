@@ -354,3 +354,9 @@ class ModelMeta(_Node, extra="allow"):
     @property
     def managed_columns(self) -> t.Dict[str, exp.DataType]:
         return getattr(self.kind, "managed_columns", {})
+
+    @property
+    def when_matched(self) -> t.Optional[exp.When]:
+        if isinstance(self.kind, IncrementalByUniqueKeyKind):
+            return self.kind.when_matched
+        return None

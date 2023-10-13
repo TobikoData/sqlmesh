@@ -24,6 +24,7 @@ class LogicalMergeMixin(EngineAdapter):
         source_table: QueryOrDF,
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]],
         unique_key: t.Sequence[exp.Expression],
+        when_matched: t.Optional[exp.When] = None,
     ) -> None:
         """
         Merge implementation for engine adapters that do not support merge natively.
@@ -35,6 +36,10 @@ class LogicalMergeMixin(EngineAdapter):
            within the temporary table are ommitted.
         4. Drop the temporary table.
         """
+        if when_matched:
+            raise SQLMeshError(
+                "This engine does not support MERGE expressions and therefore `when_matched` is not supported."
+            )
         if columns_to_types is None:
             columns_to_types = self.columns(target_table)
 
