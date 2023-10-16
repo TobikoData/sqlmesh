@@ -114,7 +114,7 @@ class MacroEvaluator:
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
-        self.locals: t.Dict[str, t.Any] = {"runtime_stage": runtime_stage}
+        self.locals: t.Dict[str, t.Any] = {"runtime_stage": runtime_stage.value}
         self.env = {**ENV, "self": self}
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env

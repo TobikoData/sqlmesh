@@ -344,6 +344,25 @@ def _parse_table_parts(self: Parser, schema: bool = False) -> exp.Table:
     return table
 
 
+def _parse_execute_if(self: Parser) -> exp.Anonymous:
+    cond = self._parse_conjunction()
+    self._match(TokenType.COMMA)
+
+    # Try to parse a known statement, otherwise fall back to parsing a command
+    index = self._index
+    statement = self._parse_statement()
+    if isinstance(statement, exp.Command):
+        self._retreat(index)
+        statement = self._parse_as_command(self._curr)
+
+        # Unconsume the right parenthesis as well as omit it from the command's text
+        self._retreat(self._index - 1)
+        statement.set("expression", statement.expression[:-1])
+
+    # Return anonymous so that _parse_macro can create a MacroFunc with this value
+    return exp.Anonymous(this="IF", expressions=[cond, statement])
+
+
 def _create_parser(parser_type: t.Type[exp.Expression], table_keys: t.List[str]) -> t.Callable:
     def parse(self: Parser) -> t.Optional[exp.Expression]:
         from sqlmesh.core.model.kind import ModelKindName
@@ -652,6 +671,7 @@ def extend_sqlglot() -> None:
 
     for parser in parsers:
         parser.FUNCTIONS.update({"JINJA": Jinja.from_arg_list, "METRIC": MetricAgg.from_arg_list})
+        parser.FUNCTION_PARSERS.update({"EXECUTE_IF": _parse_execute_if})
         parser.PLACEHOLDER_PARSERS.update({TokenType.PARAMETER: _parse_macro})
         parser.QUERY_MODIFIER_PARSERS.update(
             {TokenType.PARAMETER: lambda self: _parse_body_macro(self)}

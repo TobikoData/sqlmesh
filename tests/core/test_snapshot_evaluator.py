@@ -158,7 +158,7 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
     @macro()
     def increment_stage_counter(evaluator) -> None:
         # Hack which allows us to intercept the different runtime stage values
-        print(f"RuntimeStage value: {evaluator.locals['runtime_stage'].value}")
+        print(f"RuntimeStage value: {evaluator.locals['runtime_stage']}")
 
     model = load_sql_based_model(
         parse(  # type: ignore
@@ -169,6 +169,11 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
             );
 
             @increment_stage_counter();
+
+            @execute_if(
+                @runtime_stage = 'evaluating',
+                ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p
+            );
 
             SELECT 1 AS a;
             """
@@ -187,6 +192,15 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
 
     evaluator.evaluate(snapshot, "2020-01-01", "2020-01-02", "2020-01-02", snapshots={})
     assert f"RuntimeStage value: {RuntimeStage.EVALUATING.value}" in capsys.readouterr().out
+
+    adapter_mock.execute.assert_has_calls(
+        [
+            call([]),
+            call([]),
+            call([parse_one("ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p")]),
+            call([]),
+        ]
+    )
 
 
 def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):
