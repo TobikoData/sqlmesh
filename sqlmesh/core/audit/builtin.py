@@ -57,10 +57,13 @@ WHERE @column NOT IN @is_in
 number_of_rows_audit = ModelAudit(
     name="number_of_rows",
     query="""
-SELECT 1
-FROM @this_model
-LIMIT @threshold + 1
-HAVING COUNT(*) <= @threshold
+SELECT COUNT(*)
+FROM (
+   SELECT 1
+   FROM @this_model
+   LIMIT @threshold + 1
+)
+HAVING COUTN(*) <= @threshold
     """,
 )
 

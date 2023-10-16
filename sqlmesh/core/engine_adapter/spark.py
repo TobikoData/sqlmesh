@@ -10,10 +10,10 @@ from sqlglot import exp
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base import (
     CatalogSupport,
-    EngineAdapter,
     InsertOverwriteStrategy,
     SourceQuery,
 )
+from sqlmesh.core.engine_adapter.mixins import HiveMetastoreTablePropertiesMixin
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
@@ -29,13 +29,12 @@ if t.TYPE_CHECKING:
         Query,
     )
     from sqlmesh.core.engine_adapter.base import QueryOrDF
-    from sqlmesh.core.node import IntervalUnit
 
 
 logger = logging.getLogger(__name__)
 
 
-class SparkEngineAdapter(EngineAdapter):
+class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
     DIALECT = "spark"
     ESCAPE_JSON = True
     SUPPORTS_TRANSACTIONS = False
@@ -383,54 +382,3 @@ class SparkEngineAdapter(EngineAdapter):
         super().create_view(
             view_name, query_or_df, columns_to_types, replace, materialized, **create_kwargs
         )
-
-    def _create_table_properties(
-        self,
-        storage_format: t.Optional[str] = None,
-        partitioned_by: t.Optional[t.List[exp.Expression]] = None,
-        partition_interval_unit: t.Optional[IntervalUnit] = None,
-        clustered_by: t.Optional[t.List[str]] = None,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
-    ) -> t.Optional[exp.Properties]:
-        properties: t.List[exp.Expression] = []
-
-        if storage_format:
-            properties.append(exp.FileFormatProperty(this=exp.Var(this=storage_format)))
-
-        if partitioned_by:
-            for expr in partitioned_by:
-                if not isinstance(expr, exp.Column):
-                    raise SQLMeshError(
-                        f"PARTITIONED BY contains non-column value '{expr.sql(dialect='spark')}'."
-                    )
-            properties.append(
-                exp.PartitionedByProperty(
-                    this=exp.Schema(expressions=partitioned_by),
-                )
-            )
-
-        properties.extend(self.__table_properties_to_expressions(table_properties))
-
-        if properties:
-            return exp.Properties(expressions=properties)
-        return None
-
-    def _create_view_properties(
-        self,
-        table_properties: t.Optional[t.Dict[str, exp.Expression]] = None,
-    ) -> t.Optional[exp.Properties]:
-        """Creates a SQLGlot table properties expression for view"""
-        if not table_properties:
-            return None
-        return exp.Properties(expressions=self.__table_properties_to_expressions(table_properties))
-
-    @classmethod
-    def __table_properties_to_expressions(
-        cls, table_properties: t.Optional[t.Dict[str, exp.Expression]] = None
-    ) -> t.List[exp.Property]:
-        if not table_properties:
-            return []
-        return [
-            exp.Property(this=key, value=value.copy()) for key, value in table_properties.items()
-        ]

@@ -8,6 +8,7 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
+    GetCurrentCatalogFromFunctionMixin,
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
 )
@@ -18,11 +19,17 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter.base import QueryOrDF, SourceQuery
 
 
-class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin, LogicalMergeMixin):
+class RedshiftEngineAdapter(
+    BasePostgresEngineAdapter,
+    LogicalReplaceQueryMixin,
+    LogicalMergeMixin,
+    GetCurrentCatalogFromFunctionMixin,
+):
     DIALECT = "redshift"
     DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
     COLUMNS_TABLE = "SVV_COLUMNS"  # Includes late-binding views
+    CURRENT_CATALOG_FUNCTION = "current_database()"
 
     @property
     def cursor(self) -> t.Any:
@@ -99,12 +106,6 @@ class RedshiftEngineAdapter(BasePostgresEngineAdapter, LogicalReplaceQueryMixin,
             self.rename_table(target_table, old_table)
             self.rename_table(temp_table, target_table)
             self.drop_table(old_table)
-
-    def get_current_catalog(self) -> t.Optional[str]:
-        result = self.fetchone("SELECT current_database()")
-        if result:
-            return result[0]
-        return None
 
     def set_current_catalog(self, catalog_name: str) -> None:
         self.cursor.connection._database = catalog_name

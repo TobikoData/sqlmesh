@@ -105,9 +105,11 @@ class TestContext:
         self.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
         self.engine_adapter.create_schema(schema)
 
-    def _format_df(self, data: pd.DataFrame, include_tz: bool = False) -> pd.DataFrame:
+    def _format_df(
+        self, data: pd.DataFrame, include_tz: bool = False, to_datetime: bool = True
+    ) -> pd.DataFrame:
         for timestamp_column in self.timestamp_columns:
-            if timestamp_column in data.columns:
+            if timestamp_column in data.columns and to_datetime:
                 data[timestamp_column] = pd.to_datetime(data[timestamp_column], utc=include_tz)
         return data
 
@@ -129,7 +131,7 @@ class TestContext:
             )
         elif self.test_type == "pyspark":
             return self.engine_adapter.spark.createDataFrame(data)  # type: ignore
-        return self._format_df(data)
+        return self._format_df(data, to_datetime=self.dialect != "trino")
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
         return self._format_df(data, include_tz=self.dialect in ("spark", "databricks"))
@@ -200,6 +202,7 @@ def config() -> Config:
         pytest.param("redshift", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("snowflake", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("mssql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        pytest.param("trino", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:
@@ -208,7 +211,12 @@ def engine_adapter(request, config) -> EngineAdapter:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
         pytest.skip(f"Gateway {gateway} not configured")
     engine_adapter = config.gateways[gateway].connection.create_engine_adapter()
-    engine_adapter.DEFAULT_BATCH_SIZE = 1
+    # Trino: If we batch up the requests then when running locally we get a table not found error after creating the
+    # table and then immediately after trying to insert rows into it. There seems to be a delay between when the
+    # metastore is made aware of the table and when it responds that it exists. I'm hoping this is not an issue
+    # in practice on production machines.
+    if request.param != "trino":
+        engine_adapter.DEFAULT_BATCH_SIZE = 1
     return engine_adapter
 
 
@@ -404,6 +412,8 @@ def test_materialized_view(ctx: TestContext):
 
 
 def test_drop_schema(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("Drop Schema tests only need to run once so we skip anything not query")
     ctx.columns_to_types = {"one": "int"}
     schema = normalize_identifiers(
         exp.to_identifier(TEST_SCHEMA), dialect=ctx.engine_adapter.dialect
@@ -599,6 +609,9 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
 
 
 def test_merge(ctx: TestContext):
+    if ctx.dialect == "trino":
+        pytest.skip("Trino doesn't support merge")
+
     ctx.init()
     table = ctx.table("test_table")
     ctx.engine_adapter.create_table(table, ctx.columns_to_types)

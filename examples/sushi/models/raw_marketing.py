@@ -49,6 +49,6 @@ def execute(
             df["status_old"] != df["status"], execution_time, df["updated_at_old"]
         ),
         errors="coerce",
-    )
+    ).strftime("%Y-%m-%d %H:%M:%S")
     df = df.drop(columns=["status_old", "updated_at_old"])
     return df

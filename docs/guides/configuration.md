@@ -419,6 +419,7 @@ These pages describe the connection configuration options for each execution eng
 * [Redshift](../integrations/engines/redshift.md)
 * [Snowflake](../integrations/engines/snowflake.md)
 * [Spark](../integrations/engines/spark.md)
+* [Trino](../integrations/engines/trino.md)
 
 #### State connection
 
