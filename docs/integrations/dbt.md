@@ -2,8 +2,6 @@
 
 SQLMesh has native support for running dbt projects with its dbt adapter.
 
-**Note:** This feature is currently under development. You can view the [development backlog](https://github.com/orgs/TobikoData/projects/1/views/3) to see what improvements are already planned. If you are interested in this feature, we encourage you to try it with your dbt projects and [submit issues](https://github.com/TobikoData/sqlmesh/issues) so we can make it more robust.
-
 ## Getting started
 ### Reading a dbt project
 
