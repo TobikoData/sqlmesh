@@ -364,12 +364,10 @@ def _parse_if(self: Parser) -> t.Optional[exp.Expression]:
             self._retreat(index)
             statement = self._parse_as_command(self._curr)
 
-            # Unconsume the right parenthesis as well as omit it from the command's text
-            self._retreat(self._index - 1)
+            # Omit the right parenthesis from the command's text
             statement.set("expression", statement.expression[:-1])
 
         # Return anonymous so that _parse_macro can create a MacroFunc with this value
-        self._match_r_paren()
         return exp.Anonymous(this="IF", expressions=[cond, statement])
 
 
