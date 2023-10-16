@@ -143,8 +143,6 @@ class SnowflakeConnectionConfig(ConnectionConfig):
             KEY_PAIR_AUTHENTICATOR,
         )
 
-        if "type" in values and values["type"] != "snowflake":
-            return values
         auth = values.get("authenticator")
         auth = auth.upper() if auth else DEFAULT_AUTHENTICATOR
         user = values.get("user")
@@ -242,7 +240,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
         from sqlmesh import runtime_env
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
 
-        if values["type"] != "databricks" or runtime_env.is_databricks:
+        if runtime_env.is_databricks:
             return values
         server_hostname, http_path, access_token = (
             values.get("server_hostname"),
@@ -490,8 +488,6 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     def _validate_auth_method(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
-        if "type" in values and values["type"] != "gcp_postgres":
-            return values
         password = values.get("password")
         enable_iam_auth = values.get("enable_iam_auth")
         if password and enable_iam_auth:
