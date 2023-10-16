@@ -169,11 +169,7 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
             );
 
             @increment_stage_counter();
-
-            @execute_if(
-                @runtime_stage = 'evaluating',
-                ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p
-            );
+            @if(@runtime_stage = 'evaluating', ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p);
 
             SELECT 1 AS a;
             """
