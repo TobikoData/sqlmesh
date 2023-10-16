@@ -89,7 +89,7 @@ class HighWaterMarkExternalSensor(BaseSensorOperator):
         signals = self.snapshot.model.render_signals(
             start=to_datetime(dag_run.data_interval_start),
             end=to_datetime(dag_run.data_interval_end),
-            execution_time=now(),
+            execution_time=now(minute_floor=False),
         )
         delegates = [self.external_table_sensor_factory(signal) for signal in signals]
         return all(d.poke(context) for d in delegates)
