@@ -328,7 +328,7 @@ SELECT
 FROM table
 ```
 
-Another example is conditionally executing a pre/post-statement depending on the current [runtime stage](./macro_variables.md#predefined-variables). The following example shows how one can execute a given statement only at model creation time:
+Another example is conditionally executing a pre/post-statement depending on the current [runtime stage](./macro_variables.md#predefined-variables). For instance, the following `@IF` pre-statement will only be executed at model creation time:
 
 ```sql linenums="1"
 MODEL (
