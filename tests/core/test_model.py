@@ -2282,3 +2282,68 @@ def test_model_allow_partials():
     assert model.allow_partials
 
     assert "allow_partials TRUE" in model.render_definition()[0].sql()
+
+
+def test_signals():
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            signals [
+                (
+                    table_name = 'table_a',
+                    ds = @end_ds,
+                ),
+                (
+                    table_name = 'table_b',
+                    ds = @end_ds,
+                    hour = @end_hour,
+                ),
+                (
+                    bool_key = True,
+                    int_key = 1,
+                    float_key = 1.0,
+                    string_key = 'string',
+                )
+            ],
+        );
+        SELECT 1;
+        """
+    )
+
+    model = load_sql_based_model(expressions)
+    assert model.signals == [
+        exp.Tuple(
+            expressions=[
+                exp.to_column("table_name").eq("table_a"),
+                exp.to_column("ds").eq(d.MacroVar(this="end_ds")),
+            ]
+        ),
+        exp.Tuple(
+            expressions=[
+                exp.to_column("table_name").eq("table_b"),
+                exp.to_column("ds").eq(d.MacroVar(this="end_ds")),
+                exp.to_column("hour").eq(d.MacroVar(this="end_hour")),
+            ]
+        ),
+        exp.Tuple(
+            expressions=[
+                exp.to_column("bool_key").eq(True),
+                exp.to_column("int_key").eq(1),
+                exp.to_column("float_key").eq(1.0),
+                exp.to_column("string_key").eq("string"),
+            ]
+        ),
+    ]
+
+    rendered_signals = model.render_signals(start="2023-01-01", end="2023-01-02 15:00:00")
+    assert rendered_signals == [
+        {"table_name": "table_a", "ds": "2023-01-02"},
+        {"table_name": "table_b", "ds": "2023-01-02", "hour": 14},
+        {"bool_key": True, "int_key": 1, "float_key": 1.0, "string_key": "string"},
+    ]
+
+    assert (
+        "signals ((table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string')"
+        in model.render_definition()[0].sql()
+    )

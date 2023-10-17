@@ -3,12 +3,12 @@ import typing as t
 from datetime import datetime
 
 from airflow.models import DagRun
-from airflow.sensors.base import BaseSensorOperator
+from airflow.sensors.base import BaseSensorOperator, PokeReturnValue
 from airflow.utils.context import Context
 
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.schedulers.airflow import util
-from sqlmesh.utils.date import to_datetime
+from sqlmesh.utils.date import now, to_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -63,3 +63,33 @@ class HighWaterMarkSensor(BaseSensorOperator):
         target_prev = to_datetime(target_snapshot.node.cron_floor(target_date))
         this_prev = to_datetime(self.this_snapshot.node.cron_floor(target_date))
         return min(target_prev, this_prev)
+
+
+class HighWaterMarkExternalSensor(BaseSensorOperator):
+    def __init__(
+        self,
+        snapshot: Snapshot,
+        external_table_sensor_factory: t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator],
+        poke_interval: float = 60.0,
+        timeout: float = 7.0 * 24.0 * 60.0 * 60.0,  # 7 days
+        mode: str = "reschedule",
+        **kwargs: t.Any,
+    ):
+        super().__init__(
+            poke_interval=poke_interval,
+            timeout=timeout,
+            mode=mode,
+            **kwargs,
+        )
+        self.snapshot = snapshot
+        self.external_table_sensor_factory = external_table_sensor_factory
+
+    def poke(self, context: Context) -> t.Union[bool, PokeReturnValue]:
+        dag_run = context["dag_run"]
+        signals = self.snapshot.model.render_signals(
+            start=to_datetime(dag_run.data_interval_start),
+            end=to_datetime(dag_run.data_interval_end),
+            execution_time=now(minute_floor=False),
+        )
+        delegates = [self.external_table_sensor_factory(signal) for signal in signals]
+        return all(d.poke(context) for d in delegates)

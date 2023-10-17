@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models import BaseOperator, TaskInstance, Variable
 from airflow.operators.python import PythonOperator
+from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.session import provide_session
 from sqlalchemy.orm import Session
 
@@ -58,6 +59,7 @@ class SQLMeshAirflow:
             deletion from Airflow. Default: 1 hour.
         plan_application_dag_ttl: Determines the time-to-live period for finished plan application DAGs.
             Once this period is exceeded, finished plan application DAGs are deleted by the janitor. Default: 2 days.
+        external_table_sensor_factory: A factory function that creates a sensor operator for a given signal payload.
     """
 
     def __init__(
@@ -68,6 +70,9 @@ class SQLMeshAirflow:
         ddl_engine_operator_args: t.Optional[t.Dict[str, t.Any]] = None,
         janitor_interval: timedelta = timedelta(hours=1),
         plan_application_dag_ttl: timedelta = timedelta(days=2),
+        external_table_sensor_factory: t.Optional[
+            t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator]
+        ] = None,
     ):
         if isinstance(engine_operator, str):
             if not ddl_engine_operator:
@@ -89,6 +94,7 @@ class SQLMeshAirflow:
             self._ddl_engine_operator_args = ddl_engine_operator_args or {}
         self._janitor_interval = janitor_interval
         self._plan_application_dag_ttl = plan_application_dag_ttl
+        self._external_table_sensor_factory = external_table_sensor_factory
 
     @property
     def dags(self) -> t.List[DAG]:
@@ -109,6 +115,7 @@ class SQLMeshAirflow:
             self._engine_operator_args,
             self._ddl_engine_operator,
             self._ddl_engine_operator_args,
+            self._external_table_sensor_factory,
             stored_snapshots,
         )
 

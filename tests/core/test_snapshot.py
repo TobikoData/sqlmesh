@@ -120,6 +120,7 @@ def test_json(snapshot: Snapshot):
             "references": [],
             "hash_raw_query": False,
             "allow_partials": False,
+            "signals": [],
         },
         "audits": [],
         "name": "name",
