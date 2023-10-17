@@ -103,6 +103,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
                     "grains": [],
                     "hash_raw_query": False,
                     "allow_partials": False,
+                    "signals": [],
                 },
                 "audits": [],
                 "name": "test_model",

@@ -9,6 +9,7 @@ from airflow import DAG
 from airflow.models import BaseOperator, baseoperator
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
+from airflow.sensors.base import BaseSensorOperator
 
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.notification_target import NotificationTarget
@@ -21,7 +22,10 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.operators import targets
-from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
+from sqlmesh.schedulers.airflow.operators.hwm_sensor import (
+    HighWaterMarkExternalSensor,
+    HighWaterMarkSensor,
+)
 from sqlmesh.schedulers.airflow.operators.notification import (
     BaseNotificationOperatorProvider,
 )
@@ -58,12 +62,16 @@ class SnapshotDagGenerator:
         engine_operator_args: t.Optional[t.Dict[str, t.Any]],
         ddl_engine_operator: t.Type[BaseOperator],
         ddl_engine_operator_args: t.Optional[t.Dict[str, t.Any]],
+        external_table_sensor_factory: t.Optional[
+            t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator]
+        ],
         snapshots: t.Dict[SnapshotId, Snapshot],
     ):
         self._engine_operator = engine_operator
         self._engine_operator_args = engine_operator_args or {}
         self._ddl_engine_operator = ddl_engine_operator
         self._ddl_engine_operator_args = ddl_engine_operator_args or {}
+        self._external_table_sensor_factory = external_table_sensor_factory
         self._snapshots = snapshots
 
     def generate_cadence_dags(self, snapshots: t.Iterable[SnapshotIdLike]) -> t.List[DAG]:
@@ -506,10 +514,12 @@ class SnapshotDagGenerator:
             task_id=task_id,
         )
 
-    def _create_hwm_sensors(self, snapshot: Snapshot) -> t.List[HighWaterMarkSensor]:
-        output = []
+    def _create_hwm_sensors(self, snapshot: Snapshot) -> t.List[BaseSensorOperator]:
+        output: t.List[BaseSensorOperator] = []
+        depends_on = snapshot.node.depends_on
         for upstream_snapshot_id in snapshot.parents:
             upstream_snapshot = self._snapshots[upstream_snapshot_id]
+            depends_on.discard(upstream_snapshot.name)
             if not upstream_snapshot.is_symbolic and not upstream_snapshot.is_seed:
                 output.append(
                     HighWaterMarkSensor(
@@ -518,6 +528,16 @@ class SnapshotDagGenerator:
                         task_id=f"{sanitize_name(upstream_snapshot.name)}_{upstream_snapshot.version}_high_water_mark_sensor",
                     )
                 )
+
+        if self._external_table_sensor_factory and snapshot.model.signals:
+            output.append(
+                HighWaterMarkExternalSensor(
+                    snapshot=snapshot,
+                    external_table_sensor_factory=self._external_table_sensor_factory,
+                    task_id="external_high_water_mark_sensor",
+                )
+            )
+
         return output
 
 

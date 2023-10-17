@@ -214,6 +214,7 @@ def date_dict(
         kwargs[f"{prefix}_ts"] = dt.isoformat()
         kwargs[f"{prefix}_epoch"] = millis / 1000
         kwargs[f"{prefix}_millis"] = millis
+        kwargs[f"{prefix}_hour"] = dt.hour
     return kwargs
 
 

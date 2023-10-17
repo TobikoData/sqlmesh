@@ -1,11 +1,16 @@
+from unittest.mock import call
+
 import pytest
 from airflow.utils.context import Context
 from pytest_mock.plugin import MockerFixture
-from sqlglot import parse_one
 
+from sqlmesh.core.dialect import parse_one
 from sqlmesh.core.model import SqlModel
 from sqlmesh.core.snapshot import SnapshotChangeCategory
-from sqlmesh.schedulers.airflow.operators.hwm_sensor import HighWaterMarkSensor
+from sqlmesh.schedulers.airflow.operators.hwm_sensor import (
+    HighWaterMarkExternalSensor,
+    HighWaterMarkSensor,
+)
 from sqlmesh.utils.date import to_datetime
 
 
@@ -109,3 +114,52 @@ def test_current_hwm_above_target(mocker: MockerFixture, make_snapshot):
     assert task.poke(context)
 
     get_snapshots_mock.assert_called_once_with([target_snapshot_v1.table_info])
+
+
+def test_hwm_external_sensor(mocker: MockerFixture, make_snapshot):
+    snapshot = make_snapshot(
+        SqlModel(
+            name="this",
+            query=parse_one("select 1"),
+            signals=[
+                {"table_name": "test_table_name_a", "ds": parse_one("@end_ds")},
+                {
+                    "table_name": "test_table_name_b",
+                    "ds": parse_one("@end_ds"),
+                    "hour": parse_one("@end_hour"),
+                },
+            ],
+        )
+    )
+
+    external_sensor_mock = mocker.Mock()
+    external_sensor_mock.poke.return_value = True
+
+    factory_mock = mocker.Mock()
+    factory_mock.return_value = external_sensor_mock
+
+    dag_run_mock = mocker.Mock()
+    dag_run_mock.data_interval_start = to_datetime("2023-01-01")
+    dag_run_mock.data_interval_end = to_datetime("2023-01-02")
+
+    context = Context(dag_run=dag_run_mock)  # type: ignore
+
+    task = HighWaterMarkExternalSensor(
+        snapshot=snapshot,
+        external_table_sensor_factory=factory_mock,
+        task_id="test_hwm_task",
+    )
+    assert task.poke(context)
+
+    factory_mock.assert_has_calls(
+        [
+            call({"table_name": "test_table_name_a", "ds": "2023-01-01"}),
+            call({"table_name": "test_table_name_b", "ds": "2023-01-01", "hour": 23}),
+        ]
+    )
+    external_sensor_mock.poke.assert_has_calls(
+        [
+            call(context),
+            call(context),
+        ]
+    )
