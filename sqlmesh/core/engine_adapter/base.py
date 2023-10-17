@@ -63,6 +63,7 @@ class InsertOverwriteStrategy(Enum):
     INSERT_OVERWRITE = 2
     # Note: Replace where on Databricks requires that `spark.sql.sources.partitionOverwriteMode` be set to `static`
     REPLACE_WHERE = 3
+    INTO_IS_OVERWRITE = 4
 
     @property
     def is_delete_insert(self) -> bool:
@@ -75,6 +76,10 @@ class InsertOverwriteStrategy(Enum):
     @property
     def is_replace_where(self) -> bool:
         return self == InsertOverwriteStrategy.REPLACE_WHERE
+
+    @property
+    def is_into_is_overwrite(self) -> bool:
+        return self == InsertOverwriteStrategy.INTO_IS_OVERWRITE
 
     @property
     def requires_condition(self) -> bool:

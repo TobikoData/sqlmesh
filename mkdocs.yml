@@ -69,6 +69,7 @@ nav:
       - integrations/engines/redshift.md
       - integrations/engines/snowflake.md
       - integrations/engines/spark.md
+      - integrations/engines/trino.md
   - Resources:
     - comparisons.md
     - development.md

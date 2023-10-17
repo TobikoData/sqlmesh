@@ -7,7 +7,8 @@ from pandas.api.types import is_datetime64_dtype  # type: ignore
 from sqlglot import exp
 
 from sqlmesh.core.dialect import to_schema
-from sqlmesh.core.engine_adapter.base import CatalogSupport, EngineAdapter, SourceQuery
+from sqlmesh.core.engine_adapter.base import CatalogSupport, SourceQuery
+from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 
 if t.TYPE_CHECKING:
@@ -15,13 +16,14 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF, Query
 
 
-class SnowflakeEngineAdapter(EngineAdapter):
+class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     DIALECT = "snowflake"
     ESCAPE_JSON = True
     SUPPORTS_MATERIALIZED_VIEWS = True
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CLONING = True
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
+    CURRENT_CATALOG_FUNCTION = "CURRENT_DATABASE()"
 
     def _df_to_source_queries(
         self,
@@ -128,12 +130,6 @@ class SnowflakeEngineAdapter(EngineAdapter):
         cascade: bool = False,
     ) -> None:
         super().drop_schema(schema_name, ignore_if_not_exists=ignore_if_not_exists, cascade=cascade)
-
-    def get_current_catalog(self) -> t.Optional[str]:
-        result = self.fetchone("SELECT CURRENT_DATABASE()")
-        if result:
-            return result[0]
-        return None
 
     def set_current_catalog(self, catalog: str) -> None:
         self.execute(exp.Use(this=exp.to_identifier(catalog)))
