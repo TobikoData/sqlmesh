@@ -260,9 +260,19 @@ It includes three elements:
 2. A value to return if the condition is `TRUE`
 3. A value to return if the condition is `FALSE` [optional]
 
-These elements are specified as `@IF([logical condition], [value if TRUE], [value if FALSE])`.
+These elements are specified as:
+
+```sql linenums="1"
+@IF([logical condition], [value if TRUE], [value if FALSE])
+```
 
 The value to return if the condition is `FALSE` is optional - if it is not provided and the condition is `FALSE`, then the macro has no effect on the resulting query.
+
+It's also possible to use this macro in order to conditionally execute pre/post-statements:
+
+```sql linenums="1"
+@IF([logical condition], [statement to execute if TRUE])
+```
 
 The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports the following operators:
 
@@ -316,6 +326,21 @@ SELECT
   col1,
   nonsensitive_col
 FROM table
+```
+
+Another example is conditionally executing a pre/post-statement depending on the current [runtime stage](./macro_variables.md#predefined-variables). The following example shows how one can execute a given statement only at model creation time:
+
+```sql linenums="1"
+MODEL (
+  ...
+);
+
+@IF(
+    @runtime_stage = 'creating',
+    ALTER TABLE table MODIFY COLUMN column SET MASKING POLICY mask_geo_point
+);
+
+SELECT ...
 ```
 
 #### @EVAL
