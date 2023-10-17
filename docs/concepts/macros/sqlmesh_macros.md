@@ -274,6 +274,8 @@ It's also possible to use this macro in order to conditionally execute pre/post-
 @IF([logical condition], [statement to execute if TRUE])
 ```
 
+Note that the statement to be executed must not end with a semi-colon.
+
 The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports the following operators:
 
 - Equality: `=` for equals, `!=` or `<>` for not equals
@@ -328,19 +330,29 @@ SELECT
 FROM table
 ```
 
-Another example is conditionally executing a pre/post-statement depending on the current [runtime stage](./macro_variables.md#predefined-variables). For instance, the following `@IF` pre-statement will only be executed at model creation time:
+Another example is conditionally executing a pre/post-statement depending on the current [runtime stage](./macro_variables.md#predefined-variables). For instance, the following `@IF` post-statement will only be executed at model evaluation time:
 
 ```sql linenums="1"
 MODEL (
-  ...
+  name sqlmesh_example.full_model,
+  kind FULL,
+  cron '@daily',
+  grain item_id,
+  audits [assert_positive_order_ids],
 );
+
+SELECT
+  item_id,
+  count(distinct id) AS num_orders,
+FROM
+    sqlmesh_example.incremental_model
+GROUP BY item_id
+ORDER BY item_id;
 
 @IF(
-    @runtime_stage = 'creating',
-    ALTER TABLE t MODIFY COLUMN c SET MASKING POLICY p
+    @runtime_stage = 'evaluating',
+    ALTER TABLE sqlmesh_example.full_model ALTER item_id TYPE VARCHAR
 );
-
-SELECT ...
 ```
 
 #### @EVAL
