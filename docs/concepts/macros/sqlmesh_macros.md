@@ -337,7 +337,7 @@ MODEL (
 
 @IF(
     @runtime_stage = 'creating',
-    ALTER TABLE table MODIFY COLUMN column SET MASKING POLICY mask_geo_point
+    ALTER TABLE t MODIFY COLUMN c SET MASKING POLICY p
 );
 
 SELECT ...
