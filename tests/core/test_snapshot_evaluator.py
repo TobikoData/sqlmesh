@@ -189,7 +189,8 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
     evaluator.evaluate(snapshot, "2020-01-01", "2020-01-02", "2020-01-02", snapshots={})
     assert f"RuntimeStage value: {RuntimeStage.EVALUATING.value}" in capsys.readouterr().out
 
-    non_empty_calls = [c for c in adapter_mock.execute.mock_calls if c != call([])]
+    empty_call = call([])
+    non_empty_calls = [c for c in adapter_mock.execute.mock_calls if c != empty_call]
     assert len(non_empty_calls) == 1
     assert non_empty_calls[0] == call(
         [parse_one("ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p")]
