@@ -15,6 +15,7 @@ from sqlmesh.core.engine_adapter.postgres import PostgresEngineAdapter
 from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlmesh.core.engine_adapter.snowflake import SnowflakeEngineAdapter
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
+from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 
 DIALECT_TO_ENGINE_ADAPTER = {
     "spark": SparkEngineAdapter,
@@ -26,6 +27,7 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "postgres": PostgresEngineAdapter,
     "mysql": MySQLEngineAdapter,
     "mssql": MSSQLEngineAdapter,
+    "trino": TrinoEngineAdapter,
 }
 
 DIALECT_ALIASES = {

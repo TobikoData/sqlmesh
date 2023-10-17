@@ -16,6 +16,7 @@ from sqlmesh.core.engine_adapter.base import (
     SourceQuery,
 )
 from sqlmesh.core.engine_adapter.mixins import (
+    GetCurrentCatalogFromFunctionMixin,
     InsertOverwriteWithMergeMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
@@ -32,6 +33,7 @@ class MSSQLEngineAdapter(
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
     InsertOverwriteWithMergeMixin,
+    GetCurrentCatalogFromFunctionMixin,
 ):
     """Implementation of EngineAdapterWithIndexSupport for MsSql compatibility.
 
@@ -46,6 +48,7 @@ class MSSQLEngineAdapter(
     SUPPORTS_TUPLE_IN = False
     SUPPORTS_MATERIALIZED_VIEWS = False
     CATALOG_SUPPORT = CatalogSupport.REQUIRES_SET_CATALOG
+    CURRENT_CATALOG_FUNCTION = "DB_NAME()"
 
     @set_catalog()
     def columns(
@@ -113,12 +116,6 @@ class MSSQLEngineAdapter(
         result = self.fetchone(sql, quote_identifiers=True)
 
         return result[0] == 1 if result else False
-
-    def get_current_catalog(self) -> t.Optional[str]:
-        result = self.fetchone("SELECT DB_NAME()")
-        if result:
-            return result[0]
-        return None
 
     def set_current_catalog(self, catalog_name: str) -> None:
         self.execute(exp.Use(this=exp.to_identifier(catalog_name)))

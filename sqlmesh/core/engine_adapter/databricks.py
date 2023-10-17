@@ -7,6 +7,7 @@ import pandas as pd
 from sqlglot import Dialect, exp
 
 from sqlmesh.core.engine_adapter.base import CatalogSupport, InsertOverwriteStrategy
+from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty
@@ -19,7 +20,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DatabricksEngineAdapter(SparkEngineAdapter):
+class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAdapter):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     SUPPORTS_CLONING = True
@@ -31,6 +32,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         array_element_selector="element",
     )
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
+    CURRENT_CATALOG_FUNCTION = "current_catalog()"
 
     def __init__(
         self,
@@ -147,12 +149,6 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         if not isinstance(df, pd.DataFrame):
             return df.toPandas()
         return df
-
-    def get_current_catalog(self) -> t.Optional[str]:
-        result = self.fetchone("SELECT current_catalog()")
-        if result:
-            return result[0]
-        return None
 
     def set_current_catalog(self, catalog_name: str) -> None:
         self.execute(exp.Use(this=exp.to_identifier(catalog_name), kind="CATALOG"))

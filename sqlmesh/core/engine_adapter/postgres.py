@@ -7,6 +7,7 @@ from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
+    GetCurrentCatalogFromFunctionMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
 )
@@ -18,16 +19,13 @@ logger = logging.getLogger(__name__)
 
 
 class PostgresEngineAdapter(
-    BasePostgresEngineAdapter, LogicalReplaceQueryMixin, PandasNativeFetchDFSupportMixin
+    BasePostgresEngineAdapter,
+    LogicalReplaceQueryMixin,
+    PandasNativeFetchDFSupportMixin,
+    GetCurrentCatalogFromFunctionMixin,
 ):
     DIALECT = "postgres"
     SUPPORTS_INDEXES = True
-
-    def get_current_catalog(self) -> t.Optional[str]:
-        result = self.fetchone("SELECT current_catalog")
-        if result:
-            return result[0]
-        return None
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

@@ -57,7 +57,7 @@ def get_table_diff(
         schema_diff=schema_diff,
         row_diff=row_diff,
         on=[
-            (eq.left.name, eq.right.name) if eq.left.table == "s" else (eq.right.name, eq.left.name)
+            (eq.left.name, eq.right.name) if eq.left.table == "s" else (eq.right.name, eq.left.name)  # type: ignore
             for eq in diff.on.find_all(exp.EQ)
         ],
     )

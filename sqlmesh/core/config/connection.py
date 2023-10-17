@@ -17,7 +17,11 @@ from sqlmesh.core.config.common import (
 )
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import field_validator, model_validator
+from sqlmesh.utils.pydantic import (
+    field_validator,
+    model_validator,
+    model_validator_v1_args,
+)
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -796,6 +800,187 @@ class SparkConnectionConfig(ConnectionConfig):
             "spark": SparkSession.builder.config(conf=spark_config)
             .enableHiveSupport()
             .getOrCreate(),
+        }
+
+
+class TrinoAuthenticationMethod(str, Enum):
+    NO_AUTH = "no-auth"
+    BASIC = "basic"
+    LDAP = "ldap"
+    KERBEROS = "kerberos"
+    JWT = "jwt"
+    CERTIFICATE = "certificate"
+    OAUTH = "oauth"
+
+    @property
+    def is_no_auth(self) -> bool:
+        return self == self.NO_AUTH
+
+    @property
+    def is_basic(self) -> bool:
+        return self == self.BASIC
+
+    @property
+    def is_ldap(self) -> bool:
+        return self == self.LDAP
+
+    @property
+    def is_kerberos(self) -> bool:
+        return self == self.KERBEROS
+
+    @property
+    def is_jwt(self) -> bool:
+        return self == self.JWT
+
+    @property
+    def is_certificate(self) -> bool:
+        return self == self.CERTIFICATE
+
+    @property
+    def is_oauth(self) -> bool:
+        return self == self.OAUTH
+
+
+class TrinoConnectionConfig(ConnectionConfig):
+    method: TrinoAuthenticationMethod = TrinoAuthenticationMethod.NO_AUTH
+    host: str
+    user: str
+    catalog: str
+    port: t.Optional[int] = None
+    http_scheme: Literal["http", "https"] = "https"
+    # General Optional
+    roles: t.Optional[t.Dict[str, str]] = None
+    http_headers: t.Optional[t.Dict[str, str]] = None
+    session_properties: t.Optional[t.Dict[str, str]] = None
+    retries: int = 3
+    timezone: t.Optional[str] = None
+    # Basic/LDAP
+    password: t.Optional[str] = None
+    # LDAP
+    impersonation_user: t.Optional[str] = None
+    # Kerberos
+    keytab: t.Optional[str] = None
+    krb5_config: t.Optional[str] = None
+    principal: t.Optional[str] = None
+    service_name: str = "trino"
+    hostname_override: t.Optional[str] = None
+    mutual_authentication: bool = False
+    force_preemptive: bool = False
+    sanitize_mutual_error_response: bool = True
+    delegate: bool = False
+    # JWT
+    jwt_token: t.Optional[str] = None
+    # Certificate
+    client_certificate: t.Optional[str] = None
+    client_private_key: t.Optional[str] = None
+    cert: t.Optional[str] = None
+
+    concurrent_tasks: int = 4
+
+    type_: Literal["trino"] = Field(alias="type", default="trino")
+
+    @model_validator(mode="after")
+    @model_validator_v1_args
+    def _root_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        port = values.get("port")
+        if (
+            values["http_scheme"] == "http"
+            and not values["method"].is_no_auth
+            and not values["method"].is_basic
+        ):
+            raise ConfigError("HTTP scheme can only be used with no-auth or basic method")
+        if port is None:
+            values["port"] = 80 if values["http_scheme"] == "http" else 443
+        if (values["method"].is_ldap or values["method"].is_basic) and (
+            not values["password"] or not values["user"]
+        ):
+            raise ConfigError(
+                f"Username and Password must be provided if using {values['method'].value} authentication"
+            )
+        if values["method"].is_kerberos and (
+            not values["principal"] or not values["keytab"] or not values["krb5_config"]
+        ):
+            raise ConfigError(
+                "Kerberos requires the following fields: principal, keytab, and krb5_config"
+            )
+        if values["method"].is_jwt and not values["jwt_token"]:
+            raise ConfigError("JWT requires `jwt_token` to be set")
+        if values["method"].is_certificate and (
+            not values["cert"]
+            or not values["client_certificate"]
+            or not values["client_private_key"]
+        ):
+            raise ConfigError(
+                "Certificate requires the following fields: cert, client_certificate, and client_private_key"
+            )
+        return values
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        kwargs = {
+            "host",
+            "port",
+            "catalog",
+            "password",
+            "roles",
+            "http_scheme",
+            "http_headers",
+            "session_properties",
+            "timezone",
+        }
+        return kwargs
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.TrinoEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from trino.dbapi import connect
+
+        return connect
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        from trino.auth import (
+            BasicAuthentication,
+            CertificateAuthentication,
+            JWTAuthentication,
+            KerberosAuthentication,
+            OAuth2Authentication,
+        )
+
+        if self.method.is_basic or self.method.is_ldap:
+            auth = BasicAuthentication(self.user, self.password)
+        elif self.method.is_kerberos:
+            if self.keytab:
+                os.environ["KRB5_CLIENT_KTNAME"] = self.keytab
+            auth = KerberosAuthentication(
+                config=self.krb5_config,
+                service_name=self.service_name,
+                principal=self.principal,
+                mutual_authentication=self.mutual_authentication,
+                ca_bundle=self.cert,
+                force_preemptive=self.force_preemptive,
+                hostname_override=self.hostname_override,
+                sanitize_mutual_error_response=self.sanitize_mutual_error_response,
+                delegate=self.delegate,
+            )
+        elif self.method.is_oauth:
+            auth = OAuth2Authentication()
+        elif self.method.is_jwt:
+            auth = JWTAuthentication(self.jwt_token)
+        elif self.method.is_certificate:
+            auth = CertificateAuthentication(self.client_certificate, self.client_private_key)
+        else:
+            auth = None
+
+        return {
+            "auth": auth,
+            "user": self.impersonation_user or self.user,
+            "max_attempts": self.retries,
+            "verify": self.cert,
+            "source": "sqlmesh",
         }
 
 
