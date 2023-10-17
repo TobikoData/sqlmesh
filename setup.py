@@ -72,7 +72,7 @@ setup(
             "isort==5.10.1",
             "mkdocs-include-markdown-plugin==4.0.3",
             "mkdocs-material==9.0.5",
-            "mypy~=1.3.0",
+            "mypy~=1.4.0",
             "pre-commit",
             "pandas-stubs",
             "pdoc",
