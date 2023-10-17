@@ -67,7 +67,7 @@ class ModelMeta(_Node, extra="allow"):
     @field_validator("audits", mode="before")
     @classmethod
     def _audits_validator(cls, v: t.Any) -> t.Any:
-        def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, str]]:
+        def extract(v: exp.Expression) -> t.Tuple[str, t.Dict[str, exp.Expression]]:
             kwargs = {}
 
             if isinstance(v, exp.Anonymous):
@@ -85,7 +85,7 @@ class ModelMeta(_Node, extra="allow"):
                         f"Function '{func}' must be called with key-value arguments like {func}(arg=value)."
                     )
                 kwargs[arg.left.name] = arg.right
-            return (func.lower(), kwargs)
+            return func.lower(), kwargs
 
         if isinstance(v, (exp.Tuple, exp.Array)):
             return [extract(i) for i in v.expressions]

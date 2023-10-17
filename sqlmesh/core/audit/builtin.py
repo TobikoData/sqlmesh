@@ -63,7 +63,7 @@ FROM (
    FROM @this_model
    LIMIT @threshold + 1
 )
-HAVING COUTN(*) <= @threshold
+HAVING COUNT(*) <= @threshold
     """,
 )
 
