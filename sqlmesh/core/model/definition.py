@@ -827,6 +827,8 @@ class _Model(ModelMeta, frozen=True):
             else:
                 raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
 
+        metadata.extend([s.sql(comments=True) for s in self.signals])
+
         # Add comments from the query.
         if self.is_sql:
             rendered_query = self.render_query()
