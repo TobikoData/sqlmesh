@@ -94,7 +94,9 @@ class ModelTest(unittest.TestCase):
 
     def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
         """Compare two DataFrames"""
-        expected = expected.astype(actual.dtypes.to_dict())
+        actual_types = actual.dtypes.to_dict()
+        # two astypes are necessary, pandas converts strings to times as NS, but if the actual is US, it doesn't take affect until the 2nd try!
+        expected = expected.astype(actual_types).astype(actual_types)
         expected = expected.replace({np.nan: None, "nan": None})
         actual = actual.replace({np.nan: None, "nan": None})
 
