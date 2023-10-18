@@ -93,5 +93,3 @@ Other macro variables:
     * 'loading' - The project is currently being loaded into SQLMesh's runtime context.
     * 'creating' - The model tables are being created.
     * 'evaluating' - The models' logic is being evaluated.
-
-NOTE: this macro variable can only be used in pre/post-statements.

@@ -171,7 +171,7 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
             @increment_stage_counter();
             @if(@runtime_stage = 'evaluating', ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p);
 
-            SELECT 1 AS a;
+            SELECT 1 AS a, @runtime_stage AS b;
             """
         ),
         macros=macro.get_registry(),
@@ -195,6 +195,8 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
     assert non_empty_calls[0] == call(
         [parse_one("ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p")]
     )
+
+    assert set(adapter_mock.create_table.mock_calls[0].kwargs["columns_to_types"]) == {"a", "b"}
 
 
 def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):

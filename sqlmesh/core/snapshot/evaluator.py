@@ -152,6 +152,7 @@ class SnapshotEvaluator:
             end=end,
             execution_time=execution_time,
             has_intervals=bool(snapshot.intervals),
+            runtime_stage=RuntimeStage.EVALUATING,
             **kwargs,
         )
 
@@ -159,7 +160,6 @@ class SnapshotEvaluator:
             engine_adapter=self.adapter,
             snapshots=snapshots,
             is_dev=is_dev,
-            runtime_stage=RuntimeStage.EVALUATING,
             **common_render_kwargs,
         )
 
