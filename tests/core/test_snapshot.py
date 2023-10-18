@@ -397,7 +397,7 @@ def test_missing_interval_smaller_than_interval_unit(make_snapshot):
         )
     )
 
-    assert snapshot_daily.missing_intervals("2020-01-01 00:00:00", "2020-01-01 23:59:59") == []
+    assert snapshot_daily.missing_intervals("2020-01-01 00:00:05", "2020-01-01 23:59:59") == []
     assert snapshot_daily.missing_intervals("2020-01-01 00:00:00", "2020-01-02 00:00:00") == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
     ]
@@ -417,6 +417,42 @@ def test_missing_interval_smaller_than_interval_unit(make_snapshot):
     assert snapshot_hourly.missing_intervals("2020-01-01 00:00:00", "2020-01-01 00:59:00") == []
     assert snapshot_hourly.missing_intervals("2020-01-01 00:00:00", "2020-01-01 01:00:00") == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-01 01:00:00"))
+    ]
+
+    snapshot_end_categorical = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
+            owner="owner",
+            dialect="spark",
+            cron="@daily",
+            start="2020-01-01",
+            query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
+        )
+    )
+
+    assert snapshot_end_categorical.missing_intervals("2020-01-01 00:00:00", "2020-01-01") == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
+    ]
+
+    snapshot_partial = make_snapshot(
+        SqlModel(
+            name="name",
+            kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=30),
+            owner="owner",
+            dialect="spark",
+            cron="@daily",
+            start="2020-01-01",
+            query=parse_one("SELECT @EACH([1, 2], x -> x), ds FROM parent.tbl"),
+            allow_partials=True,
+        )
+    )
+
+    assert snapshot_partial.missing_intervals("2020-01-01 00:00:05", "2020-01-01 23:59:59") == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
+    ]
+    assert snapshot_partial.missing_intervals("2020-01-01 00:00:00", "2020-01-02 00:00:00") == [
+        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))
     ]
 
 
