@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 import logging
 import typing as t
 from datetime import datetime
 
 from airflow.models import DagRun
-from airflow.sensors.base import BaseSensorOperator, PokeReturnValue
+from airflow.sensors.base import BaseSensorOperator
 from airflow.utils.context import Context
 
 from sqlmesh.core.snapshot import Snapshot, SnapshotTableInfo
 from sqlmesh.schedulers.airflow import util
 from sqlmesh.utils.date import now, to_datetime
+
+if t.TYPE_CHECKING:
+    from airflow.sensors.base import PokeReturnValue
 
 logger = logging.getLogger(__name__)
 
