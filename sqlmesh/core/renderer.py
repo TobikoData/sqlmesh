@@ -327,6 +327,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     snapshots=snapshots,
                     table_mapping=table_mapping,
                     is_dev=is_dev,
+                    runtime_stage=runtime_stage,
                     **kwargs,
                 )
             except ParsetimeAdapterCallError:

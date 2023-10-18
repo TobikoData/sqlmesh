@@ -171,7 +171,7 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
             @increment_stage_counter();
             @if(@runtime_stage = 'evaluating', ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p);
 
-            SELECT 1 AS a;
+            SELECT 1 AS a, @runtime_stage AS b;
             """
         ),
         macros=macro.get_registry(),
@@ -194,6 +194,16 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
     assert len(non_empty_calls) == 1
     assert non_empty_calls[0] == call(
         [parse_one("ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p")]
+    )
+
+    assert snapshot.model.render_query().sql() == '''SELECT 1 AS "a", 'loading' AS "b"'''
+    assert (
+        snapshot.model.render_query(runtime_stage=RuntimeStage.CREATING).sql()
+        == '''SELECT 1 AS "a", 'creating' AS "b"'''
+    )
+    assert (
+        snapshot.model.render_query(runtime_stage=RuntimeStage.EVALUATING).sql()
+        == '''SELECT 1 AS "a", 'evaluating' AS "b"'''
     )
 
 
