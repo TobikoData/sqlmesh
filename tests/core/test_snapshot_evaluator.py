@@ -196,7 +196,15 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
         [parse_one("ALTER TABLE test_schema.foo MODIFY COLUMN c SET MASKING POLICY p")]
     )
 
-    assert set(adapter_mock.create_table.mock_calls[0].kwargs["columns_to_types"]) == {"a", "b"}
+    assert snapshot.model.render_query().sql() == '''SELECT 1 AS "a", 'loading' AS "b"'''
+    assert (
+        snapshot.model.render_query(runtime_stage=RuntimeStage.CREATING).sql()
+        == '''SELECT 1 AS "a", 'creating' AS "b"'''
+    )
+    assert (
+        snapshot.model.render_query(runtime_stage=RuntimeStage.EVALUATING).sql()
+        == '''SELECT 1 AS "a", 'evaluating' AS "b"'''
+    )
 
 
 def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):
