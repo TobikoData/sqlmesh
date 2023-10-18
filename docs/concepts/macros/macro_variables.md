@@ -89,7 +89,7 @@ All predefined macro variables:
 
 Other macro variables:
 
-* @runtime_stage - A string value that denotes the current stage of the SQLMesh runtime. The possible values are:
+* @runtime_stage - A string value that denotes the current stage of the SQLMesh runtime. It can take one of the following values:
     * 'loading' - The project is currently being loaded into SQLMesh's runtime context.
     * 'creating' - The model tables are being created.
     * 'evaluating' - The models' logic is being evaluated.
