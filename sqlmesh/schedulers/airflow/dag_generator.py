@@ -7,7 +7,6 @@ import typing as t
 import pendulum
 from airflow import DAG
 from airflow.models import BaseOperator, baseoperator
-from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.sensors.base import BaseSensorOperator
 
@@ -32,6 +31,11 @@ from sqlmesh.schedulers.airflow.operators.notification import (
 from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import TimeLike, to_datetime, yesterday_timestamp
 from sqlmesh.utils.errors import SQLMeshError
+
+try:
+    from airflow.operators.empty import EmptyOperator
+except ImportError:
+    from airflow.operators.dummy import DummyOperator as EmptyOperator  # type: ignore
 
 logger = logging.getLogger(__name__)
 

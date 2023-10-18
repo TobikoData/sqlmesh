@@ -2,7 +2,7 @@ from sqlglot.dialects.dialect import DialectType
 
 # Sizes based on a composite key/index of two text fields with 4 bytes per characters.
 MAX_TEXT_INDEX_LENGTH = {
-    "mysql": "380",  # 380 characters per column, <= 3070 byte index size limit
+    "mysql": "250",  # 250 characters per column, <= 767 byte index size limit
     "tsql": "450",  # 450 bytes per column, <= 900 byte index size limit
 }
 
