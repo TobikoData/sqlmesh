@@ -691,6 +691,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
+        if to_timestamp(end) - to_timestamp(start) < self.node.interval_unit.milliseconds:
+            return []
         intervals = self.dev_intervals if is_dev and self.is_paused_forward_only else self.intervals
 
         if self.is_symbolic or (self.is_seed and intervals):
