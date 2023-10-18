@@ -271,10 +271,10 @@ The value to return if the condition is `FALSE` is optional - if it is not provi
 It's also possible to use this macro in order to conditionally execute pre/post-statements:
 
 ```sql linenums="1"
-@IF([logical condition], [statement to execute if TRUE])
+@IF([logical condition], [statement to execute if TRUE]);
 ```
 
-Note that the statement to be executed must not end with a semi-colon.
+The `@IF` pre/post-statement itself must end with a semi-colon, but the inner statement argument must not.
 
 The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports the following operators:
 
@@ -354,6 +354,8 @@ ORDER BY item_id;
     ALTER TABLE sqlmesh_example.full_model ALTER item_id TYPE VARCHAR
 );
 ```
+
+NOTE: we can also, say, alter the type of a column if the `@runtime_stage` is `'creating'`, but that will only have meaningful effects if the corresponding model is of an incremental kind, since `FULL` models are rebuilt on each evaluation and hence any changes made at their creation stage will be overwritten.
 
 #### @EVAL
 
