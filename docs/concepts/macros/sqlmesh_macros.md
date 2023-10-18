@@ -260,9 +260,21 @@ It includes three elements:
 2. A value to return if the condition is `TRUE`
 3. A value to return if the condition is `FALSE` [optional]
 
-These elements are specified as `@IF([logical condition], [value if TRUE], [value if FALSE])`.
+These elements are specified as:
+
+```sql linenums="1"
+@IF([logical condition], [value if TRUE], [value if FALSE])
+```
 
 The value to return if the condition is `FALSE` is optional - if it is not provided and the condition is `FALSE`, then the macro has no effect on the resulting query.
+
+It's also possible to use this macro in order to conditionally execute pre/post-statements:
+
+```sql linenums="1"
+@IF([logical condition], [statement to execute if TRUE]);
+```
+
+The `@IF` pre/post-statement itself must end with a semi-colon, but the inner statement argument must not.
 
 The logical condition should be written *in SQL* and is evaluated with [SQLGlot's](https://github.com/tobymao/sqlglot) SQL engine. It supports the following operators:
 
@@ -317,6 +329,33 @@ SELECT
   nonsensitive_col
 FROM table
 ```
+
+Another example is conditionally executing a pre/post-statement depending on the current [runtime stage](./macro_variables.md#predefined-variables). For instance, the following `@IF` post-statement will only be executed at model evaluation time:
+
+```sql linenums="1"
+MODEL (
+  name sqlmesh_example.full_model,
+  kind FULL,
+  cron '@daily',
+  grain item_id,
+  audits [assert_positive_order_ids],
+);
+
+SELECT
+  item_id,
+  count(distinct id) AS num_orders,
+FROM
+    sqlmesh_example.incremental_model
+GROUP BY item_id
+ORDER BY item_id;
+
+@IF(
+    @runtime_stage = 'evaluating',
+    ALTER TABLE sqlmesh_example.full_model ALTER item_id TYPE VARCHAR
+);
+```
+
+NOTE: we can also, say, alter the type of a column if the `@runtime_stage` is `'creating'`, but that will only have meaningful effects if the corresponding model is of an incremental kind, since `FULL` models are rebuilt on each evaluation and hence any changes made at their creation stage will be overwritten.
 
 #### @EVAL
 
