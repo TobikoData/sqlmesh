@@ -27,6 +27,7 @@ from sqlmesh.utils.date import (
     to_datetime,
     to_ds,
     to_timestamp,
+    validate_date_range,
     yesterday,
 )
 from sqlmesh.utils.errors import SQLMeshError
@@ -632,7 +633,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         interval_unit = self.node.interval_unit
         start_ts = to_timestamp(interval_unit.cron_floor(start))
-        if start_ts < to_timestamp(start):
+        if start_ts < to_timestamp(start) and not self.model.allow_partials:
             start_ts = to_timestamp(interval_unit.cron_next(start_ts))
 
         if is_date(end):
@@ -691,6 +692,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Returns:
             A list of all the missing intervals as epoch timestamps.
         """
+        # If the amount of time being checked is less than the size of a single interval then we
+        # know that there can't being missing intervals within that range and return
+        validate_date_range(start, end)
+        if (
+            not is_date(end)
+            and not (self.is_model and self.model.allow_partials)
+            and to_timestamp(end) - to_timestamp(start) < self.node.interval_unit.milliseconds
+        ):
+            return []
         intervals = self.dev_intervals if is_dev and self.is_paused_forward_only else self.intervals
 
         if self.is_symbolic or (self.is_seed and intervals):

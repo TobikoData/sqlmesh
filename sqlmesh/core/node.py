@@ -135,6 +135,10 @@ class IntervalUnit(str, Enum):
     def seconds(self) -> int:
         return INTERVAL_SECONDS[self]
 
+    @property
+    def milliseconds(self) -> int:
+        return self.seconds * 1000
+
 
 INTERVAL_SECONDS = {
     IntervalUnit.YEAR: 60 * 60 * 24 * 365,
