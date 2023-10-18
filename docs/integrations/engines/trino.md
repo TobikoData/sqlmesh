@@ -8,14 +8,14 @@
 pip install "sqlmesh[trino]"
 ```
 
-If you are using Oath for Authentication, it is recommended to install keyring cache:
+If you are using Oauth for Authentication, it is recommended to install keyring cache:
 ```
 pip install "trino[external-authentication-token-cache]"
 ```
 
 ### Trino Connector Support
 
-The trino engine adapter has been tested against the [Hive Connector](https://trino.io/docs/current/connector/hive.html). 
+The trino engine adapter has been tested against the [Hive Connector](https://trino.io/docs/current/connector/hive.html).
 Please let us know on [Slack](https://tobikodata.com/slack) if you are wanting to use another connector or have tried another connector.
 
 ### Hive Connector Configuration
@@ -50,11 +50,12 @@ hive.allow-rename-table=true
 | `timezone`           | Timezone to use for the connection. Default: client-side local timezone                                                                                                   | string |    N     |
 
 ```yaml linenums="1"
-connector_name:
-    type: trino
-    user: [user]
-    host: [host]
-    catalog: [catalog]
+gateway_name:
+    connection:
+        type: trino
+        user: [user]
+        host: [host]
+        catalog: [catalog]
 ```
 
 ### Authentication
@@ -65,60 +66,63 @@ connector_name:
     | `method`   | `no-auth` (Default)                      | string |    N     |
 
     ```yaml linenums="1"
-    connector_name:
-        type: trino
-        user: [user]
-        host: [host]
-        catalog: [catalog]
-        # Most likely you will want http for scheme when not using auth
-        http_scheme: http
+    gateway_name:
+        connection:
+            type: trino
+            user: [user]
+            host: [host]
+            catalog: [catalog]
+            # Most likely you will want http for scheme when not using auth
+            http_scheme: http
     ```
 
 
 === "Basic Auth"
-    
+
     | Option     | Description                              |  Type  | Required |
     |------------|------------------------------------------|:------:|:--------:|
     | `method`   | `basic`                                  | string |    Y     |
     | `password` | The password to use when authenticating. | string |    Y     |
-    
-    
+
+
     ```yaml linenums="1"
-    connector_name:
-        type: trino
-        method: basic
-        user: [user]
-        password: [password]
-        host: [host]
-        catalog: [catalog]
+    gateway_name:
+        connection:
+            type: trino
+            method: basic
+            user: [user]
+            password: [password]
+            host: [host]
+            catalog: [catalog]
     ```
-    
+
     * [Trino Documentation on Basic Authentication](https://trino.io/docs/current/security/password-file.html)
     * [Python Client Basic Authentication](https://github.com/trinodb/trino-python-client#basic-authentication)
 
 === "LDAP"
-    
+
     | Option               | Description                                                             |  Type  | Required |
     |----------------------|-------------------------------------------------------------------------|:------:|:--------:|
     | `method`             | `ldap`                                                                  | string |    Y     |
     | `password`           | The password to use when authenticating.                                | string |    Y     |
     | `impersonation_user` | Override the provided username. This lets you impersonate another user. | string |    N     |
-    
+
     ```yaml linenums="1"
-    connector_name:
-        type: trino
-        method: ldap
-        user: [user]
-        password: [password]
-        host: [host]
-        catalog: [catalog]
+    gateway_name:
+        connection:
+            type: trino
+            method: ldap
+            user: [user]
+            password: [password]
+            host: [host]
+            catalog: [catalog]
     ```
-    
+
     * [Trino Documentation on LDAP Authentication](https://trino.io/docs/current/security/ldap.html)
     * [Python Client LDAP Authentication](https://github.com/trinodb/trino-python-client#basic-authentication)
 
 === "Kerberos"
-    
+
     | Option                           | Description                                                                       |  Type  | Required |
     |----------------------------------|-----------------------------------------------------------------------------------|:------:|:--------:|
     | `method`                         | `kerberos`                                                                        | string |    Y     |
@@ -133,42 +137,44 @@ connector_name:
     | `delegate`                       | Boolean flag for credential delegation (`GSS_C_DELEG_FLAG`). Default: `false`     |  bool  |    N     |
 
     ```yaml linenums="1"
-    connector_name:
-        type: trino
-        method: kerberos
-        user: user
-        keytab: /tmp/trino.keytab
-        krb5_config: /tmp/krb5.conf
-        principal: trino@company.com
-        host: trino.company.com
-        catalog: datalake
+    gateway_name:
+        connection:
+            type: trino
+            method: kerberos
+            user: user
+            keytab: /tmp/trino.keytab
+            krb5_config: /tmp/krb5.conf
+            principal: trino@company.com
+            host: trino.company.com
+            catalog: datalake
     ```
-    
+
     * [Trino Documentation on Kerberos Authentication](https://trino.io/docs/current/security/kerberos.html)
     * [Python Client Kerberos Authentication](https://github.com/trinodb/trino-python-client#kerberos-authentication)
 
 === "JWT"
-    
+
     | Option      | Description     |  Type  | Required |
     |-------------|-----------------|:------:|:--------:|
     | `method`    | `jwt`           | string |    Y     |
     | `jwt_token` | The JWT string. | string |    Y     |
 
     ```yaml linenums="1"
-    connector_name:
-        type: trino
-        method: jwt
-        user: [user]
-        password: [password]
-        host: [host]
-        catalog: [catalog]
+    gateway_name:
+        connection:
+            type: trino
+            method: jwt
+            user: [user]
+            password: [password]
+            host: [host]
+            catalog: [catalog]
     ```
 
     * [Trino Documentation on JWT Authentication](https://trino.io/docs/current/security/jwt.html)
     * [Python Client JWT Authentication](https://github.com/trinodb/trino-python-client#jwt-authentication)
 
 === "Certificate"
-    
+
     | Option               | Description                                       |  Type  | Required |
     |----------------------|---------------------------------------------------|:------:|:--------:|
     | `method`             | `certificate`                                     | string |    Y     |
@@ -178,32 +184,33 @@ connector_name:
 
 
     ```yaml linenums="1"
-    connector_name:
-        type: trino
-        method: certificate
-        user: [user]
-        password: [password]
-        host: [host]
-        catalog: [catalog]
-        cert: [path/to/cert_file]
-        client_certificate: [path/to/client/cert]
-        client_private_key: [path/to/client/key]
+    gateway_name:
+        connection:
+            type: trino
+            method: certificate
+            user: [user]
+            password: [password]
+            host: [host]
+            catalog: [catalog]
+            cert: [path/to/cert_file]
+            client_certificate: [path/to/client/cert]
+            client_private_key: [path/to/client/key]
     ```
 
-=== "Oath"
+=== "Oauth"
 
     | Option               | Description                                       |  Type  | Required |
     |----------------------|---------------------------------------------------|:------:|:--------:|
-    | `method`             | `oath`                                            | string |    Y     |
+    | `method`             | `oauth`                                           | string |    Y     |
 
     ```yaml linenums="1"
-    connector_name:
-        type: trino
-        method: oauth
-        host: trino.company.com
-        catalog: datalake
+    gateway_name:
+        connection:
+            type: trino
+            method: oauth
+            host: trino.company.com
+            catalog: datalake
     ```
-    
-    * [Trino Documentation on Oath Authentication](https://trino.io/docs/current/security/oauth2.html)
-    * [Python Client Oath Authentication](https://github.com/trinodb/trino-python-client#oauth2-authentication)
 
+    * [Trino Documentation on Oauth Authentication](https://trino.io/docs/current/security/oauth2.html)
+    * [Python Client Oauth Authentication](https://github.com/trinodb/trino-python-client#oauth2-authentication)
