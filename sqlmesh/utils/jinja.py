@@ -99,15 +99,15 @@ class MacroExtractor(Parser):
         )
 
 
-def call_name(node: nodes.Expr) -> t.Tuple[str, ...]:
+def node_name(node: nodes.Expr) -> t.Tuple[str, ...]:
     if isinstance(node, nodes.Name):
         return (node.name,)
     if isinstance(node, nodes.Const):
-        return (f"'{node.value}'",)
+        return (node.value,)
     if isinstance(node, nodes.Getattr):
-        return call_name(node.node) + (node.attr,)
+        return node_name(node.node) + (node.attr,)
     if isinstance(node, (nodes.Getitem, nodes.Call)):
-        return call_name(node.node)
+        return node_name(node.node)
     return ()
 
 
@@ -115,7 +115,9 @@ def render_jinja(query: str, methods: t.Optional[t.Dict[str, t.Any]] = None) -> 
     return ENVIRONMENT.from_string(query).render(methods or {})
 
 
-def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[t.Tuple[str, ...]]:
+def find_call_names(
+    node: nodes.Node, vars_in_scope: t.Set[str]
+) -> t.Iterator[t.Tuple[t.Tuple[str, ...], nodes.Call]]:
     vars_in_scope = vars_in_scope.copy()
     for child_node in node.iter_child_nodes():
         if "target" in child_node.fields:
@@ -130,19 +132,19 @@ def find_call_names(node: nodes.Node, vars_in_scope: t.Set[str]) -> t.Iterator[t
             for arg in child_node.args:
                 vars_in_scope.add(arg.name)
         elif isinstance(child_node, nodes.Call):
-            name = call_name(child_node)
+            name = node_name(child_node)
             if name[0][0] != "'" and name[0] not in vars_in_scope:
-                yield name
+                yield (name, child_node)
         yield from find_call_names(child_node, vars_in_scope)
 
 
-def extract_call_names(jinja_str: str) -> t.List[t.Tuple[str, ...]]:
+def extract_call_names(jinja_str: str) -> t.List[t.Tuple[t.Tuple[str, ...], nodes.Call]]:
     return list(find_call_names(ENVIRONMENT.parse(jinja_str), set()))
 
 
 def extract_macro_references(jinja_str: str) -> t.Set[MacroReference]:
     result = set()
-    for call_name in extract_call_names(jinja_str):
+    for call_name, _node in extract_call_names(jinja_str):
         if len(call_name) == 1:
             result.add(MacroReference(name=call_name[0]))
         elif len(call_name) == 2:
