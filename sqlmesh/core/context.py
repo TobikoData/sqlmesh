@@ -279,11 +279,7 @@ class Context(BaseContext):
         test_connection_config = self.config.get_test_connection(self.gateway)
         self._test_engine_adapter = test_connection_config.create_engine_adapter()
 
-        self.snapshot_evaluator = SnapshotEvaluator(
-            self.engine_adapter,
-            ddl_concurrent_tasks=self.concurrent_tasks,
-            console=self.console,
-        )
+        self._snapshot_evaluator: t.Optional[SnapshotEvaluator] = None
 
         self._provided_state_sync: t.Optional[StateSync] = state_sync
         self._state_sync: t.Optional[StateSync] = None
@@ -303,6 +299,16 @@ class Context(BaseContext):
     def engine_adapter(self) -> EngineAdapter:
         """Returns an engine adapter."""
         return self._engine_adapter
+
+    @property
+    def snapshot_evaluator(self) -> SnapshotEvaluator:
+        if not self._snapshot_evaluator:
+            self._snapshot_evaluator = SnapshotEvaluator(
+                self.engine_adapter,
+                ddl_concurrent_tasks=self.concurrent_tasks,
+                console=self.console,
+            )
+        return self._snapshot_evaluator
 
     def execution_context(self, is_dev: bool = False) -> ExecutionContext:
         """Returns an execution context."""
