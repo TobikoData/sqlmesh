@@ -6,6 +6,7 @@ import logging
 import os
 import pathlib
 import re
+import traceback
 import typing as t
 import unittest
 from enum import Enum
@@ -23,6 +24,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.plan import LoadedSnapshotIntervals, Plan
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (
     CICDBotError,
@@ -727,9 +729,14 @@ class GithubController:
                     skip_reason = "Unit Test(s) Failed so skipping PR creation"
                 else:
                     skip_reason = "A prior stage failed resulting in skipping PR creation."
+
+                if isinstance(exception, NodeExecutionFailedError):
+                    failure_msg = f"Node `{exception.node.name}` failed to apply.\n\n**Stack Trace:**\n```\n{traceback.format_exc()}\n```"
+                else:
+                    failure_msg = f"This is an unexpected error.\n\n**Exception:**\n{exception}"
                 conclusion_to_summary = {
                     GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
-                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. This is an unexpected error.\n**Exception:**\n{exception}",
+                    GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n{failure_msg}",
                     GithubCheckConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
                     GithubCheckConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` locally to apply these changes. If you want the bot to automatically categorize changes, then check documentation (https://sqlmesh.readthedocs.io/en/stable/integrations/github/) for more information.",
                 }
