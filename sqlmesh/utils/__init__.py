@@ -3,7 +3,9 @@ from __future__ import annotations
 import copy
 import importlib
 import os
+import random
 import re
+import string
 import sys
 import time
 import traceback
@@ -47,7 +49,10 @@ def unique(iterable: t.Iterable[T], by: t.Callable[[T], t.Any] = lambda i: i) ->
     return list({by(i): None for i in iterable})
 
 
-def random_id() -> str:
+def random_id(short: bool = False) -> str:
+    if short:
+        return "".join(random.choices(string.ascii_letters + string.digits, k=8))
+
     return uuid.uuid4().hex
 
 
