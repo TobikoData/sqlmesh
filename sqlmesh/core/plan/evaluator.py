@@ -75,30 +75,31 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.__all_snapshots: t.Dict[str, t.Dict[SnapshotId, Snapshot]] = {}
 
     def evaluate(self, plan: Plan) -> None:
-        self.console.start_evaluation(plan.environment.name)
-        snapshots = {s.snapshot_id: s for s in plan.snapshots}
-        all_names = {s.name for s in plan.snapshots}
+        self.console.start_plan_evaluation(plan)
 
-        if plan.is_dev:
-            before_promote_snapshots = all_names
-            after_promote_snapshots = set()
-        else:
-            before_promote_snapshots = {
-                s.name for s in snapshots.values() if can_evaluate_before_promote(s, snapshots)
-            }
-            after_promote_snapshots = all_names - before_promote_snapshots
+        try:
+            snapshots = {s.snapshot_id: s for s in plan.snapshots}
+            all_names = {s.name for s in plan.snapshots}
 
-        update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
+            if plan.is_dev:
+                before_promote_snapshots = all_names
+                after_promote_snapshots = set()
+            else:
+                before_promote_snapshots = {
+                    s.name for s in snapshots.values() if can_evaluate_before_promote(s, snapshots)
+                }
+                after_promote_snapshots = all_names - before_promote_snapshots
 
-        self._push(plan)
-        self._restate(plan)
-        self._backfill(plan, before_promote_snapshots)
-        self._promote(plan)
-        self._backfill(plan, after_promote_snapshots)
+            update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
 
-        if not plan.requires_backfill:
-            self.console.log_success(
-                "Virtual Update executed successfully")
+            self._push(plan)
+            self._restate(plan)
+            self._backfill(plan, before_promote_snapshots)
+            self._promote(plan)
+            self._backfill(plan, after_promote_snapshots)
+
+            if not plan.requires_backfill:
+                self.console.log_success("Virtual Update executed successfully")
         finally:
             self.console.stop_plan_evaluation()
 
@@ -141,8 +142,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to source snapshots from.
         """
         snapshot_id_to_snapshot = {s.snapshot_id: s for s in plan.snapshots}
-        new_model_snapshot_count = len(
-            [s for s in plan.new_snapshots if s.is_model])
+        new_model_snapshot_count = len([s for s in plan.new_snapshots if s.is_model])
 
         if new_model_snapshot_count > 0:
             self.console.start_creation_progress(new_model_snapshot_count)
@@ -173,12 +173,10 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         """
         environment = plan.environment
 
-        promotion_result = self.state_sync.promote(
-            environment, no_gaps=plan.no_gaps)
+        promotion_result = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
 
         self.console.start_promotion_progress(
-            environment.name, len(promotion_result.added) +
-            len(promotion_result.removed)
+            environment.name, len(promotion_result.added) + len(promotion_result.removed)
         )
 
         if not plan.is_dev:
@@ -194,8 +192,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         completed = False
         try:
             self.snapshot_evaluator.promote(
-                [plan.context_diff.snapshots[s.name]
-                    for s in promotion_result.added],
+                [plan.context_diff.snapshots[s.name] for s in promotion_result.added],
                 environment.naming_info,
                 is_dev=plan.is_dev,
                 on_complete=on_complete,
@@ -380,10 +377,8 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
             is_dev=plan.is_dev,
             forward_only=plan.forward_only,
         )
-        plan_dag_spec = create_plan_dag_spec(
-            plan_application_request, self.state_sync)
-        PlanDagState.from_state_sync(
-            self.state_sync).add_dag_spec(plan_dag_spec)
+        plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
+        PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
 
 
 def can_evaluate_before_promote(

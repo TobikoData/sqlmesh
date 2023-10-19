@@ -28,8 +28,7 @@ class ApiConsole(TerminalConsole):
         self.queue: asyncio.Queue = asyncio.Queue()
 
     def start_plan_evaluation(self, plan: Plan) -> None:
-        self.plan_stage_tracker = models.PlanApplyStageTracker(
-            environment=plan.environment.name)
+        self.plan_stage_tracker = models.PlanApplyStageTracker(environment=plan.environment.name)
         self.log_event_apply()
 
     def stop_plan_evaluation(self) -> None:
@@ -42,8 +41,7 @@ class ApiConsole(TerminalConsole):
         if self.plan_stage_tracker:
             self.plan_stage_tracker.add_stage(
                 models.PlanApplyStage.creation,
-                models.PlanApplyStageCreation(
-                    total_tasks=total_tasks, num_tasks=0),
+                models.PlanApplyStageCreation(total_tasks=total_tasks, num_tasks=0),
             )
 
         self.log_event_apply()
@@ -108,28 +106,12 @@ class ApiConsole(TerminalConsole):
         if self.plan_stage_tracker and self.plan_stage_tracker.backfill:
             self.plan_stage_tracker.backfill.queue.add(snapshot.name)
 
-    def update_snapshot_evaluation_progress_1(
+    def update_snapshot_evaluation_progress(
         self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
     ) -> None:
-        """Update snapshot evaluation progress."""
-        if self.current_task_status:
-            self.current_task_status[snapshot.name]["completed"] += 1
-            if (
-                self.current_task_status[snapshot.name]["completed"]
-                >= self.current_task_status[snapshot.name]["total"]
-            ):
-                self.current_task_status[snapshot.name]["end"] = now_timestamp(
-                )
-            self.queue.put_nowait(
-                self._make_event(
-                    {"tasks": self.current_task_status}, event="tasks")
-            )
-        self.log_event_apply()
-
-    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_tasks: int) -> None:
         if self.plan_stage_tracker and self.plan_stage_tracker.backfill:
             task = self.plan_stage_tracker.backfill.tasks[snapshot.name]
-            task.completed += num_tasks
+            task.completed += 1
             if task.completed >= task.total:
                 task.end = now_timestamp()
 
@@ -212,8 +194,7 @@ class ApiConsole(TerminalConsole):
                 total=result.testsRun,
                 failures=len(result.failures),
                 errors=len(result.errors),
-                successful=result.testsRun -
-                len(result.failures) - len(result.errors),
+                successful=result.testsRun - len(result.failures) - len(result.errors),
                 dialect=target_dialect,
                 details=messages,
                 traceback=output,
