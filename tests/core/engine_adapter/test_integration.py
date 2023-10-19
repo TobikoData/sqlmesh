@@ -195,14 +195,42 @@ def config() -> Config:
 @pytest.fixture(
     params=[
         "duckdb",
-        pytest.param("postgres", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("mysql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
+        pytest.param(
+            "postgres",
+            marks=[
+                pytest.mark.integration,
+                pytest.mark.engine_integration,
+                pytest.mark.engine_integration_local,
+            ],
+        ),
+        pytest.param(
+            "mysql",
+            marks=[
+                pytest.mark.integration,
+                pytest.mark.engine_integration,
+                pytest.mark.engine_integration_local,
+            ],
+        ),
+        pytest.param(
+            "mssql",
+            marks=[
+                pytest.mark.integration,
+                pytest.mark.engine_integration,
+                pytest.mark.engine_integration_local,
+            ],
+        ),
+        pytest.param(
+            "trino",
+            marks=[
+                pytest.mark.integration,
+                pytest.mark.engine_integration,
+                pytest.mark.engine_integration_local,
+            ],
+        ),
         pytest.param("bigquery", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("databricks", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("redshift", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
         pytest.param("snowflake", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("mssql", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
-        pytest.param("trino", marks=[pytest.mark.integration, pytest.mark.engine_integration]),
     ]
 )
 def engine_adapter(request, config) -> EngineAdapter:
