@@ -406,7 +406,7 @@ async def test_cancel() -> None:
     app.state.task = asyncio.create_task(asyncio.sleep(1))
     response = client.post("/api/plan/cancel")
     await asyncio.sleep(0.1)
-    assert response.status_code == 204
+    assert response.status_code == 200
     assert app.state.task.cancelled()
 
 
