@@ -15,7 +15,6 @@ from sqlmesh.core.engine_adapter import BigQueryEngineAdapter
 from sqlmesh.core.engine_adapter.bigquery import select_partitions_expr
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.utils import AttributeDict
-from tests.core.engine_adapter import temp_table_name
 
 
 def test_insert_overwrite_by_time_partition_query(
@@ -44,7 +43,7 @@ def test_insert_overwrite_by_time_partition_query(
 
 
 def test_insert_overwrite_by_partition_query(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
     execute_mock = mocker.patch(
@@ -54,7 +53,7 @@ def test_insert_overwrite_by_partition_query(
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_schema.test_table"
     temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     adapter.insert_overwrite_by_partition(
         table_name,
@@ -79,7 +78,7 @@ def test_insert_overwrite_by_partition_query(
 
 
 def test_insert_overwrite_by_partition_query_unknown_column_types(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
     execute_mock = mocker.patch(
@@ -97,7 +96,7 @@ def test_insert_overwrite_by_partition_query_unknown_column_types(
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_schema.test_table"
     temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     adapter.insert_overwrite_by_partition(
         table_name,

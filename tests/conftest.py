@@ -260,3 +260,13 @@ def delete_cache(project_paths: str | t.List[str]) -> None:
             rmtree(path + "/.cache")
         except FileNotFoundError:
             pass
+
+
+@pytest.fixture
+def make_temp_table_name(mocker: MockerFixture) -> t.Callable:
+    def _make_function(table_name: str, random_id: str) -> exp.Table:
+        temp_table = t.cast(exp.Table, exp.to_table(table_name))
+        temp_table.set("this", exp.to_identifier(f"__temp_{temp_table.name}_{random_id}"))
+        return temp_table
+
+    return _make_function

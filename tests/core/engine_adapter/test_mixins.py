@@ -9,7 +9,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     LogicalMergeMixin,
     LogicalReplaceQueryMixin,
 )
-from tests.core.engine_adapter import temp_table_name, to_sql_calls
+from tests.core.engine_adapter import to_sql_calls
 
 
 def test_logical_replace_query_already_exists(
@@ -52,7 +52,7 @@ def test_logical_replace_query_does_not_exist(
 
 
 def test_logical_replace_self_reference(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
     adapter = make_mocked_engine_adapter(LogicalReplaceQueryMixin, "postgres")
     adapter.cursor.fetchone.return_value = (1,)
@@ -60,7 +60,7 @@ def test_logical_replace_self_reference(
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "db.table"
     temp_table_id = "abcdefgh"
-    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     mocker.patch(
         "sqlmesh.core.engine_adapter.postgres.LogicalReplaceQueryMixin.table_exists",
