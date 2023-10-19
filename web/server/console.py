@@ -37,8 +37,7 @@ class ApiConsole(TerminalConsole):
 
     def stop_plan_evaluation(self) -> None:
         if self.plan_apply_stage_tracker:
-            self.stop_plan_tracker(
-                tracker=self.plan_apply_stage_tracker, success=True)
+            self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_creation_progress(self, total_tasks: int) -> None:
         if self.plan_apply_stage_tracker:
@@ -62,8 +61,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.creation.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(
-                    tracker=self.plan_apply_stage_tracker, success=True)
+                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_restate_progress(self) -> None:
         if self.plan_apply_stage_tracker:
@@ -78,8 +76,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.restate.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(
-                    tracker=self.plan_apply_stage_tracker, success=True)
+                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_evaluation_progress(
         self,
@@ -92,8 +89,7 @@ class ApiConsole(TerminalConsole):
                     completed=0,
                     total=total_tasks,
                     start=now_timestamp(),
-                    view_name=snapshot.qualified_view_name.for_environment(
-                        environment_naming_info),
+                    view_name=snapshot.qualified_view_name.for_environment(environment_naming_info),
                 )
                 for snapshot, total_tasks in batches.items()
             }
@@ -113,10 +109,12 @@ class ApiConsole(TerminalConsole):
 
         self.log_event_plan_apply()
 
-    def update_snapshot_evaluation_progress(self, snapshot: Snapshot, num_tasks: int) -> None:
+    def update_snapshot_evaluation_progress(
+        self, snapshot: Snapshot, batch_idx: int, duration_ms: t.Optional[int]
+    ) -> None:
         if self.plan_apply_stage_tracker and self.plan_apply_stage_tracker.backfill:
             task = self.plan_apply_stage_tracker.backfill.tasks[snapshot.name]
-            task.completed += num_tasks
+            task.completed += 1
             if task.completed >= task.total:
                 task.end = now_timestamp()
 
@@ -130,8 +128,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.backfill.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(
-                    tracker=self.plan_apply_stage_tracker, success=True)
+                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
         if self.plan_apply_stage_tracker:
@@ -157,8 +154,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.promote.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(
-                    tracker=self.plan_apply_stage_tracker, success=True)
+                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
 
     def start_plan_tracker(
         self,
@@ -242,8 +238,7 @@ class ApiConsole(TerminalConsole):
                 total=result.testsRun,
                 failures=len(result.failures),
                 errors=len(result.errors),
-                successful=result.testsRun -
-                len(result.failures) - len(result.errors),
+                successful=result.testsRun - len(result.failures) - len(result.errors),
                 dialect=target_dialect,
                 details=messages,
                 traceback=output,
@@ -267,8 +262,7 @@ class ApiConsole(TerminalConsole):
     def log_event_plan_cancel(self) -> None:
         self.log_event(
             event=models.ConsoleEvent.plan_cancel,
-            data=self.plan_cancel_stage_tracker.dict(
-            ) if self.plan_cancel_stage_tracker else {},
+            data=self.plan_cancel_stage_tracker.dict() if self.plan_cancel_stage_tracker else {},
         )
 
     def log_exception(self) -> None:

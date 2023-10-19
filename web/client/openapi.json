@@ -21,7 +21,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ApplyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/PlanApplyStageTracker"
+                }
               }
             }
           },
@@ -383,7 +385,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlanApplyStageTracker"
+                  "$ref": "#/components/schemas/PlanOverviewStageTracker"
                 }
               }
             }
@@ -743,18 +745,6 @@
         "required": ["timestamp", "message", "origin"],
         "title": "ApiExceptionPayload"
       },
-      "ApplyResponse": {
-        "properties": { "type": { "$ref": "#/components/schemas/ApplyType" } },
-        "type": "object",
-        "required": ["type"],
-        "title": "ApplyResponse"
-      },
-      "ApplyType": {
-        "type": "string",
-        "enum": ["virtual", "backfill"],
-        "title": "ApplyType",
-        "description": "An enumeration of possible apply types."
-      },
       "BackfillDetails": {
         "properties": {
           "model_name": { "type": "string", "title": "Model Name" },
@@ -777,26 +767,8 @@
           "completed": { "type": "integer", "title": "Completed" },
           "total": { "type": "integer", "title": "Total" },
           "view_name": { "type": "string", "title": "View Name" },
-          "start": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "Start"
-          },
-          "end": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "End"
-          }
+          "start": { "type": "integer", "title": "Start" },
+          "end": { "type": "integer", "title": "End" }
         },
         "type": "object",
         "required": ["completed", "total", "view_name", "start"],
@@ -1072,7 +1044,15 @@
       },
       "IntervalUnit": {
         "type": "string",
-        "enum": ["year", "month", "day", "hour", "minute"],
+        "enum": [
+          "year",
+          "month",
+          "day",
+          "hour",
+          "half_hour",
+          "quarter_hour",
+          "five_minute"
+        ],
         "title": "IntervalUnit",
         "description": "IntervalUnit is the inferred granularity of an incremental node.\n\nIntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a node. The minimum time delta between a sample set of dates\nis used to determine which unit a node's schedule is."
       },
@@ -1093,7 +1073,14 @@
         "title": "LineageColumn"
       },
       "Meta": {
-        "properties": { "version": { "type": "string", "title": "Version" } },
+        "properties": {
+          "version": { "type": "string", "title": "Version" },
+          "has_running_task": {
+            "type": "boolean",
+            "title": "Has Running Task",
+            "default": false
+          }
+        },
         "type": "object",
         "required": ["version"],
         "title": "Meta"
@@ -1229,118 +1216,38 @@
         "title": "NodeType",
         "description": "An enumeration."
       },
-      "PlanApplyStageBackfill": {
-        "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "queue": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
-            "title": "Queue",
-            "default": []
-          },
-          "tasks": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/BackfillTask"
-            },
-            "type": "object",
-            "title": "Tasks",
-            "default": {}
-          }
-        },
-        "type": "object",
-        "title": "PlanApplyStageBackfill"
-      },
-      "PlanApplyStageBackfills": {
-        "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "models": {
-            "items": { "$ref": "#/components/schemas/BackfillDetails" },
-            "type": "array",
-            "title": "Models"
-          }
-        },
-        "type": "object",
-        "title": "PlanApplyStageBackfills"
-      },
-      "PlanApplyStageChanges": {
-        "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "added": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
-            "title": "Added"
-          },
-          "removed": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
-            "title": "Removed"
-          },
-          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
-        },
-        "type": "object",
-        "title": "PlanApplyStageChanges"
-      },
-      "PlanApplyStageCreation": {
-        "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "total_tasks": { "type": "integer", "title": "Total Tasks" },
-          "num_tasks": { "type": "integer", "title": "Num Tasks" }
-        },
-        "type": "object",
-        "required": ["total_tasks", "num_tasks"],
-        "title": "PlanApplyStageCreation"
-      },
-      "PlanApplyStagePromote": {
-        "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "total_tasks": { "type": "integer", "title": "Total Tasks" },
-          "num_tasks": { "type": "integer", "title": "Num Tasks" },
-          "target_environment": {
-            "type": "string",
-            "title": "Target Environment"
-          }
-        },
-        "type": "object",
-        "required": ["total_tasks", "num_tasks", "target_environment"],
-        "title": "PlanApplyStagePromote"
-      },
-      "PlanApplyStageRestate": {
-        "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
-        },
-        "type": "object",
-        "title": "PlanApplyStageRestate"
-      },
       "PlanApplyStageTracker": {
         "properties": {
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
           "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "environment": { "type": "string", "title": "Environment" },
           "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
-          "validation": {
-            "$ref": "#/components/schemas/PlanApplyStageValidation"
-          },
-          "changes": { "$ref": "#/components/schemas/PlanApplyStageChanges" },
-          "backfills": {
-            "$ref": "#/components/schemas/PlanApplyStageBackfills"
-          },
-          "creation": { "$ref": "#/components/schemas/PlanApplyStageCreation" },
-          "restate": { "$ref": "#/components/schemas/PlanApplyStageRestate" },
-          "backfill": { "$ref": "#/components/schemas/PlanApplyStageBackfill" },
-          "promote": { "$ref": "#/components/schemas/PlanApplyStagePromote" }
+          "creation": { "$ref": "#/components/schemas/PlanStageCreation" },
+          "restate": { "$ref": "#/components/schemas/PlanStageRestate" },
+          "backfill": { "$ref": "#/components/schemas/PlanStageBackfill" },
+          "promote": { "$ref": "#/components/schemas/PlanStagePromote" }
         },
         "type": "object",
-        "required": ["environment"],
         "title": "PlanApplyStageTracker"
-      },
-      "PlanApplyStageValidation": {
-        "properties": {
-          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
-        },
-        "type": "object",
-        "title": "PlanApplyStageValidation"
       },
       "PlanDates": {
         "properties": {
@@ -1405,6 +1312,130 @@
         },
         "type": "object",
         "title": "PlanOptions"
+      },
+      "PlanOverviewStageTracker": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "environment": { "type": "string", "title": "Environment" },
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
+          "validation": { "$ref": "#/components/schemas/PlanStageValidation" },
+          "changes": { "$ref": "#/components/schemas/PlanStageChanges" },
+          "backfills": { "$ref": "#/components/schemas/PlanStageBackfills" }
+        },
+        "type": "object",
+        "title": "PlanOverviewStageTracker"
+      },
+      "PlanStageBackfill": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "queue": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Queue",
+            "default": []
+          },
+          "tasks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackfillTask"
+            },
+            "type": "object",
+            "title": "Tasks",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "PlanStageBackfill"
+      },
+      "PlanStageBackfills": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "models": {
+            "items": { "$ref": "#/components/schemas/BackfillDetails" },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "title": "PlanStageBackfills"
+      },
+      "PlanStageChanges": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "added": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Added"
+          },
+          "removed": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Removed"
+          },
+          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
+        },
+        "type": "object",
+        "title": "PlanStageChanges"
+      },
+      "PlanStageCreation": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "total_tasks": { "type": "integer", "title": "Total Tasks" },
+          "num_tasks": { "type": "integer", "title": "Num Tasks" }
+        },
+        "type": "object",
+        "required": ["total_tasks", "num_tasks"],
+        "title": "PlanStageCreation"
+      },
+      "PlanStagePromote": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "total_tasks": { "type": "integer", "title": "Total Tasks" },
+          "num_tasks": { "type": "integer", "title": "Num Tasks" },
+          "target_environment": {
+            "type": "string",
+            "title": "Target Environment"
+          }
+        },
+        "type": "object",
+        "required": ["total_tasks", "num_tasks", "target_environment"],
+        "title": "PlanStagePromote"
+      },
+      "PlanStageRestate": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
+        },
+        "type": "object",
+        "title": "PlanStageRestate"
+      },
+      "PlanStageValidation": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
+        },
+        "type": "object",
+        "title": "PlanStageValidation"
       },
       "Query": {
         "properties": { "sql": { "type": "string", "title": "Sql" } },
