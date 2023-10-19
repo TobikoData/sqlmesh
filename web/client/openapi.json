@@ -412,8 +412,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "null",
-                  "title": "Response Cancel Plan Api Plan Cancel Post"
+                  "$ref": "#/components/schemas/PlanCancelStageTracker"
                 }
               }
             }
@@ -1249,6 +1248,36 @@
         "type": "object",
         "title": "PlanApplyStageTracker"
       },
+      "PlanCancelStageTracker": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "environment": { "type": "string", "title": "Environment" },
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
+          "cancel": { "$ref": "#/components/schemas/PlanStageCancel" }
+        },
+        "type": "object",
+        "title": "PlanCancelStageTracker"
+      },
       "PlanDates": {
         "properties": {
           "start": {
@@ -1378,6 +1407,13 @@
         },
         "type": "object",
         "title": "PlanStageBackfills"
+      },
+      "PlanStageCancel": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
+        },
+        "type": "object",
+        "title": "PlanStageCancel"
       },
       "PlanStageChanges": {
         "properties": {

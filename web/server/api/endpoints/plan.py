@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing as t
 
-from fastapi import APIRouter, Body, Depends, Request, Response, status
+from fastapi import APIRouter, Body, Depends, Request
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.plan.definition import Plan
@@ -43,6 +43,31 @@ async def run_plan(
         plan_dates=plan_dates,
         plan_options=plan_options,
     )
+
+    return tracker
+
+
+@router.post(
+    "/cancel",
+    response_model=models.PlanCancelStageTracker,
+    response_model_exclude_unset=True,
+)
+async def cancel_plan(
+    request: Request,
+) -> models.PlanCancelStageTracker:
+    """Cancel a plan application"""
+    if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():
+        raise ApiException(
+            message="Plan/apply is already running",
+            origin="API -> plan -> cancel_plan",
+        )
+    tracker = models.PlanCancelStageTracker()
+    api_console.start_plan_tracker(tracker)
+    tracker_stage_cancel = models.PlanStageCancel()
+    tracker.add_stage(stage=models.PlanStage.cancel, data=tracker_stage_cancel)
+    tracker_stage_cancel.stop(success=True)
+    api_console.stop_plan_tracker(tracker)
+
     return tracker
 
 
@@ -123,24 +148,5 @@ def get_plan_tracker(
     tracker_stage_backfills.stop(success=True)
 
     api_console.stop_plan_tracker(tracker)
+
     return tracker, plan
-
-
-@router.post("/cancel")
-async def cancel_plan(
-    request: Request,
-    response: Response,
-) -> None:
-    """Cancel a plan application"""
-    if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():
-        raise ApiException(
-            message="Plan/apply is already running",
-            origin="API -> plan -> cancel_plan",
-        )
-    tracker = models.PlanCancelStageTracker()
-    api_console.start_plan_tracker(tracker)
-    tracker_stage_cancel = models.PlanStageCancel()
-    tracker.add_stage(stage=models.PlanStage.cancel, data=tracker_stage_cancel)
-    tracker_stage_cancel.stop(success=True)
-    api_console.stop_plan_tracker(tracker)
-    response.status_code = status.HTTP_204_NO_CONTENT
