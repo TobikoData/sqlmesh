@@ -24,6 +24,8 @@ KEY = t.TypeVar("KEY", bound=t.Hashable)
 VALUE = t.TypeVar("VALUE")
 DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
 
+ALPHANUMERIC = string.ascii_lowercase + string.digits
+
 
 def optional_import(name: str) -> t.Optional[types.ModuleType]:
     """Optionally import a module.
@@ -51,7 +53,7 @@ def unique(iterable: t.Iterable[T], by: t.Callable[[T], t.Any] = lambda i: i) ->
 
 def random_id(short: bool = False) -> str:
     if short:
-        return "".join(random.choices(string.ascii_letters + string.digits, k=8))
+        return "".join(random.choices(ALPHANUMERIC, k=8))
 
     return uuid.uuid4().hex
 
