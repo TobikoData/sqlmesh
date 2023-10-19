@@ -3,7 +3,9 @@ from __future__ import annotations
 import copy
 import importlib
 import os
+import random
 import re
+import string
 import sys
 import time
 import traceback
@@ -21,6 +23,8 @@ T = t.TypeVar("T")
 KEY = t.TypeVar("KEY", bound=t.Hashable)
 VALUE = t.TypeVar("VALUE")
 DECORATOR_RETURN_TYPE = t.TypeVar("DECORATOR_RETURN_TYPE")
+
+ALPHANUMERIC = string.ascii_lowercase + string.digits
 
 
 def optional_import(name: str) -> t.Optional[types.ModuleType]:
@@ -47,7 +51,10 @@ def unique(iterable: t.Iterable[T], by: t.Callable[[T], t.Any] = lambda i: i) ->
     return list({by(i): None for i in iterable})
 
 
-def random_id() -> str:
+def random_id(short: bool = False) -> str:
+    if short:
+        return "".join(random.choices(ALPHANUMERIC, k=8))
+
     return uuid.uuid4().hex
 
 

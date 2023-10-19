@@ -1,6 +1,5 @@
 # type: ignore
 import typing as t
-import uuid
 from unittest import mock
 
 import pandas as pd
@@ -86,18 +85,19 @@ def test_table_exists(make_mocked_engine_adapter: t.Callable):
 
 
 def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
 
-    temp_table_uuid = uuid.uuid4()
-    uuid4_mock = mocker.patch("uuid.uuid4")
-    uuid4_mock.return_value = temp_table_uuid
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter.insert_overwrite_by_time_partition(
-        "test_table",
+        table_name,
         df,
         start="2022-01-01",
         end="2022-01-02",
@@ -106,29 +106,30 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_test_table_{temp_table_uuid.hex}"',
+        f'"__temp_test_table_{temp_table_id}"',
         [(1, "2022-01-01"), (2, "2022-01-02")],
     )
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "ds" TEXT)');""",
-        f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT "a", "ds" FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_uuid.hex}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds");""",
-        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}";',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_id}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_id}" ("a" INTEGER, "ds" TEXT)');""",
+        f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT "a", "ds" FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_id}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds");""",
+        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_id}";',
     ]
 
 
 def test_insert_overwrite_by_time_partition_replace_where_pandas(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
 
-    temp_table_uuid = uuid.uuid4()
-    uuid4_mock = mocker.patch("uuid.uuid4")
-    uuid4_mock.return_value = temp_table_uuid
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter.insert_overwrite_by_time_partition(
-        "test_table",
+        table_name,
         df,
         start="2022-01-01",
         end="2022-01-02",
@@ -137,27 +138,30 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_test_table_{temp_table_uuid.hex}"',
+        f'"__temp_test_table_{temp_table_id}"',
         [(1, "2022-01-01"), (2, "2022-01-02")],
     )
 
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "ds" TEXT)');""",
-        f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT "a", "ds" FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_uuid.hex}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds");""",
-        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}";',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_id}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_id}" ("a" INTEGER, "ds" TEXT)');""",
+        f"""MERGE INTO "test_table" AS "__MERGE_TARGET__" USING (SELECT "a", "ds" FROM (SELECT "a", "ds" FROM "__temp_test_table_{temp_table_id}") AS "_subquery" WHERE "ds" BETWEEN '2022-01-01' AND '2022-01-02') AS "__MERGE_SOURCE__" ON (1 = 0) WHEN NOT MATCHED BY SOURCE AND "ds" BETWEEN '2022-01-01' AND '2022-01-02' THEN DELETE WHEN NOT MATCHED THEN INSERT ("a", "ds") VALUES ("a", "ds");""",
+        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_id}";',
     ]
 
 
-def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+def test_insert_append_pandas(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
-    temp_table_uuid = uuid.uuid4()
-    uuid4_mock = mocker.patch("uuid.uuid4")
-    uuid4_mock.return_value = temp_table_uuid
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.insert_append(
-        "test_table",
+        table_name,
         df,
         columns_to_types={
             "a": exp.DataType.build("INT"),
@@ -165,14 +169,14 @@ def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
         },
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_test_table_{temp_table_uuid.hex}"',
+        f'"__temp_test_table_{temp_table_id}"',
         [(1, 4), (2, 5), (3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "b" INTEGER)');""",
-        f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}";',
-        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}";',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_id}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_id}" ("a" INTEGER, "b" INTEGER)');""",
+        f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_id}";',
+        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_id}";',
     ]
 
 
@@ -209,16 +213,19 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
     )
 
 
-def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+def test_merge_pandas(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
-    temp_table_uuid = uuid.uuid4()
-    uuid4_mock = mocker.patch("uuid.uuid4")
-    uuid4_mock.return_value = temp_table_uuid
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "target"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"id": [1, 2, 3], "ts": [1, 2, 3], "val": [4, 5, 6]})
     adapter.merge(
-        target_table="target",
+        target_table=table_name,
         source_table=df,
         columns_to_types={
             "id": exp.DataType.build("int"),
@@ -228,20 +235,20 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
         unique_key=[exp.to_identifier("id")],
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_target_{temp_table_uuid.hex}"',
+        f'"__temp_target_{temp_table_id}"',
         [(1, 1, 4), (2, 2, 5), (3, 3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_target_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_target_{temp_table_uuid.hex}" ("id" INTEGER, "ts" DATETIME2, "val" INTEGER)');""",
-        f'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "__temp_target_{temp_table_uuid.hex}") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val");',
-        f'DROP TABLE IF EXISTS "__temp_target_{temp_table_uuid.hex}";',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_target_{temp_table_id}') EXEC('CREATE TABLE "__temp_target_{temp_table_id}" ("id" INTEGER, "ts" DATETIME2, "val" INTEGER)');""",
+        f'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "__temp_target_{temp_table_id}") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val");',
+        f'DROP TABLE IF EXISTS "__temp_target_{temp_table_id}";',
     ]
 
     adapter.cursor.reset_mock()
     adapter._connection_pool.get().reset_mock()
     adapter.merge(
-        target_table="target",
+        target_table=table_name,
         source_table=df,
         columns_to_types={
             "id": exp.DataType.build("int"),
@@ -251,14 +258,14 @@ def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixt
         unique_key=[exp.to_identifier("id"), exp.to_column("ts")],
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_target_{temp_table_uuid.hex}"',
+        f'"__temp_target_{temp_table_id}"',
         [(1, 1, 4), (2, 2, 5), (3, 3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_target_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_target_{temp_table_uuid.hex}" ("id" INTEGER, "ts" DATETIME2, "val" INTEGER)');""",
-        f'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "__temp_target_{temp_table_uuid.hex}") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val");',
-        f'DROP TABLE IF EXISTS "__temp_target_{temp_table_uuid.hex}";',
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_target_{temp_table_id}') EXEC('CREATE TABLE "__temp_target_{temp_table_id}" ("id" INTEGER, "ts" DATETIME2, "val" INTEGER)');""",
+        f'MERGE INTO "target" AS "__MERGE_TARGET__" USING (SELECT "id", "ts", "val" FROM "__temp_target_{temp_table_id}") AS "__MERGE_SOURCE__" ON "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id" AND "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts" WHEN MATCHED THEN UPDATE SET "__MERGE_TARGET__"."id" = "__MERGE_SOURCE__"."id", "__MERGE_TARGET__"."ts" = "__MERGE_SOURCE__"."ts", "__MERGE_TARGET__"."val" = "__MERGE_SOURCE__"."val" WHEN NOT MATCHED THEN INSERT ("id", "ts", "val") VALUES ("__MERGE_SOURCE__"."id", "__MERGE_SOURCE__"."ts", "__MERGE_SOURCE__"."val");',
+        f'DROP TABLE IF EXISTS "__temp_target_{temp_table_id}";',
     ]
 
 
@@ -274,30 +281,33 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     ]
 
 
-def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+def test_replace_query_pandas(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.cursor.fetchone.return_value = (1,)
 
-    temp_table_uuid = uuid.uuid4()
-    uuid4_mock = mocker.patch("uuid.uuid4")
-    uuid4_mock.return_value = temp_table_uuid
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
-        "test_table", df, {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
+        table_name, df, {"a": exp.DataType.build("INT"), "b": exp.DataType.build("INT")}
     )
 
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_test_table_{temp_table_uuid.hex}"',
+        f'"__temp_test_table_{temp_table_id}"',
         [(1, 4), (2, 5), (3, 6)],
     )
 
     assert to_sql_calls(adapter) == [
         """SELECT 1 FROM "information_schema"."tables" WHERE "table_name" = 'test_table';""",
-        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_uuid.hex}" ("a" INTEGER, "b" INTEGER)');""",
+        f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_id}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_id}" ("a" INTEGER, "b" INTEGER)');""",
         'TRUNCATE TABLE "test_table"',
-        f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_uuid.hex}";',
-        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_uuid.hex}";',
+        f'INSERT INTO "test_table" ("a", "b") SELECT "a", "b" FROM "__temp_test_table_{temp_table_id}";',
+        f'DROP TABLE IF EXISTS "__temp_test_table_{temp_table_id}";',
     ]
 
 
