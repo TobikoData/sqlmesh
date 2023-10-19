@@ -173,7 +173,7 @@ jobs:
       - store_artifacts:
           path: /tmp/airflow_logs
 
-  engine_adapter_integration_tests:
+  engine_adapter_integration_local_only_tests:
     machine:
       image: ubuntu-2204:2022.10.2
       docker_layer_caching: true
@@ -194,7 +194,7 @@ jobs:
           command: sleep 10
       - run:
           name: Run tests
-          command: make core_engine_it_test
+          command: make core_engine_it_test_local_only
           no_output_timeout: 15m
 
 workflows:
@@ -214,7 +214,7 @@ workflows:
             branches:
               only:
                 - main
-      - engine_adapter_integration_tests:
+      - engine_adapter_integration_local_only_tests:
           context: engine_adapter_integration
           requires:
             - style_and_unit_tests
