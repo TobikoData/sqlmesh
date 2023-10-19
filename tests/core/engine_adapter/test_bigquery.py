@@ -1,7 +1,6 @@
 # type: ignore
 import sys
 import typing as t
-import uuid
 
 import pandas as pd
 import pytest
@@ -44,19 +43,20 @@ def test_insert_overwrite_by_time_partition_query(
 
 
 def test_insert_overwrite_by_partition_query(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
 
-    temp_table_uuid = uuid.uuid4()
-    uuid4_mock = mocker.patch("uuid.uuid4")
-    uuid4_mock.return_value = temp_table_uuid
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_schema.test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     adapter.insert_overwrite_by_partition(
-        "test_schema.test_table",
+        table_name,
         parse_one("SELECT a, ds FROM tbl"),
         partitioned_by=[
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
@@ -70,15 +70,15 @@ def test_insert_overwrite_by_partition_query(
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         "CREATE SCHEMA IF NOT EXISTS `test_schema`",
-        f"CREATE TABLE IF NOT EXISTS `test_schema`.`__temp_test_table_{temp_table_uuid.hex}` PARTITION BY DATETIME_TRUNC(`ds`, MONTH) AS SELECT `a`, `ds` FROM `tbl`",
-        f"DECLARE _sqlmesh_target_partitions_ ARRAY<DATETIME> DEFAULT (SELECT ARRAY_AGG(PARSE_DATETIME('%Y%m', partition_id)) FROM `test_schema`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__');",
-        f"MERGE INTO `test_schema`.`test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM (SELECT * FROM `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`) AS `_subquery` WHERE DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`)) AS `__MERGE_SOURCE__` ON FALSE WHEN NOT MATCHED BY SOURCE AND DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`) THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
-        f"DROP TABLE IF EXISTS `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`",
+        f"CREATE TABLE IF NOT EXISTS `test_schema`.`__temp_test_table_{temp_table_id}` PARTITION BY DATETIME_TRUNC(`ds`, MONTH) AS SELECT `a`, `ds` FROM `tbl`",
+        f"DECLARE _sqlmesh_target_partitions_ ARRAY<DATETIME> DEFAULT (SELECT ARRAY_AGG(PARSE_DATETIME('%Y%m', partition_id)) FROM `test_schema`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '__temp_test_table_{temp_table_id}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__');",
+        f"MERGE INTO `test_schema`.`test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM (SELECT * FROM `test_schema`.`__temp_test_table_{temp_table_id}`) AS `_subquery` WHERE DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`)) AS `__MERGE_SOURCE__` ON FALSE WHEN NOT MATCHED BY SOURCE AND DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`) THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
+        f"DROP TABLE IF EXISTS `test_schema`.`__temp_test_table_{temp_table_id}`",
     ]
 
 
 def test_insert_overwrite_by_partition_query_unknown_column_types(
-    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
 ):
     adapter = make_mocked_engine_adapter(BigQueryEngineAdapter)
     execute_mock = mocker.patch(
@@ -93,12 +93,13 @@ def test_insert_overwrite_by_partition_query_unknown_column_types(
         "ds": exp.DataType.build("DATETIME"),
     }
 
-    temp_table_uuid = uuid.uuid4()
-    uuid4_mock = mocker.patch("uuid.uuid4")
-    uuid4_mock.return_value = temp_table_uuid
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "test_schema.test_table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
 
     adapter.insert_overwrite_by_partition(
-        "test_schema.test_table",
+        table_name,
         parse_one("SELECT a, ds FROM tbl"),
         partitioned_by=[
             d.parse_one("DATETIME_TRUNC(ds, MONTH)"),
@@ -110,16 +111,16 @@ def test_insert_overwrite_by_partition_query_unknown_column_types(
     )
 
     columns_mock.assert_called_once_with(
-        exp.to_table(f"test_schema.__temp_test_table_{temp_table_uuid.hex}")
+        exp.to_table(f"test_schema.__temp_test_table_{temp_table_id}")
     )
 
     sql_calls = _to_sql_calls(execute_mock)
     assert sql_calls == [
         "CREATE SCHEMA IF NOT EXISTS `test_schema`",
-        f"CREATE TABLE IF NOT EXISTS `test_schema`.`__temp_test_table_{temp_table_uuid.hex}` PARTITION BY DATETIME_TRUNC(`ds`, MONTH) AS SELECT `a`, `ds` FROM `tbl`",
-        f"DECLARE _sqlmesh_target_partitions_ ARRAY<DATETIME> DEFAULT (SELECT ARRAY_AGG(PARSE_DATETIME('%Y%m', partition_id)) FROM `test_schema`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '__temp_test_table_{temp_table_uuid.hex}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__');",
-        f"MERGE INTO `test_schema`.`test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM (SELECT * FROM `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`) AS `_subquery` WHERE DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`)) AS `__MERGE_SOURCE__` ON FALSE WHEN NOT MATCHED BY SOURCE AND DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`) THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
-        f"DROP TABLE IF EXISTS `test_schema`.`__temp_test_table_{temp_table_uuid.hex}`",
+        f"CREATE TABLE IF NOT EXISTS `test_schema`.`__temp_test_table_{temp_table_id}` PARTITION BY DATETIME_TRUNC(`ds`, MONTH) AS SELECT `a`, `ds` FROM `tbl`",
+        f"DECLARE _sqlmesh_target_partitions_ ARRAY<DATETIME> DEFAULT (SELECT ARRAY_AGG(PARSE_DATETIME('%Y%m', partition_id)) FROM `test_schema`.INFORMATION_SCHEMA.PARTITIONS WHERE table_name = '__temp_test_table_{temp_table_id}' AND NOT partition_id IS NULL AND partition_id <> '__NULL__');",
+        f"MERGE INTO `test_schema`.`test_table` AS `__MERGE_TARGET__` USING (SELECT `a`, `ds` FROM (SELECT * FROM `test_schema`.`__temp_test_table_{temp_table_id}`) AS `_subquery` WHERE DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`)) AS `__MERGE_SOURCE__` ON FALSE WHEN NOT MATCHED BY SOURCE AND DATETIME_TRUNC(`ds`, MONTH) IN UNNEST(`_sqlmesh_target_partitions_`) THEN DELETE WHEN NOT MATCHED THEN INSERT (`a`, `ds`) VALUES (`a`, `ds`)",
+        f"DROP TABLE IF EXISTS `test_schema`.`__temp_test_table_{temp_table_id}`",
     ]
 
 
@@ -231,10 +232,6 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     execute_mock = mocker.patch(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
-
-    temp_table_uuid = uuid.uuid4()
-    uuid4_mock = mocker.patch("uuid.uuid4")
-    uuid4_mock.return_value = temp_table_uuid
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(

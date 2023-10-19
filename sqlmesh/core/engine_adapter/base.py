@@ -14,7 +14,6 @@ import logging
 import sys
 import types
 import typing as t
-import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from functools import partial
@@ -34,7 +33,7 @@ from sqlmesh.core.dialect import (
 from sqlmesh.core.engine_adapter.shared import DataObject, set_catalog
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.schema_diff import SchemaDiffer
-from sqlmesh.utils import double_escape
+from sqlmesh.utils import double_escape, random_id
 from sqlmesh.utils.connection_pool import create_connection_pool
 from sqlmesh.utils.date import TimeLike, make_inclusive, to_ts
 from sqlmesh.utils.errors import SQLMeshError, UnsupportedCatalogOperationError
@@ -1431,7 +1430,7 @@ class EngineAdapter:
         Returns the name of the temp table that should be used for the given table name.
         """
         table = t.cast(exp.Table, exp.to_table(table).copy())
-        table.set("this", exp.to_identifier(f"__temp_{table.name}_{uuid.uuid4().hex}"))
+        table.set("this", exp.to_identifier(f"__temp_{table.name}_{random_id(short=True)}"))
 
         if table_only:
             table.set("db", None)
