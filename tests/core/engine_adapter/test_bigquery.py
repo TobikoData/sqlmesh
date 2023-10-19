@@ -51,11 +51,10 @@ def test_insert_overwrite_by_partition_query(
         "sqlmesh.core.engine_adapter.bigquery.BigQueryEngineAdapter.execute"
     )
 
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_schema.test_table"
     temp_table_id = "abcdefgh"
-    temp_table = temp_table_name(table_name, temp_table_id)
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    temp_table_mock.return_value = temp_table
+    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
 
     adapter.insert_overwrite_by_partition(
         table_name,
@@ -95,11 +94,10 @@ def test_insert_overwrite_by_partition_query_unknown_column_types(
         "ds": exp.DataType.build("DATETIME"),
     }
 
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_schema.test_table"
     temp_table_id = "abcdefgh"
-    temp_table = temp_table_name(table_name, temp_table_id)
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    temp_table_mock.return_value = temp_table
+    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
 
     adapter.insert_overwrite_by_partition(
         table_name,

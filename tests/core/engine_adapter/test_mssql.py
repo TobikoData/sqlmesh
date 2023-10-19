@@ -90,11 +90,10 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
 
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_table"
     temp_table_id = "abcdefgh"
-    temp_table = temp_table_name(table_name, temp_table_id)
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    temp_table_mock.return_value = temp_table
+    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter.insert_overwrite_by_time_partition(
@@ -123,11 +122,10 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.REPLACE_WHERE
 
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_table"
     temp_table_id = "abcdefgh"
-    temp_table = temp_table_name(table_name, temp_table_id)
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    temp_table_mock.return_value = temp_table
+    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"a": [1, 2], "ds": ["2022-01-01", "2022-01-02"]})
     adapter.insert_overwrite_by_time_partition(
@@ -154,11 +152,10 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
 def test_insert_append_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_table"
     temp_table_id = "abcdefgh"
-    temp_table = temp_table_name(table_name, temp_table_id)
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    temp_table_mock.return_value = temp_table
+    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.insert_append(
@@ -217,11 +214,10 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
 def test_merge_pandas(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
 
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "target"
     temp_table_id = "abcdefgh"
-    temp_table = temp_table_name(table_name, temp_table_id)
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    temp_table_mock.return_value = temp_table
+    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"id": [1, 2, 3], "ts": [1, 2, 3], "val": [4, 5, 6]})
     adapter.merge(
@@ -285,11 +281,10 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
     adapter.cursor.fetchone.return_value = (1,)
 
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "test_table"
     temp_table_id = "abcdefgh"
-    temp_table = temp_table_name(table_name, temp_table_id)
-    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
-    temp_table_mock.return_value = temp_table
+    temp_table_mock.return_value = temp_table_name(table_name, temp_table_id)
 
     df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     adapter.replace_query(
