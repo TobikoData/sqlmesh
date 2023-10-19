@@ -30,6 +30,9 @@ core-it-test:
 core_engine_it_test:
 	pytest -m "engine_integration"
 
+core_engine_it_test_local_only:
+	pytest -m "engine_integration_local"
+
 core_engine_it_test_docker:
 	docker-compose -f ./tests/core/engine_adapter/docker-compose.yaml up -d
 
