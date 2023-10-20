@@ -4,7 +4,7 @@ install-dev:
 	pip3 install -e ".[dev,web,slack]"
 
 install-engine-integration:
-	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino]"
+	pip3 install -e ".[dev,web,slack,mysql,postgres,databricks,redshift,bigquery,snowflake,trino,mssql]"
 
 install-pre-commit:
 	pre-commit install
