@@ -43,18 +43,25 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
         for snapshot in environment.snapshots
         if snapshot.is_model
     }:
-        adapter.drop_schema(
-            schema_(expired_schema, expired_catalog),
-            ignore_if_not_exists=True,
-            cascade=True,
-        )
+        schema = schema_(expired_schema, expired_catalog)
+        try:
+            adapter.drop_schema(
+                schema,
+                ignore_if_not_exists=True,
+                cascade=True,
+            )
+        except Exception as e:
+            logger.warning("Falied to drop the expired environment schema '%s': %s", schema, e)
     for expired_view in {
         snapshot.qualified_view_name.for_environment(environment.naming_info)
         for environment in expired_table_environments
         for snapshot in environment.snapshots
         if snapshot.is_model
     }:
-        adapter.drop_view(expired_view, ignore_if_not_exists=True)
+        try:
+            adapter.drop_view(expired_view, ignore_if_not_exists=True)
+        except Exception as e:
+            logger.warning("Falied to drop the expired environment view '%s': %s", expired_view, e)
 
 
 def transactional() -> t.Callable[[t.Callable], t.Callable]:
