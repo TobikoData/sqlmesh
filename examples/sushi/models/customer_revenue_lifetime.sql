@@ -55,5 +55,13 @@ SELECT
   COALESCE(it.revenue, 0) + COALESCE(prev_total.revenue, 0) AS revenue, /* Lifetime revenue from this customer */
   @end_ds AS ds /* End date of the lifetime calculation */
 FROM incremental_total AS it
-FULL OUTER JOIN prev_total AS prev_total
+LEFT JOIN prev_total AS prev_total
+  ON it.customer_id = prev_total.customer_id
+UNION
+SELECT
+  COALESCE(it.customer_id, prev_total.customer_id) AS customer_id, /* Customer id */
+  COALESCE(it.revenue, 0) + COALESCE(prev_total.revenue, 0) AS revenue, /* Lifetime revenue from this customer */
+  @end_ds AS ds /* End date of the lifetime calculation */
+FROM incremental_total AS it
+RIGHT JOIN prev_total AS prev_total
   ON it.customer_id = prev_total.customer_id
