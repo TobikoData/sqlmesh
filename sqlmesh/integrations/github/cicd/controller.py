@@ -272,6 +272,7 @@ class GithubEvent:
 
 class GithubController:
     BOT_HEADER_MSG = "**SQLMesh Bot Info**"
+    MAX_CHAR_LENGTH = 65535
 
     def __init__(
         self,
@@ -533,7 +534,7 @@ class GithubController:
         status: GithubCheckStatus,
         title: str,
         conclusion: t.Optional[GithubCheckConclusion] = None,
-        summary: t.Optional[str] = None,
+        full_summary: t.Optional[str] = None,
     ) -> None:
         """
         Updates the status of the merge commit.
@@ -553,7 +554,16 @@ class GithubController:
             kwargs["completed_at"] = current_time
         if conclusion:
             kwargs["conclusion"] = conclusion.value
-        kwargs["output"] = {"title": title, "summary": summary or title}
+        full_summary = full_summary or title
+        summary, text, *truncated = [
+            full_summary[i : i + self.MAX_CHAR_LENGTH]
+            for i in range(0, len(full_summary), self.MAX_CHAR_LENGTH)
+        ] + [None]
+        if truncated and truncated[0] is not None:
+            logger.warning(f"Summary was too long so we truncated it. Full text: {full_summary}")
+        kwargs["output"] = {"title": title, "summary": summary}
+        if text:
+            kwargs["output"]["text"] = text
         if name in self._check_run_mapping:
             check_run = self._check_run_mapping[name]
             check_run.edit(
@@ -581,7 +591,7 @@ class GithubController:
             status=status,
             title=title,
             conclusion=conclusion,
-            summary=summary,
+            full_summary=summary,
         )
 
     def update_test_check(
