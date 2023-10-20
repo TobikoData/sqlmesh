@@ -1215,7 +1215,24 @@ def test_convert_to_time_column():
     """
     )
     model = load_sql_based_model(expressions)
-    assert model.convert_to_time_column("2022-01-01") == d.parse_one("CAST('20220101' AS date)")
+    assert model.convert_to_time_column("2022-01-01") == d.parse_one("CAST('2022-01-01' AS DATE)")
+
+    expressions = d.parse(
+        """
+        MODEL (
+            name db.table,
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds
+            )
+        );
+
+        SELECT ds::timestamp
+    """
+    )
+    model = load_sql_based_model(expressions)
+    assert model.convert_to_time_column("2022-01-01") == d.parse_one(
+        "CAST('2022-01-01T00:00:00+00:00' AS TIMESTAMP)"
+    )
 
 
 def test_parse(assert_exp_eq):
