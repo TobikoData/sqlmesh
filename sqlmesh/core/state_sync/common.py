@@ -133,6 +133,11 @@ class CommonStateSyncMixin(StateSync):
                 table_info.name: table_info
                 for table_info in existing_environment.promoted_snapshots
             }
+
+            demoted_snapshots = set(existing_environment.snapshots) - set(environment.snapshots)
+            for demoted_snapshot in self._get_snapshots(demoted_snapshots).values():
+                # Update the updated_at attribute.
+                self._update_snapshot(demoted_snapshot)
         else:
             existing_table_infos = {}
 
@@ -156,10 +161,6 @@ class CommonStateSyncMixin(StateSync):
             if environment_suffix_target_changed
             else [existing_table_infos[name] for name in missing_models]
         )
-        if removed and not environment_suffix_target_changed:
-            for removed_snapshot in self._get_snapshots(removed).values():
-                # Update the updated_at attribute.
-                self._update_snapshot(removed_snapshot)
 
         return PromotionResult(
             added=sorted(table_infos),
