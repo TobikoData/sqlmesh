@@ -267,9 +267,8 @@ def test_catalog_operations(ctx: TestContext):
         pytest.skip("Catalog operation tests only need to run once so we skip anything not query")
     catalog_name = "testing"
     if ctx.dialect == "databricks":
-        # We don't create a catalog because we don't have a dedicated databricks environment to test against
-        # and we don't want to pollute with extra catalogs
-        catalog_name = "system"
+        catalog_name = "catalogtest"
+        ctx.engine_adapter.execute(f"CREATE CATALOG IF NOT EXISTS {catalog_name}")
     elif ctx.dialect == "tsql":
         ctx.engine_adapter.cursor.connection.autocommit(True)
         try:
@@ -320,7 +319,8 @@ def test_drop_schema_catalog(ctx: TestContext):
         pytest.skip("Drop Schema Catalog tests only need to run once so we skip anything not query")
     catalog_name = "testing"
     if ctx.dialect == "databricks":
-        catalog_name = "test_ingest"
+        catalog_name = "catalogtest"
+        ctx.engine_adapter.execute(f"CREATE CATALOG IF NOT EXISTS {catalog_name}")
     elif ctx.dialect == "tsql":
         ctx.engine_adapter.cursor.connection.autocommit(True)
         try:
