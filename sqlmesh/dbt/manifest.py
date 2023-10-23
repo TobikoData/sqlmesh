@@ -24,7 +24,7 @@ from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroInfo, MacroReference, extract_call_names, node_name
+from sqlmesh.utils.jinja import MacroInfo, MacroReference, extract_call_names, nodes
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
@@ -361,12 +361,20 @@ def _extra_dependencies(target: str) -> Dependencies:
         if len(call_name) == 2 and call_name[0] in ("dbt", "dbt_utils"):
             dependencies.macros.append(MacroReference(package=call_name[0], name=call_name[1]))
         elif call_name[0] == "source":
-            source = ".".join(node_name(arg)[0] for arg in node.args)
+            source = ".".join(_jinja_call_arg_name(arg) for arg in node.args)
             if source:
                 dependencies.sources.append(source)
         elif call_name[0] == "ref":
-            ref = ".".join(node_name(arg)[0] for arg in node.args)
+            ref = ".".join(_jinja_call_arg_name(arg) for arg in node.args)
             if ref:
                 dependencies.refs.append(ref)
 
     return dependencies
+
+
+def _jinja_call_arg_name(node: nodes.Node) -> str:
+    if isinstance(node, nodes.Name):
+        return node.name
+    if isinstance(node, nodes.Const):
+        return node.value
+    return ""

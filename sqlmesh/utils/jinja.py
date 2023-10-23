@@ -99,15 +99,15 @@ class MacroExtractor(Parser):
         )
 
 
-def node_name(node: nodes.Expr) -> t.Tuple[str, ...]:
+def call_name(node: nodes.Expr) -> t.Tuple[str, ...]:
     if isinstance(node, nodes.Name):
         return (node.name,)
     if isinstance(node, nodes.Const):
-        return (node.value,)
+        return (f"'node.value'",)
     if isinstance(node, nodes.Getattr):
-        return node_name(node.node) + (node.attr,)
+        return call_name(node.node) + (node.attr,)
     if isinstance(node, (nodes.Getitem, nodes.Call)):
-        return node_name(node.node)
+        return call_name(node.node)
     return ()
 
 
@@ -132,7 +132,7 @@ def find_call_names(
             for arg in child_node.args:
                 vars_in_scope.add(arg.name)
         elif isinstance(child_node, nodes.Call):
-            name = node_name(child_node)
+            name = call_name(child_node)
             if name[0][0] != "'" and name[0] not in vars_in_scope:
                 yield (name, child_node)
         yield from find_call_names(child_node, vars_in_scope)
