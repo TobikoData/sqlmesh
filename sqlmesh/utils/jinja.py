@@ -271,9 +271,9 @@ class JinjaMacroRegistry(PydanticModel):
 
         env = environment()
 
+        context.update(self._create_builtin_globals(kwargs))
         context.update(root_macros)
         context.update(package_macros)
-        context.update(self._create_builtin_globals(kwargs))
 
         env.globals.update(context)
         env.filters.update(self._environment.filters)
