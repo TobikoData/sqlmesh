@@ -43,18 +43,25 @@ def cleanup_expired_views(adapter: EngineAdapter, environments: t.List[Environme
         for snapshot in environment.snapshots
         if snapshot.is_model
     }:
-        adapter.drop_schema(
-            schema_(expired_schema, expired_catalog),
-            ignore_if_not_exists=True,
-            cascade=True,
-        )
+        schema = schema_(expired_schema, expired_catalog)
+        try:
+            adapter.drop_schema(
+                schema,
+                ignore_if_not_exists=True,
+                cascade=True,
+            )
+        except Exception as e:
+            logger.warning("Falied to drop the expired environment schema '%s': %s", schema, e)
     for expired_view in {
         snapshot.qualified_view_name.for_environment(environment.naming_info)
         for environment in expired_table_environments
         for snapshot in environment.snapshots
         if snapshot.is_model
     }:
-        adapter.drop_view(expired_view, ignore_if_not_exists=True)
+        try:
+            adapter.drop_view(expired_view, ignore_if_not_exists=True)
+        except Exception as e:
+            logger.warning("Falied to drop the expired environment view '%s': %s", expired_view, e)
 
 
 def transactional() -> t.Callable[[t.Callable], t.Callable]:
@@ -133,6 +140,11 @@ class CommonStateSyncMixin(StateSync):
                 table_info.name: table_info
                 for table_info in existing_environment.promoted_snapshots
             }
+
+            demoted_snapshots = set(existing_environment.snapshots) - set(environment.snapshots)
+            for demoted_snapshot in self._get_snapshots(demoted_snapshots).values():
+                # Update the updated_at attribute.
+                self._update_snapshot(demoted_snapshot)
         else:
             existing_table_infos = {}
 
@@ -156,10 +168,6 @@ class CommonStateSyncMixin(StateSync):
             if environment_suffix_target_changed
             else [existing_table_infos[name] for name in missing_models]
         )
-        if removed and not environment_suffix_target_changed:
-            for removed_snapshot in self._get_snapshots(removed).values():
-                # Update the updated_at attribute.
-                self._update_snapshot(removed_snapshot)
 
         return PromotionResult(
             added=sorted(table_infos),

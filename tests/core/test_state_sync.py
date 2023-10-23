@@ -411,6 +411,16 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     )
     snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
+    snapshot_b_old = make_snapshot(
+        SqlModel(
+            name="b",
+            kind=FullKind(),
+            query=parse_one("select 2 from a"),
+        ),
+        nodes={"a": snapshot_a.model},
+    )
+    snapshot_b_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
     snapshot_b = make_snapshot(
         SqlModel(
             name="b",
@@ -435,28 +445,29 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     ):
         promote_snapshots(state_sync, [snapshot_a], "prod")
 
-    state_sync.push_snapshots([snapshot_a, snapshot_b, snapshot_c])
+    state_sync.push_snapshots([snapshot_a, snapshot_b_old, snapshot_b, snapshot_c])
 
-    promotion_result = promote_snapshots(state_sync, [snapshot_a, snapshot_b], "prod")
+    promotion_result = promote_snapshots(state_sync, [snapshot_a, snapshot_b_old], "prod")
 
-    assert set(promotion_result.added) == set([snapshot_a.table_info, snapshot_b.table_info])
+    assert set(promotion_result.added) == set([snapshot_a.table_info, snapshot_b_old.table_info])
     assert not promotion_result.removed
     assert not promotion_result.removed_environment_naming_info
     promotion_result = promote_snapshots(
         state_sync,
-        [snapshot_a, snapshot_b, snapshot_c],
+        [snapshot_a, snapshot_b_old, snapshot_c],
         "prod",
     )
     assert set(promotion_result.added) == set(
         [
             snapshot_a.table_info,
-            snapshot_b.table_info,
+            snapshot_b_old.table_info,
             snapshot_c.table_info,
         ]
     )
     assert not promotion_result.removed
     assert not promotion_result.removed_environment_naming_info
 
+    prev_snapshot_b_old_updated_ts = snapshot_b_old.updated_ts
     prev_snapshot_c_updated_ts = snapshot_c.updated_ts
 
     promotion_result = promote_snapshots(
@@ -471,6 +482,10 @@ def test_promote_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.
     assert (
         state_sync.get_snapshots([snapshot_c])[snapshot_c.snapshot_id].updated_ts
         > prev_snapshot_c_updated_ts
+    )
+    assert (
+        state_sync.get_snapshots([snapshot_b_old])[snapshot_b_old.snapshot_id].updated_ts
+        > prev_snapshot_b_old_updated_ts
     )
 
     snapshot_d = make_snapshot(

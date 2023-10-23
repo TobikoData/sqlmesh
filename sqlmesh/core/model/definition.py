@@ -34,7 +34,7 @@ from sqlmesh.core.model.meta import ModelMeta
 from sqlmesh.core.model.seed import CsvSeedReader, Seed, create_seed
 from sqlmesh.core.renderer import ExpressionRenderer, QueryRenderer
 from sqlmesh.utils import str_to_bool
-from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime
+from sqlmesh.utils.date import TimeLike, make_inclusive, to_datetime, to_ds, to_ts
 from sqlmesh.utils.errors import ConfigError, SQLMeshError, raise_config_error
 from sqlmesh.utils.hashing import hash_data
 from sqlmesh.utils.jinja import JinjaMacroRegistry, extract_macro_references
@@ -514,9 +514,6 @@ class _Model(ModelMeta, frozen=True):
     ) -> exp.Expression:
         """Convert a TimeLike object to the same time format and type as the model's time column."""
         if self.time_column:
-            if self.time_column.format:
-                time = to_datetime(time).strftime(self.time_column.format)
-
             if columns_to_types is None:
                 columns_to_types = self.columns_to_types_or_raise
 
@@ -526,12 +523,18 @@ class _Model(ModelMeta, frozen=True):
                 )
 
             time_column_type = columns_to_types[self.time_column.column]
+
+            if time_column_type.is_type(exp.DataType.Type.DATE):
+                return exp.cast(exp.Literal.string(to_ds(time)), to="date")
+            if time_column_type.this in exp.DataType.TEMPORAL_TYPES:
+                return exp.cast(exp.Literal.string(to_ts(time)), to=time_column_type.this)
+
+            if self.time_column.format:
+                time = to_datetime(time).strftime(self.time_column.format)
             if time_column_type.this in exp.DataType.TEXT_TYPES:
                 return exp.Literal.string(time)
-            elif time_column_type.this in exp.DataType.NUMERIC_TYPES:
+            if time_column_type.this in exp.DataType.NUMERIC_TYPES:
                 return exp.Literal.number(time)
-            elif time_column_type.this in exp.DataType.TEMPORAL_TYPES:
-                return exp.cast(exp.Literal.string(time), time_column_type)
         return exp.convert(time)
 
     def update_schema(
