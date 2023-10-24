@@ -91,7 +91,7 @@ class SnapshotEvaluator:
         execution_time: TimeLike,
         snapshots: t.Dict[str, Snapshot],
         limit: t.Optional[int] = None,
-        is_dev: bool = False,
+        is_deployable: bool = True,
         **kwargs: t.Any,
     ) -> t.Optional[DF]:
         """Evaluate a snapshot, creating its schema and table if it doesn't exist and then inserting it.
@@ -103,8 +103,7 @@ class SnapshotEvaluator:
             execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
             limit: If limit is > 0, the query will not be persisted but evaluated and returned as a dataframe.
-            is_dev: Indicates whether the evaluation happens in the development mode and temporary
-                tables / table clones should be used where applicable.
+            is_deployable: Indicates whether the result of the evaluation is deployable.
             kwargs: Additional kwargs to pass to the renderer.
         """
         if not snapshot.is_model:
@@ -117,7 +116,7 @@ class SnapshotEvaluator:
 
         logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
 
-        table_name = "" if limit else snapshot.table_name(is_dev=is_dev)
+        table_name = "" if limit else snapshot.table_name(is_deployable=is_deployable)
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
@@ -128,7 +127,7 @@ class SnapshotEvaluator:
                     table_name,
                     query_or_df,
                     snapshots,
-                    is_dev,
+                    is_deployable,
                     start=start,
                     end=end,
                     execution_time=execution_time,
@@ -140,7 +139,7 @@ class SnapshotEvaluator:
                     table_name,
                     query_or_df,
                     snapshots,
-                    is_dev,
+                    is_deployable,
                     start=start,
                     end=end,
                     execution_time=execution_time,
@@ -160,7 +159,7 @@ class SnapshotEvaluator:
         render_statements_kwargs = dict(
             engine_adapter=self.adapter,
             snapshots=snapshots,
-            is_dev=is_dev,
+            is_deployable=is_deployable,
             **common_render_kwargs,
         )
 
@@ -169,7 +168,8 @@ class SnapshotEvaluator:
                 self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
             queries_or_dfs = model.render(
-                context=ExecutionContext(self.adapter, snapshots, is_dev), **common_render_kwargs
+                context=ExecutionContext(self.adapter, snapshots, is_deployable),
+                **common_render_kwargs,
             )
 
             if limit and limit > 0:
@@ -214,7 +214,7 @@ class SnapshotEvaluator:
         self,
         target_snapshots: t.Iterable[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
-        is_dev: bool = False,
+        deployable_snapshots: t.Optional[t.Set[str]] = None,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]] = None,
     ) -> None:
         """Promotes the given collection of snapshots in the target environment by replacing a corresponding
@@ -223,8 +223,8 @@ class SnapshotEvaluator:
         Args:
             target_snapshots: Snapshots to promote.
             environment_naming_info: Naming information for the target environment.
-            is_dev: Indicates whether the promotion happens in the development mode and temporary
-                tables / table clones should be used where applicable.
+            is_deployable: Indicates whether to promote the deployable snapshot table.
+            deployable_snapshots: A set of snapshot IDs for which a deployable table should be promoted.
             on_complete: A callback to call on each successfully promoted snapshot.
         """
         self._create_schemas(
@@ -237,7 +237,12 @@ class SnapshotEvaluator:
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
                 target_snapshots,
-                lambda s: self._promote_snapshot(s, environment_naming_info, is_dev, on_complete),
+                lambda s: self._promote_snapshot(
+                    s,
+                    environment_naming_info,
+                    deployable_snapshots is None or s.name in deployable_snapshots,
+                    on_complete,
+                ),
                 self.ddl_concurrent_tasks,
             )
 
@@ -326,7 +331,7 @@ class SnapshotEvaluator:
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         raise_exception: bool = True,
-        is_dev: bool = False,
+        is_deployable: bool = True,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Execute a snapshot's node's audit queries.
@@ -339,11 +344,10 @@ class SnapshotEvaluator:
             execution_time: The date/time time reference to use for execution time.
             raise_exception: Whether to raise an exception if the audit fails. Blocking rules determine if an
                 AuditError is thrown or if we just warn with logger
-            is_dev: Indicates whether the auditing happens in the development mode and temporary
-                tables / table clones should be used where applicable.
+            is_deployable: Whether to render the query for deployable snapshot tables.
             kwargs: Additional kwargs to pass to the renderer.
         """
-        if snapshot.is_temporary_table(is_dev):
+        if not is_deployable:
             # We can't audit a temporary table.
             return []
 
@@ -366,7 +370,7 @@ class SnapshotEvaluator:
                     end=end,
                     execution_time=execution_time,
                     raise_exception=raise_exception,
-                    is_dev=is_dev,
+                    is_deployable=is_deployable,
                     **kwargs,
                 )
             )
@@ -406,7 +410,6 @@ class SnapshotEvaluator:
         # If a snapshot reuses an existing version we assume that the table for that version
         # has already been created, so we only need to create a temporary table or a clone.
         is_dev = snapshot.is_forward_only or snapshot.is_indirect_non_breaking
-        target_table_name = snapshot.table_name(is_dev=is_dev)
 
         parent_snapshots_by_name = {
             snapshots[p_sid].name: snapshots[p_sid] for p_sid in snapshot.parents
@@ -425,15 +428,13 @@ class SnapshotEvaluator:
         with self.adapter.transaction(), self.adapter.session():
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
-            if is_dev and not snapshot.previous_versions:
-                # This is a FORWARD_ONLY snapshot which represents an added model. This means
-                # that the physical table associated with it doesn't exist yet.
-                logger.info(
-                    f"Detected a forward-only snapshot without previous versions: {snapshot.snapshot_id}"
-                )
-                evaluation_strategy.create(snapshot, target_table_name, **render_kwargs)
-                evaluation_strategy.create(snapshot, snapshot.table_name(), **render_kwargs)
-            elif is_dev and snapshot.is_materialized and self.adapter.SUPPORTS_CLONING:
+            if (
+                is_dev
+                and snapshot.is_materialized
+                and snapshot.previous_versions
+                and self.adapter.SUPPORTS_CLONING
+            ):
+                target_table_name = snapshot.table_name(is_deployable=False)
                 tmp_table_name = f"{target_table_name}__schema_migration_source"
                 source_table_name = snapshot.table_name()
 
@@ -446,7 +447,10 @@ class SnapshotEvaluator:
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
-                evaluation_strategy.create(snapshot, target_table_name, **render_kwargs)
+                for is_deployable in (True, False):
+                    evaluation_strategy.create(
+                        snapshot, snapshot.table_name(is_deployable=is_deployable), **render_kwargs
+                    )
 
             self.adapter.execute(snapshot.model.render_post_statements(**render_kwargs))
 
@@ -467,7 +471,7 @@ class SnapshotEvaluator:
         }
         parent_snapshots_by_name[snapshot.name] = snapshot
 
-        tmp_table_name = snapshot.table_name(is_dev=True)
+        tmp_table_name = snapshot.table_name(is_deployable=False)
         target_table_name = snapshot.table_name()
         _evaluation_strategy(snapshot, self.adapter).migrate(
             snapshot, parent_snapshots_by_name, target_table_name, tmp_table_name
@@ -477,10 +481,10 @@ class SnapshotEvaluator:
         self,
         snapshot: Snapshot,
         environment_naming_info: EnvironmentNamingInfo,
-        is_dev: bool,
+        is_deployable: bool,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        table_name = snapshot.table_name_for_mapping(is_dev=is_dev)
+        table_name = snapshot.table_name_for_mapping(is_deployable)
         _evaluation_strategy(snapshot, self.adapter).promote(
             snapshot.qualified_view_name, environment_naming_info, table_name, snapshot
         )
@@ -504,18 +508,9 @@ class SnapshotEvaluator:
     def _cleanup_snapshot(self, snapshot: SnapshotInfoLike, dev_table_only: bool) -> None:
         snapshot = snapshot.table_info
 
-        table_name = snapshot.table_name()
-        dev_table_name = snapshot.table_name(is_dev=True)
-
-        if dev_table_only:
-            if table_name == dev_table_name:
-                # Nothing to delete.
-                return
-            table_names = [dev_table_name]
-        else:
-            table_names = [table_name]
-            if table_name != dev_table_name:
-                table_names.append(dev_table_name)
+        table_names = [snapshot.table_name(is_deployable=False)]
+        if not dev_table_only:
+            table_names.append(snapshot.table_name(is_deployable=True))
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
@@ -546,7 +541,7 @@ class SnapshotEvaluator:
         end: t.Optional[TimeLike],
         execution_time: t.Optional[TimeLike],
         raise_exception: bool,
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> AuditResult:
         if audit.skip:
@@ -561,7 +556,7 @@ class SnapshotEvaluator:
             end=end,
             execution_time=execution_time,
             snapshots=snapshots,
-            is_dev=is_dev,
+            is_deployable=is_deployable,
             engine_adapter=self.adapter,
             **audit_args,
             **kwargs,
@@ -633,7 +628,7 @@ class EvaluationStrategy(abc.ABC):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         """Inserts the given query or a DataFrame into the target table or replaces a view.
@@ -643,7 +638,7 @@ class EvaluationStrategy(abc.ABC):
             name: The name of the target table or view.
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
-            is_dev: Whether the insert is for the dev table.
+            is_deployable: Whether the insert is for the deployable table.
         """
 
     @abc.abstractmethod
@@ -653,7 +648,7 @@ class EvaluationStrategy(abc.ABC):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         """Appends the given query or a DataFrame to the existing table.
@@ -663,7 +658,7 @@ class EvaluationStrategy(abc.ABC):
             table_name: The target table name.
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
-            is_dev: Whether the insert is for the dev table.
+            is_deployable: Whether the append is for the deployable table.
         """
 
     @abc.abstractmethod
@@ -744,7 +739,7 @@ class SymbolicStrategy(EvaluationStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -755,7 +750,7 @@ class SymbolicStrategy(EvaluationStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -841,7 +836,7 @@ class MaterializableStrategy(PromotableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -904,7 +899,7 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -926,7 +921,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -944,7 +939,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -964,7 +959,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -973,7 +968,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
                 name, query_or_df, model.partitioned_by, columns_to_types=model.columns_to_types
             )
         else:
-            self.append(snapshot, name, query_or_df, snapshots, is_dev, **kwargs)
+            self.append(snapshot, name, query_or_df, snapshots, is_deployable, **kwargs)
 
 
 class FullRefreshStrategy(MaterializableStrategy):
@@ -983,7 +978,7 @@ class FullRefreshStrategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1005,7 +1000,7 @@ class SCDType2Strategy(MaterializableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1027,7 +1022,7 @@ class SCDType2Strategy(MaterializableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1051,13 +1046,15 @@ class ViewStrategy(PromotableStrategy):
         name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
         if (
             isinstance(query_or_df, exp.Expression)
-            and model.render_query(snapshots=snapshots, is_dev=is_dev, engine_adapter=self.adapter)
+            and model.render_query(
+                snapshots=snapshots, is_deployable=is_deployable, engine_adapter=self.adapter
+            )
             == query_or_df
             and self.adapter.table_exists(name)
         ):
@@ -1079,7 +1076,7 @@ class ViewStrategy(PromotableStrategy):
         table_name: str,
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
         **kwargs: t.Any,
     ) -> None:
         raise ConfigError(f"Cannot append to a view '{table_name}'.")

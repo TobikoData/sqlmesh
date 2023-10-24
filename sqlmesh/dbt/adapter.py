@@ -168,7 +168,7 @@ class RuntimeAdapter(BaseAdapter):
         quote_policy: t.Optional[Policy] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
-        is_dev: bool = False,
+        is_deployable: bool = True,
     ):
         from dbt.adapters.base import BaseRelation
         from dbt.adapters.base.relation import Policy
@@ -181,7 +181,7 @@ class RuntimeAdapter(BaseAdapter):
         self.relation_type = relation_type or BaseRelation
         self.quote_policy = quote_policy or Policy()
         self.table_mapping = {
-            **to_table_mapping((snapshots or {}).values(), is_dev),
+            **to_table_mapping((snapshots or {}).values(), is_deployable),
             **table_mapping,
         }
 

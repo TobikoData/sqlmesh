@@ -728,6 +728,15 @@ class Plan:
         )
 
     def _is_forward_only_model(self, model_name: str) -> bool:
+        snapshot = self._snapshot_mapping[model_name]
+        return (
+            snapshot.is_model
+            and snapshot.model.forward_only
+            and not snapshot.change_category
+            and bool(snapshot.previous_versions)
+        )
+
+    def _is_forward_only_model_old(self, model_name: str) -> bool:
         def _is_forward_only_expected(snapshot: Snapshot) -> bool:
             # Returns True if the snapshot is not categorized yet but is expected
             # to be categorized as forward-only. Checking the previous versions to make

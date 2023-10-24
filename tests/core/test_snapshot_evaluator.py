@@ -271,10 +271,14 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     snapshot.version = "test_version"
 
-    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"), is_dev=True)
+    evaluator.promote(
+        [snapshot], EnvironmentNamingInfo(name="test_env"), deployable_snapshots=set()
+    )
 
     snapshot.unpaused_ts = to_timestamp("2023-01-01")
-    evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"), is_dev=True)
+    evaluator.promote(
+        [snapshot], EnvironmentNamingInfo(name="test_env"), deployable_snapshots=set()
+    )
 
     adapter_mock.create_schema.assert_has_calls(
         [

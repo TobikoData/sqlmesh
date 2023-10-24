@@ -16,6 +16,7 @@ from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.utils import sanitize_name
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -255,24 +256,14 @@ class SnapshotInfoMixin(ModelKindMixin):
     def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
         return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
 
-    def _table_name(self, version: str, is_dev: bool, for_read: bool) -> str:
+    def _table_name(self, version: str, is_deployable: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
             version: The snapshot version.
-            is_dev: Whether the table name will be used in development mode.
-            for_read: Whether the table name will be used for reading by a different snapshot.
+            is_deployable: Indicates whether to return the table name for deployment to production.
         """
-        if is_dev and for_read:
-            # If this snapshot is used for **reading**, return a temporary table
-            # only if this snapshot captures a direct forward-only change applied to its model.
-            is_temp = self.is_forward_only
-        elif is_dev:
-            # Use a temporary table in the dev environment when **writing** a forward-only snapshot
-            # which was modified either directly or indirectly.
-            is_temp = self.is_forward_only or self.is_indirect_non_breaking
-        else:
-            is_temp = False
+        is_temp = not is_deployable
 
         if is_temp:
             version = self.temp_version or self.fingerprint.to_version()
@@ -312,14 +303,13 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
 
-    def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
+    def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
-            is_dev: Whether the table name will be used in development mode.
-            for_read: Whether the table name will be used for reading by a different snapshot.
+            is_deployable: Indicates whether to return the table name for deployment to production.
         """
-        return self._table_name(self.version, is_dev, for_read)
+        return self._table_name(self.version, is_deployable)
 
     @property
     def physical_schema(self) -> str:
@@ -803,32 +793,31 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             to_timestamp(self.node.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
-    def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
+    def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
-            is_dev: Whether the table name will be used in development mode.
-            for_read: Whether the table name will be used for reading by a different snapshot.
+            is_deployable: Indicates whether to return the table name for deployment to production.
         """
         self._ensure_categorized()
         assert self.version
-        return self._table_name(self.version, is_dev, for_read)
+        return self._table_name(self.version, is_deployable)
 
-    def table_name_for_mapping(self, is_dev: bool = False) -> str:
+    def table_name_for_mapping(self, is_deployable: bool = True) -> str:
         """Full table name used by a child snapshot for table mapping during evaluation.
 
         Args:
-            is_dev: Whether the table name will be used in development mode.
+            is_deployable: Indicates whether to return the table name for deployment to production.
         """
         self._ensure_categorized()
         assert self.version
 
-        if is_dev and self.is_forward_only:
+        if not is_deployable:
             # If this snapshot is unpaused we shouldn't be using a temporary
             # table for mapping purposes.
-            is_dev = self.is_paused
+            is_deployable = not self.is_paused or self.is_indirect_non_breaking
 
-        return self._table_name(self.version, is_dev, True)
+        return self._table_name(self.version, is_deployable)
 
     def is_temporary_table(self, is_dev: bool) -> bool:
         """Provided whether the snapshot is used in a development mode or not, returns True
@@ -1185,9 +1174,9 @@ def remove_interval(intervals: Intervals, remove_start: int, remove_end: int) ->
     return modified
 
 
-def to_table_mapping(snapshots: t.Iterable[Snapshot], is_dev: bool) -> t.Dict[str, str]:
+def to_table_mapping(snapshots: t.Iterable[Snapshot], is_deployable: bool) -> t.Dict[str, str]:
     return {
-        snapshot.name: snapshot.table_name_for_mapping(is_dev=is_dev)
+        snapshot.name: snapshot.table_name_for_mapping(is_deployable)
         for snapshot in snapshots
         if snapshot.version and not snapshot.is_symbolic
     }
@@ -1320,3 +1309,41 @@ def start_date(
 
     cache[key] = earliest
     return earliest
+
+
+def snapshots_to_dag(snapshots: t.Collection[Snapshot]) -> DAG[SnapshotId]:
+    dag: DAG[SnapshotId] = DAG()
+    for snapshot in snapshots:
+        dag.add(snapshot.snapshot_id, snapshot.parents)
+    return dag
+
+
+def get_deployable_snapshots(snapshots: t.Dict[SnapshotId, Snapshot]) -> t.Set[SnapshotId]:
+    dag = snapshots_to_dag(snapshots.values())
+    reversed_dag = dag.reversed.graph
+
+    mapping: t.Dict[SnapshotId, bool] = {}
+
+    def _visit(node: SnapshotId, deployable: bool = True) -> None:
+        if node in mapping and (not mapping[node] or mapping[node] == deployable):
+            return
+
+        if deployable:
+            snapshot = snapshots[node]
+            # FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots are never deployable.
+            this_deployable = snapshot.change_category not in (
+                SnapshotChangeCategory.FORWARD_ONLY,
+                SnapshotChangeCategory.INDIRECT_NON_BREAKING,
+            )
+            children_deployable = not snapshot.is_paused_forward_only
+        else:
+            this_deployable, children_deployable = False, False
+
+        mapping[node] = mapping.get(node, True) and this_deployable
+        for child in reversed_dag[node]:
+            _visit(child, children_deployable)
+
+    for node in dag.roots:
+        _visit(node)
+
+    return {snapshot_id for snapshot_id, deployable in mapping.items() if deployable}

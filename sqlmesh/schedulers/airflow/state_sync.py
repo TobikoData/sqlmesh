@@ -181,6 +181,7 @@ class HttpStateSync(StateSync):
         start: TimeLike,
         end: TimeLike,
         is_dev: bool = False,
+        is_deployable: bool = True,
     ) -> None:
         """Add an interval to a snapshot and sync it to the store.
 
@@ -192,6 +193,7 @@ class HttpStateSync(StateSync):
             end: The end of the interval to add.
             is_dev: Indicates whether the given interval is being added while in
                 development mode.
+            is_deployable: Indicates whether the given interval is deployable.
         """
         raise NotImplementedError("Adding intervals is not supported by the Airflow state sync.")
 

@@ -254,7 +254,7 @@ class StateSync(StateReader, abc.ABC):
             start: The start of the interval to add.
             end: The end of the interval to add.
             is_dev: Indicates whether the given interval is being added while in
-                development mode.
+                development mode.is_dev.
         """
 
     @abc.abstractmethod

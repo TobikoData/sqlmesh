@@ -29,6 +29,7 @@ from sqlmesh.core.snapshot import (
     SnapshotEvaluator,
     SnapshotId,
     SnapshotInfoLike,
+    get_deployable_snapshots,
 )
 from sqlmesh.core.state_sync import StateSync
 from sqlmesh.core.user import User
@@ -80,24 +81,26 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if plan.is_dev:
             before_promote_snapshots = all_names
             after_promote_snapshots = set()
+            deployable_snapshots = {s.name for s in get_deployable_snapshots(snapshots)}
         else:
-            before_promote_snapshots = {
-                s.name for s in snapshots.values() if can_evaluate_before_promote(s, snapshots)
-            }
+            before_promote_snapshots = {s.name for s in get_deployable_snapshots(snapshots)}
             after_promote_snapshots = all_names - before_promote_snapshots
+            deployable_snapshots = all_names
 
         update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
 
         self._push(plan)
         self._restate(plan)
-        self._backfill(plan, before_promote_snapshots)
-        self._promote(plan)
-        self._backfill(plan, after_promote_snapshots)
+        self._backfill(plan, before_promote_snapshots, deployable_snapshots)
+        self._promote(plan, deployable_snapshots)
+        self._backfill(plan, after_promote_snapshots, deployable_snapshots)
 
         if not plan.requires_backfill:
             self.console.log_success("Virtual Update executed successfully")
 
-    def _backfill(self, plan: Plan, selected_snapshots: t.Set[str]) -> None:
+    def _backfill(
+        self, plan: Plan, selected_snapshots: t.Set[str], deployable_snapshots: t.Set[str]
+    ) -> None:
         """Backfill missing intervals for snapshots that are part of the given plan.
 
         Args:
@@ -157,7 +160,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         self.state_sync.push_snapshots(plan.new_snapshots)
 
-    def _promote(self, plan: Plan) -> None:
+    def _promote(self, plan: Plan, deployable_snapshots: t.Optional[t.Set[str]] = None) -> None:
         """Promote a plan.
 
         Promotion creates views with a model's name + env pointing to a physical snapshot.
@@ -188,7 +191,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.snapshot_evaluator.promote(
                 [plan.context_diff.snapshots[s.name] for s in promotion_result.added],
                 environment.naming_info,
-                is_dev=plan.is_dev,
+                deployable_snapshots=deployable_snapshots,
                 on_complete=on_complete,
             )
             if promotion_result.removed_environment_naming_info:

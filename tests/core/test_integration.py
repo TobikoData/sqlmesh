@@ -1478,10 +1478,12 @@ def validate_environment_views(
             )
         )
 
+        is_deployable = environment == c.PROD or not snapshot.is_paused_forward_only
+
         assert adapter.table_exists(view_name)
-        assert select_all(
-            snapshot.table_name(is_dev=environment != c.PROD, for_read=True), adapter
-        ) == select_all(view_name, adapter)
+        assert select_all(snapshot.table_name_for_mapping(is_deployable), adapter) == select_all(
+            view_name, adapter
+        )
 
 
 def select_all(table: str, adapter: EngineAdapter) -> t.Iterable:

@@ -186,20 +186,19 @@ class ExecutionContext(BaseContext):
     Args:
         engine_adapter: The engine adapter to execute queries against.
         snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
-        is_dev: Indicates whether the evaluation happens in the development mode and temporary
-            tables / table clones should be used where applicable.
+        is_deployable: Indicates whether the result of the evaluation is deployable.
     """
 
     def __init__(
         self,
         engine_adapter: EngineAdapter,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        is_deployable: bool,
     ):
         self.snapshots = snapshots
-        self.is_dev = is_dev
+        self.is_deployable = is_deployable
         self._engine_adapter = engine_adapter
-        self.__model_tables = to_table_mapping(snapshots.values(), is_dev)
+        self.__model_tables = to_table_mapping(snapshots.values(), is_deployable)
 
     @property
     def engine_adapter(self) -> EngineAdapter:
@@ -312,10 +311,12 @@ class Context(BaseContext):
             )
         return self._snapshot_evaluator
 
-    def execution_context(self, is_dev: bool = False) -> ExecutionContext:
+    def execution_context(self, is_deployable: bool = True) -> ExecutionContext:
         """Returns an execution context."""
         return ExecutionContext(
-            engine_adapter=self._engine_adapter, snapshots=self.snapshots, is_dev=is_dev
+            engine_adapter=self._engine_adapter,
+            snapshots=self.snapshots,
+            is_deployable=is_deployable,
         )
 
     def upsert_model(self, model: t.Union[str, Model], **kwargs: t.Any) -> Model:

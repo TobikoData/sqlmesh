@@ -242,18 +242,12 @@ def test_add_interval(state_sync: EngineAdapterStateSync, make_snapshot: t.Calla
         (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
 
-    state_sync.add_interval(snapshot, to_datetime("2020-01-11"), "2020-01-15", is_dev=True)
-    assert get_snapshot_intervals(state_sync, snapshot).intervals == [
-        (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
-        (to_timestamp("2020-01-05"), to_timestamp("2020-01-16")),
-    ]
-
     snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
     state_sync.add_interval(snapshot, to_datetime("2020-01-16"), "2020-01-20", is_dev=True)
     intervals = get_snapshot_intervals(state_sync, snapshot)
     assert intervals.intervals == [
         (to_timestamp("2020-01-01"), to_timestamp("2020-01-04")),
-        (to_timestamp("2020-01-05"), to_timestamp("2020-01-16")),
+        (to_timestamp("2020-01-05"), to_timestamp("2020-01-11")),
     ]
     assert intervals.dev_intervals == [
         (to_timestamp("2020-01-16"), to_timestamp("2020-01-21")),

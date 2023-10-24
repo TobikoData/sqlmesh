@@ -16,6 +16,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
     earliest_start_date,
+    get_deployable_snapshots,
     missing_intervals,
 )
 from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
@@ -130,7 +131,7 @@ class Scheduler:
         start: TimeLike,
         end: TimeLike,
         execution_time: TimeLike,
-        is_dev: bool = False,
+        is_deployable: bool = True,
         **kwargs: t.Any,
     ) -> None:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -140,8 +141,6 @@ class Scheduler:
             start: The start datetime to render.
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
-            is_dev: Indicates whether the evaluation happens in the development mode and temporary
-                tables / table clones should be used where applicable.
             kwargs: Additional kwargs to pass to the renderer.
         """
         validate_date_range(start, end)
@@ -162,7 +161,7 @@ class Scheduler:
             end,
             execution_time,
             snapshots=snapshots,
-            is_dev=is_dev,
+            is_deployable=is_deployable,
             **kwargs,
         )
         try:
@@ -172,17 +171,17 @@ class Scheduler:
                 end=end,
                 execution_time=execution_time,
                 snapshots=snapshots,
-                is_dev=is_dev,
+                is_deployable=is_deployable,
                 **kwargs,
             )
         except AuditError as e:
             self.notification_target_manager.notify(NotificationEvent.AUDIT_FAILURE, e)
-            if not is_dev and snapshot.node.owner:
+            if is_deployable and snapshot.node.owner:
                 self.notification_target_manager.notify_user(
                     NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, e
                 )
             raise e
-        self.state_sync.add_interval(snapshot, start, end, is_dev=is_dev)
+        self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
 
     def run(
         self,
@@ -194,6 +193,7 @@ class Scheduler:
         ignore_cron: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
+        deployable_snapshots: t.Optional[t.Set[str]] = None,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
@@ -226,6 +226,9 @@ class Scheduler:
             environment_naming_info = environment
 
         is_dev = environment_naming_info.name != c.PROD
+        if deployable_snapshots is None and is_dev:
+            deployable_snapshots = {s.name for s in get_deployable_snapshots(self.snapshots)}
+
         execution_time = execution_time or now()
         batches = self.batches(
             start,
@@ -257,6 +260,8 @@ class Scheduler:
                 raise CircuitBreakerError()
 
             snapshot, ((start, end), batch_idx) = node
+            is_deployable = deployable_snapshots is None or snapshot.name in deployable_snapshots
+
             self.console.start_snapshot_evaluation_progress(snapshot)
 
             execution_start_ts = now_timestamp()
@@ -264,7 +269,7 @@ class Scheduler:
 
             try:
                 assert execution_time
-                self.evaluate(snapshot, start, end, execution_time, is_dev=is_dev)
+                self.evaluate(snapshot, start, end, execution_time, is_deployable=is_deployable)
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
                 self.console.update_snapshot_evaluation_progress(
