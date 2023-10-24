@@ -107,5 +107,15 @@ class FileCache(t.Generic[T]):
             major, minor = __version_tuple__[0], __version_tuple__[1]
         except ImportError:
             major, minor = 0, 0
-        entry_file_name = f"{name}__{major}__{minor}__{SQLGLOT_MAJOR_VERSION}__{SQLGLOT_MINOR_VERSION}__{SCHEMA_VERSION}__{entry_id}"
+        entry_file_name = "__".join(
+            [
+                name,
+                str(major),
+                str(minor),
+                SQLGLOT_MAJOR_VERSION,
+                SQLGLOT_MINOR_VERSION,
+                str(SCHEMA_VERSION),
+                entry_id,
+            ]
+        )
         return self._path / entry_file_name
