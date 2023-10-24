@@ -27,7 +27,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.dbt.util import DBT_VERSION
-from sqlmesh.utils import AttributeDict
+from sqlmesh.utils import AttributeDict, classproperty
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator, model_validator
 
@@ -111,7 +111,7 @@ class TargetConfig(abc.ABC, DbtConfig):
         fields["target_name"] = self.name
         return AttributeDict(fields)
 
-    @classmethod
+    @classproperty
     def quote_policy(cls) -> Policy:
         return Policy()
 
@@ -119,11 +119,11 @@ class TargetConfig(abc.ABC, DbtConfig):
     def extra(self) -> t.Set[str]:
         return self.extra_fields(set(self.dict()))
 
-    @classmethod
+    @classproperty
     def relation_class(cls) -> t.Type[BaseRelation]:
         return BaseRelation
 
-    @classmethod
+    @classproperty
     def column_class(cls) -> t.Type[Column]:
         return Column
 
@@ -161,7 +161,7 @@ class DuckDbConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert"
 
-    @classmethod
+    @classproperty
     def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.duckdb.relation import DuckDBRelation
 
@@ -223,13 +223,13 @@ class SnowflakeConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
 
-    @classmethod
+    @classproperty
     def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.snowflake import SnowflakeRelation
 
         return SnowflakeRelation
 
-    @classmethod
+    @classproperty
     def column_class(cls) -> t.Type[Column]:
         from dbt.adapters.snowflake import SnowflakeColumn
 
@@ -247,7 +247,7 @@ class SnowflakeConfig(TargetConfig):
             concurrent_tasks=self.threads,
         )
 
-    @classmethod
+    @classproperty
     def quote_policy(cls) -> Policy:
         return Policy(database=False, schema=False, identifier=False)
 
@@ -359,13 +359,13 @@ class RedshiftConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "append"
 
-    @classmethod
+    @classproperty
     def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.redshift import RedshiftRelation
 
         return RedshiftRelation
 
-    @classmethod
+    @classproperty
     def column_class(cls) -> t.Type[Column]:
         if DBT_VERSION < (1, 6):
             from dbt.adapters.redshift import RedshiftColumn  # type: ignore
@@ -409,13 +409,13 @@ class DatabricksConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
 
-    @classmethod
+    @classproperty
     def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.databricks.relation import DatabricksRelation
 
         return DatabricksRelation
 
-    @classmethod
+    @classproperty
     def column_class(cls) -> t.Type[Column]:
         from dbt.adapters.databricks.column import DatabricksColumn
 
@@ -491,13 +491,13 @@ class BigQueryConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
 
-    @classmethod
+    @classproperty
     def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.bigquery.relation import BigQueryRelation
 
         return BigQueryRelation
 
-    @classmethod
+    @classproperty
     def column_class(cls) -> t.Type[Column]:
         from dbt.adapters.bigquery import BigQueryColumn
 

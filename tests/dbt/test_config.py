@@ -2,7 +2,9 @@ import typing as t
 from pathlib import Path
 
 import pytest
-from dbt.adapters.base import BaseRelation
+from dbt.adapters.base import BaseRelation, Column
+from dbt.adapters.duckdb.relation import DuckDBRelation
+from dbt.contracts.relation import Policy
 
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
@@ -12,6 +14,7 @@ from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, Model
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.source import SourceConfig
 from sqlmesh.dbt.target import (
+    TARGET_TYPE_TO_CONFIG_CLASS,
     BigQueryConfig,
     DatabricksConfig,
     DuckDbConfig,
@@ -512,3 +515,15 @@ def test_quoting_config():
     assert QuotingConfig.parse_obj(
         {"database": True, "identifier": True, "schema": True}
     ) == QuotingConfig(database=True, identifier=True, schema=True)
+
+
+def test_db_type_to_relation_class():
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].relation_class) == DuckDBRelation
+
+
+def test_db_type_to_column_class():
+    assert (TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].column_class) == Column
+
+
+def test_db_type_to_quote_policy():
+    assert isinstance(TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].quote_policy, Policy)

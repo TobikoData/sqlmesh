@@ -45,9 +45,9 @@ class Api:
     def __init__(self, target: t.Optional[AttributeDict] = None) -> None:
         if target:
             config_class = TARGET_TYPE_TO_CONFIG_CLASS[target["type"]]
-            self.Relation = config_class.relation_class()
-            self.Column = config_class.column_class()
-            self.quote_policy = config_class.quote_policy()
+            self.Relation = config_class.relation_class
+            self.Column = config_class.column_class
+            self.quote_policy = config_class.quote_policy
         else:
             self.Relation = BaseRelation
             self.Column = Column
