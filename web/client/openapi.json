@@ -1,0 +1,1644 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "FastAPI", "version": "0.1.0" },
+  "paths": {
+    "/api/commands/apply": {
+      "post": {
+        "summary": "Apply",
+        "description": "Apply a plan",
+        "operationId": "apply_api_commands_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_apply_api_commands_apply_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApplyResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commands/evaluate": {
+      "post": {
+        "summary": "Evaluate",
+        "description": "Evaluate a model with a default limit of 1000",
+        "operationId": "evaluate_api_commands_evaluate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EvaluateInput" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commands/fetchdf": {
+      "post": {
+        "summary": "Fetchdf",
+        "description": "Fetches a dataframe given a sql string",
+        "operationId": "fetchdf_api_commands_fetchdf_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FetchdfInput" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commands/render": {
+      "post": {
+        "summary": "Render",
+        "description": "Renders a model's query, optionally expanding referenced models",
+        "operationId": "render_api_commands_render_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RenderInput" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Query" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commands/test": {
+      "get": {
+        "summary": "Test",
+        "description": "Run one or all model tests",
+        "operationId": "test_api_commands_test_get",
+        "parameters": [
+          {
+            "required": false,
+            "schema": { "type": "string", "title": "Test" },
+            "name": "test",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "title": "Verbose",
+              "default": false
+            },
+            "name": "verbose",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TestResult" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files": {
+      "get": {
+        "summary": "Get Files",
+        "description": "Get all project files.",
+        "operationId": "get_files_api_files_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Directory" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/{path}": {
+      "get": {
+        "summary": "Get File",
+        "description": "Get a file, including its contents.",
+        "operationId": "get_file_api_files__path__get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Path" },
+            "name": "path",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/File" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Write File",
+        "description": "Create, update, or rename a file.",
+        "operationId": "write_file_api_files__path__post",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Path" },
+            "name": "path",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_write_file_api_files__path__post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/File" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete File",
+        "description": "Delete a file.",
+        "operationId": "delete_file_api_files__path__delete",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Path" },
+            "name": "path",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "null",
+                  "title": "Response Delete File Api Files  Path  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/directories/{path}": {
+      "post": {
+        "summary": "Write Directory",
+        "description": "Create or rename a directory.",
+        "operationId": "write_directory_api_directories__path__post",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Path" },
+            "name": "path",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_write_directory_api_directories__path__post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Directory" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Directory",
+        "description": "Delete a directory.",
+        "operationId": "delete_directory_api_directories__path__delete",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Path" },
+            "name": "path",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plan": {
+      "post": {
+        "summary": "Run Plan",
+        "description": "Get a plan for an environment.",
+        "operationId": "run_plan_api_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_run_plan_api_plan_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ContextEnvironment" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plan/cancel": {
+      "post": {
+        "summary": "Cancel Plan",
+        "description": "Cancel a plan application",
+        "operationId": "cancel_plan_api_plan_cancel_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "null",
+                  "title": "Response Cancel Plan Api Plan Cancel Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/environments": {
+      "get": {
+        "summary": "Get Environments",
+        "description": "Get the environments",
+        "operationId": "get_environments_api_environments_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Environments" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/environments/{environment}": {
+      "delete": {
+        "summary": "Delete Environment",
+        "description": "Invalidate and delete an environment",
+        "operationId": "delete_environment_api_environments__environment__delete",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Environment" },
+            "name": "environment",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "summary": "Events",
+        "description": "SQLMesh console server sent events",
+        "operationId": "events_api_events_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          }
+        }
+      }
+    },
+    "/api/lineage/{model_name}/{column_name}": {
+      "get": {
+        "summary": "Column Lineage",
+        "description": "Get a column's lineage",
+        "operationId": "column_lineage_api_lineage__model_name___column_name__get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Column Name" },
+            "name": "column_name",
+            "in": "path"
+          },
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Model Name" },
+            "name": "model_name",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/LineageColumn"
+                    },
+                    "type": "object"
+                  },
+                  "type": "object",
+                  "title": "Response Column Lineage Api Lineage  Model Name   Column Name  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/lineage/{model_name}": {
+      "get": {
+        "summary": "Model Lineage",
+        "description": "Get a model's lineage",
+        "operationId": "model_lineage_api_lineage__model_name__get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Model Name" },
+            "name": "model_name",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": { "type": "string" },
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "type": "object",
+                  "title": "Response Model Lineage Api Lineage  Model Name  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models": {
+      "get": {
+        "summary": "Get Models",
+        "description": "Get a mapping of model names to model metadata",
+        "operationId": "get_models_api_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "items": { "$ref": "#/components/schemas/Model" },
+                      "type": "array"
+                    },
+                    { "$ref": "#/components/schemas/ApiExceptionPayload" }
+                  ],
+                  "title": "Response Get Models Api Models Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meta": {
+      "get": {
+        "summary": "Get Api Meta",
+        "description": "Get the metadata",
+        "operationId": "get_api_meta_api_meta_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Meta" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/table_diff": {
+      "get": {
+        "summary": "Get Table Diff",
+        "description": "Calculate differences between tables, taking into account schema and row level differences.",
+        "operationId": "get_table_diff_api_table_diff_get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Source" },
+            "name": "source",
+            "in": "query"
+          },
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Target" },
+            "name": "target",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": { "type": "string", "title": "On" },
+            "name": "on",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": { "type": "string", "title": "Model Or Snapshot" },
+            "name": "model_or_snapshot",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": { "type": "string", "title": "Where" },
+            "name": "where",
+            "in": "query"
+          },
+          {
+            "required": false,
+            "schema": { "type": "integer", "title": "Limit", "default": 20 },
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TableDiff" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{full_path}": {
+      "get": {
+        "summary": "Index",
+        "operationId": "index__full_path__get",
+        "parameters": [
+          {
+            "required": true,
+            "schema": { "type": "string", "title": "Full Path" },
+            "name": "full_path",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiExceptionPayload": {
+        "properties": {
+          "timestamp": { "type": "integer", "title": "Timestamp" },
+          "message": { "type": "string", "title": "Message" },
+          "origin": { "type": "string", "title": "Origin" },
+          "status": { "type": "integer", "title": "Status" },
+          "trigger": { "type": "string", "title": "Trigger" },
+          "type": { "type": "string", "title": "Type" },
+          "description": { "type": "string", "title": "Description" },
+          "traceback": { "type": "string", "title": "Traceback" },
+          "stack": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Stack"
+          }
+        },
+        "type": "object",
+        "required": ["timestamp", "message", "origin"],
+        "title": "ApiExceptionPayload"
+      },
+      "ApplyResponse": {
+        "properties": { "type": { "$ref": "#/components/schemas/ApplyType" } },
+        "type": "object",
+        "required": ["type"],
+        "title": "ApplyResponse"
+      },
+      "ApplyType": {
+        "type": "string",
+        "enum": ["virtual", "backfill"],
+        "title": "ApplyType",
+        "description": "An enumeration of possible apply types."
+      },
+      "Body_apply_api_commands_apply_post": {
+        "properties": {
+          "environment": { "type": "string", "title": "Environment" },
+          "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
+          "plan_options": {
+            "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
+            "title": "Plan Options",
+            "default": {
+              "skip_tests": false,
+              "skip_backfill": false,
+              "no_gaps": false,
+              "forward_only": false,
+              "no_auto_categorization": false,
+              "include_unmodified": false
+            }
+          },
+          "categories": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SnapshotChangeCategory"
+            },
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "title": "Body_apply_api_commands_apply_post"
+      },
+      "Body_run_plan_api_plan_post": {
+        "properties": {
+          "environment": { "type": "string", "title": "Environment" },
+          "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
+          "plan_options": {
+            "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
+            "title": "Plan Options",
+            "default": {
+              "skip_tests": false,
+              "skip_backfill": false,
+              "no_gaps": false,
+              "forward_only": false,
+              "no_auto_categorization": false,
+              "include_unmodified": false
+            }
+          }
+        },
+        "type": "object",
+        "title": "Body_run_plan_api_plan_post"
+      },
+      "Body_write_directory_api_directories__path__post": {
+        "properties": { "new_path": { "type": "string", "title": "New Path" } },
+        "type": "object",
+        "title": "Body_write_directory_api_directories__path__post"
+      },
+      "Body_write_file_api_files__path__post": {
+        "properties": {
+          "content": { "type": "string", "title": "Content", "default": "" },
+          "new_path": { "type": "string", "title": "New Path" }
+        },
+        "type": "object",
+        "title": "Body_write_file_api_files__path__post"
+      },
+      "ChangeDirect": {
+        "properties": {
+          "model_name": { "type": "string", "title": "Model Name" },
+          "diff": { "type": "string", "title": "Diff" },
+          "indirect": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Indirect",
+            "default": []
+          },
+          "change_category": {
+            "$ref": "#/components/schemas/SnapshotChangeCategory"
+          }
+        },
+        "type": "object",
+        "required": ["model_name", "diff"],
+        "title": "ChangeDirect"
+      },
+      "ChangeIndirect": {
+        "properties": {
+          "model_name": { "type": "string", "title": "Model Name" },
+          "direct": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Direct",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": ["model_name"],
+        "title": "ChangeIndirect"
+      },
+      "Column": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "type": { "type": "string", "title": "Type" },
+          "description": { "type": "string", "title": "Description" }
+        },
+        "type": "object",
+        "required": ["name", "type"],
+        "title": "Column"
+      },
+      "ContextEnvironment": {
+        "properties": {
+          "environment": { "type": "string", "title": "Environment" },
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/ContextEnvironmentChanges"
+          },
+          "backfills": {
+            "items": {
+              "$ref": "#/components/schemas/ContextEnvironmentBackfill"
+            },
+            "type": "array",
+            "title": "Backfills",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": ["environment", "start", "end"],
+        "title": "ContextEnvironment"
+      },
+      "ContextEnvironmentBackfill": {
+        "properties": {
+          "model_name": { "type": "string", "title": "Model Name" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "interval": {
+            "items": [{ "type": "string" }, { "type": "string" }],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Interval"
+          },
+          "batches": { "type": "integer", "title": "Batches" }
+        },
+        "type": "object",
+        "required": ["model_name", "view_name", "interval", "batches"],
+        "title": "ContextEnvironmentBackfill"
+      },
+      "ContextEnvironmentChanges": {
+        "properties": {
+          "added": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Added"
+          },
+          "removed": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Removed"
+          },
+          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
+        },
+        "type": "object",
+        "required": ["added", "removed", "modified"],
+        "title": "ContextEnvironmentChanges"
+      },
+      "Directory": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "title": "Path" },
+          "directories": {
+            "items": { "$ref": "#/components/schemas/Directory" },
+            "type": "array",
+            "title": "Directories",
+            "default": []
+          },
+          "files": {
+            "items": { "$ref": "#/components/schemas/File" },
+            "type": "array",
+            "title": "Files",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": ["name", "path"],
+        "title": "Directory"
+      },
+      "Environment": {
+        "properties": {
+          "name": { "type": "string", "title": "Name", "default": "prod" },
+          "suffix_target": {
+            "allOf": [
+              { "$ref": "#/components/schemas/EnvironmentSuffixTarget" }
+            ],
+            "default": "schema"
+          },
+          "snapshots": {
+            "items": { "$ref": "#/components/schemas/SnapshotTableInfo" },
+            "type": "array",
+            "title": "Snapshots"
+          },
+          "start_at": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start At"
+          },
+          "end_at": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End At"
+          },
+          "plan_id": { "type": "string", "title": "Plan Id" },
+          "previous_plan_id": { "type": "string", "title": "Previous Plan Id" },
+          "expiration_ts": { "type": "integer", "title": "Expiration Ts" },
+          "finalized_ts": { "type": "integer", "title": "Finalized Ts" },
+          "promoted_snapshot_ids": {
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
+            "type": "array",
+            "title": "Promoted Snapshot Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["snapshots", "start_at", "plan_id"],
+        "title": "Environment",
+        "description": "Represents an isolated environment.\n\nEnvironments are isolated workspaces that hold pointers to physical tables.\n\nArgs:\n    snapshots: The snapshots that are part of this environment.\n    start_at: The start time of the environment.\n    end_at: The end time of the environment.\n    plan_id: The ID of the plan that last updated this environment.\n    previous_plan_id: The ID of the previous plan that updated this environment.\n    expiration_ts: The timestamp when this environment will expire.\n    finalized_ts: The timestamp when this environment was finalized.\n    promoted_snapshot_ids: The IDs of the snapshots that are promoted in this environment\n        (i.e. for which the views are created). If not specified, all snapshots are promoted."
+      },
+      "EnvironmentSuffixTarget": {
+        "type": "string",
+        "enum": ["schema", "table"],
+        "title": "EnvironmentSuffixTarget",
+        "description": "An enumeration."
+      },
+      "Environments": {
+        "properties": {
+          "environments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Environment"
+            },
+            "type": "object",
+            "title": "Environments",
+            "default": {}
+          },
+          "pinned_environments": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Pinned Environments",
+            "default": []
+          },
+          "default_target_environment": {
+            "type": "string",
+            "title": "Default Target Environment",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "Environments"
+      },
+      "EvaluateInput": {
+        "properties": {
+          "model": { "type": "string", "title": "Model" },
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
+          "execution_time": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Execution Time"
+          },
+          "limit": { "type": "integer", "title": "Limit", "default": 1000 }
+        },
+        "type": "object",
+        "required": ["model", "start", "end", "execution_time"],
+        "title": "EvaluateInput"
+      },
+      "FetchdfInput": {
+        "properties": {
+          "sql": { "type": "string", "title": "Sql" },
+          "limit": { "type": "integer", "title": "Limit", "default": 1000 }
+        },
+        "type": "object",
+        "required": ["sql"],
+        "title": "FetchdfInput"
+      },
+      "File": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "title": "Path" },
+          "extension": {
+            "type": "string",
+            "title": "Extension",
+            "default": ""
+          },
+          "is_supported": {
+            "type": "boolean",
+            "title": "Is Supported",
+            "default": false
+          },
+          "content": { "type": "string", "title": "Content" },
+          "type": { "$ref": "#/components/schemas/FileType" }
+        },
+        "type": "object",
+        "required": ["name", "path"],
+        "title": "File"
+      },
+      "FileType": {
+        "type": "string",
+        "enum": ["audit", "macros", "model", "tests"],
+        "title": "FileType",
+        "description": "An enumeration of possible file types."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": { "$ref": "#/components/schemas/ValidationError" },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IntervalUnit": {
+        "type": "string",
+        "enum": ["year", "month", "day", "hour", "minute"],
+        "title": "IntervalUnit",
+        "description": "IntervalUnit is the inferred granularity of an incremental node.\n\nIntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a node. The minimum time delta between a sample set of dates\nis used to determine which unit a node's schedule is."
+      },
+      "LineageColumn": {
+        "properties": {
+          "source": { "type": "string", "title": "Source" },
+          "expression": { "type": "string", "title": "Expression" },
+          "models": {
+            "additionalProperties": {
+              "items": { "type": "string" },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "title": "LineageColumn"
+      },
+      "Meta": {
+        "properties": { "version": { "type": "string", "title": "Version" } },
+        "type": "object",
+        "required": ["version"],
+        "title": "Meta"
+      },
+      "Model": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "title": "Path" },
+          "dialect": { "type": "string", "title": "Dialect" },
+          "type": { "type": "string", "title": "Type" },
+          "columns": {
+            "items": { "$ref": "#/components/schemas/Column" },
+            "type": "array",
+            "title": "Columns"
+          },
+          "description": { "type": "string", "title": "Description" },
+          "details": { "$ref": "#/components/schemas/ModelDetails" },
+          "sql": { "type": "string", "title": "Sql" }
+        },
+        "type": "object",
+        "required": ["name", "path", "dialect", "type", "columns"],
+        "title": "Model"
+      },
+      "ModelDetails": {
+        "properties": {
+          "owner": { "type": "string", "title": "Owner" },
+          "kind": { "type": "string", "title": "Kind" },
+          "batch_size": { "type": "integer", "title": "Batch Size" },
+          "cron": { "type": "string", "title": "Cron" },
+          "stamp": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Stamp"
+          },
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "retention": { "type": "integer", "title": "Retention" },
+          "storage_format": { "type": "string", "title": "Storage Format" },
+          "time_column": { "type": "string", "title": "Time Column" },
+          "tags": { "type": "string", "title": "Tags" },
+          "references": {
+            "items": { "$ref": "#/components/schemas/Reference" },
+            "type": "array",
+            "title": "References",
+            "default": []
+          },
+          "partitioned_by": { "type": "string", "title": "Partitioned By" },
+          "clustered_by": { "type": "string", "title": "Clustered By" },
+          "lookback": { "type": "integer", "title": "Lookback" },
+          "cron_prev": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Cron Prev"
+          },
+          "cron_next": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Cron Next"
+          },
+          "interval_unit": { "$ref": "#/components/schemas/IntervalUnit" },
+          "annotated": { "type": "boolean", "title": "Annotated" }
+        },
+        "type": "object",
+        "title": "ModelDetails"
+      },
+      "ModelKindName": {
+        "type": "string",
+        "enum": [
+          "INCREMENTAL_BY_TIME_RANGE",
+          "INCREMENTAL_BY_UNIQUE_KEY",
+          "INCREMENTAL_UNMANAGED",
+          "FULL",
+          "SCD_TYPE_2",
+          "VIEW",
+          "EMBEDDED",
+          "SEED",
+          "EXTERNAL"
+        ],
+        "title": "ModelKindName",
+        "description": "The kind of model, determining how this data is computed and stored in the warehouse."
+      },
+      "ModelsDiff": {
+        "properties": {
+          "direct": {
+            "items": { "$ref": "#/components/schemas/ChangeDirect" },
+            "type": "array",
+            "title": "Direct",
+            "default": []
+          },
+          "indirect": {
+            "items": { "$ref": "#/components/schemas/ChangeIndirect" },
+            "type": "array",
+            "title": "Indirect",
+            "default": []
+          },
+          "metadata": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Metadata",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "ModelsDiff"
+      },
+      "NodeType": {
+        "type": "string",
+        "enum": ["model", "audit"],
+        "title": "NodeType",
+        "description": "An enumeration."
+      },
+      "PlanDates": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "title": "PlanDates"
+      },
+      "PlanOptions": {
+        "properties": {
+          "skip_tests": {
+            "type": "boolean",
+            "title": "Skip Tests",
+            "default": false
+          },
+          "skip_backfill": {
+            "type": "boolean",
+            "title": "Skip Backfill",
+            "default": false
+          },
+          "no_gaps": {
+            "type": "boolean",
+            "title": "No Gaps",
+            "default": false
+          },
+          "forward_only": {
+            "type": "boolean",
+            "title": "Forward Only",
+            "default": false
+          },
+          "no_auto_categorization": {
+            "type": "boolean",
+            "title": "No Auto Categorization",
+            "default": false
+          },
+          "include_unmodified": {
+            "type": "boolean",
+            "title": "Include Unmodified",
+            "default": false
+          },
+          "create_from": { "type": "string", "title": "Create From" },
+          "restate_models": { "type": "string", "title": "Restate Models" }
+        },
+        "type": "object",
+        "title": "PlanOptions"
+      },
+      "Query": {
+        "properties": { "sql": { "type": "string", "title": "Sql" } },
+        "type": "object",
+        "required": ["sql"],
+        "title": "Query"
+      },
+      "Reference": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "expression": { "type": "string", "title": "Expression" },
+          "unique": { "type": "boolean", "title": "Unique" }
+        },
+        "type": "object",
+        "required": ["name", "expression", "unique"],
+        "title": "Reference"
+      },
+      "RenderInput": {
+        "properties": {
+          "model": { "type": "string", "title": "Model" },
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
+          "execution_time": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Execution Time"
+          },
+          "expand": {
+            "anyOf": [
+              { "type": "boolean" },
+              { "items": { "type": "string" }, "type": "array" }
+            ],
+            "title": "Expand",
+            "default": false
+          },
+          "pretty": { "type": "boolean", "title": "Pretty", "default": true },
+          "dialect": { "type": "string", "title": "Dialect" }
+        },
+        "type": "object",
+        "required": ["model"],
+        "title": "RenderInput"
+      },
+      "RowDiff": {
+        "properties": {
+          "source": { "type": "string", "title": "Source" },
+          "target": { "type": "string", "title": "Target" },
+          "stats": {
+            "additionalProperties": { "type": "number" },
+            "type": "object",
+            "title": "Stats"
+          },
+          "sample": { "type": "object", "title": "Sample" },
+          "source_count": { "type": "integer", "title": "Source Count" },
+          "target_count": { "type": "integer", "title": "Target Count" },
+          "count_pct_change": { "type": "number", "title": "Count Pct Change" }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "stats",
+          "sample",
+          "source_count",
+          "target_count",
+          "count_pct_change"
+        ],
+        "title": "RowDiff"
+      },
+      "SchemaDiff": {
+        "properties": {
+          "source": { "type": "string", "title": "Source" },
+          "target": { "type": "string", "title": "Target" },
+          "source_schema": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Source Schema"
+          },
+          "target_schema": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Target Schema"
+          },
+          "added": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Added"
+          },
+          "removed": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Removed"
+          },
+          "modified": {
+            "additionalProperties": { "type": "string" },
+            "type": "object",
+            "title": "Modified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "source_schema",
+          "target_schema",
+          "added",
+          "removed",
+          "modified"
+        ],
+        "title": "SchemaDiff"
+      },
+      "SnapshotChangeCategory": {
+        "type": "integer",
+        "enum": [1, 2, 3, 4, 5],
+        "title": "SnapshotChangeCategory",
+        "description": "Values are ordered by decreasing severity and that ordering is required.\n\nBREAKING: The change requires that snapshot modified and downstream dependencies be rebuilt\nNON_BREAKING: The change requires that only the snapshot modified be rebuilt\nFORWARD_ONLY: The change requires no rebuilding\nINDIRECT_BREAKING: The change was caused indirectly and is breaking.\nINDIRECT_NON_BREAKING: The change was caused indirectly by a non-breaking change."
+      },
+      "SnapshotDataVersion": {
+        "properties": {
+          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
+          "version": { "type": "string", "title": "Version" },
+          "temp_version": { "type": "string", "title": "Temp Version" },
+          "change_category": {
+            "$ref": "#/components/schemas/SnapshotChangeCategory"
+          },
+          "physical_schema": { "type": "string", "title": "Physical Schema" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["fingerprint", "version"],
+        "title": "SnapshotDataVersion"
+      },
+      "SnapshotFingerprint": {
+        "properties": {
+          "data_hash": { "type": "string", "title": "Data Hash" },
+          "metadata_hash": { "type": "string", "title": "Metadata Hash" },
+          "parent_data_hash": {
+            "type": "string",
+            "title": "Parent Data Hash",
+            "default": "0"
+          },
+          "parent_metadata_hash": {
+            "type": "string",
+            "title": "Parent Metadata Hash",
+            "default": "0"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["data_hash", "metadata_hash"],
+        "title": "SnapshotFingerprint"
+      },
+      "SnapshotId": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "identifier": { "type": "string", "title": "Identifier" }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": ["name", "identifier"],
+        "title": "SnapshotId"
+      },
+      "SnapshotTableInfo": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
+          "version": { "type": "string", "title": "Version" },
+          "temp_version": { "type": "string", "title": "Temp Version" },
+          "physical_schema": { "type": "string", "title": "Physical Schema" },
+          "parents": {
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
+            "type": "array",
+            "title": "Parents"
+          },
+          "previous_versions": {
+            "items": { "$ref": "#/components/schemas/SnapshotDataVersion" },
+            "type": "array",
+            "title": "Previous Versions",
+            "default": []
+          },
+          "change_category": {
+            "$ref": "#/components/schemas/SnapshotChangeCategory"
+          },
+          "kind_name": { "$ref": "#/components/schemas/ModelKindName" },
+          "node_type": {
+            "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
+            "default": "model"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "fingerprint",
+          "version",
+          "physical_schema",
+          "parents"
+        ],
+        "title": "SnapshotTableInfo"
+      },
+      "TableDiff": {
+        "properties": {
+          "schema_diff": { "$ref": "#/components/schemas/SchemaDiff" },
+          "row_diff": { "$ref": "#/components/schemas/RowDiff" },
+          "on": {
+            "items": {
+              "items": [{ "type": "string" }, { "type": "string" }],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "On"
+          }
+        },
+        "type": "object",
+        "required": ["schema_diff", "row_diff", "on"],
+        "title": "TableDiff"
+      },
+      "TestErrorOrFailure": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "format": "path", "title": "Path" },
+          "tb": { "type": "string", "title": "Tb" }
+        },
+        "type": "object",
+        "required": ["name", "path", "tb"],
+        "title": "TestErrorOrFailure"
+      },
+      "TestResult": {
+        "properties": {
+          "tests_run": { "type": "integer", "title": "Tests Run" },
+          "failures": {
+            "items": { "$ref": "#/components/schemas/TestErrorOrFailure" },
+            "type": "array",
+            "title": "Failures"
+          },
+          "errors": {
+            "items": { "$ref": "#/components/schemas/TestErrorOrFailure" },
+            "type": "array",
+            "title": "Errors"
+          },
+          "skipped": {
+            "items": { "$ref": "#/components/schemas/TestSkipped" },
+            "type": "array",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": ["tests_run", "failures", "errors", "skipped"],
+        "title": "TestResult"
+      },
+      "TestSkipped": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "path": { "type": "string", "format": "path", "title": "Path" },
+          "reason": { "type": "string", "title": "Reason" }
+        },
+        "type": "object",
+        "required": ["name", "path", "reason"],
+        "title": "TestSkipped"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": { "type": "string", "title": "Message" },
+          "type": { "type": "string", "title": "Error Type" }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
