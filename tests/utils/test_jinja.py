@@ -278,5 +278,5 @@ def test_find_call_names():
     [call_name(node) for node in ENVIRONMENT.parse(jinja_str).find_all(nodes.Call)] == [
         ("local_macro",),
         ("package", "package_macro"),
-        ("stringval", "function"),
+        ("'stringval'", "function"),
     ]
