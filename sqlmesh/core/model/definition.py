@@ -749,14 +749,13 @@ class _Model(ModelMeta, frozen=True):
         data = [
             str(self.sorted_python_env),
             *self.kind.data_hash_values,
-            self.cron,
             self.storage_format,
             str(self.lookback),
             *(expr.sql() for expr in (self.partitioned_by or [])),
             *(self.clustered_by or []),
             self.stamp,
             self.physical_schema,
-            str(self.interval_unit_) if self.interval_unit_ is not None else None,
+            str(self.interval_unit) if self.interval_unit is not None else None,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -791,6 +790,7 @@ class _Model(ModelMeta, frozen=True):
             self.dialect,
             self.owner,
             self.description,
+            self.cron,
             str(self.start) if self.start else None,
             str(self.retention) if self.retention else None,
             str(self.batch_size) if self.batch_size is not None else None,
