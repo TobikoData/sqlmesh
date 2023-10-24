@@ -16,7 +16,7 @@ from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
-from sqlmesh.dbt.target import TargetConfig
+from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
@@ -44,10 +44,10 @@ class Exceptions:
 class Api:
     def __init__(self, target: t.Optional[AttributeDict] = None) -> None:
         if target:
-            config = TargetConfig.load(target)
-            self.Relation = config.relation_class
-            self.Column = config.column_class
-            self.quote_policy = config.quote_policy
+            config_class = TARGET_TYPE_TO_CONFIG_CLASS[target["type"]]
+            self.Relation = config_class.relation_class
+            self.Column = config_class.column_class
+            self.quote_policy = config_class.quote_policy
         else:
             self.Relation = BaseRelation
             self.Column = Column
