@@ -9,7 +9,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, Seed, SeedKind, SeedModel, SqlModel
-from sqlmesh.core.snapshot import SnapshotChangeCategory, SnapshotTableCleanupTask
+from sqlmesh.core.snapshot import DeployabilityIndex, SnapshotChangeCategory, SnapshotTableCleanupTask
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.utils.date import to_datetime
@@ -47,8 +47,12 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     parent_snapshots = {snapshot.name: snapshot}
 
+    deployability_index = DeployabilityIndex.all_deployable()
+
     target = targets.SnapshotEvaluationTarget(
-        snapshot=snapshot, parent_snapshots=parent_snapshots, is_dev=False
+        snapshot=snapshot,
+        parent_snapshots=parent_snapshots,
+        deployability_index=deployability_index,
     )
     target.execute(context, lambda: mocker.Mock(), "spark")
 
@@ -60,7 +64,7 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
         interval_ds,
         logical_ds,
         snapshots=parent_snapshots,
-        is_dev=False,
+        deployability_index=deployability_index,
     )
 
 
@@ -100,7 +104,11 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
     )
     get_snapshots_mock.return_value = {snapshot.snapshot_id: snapshot}
 
-    target = targets.SnapshotEvaluationTarget(snapshot=snapshot, parent_snapshots={}, is_dev=False)
+    deployability_index = DeployabilityIndex.all_deployable()
+
+    target = targets.SnapshotEvaluationTarget(
+        snapshot=snapshot, parent_snapshots={}, deployability_index=deployability_index
+    )
     target.execute(context, lambda: mocker.Mock(), "spark")
 
     add_interval_mock.assert_called_once_with(snapshot, interval_ds, interval_ds, is_dev=False)
@@ -113,7 +121,7 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
         interval_ds,
         logical_ds,
         snapshots={snapshot.name: snapshot},
-        is_dev=False,
+        deployability_index=deployability_index,
     )
 
 

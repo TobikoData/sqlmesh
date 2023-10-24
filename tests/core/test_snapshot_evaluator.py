@@ -28,13 +28,14 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotEvaluator,
     SnapshotTableCleanupTask,
 )
 from sqlmesh.utils.date import to_timestamp
-from sqlmesh.utils.errors import ConfigError, SQLMeshError
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import Executable
 
 
@@ -146,14 +147,26 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
         ]
     )
 
-    adapter_mock.create_table.assert_called_once_with(
-        snapshot.table_name(),
+    common_kwargs = dict(
         columns_to_types={"a": exp.DataType.build("int")},
         storage_format="parquet",
         partitioned_by=[exp.to_column("a")],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
+    )
+
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(
+                snapshot.table_name(is_deployable=False),
+                **common_kwargs,
+            ),
+            call(
+                snapshot.table_name(),
+                **common_kwargs,
+            ),
+        ]
     )
 
 
@@ -212,28 +225,6 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
     )
 
 
-def test_evaluate_paused_forward_only_upstream(mocker: MockerFixture, make_snapshot):
-    model = SqlModel(name="test_schema.test_model", query=parse_one("SELECT a, ds"))
-    snapshot = make_snapshot(model)
-    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
-
-    parent_snapshot = make_snapshot(
-        SqlModel(name="test_parent_model", query=parse_one("SELECT b, ds"))
-    )
-    parent_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    parent_snapshot.version = "test_version"
-
-    evaluator = SnapshotEvaluator(mocker.Mock())
-    with pytest.raises(SQLMeshError, match=r".*Create and apply a new plan to fix this issue."):
-        evaluator.evaluate(
-            snapshot,
-            "2020-01-01",
-            "2020-01-02",
-            "2020-01-02",
-            snapshots={parent_snapshot.name: parent_snapshot},
-        )
-
-
 def test_promote(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
@@ -272,12 +263,16 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
     snapshot.version = "test_version"
 
     evaluator.promote(
-        [snapshot], EnvironmentNamingInfo(name="test_env"), deployable_snapshots=set()
+        [snapshot],
+        EnvironmentNamingInfo(name="test_env"),
+        deployability_index=DeployabilityIndex.none_deployable(),
     )
 
     snapshot.unpaused_ts = to_timestamp("2023-01-01")
     evaluator.promote(
-        [snapshot], EnvironmentNamingInfo(name="test_env"), deployable_snapshots=set()
+        [snapshot],
+        EnvironmentNamingInfo(name="test_env"),
+        deployability_index=DeployabilityIndex(deployable_ids=[snapshot.snapshot_id]),
     )
 
     adapter_mock.create_schema.assert_has_calls(
@@ -502,11 +497,16 @@ def test_create_materialized_view(mocker: MockerFixture, adapter_mock, make_snap
 
     evaluator.create([snapshot], {})
 
-    adapter_mock.create_view.assert_called_once_with(
-        snapshot.table_name(),
-        model.render_query(),
+    common_kwargs = dict(
         materialized=True,
         table_properties={},
+    )
+
+    adapter_mock.create_view.assert_has_calls(
+        [
+            call(snapshot.table_name(is_deployable=False), model.render_query(), **common_kwargs),
+            call(snapshot.table_name(), model.render_query(), **common_kwargs),
+        ]
     )
 
 
@@ -536,13 +536,18 @@ def test_create_view_with_properties(mocker: MockerFixture, adapter_mock, make_s
 
     evaluator.create([snapshot], {})
 
-    adapter_mock.create_view.assert_called_once_with(
-        snapshot.table_name(),
-        model.render_query(),
+    common_kwargs = dict(
         materialized=True,
         table_properties={
             "key": exp.convert("value"),
         },
+    )
+
+    adapter_mock.create_view.assert_has_calls(
+        [
+            call(snapshot.table_name(is_deployable=False), model.render_query(), **common_kwargs),
+            call(snapshot.table_name(), model.render_query(), **common_kwargs),
+        ]
     )
 
 
@@ -664,6 +669,7 @@ def test_evaluate_creation_duckdb(
             "SELECT table_schema, table_name, table_type FROM information_schema.tables"
         ).fetchall() == [
             ("sqlmesh__db", f"db__model__{version}", "BASE TABLE"),
+            ("sqlmesh__db", f"db__model__{version}__temp", "BASE TABLE"),
             ("main", "tbl", "VIEW"),
         ]
 
@@ -949,8 +955,7 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
 
     evaluator.create([snapshot], {})
 
-    adapter_mock.create_table.assert_called_once_with(
-        snapshot.table_name(),
+    common_kwargs: t.Dict[str, t.Any] = dict(
         columns_to_types={
             "id": exp.DataType.build("INT"),
             "name": exp.DataType.build("STRING"),
@@ -964,6 +969,13 @@ def test_create_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapshot):
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
+    )
+
+    adapter_mock.create_table.assert_has_calls(
+        [
+            call(snapshot.table_name(is_deployable=False), **common_kwargs),
+            call(snapshot.table_name(), **common_kwargs),
+        ]
     )
 
 
@@ -989,18 +1001,24 @@ def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
 
     evaluator.create([snapshot], {})
 
-    adapter_mock.ctas.assert_called_once_with(
-        snapshot.table_name(),
-        # Verify that managed columns are included in CTAS with types
-        parse_one(
-            """SELECT *, CAST(NULL AS TIMESTAMP) AS valid_from, CAST(NULL AS TIMESTAMP) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE"""
-        ),
-        None,
+    query = parse_one(
+        """SELECT *, CAST(NULL AS TIMESTAMP) AS valid_from, CAST(NULL AS TIMESTAMP) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE"""
+    )
+
+    # Verify that managed columns are included in CTAS with types
+    common_kwargs: t.Dict[str, t.Any] = dict(
         storage_format=None,
         partitioned_by=[],
         partition_interval_unit=IntervalUnit.DAY,
         clustered_by=[],
         table_properties={},
+    )
+
+    adapter_mock.ctas.assert_has_calls(
+        [
+            call(snapshot.table_name(is_deployable=False), query, None, **common_kwargs),
+            call(snapshot.table_name(), query, None, **common_kwargs),
+        ]
     )
 
 

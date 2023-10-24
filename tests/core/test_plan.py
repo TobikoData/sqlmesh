@@ -10,6 +10,7 @@ from sqlmesh.core.model import IncrementalByTimeRangeKind, SeedKind, SeedModel, 
 from sqlmesh.core.model.seed import Seed
 from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     SnapshotChangeCategory,
     SnapshotDataVersion,
     SnapshotFingerprint,
@@ -113,7 +114,7 @@ def test_forward_only_plan_added_models(make_snapshot, mocker: MockerFixture):
 
     Plan(context_diff_mock, forward_only=True)
     assert snapshot_a.change_category == SnapshotChangeCategory.FORWARD_ONLY
-    assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
 def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
@@ -130,19 +131,22 @@ def test_paused_forward_only_parent(make_snapshot, mocker: MockerFixture):
     )
     snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
-    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds from a")))
+    snapshot_b_old = make_snapshot(SqlModel(name="b", query=parse_one("select 2, ds from a")))
+    snapshot_b_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("select 3, ds from a")))
     assert not snapshot_b.version
 
     context_diff_mock = mocker.Mock()
     context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
     context_diff_mock.added = set()
     context_diff_mock.removed_snapshots = set()
-    context_diff_mock.modified_snapshots = {"b": (snapshot_b, snapshot_b)}
+    context_diff_mock.modified_snapshots = {"b": (snapshot_b, snapshot_b_old)}
     context_diff_mock.new_snapshots = {snapshot_b.snapshot_id: snapshot_b}
     context_diff_mock.added_materialized_models = set()
 
     Plan(context_diff_mock, forward_only=False)
-    assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
 def test_restate_models(sushi_context_pre_scheduling: Context):
@@ -614,7 +618,9 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
         SqlModel(name="c", query=parse_one("select a, ds from b")), nodes={"b": snapshot_b.model}
     )
     snapshot_c.categorize_as(SnapshotChangeCategory.BREAKING)
-    updated_snapshot_c = make_snapshot(snapshot_c.model, nodes={"b": updated_snapshot_b.model})
+    updated_snapshot_c = make_snapshot(
+        snapshot_c.model, nodes={"b": updated_snapshot_b.model, "a": updated_snapshot_a.model}
+    )
     updated_snapshot_c.previous_versions = snapshot_c.all_versions
 
     context_diff_mock = mocker.Mock()
@@ -649,7 +655,18 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
 
     assert updated_snapshot_a.change_category == SnapshotChangeCategory.BREAKING
     assert updated_snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
-    assert updated_snapshot_c.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert updated_snapshot_c.change_category == SnapshotChangeCategory.INDIRECT_BREAKING
+
+    deployability_index = DeployabilityIndex.create(
+        {
+            updated_snapshot_a.snapshot_id: updated_snapshot_a,
+            updated_snapshot_b.snapshot_id: updated_snapshot_b,
+            updated_snapshot_c.snapshot_id: updated_snapshot_c,
+        }
+    )
+    assert deployability_index.is_deployable_or_deployed(updated_snapshot_a)
+    assert not deployability_index.is_deployable_or_deployed(updated_snapshot_b)
+    assert not deployability_index.is_deployable_or_deployed(updated_snapshot_c)
 
 
 def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixture):
@@ -675,7 +692,7 @@ def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixtu
     context_diff_mock.previous_plan_id = "previous_plan_id"
 
     Plan(context_diff_mock, is_dev=True)
-    assert snapshot_b.change_category == SnapshotChangeCategory.FORWARD_ONLY
+    assert snapshot_b.change_category == SnapshotChangeCategory.BREAKING
 
 
 def test_added_forward_only_model(make_snapshot, mocker: MockerFixture):

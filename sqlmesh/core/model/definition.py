@@ -51,7 +51,7 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.context import ExecutionContext
     from sqlmesh.core.engine_adapter import EngineAdapter
     from sqlmesh.core.engine_adapter._typing import QueryOrDF
-    from sqlmesh.core.snapshot import Node, Snapshot
+    from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
@@ -153,7 +153,7 @@ class _Model(ModelMeta, frozen=True):
             end=end,
             execution_time=execution_time,
             snapshots=context.snapshots,
-            is_deployable=context.is_deployable,
+            deployability_index=context.deployability_index,
             engine_adapter=context.engine_adapter,
             **kwargs,
         )
@@ -221,7 +221,7 @@ class _Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Subqueryable]:
@@ -236,7 +236,7 @@ class _Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            is_deployable: Indicates whether to render a query which produces deployable results.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -259,7 +259,7 @@ class _Model(ModelMeta, frozen=True):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
@@ -274,7 +274,7 @@ class _Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            is_deployable: Indicates whether to render a query which produces deployable results.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -287,7 +287,7 @@ class _Model(ModelMeta, frozen=True):
             snapshots=snapshots,
             table_mapping=table_mapping,
             expand=expand,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             engine_adapter=engine_adapter,
             **kwargs,
         )
@@ -303,7 +303,7 @@ class _Model(ModelMeta, frozen=True):
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
@@ -319,7 +319,7 @@ class _Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            is_deployable: Indicates whether to render statements which operate on deployable snapshot tables.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -335,7 +335,7 @@ class _Model(ModelMeta, frozen=True):
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
@@ -351,7 +351,7 @@ class _Model(ModelMeta, frozen=True):
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
-            is_deployable: Indicates whether to render statements which operate on deployable snapshot tables.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -864,7 +864,7 @@ class _SqlBasedModel(_Model):
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
@@ -875,7 +875,7 @@ class _SqlBasedModel(_Model):
             execution_time=execution_time,
             snapshots=snapshots,
             expand=expand,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             engine_adapter=engine_adapter,
             **kwargs,
         )
@@ -888,7 +888,7 @@ class _SqlBasedModel(_Model):
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         expand: t.Iterable[str] = tuple(),
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
@@ -899,7 +899,7 @@ class _SqlBasedModel(_Model):
             execution_time=execution_time,
             snapshots=snapshots,
             expand=expand,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             engine_adapter=engine_adapter,
             **kwargs,
         )
@@ -982,7 +982,7 @@ class SqlModel(_SqlBasedModel):
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         engine_adapter: t.Optional[EngineAdapter] = None,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Subqueryable]:
@@ -993,7 +993,7 @@ class SqlModel(_SqlBasedModel):
             snapshots=snapshots,
             table_mapping=table_mapping,
             expand=expand,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             engine_adapter=engine_adapter,
             **kwargs,
         )

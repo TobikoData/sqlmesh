@@ -31,12 +31,7 @@ def test_interval_params(scheduler: Scheduler, sushi_context_fixed_date: Context
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
 
-    assert compute_interval_params(
-        [orders, waiter_revenue],
-        start=start_ds,
-        end=end_ds,
-        is_dev=False,
-    ) == {
+    assert compute_interval_params([orders, waiter_revenue], start=start_ds, end=end_ds,) == {
         orders: [
             (to_datetime(start_ds), to_datetime("2022-01-31")),
             (to_datetime("2022-01-31"), to_datetime("2022-02-06")),
@@ -56,7 +51,7 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
 
     orders.add_interval("2022-01-10", "2022-01-15")
 
-    assert compute_interval_params([orders], start=start_ds, end=end_ds, is_dev=False) == {
+    assert compute_interval_params([orders], start=start_ds, end=end_ds) == {
         orders: [
             (to_datetime(start_ds), to_datetime("2022-01-10")),
             (to_datetime("2022-01-16"), to_datetime("2022-02-06")),
@@ -70,7 +65,7 @@ def test_interval_params_missing(scheduler: Scheduler, sushi_context_fixed_date:
     start_ds = "2022-01-01"
     end_ds = "2022-03-01"
     assert compute_interval_params(
-        sushi_context_fixed_date.snapshots.values(), start=start_ds, end=end_ds, is_dev=False
+        sushi_context_fixed_date.snapshots.values(), start=start_ds, end=end_ds
     )[waiters] == [
         (to_datetime(start_ds), to_datetime("2022-03-02")),
     ]
@@ -160,7 +155,7 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
         state_sync=mocker.MagicMock(),
         max_workers=2,
     )
-    batches = scheduler.batches(start, end, end, is_dev=False)
+    batches = scheduler.batches(start, end, end)
     dag = scheduler._dag(batches)
 
     assert dag.graph == {

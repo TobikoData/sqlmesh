@@ -415,6 +415,121 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
     ]
 
 
+@freeze_time("2023-01-08 15:00:00")
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi", mocker)
+    context.apply(plan)
+
+    model = context.models["sushi.waiter_revenue_by_day"]
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True, forward_only=True)
+    assert len(plan.new_snapshots) == 2
+    assert (
+        plan.context_diff.snapshots["sushi.waiter_revenue_by_day"].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert plan.start == to_date("2023-01-07")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.waiter_revenue_by_day",
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[(to_timestamp("2023-01-07"), to_timestamp("2023-01-08"))],
+        ),
+    ]
+
+    # Apply the forward-only changes first.
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+    )
+    assert dev_df["ds"].tolist() == ["2023-01-07"]
+
+    # FIXME: Due to freezgun freezing the time, all inteval records have the same creation timestamp.
+    # As a result removal records are always being applied after any addition records. Running the plan repeatadly
+    # to make sure there are no missing intervals.
+    context._run_janitor()
+    context.plan("dev", no_prompts=True, skip_tests=True, auto_apply=True)
+
+    # Make a non-breaking change to a model downstream.
+    model = context.models["sushi.top_waiters"]
+    # Select 'one' column from the updated upstream model.
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model), literal=False))
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    assert len(plan.new_snapshots) == 1
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert plan.start == to_timestamp("2023-01-01")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    # Apply the non-breaking changes.
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT waiter_id FROM sushi__dev.top_waiters WHERE one IS NOT NULL"
+    )
+    assert not dev_df.empty
+
+    prod_df = context.engine_adapter.fetchdf("DESCRIBE sushi.top_waiters")
+    assert "one" not in prod_df["column_name"].tolist()
+
+    # Deploy both changes to prod.
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    assert plan.start == to_timestamp("2023-01-01")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+
+    prod_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY ds"
+    )
+    assert prod_df.empty
+
+    prod_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT waiter_id FROM sushi.top_waiters WHERE one IS NOT NULL"
+    )
+    assert prod_df.empty
+
+
 @pytest.mark.integration
 @pytest.mark.core_integration
 @pytest.mark.parametrize(
@@ -1481,7 +1596,7 @@ def validate_environment_views(
         is_deployable = environment == c.PROD or not snapshot.is_paused_forward_only
 
         assert adapter.table_exists(view_name)
-        assert select_all(snapshot.table_name_for_mapping(is_deployable), adapter) == select_all(
+        assert select_all(snapshot.table_name(is_deployable), adapter) == select_all(
             view_name, adapter
         )
 
@@ -1504,9 +1619,10 @@ def start(context: Context) -> TimeLike:
     return env.start_at
 
 
-def add_projection_to_model(model: SqlModel) -> SqlModel:
+def add_projection_to_model(model: SqlModel, literal: bool = True) -> SqlModel:
+    one_expr = exp.Literal.number(1).as_("one") if literal else exp.column("one")
     kwargs = {
         **model.dict(),
-        "query": model.query.select(exp.Literal.number(1).as_("one")),  # type: ignore
+        "query": model.query.select(one_expr),  # type: ignore
     }
     return SqlModel.parse_obj(kwargs)

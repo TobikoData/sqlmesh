@@ -190,11 +190,12 @@ def test_diff(sushi_context: Context, mocker: MockerFixture):
     plan_evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync, sushi_context.snapshot_evaluator
     )
-    plan_evaluator._promote(
-        Plan(
-            context_diff=sushi_context._context_diff("prod"),
-        )
+    plan = Plan(
+        context_diff=sushi_context._context_diff("prod"),
     )
+
+    promotion_result = plan_evaluator._promote(plan)
+    plan_evaluator._update_views(plan, promotion_result)
 
     sushi_context.upsert_model("sushi.customers", query=parse_one("select 1 as customer_id"))
     sushi_context.diff("test")

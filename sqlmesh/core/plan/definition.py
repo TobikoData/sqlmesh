@@ -18,6 +18,7 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Intervals,
     Snapshot,
     SnapshotChangeCategory,
@@ -426,6 +427,12 @@ class Plan:
                 if new.is_forward_only:
                     new.dev_intervals = new.intervals.copy()
 
+            deployability_index = (
+                DeployabilityIndex.create({s.snapshot_id: s for s in self.snapshots})
+                if self.is_dev
+                else DeployabilityIndex.all_deployable()
+            )
+
             self.__missing_intervals = {
                 (snapshot.name, snapshot.version_get_or_generate()): missing
                 for snapshot, missing in missing_intervals(
@@ -434,7 +441,7 @@ class Plan:
                     end=self._end,
                     execution_time=self._execution_time,
                     restatements=self.restatements,
-                    is_dev=self.is_dev,
+                    deployability_index=deployability_index,
                     ignore_cron=True,
                 ).items()
             }

@@ -26,15 +26,14 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     QualifiedViewName,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotFingerprint,
-    SnapshotId,
     categorize_change,
     earliest_start_date,
     fingerprint_from_node,
-    get_deployable_snapshots,
     has_paused_forward_only,
 )
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
@@ -662,13 +661,6 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     snapshot.previous_versions = ()
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
-    assert (
-        snapshot.table_name_for_mapping(is_deployable=True) == "sqlmesh__default.name__3078928823"
-    )
-    assert (
-        snapshot.table_name_for_mapping(is_deployable=False)
-        == "sqlmesh__default.name__3078928823__temp"
-    )
 
     # Mimic an indirect forward-only change.
     previous_data_version = snapshot.data_version
@@ -680,12 +672,6 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__781051917__temp"
-    assert (
-        snapshot.table_name_for_mapping(is_deployable=True) == "sqlmesh__default.name__3078928823"
-    )
-    assert (
-        snapshot.table_name_for_mapping(is_deployable=False) == "sqlmesh__default.name__3078928823"
-    )
 
     # Mimic a direct forward-only change.
     snapshot.fingerprint = SnapshotFingerprint(
@@ -695,24 +681,6 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3049392110__temp"
-    assert (
-        snapshot.table_name_for_mapping(is_deployable=True) == "sqlmesh__default.name__3078928823"
-    )
-    assert (
-        snapshot.table_name_for_mapping(is_deployable=False)
-        == "sqlmesh__default.name__3049392110__temp"
-    )
-
-    # Mimic a deployed forward-only snapshot.
-    snapshot.set_unpaused_ts(to_datetime("2022-01-01"))
-    assert (
-        snapshot.table_name_for_mapping(is_deployable=True) == "sqlmesh__default.name__3078928823"
-    )
-    assert (
-        snapshot.table_name_for_mapping(is_deployable=False) == "sqlmesh__default.name__3078928823"
-    )
-    snapshot.physical_schema_ = "private"
-    assert snapshot.table_name_for_mapping(is_deployable=False) == "private.name__3078928823"
 
     fully_qualified_snapshot = make_snapshot(
         SqlModel(name='"my-catalog".db.table', query=parse_one("select 1, ds"))
@@ -1327,86 +1295,79 @@ def test_earliest_start_date(sushi_context: Context):
     assert model_name not in cache
 
 
-def test_get_deployable_snapshots(mocker: MockerFixture):
-    snapshot_a = mocker.Mock()
-    snapshot_a.snapshot_id = SnapshotId(name="a", identifier="1")
-    snapshot_a.is_paused_forward_only = False
-    snapshot_a.change_category = SnapshotChangeCategory.BREAKING
-    snapshot_a.parents = ()
+def test_deployability_index(make_snapshot):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    snapshot_b = mocker.Mock()
-    snapshot_b.snapshot_id = SnapshotId(name="b", identifier="1")
-    snapshot_b.is_paused_forward_only = True
-    snapshot_b.change_category = SnapshotChangeCategory.FORWARD_ONLY
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
     snapshot_b.parents = (snapshot_a.snapshot_id,)
 
-    snapshot_c = mocker.Mock()
-    snapshot_c.snapshot_id = SnapshotId(name="c", identifier="1")
-    snapshot_c.is_paused_forward_only = False
-    snapshot_c.change_category = SnapshotChangeCategory.INDIRECT_BREAKING
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("SELECT 1")))
+    snapshot_c.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
     snapshot_c.parents = (snapshot_b.snapshot_id,)
 
-    snapshot_d = mocker.Mock()
-    snapshot_d.snapshot_id = SnapshotId(name="d", identifier="1")
-    snapshot_d.is_paused_forward_only = False
-    snapshot_d.change_category = SnapshotChangeCategory.INDIRECT_BREAKING
+    snapshot_d = make_snapshot(SqlModel(name="d", query=parse_one("SELECT 1")))
+    snapshot_d.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
     snapshot_d.parents = (snapshot_b.snapshot_id, snapshot_a.snapshot_id)
 
-    snapshot_e = mocker.Mock()
-    snapshot_e.snapshot_id = SnapshotId(name="e", identifier="1")
-    snapshot_e.is_paused_forward_only = False
-    snapshot_e.change_category = SnapshotChangeCategory.NON_BREAKING
-    snapshot_e.parents = ()
+    snapshot_e = make_snapshot(SqlModel(name="e", query=parse_one("SELECT 1")))
+    snapshot_e.categorize_as(SnapshotChangeCategory.NON_BREAKING)
 
-    snapshot_f = mocker.Mock()
-    snapshot_f.snapshot_id = SnapshotId(name="f", identifier="1")
-    snapshot_f.is_paused_forward_only = False
-    snapshot_f.change_category = SnapshotChangeCategory.INDIRECT_BREAKING
+    snapshot_f = make_snapshot(SqlModel(name="f", query=parse_one("SELECT 1")))
+    snapshot_f.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
     snapshot_f.parents = (snapshot_e.snapshot_id, snapshot_a.snapshot_id)
 
-    snapshot_g = mocker.Mock()
-    snapshot_g.snapshot_id = SnapshotId(name="g", identifier="1")
-    snapshot_g.is_paused_forward_only = False
-    snapshot_g.change_category = SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    snapshot_g = make_snapshot(SqlModel(name="g", query=parse_one("SELECT 1")))
+    snapshot_g.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
     snapshot_g.parents = (snapshot_e.snapshot_id,)
 
-    deployable_snapshots = get_deployable_snapshots(
-        {
-            s.snapshot_id: s
-            for s in [
-                snapshot_a,
-                snapshot_b,
-                snapshot_c,
-                snapshot_d,
-                snapshot_e,
-                snapshot_f,
-                snapshot_g,
-            ]
-        }
-    )
-
-    assert deployable_snapshots == {
-        snapshot_a.snapshot_id,
-        snapshot_e.snapshot_id,
-        snapshot_f.snapshot_id,
+    snapshots = {
+        s.snapshot_id: s
+        for s in [
+            snapshot_a,
+            snapshot_b,
+            snapshot_c,
+            snapshot_d,
+            snapshot_e,
+            snapshot_f,
+            snapshot_g,
+        ]
     }
 
+    deployable_snapshots = DeployabilityIndex.create(snapshots)
 
-def test_get_deployable_snapshots_unpaused_forward_only(mocker: MockerFixture):
-    snapshot_a = mocker.Mock()
-    snapshot_a.snapshot_id = SnapshotId(name="a", identifier="1")
-    snapshot_a.is_paused_forward_only = False
-    snapshot_a.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    snapshot_a.parents = ()
+    assert deployable_snapshots.is_deployable(snapshot_a)
+    assert deployable_snapshots.is_deployable(snapshot_e)
+    assert deployable_snapshots.is_deployable(snapshot_f)
+    assert not deployable_snapshots.is_deployable(snapshot_g)
+    assert not deployable_snapshots.is_deployable(snapshot_b)
+    assert not deployable_snapshots.is_deployable(snapshot_c)
+    assert not deployable_snapshots.is_deployable(snapshot_d)
 
-    snapshot_b = mocker.Mock()
-    snapshot_b.snapshot_id = SnapshotId(name="b", identifier="1")
-    snapshot_b.is_paused_forward_only = False
-    snapshot_b.change_category = SnapshotChangeCategory.BREAKING
-    snapshot_b.parents = (snapshot_a.snapshot_id,)
+    assert deployable_snapshots.is_deployable_or_deployed(snapshot_a)
+    assert deployable_snapshots.is_deployable_or_deployed(snapshot_e)
+    assert deployable_snapshots.is_deployable_or_deployed(snapshot_f)
+    assert deployable_snapshots.is_deployable_or_deployed(snapshot_g)
+    assert not deployable_snapshots.is_deployable_or_deployed(snapshot_b)
+    assert not deployable_snapshots.is_deployable_or_deployed(snapshot_c)
+    assert not deployable_snapshots.is_deployable_or_deployed(snapshot_d)
 
-    deployable_snapshots = get_deployable_snapshots(
+
+def test_deployability_index_unpaused_forward_only(make_snapshot):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_a.unpaused_ts = 1
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    deplyable_snapshots = DeployabilityIndex.create(
         {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}
     )
 
-    assert deployable_snapshots == {snapshot_b.snapshot_id}
+    assert not deplyable_snapshots.is_deployable(snapshot_a)
+    assert deplyable_snapshots.is_deployable(snapshot_b)
+
+    assert deplyable_snapshots.is_deployable_or_deployed(snapshot_a)
+    assert deplyable_snapshots.is_deployable_or_deployed(snapshot_b)

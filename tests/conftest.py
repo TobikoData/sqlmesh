@@ -129,7 +129,8 @@ def duck_conn() -> duckdb.DuckDBPyConnection:
 def push_plan(context: Context, plan: Plan) -> None:
     plan_evaluator = BuiltInPlanEvaluator(context.state_sync, context.snapshot_evaluator)
     plan_evaluator._push(plan)
-    plan_evaluator._promote(plan)
+    promotion_result = plan_evaluator._promote(plan)
+    plan_evaluator._update_views(plan, promotion_result)
 
 
 @pytest.fixture()

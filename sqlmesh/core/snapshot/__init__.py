@@ -1,5 +1,6 @@
 from sqlmesh.core.snapshot.categorizer import categorize_change
 from sqlmesh.core.snapshot.definition import (
+    DeployabilityIndex,
     Intervals,
     Node,
     QualifiedViewName,
@@ -17,7 +18,6 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotTableInfo,
     earliest_start_date,
     fingerprint_from_node,
-    get_deployable_snapshots,
     has_paused_forward_only,
     merge_intervals,
     missing_intervals,

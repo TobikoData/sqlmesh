@@ -4,7 +4,6 @@ import logging
 import typing as t
 from datetime import datetime
 
-from sqlmesh.core import constants as c
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import SeedModel
@@ -13,10 +12,10 @@ from sqlmesh.core.notification_target import (
     NotificationTargetManager,
 )
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotEvaluator,
     earliest_start_date,
-    get_deployable_snapshots,
     missing_intervals,
 )
 from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
@@ -81,7 +80,7 @@ class Scheduler:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        is_dev: bool = False,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
         ignore_cron: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
@@ -100,8 +99,7 @@ class Scheduler:
             start: The start of the run. Defaults to the min node start date.
             end: The end of the run. Defaults to now.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
-            is_dev: Indicates whether the evaluation happens in the development mode and temporary
-                tables / table clones should be used where applicable.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             restatements: A set of snapshot names being restated.
             ignore_cron: Whether to ignore the node's cron schedule.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
@@ -119,7 +117,7 @@ class Scheduler:
             snapshots,
             start=start or earliest_start_date(snapshots),
             end=end or now(),
-            is_dev=is_dev,
+            deployability_index=deployability_index,
             execution_time=execution_time or now(),
             restatements=restatements,
             ignore_cron=ignore_cron,
@@ -131,7 +129,7 @@ class Scheduler:
         start: TimeLike,
         end: TimeLike,
         execution_time: TimeLike,
-        is_deployable: bool = True,
+        deployability_index: DeployabilityIndex,
         **kwargs: t.Any,
     ) -> None:
         """Evaluate a snapshot and add the processed interval to the state sync.
@@ -141,6 +139,7 @@ class Scheduler:
             start: The start datetime to render.
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time. Defaults to now.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             kwargs: Additional kwargs to pass to the renderer.
         """
         validate_date_range(start, end)
@@ -155,13 +154,15 @@ class Scheduler:
                 snapshot.snapshot_id
             ]
 
+        is_deployable = deployability_index.is_deployable(snapshot)
+
         self.snapshot_evaluator.evaluate(
             snapshot,
             start,
             end,
             execution_time,
             snapshots=snapshots,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             **kwargs,
         )
         try:
@@ -171,7 +172,7 @@ class Scheduler:
                 end=end,
                 execution_time=execution_time,
                 snapshots=snapshots,
-                is_deployable=is_deployable,
+                deployability_index=deployability_index,
                 **kwargs,
             )
         except AuditError as e:
@@ -193,7 +194,7 @@ class Scheduler:
         ignore_cron: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
         circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
-        deployable_snapshots: t.Optional[t.Set[str]] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
@@ -208,6 +209,7 @@ class Scheduler:
             ignore_cron: Whether to ignore the node's cron schedule.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
             circuit_breaker: An optional handler which checks if the run should be aborted.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
 
         Returns:
             True if the execution was successful and False otherwise.
@@ -225,16 +227,13 @@ class Scheduler:
         else:
             environment_naming_info = environment
 
-        is_dev = environment_naming_info.name != c.PROD
-        if deployable_snapshots is None and is_dev:
-            deployable_snapshots = {s.name for s in get_deployable_snapshots(self.snapshots)}
-
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         execution_time = execution_time or now()
         batches = self.batches(
             start,
             end,
             execution_time,
-            is_dev=is_dev,
+            deployability_index=deployability_index,
             restatements=restatements,
             ignore_cron=ignore_cron,
             selected_snapshots=selected_snapshots,
@@ -260,7 +259,6 @@ class Scheduler:
                 raise CircuitBreakerError()
 
             snapshot, ((start, end), batch_idx) = node
-            is_deployable = deployable_snapshots is None or snapshot.name in deployable_snapshots
 
             self.console.start_snapshot_evaluation_progress(snapshot)
 
@@ -268,8 +266,9 @@ class Scheduler:
             evaluation_duration_ms: t.Optional[int] = None
 
             try:
-                assert execution_time
-                self.evaluate(snapshot, start, end, execution_time, is_deployable=is_deployable)
+                assert execution_time  # mypy
+                assert deployability_index  # mypy
+                self.evaluate(snapshot, start, end, execution_time, deployability_index)
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:
                 self.console.update_snapshot_evaluation_progress(
@@ -350,7 +349,7 @@ def compute_interval_params(
     *,
     start: TimeLike,
     end: TimeLike,
-    is_dev: bool,
+    deployability_index: t.Optional[DeployabilityIndex] = None,
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
     ignore_cron: bool = False,
@@ -370,7 +369,7 @@ def compute_interval_params(
         intervals: A list of all snapshot intervals that should be considered.
         start: Start of the interval.
         end: End of the interval.
-        is_dev: Whether or not these intervals are for development.
+        deployability_index: Determines snapshots that are deployable in the context of this evaluation.
         execution_time: The date/time time reference to use for execution time.
         restatements: A dict of snapshot names being restated and their intervals.
         ignore_cron: Whether to ignore the node's cron schedule.
@@ -386,7 +385,7 @@ def compute_interval_params(
         end=end,
         execution_time=execution_time,
         restatements=restatements,
-        is_dev=is_dev,
+        deployability_index=deployability_index,
         ignore_cron=ignore_cron,
     ).items():
         batches = []

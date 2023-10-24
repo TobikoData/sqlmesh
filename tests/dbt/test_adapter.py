@@ -75,7 +75,7 @@ def test_adapter_map_snapshot_tables(
     snapshot_mock.name = "test_db.test_model"
     snapshot_mock.version = "1"
     snapshot_mock.is_symbolic = False
-    snapshot_mock.table_name_for_mapping.return_value = "sqlmesh.test_db__test_model"
+    snapshot_mock.table_name.return_value = "sqlmesh.test_db__test_model"
 
     context = sushi_test_project.context
     assert context.target

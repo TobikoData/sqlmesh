@@ -30,7 +30,7 @@ from sqlmesh.utils.pydantic import (
 )
 
 if t.TYPE_CHECKING:
-    from sqlmesh.core.snapshot import Node, Snapshot
+    from sqlmesh.core.snapshot import DeployabilityIndex, Node, Snapshot
     from sqlmesh.utils.jinja import MacroReference
 
 if sys.version_info >= (3, 9):
@@ -82,7 +82,7 @@ class AuditMixin(AuditCommonMetaMixin):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
         """Renders the audit's query.
@@ -94,7 +94,7 @@ class AuditMixin(AuditCommonMetaMixin):
             execution_time: The date/time time reference to use for execution time.
             snapshots: All snapshots (by name) to use for mapping of physical locations.
             audit_name: The name of audit if the query to render is for an audit.
-            is_deployable: Whether to render the query for deployable snapshot tables.
+            deployability_index: Determines snapshots that are deployable in the context of this render.
             kwargs: Additional kwargs to pass to the renderer.
 
         Returns:
@@ -108,7 +108,7 @@ class AuditMixin(AuditCommonMetaMixin):
             end=end,
             execution_time=execution_time,
             snapshots=snapshots,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             **{**self.defaults, **kwargs},  # type: ignore
         )
 
@@ -185,10 +185,12 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
     ) -> exp.Subqueryable:
-        from sqlmesh.core.snapshot import Snapshot
+        from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
+
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
         extra_kwargs = {}
 
@@ -196,7 +198,9 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
         this_model = (
             node.name
             if isinstance(snapshot_or_node, _Node)
-            else t.cast(Snapshot, snapshot_or_node).table_name(is_deployable)
+            else t.cast(Snapshot, snapshot_or_node).table_name(
+                deployability_index.is_deployable(snapshot_or_node)
+            )
         )
 
         columns_to_types: t.Optional[t.Dict[str, t.Any]] = None
@@ -231,7 +235,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
             end=end,
             execution_time=execution_time,
             snapshots=snapshots,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             **{**extra_kwargs, **kwargs},
         )
 

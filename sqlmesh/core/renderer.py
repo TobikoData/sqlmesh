@@ -32,7 +32,7 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env
 if t.TYPE_CHECKING:
     from sqlglot._typing import E
 
-    from sqlmesh.core.snapshot import Snapshot
+    from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot
 
 CacheKey = t.Tuple[datetime, datetime, datetime, RuntimeStage]
 
@@ -70,7 +70,7 @@ class BaseExpressionRenderer:
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         runtime_stage: t.Optional[RuntimeStage] = None,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
@@ -82,7 +82,7 @@ class BaseExpressionRenderer:
             execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
-            is_deployable: Indicates whether to render a query which produces deployable results.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             runtime_stage: Indicates the current runtime stage, for example if we're still loading the project, etc.
             kwargs: Additional kwargs to pass to the renderer.
 
@@ -109,7 +109,7 @@ class BaseExpressionRenderer:
                 **{**render_kwargs, **env},
                 snapshots=(snapshots or {}),
                 table_mapping=table_mapping,
-                is_deployable=is_deployable,
+                deployability_index=deployability_index,
             )
 
             if isinstance(self._expression, d.Jinja):
@@ -187,7 +187,7 @@ class BaseExpressionRenderer:
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         expand: t.Iterable[str] = tuple(),
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
     ) -> E:
         if not snapshots and not table_mapping and not expand:
@@ -200,7 +200,7 @@ class BaseExpressionRenderer:
                 snapshots=snapshots,
                 table_mapping=table_mapping,
                 expand=expand,
-                is_deployable=is_deployable,
+                deployability_index=deployability_index,
                 start=start,
                 end=end,
                 execution_time=execution_time,
@@ -229,7 +229,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         expand: t.Iterable[str] = tuple(),
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
@@ -238,7 +238,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
             end=end,
             execution_time=execution_time,
             snapshots=snapshots,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             **kwargs,
         )
 
@@ -248,7 +248,7 @@ class ExpressionRenderer(BaseExpressionRenderer):
                 snapshots=snapshots,
                 table_mapping=table_mapping,
                 expand=expand,
-                is_deployable=is_deployable,
+                deployability_index=deployability_index,
                 start=start,
                 end=end,
                 execution_time=execution_time,
@@ -293,7 +293,7 @@ class QueryRenderer(BaseExpressionRenderer):
         execution_time: t.Optional[TimeLike] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
-        is_deployable: bool = True,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         expand: t.Iterable[str] = tuple(),
         optimize: bool = True,
         runtime_stage: t.Optional[RuntimeStage] = None,
@@ -308,7 +308,7 @@ class QueryRenderer(BaseExpressionRenderer):
             execution_time: The date/time time reference to use for execution time. Defaults to epoch start.
             snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
             table_mapping: Table mapping of physical locations. Takes precedence over snapshot mappings.
-            is_deployable: Indicates whether to render a query which produces deployable results.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             expand: Expand referenced models as subqueries. This is used to bypass backfills when running queries
                 that depend on materialized tables.  Model definitions are inlined and can thus be run end to
                 end on the fly.
@@ -329,7 +329,7 @@ class QueryRenderer(BaseExpressionRenderer):
                     execution_time=execution_time,
                     snapshots=snapshots,
                     table_mapping=table_mapping,
-                    is_deployable=is_deployable,
+                    deployability_index=deployability_index,
                     runtime_stage=runtime_stage,
                     **kwargs,
                 )
@@ -356,7 +356,7 @@ class QueryRenderer(BaseExpressionRenderer):
             snapshots=snapshots,
             table_mapping=table_mapping,
             expand=expand,
-            is_deployable=is_deployable,
+            deployability_index=deployability_index,
             start=start,
             end=end,
             execution_time=execution_time,
@@ -457,14 +457,14 @@ def _resolve_tables(
     snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     table_mapping: t.Optional[t.Dict[str, str]] = None,
     expand: t.Iterable[str] = tuple(),
-    is_deployable: bool = True,
+    deployability_index: t.Optional[DeployabilityIndex] = None,
     **render_kwargs: t.Any,
 ) -> E:
     from sqlmesh.core.snapshot import to_table_mapping
 
     snapshots = snapshots or {}
     table_mapping = table_mapping or {}
-    mapping = {**to_table_mapping(snapshots.values(), is_deployable), **table_mapping}
+    mapping = {**to_table_mapping(snapshots.values(), deployability_index), **table_mapping}
     # if a snapshot is provided but not mapped, we need to expand it or the query
     # won't be valid
     expand = set(expand) | {name for name in snapshots if name not in mapping}
@@ -479,7 +479,7 @@ def _resolve_tables(
                     nested_query = model.render_query(
                         snapshots=snapshots,
                         expand=expand,
-                        is_deployable=is_deployable,
+                        deployability_index=deployability_index,
                         **render_kwargs,
                     )
                     if nested_query is not None:

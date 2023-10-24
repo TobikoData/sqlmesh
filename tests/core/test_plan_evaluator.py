@@ -57,9 +57,7 @@ def test_builtin_evaluator_push(sushi_context: Context, make_snapshot):
     new_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     new_view_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
-    plan = Plan(
-        sushi_context._context_diff("prod"),
-    )
+    plan = Plan(sushi_context._context_diff("prod"))
 
     evaluator = BuiltInPlanEvaluator(
         sushi_context.state_sync,

@@ -331,7 +331,7 @@ def create_builtin_globals(
             quote_policy=api.quote_policy,
             snapshots=jinja_globals.get("snapshots", {}),
             table_mapping=jinja_globals.get("table_mapping", {}),
-            is_deployable=jinja_globals.get("is_deployable", False),
+            deployability_index=jinja_globals.get("deployability_index", False),
         )
     else:
         adapter = ParsetimeAdapter(

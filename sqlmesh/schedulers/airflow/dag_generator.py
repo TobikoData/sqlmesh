@@ -14,6 +14,7 @@ from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.plan import PlanStatus
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
@@ -167,7 +168,9 @@ class SnapshotDagGenerator:
             end_task = EmptyOperator(task_id="plan_application_end")
 
             (create_start_task, create_end_task) = self._create_creation_tasks(
-                plan_dag_spec.new_snapshots, plan_dag_spec.ddl_concurrent_tasks
+                plan_dag_spec.new_snapshots,
+                plan_dag_spec.ddl_concurrent_tasks,
+                plan_dag_spec.deployability_index,
             )
 
             (
@@ -176,7 +179,7 @@ class SnapshotDagGenerator:
             ) = self._create_backfill_tasks(
                 [i for i in plan_dag_spec.backfill_intervals_per_snapshot if i.before_promote],
                 all_snapshots,
-                plan_dag_spec.is_dev,
+                plan_dag_spec.deployability_index,
                 "before_promote",
             )
 
@@ -186,7 +189,7 @@ class SnapshotDagGenerator:
             ) = self._create_backfill_tasks(
                 [i for i in plan_dag_spec.backfill_intervals_per_snapshot if not i.before_promote],
                 all_snapshots,
-                plan_dag_spec.is_dev,
+                plan_dag_spec.deployability_index,
                 "after_promote",
             )
 
@@ -242,7 +245,10 @@ class SnapshotDagGenerator:
             previous_end_task >> end_task
 
     def _create_creation_tasks(
-        self, new_snapshots: t.List[Snapshot], ddl_concurrent_tasks: int
+        self,
+        new_snapshots: t.List[Snapshot],
+        ddl_concurrent_tasks: int,
+        deployability_index: DeployabilityIndex,
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         start_task = EmptyOperator(task_id="snapshot_creation_start")
         end_task = EmptyOperator(task_id="snapshot_creation_end", trigger_rule="none_failed")
@@ -252,7 +258,10 @@ class SnapshotDagGenerator:
             return (start_task, end_task)
 
         creation_task = self._create_snapshot_create_tables_operator(
-            new_snapshots, ddl_concurrent_tasks, "snapshot_creation__create_tables"
+            new_snapshots,
+            ddl_concurrent_tasks,
+            deployability_index,
+            "snapshot_creation__create_tables",
         )
 
         update_state_task = PythonOperator(
@@ -307,7 +316,7 @@ class SnapshotDagGenerator:
                 [snapshots[x.snapshot_id] for x in request.promoted_snapshots],
                 request.environment_naming_info,
                 request.ddl_concurrent_tasks,
-                request.is_dev,
+                request.deployability_index,
                 "snapshot_promotion__create_views",
             )
             create_views_task >> finalize_task
@@ -358,7 +367,7 @@ class SnapshotDagGenerator:
         self,
         backfill_intervals: t.List[common.BackfillIntervalsPerSnapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
-        is_dev: bool,
+        deployability_index: DeployabilityIndex,
         task_id_suffix: str,
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         snapshot_to_tasks = {}
@@ -380,7 +389,7 @@ class SnapshotDagGenerator:
                     task_id=f"{task_id_prefix}__{start.strftime(TASK_ID_DATE_FORMAT)}__{end.strftime(TASK_ID_DATE_FORMAT)}",
                     start=start,
                     end=end,
-                    is_dev=is_dev,
+                    deployability_index=deployability_index,
                 )
                 for (start, end) in intervals_per_snapshot.intervals
             ]
@@ -436,7 +445,7 @@ class SnapshotDagGenerator:
         snapshots: t.List[Snapshot],
         environment_naming_info: EnvironmentNamingInfo,
         ddl_concurrent_tasks: int,
-        is_dev: bool,
+        deployability_index: DeployabilityIndex,
         task_id: str,
     ) -> BaseOperator:
         return self._ddl_engine_operator(
@@ -445,7 +454,7 @@ class SnapshotDagGenerator:
                 snapshots=snapshots,
                 environment_naming_info=environment_naming_info,
                 ddl_concurrent_tasks=ddl_concurrent_tasks,
-                is_dev=is_dev,
+                deployability_index=deployability_index,
             ),
             task_id=task_id,
         )
@@ -471,12 +480,15 @@ class SnapshotDagGenerator:
         self,
         new_snapshots: t.List[Snapshot],
         ddl_concurrent_tasks: int,
+        deployability_index: DeployabilityIndex,
         task_id: str,
     ) -> BaseOperator:
         return self._ddl_engine_operator(
             **self._ddl_engine_operator_args,
             target=targets.SnapshotCreateTablesTarget(
-                new_snapshots=new_snapshots, ddl_concurrent_tasks=ddl_concurrent_tasks
+                new_snapshots=new_snapshots,
+                ddl_concurrent_tasks=ddl_concurrent_tasks,
+                deployability_index=deployability_index,
             ),
             task_id=task_id,
         )
@@ -502,7 +514,7 @@ class SnapshotDagGenerator:
         task_id: str,
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
-        is_dev: bool = False,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
     ) -> BaseOperator:
         parent_snapshots = {sid.name: snapshots[sid] for sid in snapshot.parents}
 
@@ -513,7 +525,7 @@ class SnapshotDagGenerator:
                 parent_snapshots=parent_snapshots,
                 start=start,
                 end=end,
-                is_dev=is_dev,
+                deployability_index=deployability_index or DeployabilityIndex.all_deployable(),
             ),
             task_id=task_id,
         )
