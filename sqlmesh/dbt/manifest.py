@@ -171,7 +171,7 @@ class ManifestHelper:
             sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
             dependencies = dependencies.union(_extra_dependencies(sql))
             dependencies = dependencies.union(
-                self._macro_dependencies(dependencies.macros, package_name)
+                self._macro_source_ref_dependencies(dependencies.macros, package_name)
             )
 
             test_model = _test_model(node)
@@ -205,7 +205,7 @@ class ManifestHelper:
                 )
                 dependencies = dependencies.union(_extra_dependencies(sql))
                 dependencies = dependencies.union(
-                    self._macro_dependencies(dependencies.macros, node.package_name)
+                    self._macro_source_ref_dependencies(dependencies.macros, node.package_name)
                 )
 
                 self._models_per_package[node.package_name][node.name] = ModelConfig(
@@ -270,7 +270,7 @@ class ManifestHelper:
             target_override=self.target.name,
         )
 
-    def _macro_dependencies(
+    def _macro_source_ref_dependencies(
         self, macros: t.List[MacroReference], default_package: str
     ) -> Dependencies:
         dependencies = Dependencies()
@@ -280,6 +280,7 @@ class ManifestHelper:
             )
             if macro_config:
                 dependencies = dependencies.union(macro_config.dependencies)
+        dependencies.macros = []
         return dependencies
 
 

@@ -103,7 +103,7 @@ def call_name(node: nodes.Expr) -> t.Tuple[str, ...]:
     if isinstance(node, nodes.Name):
         return (node.name,)
     if isinstance(node, nodes.Const):
-        return (f"'node.value'",)
+        return (f"'{node.value}'",)
     if isinstance(node, nodes.Getattr):
         return call_name(node.node) + (node.attr,)
     if isinstance(node, (nodes.Getitem, nodes.Call)):
@@ -144,7 +144,7 @@ def extract_call_names(jinja_str: str) -> t.List[t.Tuple[t.Tuple[str, ...], node
 
 def extract_macro_references(jinja_str: str) -> t.Set[MacroReference]:
     result = set()
-    for call_name, _node in extract_call_names(jinja_str):
+    for call_name, _ in extract_call_names(jinja_str):
         if len(call_name) == 1:
             result.add(MacroReference(name=call_name[0]))
         elif len(call_name) == 2:

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.jinja import (
+    ENVIRONMENT,
     JinjaMacroRegistry,
     MacroExtractor,
     MacroReference,
     MacroReturnVal,
+    call_name,
+    nodes,
 )
 
 
@@ -267,4 +270,13 @@ macro_a_a
     assert rendered == [
         "macro_a_a",
         "macro_a_a",
+    ]
+
+
+def test_find_call_names():
+    jinja_str = "{{ local_macro() }}{{ package.package_macro() }}{{ 'stringval'.function() }}"
+    [call_name(node) for node in ENVIRONMENT.parse(jinja_str).find_all(nodes.Call)] == [
+        ("local_macro",),
+        ("package", "package_macro"),
+        ("stringval", "function"),
     ]
