@@ -153,7 +153,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
                   <CodeEditorDefault
                     content={source}
                     type={EnumFileExtensions.SQL}
-                    className="scrollbar--vertical-md scrollbar--horizontal-md overflow-auto !max-w-[30rem] !h-[25vh] text-xs"
+                    className="scrollbar--vertical scrollbar--horizontal overflow-auto !max-w-[30rem] !h-[25vh] text-xs"
                     extensions={modelExtensions}
                   />
                 </Popover.Panel>

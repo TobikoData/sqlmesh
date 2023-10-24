@@ -4,10 +4,6 @@
   color: var(--color-editor-text);
 }
 
-.cm-editor .cm-scroller {
-  font-family: inherit;
-}
-
 .cm-editor .cm-gutters {
   background-color: var(--color-editor);
   border: none;
@@ -31,29 +27,61 @@
   color: var(--color-brand-700) !important;
 }
 
-.cm-editor .cm-scroller::-webkit-scrollbar {
-  height: 0.2rem;
-  width: 0.2rem;
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete {
+  border: 1px solid var(--color-neutral-300) !important;
+  border-radius: 0.25rem;
 }
 
-.scrollbar--vertical-md .cm-scroller::-webkit-scrollbar {
-  width: 0.4rem;
+.cm-editor .cm-tooltip-autocomplete ul li[aria-selected='true'] {
+  background: var(--color-primary-10);
+  color: var(--color-text);
 }
 
-.scrollbar--horizontal-md .cm-scroller::-webkit-scrollbar {
-  height: 0.4rem;
+.cm-editor .cm-tooltip-autocomplete .cm-completionIcon-column,
+.cm-editor .cm-tooltip-autocomplete .cm-completionIcon-model {
+  margin: 0.125rem 1.25rem 0.125rem 0;
 }
 
-.cm-editor .cm-scroller::-webkit-scrollbar-track {
-  background-color: transparent;
+.cm-editor .cm-tooltip-autocomplete .cm-completionIcon::before {
+  display: inline-block;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
 }
 
-.cm-editor .cm-scroller::-webkit-scrollbar-thumb {
+.cm-editor .cm-tooltip-autocomplete .cm-completionIcon-column::before {
+  content: 'col';
+  color: var(--color-brand-600);
+  background: var(--color-brand-10);
+}
+
+.cm-editor .cm-tooltip-autocomplete .cm-completionIcon-model::before {
+  content: 'mdl';
+  color: var(--color-primary-500);
+  background: var(--color-primary-10);
+}
+
+.cm-editor .cm-scroller {
+  font-family: inherit;
+}
+
+.cm-editor .cm-scroller::-webkit-scrollbar,
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete ul::-webkit-scrollbar {
+  height: var(--scrollbar-size);
+  width: var(--scrollbar-size);
+}
+
+.cm-editor .cm-scroller::-webkit-scrollbar-track,
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete ul::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cm-editor .cm-scroller::-webkit-scrollbar-thumb,
+.cm-editor .cm-tooltip.cm-tooltip-autocomplete ul::-webkit-scrollbar-thumb {
   background: var(--color-brand);
-  border-radius: 1rem;
+  border-radius: var(--scrollbar-radius);
 }
 
-.cm-tooltip {
+.cm-editor .cm-tooltip {
   border: none !important;
   outline: none !important;
   background: var(--color-theme) !important;

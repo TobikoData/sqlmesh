@@ -6,7 +6,7 @@ import {
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { LanguageSupport } from '@codemirror/language'
 import { type Model } from '~/api/client'
-import { isFalse, isNil } from '~/utils'
+import { isArrayEmpty, isNil, isNotNil } from '~/utils'
 import { sqlglotWorker } from '~/workers'
 
 const cache = new Map<string, (e: MessageEvent) => void>()
@@ -30,18 +30,24 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
     'columns grain grains references metric tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
   const SQLMeshTypes =
     'expression seed full incremental_by_time_range incremental_by_unique_key view embedded'
-
   const lang = SQLDialect.define({
     keywords: (SQLKeywords + WHITE_SPACE + SQLMeshKeywords).toLowerCase(),
     types: (SQLTypes + WHITE_SPACE + SQLMeshTypes).toLowerCase(),
   })
-
-  const tables: Completion[] = Array.from(new Set(Object.values(models))).map(
-    label => ({
-      label,
-      type: 'keyword',
-    }),
+  const allModels = Array.from(new Set(models.values()))
+  const modelColumns = Array.from(
+    new Set(
+      allModels.map(model => model.columns.map(column => column.name)).flat(),
+    ),
   )
+  const modelNames: Completion[] = allModels.map(model => ({
+    label: model.name,
+    type: 'model',
+  }))
+  const columnNames: Completion[] = modelColumns.map(name => ({
+    label: name,
+    type: 'column',
+  }))
 
   SQLMeshDialectCleanUp()
 
@@ -57,24 +63,40 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
 
   return new LanguageSupport(lang.language, [
     lang.language.data.of({
-      autocomplete: completeFromList([
-        {
-          label: 'model',
-          type: 'keyword',
-          apply: 'MODEL (\n\r);',
-        },
-      ]),
-    }),
-    lang.language.data.of({
-      async autocomplete(ctx: CompletionContext) {
-        const match = ctx.matchBefore(/\w*$/)?.text.trim() ?? ''
-        const text = ctx.state.doc.toJSON().join('\n')
-        const keywordFrom = ctx.matchBefore(/from.+/i)
+      autocomplete(ctx: CompletionContext) {
+        const word = ctx.matchBefore(/\w*$/)
+        const dot = ctx.matchBefore(/[\w.]+\.([^ ]+)$/)
+
+        if (isNotNil(dot)) {
+          let suggestions = columnNames
+
+          const maybeModelName = dot.text.split('.').slice(0, -1).join('.')
+          const maybeModel = models.get(maybeModelName)
+
+          if (isNotNil(maybeModel)) {
+            suggestions = maybeModel.columns.map(column => ({
+              label: column.name,
+              type: 'column',
+            }))
+          }
+
+          return completeFromList(suggestions)(ctx)
+        }
+
+        if (isNil(word) || (word?.from === word?.to && !ctx.explicit)) return
+
         const keywordKind = ctx.matchBefore(/kind.+/i)
         const keywordDialect = ctx.matchBefore(/dialect.+/i)
+        const keywordModel = ctx.matchBefore(/model\s*(?=\S)([^ ]+)/i)
+        const keywordFrom = ctx.matchBefore(/from\s*(?=\S)([^ ]+)/i)
+        const keywordJoin = ctx.matchBefore(/join\s*(?=\S)([^ ]+)/i)
+        const keywordSelect = ctx.matchBefore(/select\s*(?=\S)([^ ]+)/i)
+        const keywordColumnName = ctx.matchBefore(/[A-Za-z0-9._]+\.[^ ]+/i)
+
+        const text = ctx.state.doc.toJSON().join('\n')
         const matchModels = text.match(/MODEL \(([\s\S]+?)\);/g) ?? []
-        const isInsideModel = matchModels
-          .filter(str => str.includes(match))
+        const isInMODEL = matchModels
+          .filter(str => str.includes(word.text))
           .map<[number, number]>(str => [
             text.indexOf(str),
             text.indexOf(str) + str.length,
@@ -84,26 +106,40 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
               ctx.pos >= start && ctx.pos <= end,
           )
 
-        let suggestions: Completion[] = tables
+        if (isInMODEL) {
+          let suggestions: Completion[] =
+            SQLMeshModelDictionary.get('keywords') ?? []
 
-        if (isFalse(isInsideModel)) {
-          if (keywordFrom != null)
-            return await completeFromList(suggestions)(ctx)
+          if (isNotNil(keywordKind)) {
+            suggestions = SQLMeshModelDictionary.get('kind') ?? []
+          }
 
-          return await keywordCompletionSource(lang)(ctx)
+          if (isNotNil(keywordDialect)) {
+            suggestions = SQLMeshModelDictionary.get('dialect') ?? []
+          }
+
+          return completeFromList(suggestions)(ctx)
+        } else {
+          let suggestions: Completion[] = []
+
+          if (isNotNil(keywordModel) && isArrayEmpty(matchModels)) {
+            suggestions = [
+              {
+                label: 'model',
+                type: 'keyword',
+                apply: 'MODEL (\n\r);',
+              },
+            ]
+          } else if (isNotNil(keywordSelect) || isNotNil(keywordColumnName)) {
+            suggestions = columnNames
+          } else if (isNotNil(keywordFrom) || isNotNil(keywordJoin)) {
+            suggestions = modelNames
+          }
+
+          return isArrayEmpty(suggestions)
+            ? keywordCompletionSource(lang)(ctx)
+            : completeFromList(suggestions)(ctx)
         }
-
-        suggestions = SQLMeshModelDictionary.get('keywords') ?? []
-
-        if (keywordKind != null) {
-          suggestions = SQLMeshModelDictionary.get('kind') ?? []
-        }
-
-        if (keywordDialect != null) {
-          suggestions = SQLMeshModelDictionary.get('dialect') ?? []
-        }
-
-        return await completeFromList(suggestions)(ctx)
       },
     }),
   ])
