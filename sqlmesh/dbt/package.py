@@ -4,7 +4,7 @@ import logging
 import typing as t
 from pathlib import Path
 
-from sqlmesh.dbt.common import PROJECT_FILENAME, load_yaml
+from sqlmesh.dbt.common import PROJECT_FILENAME, Dependencies, load_yaml
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.source import SourceConfig
@@ -24,6 +24,7 @@ class MacroConfig(PydanticModel):
     """Class to contain macro configuration"""
 
     info: MacroInfo
+    dependencies: Dependencies
     path: Path
 
 

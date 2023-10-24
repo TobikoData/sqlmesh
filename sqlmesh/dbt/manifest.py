@@ -24,7 +24,7 @@ from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.dbt.test import TestConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.jinja import MacroInfo, MacroReference, extract_macro_references
+from sqlmesh.utils.jinja import MacroInfo, MacroReference, extract_call_names, nodes
 
 if t.TYPE_CHECKING:
     from dbt.contracts.graph.manifest import Macro, Manifest
@@ -96,10 +96,10 @@ class ManifestHelper:
     def _load_all(self) -> None:
         if self._is_loaded:
             return
+        self._load_macros()
+        self._load_sources()
         self._load_tests()
         self._load_models_and_seeds()
-        self._load_sources()
-        self._load_macros()
         self._is_loaded = True
 
     def _load_sources(self) -> None:
@@ -121,15 +121,16 @@ class ManifestHelper:
             if macro.name.startswith("test_"):
                 macro.macro_sql = _convert_jinja_test_to_macro(macro.macro_sql)
 
-            macro_references = _macro_references(self._manifest, macro)
+            dependencies = Dependencies(macros=_macro_references(self._manifest, macro))
             if not macro.name.startswith("materialization_") and not macro.name.startswith("test_"):
-                macro_references |= _extra_macro_references(macro.macro_sql)
+                dependencies = dependencies.union(_extra_dependencies(macro.macro_sql))
 
             self._macros_per_package[macro.package_name][macro.name] = MacroConfig(
                 info=MacroInfo(
                     definition=macro.macro_sql,
-                    depends_on=list(macro_references),
+                    depends_on=dependencies.macros,
                 ),
+                dependencies=dependencies,
                 path=Path(macro.original_file_path),
             )
 
@@ -167,10 +168,16 @@ class ManifestHelper:
             dependencies.macros.append(MacroReference(package="dbt", name="get_where_subquery"))
             dependencies.macros.append(MacroReference(package="dbt", name="should_store_failures"))
 
+            sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
+            dependencies = dependencies.union(_extra_dependencies(sql))
+            dependencies = dependencies.union(
+                self._macro_source_ref_dependencies(dependencies.macros, package_name)
+            )
+
             test_model = _test_model(node)
 
             test = TestConfig(
-                sql=node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql,  # type: ignore
+                sql=sql,
                 model_name=test_model,
                 test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
                 dependencies=dependencies,
@@ -193,14 +200,17 @@ class ManifestHelper:
 
             if node.resource_type == "model":
                 sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
-                macro_references |= _extra_macro_references(sql)
+                dependencies = Dependencies(
+                    macros=macro_references, refs=_refs(node), sources=_sources(node)
+                )
+                dependencies = dependencies.union(_extra_dependencies(sql))
+                dependencies = dependencies.union(
+                    self._macro_source_ref_dependencies(dependencies.macros, node.package_name)
+                )
+
                 self._models_per_package[node.package_name][node.name] = ModelConfig(
                     sql=sql,
-                    dependencies=Dependencies(
-                        macros=macro_references,
-                        refs=_refs(node),
-                        sources=_sources(node),
-                    ),
+                    dependencies=dependencies,
                     tests=tests,
                     **_node_base_config(node),
                 )
@@ -259,6 +269,19 @@ class ManifestHelper:
             renderer=profile_renderer,
             target_override=self.target.name,
         )
+
+    def _macro_source_ref_dependencies(
+        self, macros: t.List[MacroReference], default_package: str
+    ) -> Dependencies:
+        dependencies = Dependencies()
+        for macro in macros:
+            macro_config = self._macros_per_package[macro.package or default_package].get(
+                macro.name
+            )
+            if macro_config:
+                dependencies = dependencies.union(macro_config.dependencies)
+        dependencies.macros = []
+        return dependencies
 
 
 def _config(node: t.Union[ManifestNode, SourceDefinition]) -> t.Dict[str, t.Any]:
@@ -330,8 +353,29 @@ def _convert_jinja_test_to_macro(test_jinja: str) -> str:
     return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)
 
 
-def _extra_macro_references(target: str) -> t.Set[MacroReference]:
+def _extra_dependencies(target: str) -> Dependencies:
     # We sometimes observe that the manifest doesn't capture certain macros referenced in the model.
     # This behavior has been observed with macros like dbt.current_timestamp() and dbt_utils.slugify().
     # Here we apply our custom extractor in addition to referenced extracted from the manifest to mitigate this.
-    return {r for r in extract_macro_references(target) if r.package in ("dbt", "dbt_utils")}
+    dependencies = Dependencies()
+    for call_name, node in extract_call_names(target):
+        if len(call_name) == 2 and call_name[0] in ("dbt", "dbt_utils"):
+            dependencies.macros.append(MacroReference(package=call_name[0], name=call_name[1]))
+        elif call_name[0] == "source":
+            source = ".".join(_jinja_call_arg_name(arg) for arg in node.args)
+            if source:
+                dependencies.sources.append(source)
+        elif call_name[0] == "ref":
+            ref = ".".join(_jinja_call_arg_name(arg) for arg in node.args)
+            if ref:
+                dependencies.refs.append(ref)
+
+    return dependencies
+
+
+def _jinja_call_arg_name(node: nodes.Node) -> str:
+    if isinstance(node, nodes.Name):
+        return node.name
+    if isinstance(node, nodes.Const):
+        return node.value
+    return ""
