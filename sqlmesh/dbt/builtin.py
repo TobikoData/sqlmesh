@@ -37,7 +37,7 @@ class Exceptions:
             raise CompilationException(msg)
 
     def warn(self, msg: str) -> str:
-        print(msg)
+        logger.warning(msg)
         return ""
 
 
@@ -146,11 +146,7 @@ def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
 
 
 def log(msg: str, info: bool = False) -> str:
-    print(msg)
-    return ""
-
-
-def no_log(msg: str, info: bool = False) -> str:
+    logger.debug(msg)
     return ""
 
 
