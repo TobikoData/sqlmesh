@@ -250,7 +250,8 @@ jobs:
         sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all
     # Add deploy step that only runs on merged PR
     - name: Deploy to Production
-      if: github.event.pull_request.merged == true
+      # `main` should be the name of your branch that represents production
+      if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
       run: |
         sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} deploy-production
 ```
