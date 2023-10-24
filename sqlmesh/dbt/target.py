@@ -27,7 +27,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.dbt.util import DBT_VERSION
-from sqlmesh.utils import AttributeDict
+from sqlmesh.utils import AttributeDict, classproperty
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import field_validator, model_validator
 
@@ -111,20 +111,20 @@ class TargetConfig(abc.ABC, DbtConfig):
         fields["target_name"] = self.name
         return AttributeDict(fields)
 
-    @property
-    def quote_policy(self) -> Policy:
+    @classproperty
+    def quote_policy(cls) -> Policy:
         return Policy()
 
     @property
     def extra(self) -> t.Set[str]:
         return self.extra_fields(set(self.dict()))
 
-    @property
-    def relation_class(self) -> t.Type[BaseRelation]:
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
         return BaseRelation
 
-    @property
-    def column_class(self) -> t.Type[Column]:
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
         return Column
 
 
@@ -161,8 +161,8 @@ class DuckDbConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "delete+insert"
 
-    @property
-    def relation_class(self) -> t.Type[BaseRelation]:
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.duckdb.relation import DuckDBRelation
 
         return DuckDBRelation
@@ -223,14 +223,14 @@ class SnowflakeConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
 
-    @property
-    def relation_class(self) -> t.Type[BaseRelation]:
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.snowflake import SnowflakeRelation
 
         return SnowflakeRelation
 
-    @property
-    def column_class(self) -> t.Type[Column]:
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
         from dbt.adapters.snowflake import SnowflakeColumn
 
         return SnowflakeColumn
@@ -247,8 +247,8 @@ class SnowflakeConfig(TargetConfig):
             concurrent_tasks=self.threads,
         )
 
-    @property
-    def quote_policy(self) -> Policy:
+    @classproperty
+    def quote_policy(cls) -> Policy:
         return Policy(database=False, schema=False, identifier=False)
 
 
@@ -359,20 +359,20 @@ class RedshiftConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "append"
 
-    @property
-    def relation_class(self) -> t.Type[BaseRelation]:
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.redshift import RedshiftRelation
 
         return RedshiftRelation
 
-    @property
-    def column_class(self) -> t.Type[Column]:
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
         if DBT_VERSION < (1, 6):
             from dbt.adapters.redshift import RedshiftColumn  # type: ignore
 
             return RedshiftColumn
         else:
-            return super().column_class
+            return super(RedshiftConfig, cls).column_class()
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return RedshiftConnectionConfig(
@@ -409,14 +409,14 @@ class DatabricksConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
 
-    @property
-    def relation_class(self) -> t.Type[BaseRelation]:
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.databricks.relation import DatabricksRelation
 
         return DatabricksRelation
 
-    @property
-    def column_class(self) -> t.Type[Column]:
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
         from dbt.adapters.databricks.column import DatabricksColumn
 
         return DatabricksColumn
@@ -491,14 +491,14 @@ class BigQueryConfig(TargetConfig):
     def default_incremental_strategy(self, kind: IncrementalKind) -> str:
         return "merge"
 
-    @property
-    def relation_class(self) -> t.Type[BaseRelation]:
+    @classproperty
+    def relation_class(cls) -> t.Type[BaseRelation]:
         from dbt.adapters.bigquery.relation import BigQueryRelation
 
         return BigQueryRelation
 
-    @property
-    def column_class(self) -> t.Type[Column]:
+    @classproperty
+    def column_class(cls) -> t.Type[Column]:
         from dbt.adapters.bigquery import BigQueryColumn
 
         return BigQueryColumn
@@ -529,3 +529,13 @@ class BigQueryConfig(TargetConfig):
             priority=self.priority,
             maximum_bytes_billed=self.maximum_bytes_billed,
         )
+
+
+TARGET_TYPE_TO_CONFIG_CLASS: t.Dict[str, t.Type[TargetConfig]] = {
+    "databricks": DatabricksConfig,
+    "duckdb": DuckDbConfig,
+    "postgres": PostgresConfig,
+    "redshift": RedshiftConfig,
+    "snowflake": SnowflakeConfig,
+    "bigquery": BigQueryConfig,
+}
