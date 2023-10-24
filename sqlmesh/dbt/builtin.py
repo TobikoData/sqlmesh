@@ -337,14 +337,12 @@ def create_builtin_globals(
             table_mapping=jinja_globals.get("table_mapping", {}),
             is_dev=jinja_globals.get("is_dev", False),
         )
-        builtin_globals.update({"log": log, "print": log})
     else:
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
             dialect=dialect,
         )
-        builtin_globals.update({"log": no_log, "print": no_log})
 
     sql_execution = SQLExecution(adapter)
     builtin_globals.update(
@@ -354,6 +352,8 @@ def create_builtin_globals(
             "load_relation": lambda r: adapter.get_relation(r.database, r.schema, r.identifier),
             "store_result": sql_execution.store_result,
             "load_result": sql_execution.load_result,
+            "log": log,
+            "print": log,
             "run_query": sql_execution.run_query,
             "statement": sql_execution.statement,
         }
