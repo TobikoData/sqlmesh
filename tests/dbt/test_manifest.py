@@ -20,9 +20,7 @@ def test_manifest_helper():
     assert helper.models()["top_waiters"].materialized == "view"
 
     assert helper.models()["waiters"].dependencies == Dependencies(
-        macros={
-            MacroReference(name="incremental_by_time"),
-        },
+        macros={MacroReference(name="incremental_by_time")},
         sources={"streaming.orders"},
     )
     assert helper.models()["waiters"].materialized == "ephemeral"
