@@ -42,6 +42,14 @@ IncrementalKind = t.Union[
     t.Type[IncrementalUnmanagedKind],
 ]
 
+# We only serialize a subset of fields in order to avoid persisting sensitive information
+SERIALIZABLE_FIELDS = {
+    "type",
+    "name",
+    "database",
+    "schema_",
+}
+
 
 class TargetConfig(abc.ABC, DbtConfig):
     """
@@ -99,7 +107,7 @@ class TargetConfig(abc.ABC, DbtConfig):
         raise NotImplementedError
 
     def attribute_dict(self) -> AttributeDict:
-        fields = self.dict().copy()
+        fields = self.dict(include=SERIALIZABLE_FIELDS).copy()
         fields["target_name"] = self.name
         return AttributeDict(fields)
 

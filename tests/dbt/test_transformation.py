@@ -1,3 +1,4 @@
+import json
 import typing as t
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from sqlmesh.core.model import (
     SqlModel,
     ViewKind,
 )
+from sqlmesh.core.state_sync.engine_adapter import _snapshot_to_json
 from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
     ColumnConfig,
@@ -236,7 +238,9 @@ def test_target_jinja(sushi_test_project: Project):
     assert context.render("{{ target.name }}") == "in_memory"
     assert context.render("{{ target.schema }}") == "sushi"
     assert context.render("{{ target.type }}") == "duckdb"
-    assert context.render("{{ target.profile_name }}") == "sushi"
+    # Path and Profile name are not included in serializable fields
+    assert context.render("{{ target.path }}") == "None"
+    assert context.render("{{ target.profile_name }}") == "None"
 
 
 def test_project_name_jinja(sushi_test_project: Project):
@@ -649,4 +653,16 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
         context
     ).table_properties == {
         "partition_expiration_days": exp.convert(7),
+    }
+
+
+def test_snapshot_json_payload():
+    sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
+    snapshot_json = json.loads(_snapshot_to_json(sushi_context.snapshots["sushi.top_waiters"]))
+    assert snapshot_json["node"]["jinja_macros"]["global_objs"]["target"] == {
+        "type": "duckdb",
+        "name": "in_memory",
+        "schema": "sushi",
+        "database": "memory",
+        "target_name": "in_memory",
     }
