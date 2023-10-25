@@ -6,6 +6,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotEvaluator,
     SnapshotId,
+    SnapshotTableCleanupTask,
     SnapshotTableInfo,
 )
 from sqlmesh.core.state_sync import cleanup_expired_views
@@ -50,7 +51,7 @@ class DemoteCommandPayload(PydanticModel):
 
 class CleanupCommandPayload(PydanticModel):
     environments: t.List[Environment]
-    snapshots: t.List[SnapshotTableInfo]
+    tasks: t.List[SnapshotTableCleanupTask]
 
 
 class CreateTablesCommandPayload(PydanticModel):
@@ -120,7 +121,7 @@ def cleanup(
         command_payload = CleanupCommandPayload.parse_raw(command_payload)
 
     cleanup_expired_views(evaluator.adapter, command_payload.environments)
-    evaluator.cleanup(command_payload.snapshots)
+    evaluator.cleanup(command_payload.tasks)
 
 
 def create_tables(

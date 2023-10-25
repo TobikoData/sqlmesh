@@ -25,6 +25,7 @@ from sqlmesh.core.snapshot import (
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
+    SnapshotTableCleanupTask,
     missing_intervals,
 )
 from sqlmesh.core.state_sync import (
@@ -770,6 +771,119 @@ def test_delete_expired_environments(state_sync: EngineAdapterStateSync, make_sn
 
     assert state_sync.get_environment(env_a.name) is None
     assert state_sync.get_environment(env_b.name) == env_b
+
+
+def test_delete_expired_snapshots(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):
+    now_ts = now_timestamp()
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.ttl = "in 10 seconds"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.updated_ts = now_ts - 15000
+
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    new_snapshot.ttl = "in 10 seconds"
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = snapshot.version
+    new_snapshot.updated_ts = now_ts - 11000
+
+    state_sync.push_snapshots([snapshot, new_snapshot])
+    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+
+    assert state_sync.delete_expired_snapshots() == [
+        SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True),
+        SnapshotTableCleanupTask(snapshot=new_snapshot.table_info, dev_table_only=False),
+    ]
+
+    assert not state_sync.get_snapshots(None)
+
+
+def test_delete_expired_snapshots_promoted(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable, mocker: MockerFixture
+):
+    now_ts = now_timestamp()
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.ttl = "in 10 seconds"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.updated_ts = now_ts - 15000
+
+    state_sync.push_snapshots([snapshot])
+
+    env = Environment(
+        name="test_environment",
+        snapshots=[snapshot.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-01",
+        plan_id="test_plan_id",
+        previous_plan_id="test_plan_id",
+    )
+    state_sync.promote(env)
+
+    assert not state_sync.delete_expired_snapshots()
+    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id}
+
+    env.snapshots = []
+    state_sync.promote(env)
+
+    now_mock = mocker.patch("sqlmesh.core.state_sync.common.now")
+    now_mock.return_value = to_datetime(now_timestamp() + 11000)
+
+    assert state_sync.delete_expired_snapshots() == [
+        SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)
+    ]
+    assert not state_sync.get_snapshots(None)
+
+
+def test_delete_expired_snapshots_dev_table_cleanup_only(
+    state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
+):
+    now_ts = now_timestamp()
+
+    snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, ds"),
+        ),
+    )
+    snapshot.ttl = "in 10 seconds"
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.updated_ts = now_ts - 15000
+
+    new_snapshot = make_snapshot(
+        SqlModel(
+            name="a",
+            query=parse_one("select a, b, ds"),
+        ),
+    )
+    new_snapshot.ttl = "in 10 seconds"
+    new_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    new_snapshot.version = snapshot.version
+    new_snapshot.updated_ts = now_ts - 5000
+
+    state_sync.push_snapshots([snapshot, new_snapshot])
+    assert set(state_sync.get_snapshots(None)) == {snapshot.snapshot_id, new_snapshot.snapshot_id}
+
+    assert state_sync.delete_expired_snapshots() == [
+        SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=True)
+    ]
+
+    assert set(state_sync.get_snapshots(None)) == {new_snapshot.snapshot_id}
 
 
 def test_environment_start_as_timestamp(

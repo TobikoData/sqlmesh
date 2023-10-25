@@ -26,7 +26,6 @@ class RedshiftEngineAdapter(
     GetCurrentCatalogFromFunctionMixin,
 ):
     DIALECT = "redshift"
-    DEFAULT_BATCH_SIZE = 1000
     ESCAPE_JSON = True
     COLUMNS_TABLE = "SVV_COLUMNS"  # Includes late-binding views
     CURRENT_CATALOG_FUNCTION = "current_database()"

@@ -15,6 +15,7 @@ from sqlmesh.core.snapshot import (
     SnapshotId,
     SnapshotIdLike,
     SnapshotInfoLike,
+    SnapshotTableCleanupTask,
     SnapshotTableInfo,
 )
 from sqlmesh.core.snapshot.definition import Interval
@@ -218,14 +219,14 @@ class StateSync(StateReader, abc.ABC):
         """
 
     @abc.abstractmethod
-    def delete_expired_snapshots(self) -> t.List[Snapshot]:
+    def delete_expired_snapshots(self) -> t.List[SnapshotTableCleanupTask]:
         """Removes expired snapshots.
 
         Expired snapshots are snapshots that have exceeded their time-to-live
         and are no longer in use within an environment.
 
         Returns:
-            The list of removed snapshots.
+            The list of table cleanup tasks.
         """
 
     @abc.abstractmethod
