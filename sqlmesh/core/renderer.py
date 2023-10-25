@@ -137,7 +137,7 @@ class BaseExpressionRenderer:
                 jinja_env=jinja_env,
                 schema=self.schema,
                 runtime_stage=runtime_stage,
-                expression_meta=self._expression.meta,
+                query_meta=self._expression.meta,
             )
 
             for definition in self._macro_definitions:
