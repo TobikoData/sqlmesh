@@ -267,16 +267,16 @@ class SnapshotInfoMixin(ModelKindMixin):
             version: The snapshot version.
             is_deployable: Indicates whether to return the table name for deployment to production.
         """
-        is_temp = not is_deployable
+        is_dev_table = not is_deployable
 
-        if is_temp:
+        if is_dev_table:
             version = self.temp_version or self.fingerprint.to_version()
 
         return table_name(
             self.physical_schema,
             self.name,
             version,
-            is_temp=is_temp,
+            is_dev_table=is_dev_table,
         )
 
     @property
@@ -1167,12 +1167,12 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             )
 
 
-def table_name(physical_schema: str, name: str, version: str, is_temp: bool = False) -> str:
+def table_name(physical_schema: str, name: str, version: str, is_dev_table: bool = False) -> str:
     table = exp.to_table(name)
 
     # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
     name = "__".join(sanitize_name(part.name) for part in table.parts)
-    temp_suffix = "__temp" if is_temp else ""
+    temp_suffix = "__temp" if is_dev_table else ""
 
     table.set("this", exp.to_identifier(f"{name}__{version}{temp_suffix}"))
     table.set("db", exp.to_identifier(physical_schema))
