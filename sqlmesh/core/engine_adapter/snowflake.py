@@ -46,13 +46,14 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
 
             # See: https://stackoverflow.com/a/75627721
             for column, kind in columns_to_types.items():
-                if kind.is_type("date") and is_datetime64_any_dtype(df.dtypes[column]):  # type: ignore
-                    df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
-                elif is_datetime64_any_dtype(df.dtypes[column]) and getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
-                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f%z")  # type: ignore
-                # https://github.com/snowflakedb/snowflake-connector-python/issues/1677
-                elif is_datetime64_any_dtype(df.dtypes[column]):  # type: ignore
-                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
+                if is_datetime64_any_dtype(df.dtypes[column]):
+                    if kind.is_type("date"):  # type: ignore
+                        df[column] = pd.to_datetime(df[column]).dt.date  # type: ignore
+                    elif getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
+                        df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f%z")  # type: ignore
+                    # https://github.com/snowflakedb/snowflake-connector-python/issues/1677
+                    else:  # type: ignore
+                        df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
             self.create_table(temp_table, columns_to_types, exists=False)
             write_pandas(
                 self._connection_pool.get(),
