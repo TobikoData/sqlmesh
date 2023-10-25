@@ -1030,6 +1030,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been versioned yet.")
 
 
+class SnapshotTableCleanupTask(PydanticModel):
+    snapshot: SnapshotTableInfo
+    dev_table_only: bool
+
+
 SnapshotIdLike = t.Union[SnapshotId, SnapshotTableInfo, Snapshot]
 SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]

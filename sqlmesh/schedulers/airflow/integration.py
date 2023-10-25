@@ -181,7 +181,7 @@ def _janitor_task(
             key=common.SNAPSHOT_CLEANUP_COMMAND_XCOM_KEY,
             value=commands.CleanupCommandPayload(
                 environments=expired_environments,
-                snapshots=[s.table_info for s in expired_snapshots],
+                tasks=expired_snapshots,
             ).json(),
             session=session,
         )

@@ -13,6 +13,7 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotIntervals,
     SnapshotNameVersion,
     SnapshotNameVersionLike,
+    SnapshotTableCleanupTask,
     SnapshotTableInfo,
     earliest_start_date,
     fingerprint_from_node,

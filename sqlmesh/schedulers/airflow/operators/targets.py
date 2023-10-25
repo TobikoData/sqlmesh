@@ -254,7 +254,7 @@ class SnapshotCleanupTarget(BaseTarget[commands.CleanupCommandPayload], Pydantic
         command = commands.CleanupCommandPayload.parse_raw(
             context["ti"].xcom_pull(key=common.SNAPSHOT_CLEANUP_COMMAND_XCOM_KEY)
         )
-        if not command.snapshots and not command.environments:
+        if not command.tasks and not command.environments:
             return None
         return command
 

@@ -27,7 +27,12 @@ from sqlmesh.core.model import (
     load_sql_based_model,
 )
 from sqlmesh.core.node import IntervalUnit
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, SnapshotEvaluator
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotEvaluator,
+    SnapshotTableCleanupTask,
+)
 from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.metaprogramming import Executable
@@ -298,7 +303,7 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
 def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator = SnapshotEvaluator(adapter_mock)
 
-    def create_and_cleanup(name):
+    def create_and_cleanup(name: str, dev_table_only: bool):
         model = SqlModel(
             name=name,
             kind=IncrementalByTimeRangeKind(time_column="a"),
@@ -307,25 +312,38 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
         )
 
         snapshot = make_snapshot(model)
-        snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+        snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+        snapshot.version = "test_version"
 
         evaluator.promote([snapshot], EnvironmentNamingInfo(name="test_env"))
-        evaluator.cleanup([snapshot])
+        evaluator.cleanup(
+            [SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=dev_table_only)]
+        )
         return snapshot
 
-    snapshot = create_and_cleanup("catalog.test_schema.test_model")
+    snapshot = create_and_cleanup("catalog.test_schema.test_model", True)
     adapter_mock.drop_table.assert_called_once_with(
-        f"catalog.sqlmesh__test_schema.catalog__test_schema__test_model__{snapshot.version}"
+        f"catalog.sqlmesh__test_schema.catalog__test_schema__test_model__{snapshot.fingerprint.to_version()}__temp"
     )
     adapter_mock.reset_mock()
-    snapshot = create_and_cleanup("test_schema.test_model")
-    adapter_mock.drop_table.assert_called_once_with(
-        f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"
+
+    snapshot = create_and_cleanup("test_schema.test_model", False)
+    adapter_mock.drop_table.assert_has_calls(
+        [
+            call(f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"),
+            call(
+                f"sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__temp"
+            ),
+        ]
     )
     adapter_mock.reset_mock()
-    snapshot = create_and_cleanup("test_model")
-    adapter_mock.drop_table.assert_called_once_with(
-        f"sqlmesh__default.test_model__{snapshot.version}"
+
+    snapshot = create_and_cleanup("test_model", False)
+    adapter_mock.drop_table.assert_has_calls(
+        [
+            call(f"sqlmesh__default.test_model__{snapshot.version}"),
+            call(f"sqlmesh__default.test_model__{snapshot.fingerprint.to_version()}__temp"),
+        ]
     )
 
 
@@ -1148,7 +1166,9 @@ def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.session.assert_not_called()
 
     # Cleanup
-    evaluator.cleanup([snapshot])
+    evaluator.cleanup(
+        [SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)]
+    )
 
     adapter_mock.assert_not_called()
     adapter_mock.transaction.assert_not_called()
