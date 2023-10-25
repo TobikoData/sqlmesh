@@ -64,7 +64,6 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   return new LanguageSupport(lang.language, [
     lang.language.data.of({
       autocomplete(ctx: CompletionContext) {
-        const word = ctx.matchBefore(/\w*$/)
         const dot = ctx.matchBefore(/[\w.]+\.([^ ]+)$/)
 
         if (isNotNil(dot)) {
@@ -83,15 +82,20 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
           return completeFromList(suggestions)(ctx)
         }
 
+        const word = ctx.matchBefore(/\w*$/)
+
         if (isNil(word) || (word?.from === word?.to && !ctx.explicit)) return
 
-        const keywordKind = ctx.matchBefore(/kind.+/i)
-        const keywordDialect = ctx.matchBefore(/dialect.+/i)
-        const keywordModel = ctx.matchBefore(/model\s*(?=\S)([^ ]+)/i)
-        const keywordFrom = ctx.matchBefore(/from\s*(?=\S)([^ ]+)/i)
-        const keywordJoin = ctx.matchBefore(/join\s*(?=\S)([^ ]+)/i)
-        const keywordSelect = ctx.matchBefore(/select\s*(?=\S)([^ ]+)/i)
-        const keywordColumnName = ctx.matchBefore(/[A-Za-z0-9._]+\.[^ ]+/i)
+        const keywordKind = ctx.matchBefore(matchWordWithSpacesAfter('kind'))
+        const keywordDialect = ctx.matchBefore(
+          matchWordWithSpacesAfter('dialect'),
+        )
+        const keywordModel = ctx.matchBefore(matchWordWithSpacesAfter('model'))
+        const keywordFrom = ctx.matchBefore(matchWordWithSpacesAfter('from'))
+        const keywordJoin = ctx.matchBefore(matchWordWithSpacesAfter('join'))
+        const keywordSelect = ctx.matchBefore(
+          matchWordWithSpacesAfter('select'),
+        )
 
         const text = ctx.state.doc.toJSON().join('\n')
         const matchModels = text.match(/MODEL \(([\s\S]+?)\);/g) ?? []
@@ -107,18 +111,15 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
           )
 
         if (isInMODEL) {
-          let suggestions: Completion[] =
-            SQLMeshModelDictionary.get('keywords') ?? []
+          let suggestions = SQLMeshModelDictionary.get('keywords')
 
           if (isNotNil(keywordKind)) {
-            suggestions = SQLMeshModelDictionary.get('kind') ?? []
+            suggestions = SQLMeshModelDictionary.get('kind')
+          } else if (isNotNil(keywordDialect)) {
+            suggestions = SQLMeshModelDictionary.get('dialect')
           }
 
-          if (isNotNil(keywordDialect)) {
-            suggestions = SQLMeshModelDictionary.get('dialect') ?? []
-          }
-
-          return completeFromList(suggestions)(ctx)
+          return completeFromList(suggestions ?? [])(ctx)
         } else {
           let suggestions: Completion[] = []
 
@@ -130,7 +131,7 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
                 apply: 'MODEL (\n\r);',
               },
             ]
-          } else if (isNotNil(keywordSelect) || isNotNil(keywordColumnName)) {
+          } else if (isNotNil(keywordSelect)) {
             suggestions = columnNames
           } else if (isNotNil(keywordFrom) || isNotNil(keywordJoin)) {
             suggestions = modelNames
@@ -143,6 +144,10 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
       },
     }),
   ])
+}
+
+function matchWordWithSpacesAfter(word: string): RegExp {
+  return new RegExp(`${word}\\s*(?=\\S)([^ ]+)`, 'i')
 }
 
 export function SQLMeshDialectCleanUp(): void {
