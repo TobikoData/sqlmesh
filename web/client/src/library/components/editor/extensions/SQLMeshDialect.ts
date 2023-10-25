@@ -147,17 +147,6 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   ])
 }
 
-function matchWordWithSpacesAfter(
-  ctx: CompletionContext,
-  word: string,
-): Maybe<{
-  from: number
-  to: number
-  text: string
-}> {
-  return ctx.matchBefore(new RegExp(`${word}\\s*(?=\\S)([^ ]+)`, 'i'))
-}
-
 export function SQLMeshDialectCleanUp(): void {
   const handler = cache.get('message')
 
@@ -240,4 +229,15 @@ export function getSQLMeshModelKeywords(
       ],
     ],
   ])
+}
+
+function matchWordWithSpacesAfter(
+  ctx: CompletionContext,
+  word: string,
+): Maybe<{
+  from: number
+  to: number
+  text: string
+}> {
+  return ctx.matchBefore(new RegExp(`${word}\\s*(?=\\S)([^ ]+)`, 'i'))
 }
