@@ -159,7 +159,12 @@ class BaseExpressionRenderer:
                         pass
                     resolved_expressions.append(expression)
 
-            self._cache[cache_key] = resolved_expressions
+            # We dont cache here if columns_to_type was called in a macro.
+            # This allows the model's query to be re-rendered so that the
+            # MacroEvaluator can resolve columns_to_types calls and provide true schemas.
+            if not macro_evaluator.columns_to_types_called:
+                self._cache[cache_key] = resolved_expressions
+            return resolved_expressions
 
         return self._cache[cache_key]
 
