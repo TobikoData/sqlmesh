@@ -6,7 +6,7 @@ import {
 import { keywordCompletionSource, SQLDialect } from '@codemirror/lang-sql'
 import { LanguageSupport } from '@codemirror/language'
 import { type Model } from '~/api/client'
-import { isArrayEmpty, isNil, isNotNil } from '~/utils'
+import { isArrayEmpty, isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
 import { sqlglotWorker } from '~/workers'
 
 const cache = new Map<string, (e: MessageEvent) => void>()
@@ -64,38 +64,39 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   return new LanguageSupport(lang.language, [
     lang.language.data.of({
       autocomplete(ctx: CompletionContext) {
-        const dot = ctx.matchBefore(/[\w.]+\.([^ ]+)$/)
+        const dot = ctx.matchBefore(/[A-Za-z0-9_.]*\.(\w+)?\s*$/i)
 
         if (isNotNil(dot)) {
-          let suggestions = columnNames
-
-          const maybeModelName = dot.text.split('.').slice(0, -1).join('.')
+          let options = columnNames
+          const blocks = dot.text.split('.')
+          const text = blocks.pop()
+          const maybeModelName = blocks.join('.')
           const maybeModel = models.get(maybeModelName)
 
           if (isNotNil(maybeModel)) {
-            suggestions = maybeModel.columns.map(column => ({
+            options = maybeModel.columns.map(column => ({
               label: column.name,
               type: 'column',
             }))
           }
 
-          return completeFromList(suggestions)(ctx)
+          return {
+            from: isStringEmptyOrNil(text) ? dot.to : dot.to - text.length,
+            to: dot.to,
+            options,
+          }
         }
 
         const word = ctx.matchBefore(/\w*$/)
 
         if (isNil(word) || (word?.from === word?.to && !ctx.explicit)) return
 
-        const keywordKind = ctx.matchBefore(matchWordWithSpacesAfter('kind'))
-        const keywordDialect = ctx.matchBefore(
-          matchWordWithSpacesAfter('dialect'),
-        )
-        const keywordModel = ctx.matchBefore(matchWordWithSpacesAfter('model'))
-        const keywordFrom = ctx.matchBefore(matchWordWithSpacesAfter('from'))
-        const keywordJoin = ctx.matchBefore(matchWordWithSpacesAfter('join'))
-        const keywordSelect = ctx.matchBefore(
-          matchWordWithSpacesAfter('select'),
-        )
+        const keywordKind = matchWordWithSpacesAfter(ctx, 'kind')
+        const keywordDialect = matchWordWithSpacesAfter(ctx, 'dialect')
+        const keywordModel = matchWordWithSpacesAfter(ctx, 'model')
+        const keywordFrom = matchWordWithSpacesAfter(ctx, 'from')
+        const keywordJoin = matchWordWithSpacesAfter(ctx, 'join')
+        const keywordSelect = matchWordWithSpacesAfter(ctx, 'select')
 
         const text = ctx.state.doc.toJSON().join('\n')
         const matchModels = text.match(/MODEL \(([\s\S]+?)\);/g) ?? []
@@ -146,8 +147,15 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   ])
 }
 
-function matchWordWithSpacesAfter(word: string): RegExp {
-  return new RegExp(`${word}\\s*(?=\\S)([^ ]+)`, 'i')
+function matchWordWithSpacesAfter(
+  ctx: CompletionContext,
+  word: string,
+): Maybe<{
+  from: number
+  to: number
+  text: string
+}> {
+  return ctx.matchBefore(new RegExp(`${word}\\s*(?=\\S)([^ ]+)`, 'i'))
 }
 
 export function SQLMeshDialectCleanUp(): void {
