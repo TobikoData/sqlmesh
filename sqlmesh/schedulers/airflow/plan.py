@@ -151,7 +151,7 @@ def create_plan_dag_spec(
         environment_naming_info=request.environment.naming_info,
         new_snapshots=request.new_snapshots,
         backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
-        promoted_snapshots=request.environment.snapshots,
+        promoted_snapshots=request.environment.promoted_snapshots,
         demoted_snapshots=_get_demoted_snapshots(request.environment, state_sync),
         start=request.environment.start_at,
         end=request.environment.end_at,

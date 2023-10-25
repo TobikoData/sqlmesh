@@ -148,6 +148,8 @@ class SnapshotDagGenerator:
             **self._snapshots,
         }
 
+        environment = plan_dag_spec_to_environment(plan_dag_spec)
+
         with DAG(
             dag_id=dag_id,
             schedule_interval="@once",
@@ -196,16 +198,24 @@ class SnapshotDagGenerator:
             (
                 promote_start_task,
                 promote_end_task,
-            ) = self._create_promotion_demotion_tasks(plan_dag_spec, all_snapshots)
+            ) = self._create_promotion_demotion_tasks(plan_dag_spec, environment, all_snapshots)
+
+            update_views_task_pair = self._create_update_views_tasks(plan_dag_spec, all_snapshots)
+
+            finalize_task = self._create_finalize_task(environment)
 
             start_task >> create_start_task
             create_end_task >> backfill_before_promote_start_task
             backfill_before_promote_end_task >> promote_start_task
             promote_end_task >> backfill_after_promote_start_task
 
-            self._add_notification_target_tasks(
-                plan_dag_spec, start_task, end_task, backfill_after_promote_end_task
-            )
+            if update_views_task_pair:
+                backfill_after_promote_end_task >> update_views_task_pair[0]
+                update_views_task_pair[1] >> finalize_task
+            else:
+                backfill_after_promote_end_task >> finalize_task
+
+            self._add_notification_target_tasks(plan_dag_spec, start_task, end_task, finalize_task)
             return dag
 
     def _add_notification_target_tasks(
@@ -277,24 +287,13 @@ class SnapshotDagGenerator:
         return (start_task, end_task)
 
     def _create_promotion_demotion_tasks(
-        self, request: common.PlanDagSpec, snapshots: t.Dict[SnapshotId, Snapshot]
+        self,
+        request: common.PlanDagSpec,
+        environment: Environment,
+        snapshots: t.Dict[SnapshotId, Snapshot],
     ) -> t.Tuple[BaseOperator, BaseOperator]:
-        start_task = EmptyOperator(task_id="snapshot_promotion_start")
-        end_task = EmptyOperator(task_id="snapshot_promotion_end")
-
-        environment = Environment(
-            name=request.environment_naming_info.name,
-            snapshots=request.promoted_snapshots,
-            start_at=request.start,
-            end_at=request.end,
-            plan_id=request.plan_id,
-            previous_plan_id=request.previous_plan_id,
-            expiration_ts=request.environment_expiration_ts,
-            suffix_target=request.environment_naming_info.suffix_target,
-        )
-
         update_state_task = PythonOperator(
-            task_id="snapshot_promotion__update_state",
+            task_id="snapshot_promotion_update_state",
             python_callable=promotion_update_state_task,
             op_kwargs={
                 "environment": environment,
@@ -302,25 +301,10 @@ class SnapshotDagGenerator:
             },
         )
 
-        finalize_task = PythonOperator(
-            task_id="snapshot_promotion__finalize",
-            python_callable=promotion_finalize_task,
-            op_kwargs={"environment": environment},
-        )
-
-        start_task >> update_state_task
-        finalize_task >> end_task
+        start_task = update_state_task
+        end_task = update_state_task
 
         if request.promoted_snapshots:
-            create_views_task = self._create_snapshot_promotion_operator(
-                [snapshots[x.snapshot_id] for x in request.promoted_snapshots],
-                request.environment_naming_info,
-                request.ddl_concurrent_tasks,
-                request.deployability_index,
-                "snapshot_promotion__create_views",
-            )
-            create_views_task >> finalize_task
-
             if not request.is_dev and request.unpaused_dt:
                 migrate_tables_task = self._create_snapshot_migrate_tables_operator(
                     [
@@ -329,11 +313,11 @@ class SnapshotDagGenerator:
                         if snapshots[s.snapshot_id].is_paused
                     ],
                     request.ddl_concurrent_tasks,
-                    "snapshot_promotion__migrate_tables",
+                    "snapshot_promotion_migrate_tables",
                 )
 
                 unpause_snapshots_task = PythonOperator(
-                    task_id="snapshot_promotion__unpause_snapshots",
+                    task_id="snapshot_promotion_unpause_snapshots",
                     python_callable=promotion_unpause_snapshots_task,
                     op_kwargs={
                         "environment": environment,
@@ -344,24 +328,48 @@ class SnapshotDagGenerator:
 
                 update_state_task >> migrate_tables_task
                 migrate_tables_task >> unpause_snapshots_task
-                unpause_snapshots_task >> create_views_task
-            else:
-                update_state_task >> create_views_task
+                end_task = unpause_snapshots_task
+
+        return (start_task, end_task)
+
+    def _create_update_views_tasks(
+        self, request: common.PlanDagSpec, snapshots: t.Dict[SnapshotId, Snapshot]
+    ) -> t.Optional[t.Tuple[BaseOperator, BaseOperator]]:
+        create_views_task = None
+        delete_views_task = None
+
+        if request.promoted_snapshots:
+            create_views_task = self._create_snapshot_promotion_operator(
+                [snapshots[x.snapshot_id] for x in request.promoted_snapshots],
+                request.environment_naming_info,
+                request.ddl_concurrent_tasks,
+                request.deployability_index,
+                "snapshot_promotion_create_views",
+            )
 
         if request.demoted_snapshots:
             delete_views_task = self._create_snapshot_demotion_operator(
                 request.demoted_snapshots,
                 request.environment_naming_info,
                 request.ddl_concurrent_tasks,
-                "snapshot_promotion__delete_views",
+                "snapshot_promotion_delete_views",
             )
-            update_state_task >> delete_views_task
-            delete_views_task >> finalize_task
 
-        if not request.promoted_snapshots and not request.demoted_snapshots:
-            update_state_task >> finalize_task
+        if create_views_task and delete_views_task:
+            create_views_task >> delete_views_task
+            return create_views_task, delete_views_task
+        if create_views_task:
+            return create_views_task, create_views_task
+        if delete_views_task:
+            return delete_views_task, delete_views_task
+        return None
 
-        return (start_task, end_task)
+    def _create_finalize_task(self, environment: Environment) -> BaseOperator:
+        return PythonOperator(
+            task_id="snapshot_promotion_finalize",
+            python_callable=promotion_finalize_task,
+            op_kwargs={"environment": environment},
+        )
 
     def _create_backfill_tasks(
         self,
@@ -582,3 +590,16 @@ def promotion_unpause_snapshots_task(
 def promotion_finalize_task(environment: Environment) -> None:
     with util.scoped_state_sync() as state_sync:
         state_sync.finalize(environment)
+
+
+def plan_dag_spec_to_environment(plan_dag_spec: common.PlanDagSpec) -> Environment:
+    return Environment(
+        name=plan_dag_spec.environment_naming_info.name,
+        snapshots=plan_dag_spec.promoted_snapshots,
+        start_at=plan_dag_spec.start,
+        end_at=plan_dag_spec.end,
+        plan_id=plan_dag_spec.plan_id,
+        previous_plan_id=plan_dag_spec.previous_plan_id,
+        expiration_ts=plan_dag_spec.environment_expiration_ts,
+        suffix_target=plan_dag_spec.environment_naming_info.suffix_target,
+    )

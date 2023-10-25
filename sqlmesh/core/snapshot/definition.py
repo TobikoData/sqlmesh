@@ -116,10 +116,6 @@ class SnapshotId(PydanticModel, frozen=True):
         """Helper method to return self."""
         return self
 
-    @property
-    def to_tuple(self) -> t.Tuple[str, str]:
-        return self.name, self.identifier
-
     def __lt__(self, other: SnapshotId) -> bool:
         return self.name < other.name
 
@@ -1021,9 +1017,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
     current evaluation can be reused in (deployed to) the production environment.
     """
 
-    deployable_ids: t.Optional[t.FrozenSet[t.Tuple[str, str]]] = None
-    non_deployable_ids: t.Optional[t.FrozenSet[t.Tuple[str, str]]] = None
-    deployed_shared_version_ids: t.Optional[t.FrozenSet[t.Tuple[str, str]]] = None
+    deployable_ids: t.Optional[t.FrozenSet[str]] = None
+    non_deployable_ids: t.Optional[t.FrozenSet[str]] = None
+    deployed_shared_version_ids: t.Optional[t.FrozenSet[str]] = None
 
     @field_validator(
         "deployable_ids", "non_deployable_ids", "deployed_shared_version_ids", mode="before"
@@ -1032,10 +1028,12 @@ class DeployabilityIndex(PydanticModel, frozen=True):
     def _snapshot_ids_set_validator(cls, v: t.Any) -> t.Optional[t.FrozenSet[t.Tuple[str, str]]]:
         if v is None:
             return v
-        # Transforming into tuples because the serialization of sets of objects is broken in Pydantic.
+        # Transforming into strings because the serialization of sets of objects / lists is broken in Pydantic.
         return frozenset(
             {
-                snapshot_id.to_tuple if isinstance(snapshot_id, SnapshotId) else snapshot_id
+                cls._snapshot_id_key(snapshot_id)
+                if isinstance(snapshot_id, SnapshotId)
+                else snapshot_id
                 for snapshot_id in v
             }
         )
@@ -1050,7 +1048,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         Returns:
             True if the snapshot is deployable, False otherwise.
         """
-        snapshot_id = snapshot.snapshot_id.to_tuple
+        snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
         if self.deployable_ids is not None and snapshot_id not in self.deployable_ids:
             return False
         if self.non_deployable_ids is not None and snapshot_id in self.non_deployable_ids:
@@ -1071,7 +1069,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         Returns:
             True if the snapshot is deployable or is already deployed, False otherwise.
         """
-        snapshot_id = snapshot.snapshot_id.to_tuple
+        snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
         deployed = (
             self.deployed_shared_version_ids is not None
             and snapshot_id in self.deployed_shared_version_ids
@@ -1080,7 +1078,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
 
     def with_non_deployable(self, snapshot: SnapshotIdLike) -> DeployabilityIndex:
         """Creates a new index with the given snapshot marked as non-deployable."""
-        snapshot_id = snapshot.snapshot_id.to_tuple
+        snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
         deployable_ids = self.deployable_ids
         non_deployable_ids = self.non_deployable_ids
         if deployable_ids is not None:
@@ -1165,6 +1163,10 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                 non_deployable_ids=non_deployable_ids,
                 deployed_shared_version_ids=deployed_shared_version_ids,
             )
+
+    @staticmethod
+    def _snapshot_id_key(snapshot_id: SnapshotId) -> str:
+        return f"{snapshot_id.name}__{snapshot_id.identifier}"
 
 
 def table_name(physical_schema: str, name: str, version: str, is_dev_table: bool = False) -> str:
