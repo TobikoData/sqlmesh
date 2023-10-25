@@ -111,6 +111,7 @@ class MacroEvaluator:
         jinja_env: t.Optional[Environment] = None,
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
+        query_meta: t.Dict[str, t.Any] = {},
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -120,6 +121,7 @@ class MacroEvaluator:
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
         self._schema = MappingSchema(schema, dialect=dialect, normalize=False) if schema else {}
+        self._query_meta = query_meta
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -276,6 +278,11 @@ class MacroEvaluator:
 
     def columns_to_types(self, model_name: str) -> t.Dict[str, exp.DataType]:
         """Returns the columns-to-types mapping corresponding to the specified model."""
+
+        # This enables us to propagate the information that this method was called to the model so
+        # it can empty the renderer's caches appropriately and get rid of the mocked star column
+        self._query_meta["must_empty_cache"] = True
+
         if not isinstance(self._schema, MappingSchema):
             return {SQLMESH_MOCKED_STAR: exp.DataType.build("unknown")}
 
