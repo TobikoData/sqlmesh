@@ -65,8 +65,8 @@ class HighWaterMarkSensor(BaseSensorOperator):
         self, dag_run: DagRun, target_snapshot: Snapshot
     ) -> datetime:
         target_date = to_datetime(dag_run.data_interval_end)
-        target_prev = to_datetime(target_snapshot.node.cron_floor(target_date))
-        this_prev = to_datetime(self.this_snapshot.node.cron_floor(target_date))
+        target_prev = to_datetime(target_snapshot.node.interval_unit.cron_floor(target_date))
+        this_prev = to_datetime(self.this_snapshot.node.interval_unit.cron_floor(target_date))
         return min(target_prev, this_prev)
 
 

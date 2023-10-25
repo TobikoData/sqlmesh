@@ -1,6 +1,5 @@
 import abc
 import typing as t
-from datetime import datetime
 
 from airflow.exceptions import AirflowSkipException
 from airflow.utils.context import Context
@@ -154,14 +153,16 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
         if self.start:
             return self.start
 
-        start = t.cast(datetime, context["dag_run"].data_interval_start)
+        start = self.snapshot.node.interval_unit.cron_floor(context["dag_run"].data_interval_start)
         if not self.snapshot.is_model:
             return start
 
         return self.snapshot.model.lookback_start(start)
 
     def _get_end(self, context: Context) -> TimeLike:
-        return self.end or context["dag_run"].data_interval_end
+        return self.end or self.snapshot.node.interval_unit.cron_floor(
+            context["dag_run"].data_interval_end
+        )
 
     def _get_execution_time(self, context: Context) -> TimeLike:
         return self.execution_time or context["dag_run"].logical_date

@@ -1,5 +1,8 @@
+import json
+import logging
 import typing as t
 from pathlib import Path
+from unittest.mock import patch
 
 import agate
 import pytest
@@ -19,6 +22,7 @@ from sqlmesh.core.model import (
     SqlModel,
     ViewKind,
 )
+from sqlmesh.core.state_sync.engine_adapter import _snapshot_to_json
 from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.column import (
     ColumnConfig,
@@ -212,22 +216,26 @@ def test_seed_columns():
 
 
 @pytest.mark.parametrize("model", ["sushi.waiters", "sushi.waiter_names"])
-def test_hooks(capsys, sushi_test_dbt_context: Context, model: str):
+def test_hooks(sushi_test_dbt_context: Context, model: str):
     engine_adapter = sushi_test_dbt_context.engine_adapter
     waiters = sushi_test_dbt_context.models[model]
-    capsys.readouterr()
 
-    engine_adapter.execute(
-        waiters.render_pre_statements(engine_adapter=engine_adapter, execution_time="2023-01-01")
-    )
-    assert "pre-hook" in capsys.readouterr().out
-
-    engine_adapter.execute(
-        waiters.render_post_statements(
-            engine_adapter=sushi_test_dbt_context.engine_adapter, execution_time="2023-01-01"
+    logger = logging.getLogger("sqlmesh.dbt.builtin")
+    with patch.object(logger, "debug") as mock_logger:
+        engine_adapter.execute(
+            waiters.render_pre_statements(
+                engine_adapter=engine_adapter, execution_time="2023-01-01"
+            )
         )
-    )
-    assert "post-hook" in capsys.readouterr().out
+    assert "pre-hook" in mock_logger.call_args[0][0]
+
+    with patch.object(logger, "debug") as mock_logger:
+        engine_adapter.execute(
+            waiters.render_post_statements(
+                engine_adapter=sushi_test_dbt_context.engine_adapter, execution_time="2023-01-01"
+            )
+        )
+    assert "post-hook" in mock_logger.call_args[0][0]
 
 
 def test_target_jinja(sushi_test_project: Project):
@@ -236,7 +244,9 @@ def test_target_jinja(sushi_test_project: Project):
     assert context.render("{{ target.name }}") == "in_memory"
     assert context.render("{{ target.schema }}") == "sushi"
     assert context.render("{{ target.type }}") == "duckdb"
-    assert context.render("{{ target.profile_name }}") == "sushi"
+    # Path and Profile name are not included in serializable fields
+    assert context.render("{{ target.path }}") == "None"
+    assert context.render("{{ target.profile_name }}") == "None"
 
 
 def test_project_name_jinja(sushi_test_project: Project):
@@ -307,24 +317,29 @@ def test_run_query(sushi_test_project: Project, runtime_renderer: t.Callable):
     )
 
 
-def test_logging(capsys, sushi_test_project: Project, runtime_renderer: t.Callable):
+def test_logging(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
     renderer = runtime_renderer(context, engine_adapter=engine_adapter)
 
-    assert renderer('{{ log("foo") }}') == ""
-    assert "foo" in capsys.readouterr().out
+    logger = logging.getLogger("sqlmesh.dbt.builtin")
+    with patch.object(logger, "debug") as mock_logger:
+        assert renderer('{{ log("foo") }}') == ""
+    assert "foo" in mock_logger.call_args[0][0]
 
-    assert renderer('{{ print("bar") }}') == ""
-    assert "bar" in capsys.readouterr().out
+    with patch.object(logger, "debug") as mock_logger:
+        assert renderer('{{ print("bar") }}') == ""
+    assert "bar" in mock_logger.call_args[0][0]
 
 
-def test_exceptions(capsys, sushi_test_project: Project):
+def test_exceptions(sushi_test_project: Project):
     context = sushi_test_project.context
 
-    assert context.render('{{ exceptions.warn("Warning") }}') == ""
-    assert "Warning" in capsys.readouterr().out
+    logger = logging.getLogger("sqlmesh.dbt.builtin")
+    with patch.object(logger, "warning") as mock_logger:
+        assert context.render('{{ exceptions.warn("Warning") }}') == ""
+    assert "Warning" in mock_logger.call_args[0][0]
 
     with pytest.raises(CompilationError, match="Error"):
         context.render('{{ exceptions.raise_compiler_error("Error") }}')
@@ -649,4 +664,16 @@ def test_bigquery_table_properties(sushi_test_project: Project, mocker: MockerFi
         context
     ).table_properties == {
         "partition_expiration_days": exp.convert(7),
+    }
+
+
+def test_snapshot_json_payload():
+    sushi_context = Context(paths=["tests/fixtures/dbt/sushi_test"])
+    snapshot_json = json.loads(_snapshot_to_json(sushi_context.snapshots["sushi.top_waiters"]))
+    assert snapshot_json["node"]["jinja_macros"]["global_objs"]["target"] == {
+        "type": "duckdb",
+        "name": "in_memory",
+        "schema": "sushi",
+        "database": "memory",
+        "target_name": "in_memory",
     }

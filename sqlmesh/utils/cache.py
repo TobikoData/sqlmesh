@@ -99,11 +99,23 @@ class FileCache(t.Generic[T]):
             pickle.dump(value.dict(), fd)
 
     def _cache_entry_path(self, name: str, entry_id: str) -> Path:
+        from sqlmesh.core.state_sync.base import SCHEMA_VERSION
+
         try:
             from sqlmesh._version import __version_tuple__
 
             major, minor = __version_tuple__[0], __version_tuple__[1]
         except ImportError:
             major, minor = 0, 0
-        entry_file_name = f"{name}__{major}__{minor}__{SQLGLOT_MAJOR_VERSION}__{SQLGLOT_MINOR_VERSION}__{entry_id}"
+        entry_file_name = "__".join(
+            [
+                name,
+                str(major),
+                str(minor),
+                SQLGLOT_MAJOR_VERSION,
+                SQLGLOT_MINOR_VERSION,
+                str(SCHEMA_VERSION),
+                entry_id,
+            ]
+        )
         return self._path / entry_file_name

@@ -16,7 +16,7 @@ from ruamel.yaml import YAMLError
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.dbt.adapter import BaseAdapter, ParsetimeAdapter, RuntimeAdapter
-from sqlmesh.dbt.target import TargetConfig
+from sqlmesh.dbt.target import TARGET_TYPE_TO_CONFIG_CLASS
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, yaml
 from sqlmesh.utils.errors import ConfigError, MacroEvalError
@@ -37,17 +37,17 @@ class Exceptions:
             raise CompilationException(msg)
 
     def warn(self, msg: str) -> str:
-        print(msg)
+        logger.warning(msg)
         return ""
 
 
 class Api:
     def __init__(self, target: t.Optional[AttributeDict] = None) -> None:
         if target:
-            config = TargetConfig.load(target)
-            self.Relation = config.relation_class
-            self.Column = config.column_class
-            self.quote_policy = config.quote_policy
+            config_class = TARGET_TYPE_TO_CONFIG_CLASS[target["type"]]
+            self.Relation = config_class.relation_class
+            self.Column = config_class.column_class
+            self.quote_policy = config_class.quote_policy
         else:
             self.Relation = BaseRelation
             self.Column = Column
@@ -146,11 +146,7 @@ def env_var(name: str, default: t.Optional[str] = None) -> t.Optional[str]:
 
 
 def log(msg: str, info: bool = False) -> str:
-    print(msg)
-    return ""
-
-
-def no_log(msg: str, info: bool = False) -> str:
+    logger.debug(msg)
     return ""
 
 
@@ -260,9 +256,9 @@ BUILTIN_GLOBALS = {
     "flags": Flags(),
     "fromjson": from_json,
     "fromyaml": from_yaml,
-    "log": no_log,
+    "log": log,
     "modules": Modules(),
-    "print": no_log,
+    "print": log,
     "return": return_val,
     "set": to_set,
     "set_strict": set,
@@ -337,14 +333,12 @@ def create_builtin_globals(
             table_mapping=jinja_globals.get("table_mapping", {}),
             is_dev=jinja_globals.get("is_dev", False),
         )
-        builtin_globals.update({"log": log, "print": log})
     else:
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
             dialect=dialect,
         )
-        builtin_globals.update({"log": no_log, "print": no_log})
 
     sql_execution = SQLExecution(adapter)
     builtin_globals.update(
