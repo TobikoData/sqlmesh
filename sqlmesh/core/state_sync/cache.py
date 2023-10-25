@@ -4,7 +4,13 @@ import sys
 import typing as t
 
 from sqlmesh.core.model import SeedModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotIdLike,
+    SnapshotInfoLike,
+    SnapshotTableCleanupTask,
+)
 from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync.base import DelegatingStateSync, StateSync
 from sqlmesh.utils.date import TimeLike, now_timestamp
@@ -119,7 +125,7 @@ class CachingStateSync(DelegatingStateSync):
             self.snapshot_cache.pop(s.snapshot_id, None)
         self.state_sync.delete_snapshots(snapshot_ids)
 
-    def delete_expired_snapshots(self) -> t.List[Snapshot]:
+    def delete_expired_snapshots(self) -> t.List[SnapshotTableCleanupTask]:
         self.snapshot_cache.clear()
         return self.state_sync.delete_expired_snapshots()
 

@@ -5,7 +5,13 @@ import typing as t
 
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.snapshot import Snapshot, SnapshotId, SnapshotIdLike, SnapshotInfoLike
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotId,
+    SnapshotIdLike,
+    SnapshotInfoLike,
+    SnapshotTableCleanupTask,
+)
 from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync import StateSync, Versions
 from sqlmesh.core.state_sync.base import PromotionResult
@@ -148,14 +154,14 @@ class HttpStateSync(StateSync):
         """
         raise NotImplementedError("Deleting snapshots is not supported by the Airflow state sync.")
 
-    def delete_expired_snapshots(self) -> t.List[Snapshot]:
+    def delete_expired_snapshots(self) -> t.List[SnapshotTableCleanupTask]:
         """Removes expired snapshots.
 
         Expired snapshots are snapshots that have exceeded their time-to-live
         and are no longer in use within an environment.
 
         Returns:
-            The list of removed snapshots.
+            The list of table cleanup tasks.
         """
         raise NotImplementedError(
             "Deleting expired snapshots is not supported by the Airflow state sync."

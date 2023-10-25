@@ -14,6 +14,7 @@ if t.TYPE_CHECKING:
 
 
 class BasePostgresEngineAdapter(EngineAdapter):
+    DEFAULT_BATCH_SIZE = 1000
     COLUMNS_TABLE = "information_schema.columns"
 
     def columns(

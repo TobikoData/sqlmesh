@@ -9,7 +9,7 @@ from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, Seed, SeedKind, SeedModel, SqlModel
-from sqlmesh.core.snapshot import SnapshotChangeCategory
+from sqlmesh.core.snapshot import SnapshotChangeCategory, SnapshotTableCleanupTask
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.utils.date import to_datetime
@@ -126,8 +126,11 @@ def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable
         name="test_env", snapshots=[snapshot.table_info], start_at="", plan_id="test_plan_id"
     )
 
+    cleanup_task = SnapshotTableCleanupTask(snapshot=snapshot.table_info, dev_table_only=False)
+
     command = commands.CleanupCommandPayload(
-        environments=[environment], snapshots=[snapshot.table_info]
+        environments=[environment],
+        tasks=[cleanup_task],
     )
 
     task_instance_mock = mocker.Mock()
@@ -149,7 +152,7 @@ def test_cleanup_target_execute(mocker: MockerFixture, make_snapshot: t.Callable
     evaluator_adapter_mock.cursor().execute.assert_has_calls(
         [call("DROP SCHEMA IF EXISTS `default__test_env` CASCADE")]
     )
-    evaluator_cleanup_mock.assert_called_once_with([snapshot.table_info])
+    evaluator_cleanup_mock.assert_called_once_with([cleanup_task])
 
     task_instance_mock.xcom_pull.assert_called_once_with(key="snapshot_cleanup_command")
 
@@ -165,7 +168,7 @@ def test_cleanup_target_skip_execution(
 
     task_instance_mock = mocker.Mock()
     task_instance_mock.xcom_pull.return_value = commands.CleanupCommandPayload(
-        snapshots=[], environments=[]
+        tasks=[], environments=[]
     ).json()
 
     context = Context(ti=task_instance_mock)  # type: ignore

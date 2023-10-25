@@ -43,6 +43,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotId,
     SnapshotInfoLike,
+    SnapshotTableCleanupTask,
 )
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike, now
@@ -299,16 +300,19 @@ class SnapshotEvaluator:
                 self.ddl_concurrent_tasks,
             )
 
-    def cleanup(self, target_snapshots: t.Iterable[SnapshotInfoLike]) -> None:
+    def cleanup(self, target_snapshots: t.Iterable[SnapshotTableCleanupTask]) -> None:
         """Cleans up the given snapshots by removing its table
 
         Args:
             target_snapshots: Snapshots to cleanup.
         """
+        snapshots_to_dev_table_only = {
+            t.snapshot.snapshot_id: t.dev_table_only for t in target_snapshots
+        }
         with self.concurrent_context():
             concurrent_apply_to_snapshots(
-                target_snapshots,
-                self._cleanup_snapshot,
+                [t.snapshot for t in target_snapshots],
+                lambda s: self._cleanup_snapshot(s, snapshots_to_dev_table_only[s.snapshot_id]),
                 self.ddl_concurrent_tasks,
                 reverse_order=True,
             )
@@ -497,15 +501,21 @@ class SnapshotEvaluator:
         if on_complete is not None:
             on_complete(snapshot)
 
-    def _cleanup_snapshot(self, snapshot: SnapshotInfoLike) -> None:
+    def _cleanup_snapshot(self, snapshot: SnapshotInfoLike, dev_table_only: bool) -> None:
         snapshot = snapshot.table_info
 
         table_name = snapshot.table_name()
         dev_table_name = snapshot.table_name(is_dev=True)
 
-        table_names = [table_name]
-        if table_name != dev_table_name:
-            table_names.append(dev_table_name)
+        if dev_table_only:
+            if table_name == dev_table_name:
+                # Nothing to delete.
+                return
+            table_names = [dev_table_name]
+        else:
+            table_names = [table_name]
+            if table_name != dev_table_name:
+                table_names.append(dev_table_name)
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
