@@ -71,6 +71,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         schema: The schema to store state metadata in. If None or empty string then no schema is defined
     """
 
+    SNAPSHOT_BATCH_SIZE = 1000
+
     def __init__(
         self,
         engine_adapter: EngineAdapter,
@@ -249,17 +251,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return environments
 
     def delete_snapshots(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> None:
-        self.engine_adapter.delete_from(
-            self.snapshots_table, where=self._snapshot_id_filter(snapshot_ids)
-        )
+        for where in self._snapshot_id_filter(snapshot_ids):
+            self.engine_adapter.delete_from(self.snapshots_table, where=where)
 
     def snapshots_exist(self, snapshot_ids: t.Iterable[SnapshotIdLike]) -> t.Set[SnapshotId]:
         return {
             SnapshotId(name=name, identifier=identifier)
+            for where in self._snapshot_id_filter(snapshot_ids)
             for name, identifier in self.engine_adapter.fetchall(
-                exp.select("name", "identifier")
-                .from_(self.snapshots_table)
-                .where(self._snapshot_id_filter(snapshot_ids)),
+                exp.select("name", "identifier").from_(self.snapshots_table).where(where),
                 quote_identifiers=True,
             )
         }
@@ -305,12 +305,13 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def _update_snapshot(self, snapshot: Snapshot) -> None:
         snapshot.updated_ts = now_timestamp()
-        self.engine_adapter.update_table(
-            self.snapshots_table,
-            {"snapshot": _snapshot_to_json(snapshot)},
-            where=self._snapshot_id_filter([snapshot.snapshot_id]),
-            contains_json=True,
-        )
+        for where in self._snapshot_id_filter([snapshot.snapshot_id]):
+            self.engine_adapter.update_table(
+                self.snapshots_table,
+                {"snapshot": _snapshot_to_json(snapshot)},
+                where=where,
+                contains_json=True,
+            )
 
     def get_environments(self) -> t.List[Environment]:
         """Fetches all environments.
@@ -360,48 +361,47 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         Returns:
             A dictionary of snapshot ids to snapshots for ones that could be found.
         """
-        query = (
-            exp.select(exp.column("snapshot", table="snapshots"))
-            .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
-            .where(
-                None
-                if snapshot_ids is None
-                else self._snapshot_id_filter(snapshot_ids, "snapshots")
-            )
-        )
-        if hydrate_seeds:
-            query = query.select(exp.column("content", table="seeds")).join(
-                exp.to_table(self.seeds_table).as_("seeds"),
-                on=exp.and_(
-                    exp.column("name", table="snapshots").eq(exp.column("name", table="seeds")),
-                    exp.column("identifier", table="snapshots").eq(
-                        exp.column("identifier", table="seeds")
-                    ),
-                ),
-                join_type="left",
-            )
-        elif lock_for_update:
-            query = query.lock(copy=False)
-
         snapshots: t.Dict[SnapshotId, Snapshot] = {}
         duplicates: t.Dict[SnapshotId, Snapshot] = {}
 
-        for row in self.engine_adapter.fetchall(
-            query, ignore_unsupported_errors=True, quote_identifiers=True
+        for where in (
+            [None] if snapshot_ids is None else self._snapshot_id_filter(snapshot_ids, "snapshots")
         ):
-            snapshot = Snapshot.parse_raw(row[0])
-            snapshot_id = snapshot.snapshot_id
-            if snapshot_id in snapshots:
-                other = duplicates.get(snapshot_id, snapshots[snapshot_id])
-                duplicates[snapshot_id] = (
-                    snapshot if snapshot.updated_ts > other.updated_ts else other
+            query = (
+                exp.select(exp.column("snapshot", table="snapshots"))
+                .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
+                .where(where)
+            )
+            if hydrate_seeds:
+                query = query.select(exp.column("content", table="seeds")).join(
+                    exp.to_table(self.seeds_table).as_("seeds"),
+                    on=exp.and_(
+                        exp.column("name", table="snapshots").eq(exp.column("name", table="seeds")),
+                        exp.column("identifier", table="snapshots").eq(
+                            exp.column("identifier", table="seeds")
+                        ),
+                    ),
+                    join_type="left",
                 )
-                snapshots[snapshot_id] = duplicates[snapshot_id]
-            else:
-                snapshots[snapshot_id] = snapshot
+            elif lock_for_update:
+                query = query.lock(copy=False)
 
-            if hydrate_seeds and isinstance(snapshot.node, SeedModel) and row[1]:
-                snapshot.node = t.cast(SeedModel, snapshot.node).to_hydrated(row[1])
+            for row in self.engine_adapter.fetchall(
+                query, ignore_unsupported_errors=True, quote_identifiers=True
+            ):
+                snapshot = Snapshot.parse_raw(row[0])
+                snapshot_id = snapshot.snapshot_id
+                if snapshot_id in snapshots:
+                    other = duplicates.get(snapshot_id, snapshots[snapshot_id])
+                    duplicates[snapshot_id] = (
+                        snapshot if snapshot.updated_ts > other.updated_ts else other
+                    )
+                    snapshots[snapshot_id] = duplicates[snapshot_id]
+                else:
+                    snapshots[snapshot_id] = snapshot
+
+                if hydrate_seeds and isinstance(snapshot.node, SeedModel) and row[1]:
+                    snapshot.node = t.cast(SeedModel, snapshot.node).to_hydrated(row[1])
 
         if snapshots and hydrate_intervals:
             _, intervals = self._get_snapshot_intervals(snapshots.values())
@@ -432,17 +432,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not snapshots:
             return []
 
-        query = (
-            exp.select("snapshot")
-            .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
-            .where(self._snapshot_name_version_filter(snapshots))
-        )
-        if lock_for_update:
-            query = query.lock(copy=False)
+        snapshot_rows = []
 
-        snapshot_rows = self.engine_adapter.fetchall(
-            query, ignore_unsupported_errors=True, quote_identifiers=True
-        )
+        for where in self._snapshot_name_version_filter(snapshots):
+            query = (
+                exp.select("snapshot")
+                .from_(exp.to_table(self.snapshots_table).as_("snapshots"))
+                .where(where)
+            )
+            if lock_for_update:
+                query = query.lock(copy=False)
+
+            snapshot_rows.extend(
+                self.engine_adapter.fetchall(
+                    query, ignore_unsupported_errors=True, quote_identifiers=True
+                )
+            )
+
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
@@ -578,15 +584,23 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         if not env:
             return None
 
-        snapshot_filter = self._snapshot_name_version_filter(env.snapshots, "intervals")
-        query = (
-            exp.select(exp.func("MAX", exp.to_column("end_ts")))
-            .from_(exp.to_table(self.intervals_table).as_("intervals"))
-            .where(snapshot_filter, copy=False)
-            .where(exp.to_column("is_dev").not_(), copy=False)
-        )
+        max_end = None
 
-        return self.engine_adapter.fetchone(query, quote_identifiers=True)[0]
+        for where in self._snapshot_name_version_filter(env.snapshots, "intervals"):
+            end = self.engine_adapter.fetchone(
+                exp.select(exp.func("MAX", exp.to_column("end_ts")))
+                .from_(exp.to_table(self.intervals_table).as_("intervals"))
+                .where(where, copy=False)
+                .where(exp.to_column("is_dev").not_(), copy=False),
+                quote_identifiers=True,
+            )[0]
+
+            if max_end is None:
+                max_end = end
+            elif end is not None:
+                max_end = max(max_end, end)
+
+        return max_end
 
     def recycle(self) -> None:
         self.engine_adapter.recycle()
@@ -637,40 +651,43 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 copy=False,
             )
 
-        if snapshots:
-            query.where(self._snapshot_name_version_filter(snapshots, "intervals"), copy=False)
-        elif snapshots is not None:
+        if not snapshots and snapshots is not None:
             return (set(), [])
 
-        rows = self.engine_adapter.fetchall(query, quote_identifiers=True)
-        interval_ids = {row[0] for row in rows}
-
-        intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
-        dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
-        for row in rows:
-            _, name, identifier, version, start, end, is_dev, is_removed = row
-            intervals_key = (name, identifier, version)
-            target_intervals = intervals if not is_dev else dev_intervals
-            if is_removed:
-                target_intervals[intervals_key] = remove_interval(
-                    target_intervals[intervals_key], start, end
-                )
-            else:
-                target_intervals[intervals_key] = merge_intervals(
-                    [*target_intervals[intervals_key], (start, end)]
-                )
-
+        interval_ids: t.Set[str] = set()
         snapshot_intervals = []
-        for name, identifier, version in {**intervals, **dev_intervals}:
-            snapshot_intervals.append(
-                SnapshotIntervals(
-                    name=name,
-                    identifier=identifier,
-                    version=version,
-                    intervals=intervals.get((name, identifier, version), []),
-                    dev_intervals=dev_intervals.get((name, identifier, version), []),
+
+        for where in (
+            self._snapshot_name_version_filter(snapshots, "intervals") if snapshots else [None]
+        ):
+            rows = self.engine_adapter.fetchall(query.where(where), quote_identifiers=True)
+            interval_ids.update(row[0] for row in rows)
+
+            intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+            dev_intervals: t.Dict[t.Tuple[str, str, str], Intervals] = defaultdict(list)
+            for row in rows:
+                _, name, identifier, version, start, end, is_dev, is_removed = row
+                intervals_key = (name, identifier, version)
+                target_intervals = intervals if not is_dev else dev_intervals
+                if is_removed:
+                    target_intervals[intervals_key] = remove_interval(
+                        target_intervals[intervals_key], start, end
+                    )
+                else:
+                    target_intervals[intervals_key] = merge_intervals(
+                        [*target_intervals[intervals_key], (start, end)]
+                    )
+
+            for name, identifier, version in {**intervals, **dev_intervals}:
+                snapshot_intervals.append(
+                    SnapshotIntervals(
+                        name=name,
+                        identifier=identifier,
+                        version=version,
+                        intervals=intervals.get((name, identifier, version), []),
+                        dev_intervals=dev_intervals.get((name, identifier, version), []),
+                    )
                 )
-            )
 
         return interval_ids, snapshot_intervals
 
@@ -909,61 +926,75 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def _snapshot_id_filter(
         self, snapshot_ids: t.Iterable[SnapshotIdLike], alias: t.Optional[str] = None
-    ) -> t.Union[exp.In, exp.Boolean, exp.Condition]:
-        name_identifiers = {
-            (snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids
-        }
+    ) -> t.Iterator[exp.Condition]:
+        name_identifiers = sorted(
+            {(snapshot_id.name, snapshot_id.identifier) for snapshot_id in snapshot_ids}
+        )
+
+        batches = [
+            name_identifiers[i : i + self.SNAPSHOT_BATCH_SIZE]
+            for i in range(0, len(name_identifiers), self.SNAPSHOT_BATCH_SIZE)
+        ]
 
         if not name_identifiers:
-            return exp.false()
+            yield exp.false()
         elif self.engine_adapter.SUPPORTS_TUPLE_IN:
-            return t.cast(
-                exp.Tuple,
-                exp.convert(
-                    (
-                        exp.column("name", table=alias),
-                        exp.column("identifier", table=alias),
-                    )
-                ),
-            ).isin(*name_identifiers)
+            for identifiers in batches:
+                yield t.cast(
+                    exp.Tuple,
+                    exp.convert(
+                        (
+                            exp.column("name", table=alias),
+                            exp.column("identifier", table=alias),
+                        )
+                    ),
+                ).isin(*identifiers)
         else:
-            return exp.or_(
-                *[
-                    exp.and_(
-                        exp.column("name", table=alias).eq(name),
-                        exp.column("identifier", table=alias).eq(identifier),
-                    )
-                    for name, identifier in name_identifiers
-                ]
-            )
+            for identifiers in batches:
+                yield exp.or_(
+                    *[
+                        exp.and_(
+                            exp.column("name", table=alias).eq(name),
+                            exp.column("identifier", table=alias).eq(identifier),
+                        )
+                        for name, identifier in identifiers
+                    ]
+                )
 
     def _snapshot_name_version_filter(
         self, snapshot_name_versions: t.Iterable[SnapshotNameVersionLike], alias: str = "snapshots"
-    ) -> t.Union[exp.In, exp.Boolean, exp.Condition]:
-        name_versions = {(s.name, s.version) for s in snapshot_name_versions}
+    ) -> t.Iterator[exp.Condition]:
+        name_versions = sorted({(s.name, s.version) for s in snapshot_name_versions})
+
+        batches = [
+            name_versions[i : i + self.SNAPSHOT_BATCH_SIZE]
+            for i in range(0, len(name_versions), self.SNAPSHOT_BATCH_SIZE)
+        ]
 
         if not name_versions:
             return exp.false()
         elif self.engine_adapter.SUPPORTS_TUPLE_IN:
-            return t.cast(
-                exp.Tuple,
-                exp.convert(
-                    (
-                        exp.column("name", table=alias),
-                        exp.column("version", table=alias),
-                    )
-                ),
-            ).isin(*name_versions)
+            for versions in batches:
+                yield t.cast(
+                    exp.Tuple,
+                    exp.convert(
+                        (
+                            exp.column("name", table=alias),
+                            exp.column("version", table=alias),
+                        )
+                    ),
+                ).isin(*versions)
         else:
-            return exp.or_(
-                *[
-                    exp.and_(
-                        exp.column("name", table=alias).eq(name),
-                        exp.column("version", table=alias).eq(version),
-                    )
-                    for name, version in name_versions
-                ]
-            )
+            for versions in batches:
+                yield exp.or_(
+                    *[
+                        exp.and_(
+                            exp.column("name", table=alias).eq(name),
+                            exp.column("version", table=alias).eq(version),
+                        )
+                        for name, version in versions
+                    ]
+                )
 
     @contextlib.contextmanager
     def _transaction(self) -> t.Iterator[None]:

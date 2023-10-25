@@ -21,7 +21,12 @@ from sqlmesh.core.model import (
     SeedModel,
     SqlModel,
 )
-from sqlmesh.core.snapshot import Snapshot, SnapshotChangeCategory, missing_intervals
+from sqlmesh.core.snapshot import (
+    Snapshot,
+    SnapshotChangeCategory,
+    SnapshotId,
+    missing_intervals,
+)
 from sqlmesh.core.state_sync import (
     CachingStateSync,
     EngineAdapterStateSync,
@@ -338,6 +343,8 @@ def test_refresh_snapshot_intervals(
 def test_get_snapshot_intervals(
     state_sync: EngineAdapterStateSync, make_snapshot: t.Callable
 ) -> None:
+    state_sync.SNAPSHOT_BATCH_SIZE = 1
+
     snapshot_a = make_snapshot(
         SqlModel(
             name="a",
@@ -360,9 +367,21 @@ def test_get_snapshot_intervals(
     )
     state_sync.push_snapshots([snapshot_b])
 
-    assert get_snapshot_intervals(state_sync, snapshot_b).intervals == [
-        (to_timestamp("2020-01-01"), to_timestamp("2020-01-02")),
-    ]
+    snapshot_c = make_snapshot(
+        SqlModel(
+            name="c",
+            cron="@daily",
+            query=parse_one("select 3, ds"),
+        ),
+        version="c",
+    )
+    state_sync.add_interval(snapshot_c, "2020-01-03", "2020-01-03")
+    state_sync.push_snapshots([snapshot_c])
+
+    _, intervals = state_sync._get_snapshot_intervals([snapshot_b, snapshot_c])
+    assert len(intervals) == 2
+    assert intervals[0].intervals == [(to_timestamp("2020-01-01"), to_timestamp("2020-01-02"))]
+    assert intervals[1].intervals == [(to_timestamp("2020-01-03"), to_timestamp("2020-01-04"))]
 
 
 def test_compact_intervals(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable) -> None:
@@ -1341,5 +1360,55 @@ def test_get_snapshots(mocker):
     cache.get_snapshots([])
     mock.get_snapshots.assert_not_called()
 
-    cache.get_snapshots(None)
-    mock.get_snapshots.assert_called()
+
+def test_snapshot_batching(state_sync, mocker, make_snapshot):
+    mock = mocker.Mock()
+
+    state_sync.SNAPSHOT_BATCH_SIZE = 2
+    state_sync.engine_adapter = mock
+
+    state_sync.delete_snapshots(
+        (
+            SnapshotId(name="a", identifier="1"),
+            SnapshotId(name="a", identifier="2"),
+            SnapshotId(name="a", identifier="3"),
+        )
+    )
+    calls = mock.delete_from.call_args_list
+    assert len(calls) == 2
+    assert calls[0][1] == {"where": parse_one("(name, identifier) in (('a', '1'), ('a', '2'))")}
+    assert calls[1][1] == {"where": parse_one("(name, identifier) in (('a', '3'))")}
+
+    mock.fetchall.side_effect = [
+        [
+            [
+                make_snapshot(
+                    SqlModel(name="a", query=parse_one("select 1")),
+                ).json(),
+            ],
+            [
+                make_snapshot(
+                    SqlModel(name="a", query=parse_one("select 2")),
+                ).json(),
+            ],
+        ],
+        [
+            [
+                make_snapshot(
+                    SqlModel(name="a", query=parse_one("select 3")),
+                ).json(),
+            ],
+        ],
+    ]
+
+    snapshots = state_sync._get_snapshots(
+        (
+            SnapshotId(name="a", identifier="1"),
+            SnapshotId(name="a", identifier="2"),
+            SnapshotId(name="a", identifier="3"),
+        ),
+        hydrate_intervals=False,
+    )
+    assert len(snapshots) == 3
+    calls = mock.fetchall.call_args_list
+    assert len(calls) == 2
