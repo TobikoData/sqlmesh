@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import typing as t
 
+from sqlmesh.utils.errors import SQLMeshError
+
 T = t.TypeVar("T", bound=t.Hashable)
 
 
@@ -92,6 +94,12 @@ class DAG(t.Generic[T]):
             unprocessed_nodes = self.graph
             while unprocessed_nodes:
                 next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
+
+                if not next_nodes:
+                    raise SQLMeshError(
+                        "Detected a cycle in the DAG. "
+                        "Please make sure there are no circular references between models."
+                    )
 
                 for node in next_nodes:
                     unprocessed_nodes.pop(node)
