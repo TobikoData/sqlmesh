@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import typing as t
 
+import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
@@ -16,6 +18,7 @@ from sqlmesh.core.engine_adapter.mixins import (
     HiveMetastoreTablePropertiesMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
+    ReplaceQueryInsteadOfUpdateMixin,
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 
@@ -23,6 +26,7 @@ if t.TYPE_CHECKING:
     from trino.dbapi import Connection as TrinoConnection
 
     from sqlmesh.core._typing import SchemaName, TableName
+    from sqlmesh.core.engine_adapter._typing import DF
 
 
 class TrinoEngineAdapter(
@@ -30,6 +34,7 @@ class TrinoEngineAdapter(
     LogicalReplaceQueryMixin,
     HiveMetastoreTablePropertiesMixin,
     GetCurrentCatalogFromFunctionMixin,
+    ReplaceQueryInsteadOfUpdateMixin,
 ):
     DIALECT = "trino"
     ESCAPE_JSON = False
@@ -79,17 +84,17 @@ class TrinoEngineAdapter(
                 t.table_catalog AS catalog,
                 t.table_name AS name,
                 t.table_schema AS schema,
-                CASE 
+                CASE
                     WHEN mv.name is not null THEN 'materialized_view'
                     WHEN t.table_type = 'BASE TABLE' THEN 'table'
                     ELSE t.table_type
                 END AS type
             FROM {catalog}.information_schema.tables t
             LEFT JOIN system.metadata.materialized_views mv
-                ON mv.catalog_name = t.table_catalog 
-                AND mv.schema_name = t.table_schema 
+                ON mv.catalog_name = t.table_catalog
+                AND mv.schema_name = t.table_schema
                 AND mv.name = t.table_name
-            WHERE 
+            WHERE
                 t.table_schema = '{schema}'
                 AND (mv.catalog_name is null OR mv.catalog_name =  '{catalog}')
                 AND (mv.schema_name is null OR mv.schema_name =  '{schema}')
@@ -104,3 +109,19 @@ class TrinoEngineAdapter(
             )
             for row in df.itertuples()
         ]
+
+    def _df_to_source_queries(
+        self,
+        df: DF,
+        columns_to_types: t.Dict[str, exp.DataType],
+        batch_size: int,
+        target_table: TableName,
+    ) -> t.List[SourceQuery]:
+        # Trino does not accept timestamps in ISOFORMAT that include the "T". `execution_time` is stored in
+        # Pandas with that format, so we convert the column to a string with the proper format and CAST to
+        # timestamp in Trino.
+        for column, kind in (columns_to_types or {}).items():
+            if is_datetime64_any_dtype(df.dtypes[column]) and getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
+                df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))  # type: ignore
+
+        return super()._df_to_source_queries(df, columns_to_types, batch_size, target_table)

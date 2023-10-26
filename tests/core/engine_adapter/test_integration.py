@@ -49,7 +49,9 @@ class TestContext:
 
     @columns_to_types.setter
     def columns_to_types(self, value: t.Dict[str, t.Union[str, exp.DataType]]):
-        self._columns_to_types = {k: exp.DataType.build(v) for k, v in value.items()}
+        self._columns_to_types = {
+            k: exp.DataType.build(v, dialect=self.dialect) for k, v in value.items()
+        }
 
     @property
     def time_columns(self) -> t.List[str]:
@@ -714,6 +716,90 @@ def test_merge(ctx: TestContext):
                 ]
             ),
         )
+
+
+def test_update(ctx: TestContext):
+    ctx.engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
+    ctx.columns_to_types = {"id": "int", "ds": "string", "int_var": "int"}
+    ctx.init()
+    table = ctx.table("test_table")
+    # Initial Load
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01", "int_var": 1},
+            {"id": 2, "ds": "2022-01-02", "int_var": 1},
+            {"id": 3, "ds": "2022-01-03", "int_var": 1},
+        ]
+    )
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    ctx.engine_adapter.replace_query(
+        table,
+        ctx.input_data(input_data),
+        # Spark based engines do a create table -> insert overwrite instead of replace. If columns to types aren't
+        # provided then it checks the table itself for types. This is fine within SQLMesh since we always know the tables
+        # exist prior to evaluation but when running these tests that isn't the case. As a result we just pass in
+        # columns_to_types for these two engines so we can still test inference on the other ones
+        columns_to_types=ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None,
+    )
+
+    ctx.engine_adapter.update_table(table, {"id": 4, "ds": "2022-01-04"}, "id = 1")
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {"id": 4, "ds": "2022-01-04", "int_var": 1},
+                {"id": 2, "ds": "2022-01-02", "int_var": 1},
+                {"id": 3, "ds": "2022-01-03", "int_var": 1},
+            ]
+        ),
+    )
+
+
+def test_delete_from(ctx: TestContext):
+    ctx.engine_adapter.DEFAULT_BATCH_SIZE = sys.maxsize
+    ctx.init()
+    table = ctx.table("test_table")
+    # Initial Load
+    input_data = pd.DataFrame(
+        [
+            {"id": 1, "ds": "2022-01-01"},
+            {"id": 2, "ds": "2022-01-02"},
+            {"id": 3, "ds": "2022-01-03"},
+        ]
+    )
+    ctx.engine_adapter.create_table(table, ctx.columns_to_types)
+    ctx.engine_adapter.replace_query(
+        table,
+        ctx.input_data(input_data),
+        # Spark based engines do a create table -> insert overwrite instead of replace. If columns to types aren't
+        # provided then it checks the table itself for types. This is fine within SQLMesh since we always know the tables
+        # exist prior to evaluation but when running these tests that isn't the case. As a result we just pass in
+        # columns_to_types for these two engines so we can still test inference on the other ones
+        columns_to_types=ctx.columns_to_types if ctx.dialect in ["spark", "databricks"] else None,
+    )
+
+    ctx.engine_adapter.delete_from(table, "id = 1")
+    results = ctx.get_metadata_results()
+    assert len(results.views) == 0
+    assert len(results.materialized_views) == 0
+    assert len(results.tables) == len(results.non_temp_tables) == 1
+    assert len(results.non_temp_tables) == 1
+    assert results.non_temp_tables[0] == table.name
+    ctx.compare_with_current(
+        table,
+        pd.DataFrame(
+            [
+                {"id": 2, "ds": "2022-01-02"},
+                {"id": 3, "ds": "2022-01-03"},
+            ]
+        ),
+    )
 
 
 def test_scd_type_2(ctx: TestContext):

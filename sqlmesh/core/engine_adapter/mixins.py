@@ -96,21 +96,29 @@ class LogicalReplaceQueryMixin(EngineAdapter):
             with source_queries[0] as query:
                 target_table = exp.to_table(table_name)
                 # Check if self-referencing
-                matching_tables = [
-                    table
+                self_referencing = any(
+                    quote_identifiers(table) == quote_identifiers(target_table)
                     for table in query.find_all(exp.Table)
-                    if quote_identifiers(table) == quote_identifiers(target_table)
-                ]
-                if matching_tables:
+                )
+                if self_referencing:
                     with self.temp_table(
                         exp.select(*columns_to_types).from_(target_table),
                         target_table,
                         columns_to_types,
                     ) as temp_table:
-                        for table in matching_tables:
-                            table.replace(temp_table.copy())
+
+                        def replace_table(
+                            node: exp.Expression, curr_table: exp.Table, new_table: exp.Table
+                        ) -> exp.Expression:
+                            if isinstance(node, exp.Table) and node == curr_table:
+                                return new_table
+                            return node
+
+                        temp_query = query.transform(
+                            replace_table, curr_table=target_table, new_table=temp_table
+                        )
                         self.execute(self._truncate_table(table_name))
-                        return self._insert_append_query(table_name, query, columns_to_types)
+                        return self._insert_append_query(table_name, temp_query, columns_to_types)
                 self.execute(self._truncate_table(table_name))
                 return self._insert_append_query(table_name, query, columns_to_types)
 
@@ -233,3 +241,48 @@ class GetCurrentCatalogFromFunctionMixin(EngineAdapter):
         if result:
             return result[0]
         return None
+
+
+class ReplaceQueryInsteadOfUpdateMixin(EngineAdapter):
+    def update_table(
+        self,
+        table_name: TableName,
+        properties: t.Dict[str, t.Any],
+        where: t.Optional[str | exp.Condition] = None,
+        contains_json: bool = False,
+    ) -> None:
+        """
+        Some engines do not support `UPDATE`ing tables, so we instead rewrite the
+        table and perform the updates with `CASE WHEN` statements.
+        """
+        if contains_json and properties:
+            properties = {
+                k: self._escape_json(v)
+                if isinstance(v, (str, exp.Subqueryable, exp.DerivedTable))
+                else v
+                for k, v in properties.items()
+            }
+
+        def make_if_true(value: exp.Expression | bool | str | int | float) -> exp.Expression:
+            if isinstance(value, exp.Expression):
+                return value
+            if isinstance(value, bool):
+                return exp.Boolean(this=value)
+            if isinstance(value, str):
+                return exp.Literal(this=value, is_string=True)
+            return exp.Literal(this=str(value), is_string=False)
+
+        query = exp.select(
+            *(col for col in self.columns(table_name) if not col in properties),
+            *(
+                exp.If(this=where, true=make_if_true(v), false=k).as_(k)
+                for k, v in properties.items()
+            ),
+        ).from_(table_name)
+
+        self.replace_query(table_name, query)
+
+    def delete_from(self, table_name: TableName, where: t.Union[str, exp.Expression]) -> None:
+        query = exp.select("*").from_(table_name).where(exp.condition(where).not_())
+
+        self.replace_query(table_name, query)
