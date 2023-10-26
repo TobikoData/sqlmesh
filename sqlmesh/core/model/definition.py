@@ -22,7 +22,7 @@ from sqlglot.time import format_time
 
 from sqlmesh.core import constants as c
 from sqlmesh.core import dialect as d
-from sqlmesh.core.macros import SQLMESH_MOCKED_STAR, MacroRegistry, macro
+from sqlmesh.core.macros import MacroRegistry, macro
 from sqlmesh.core.model.common import expression_validator
 from sqlmesh.core.model.kind import (
     IncrementalByTimeRangeKind,
@@ -1078,16 +1078,6 @@ class SqlModel(_SqlBasedModel):
         super().update_schema(
             schema, default_schema=default_schema, default_catalog=default_catalog
         )
-
-        query = self._query_renderer.render(optimize=False)
-        if isinstance(query, exp.Subqueryable) and any(
-            name.upper() == SQLMESH_MOCKED_STAR for name in query.named_selects
-        ):
-            # We reset the unoptimized query cache here as well to allow the model's query
-            # to be re-rendered so that the MacroEvaluator can resolve columns_to_types calls
-            # and get rid of the mocked star column
-            self._query_renderer._cache = {}
-
         self._columns_to_types = None
         self._query_renderer._optimized_cache = {}
 

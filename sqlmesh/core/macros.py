@@ -27,8 +27,6 @@ from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
-SQLMESH_MOCKED_STAR = "__SQLMESH_MOCKED_STAR__"
-
 
 class RuntimeStage(Enum):
     LOADING = "loading"
@@ -120,6 +118,7 @@ class MacroEvaluator:
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
         self._schema = MappingSchema(schema, dialect=dialect, normalize=False) if schema else {}
+        self.columns_to_types_called = False
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -277,7 +276,8 @@ class MacroEvaluator:
     def columns_to_types(self, model_name: str) -> t.Dict[str, exp.DataType]:
         """Returns the columns-to-types mapping corresponding to the specified model."""
         if not isinstance(self._schema, MappingSchema):
-            return {SQLMESH_MOCKED_STAR: exp.DataType.build("unknown")}
+            self.columns_to_types_called = True
+            return {"__schema_unavailable_at_load__": exp.DataType.build("unknown")}
 
         columns_to_types = self._schema.find(exp.to_table(model_name))
         if columns_to_types is None:
