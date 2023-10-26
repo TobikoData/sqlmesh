@@ -1,0 +1,41 @@
+gateways:
+  inttest_duckdb:
+    connection:
+      type: duckdb
+  inttest_trino:
+    connection:
+      type: trino
+      host: localhost
+      port: 8080
+      user: admin
+      catalog: datalake
+      http_scheme: http
+      retries: 20
+  inttest_spark:
+    connection:
+      type: spark
+      config:
+        spark.remote: sc://localhost
+  inttest_mssql:
+    connection:
+      type: mssql
+      host: localhost
+      user: sa
+      password: 1StrongPwd@@
+  inttest_postgres:
+    connection:
+      type: postgres
+      user: postgres
+      password: postgres
+      database: postgres
+      host: localhost
+      port: 5432
+      concurrent_tasks: 1
+  inttest_mysql:
+    connection:
+      type: mysql
+      host: localhost
+      user: root
+      password: mysql
+      port: 3306
+      charset: utf8

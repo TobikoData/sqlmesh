@@ -1,6 +1,7 @@
 # type: ignore
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
 import typing as t
@@ -187,7 +188,10 @@ def test_type(request):
 @pytest.fixture(scope="session")
 def config() -> Config:
     return load_config_from_paths(
-        project_paths=[pathlib.Path("examples/wursthall/config.yaml")],
+        project_paths=[
+            pathlib.Path("examples/wursthall/config.yaml"),
+            pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
+        ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
 
@@ -221,6 +225,14 @@ def config() -> Config:
         ),
         pytest.param(
             "trino",
+            marks=[
+                pytest.mark.integration,
+                pytest.mark.engine_integration,
+                pytest.mark.engine_integration_local,
+            ],
+        ),
+        pytest.param(
+            "spark",
             marks=[
                 pytest.mark.integration,
                 pytest.mark.engine_integration,
@@ -278,8 +290,11 @@ def test_catalog_operations(ctx: TestContext):
         ctx.engine_adapter.cursor.connection.autocommit(False)
     elif ctx.dialect == "snowflake":
         ctx.engine_adapter.execute(f'CREATE DATABASE IF NOT EXISTS "{catalog_name}"')
+    current_catalog = ctx.engine_adapter.get_current_catalog()
     ctx.engine_adapter.set_current_catalog(catalog_name)
     assert ctx.engine_adapter.get_current_catalog() == catalog_name
+    ctx.engine_adapter.set_current_catalog(current_catalog)
+    assert ctx.engine_adapter.get_current_catalog() == current_catalog
 
 
 def test_drop_schema_catalog(ctx: TestContext):
@@ -314,6 +329,10 @@ def test_drop_schema_catalog(ctx: TestContext):
     if ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported:
         pytest.skip(
             f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
+        )
+    if ctx.dialect == "spark":
+        pytest.skip(
+            "Currently local spark is configured to have iceberg be the testing catalog and drop cascade doesn't work on iceberg. Skipping until we have time to fix."
         )
     if ctx.test_type != "query":
         pytest.skip("Drop Schema Catalog tests only need to run once so we skip anything not query")
@@ -637,8 +656,8 @@ def test_insert_overwrite_by_time_partition(ctx: TestContext):
 
 
 def test_merge(ctx: TestContext):
-    if ctx.dialect == "trino":
-        pytest.skip("Trino doesn't support merge")
+    if ctx.dialect in ("trino", "spark"):
+        pytest.skip(f"{ctx.dialect} doesn't support merge")
 
     ctx.init()
     table = ctx.table("test_table")
@@ -700,6 +719,10 @@ def test_merge(ctx: TestContext):
 def test_scd_type_2(ctx: TestContext):
     if ctx.dialect == "tsql":
         pytest.skip(f"MSSQL scd type 2 functionality waiting on sqlglot cte in FROM fix")
+    if ctx.dialect == "spark":
+        pytest.skip(
+            "Spark SCD Type 2 does not currently work due to this error: `[UNSUPPORTED_OVERWRITE.TABLE] Can't overwrite the target that is also being read from`"
+        )
 
     name_type = "varchar(max)" if ctx.dialect == "tsql" else "string"
     ctx.columns_to_types = {
