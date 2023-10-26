@@ -50,26 +50,47 @@ services:
     volumes:
       - ./trino/catalog:/etc/trino/catalog
 
-  trino_metastore_db:
+  trino_datalake_metastore_db:
     image: postgres
-    hostname: trino_metastore_db
+    hostname: trino_datalake_metastore_db
     environment:
       POSTGRES_USER: hive
       POSTGRES_PASSWORD: hive
       POSTGRES_DB: metastore
 
-  trino-hive-metastore:
-    hostname: hive-metastore
+  trino-datalake-hive-metastore:
+    hostname: trino-datalake-hive-metastore
     image: 'starburstdata/hive:3.1.2-e.15'
     environment:
       HIVE_METASTORE_DRIVER: org.postgresql.Driver
-      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://trino_metastore_db:5432/metastore
+      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://trino_datalake_metastore_db:5432/metastore
       HIVE_METASTORE_USER: hive
       HIVE_METASTORE_PASSWORD: hive
-      HIVE_METASTORE_WAREHOUSE_DIR: s3://trino/
+      HIVE_METASTORE_WAREHOUSE_DIR: s3://trino/datalake
       <<: *hive_metastore_environments
     depends_on:
-      - trino_metastore_db
+      - trino_datalake_metastore_db
+
+  trino_testing_metastore_db:
+    image: postgres
+    hostname: trino_testing_metastore_db
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      POSTGRES_DB: metastore
+
+  trino-testing-hive-metastore:
+    hostname: trino-testing-hive-metastore
+    image: 'starburstdata/hive:3.1.2-e.15'
+    environment:
+      HIVE_METASTORE_DRIVER: org.postgresql.Driver
+      HIVE_METASTORE_JDBC_URL: jdbc:postgresql://trino_testing_metastore_db:5432/metastore
+      HIVE_METASTORE_USER: hive
+      HIVE_METASTORE_PASSWORD: hive
+      HIVE_METASTORE_WAREHOUSE_DIR: s3://trino/testing
+      <<: *hive_metastore_environments
+    depends_on:
+      - trino_testing_metastore_db
   # Spark Stack
   spark:
     build:
@@ -123,7 +144,8 @@ services:
       /bin/bash -c "
       sleep 5;
       /usr/bin/mc config --quiet host add myminio http://minio:9000 minio minio123;
-      /usr/bin/mc mb --quiet myminio/trino/datalake
+      /usr/bin/mc mb --quiet myminio/trino/datalake;
+      /usr/bin/mc mb --quiet myminio/trino/testing;
       /usr/bin/mc mb --quiet myminio/spark/datalake;
       /usr/bin/mc mb --quiet myminio/spark/testing
       "

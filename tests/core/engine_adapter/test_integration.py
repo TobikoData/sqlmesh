@@ -1,6 +1,7 @@
 # type: ignore
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
 import typing as t
@@ -187,7 +188,10 @@ def test_type(request):
 @pytest.fixture(scope="session")
 def config() -> Config:
     return load_config_from_paths(
-        project_paths=[pathlib.Path("examples/wursthall/config.yaml")],
+        project_paths=[
+            pathlib.Path("examples/wursthall/config.yaml"),
+            pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
+        ],
         personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
     )
 
