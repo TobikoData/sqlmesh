@@ -85,9 +85,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             after_promote_snapshots = set()
         else:
             before_promote_snapshots = {
-                s.name
-                for s in snapshots.values()
-                if deployability_index.is_deployable_or_deployed(s)
+                s.name for s in snapshots.values() if deployability_index.is_representative(s)
             }
             after_promote_snapshots = all_names - before_promote_snapshots
             deployability_index = DeployabilityIndex.all_deployable()

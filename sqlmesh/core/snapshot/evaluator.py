@@ -503,7 +503,7 @@ class SnapshotEvaluator:
         deployability_index: DeployabilityIndex,
         on_complete: t.Optional[t.Callable[[SnapshotInfoLike], None]],
     ) -> None:
-        table_name = snapshot.table_name(deployability_index.is_deployable_or_deployed(snapshot))
+        table_name = snapshot.table_name(deployability_index.is_representative(snapshot))
         _evaluation_strategy(snapshot, self.adapter).promote(
             snapshot.qualified_view_name, environment_naming_info, table_name, snapshot
         )

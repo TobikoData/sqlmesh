@@ -664,9 +664,9 @@ def test_indirectly_modified_forward_only_model(make_snapshot, mocker: MockerFix
             updated_snapshot_c.snapshot_id: updated_snapshot_c,
         }
     )
-    assert deployability_index.is_deployable_or_deployed(updated_snapshot_a)
-    assert not deployability_index.is_deployable_or_deployed(updated_snapshot_b)
-    assert not deployability_index.is_deployable_or_deployed(updated_snapshot_c)
+    assert deployability_index.is_representative(updated_snapshot_a)
+    assert not deployability_index.is_representative(updated_snapshot_b)
+    assert not deployability_index.is_representative(updated_snapshot_c)
 
 
 def test_added_model_with_forward_only_parent(make_snapshot, mocker: MockerFixture):

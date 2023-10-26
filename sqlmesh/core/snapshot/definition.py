@@ -33,12 +33,7 @@ from sqlmesh.utils.date import (
 )
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.hashing import hash_data
-from sqlmesh.utils.pydantic import (
-    PydanticModel,
-    field_validator,
-    model_validator,
-    model_validator_v1_args,
-)
+from sqlmesh.utils.pydantic import PydanticModel, field_validator
 
 if sys.version_info >= (3, 9):
     from typing import Annotated
@@ -699,9 +694,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
 
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         intervals = (
-            self.intervals
-            if deployability_index.is_deployable_or_deployed(self)
-            else self.dev_intervals
+            self.intervals if deployability_index.is_representative(self) else self.dev_intervals
         )
 
         if self.is_symbolic or (self.is_seed and intervals):
@@ -1022,13 +1015,11 @@ class DeployabilityIndex(PydanticModel, frozen=True):
     current evaluation can be reused in (deployed to) the production environment.
     """
 
-    deployable_ids: t.Optional[t.FrozenSet[str]] = None
-    non_deployable_ids: t.Optional[t.FrozenSet[str]] = None
-    deployed_shared_version_ids: t.Optional[t.FrozenSet[str]] = None
+    indexed_ids: t.FrozenSet[str]
+    is_opposite_index: bool = False
+    representative_shared_version_ids: t.Optional[t.FrozenSet[str]] = None
 
-    @field_validator(
-        "deployable_ids", "non_deployable_ids", "deployed_shared_version_ids", mode="before"
-    )
+    @field_validator("indexed_ids", "representative_shared_version_ids", mode="before")
     @classmethod
     def _snapshot_ids_set_validator(cls, v: t.Any) -> t.Optional[t.FrozenSet[t.Tuple[str, str]]]:
         if v is None:
@@ -1043,15 +1034,6 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             }
         )
 
-    @model_validator(mode="after")
-    @model_validator_v1_args
-    def _validate_deployable_ids(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if all(values.get(key) is not None for key in ("deployable_ids", "non_deployable_ids")):
-            raise SQLMeshError(
-                "Cannot specify both deployable_ids and non_deployable_ids in the index."
-            )
-        return values
-
     def is_deployable(self, snapshot: SnapshotIdLike) -> bool:
         """Returns true if the output produced by the given snapshot in a development environment can be reused
         in (deployed to) production
@@ -1063,58 +1045,55 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             True if the snapshot is deployable, False otherwise.
         """
         snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
-        if self.deployable_ids is not None and snapshot_id not in self.deployable_ids:
+        if not self.is_opposite_index and snapshot_id not in self.indexed_ids:
             return False
-        if self.non_deployable_ids is not None and snapshot_id in self.non_deployable_ids:
+        if self.is_opposite_index and snapshot_id in self.indexed_ids:
             return False
         return True
 
-    def is_deployable_or_deployed(self, snapshot: SnapshotIdLike) -> bool:
+    def is_representative(self, snapshot: SnapshotIdLike) -> bool:
         """Returns true if the output produced by the given snapshot in a development environment can be reused
         in (deployed to) production, or if this snapshot already represents what is currently in production.
 
         Unlike `is_deployable`, this variant also captures FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots that
-        are not deployable by their nature but are currently deployed in production. Therefore, it's safe to consider
+        are not deployable by their nature but are currently promoted in production. Therefore, it's safe to consider
         them as such when constructing a plan, building a physical table mapping or computing missing intervals.
 
         Args:
             snapshot: The snapshot to check.
 
         Returns:
-            True if the snapshot is deployable or is already deployed, False otherwise.
+            True if the snapshot is representative, False otherwise.
         """
         snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
         deployed = (
-            self.deployed_shared_version_ids is not None
-            and snapshot_id in self.deployed_shared_version_ids
+            self.representative_shared_version_ids is not None
+            and snapshot_id in self.representative_shared_version_ids
         )
         return deployed or self.is_deployable(snapshot)
 
     def with_non_deployable(self, snapshot: SnapshotIdLike) -> DeployabilityIndex:
         """Creates a new index with the given snapshot marked as non-deployable."""
         snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
-        deployable_ids = self.deployable_ids
-        non_deployable_ids = self.non_deployable_ids
-        if deployable_ids is not None:
-            deployable_ids = deployable_ids - {snapshot_id}
-        elif non_deployable_ids is not None:
-            non_deployable_ids = non_deployable_ids | {snapshot_id}
-        elif deployable_ids is None and non_deployable_ids is None:
-            non_deployable_ids = frozenset({snapshot_id})
+        indexed_ids = self.indexed_ids
+        if self.is_opposite_index:
+            indexed_ids = indexed_ids | {snapshot_id}
+        else:
+            indexed_ids = indexed_ids - {snapshot_id}
 
         return DeployabilityIndex(
-            deployable_ids=deployable_ids,
-            non_deployable_ids=non_deployable_ids,
-            deployed_shared_version_ids=self.deployed_shared_version_ids,
+            indexed_ids=indexed_ids,
+            is_opposite_index=self.is_opposite_index,
+            representative_shared_version_ids=self.representative_shared_version_ids,
         )
 
     @classmethod
     def all_deployable(cls) -> DeployabilityIndex:
-        return cls()
+        return cls(indexed_ids=frozenset(), is_opposite_index=True)
 
     @classmethod
     def none_deployable(cls) -> DeployabilityIndex:
-        return cls(deployable_ids=frozenset())
+        return cls(indexed_ids=frozenset())
 
     @classmethod
     def create(cls, snapshots: t.Dict[SnapshotId, Snapshot]) -> DeployabilityIndex:
@@ -1122,7 +1101,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         reversed_dag = dag.reversed.graph
 
         deployability_mapping: t.Dict[SnapshotId, bool] = {}
-        deployed_shared_version_ids: t.Set[SnapshotId] = set()
+        representative_shared_version_ids: t.Set[SnapshotId] = set()
 
         def _visit(node: SnapshotId, deployable: bool = True) -> None:
             if node in deployability_mapping and (
@@ -1145,7 +1124,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                     this_deployable = False
                     if not snapshot.is_paused or snapshot.is_indirect_non_breaking:
                         # This snapshot represents what's currently deployed in prod.
-                        deployed_shared_version_ids.add(node)
+                        representative_shared_version_ids.add(node)
                 else:
                     this_deployable = True
                 children_deployable = not (
@@ -1169,12 +1148,13 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         # Pick the smaller set to reduce the size of the serialized object.
         if len(deployable_ids) <= len(non_deployable_ids):
             return cls(
-                deployable_ids=deployable_ids,
-                deployed_shared_version_ids=deployed_shared_version_ids,
+                indexed_ids=deployable_ids,
+                representative_shared_version_ids=representative_shared_version_ids,
             )
         return cls(
-            non_deployable_ids=non_deployable_ids,
-            deployed_shared_version_ids=deployed_shared_version_ids,
+            indexed_ids=non_deployable_ids,
+            is_opposite_index=True,
+            representative_shared_version_ids=representative_shared_version_ids,
         )
 
     @staticmethod
@@ -1335,7 +1315,7 @@ def to_table_mapping(
 ) -> t.Dict[str, str]:
     deployability_index = deployability_index or DeployabilityIndex.all_deployable()
     return {
-        snapshot.name: snapshot.table_name(deployability_index.is_deployable_or_deployed(snapshot))
+        snapshot.name: snapshot.table_name(deployability_index.is_representative(snapshot))
         for snapshot in snapshots
         if snapshot.version and not snapshot.is_symbolic
     }

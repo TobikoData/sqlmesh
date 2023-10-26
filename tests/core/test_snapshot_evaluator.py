@@ -272,7 +272,7 @@ def test_promote_forward_only(mocker: MockerFixture, adapter_mock, make_snapshot
     evaluator.promote(
         [snapshot],
         EnvironmentNamingInfo(name="test_env"),
-        deployability_index=DeployabilityIndex(deployable_ids=[snapshot.snapshot_id]),
+        deployability_index=DeployabilityIndex(indexed_ids=[snapshot.snapshot_id]),
     )
 
     adapter_mock.create_schema.assert_has_calls(

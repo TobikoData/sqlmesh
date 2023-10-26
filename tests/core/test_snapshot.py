@@ -1345,18 +1345,21 @@ def test_deployability_index(make_snapshot):
     assert not deployability_index.is_deployable(snapshot_c)
     assert not deployability_index.is_deployable(snapshot_d)
 
-    assert deployability_index.is_deployable_or_deployed(snapshot_a)
-    assert deployability_index.is_deployable_or_deployed(snapshot_e)
-    assert deployability_index.is_deployable_or_deployed(snapshot_f)
-    assert deployability_index.is_deployable_or_deployed(snapshot_g)
-    assert not deployability_index.is_deployable_or_deployed(snapshot_b)
-    assert not deployability_index.is_deployable_or_deployed(snapshot_c)
-    assert not deployability_index.is_deployable_or_deployed(snapshot_d)
+    assert deployability_index.is_representative(snapshot_a)
+    assert deployability_index.is_representative(snapshot_e)
+    assert deployability_index.is_representative(snapshot_f)
+    assert deployability_index.is_representative(snapshot_g)
+    assert not deployability_index.is_representative(snapshot_b)
+    assert not deployability_index.is_representative(snapshot_c)
+    assert not deployability_index.is_representative(snapshot_d)
 
-    with pytest.raises(SQLMeshError):
-        DeployabilityIndex(
-            deployable_ids=[snapshot_a.snapshot_id], non_deployable_ids=[snapshot_a.snapshot_id]
-        )
+    all_deployable_index = deployability_index.all_deployable()
+    assert all(all_deployable_index.is_deployable(s) for s in snapshots.values())
+    assert all(all_deployable_index.is_representative(s) for s in snapshots.values())
+
+    none_deployable_index = deployability_index.none_deployable()
+    assert all(not none_deployable_index.is_deployable(s) for s in snapshots.values())
+    assert all(not none_deployable_index.is_representative(s) for s in snapshots.values())
 
 
 def test_deployability_index_unpaused_forward_only(make_snapshot):
@@ -1375,8 +1378,8 @@ def test_deployability_index_unpaused_forward_only(make_snapshot):
     assert not deplyability_index.is_deployable(snapshot_a)
     assert deplyability_index.is_deployable(snapshot_b)
 
-    assert deplyability_index.is_deployable_or_deployed(snapshot_a)
-    assert deplyability_index.is_deployable_or_deployed(snapshot_b)
+    assert deplyability_index.is_representative(snapshot_a)
+    assert deplyability_index.is_representative(snapshot_b)
 
 
 def test_deployability_index_uncategorized_forward_only_model(make_snapshot):
@@ -1402,5 +1405,5 @@ def test_deployability_index_uncategorized_forward_only_model(make_snapshot):
     assert not deplyability_index.is_deployable(snapshot_a)
     assert not deplyability_index.is_deployable(snapshot_b)
 
-    assert not deplyability_index.is_deployable_or_deployed(snapshot_a)
-    assert not deplyability_index.is_deployable_or_deployed(snapshot_b)
+    assert not deplyability_index.is_representative(snapshot_a)
+    assert not deplyability_index.is_representative(snapshot_b)

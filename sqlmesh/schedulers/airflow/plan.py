@@ -140,8 +140,7 @@ def create_plan_dag_spec(
         common.BackfillIntervalsPerSnapshot(
             snapshot_id=s.snapshot_id,
             intervals=intervals,
-            before_promote=request.is_dev
-            or initial_deployability_index.is_deployable_or_deployed(s),
+            before_promote=request.is_dev or initial_deployability_index.is_representative(s),
         )
         for s, intervals in backfill_batches.items()
     ]
