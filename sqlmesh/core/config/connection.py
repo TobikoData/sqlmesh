@@ -482,6 +482,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     password: t.Optional[str] = None
     enable_iam_auth: t.Optional[bool] = None
     db: str
+    timeout: t.Optional[int] = None
 
     driver: str = "pg8000"
     type_: Literal["gcp_postgres"] = Field(alias="type", default="gcp_postgres")
@@ -517,6 +518,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
             "password",
             "db",
             "enable_iam_auth",
+            "timeout",
         }
 
     @property
