@@ -101,7 +101,7 @@ def set_catalog(
                 exp.to_table if obj_type == "TableName" else to_schema,
             )
             expression = to_expression_func(obj.copy() if isinstance(obj, exp.Table) else obj)
-            catalog_name = expression.args.get("catalog")
+            catalog_name = expression.catalog
             if not catalog_name:
                 return func(*list_args, **kwargs)
             # If we have a catalog and this engine doesn't support catalogs then we need to error
