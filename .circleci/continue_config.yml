@@ -191,7 +191,7 @@ jobs:
           command: make core_engine_it_test_docker
       - run:
           name: Make sure DBs are ready
-          command: sleep 10
+          command: sleep 30
       - run:
           name: Run tests
           command: make core_engine_it_test_local_only
