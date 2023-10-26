@@ -1353,6 +1353,11 @@ def test_deployability_index(make_snapshot):
     assert not deployability_index.is_deployable_or_deployed(snapshot_c)
     assert not deployability_index.is_deployable_or_deployed(snapshot_d)
 
+    with pytest.raises(SQLMeshError):
+        DeployabilityIndex(
+            deployable_ids=[snapshot_a.snapshot_id], non_deployable_ids=[snapshot_a.snapshot_id]
+        )
+
 
 def test_deployability_index_unpaused_forward_only(make_snapshot):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1")))

@@ -33,7 +33,12 @@ from sqlmesh.utils.date import (
 )
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.hashing import hash_data
-from sqlmesh.utils.pydantic import PydanticModel, field_validator
+from sqlmesh.utils.pydantic import (
+    PydanticModel,
+    field_validator,
+    model_validator,
+    model_validator_v1_args,
+)
 
 if sys.version_info >= (3, 9):
     from typing import Annotated
@@ -1038,6 +1043,15 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             }
         )
 
+    @model_validator(mode="after")
+    @model_validator_v1_args
+    def _validate_deployable_ids(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        if all(values.get(key) is not None for key in ("deployable_ids", "non_deployable_ids")):
+            raise SQLMeshError(
+                "Cannot specify both deployable_ids and non_deployable_ids in the index."
+            )
+        return values
+
     def is_deployable(self, snapshot: SnapshotIdLike) -> bool:
         """Returns true if the output produced by the given snapshot in a development environment can be reused
         in (deployed to) production
@@ -1158,11 +1172,10 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                 deployable_ids=deployable_ids,
                 deployed_shared_version_ids=deployed_shared_version_ids,
             )
-        else:
-            return cls(
-                non_deployable_ids=non_deployable_ids,
-                deployed_shared_version_ids=deployed_shared_version_ids,
-            )
+        return cls(
+            non_deployable_ids=non_deployable_ids,
+            deployed_shared_version_ids=deployed_shared_version_ids,
+        )
 
     @staticmethod
     def _snapshot_id_key(snapshot_id: SnapshotId) -> str:
