@@ -63,8 +63,8 @@ class ManifestHelper:
         self._macros_per_package: t.Dict[str, MacroConfigs] = defaultdict(dict)
 
         self._tests_by_owner: t.Dict[str, t.List[TestConfig]] = defaultdict(list)
-        self._disabled_refs: t.Set[str] = set()
-        self._disabled_sources: t.Set[str] = set()
+        self._disabled_refs: t.Optional[t.Set[str]] = None
+        self._disabled_sources: t.Optional[t.Set[str]] = None
 
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
@@ -268,18 +268,20 @@ class ManifestHelper:
         )
 
     def _disabled_ref(self, ref: str) -> bool:
-        if not self._disabled_refs:
+        if self._disabled_refs is None:
             self._load_disabled()
 
-        return ref in self._disabled_refs
+        return ref in self._disabled_refs  # type: ignore
 
     def _disabled_source(self, source: str) -> bool:
-        if not self._disabled_sources:
+        if self._disabled_sources is None:
             self._load_disabled()
 
-        return source in self._disabled_sources
+        return source in self._disabled_sources  # type: ignore
 
     def _load_disabled(self) -> None:
+        self._disabled_refs = set()
+        self._disabled_sources = set()
         for nodes in self._manifest.disabled.values():
             for node in nodes:
                 if node.resource_type in ("model", "snapshot", "seed"):
