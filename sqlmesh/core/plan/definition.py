@@ -743,35 +743,6 @@ class Plan:
             and bool(snapshot.previous_versions)
         )
 
-    def _is_forward_only_model_old(self, model_name: str) -> bool:
-        def _is_forward_only_expected(snapshot: Snapshot) -> bool:
-            # Returns True if the snapshot is not categorized yet but is expected
-            # to be categorized as forward-only. Checking the previous versions to make
-            # sure that the snapshot doesn't represent a newly added model.
-            return (
-                snapshot.node.is_model
-                and snapshot.model.forward_only
-                and not snapshot.change_category
-                and bool(snapshot.previous_versions)
-            )
-
-        snapshot = self._snapshot_mapping[model_name]
-        if _is_forward_only_expected(snapshot):
-            return True
-
-        for upstream in self._dag.upstream(model_name):
-            upstream_snapshot = self._snapshot_mapping.get(upstream)
-            if (
-                upstream_snapshot
-                and upstream_snapshot.is_paused
-                and (
-                    upstream_snapshot.is_forward_only
-                    or _is_forward_only_expected(upstream_snapshot)
-                )
-            ):
-                return True
-        return False
-
 
 class PlanStatus(str, Enum):
     STARTED = "started"
