@@ -9,7 +9,11 @@ from sqlglot import parse_one
 
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, Seed, SeedKind, SeedModel, SqlModel
-from sqlmesh.core.snapshot import DeployabilityIndex, SnapshotChangeCategory, SnapshotTableCleanupTask
+from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
+    SnapshotChangeCategory,
+    SnapshotTableCleanupTask,
+)
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.utils.date import to_datetime

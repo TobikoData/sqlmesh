@@ -329,10 +329,10 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     snapshot = create_and_cleanup("test_schema.test_model", False)
     adapter_mock.drop_table.assert_has_calls(
         [
-            call(f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"),
             call(
                 f"sqlmesh__test_schema.test_schema__test_model__{snapshot.fingerprint.to_version()}__temp"
             ),
+            call(f"sqlmesh__test_schema.test_schema__test_model__{snapshot.version}"),
         ]
     )
     adapter_mock.reset_mock()
@@ -340,8 +340,8 @@ def test_cleanup(mocker: MockerFixture, adapter_mock, make_snapshot):
     snapshot = create_and_cleanup("test_model", False)
     adapter_mock.drop_table.assert_has_calls(
         [
-            call(f"sqlmesh__default.test_model__{snapshot.version}"),
             call(f"sqlmesh__default.test_model__{snapshot.fingerprint.to_version()}__temp"),
+            call(f"sqlmesh__default.test_model__{snapshot.version}"),
         ]
     )
 
