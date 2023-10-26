@@ -1,0 +1,45 @@
+<configuration>
+    <property>
+        <name>metastore.thrift.uris</name>
+        <value>thrift://spark-hive-metastore:9083</value>
+    </property>
+    <property>
+        <name>hive.metastore.uris</name>
+        <value>thrift://spark-hive-metastore:9083</value>
+    </property>
+    <property>
+        <name>metastore.task.threads.always</name>
+        <value>org.apache.hadoop.hive.metastore.events.EventCleanerTask,org.apache.hadoop.hive.metastore.MaterializationsCacheCleanerTask</value>
+    </property>
+    <property>
+        <name>metastore.expression.proxy</name>
+        <value>org.apache.hadoop.hive.metastore.DefaultPartitionExpressionProxy</value>
+    </property>
+    <property>
+        <name>metastore.warehouse.dir</name>
+        <value>s3://spark/</value>
+    </property>
+
+    <property>
+        <name>fs.s3a.access.key</name>
+        <value>minio</value>
+    </property>
+    <property>
+        <name>fs.s3a.secret.key</name>
+        <value>minio123</value>
+    </property>
+    <property>
+        <name>fs.s3a.endpoint</name>
+        <value>http://minio:9000</value>
+    </property>
+    <property>
+        <name>fs.s3a.path.style.access</name>
+        <value>true</value>
+    </property>
+
+    <property>
+        <name>hive.default.fileformat</name>
+        <value>Parquet</value>
+    </property>
+
+</configuration>
