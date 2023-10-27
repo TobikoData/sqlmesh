@@ -6,7 +6,7 @@ from __future__ import annotations
 import typing as t
 
 import pandas as pd
-from pandas.api.types import is_datetime64_dtype  # type: ignore
+from pandas.api.types import is_datetime64_any_dtype  # type: ignore
 from sqlglot import exp
 from sqlglot.optimizer.qualify_columns import quote_identifiers
 
@@ -185,10 +185,14 @@ class MSSQLEngineAdapter(
             # pymssql doesn't convert Pandas Timestamp (datetime64) types
             # - this code is based on snowflake adapter implementation
             for column, kind in (columns_to_types or {}).items():
-                if kind.is_type("date") and is_datetime64_dtype(df.dtypes[column]):  # type: ignore
-                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
-                elif is_datetime64_dtype(df.dtypes[column]):  # type: ignore
-                    df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
+                if is_datetime64_any_dtype(df.dtypes[column]):
+                    if kind.is_type("date"):  # type: ignore
+                        df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
+                    elif getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
+                        # MSSQL requires a colon in the offset (+00:00) so we use isoformat() instead of strftime()
+                        df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))  # type: ignore
+                    else:  # type: ignore
+                        df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
 
             self.create_table(temp_table, columns_to_types)
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
