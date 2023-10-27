@@ -428,7 +428,7 @@ class Plan:
                     new.dev_intervals = new.intervals.copy()
 
             deployability_index = (
-                DeployabilityIndex.create({s.snapshot_id: s for s in self.snapshots})
+                DeployabilityIndex.create(self.snapshots)
                 if self.is_dev
                 else DeployabilityIndex.all_deployable()
             )

@@ -1291,9 +1291,6 @@ def test_earliest_start_date(sushi_context: Context):
     earliest_start_date(sushi_context.snapshots.values(), cache)
     assert cache[model_name] == to_datetime("yesterday")
 
-    # Make sure that the default value for a snapshot with a missing start is not cached.
-    assert model_name not in cache
-
 
 def test_deployability_index(make_snapshot):
     snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1")))

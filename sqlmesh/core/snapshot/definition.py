@@ -1045,11 +1045,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             True if the snapshot is deployable, False otherwise.
         """
         snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
-        if not self.is_opposite_index and snapshot_id not in self.indexed_ids:
-            return False
-        if self.is_opposite_index and snapshot_id in self.indexed_ids:
-            return False
-        return True
+        return (self.is_opposite_index and snapshot_id not in self.indexed_ids) or (
+            not self.is_opposite_index and snapshot_id in self.indexed_ids
+        )
 
     def is_representative(self, snapshot: SnapshotIdLike) -> bool:
         """Returns true if the output produced by the given snapshot in a development environment can be reused
@@ -1066,11 +1064,11 @@ class DeployabilityIndex(PydanticModel, frozen=True):
             True if the snapshot is representative, False otherwise.
         """
         snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
-        deployed = (
+        representative = (
             self.representative_shared_version_ids is not None
             and snapshot_id in self.representative_shared_version_ids
         )
-        return deployed or self.is_deployable(snapshot)
+        return representative or self.is_deployable(snapshot)
 
     def with_non_deployable(self, snapshot: SnapshotIdLike) -> DeployabilityIndex:
         """Creates a new index with the given snapshot marked as non-deployable."""
@@ -1096,7 +1094,12 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         return cls(indexed_ids=frozenset())
 
     @classmethod
-    def create(cls, snapshots: t.Dict[SnapshotId, Snapshot]) -> DeployabilityIndex:
+    def create(
+        cls, snapshots: t.Dict[SnapshotId, Snapshot] | t.Collection[Snapshot]
+    ) -> DeployabilityIndex:
+        if not isinstance(snapshots, dict):
+            snapshots = {s.snapshot_id: s for s in snapshots}
+
         dag = snapshots_to_dag(snapshots.values())
         reversed_dag = dag.reversed.graph
 
@@ -1104,9 +1107,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         representative_shared_version_ids: t.Set[SnapshotId] = set()
 
         def _visit(node: SnapshotId, deployable: bool = True) -> None:
-            if node in deployability_mapping and (
-                not deployability_mapping[node] or deployability_mapping[node] == deployable
-            ):
+            if deployability_mapping.get(node) in (False, deployable):
                 return
 
             if deployable:
