@@ -19,6 +19,7 @@ from sqlmesh.core.config.connection import (
 )
 from sqlmesh.core.config.gateway import GatewayConfig
 from sqlmesh.core.config.model import ModelDefaultsConfig
+from sqlmesh.core.config.run import RunConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
 from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
@@ -82,6 +83,7 @@ class Config(BaseConfig):
     )
     default_target_environment: str = c.PROD
     cicd_bot: t.Optional[CICDBotConfig] = None
+    run: RunConfig = RunConfig()
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         "gateways": UpdateStrategy.KEY_UPDATE,
@@ -92,6 +94,7 @@ class Config(BaseConfig):
         "auto_categorize_changes": UpdateStrategy.NESTED_UPDATE,
         "pinned_environments": UpdateStrategy.EXTEND,
         "physical_schema_override": UpdateStrategy.KEY_UPDATE,
+        "run": UpdateStrategy.NESTED_UPDATE,
     }
 
     _connection_config_validator = connection_config_validator
