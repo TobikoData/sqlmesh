@@ -62,7 +62,7 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
         )
     )
 
-    expected_start = to_date("2022-01-01")
+    expected_start = to_date("2022-01-02")
     expected_end = to_date("2022-01-03")
     expected_interval_end = to_timestamp(to_date("2022-01-04"))
 
@@ -77,13 +77,16 @@ def test_forward_only_dev(make_snapshot, mocker: MockerFixture):
     yesterday_ds_mock = mocker.patch("sqlmesh.core.plan.definition.yesterday_ds")
     yesterday_ds_mock.return_value = expected_start
 
+    now_mock = mocker.patch("sqlmesh.core.snapshot.definition.now")
+    now_mock.return_value = expected_end
+
     now_ds_mock = mocker.patch("sqlmesh.core.plan.definition.now")
-    now_ds_mock.return_value = to_date("2022-01-03")
+    now_ds_mock.return_value = expected_end
 
     plan = Plan(context_diff_mock, forward_only=True, is_dev=True)
 
     assert plan.restatements == {"a": (to_timestamp(expected_start), expected_interval_end)}
-    assert plan.start == expected_start
+    assert plan.start == to_datetime(expected_start)
     assert plan.end == expected_end
 
     yesterday_ds_mock.assert_called_once()
@@ -419,11 +422,15 @@ def test_broken_references(make_snapshot, mocker: MockerFixture):
 
 
 def test_effective_from(make_snapshot, mocker: MockerFixture):
-    snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds FROM b")))
+    snapshot = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 1, ds FROM b"), start="2023-01-01")
+    )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.add_interval("2023-01-01", "2023-03-01")
 
-    updated_snapshot = make_snapshot(SqlModel(name="a", query=parse_one("select 2, ds FROM b")))
+    updated_snapshot = make_snapshot(
+        SqlModel(name="a", query=parse_one("select 2, ds FROM b"), start="2023-01-01")
+    )
     updated_snapshot.previous_versions = snapshot.all_versions
 
     context_diff_mock = mocker.Mock()

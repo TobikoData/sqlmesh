@@ -843,7 +843,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     def is_valid_start(
         self,
         start: t.Optional[TimeLike],
-        snapshot_start: t.Optional[TimeLike] = None,
+        snapshot_start: TimeLike,
         execution_time: t.Optional[TimeLike] = None,
     ) -> bool:
         """Checks if the given start and end are valid for this snapshot.
@@ -853,9 +853,6 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """
         # The snapshot may not have a start defined. If so we use the provided snapshot start.
         if self.depends_on_past and start:
-            if not snapshot_start:
-                raise SQLMeshError("Snapshot must have a start defined if it depends on past")
-
             interval_unit = self.node.interval_unit
             start_ts = to_timestamp(interval_unit.cron_floor(start))
 
@@ -1225,13 +1222,13 @@ def missing_intervals(
     start_dt = (
         to_datetime(start)
         if start
-        else earliest_start_date(
-            snapshots, cache, default_value=to_date(end_date) - timedelta(days=1)
-        )
+        else earliest_start_date(snapshots, cache=cache, relative_to=end_date)
     )
     restatements = restatements or {}
 
     for snapshot in snapshots:
+        if snapshot.is_symbolic:
+            continue
         interval = restatements.get(snapshot.name)
         snapshot_start_date = start_dt
         snapshot_end_date = end_date
@@ -1244,7 +1241,7 @@ def missing_intervals(
         intervals = snapshot.missing_intervals(
             max(
                 to_datetime(snapshot_start_date),
-                to_datetime(start_date(snapshot, snapshots, cache) or snapshot_start_date),
+                to_datetime(start_date(snapshot, snapshots, cache, relative_to=snapshot_end_date)),
             ),
             snapshot_end_date,
             execution_time=execution_time,
@@ -1258,69 +1255,68 @@ def missing_intervals(
 
 
 def earliest_start_date(
-    snapshots: t.Iterable[Snapshot],
+    snapshots: t.Collection[Snapshot],
     cache: t.Optional[t.Dict[str, datetime]] = None,
-    default_value: t.Optional[TimeLike] = None,
+    relative_to: t.Optional[TimeLike] = None,
 ) -> datetime:
     """Get the earliest start date from a collection of snapshots.
 
     Args:
         snapshots: Snapshots to find earliest start date.
         cache: optional cache to make computing cache date more efficient
+        relative_to: the base date to compute start from if inferred from cron
     Returns:
         The earliest start date or yesterday if none is found.
     """
     cache = {} if cache is None else cache
-    snapshots = list(snapshots)
-    earliest = to_datetime(default_value or yesterday().date())
     if snapshots:
-        return min(start_date(snapshot, snapshots, cache) or earliest for snapshot in snapshots)
-    return earliest
+        return min(
+            start_date(snapshot, snapshots, cache=cache, relative_to=relative_to)
+            for snapshot in snapshots
+        )
+    return yesterday()
 
 
 def start_date(
     snapshot: Snapshot,
     snapshots: t.Dict[SnapshotId, Snapshot] | t.Iterable[Snapshot],
     cache: t.Optional[t.Dict[str, datetime]] = None,
-) -> t.Optional[datetime]:
+    relative_to: t.Optional[TimeLike] = None,
+) -> datetime:
     """Get the effective/inferred start date for a snapshot.
 
     Not all snapshots define a start date. In those cases, the node's start date
-    can be inferred from its parent's start date.
+    can be inferred from its parent's start date or from its cron.
 
     Args:
         snapshot: snapshot to infer start date.
         snapshots: a catalog of available snapshots.
         cache: optional cache to make computing cache date more efficient
+        relative_to: the base date to compute start from if inferred from cron
 
     Returns:
         Start datetime object.
     """
     cache = {} if cache is None else cache
-    if snapshot.name in cache:
-        return cache[snapshot.name]
+    key = f"{snapshot.name}_{to_timestamp(relative_to)}" if relative_to else snapshot.name
+    if key in cache:
+        return cache[key]
     if snapshot.node.start:
         start = to_datetime(snapshot.node.start)
-        cache[snapshot.name] = start
+        cache[key] = start
         return start
 
     if not isinstance(snapshots, dict):
         snapshots = {snapshot.snapshot_id: snapshot for snapshot in snapshots}
 
-    earliest = None
+    earliest = snapshot.node.cron_prev(snapshot.node.cron_floor(relative_to or now()))
 
     for parent in snapshot.parents:
-        if parent not in snapshots:
-            continue
+        if parent in snapshots:
+            earliest = min(
+                earliest,
+                start_date(snapshots[parent], snapshots, cache=cache, relative_to=relative_to),
+            )
 
-        start_dt = start_date(snapshots[parent], snapshots, cache)
-
-        if not earliest:
-            earliest = start_dt
-        elif start_dt:
-            earliest = min(earliest, start_dt)
-
-    if earliest:
-        cache[snapshot.name] = earliest
-
+    cache[key] = earliest
     return earliest
