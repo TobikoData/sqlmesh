@@ -32,7 +32,7 @@ def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Calla
 
     assert (
         renderer("{{ adapter.get_relation(database=None, schema='foo', identifier='bar') }}")
-        == '"foo"."bar"'
+        == '"memory"."foo"."bar"'
     )
     assert renderer(
         "{%- set relation = adapter.get_relation(database=None, schema='foo', identifier='bar') -%} {{ adapter.get_columns_in_relation(relation) }}"
@@ -102,14 +102,14 @@ def test_adapter_map_snapshot_tables(
         renderer(
             "{{ adapter.get_relation(database=none, schema='test_db', identifier='test_model') }}"
         )
-        == '"sqlmesh"."test_db__test_model"'
+        == '"memory"."sqlmesh"."test_db__test_model"'
     )
 
     assert "baz" in renderer("{{ run_query('SELECT * FROM test_db.test_model') }}")
 
     assert (
         renderer("{{ adapter.get_relation(database=none, schema='foo', identifier='bar') }}")
-        == '"foo"."bar"'
+        == '"memory"."foo"."bar"'
     )
 
     assert renderer("{{ adapter.resolve_schema(test_model) }}") == "sqlmesh"

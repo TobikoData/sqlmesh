@@ -260,8 +260,11 @@ def engine_adapter(request, config) -> EngineAdapter:
         engine_adapter.DEFAULT_BATCH_SIZE = 1
     # Clear our any local db files that may have been left over from previous runs
     if request.param == "duckdb":
-        for path in (connection_config.catalogs or {}).values():
-            pathlib.Path(path).unlink(missing_ok=True)
+        for raw_path in (connection_config.catalogs or {}).values():
+            # Once 3.7 support is dropped this can be changed to `pathlib.Path(path).unlink(missing_ok=True)`
+            path = pathlib.Path(raw_path)
+            if path.is_file():
+                path.unlink()
     return engine_adapter
 
 
