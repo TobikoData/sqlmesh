@@ -144,7 +144,7 @@ class ManifestHelper:
             skip_test = False
             refs = _refs(node)
             for ref in refs:
-                if self._disabled_ref(ref):
+                if self._is_disabled_ref(ref):
                     logger.info(
                         "Skipping test '%s' which references a disabled model '%s'",
                         node.name,
@@ -267,13 +267,13 @@ class ManifestHelper:
             target_override=self.target.name,
         )
 
-    def _disabled_ref(self, ref: str) -> bool:
+    def _is_disabled_ref(self, ref: str) -> bool:
         if self._disabled_refs is None:
             self._load_disabled()
 
         return ref in self._disabled_refs  # type: ignore
 
-    def _disabled_source(self, source: str) -> bool:
+    def _is_disabled_source(self, source: str) -> bool:
         if self._disabled_sources is None:
             self._load_disabled()
 
@@ -321,13 +321,13 @@ class ManifestHelper:
                 args = [_jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
                     source = ".".join(args)
-                    if not self._disabled_source(source):
+                    if not self._is_disabled_source(source):
                         dependencies.sources.append(source)
             elif call_name[0] == "ref":
                 args = [_jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
                     ref = ".".join(args)
-                    if not self._disabled_ref(ref):
+                    if not self._is_disabled_ref(ref):
                         dependencies.refs.append(ref)
 
         return dependencies
