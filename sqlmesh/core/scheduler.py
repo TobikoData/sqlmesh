@@ -285,6 +285,8 @@ class Scheduler:
         self.console.stop_evaluation_progress(success=not errors)
 
         for error in errors:
+            if isinstance(error.__cause__, CircuitBreakerError):
+                raise error.__cause__
             sid = error.node[0]
             formatted_exception = "".join(format_exception(error.__cause__ or error))
             self.console.log_error(f"FAILED processing snapshot {sid}\n{formatted_exception}")

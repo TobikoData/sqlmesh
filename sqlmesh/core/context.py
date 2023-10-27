@@ -482,7 +482,9 @@ class Context(BaseContext):
                 )
                 time.sleep(self.config.run.environment_check_interval)
             raise SQLMeshError(
-                f"Exceeded the maximum wait time for environment '{environment}' to be ready."
+                f"Exceeded the maximum wait time for environment '{environment}' to be ready. "
+                "This means that the environment either failed to update or the update is taking longer than expected. "
+                "See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#run to adjust the timeout settings."
             )
 
         done = False
@@ -508,19 +510,16 @@ class Context(BaseContext):
                     circuit_breaker=_has_environment_changed,
                 )
                 done = True
+            except CircuitBreakerError:
+                logger.warning(
+                    "Environment '%s' has been modified while running. Restarting the run...",
+                    environment,
+                )
             except Exception as e:
-                if isinstance(e, CircuitBreakerError) or isinstance(
-                    e.__cause__, CircuitBreakerError
-                ):
-                    logger.warning(
-                        "Environment '%s' has been modified while running. Restarting the run...",
-                        environment,
-                    )
-                else:
-                    self.notification_target_manager.notify(
-                        NotificationEvent.RUN_FAILURE, traceback.format_exc()
-                    )
-                    raise e
+                self.notification_target_manager.notify(
+                    NotificationEvent.RUN_FAILURE, traceback.format_exc()
+                )
+                raise e
 
         if success:
             self.notification_target_manager.notify(
