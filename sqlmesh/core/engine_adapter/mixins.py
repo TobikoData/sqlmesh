@@ -243,7 +243,7 @@ class GetCurrentCatalogFromFunctionMixin(EngineAdapter):
         return None
 
 
-class ReplaceQueryInsteadOfUpdateMixin(EngineAdapter):
+class ReplaceQueryInsteadOfRowLevelMixin(EngineAdapter):
     def update_table(
         self,
         table_name: TableName,
