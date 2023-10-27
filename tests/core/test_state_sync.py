@@ -22,6 +22,7 @@ from sqlmesh.core.model import (
     SqlModel,
 )
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotId,
@@ -76,6 +77,7 @@ def promote_snapshots(
     state_sync: EngineAdapterStateSync,
     snapshots: t.List[Snapshot],
     environment: str,
+    deployability_index: t.Optional[DeployabilityIndex] = None,
     no_gaps: bool = False,
     environment_suffix_target: EnvironmentSuffixTarget = EnvironmentSuffixTarget.SCHEMA,
 ) -> PromotionResult:
@@ -88,7 +90,7 @@ def promote_snapshots(
         plan_id="test_plan_id",
         previous_plan_id="test_plan_id",
     )
-    return state_sync.promote(env, no_gaps=no_gaps)
+    return state_sync.promote(env, deployability_index=deployability_index, no_gaps=no_gaps)
 
 
 def delete_versions(state_sync: EngineAdapterStateSync) -> None:
@@ -663,6 +665,15 @@ def test_promote_snapshots_no_gaps(state_sync: EngineAdapterStateSync, make_snap
     state_sync.push_snapshots([new_snapshot_same_interval])
     state_sync.add_interval(new_snapshot_same_interval, "2022-01-01", "2022-01-03")
     promote_snapshots(state_sync, [new_snapshot_same_interval], "prod", no_gaps=True)
+
+    # We should skip the gaps check if the snapshot is not representative.
+    promote_snapshots(
+        state_sync,
+        [new_snapshot_missing_interval],
+        "prod",
+        deployability_index=DeployabilityIndex.none_deployable(),
+        no_gaps=True,
+    )
 
 
 def test_finalize(state_sync: EngineAdapterStateSync, make_snapshot: t.Callable):

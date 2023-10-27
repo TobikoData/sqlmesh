@@ -176,7 +176,9 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to promote.
             deployability_index: Indicates which snapshots are deployable in the context of this promotion.
         """
-        promotion_result = self.state_sync.promote(plan.environment, no_gaps=plan.no_gaps)
+        promotion_result = self.state_sync.promote(
+            plan.environment, deployability_index=deployability_index, no_gaps=plan.no_gaps
+        )
 
         if not plan.is_dev:
             self.snapshot_evaluator.migrate(
