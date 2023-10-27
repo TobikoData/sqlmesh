@@ -13,6 +13,7 @@ from sqlmesh.core.model.kind import (
 from sqlmesh.core.scheduler import Scheduler, compute_interval_params
 from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator
 from sqlmesh.utils.date import to_datetime
+from sqlmesh.utils.errors import CircuitBreakerError
 
 
 @pytest.fixture
@@ -196,3 +197,14 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
             ),
         },
     }
+
+
+def test_circuit_breaker(scheduler: Scheduler):
+    with pytest.raises(CircuitBreakerError):
+        scheduler.run(
+            EnvironmentNamingInfo(),
+            "2022-01-01",
+            "2022-01-03",
+            "2022-01-30",
+            circuit_breaker=lambda: True,
+        )
