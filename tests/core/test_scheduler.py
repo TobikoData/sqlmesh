@@ -68,11 +68,11 @@ def test_interval_params_missing(scheduler: Scheduler, sushi_context_fixed_date:
 
     start_ds = "2022-01-01"
     end_ds = "2022-03-01"
-    assert compute_interval_params([waiters], start=start_ds, end=end_ds, is_dev=False) == {
-        waiters: [
-            (to_datetime(start_ds), to_datetime("2022-03-02")),
-        ]
-    }
+    assert compute_interval_params(
+        sushi_context_fixed_date.snapshots.values(), start=start_ds, end=end_ds, is_dev=False
+    )[waiters] == [
+        (to_datetime(start_ds), to_datetime("2022-03-02")),
+    ]
 
 
 def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):

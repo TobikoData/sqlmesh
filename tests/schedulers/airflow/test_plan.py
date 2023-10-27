@@ -36,6 +36,7 @@ def snapshot(make_snapshot, random_name) -> Snapshot:
             random_name(),
             parse_one("SELECT 1, ds"),
             kind=IncrementalByTimeRangeKind(time_column="ds"),
+            start="2022-01-01",
         ),
     )
     result.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -50,6 +51,7 @@ def depends_on_past_snapshot(make_snapshot, random_name) -> Snapshot:
             name,
             parse_one(f"SELECT 1, ds FROM {name}"),
             kind=IncrementalByTimeRangeKind(time_column="ds", batch_size=1),
+            start="2022-01-01",
         ),
     )
     result.categorize_as(SnapshotChangeCategory.BREAKING)

@@ -23,7 +23,7 @@ from sqlmesh.core.state_sync.base import (
     SnapshotTableCleanupTask,
     StateSync,
 )
-from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime
+from sqlmesh.utils.date import TimeLike, now, now_timestamp, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
@@ -304,15 +304,18 @@ class CommonStateSyncMixin(StateSync):
                 and prev_snapshot.is_incremental_by_time_range
                 and prev_snapshot.intervals
             ):
-                missing_intervals = target_snapshot.missing_intervals(
+                start = to_timestamp(
                     start_date(target_snapshot, target_snapshots_by_name.values(), cache)
-                    or prev_snapshot.intervals[0][0],
-                    prev_snapshot.intervals[-1][1],
                 )
-                if missing_intervals:
-                    raise SQLMeshError(
-                        f"Detected gaps in snapshot {target_snapshot.snapshot_id}: {missing_intervals}"
-                    )
+                end = prev_snapshot.intervals[-1][1]
+
+                if start < end:
+                    missing_intervals = target_snapshot.missing_intervals(start, end)
+
+                    if missing_intervals:
+                        raise SQLMeshError(
+                            f"Detected gaps in snapshot {target_snapshot.snapshot_id}: {missing_intervals}"
+                        )
 
     @abc.abstractmethod
     def _update_environment(self, environment: Environment) -> None:

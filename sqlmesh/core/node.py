@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from datetime import datetime
 from enum import Enum
 
 from pydantic import Field
@@ -95,7 +96,7 @@ class IntervalUnit(str, Enum):
     def croniter(self, value: TimeLike) -> CroniterCache:
         return CroniterCache(self._cron_expr, value)
 
-    def cron_next(self, value: TimeLike) -> TimeLike:
+    def cron_next(self, value: TimeLike) -> datetime:
         """
         Get the next timestamp given a time-like value for this interval unit.
 
@@ -107,7 +108,7 @@ class IntervalUnit(str, Enum):
         """
         return self.croniter(value).get_next()
 
-    def cron_prev(self, value: TimeLike) -> TimeLike:
+    def cron_prev(self, value: TimeLike) -> datetime:
         """
         Get the previous timestamp given a time-like value for this interval unit.
 
@@ -119,7 +120,7 @@ class IntervalUnit(str, Enum):
         """
         return self.croniter(value).get_prev()
 
-    def cron_floor(self, value: TimeLike) -> TimeLike:
+    def cron_floor(self, value: TimeLike) -> datetime:
         """
         Get the floor timestamp given a time-like value for this interval unit.
 
@@ -283,7 +284,7 @@ class _Node(PydanticModel):
             self._croniter.curr = to_datetime(value)
         return self._croniter
 
-    def cron_next(self, value: TimeLike) -> TimeLike:
+    def cron_next(self, value: TimeLike) -> datetime:
         """
         Get the next timestamp given a time-like value and the node's cron.
 
@@ -295,7 +296,7 @@ class _Node(PydanticModel):
         """
         return self.croniter(value).get_next()
 
-    def cron_prev(self, value: TimeLike) -> TimeLike:
+    def cron_prev(self, value: TimeLike) -> datetime:
         """
         Get the previous timestamp given a time-like value and the node's cron.
 
@@ -307,7 +308,7 @@ class _Node(PydanticModel):
         """
         return self.croniter(value).get_prev()
 
-    def cron_floor(self, value: TimeLike) -> TimeLike:
+    def cron_floor(self, value: TimeLike) -> datetime:
         """
         Get the floor timestamp given a time-like value and the node's cron.
 
