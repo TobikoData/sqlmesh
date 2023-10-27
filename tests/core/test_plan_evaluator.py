@@ -3,17 +3,16 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import parse_one
 
 from sqlmesh.core.context import Context
-from sqlmesh.core.model import FullKind, IncrementalByTimeRangeKind, SqlModel, ViewKind
+from sqlmesh.core.model import FullKind, SqlModel, ViewKind
 from sqlmesh.core.plan import (
     AirflowPlanEvaluator,
     BuiltInPlanEvaluator,
     MWAAPlanEvaluator,
     Plan,
-    can_evaluate_before_promote,
     update_intervals_for_new_snapshots,
 )
 from sqlmesh.core.snapshot import SnapshotChangeCategory
-from sqlmesh.utils.date import now_timestamp, to_timestamp
+from sqlmesh.utils.date import to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 
 
@@ -142,64 +141,6 @@ def test_mwaa_evaluator(sushi_plan: Plan, mocker: MockerFixture):
 
     mwaa_client_mock.wait_for_dag_run_completion.assert_called_once()
     mwaa_client_mock.wait_for_first_dag_run.assert_called_once()
-
-
-def test_can_evaluate_before_promote(sushi_context: Context):
-    parent_model_a = SqlModel(
-        name="sushi.new_test_model_a",
-        kind=IncrementalByTimeRangeKind(time_column="ds"),
-        cron="@daily",
-        start="2020-01-01",
-        query=parse_one("SELECT 1::INT AS one, '2023-01-01' as ds"),
-    )
-    parent_model_b = SqlModel(
-        name="sushi.new_test_model_b",
-        kind=IncrementalByTimeRangeKind(time_column="ds"),
-        cron="@daily",
-        start="2020-01-01",
-        query=parse_one("SELECT 2::INT AS two, '2023-01-01' as ds"),
-    )
-    child_model = SqlModel(
-        name="sushi.new_test_model_child",
-        kind=FullKind(),
-        start="2020-01-01",
-        query=parse_one("SELECT one, two FROM sushi.new_test_model_a, sushi.new_test_model_b"),
-    )
-
-    sushi_context.upsert_model(parent_model_a)
-    sushi_context.upsert_model(parent_model_b)
-    sushi_context.upsert_model(child_model)
-
-    snapshots = sushi_context.snapshots
-
-    parent_snapshot_a = snapshots[parent_model_a.name]
-    parent_snapshot_b = snapshots[parent_model_b.name]
-    child_snapshot = snapshots[child_model.name]
-
-    all_snapshots = {
-        s.snapshot_id: s for s in [parent_snapshot_a, parent_snapshot_b, child_snapshot]
-    }
-
-    parent_snapshot_a.change_category = SnapshotChangeCategory.BREAKING
-    parent_snapshot_b.change_category = SnapshotChangeCategory.BREAKING
-    child_snapshot.change_category = SnapshotChangeCategory.BREAKING
-    assert can_evaluate_before_promote(child_snapshot, all_snapshots)
-
-    parent_snapshot_a.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    parent_snapshot_b.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    assert not can_evaluate_before_promote(child_snapshot, all_snapshots)
-
-    parent_snapshot_a.unpaused_ts = now_timestamp()
-    assert not can_evaluate_before_promote(child_snapshot, all_snapshots)
-
-    parent_snapshot_b.unpaused_ts = now_timestamp()
-    assert can_evaluate_before_promote(child_snapshot, all_snapshots)
-
-    child_snapshot.change_category = SnapshotChangeCategory.FORWARD_ONLY
-    assert not can_evaluate_before_promote(child_snapshot, all_snapshots)
-
-    child_snapshot.unpaused_ts = now_timestamp()
-    assert can_evaluate_before_promote(child_snapshot, all_snapshots)
 
 
 @pytest.mark.parametrize(

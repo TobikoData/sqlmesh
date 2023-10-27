@@ -403,14 +403,6 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
 
 
-def can_evaluate_before_promote(
-    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
-) -> bool:
-    return not snapshot.is_paused_forward_only and not any(
-        snapshots[p_id].is_paused_forward_only for p_id in snapshot.parents
-    )
-
-
 def update_intervals_for_new_snapshots(
     snapshots: t.Collection[Snapshot], state_sync: StateSync
 ) -> None:
