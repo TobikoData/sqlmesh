@@ -82,14 +82,27 @@ class DuckDBConnectionConfig(ConnectionConfig):
 
     Args:
         database: The optional database name. If not specified, the in-memory database will be used.
+        catalogs: Key is the name of the catalog and value is the path.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
     """
 
     database: t.Optional[str] = None
+    catalogs: t.Optional[t.Dict[str, str]] = None
 
     concurrent_tasks: Literal[1] = 1
 
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _validate_database_catalogs(
+        cls, values: t.Dict[str, t.Optional[str]]
+    ) -> t.Dict[str, t.Optional[str]]:
+        if values.get("database") and values.get("catalogs"):
+            raise ConfigError(
+                "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
+            )
+        return values
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -104,6 +117,26 @@ class DuckDBConnectionConfig(ConnectionConfig):
         import duckdb
 
         return duckdb.connect
+
+    def create_engine_adapter(self) -> EngineAdapter:
+        """Returns a new instance of the Engine Adapter."""
+        from duckdb import BinderException
+
+        engine_adapter = super().create_engine_adapter()
+        for i, (alias, path) in enumerate((self.catalogs or {}).items()):
+            try:
+                engine_adapter.execute(f"ATTACH '{path}' AS {alias}")
+            except BinderException as e:
+                # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
+                # then we don't want to raise since this happens by default. They are just doing this to
+                # set it as the default catalog.
+                if not (
+                    'database with name "memory" already exists' in str(e) and path == ":memory:"
+                ):
+                    raise e
+            if i == 0 and not self.database:
+                engine_adapter.set_current_catalog(alias)
+        return engine_adapter
 
 
 class SnowflakeConnectionConfig(ConnectionConfig):

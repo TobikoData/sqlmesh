@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import math
 import typing as t
 
 from sqlglot import exp
 
-from sqlmesh.core.engine_adapter.base import SourceQuery
-from sqlmesh.core.engine_adapter.mixins import LogicalMergeMixin
+from sqlmesh.core.engine_adapter.base import CatalogSupport, SourceQuery
+from sqlmesh.core.engine_adapter.mixins import (
+    GetCurrentCatalogFromFunctionMixin,
+    LogicalMergeMixin,
+)
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 
 if t.TYPE_CHECKING:
@@ -14,9 +16,15 @@ if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import DF
 
 
-class DuckDBEngineAdapter(LogicalMergeMixin):
+class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin):
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
+    CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
+    CURRENT_CATALOG_FUNCTION = "current_catalog()"
+
+    def set_current_catalog(self, catalog: str) -> None:
+        """Sets the catalog name of the current connection."""
+        self.execute(f"USE {catalog}")
 
     def _df_to_source_queries(
         self,
@@ -39,14 +47,15 @@ class DuckDBEngineAdapter(LogicalMergeMixin):
             )
         ]
 
-    @set_catalog()
+    @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
+        current_catalog = self.get_current_catalog()
         query = f"""
             SELECT
-              NULL as catalog,
+              '{current_catalog}' as catalog,
               table_name as name,
               table_schema as schema,
               CASE table_type
@@ -60,7 +69,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin):
         df = self.fetchdf(query)
         return [
             DataObject(
-                catalog=None if math.isnan(row.catalog) else row.catalog,  # type: ignore
+                catalog=row.catalog,  # type: ignore
                 schema=row.schema,  # type: ignore
                 name=row.name,  # type: ignore
                 type=DataObjectType.from_str(row.type),  # type: ignore
