@@ -1323,6 +1323,4 @@ def test_earliest_start_date(sushi_context: Context):
 
     cache: t.Dict[str, datetime] = {}
     earliest_start_date(sushi_context.snapshots.values(), cache)
-
-    # Make sure that the default value for a snapshot with a missing start is not cached.
-    assert model_name not in cache
+    assert cache[model_name] == to_datetime("yesterday")

@@ -66,7 +66,7 @@ def test_forward_only_plan_with_effective_date(mocker: MockerFixture):
 
     model_name = "sushi.waiter_revenue_by_day"
     model = context.models[model_name]
-    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)), start="2023-01-01")
 
     plan = context.plan("dev", no_prompts=True, skip_tests=True, forward_only=True)
     assert len(plan.new_snapshots) == 2
