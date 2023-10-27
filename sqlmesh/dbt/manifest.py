@@ -63,6 +63,8 @@ class ManifestHelper:
         self._macros_per_package: t.Dict[str, MacroConfigs] = defaultdict(dict)
 
         self._tests_by_owner: t.Dict[str, t.List[TestConfig]] = defaultdict(list)
+        self._disabled_refs: t.Optional[t.Set[str]] = None
+        self._disabled_sources: t.Optional[t.Set[str]] = None
 
     def tests(self, package_name: t.Optional[str] = None) -> TestConfigs:
         self._load_all()
@@ -123,7 +125,7 @@ class ManifestHelper:
 
             dependencies = Dependencies(macros=_macro_references(self._manifest, macro))
             if not macro.name.startswith("materialization_") and not macro.name.startswith("test_"):
-                dependencies = dependencies.union(_extra_dependencies(macro.macro_sql))
+                dependencies = dependencies.union(self._extra_dependencies(macro.macro_sql))
 
             self._macros_per_package[macro.package_name][macro.name] = MacroConfig(
                 info=MacroInfo(
@@ -140,21 +142,16 @@ class ManifestHelper:
                 continue
 
             skip_test = False
-            package_name = node.package_name
             refs = _refs(node)
             for ref in refs:
-                if "." not in ref:
-                    ref = f"{package_name}.{ref}"
-                for node_type in ("model", "seed", "snapshot"):
-                    ref_node_name = f"{node_type}.{ref}"
-                    if ref_node_name in self._manifest.disabled:
-                        logger.info(
-                            "Skipping test '%s' which references a disabled model '%s'",
-                            node.name,
-                            ref,
-                        )
-                        skip_test = True
-                        break
+                if self._is_disabled_ref(ref):
+                    logger.info(
+                        "Skipping test '%s' which references a disabled model '%s'",
+                        node.name,
+                        ref,
+                    )
+                    skip_test = True
+                    break
 
             if skip_test:
                 continue
@@ -169,9 +166,9 @@ class ManifestHelper:
             dependencies.macros.append(MacroReference(package="dbt", name="should_store_failures"))
 
             sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
-            dependencies = dependencies.union(_extra_dependencies(sql))
+            dependencies = dependencies.union(self._extra_dependencies(sql))
             dependencies = dependencies.union(
-                self._macro_source_ref_dependencies(dependencies.macros, package_name)
+                self._macro_source_ref_dependencies(dependencies.macros, node.package_name)
             )
 
             test_model = _test_model(node)
@@ -203,7 +200,7 @@ class ManifestHelper:
                 dependencies = Dependencies(
                     macros=macro_references, refs=_refs(node), sources=_sources(node)
                 )
-                dependencies = dependencies.union(_extra_dependencies(sql))
+                dependencies = dependencies.union(self._extra_dependencies(sql))
                 dependencies = dependencies.union(
                     self._macro_source_ref_dependencies(dependencies.macros, node.package_name)
                 )
@@ -270,6 +267,35 @@ class ManifestHelper:
             target_override=self.target.name,
         )
 
+    def _is_disabled_ref(self, ref: str) -> bool:
+        if self._disabled_refs is None:
+            self._load_disabled()
+
+        return ref in self._disabled_refs  # type: ignore
+
+    def _is_disabled_source(self, source: str) -> bool:
+        if self._disabled_sources is None:
+            self._load_disabled()
+
+        return source in self._disabled_sources  # type: ignore
+
+    def _load_disabled(self) -> None:
+        self._disabled_refs = set()
+        self._disabled_sources = set()
+        for nodes in self._manifest.disabled.values():
+            for node in nodes:
+                if node.resource_type in ("model", "snapshot", "seed"):
+                    self._disabled_refs.add(f"{node.package_name}.{node.name}")
+                    self._disabled_refs.add(node.name)
+                elif node.resource_type == "source":
+                    self._disabled_sources.add(f"{node.package_name}.{node.name}")
+
+        for node in self._manifest.nodes.values():
+            if node.resource_type in ("model", "snapshot", "seed"):
+                self._disabled_refs.discard(node.name)
+            elif node.resource_type == "source":
+                self._disabled_sources.discard(node.name)
+
     def _macro_source_ref_dependencies(
         self, macros: t.List[MacroReference], default_package: str
     ) -> Dependencies:
@@ -281,6 +307,29 @@ class ManifestHelper:
             if macro_config:
                 dependencies = dependencies.union(macro_config.dependencies)
         dependencies.macros = []
+        return dependencies
+
+    def _extra_dependencies(self, target: str) -> Dependencies:
+        # We sometimes observe that the manifest doesn't capture all macros, refs, and sources within a macro.
+        # This behavior has been observed with macros like dbt.current_timestamp(), dbt_utils.slugify(), and source().
+        # Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
+        dependencies = Dependencies()
+        for call_name, node in extract_call_names(target):
+            if len(call_name) == 2 and call_name[0] in ("dbt", "dbt_utils"):
+                dependencies.macros.append(MacroReference(package=call_name[0], name=call_name[1]))
+            elif call_name[0] == "source":
+                args = [_jinja_call_arg_name(arg) for arg in node.args]
+                if args and all(arg for arg in args):
+                    source = ".".join(args)
+                    if not self._is_disabled_source(source):
+                        dependencies.sources.append(source)
+            elif call_name[0] == "ref":
+                args = [_jinja_call_arg_name(arg) for arg in node.args]
+                if args and all(arg for arg in args):
+                    ref = ".".join(args)
+                    if not self._is_disabled_ref(ref):
+                        dependencies.refs.append(ref)
+
         return dependencies
 
 
@@ -353,29 +402,7 @@ def _convert_jinja_test_to_macro(test_jinja: str) -> str:
     return re.sub(ENDTEST_REGEX, "{% endmacro %}", macro)
 
 
-def _extra_dependencies(target: str) -> Dependencies:
-    # We sometimes observe that the manifest doesn't capture certain macros referenced in the model.
-    # This behavior has been observed with macros like dbt.current_timestamp() and dbt_utils.slugify().
-    # Here we apply our custom extractor in addition to referenced extracted from the manifest to mitigate this.
-    dependencies = Dependencies()
-    for call_name, node in extract_call_names(target):
-        if len(call_name) == 2 and call_name[0] in ("dbt", "dbt_utils"):
-            dependencies.macros.append(MacroReference(package=call_name[0], name=call_name[1]))
-        elif call_name[0] == "source":
-            source = ".".join(_jinja_call_arg_name(arg) for arg in node.args)
-            if source:
-                dependencies.sources.append(source)
-        elif call_name[0] == "ref":
-            ref = ".".join(_jinja_call_arg_name(arg) for arg in node.args)
-            if ref:
-                dependencies.refs.append(ref)
-
-    return dependencies
-
-
 def _jinja_call_arg_name(node: nodes.Node) -> str:
-    if isinstance(node, nodes.Name):
-        return node.name
     if isinstance(node, nodes.Const):
         return node.value
     return ""
