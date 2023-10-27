@@ -119,6 +119,11 @@ class UnsupportedCatalogOperationError(EngineAdapterError):
     pass
 
 
+class CircuitBreakerError(SQLMeshError):
+    def __init__(self) -> None:
+        super().__init__("Circuit breaker has been triggered.")
+
+
 def raise_config_error(
     msg: str,
     location: t.Optional[str | Path] = None,

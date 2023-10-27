@@ -30,7 +30,7 @@ from sqlmesh.utils.date import (
     to_datetime,
     validate_date_range,
 )
-from sqlmesh.utils.errors import AuditError, SQLMeshError
+from sqlmesh.utils.errors import AuditError, CircuitBreakerError, SQLMeshError
 
 logger = logging.getLogger(__name__)
 Interval = t.Tuple[datetime, datetime]
@@ -193,6 +193,7 @@ class Scheduler:
         restatements: t.Optional[t.Dict[str, SnapshotInterval]] = None,
         ignore_cron: bool = False,
         selected_snapshots: t.Optional[t.Set[str]] = None,
+        circuit_breaker: t.Optional[t.Callable[[], bool]] = None,
     ) -> bool:
         """Concurrently runs all snapshots in topological order.
 
@@ -206,6 +207,7 @@ class Scheduler:
             restatements: A dict of snapshots to restate and their intervals.
             ignore_cron: Whether to ignore the node's cron schedule.
             selected_snapshots: A set of snapshot names to run. If not provided, all snapshots will be run.
+            circuit_breaker: An optional handler which checks if the run should be aborted.
 
         Returns:
             True if the execution was successful and False otherwise.
@@ -251,7 +253,8 @@ class Scheduler:
         )
 
         def evaluate_node(node: SchedulingUnit) -> None:
-            assert execution_time
+            if circuit_breaker and circuit_breaker():
+                raise CircuitBreakerError()
 
             snapshot, ((start, end), batch_idx) = node
             self.console.start_snapshot_evaluation_progress(snapshot)
@@ -260,6 +263,7 @@ class Scheduler:
             evaluation_duration_ms: t.Optional[int] = None
 
             try:
+                assert execution_time
                 self.evaluate(snapshot, start, end, execution_time, is_dev=is_dev)
                 evaluation_duration_ms = now_timestamp() - execution_start_ts
             finally:

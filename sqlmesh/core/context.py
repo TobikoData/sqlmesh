@@ -36,6 +36,7 @@ import abc
 import collections
 import gc
 import logging
+import time
 import traceback
 import typing as t
 import unittest.result
@@ -98,6 +99,7 @@ from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_date
 from sqlmesh.utils.errors import (
+    CircuitBreakerError,
     ConfigError,
     MissingDependencyError,
     PlanError,
@@ -450,22 +452,76 @@ class Context(BaseContext):
             True if the run was successful, False otherwise.
         """
         environment = environment or self.config.default_target_environment
+
+        if not skip_janitor and environment.lower() == c.PROD:
+            self._run_janitor()
+
         self.notification_target_manager.notify(
             NotificationEvent.RUN_START, environment=environment
         )
-        try:
-            success = self.scheduler(environment=environment).run(
-                environment,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                ignore_cron=ignore_cron,
+
+        env_check_attempts_num = max(
+            1,
+            self.config.run.environment_check_max_wait
+            // self.config.run.environment_check_interval,
+        )
+
+        def _block_until_finalized() -> str:
+            for _ in range(env_check_attempts_num):
+                assert environment is not None  # mypy
+                environment_state = self.state_sync.get_environment(environment)
+                if not environment_state:
+                    raise SQLMeshError(f"Environment '{environment}' was not found.")
+                if environment_state.finalized_ts:
+                    return environment_state.plan_id
+                logger.warning(
+                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
+                    environment,
+                    environment_state.plan_id,
+                    self.config.run.environment_check_interval,
+                )
+                time.sleep(self.config.run.environment_check_interval)
+            raise SQLMeshError(
+                f"Exceeded the maximum wait time for environment '{environment}' to be ready."
             )
-        except Exception as e:
-            self.notification_target_manager.notify(
-                NotificationEvent.RUN_FAILURE, traceback.format_exc()
-            )
-            raise e
+
+        done = False
+        while not done:
+            plan_id_at_start = _block_until_finalized()
+
+            def _has_environment_changed() -> bool:
+                assert environment is not None  # mypy
+                current_environment_state = self.state_sync.get_environment(environment)
+                return (
+                    not current_environment_state
+                    or current_environment_state.plan_id != plan_id_at_start
+                    or not current_environment_state.finalized_ts
+                )
+
+            try:
+                success = self.scheduler(environment=environment).run(
+                    environment,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    ignore_cron=ignore_cron,
+                    circuit_breaker=_has_environment_changed,
+                )
+                done = True
+            except Exception as e:
+                if isinstance(e, CircuitBreakerError) or isinstance(
+                    e.__cause__, CircuitBreakerError
+                ):
+                    logger.warning(
+                        "Environment '%s' has been modified while running. Restarting the run...",
+                        environment,
+                    )
+                else:
+                    self.notification_target_manager.notify(
+                        NotificationEvent.RUN_FAILURE, traceback.format_exc()
+                    )
+                    raise e
+
         if success:
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_END, environment=environment
@@ -475,9 +531,6 @@ class Context(BaseContext):
                 NotificationEvent.RUN_FAILURE, environment=environment
             )
             return success
-
-        if not skip_janitor and environment.lower() == c.PROD:
-            self._run_janitor()
 
         return success
 
