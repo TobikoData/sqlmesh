@@ -250,13 +250,21 @@ def engine_adapter(request, config) -> EngineAdapter:
     if gateway not in config.gateways:
         # TODO: Once everything is fully setup we want to error if a gateway is not configured that we expect
         pytest.skip(f"Gateway {gateway} not configured")
-    engine_adapter = config.gateways[gateway].connection.create_engine_adapter()
+    connection_config = config.gateways[gateway].connection
+    engine_adapter = connection_config.create_engine_adapter()
     # Trino: If we batch up the requests then when running locally we get a table not found error after creating the
     # table and then immediately after trying to insert rows into it. There seems to be a delay between when the
     # metastore is made aware of the table and when it responds that it exists. I'm hoping this is not an issue
     # in practice on production machines.
     if request.param != "trino":
         engine_adapter.DEFAULT_BATCH_SIZE = 1
+    # Clear our any local db files that may have been left over from previous runs
+    if request.param == "duckdb":
+        for raw_path in (connection_config.catalogs or {}).values():
+            # Once 3.7 support is dropped this can be changed to `pathlib.Path(path).unlink(missing_ok=True)`
+            path = pathlib.Path(raw_path)
+            if path.is_file():
+                path.unlink()
     return engine_adapter
 
 
@@ -271,7 +279,7 @@ def ctx(engine_adapter, test_type):
 
 
 def test_catalog_operations(ctx: TestContext):
-    if ctx.dialect in {"mysql", "redshift", "postgres", "duckdb"}:
+    if ctx.dialect in {"mysql", "redshift", "postgres"}:
         pytest.skip(
             f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
         )

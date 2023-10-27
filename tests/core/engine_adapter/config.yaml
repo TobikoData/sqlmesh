@@ -2,6 +2,9 @@ gateways:
   inttest_duckdb:
     connection:
       type: duckdb
+      catalogs:
+        memory: ':memory:'
+        testing: 'testing.duckdb'
   inttest_trino:
     connection:
       type: trino
