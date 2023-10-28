@@ -1726,7 +1726,7 @@ def create_python_model(
     depends_on = (
         _parse_depends_on(entrypoint, python_env) - {name}
         if depends_on is None and python_env is not None
-        else None
+        else depends_on
     )
     return _create_model(
         PythonModel,

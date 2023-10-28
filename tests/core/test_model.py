@@ -1303,6 +1303,24 @@ WHERE
     )
 
 
+def test_python_model_depends_on() -> None:
+    @model(
+        name="model_with_depends_on", kind="full", columns={'"COL"': "int"}, depends_on=["foo.bar"]
+    )
+    def my_model(context, **kwargs):
+        context.table("foo")
+        context.table(model_name=CONST + ".baz")
+
+    m = model.get_registry()["model_with_depends_on"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    # We are not expecting the context.table() calls to be reflected in the model's depends_on since we
+    # explicitly specified the depends_on argument.
+    assert m.depends_on == {"foo.bar"}
+
+
 def test_python_models_returning_sql(assert_exp_eq) -> None:
     config = Config(model_defaults=ModelDefaultsConfig(dialect="snowflake"))
     context = Context(config=config)
