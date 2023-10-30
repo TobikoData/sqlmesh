@@ -42,6 +42,15 @@ The `model_defaults` key is **required** and must contain a value for the `diale
 
 See all the keys allowed in `model_defaults` at the [model configuration reference page](./model_configuration.md#model-defaults).
 
+### Run
+
+Configuration for the `sqlmesh run` command. Please note that this is only applicable when configured with the [builtin](#builtin) scheduler.
+
+| Option                       | Description                                                                                                        | Type | Required |
+|------------------------------|--------------------------------------------------------------------------------------------------------------------|:----:|:--------:|
+| `environment_check_interval` | The number of seconds to wait between attempts to check the target environment for readiness (Default: 30 seconds) | int  | N        |
+| `environment_check_max_wait` | The maximum number of seconds to wait for the target environment to be ready (Default: 6 hours)                    | int  | N        |
+
 ## Gateways
 
 The `gateways` dictionary defines how SQLMesh should connect to the data warehouse, state backend, test backend, and scheduler.
