@@ -37,6 +37,8 @@ def test_sorted():
     assert result[5] in ("b", "c")
     assert result[6] == "a"
 
+
+def test_sorted_with_cycles():
     dag = DAG({"a": {}, "b": {"a"}, "c": {"b"}, "d": {"b", "e"}, "e": {"b", "d"}})
 
     with pytest.raises(SQLMeshError) as ex:
@@ -49,6 +51,30 @@ def test_sorted():
     )
 
     assert expected_error_message == str(ex.value)
+
+    dag = DAG({"a": {"b"}, "b": {"c"}, "c": {"a"}})
+
+    with pytest.raises(SQLMeshError) as ex:
+        dag.sorted
+
+    expected_error_message = (
+        "Detected a cycle in the DAG. Please make sure there are no circular references between nodes.\n"
+        "Possible candidates to check for circular references: a, b, c"
+    )
+
+    assert expected_error_message == str(ex.value)
+
+    dag = DAG({"a": {}, "b": {"a", "d"}, "c": {"a"}, "d": {"b"}})
+
+    with pytest.raises(SQLMeshError) as ex:
+        dag.sorted
+
+    expected_error_message = (
+        "Last nodes added to the DAG: c\n"
+        "Possible candidates to check for circular references: b, d"
+    )
+
+    assert expected_error_message in str(ex.value)
 
 
 def test_reversed_graph():
