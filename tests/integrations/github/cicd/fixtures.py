@@ -44,7 +44,8 @@ def make_pull_request_review() -> t.Callable:
             "test",  # type: ignore
             {},
             {
-                "user": AttributeDict(name=username),
+                # Name is whatever they provide in their GitHub profile or login as fallback. Always use login.
+                "user": AttributeDict(name="Unrelated", login=username),
                 "state": state,
                 **kwargs,
             },
