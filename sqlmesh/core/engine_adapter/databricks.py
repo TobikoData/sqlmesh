@@ -41,6 +41,7 @@ class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAda
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
         cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
         **kwargs: t.Any,
     ):
         super().__init__(
@@ -49,6 +50,7 @@ class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAda
             sql_gen_kwargs,
             multithreaded,
             cursor_kwargs,
+            cursor_init,
             **kwargs,
         )
         self._spark: t.Optional[PySparkSession] = None
