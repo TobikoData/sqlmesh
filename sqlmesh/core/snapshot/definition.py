@@ -1119,7 +1119,9 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         representative_shared_version_ids: t.Set[SnapshotId] = set()
 
         def _visit(node: SnapshotId, deployable: bool = True) -> None:
-            if deployability_mapping.get(node) in (False, deployable):
+            if deployability_mapping.get(node) in (False, deployable) and (
+                deployable or node not in representative_shared_version_ids
+            ):
                 return
 
             if deployable:

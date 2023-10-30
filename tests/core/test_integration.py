@@ -530,6 +530,196 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
     assert prod_df.empty
 
 
+@freeze_time("2023-01-08 15:00:00")
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_indirect_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi", mocker)
+    context.apply(plan)
+
+    # Make sushi.orders a forward-only model.
+    model = context.models["sushi.orders"]
+    updated_model_kind = model.kind.copy(update={"forward_only": True})
+    model = model.copy(update={"stamp": "force new version", "kind": updated_model_kind})
+    context.upsert_model(model)
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    assert (
+        plan.context_diff.snapshots["sushi.orders"].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert not plan.requires_backfill
+    context.apply(plan)
+
+    # Make a non-breaking change to a model.
+    model = context.models["sushi.top_waiters"]
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    assert len(plan.new_snapshots) == 1
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert plan.start == to_timestamp("2023-01-01")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    # Apply the non-breaking changes.
+    context.apply(plan)
+
+    # Make a non-breaking change upstream from the previously modified model.
+    model = context.models["sushi.waiter_revenue_by_day"]
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, model)))
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    assert len(plan.new_snapshots) == 2
+    assert (
+        plan.context_diff.snapshots["sushi.waiter_revenue_by_day"].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.INDIRECT_NON_BREAKING
+    )
+    assert plan.start == to_timestamp("2023-01-01")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.waiter_revenue_by_day",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    # Apply the upstream non-breaking changes.
+    context.apply(plan)
+    assert not context.plan("dev", no_prompts=True, skip_tests=True).requires_backfill
+
+    # Deploy everything to prod.
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    assert plan.start == to_timestamp("2023-01-01")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.waiter_revenue_by_day",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.top_waiters",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+    assert not context.plan("prod", no_prompts=True, skip_tests=True).requires_backfill
+
+
+@freeze_time("2023-01-08 15:00:00")
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_forward_only_precedence_over_indirect_non_breaking(mocker: MockerFixture):
+    context, plan = init_and_plan_context("examples/sushi", mocker)
+    context.apply(plan)
+
+    # Make sushi.orders a forward-only model.
+    forward_only_model = context.models["sushi.orders"]
+    updated_model_kind = forward_only_model.kind.copy(update={"forward_only": True})
+    forward_only_model = forward_only_model.copy(
+        update={"stamp": "force new version", "kind": updated_model_kind}
+    )
+    context.upsert_model(forward_only_model)
+
+    non_breaking_model = context.models["sushi.waiter_revenue_by_day"]
+    context.upsert_model(add_projection_to_model(t.cast(SqlModel, non_breaking_model)))
+
+    plan = context.plan("dev", no_prompts=True, skip_tests=True)
+    assert (
+        plan.context_diff.snapshots["sushi.orders"].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.waiter_revenue_by_day"].change_category
+        == SnapshotChangeCategory.NON_BREAKING
+    )
+    assert (
+        plan.context_diff.snapshots["sushi.top_waiters"].change_category
+        == SnapshotChangeCategory.FORWARD_ONLY
+    )
+    assert plan.start == to_timestamp("2023-01-01")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.waiter_revenue_by_day",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+    assert not context.plan("dev", no_prompts=True, skip_tests=True).requires_backfill
+
+    # Deploy everything to prod.
+    plan = context.plan("prod", no_prompts=True, skip_tests=True)
+    assert plan.start == to_timestamp("2023-01-01")
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.waiter_revenue_by_day",
+            intervals=[
+                (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+                (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+                (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+                (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+                (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+                (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+                (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+            ],
+        ),
+    ]
+
+    context.apply(plan)
+    assert not context.plan("prod", no_prompts=True, skip_tests=True).requires_backfill
+
+
 @pytest.mark.integration
 @pytest.mark.core_integration
 @pytest.mark.parametrize(
