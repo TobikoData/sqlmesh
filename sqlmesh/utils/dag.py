@@ -74,9 +74,9 @@ class DAG(t.Generic[T]):
         return self.subdag(node).sorted[:-1]
 
     @property
-    def leaves(self) -> t.Set[T]:
+    def roots(self) -> t.Set[T]:
         """Returns all nodes in the graph without any upstream dependencies."""
-        return {dep for deps in self._dag.values() for dep in deps if dep not in self._dag}
+        return {node for node, deps in self._dag.items() if not deps}
 
     @property
     def graph(self) -> t.Dict[T, t.Set[T]]:

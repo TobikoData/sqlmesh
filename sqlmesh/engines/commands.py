@@ -3,6 +3,7 @@ from enum import Enum
 
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotEvaluator,
     SnapshotId,
@@ -35,13 +36,13 @@ class EvaluateCommandPayload(PydanticModel):
     start: TimeLike
     end: TimeLike
     execution_time: TimeLike
-    is_dev: bool
+    deployability_index: DeployabilityIndex
 
 
 class PromoteCommandPayload(PydanticModel):
     snapshots: t.List[Snapshot]
     environment_naming_info: EnvironmentNamingInfo
-    is_dev: bool
+    deployability_index: DeployabilityIndex
 
 
 class DemoteCommandPayload(PydanticModel):
@@ -57,6 +58,7 @@ class CleanupCommandPayload(PydanticModel):
 class CreateTablesCommandPayload(PydanticModel):
     target_snapshot_ids: t.List[SnapshotId]
     snapshots: t.List[Snapshot]
+    deployability_index: DeployabilityIndex
 
 
 class MigrateTablesCommandPayload(PydanticModel):
@@ -79,7 +81,7 @@ def evaluate(
         command_payload.end,
         command_payload.execution_time,
         snapshots=parent_snapshots,
-        is_dev=command_payload.is_dev,
+        deployability_index=command_payload.deployability_index,
     )
     evaluator.audit(
         snapshot=command_payload.snapshot,
@@ -87,7 +89,7 @@ def evaluate(
         end=command_payload.end,
         execution_time=command_payload.execution_time,
         snapshots=parent_snapshots,
-        is_dev=command_payload.is_dev,
+        deployability_index=command_payload.deployability_index,
     )
 
 
@@ -99,7 +101,7 @@ def promote(
     evaluator.promote(
         command_payload.snapshots,
         command_payload.environment_naming_info,
-        is_dev=command_payload.is_dev,
+        deployability_index=command_payload.deployability_index,
     )
 
 
@@ -133,7 +135,9 @@ def create_tables(
 
     snapshots_by_id = {s.snapshot_id: s for s in command_payload.snapshots}
     target_snapshots = [snapshots_by_id[sid] for sid in command_payload.target_snapshot_ids]
-    evaluator.create(target_snapshots, snapshots_by_id)
+    evaluator.create(
+        target_snapshots, snapshots_by_id, deployability_index=command_payload.deployability_index
+    )
 
 
 def migrate_tables(

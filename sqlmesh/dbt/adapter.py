@@ -11,7 +11,7 @@ from sqlglot.helper import seq_get
 
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
-from sqlmesh.core.snapshot import Snapshot, to_table_mapping
+from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroReference
 
@@ -168,7 +168,7 @@ class RuntimeAdapter(BaseAdapter):
         quote_policy: t.Optional[Policy] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
-        is_dev: bool = False,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
     ):
         from dbt.adapters.base import BaseRelation
         from dbt.adapters.base.relation import Policy
@@ -181,7 +181,7 @@ class RuntimeAdapter(BaseAdapter):
         self.relation_type = relation_type or BaseRelation
         self.quote_policy = quote_policy or Policy()
         self.table_mapping = {
-            **to_table_mapping((snapshots or {}).values(), is_dev),
+            **to_table_mapping((snapshots or {}).values(), deployability_index),
             **table_mapping,
         }
 

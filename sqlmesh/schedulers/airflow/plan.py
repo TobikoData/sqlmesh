@@ -8,11 +8,8 @@ from sqlglot import exp
 from sqlmesh.core import scheduler
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.environment import Environment
-from sqlmesh.core.plan import (
-    can_evaluate_before_promote,
-    update_intervals_for_new_snapshots,
-)
-from sqlmesh.core.snapshot import SnapshotTableInfo
+from sqlmesh.core.plan import update_intervals_for_new_snapshots
+from sqlmesh.core.snapshot import DeployabilityIndex, SnapshotTableInfo
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.core.state_sync.base import DelegatingStateSync
 from sqlmesh.schedulers.airflow import common
@@ -121,13 +118,18 @@ def create_plan_dag_spec(
         for s, interval in intervals_to_remove:
             all_snapshots[s.snapshot_id].remove_interval(interval)
 
+    initial_deployability_index = DeployabilityIndex.create(all_snapshots)
+    deployability_index = (
+        initial_deployability_index if request.is_dev else DeployabilityIndex.all_deployable()
+    )
+
     if not request.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(
             all_snapshots.values(),
             start=request.environment.start_at,
             end=end,
             execution_time=now(),
-            is_dev=request.is_dev,
+            deployability_index=deployability_index,
             restatements=request.restatements,
             ignore_cron=True,
         )
@@ -138,7 +140,7 @@ def create_plan_dag_spec(
         common.BackfillIntervalsPerSnapshot(
             snapshot_id=s.snapshot_id,
             intervals=intervals,
-            before_promote=request.is_dev or can_evaluate_before_promote(s, all_snapshots),
+            before_promote=request.is_dev or initial_deployability_index.is_representative(s),
         )
         for s, intervals in backfill_batches.items()
     ]
@@ -148,7 +150,7 @@ def create_plan_dag_spec(
         environment_naming_info=request.environment.naming_info,
         new_snapshots=request.new_snapshots,
         backfill_intervals_per_snapshot=backfill_intervals_per_snapshot,
-        promoted_snapshots=request.environment.snapshots,
+        promoted_snapshots=request.environment.promoted_snapshots,
         demoted_snapshots=_get_demoted_snapshots(request.environment, state_sync),
         start=request.environment.start_at,
         end=request.environment.end_at,
@@ -164,6 +166,7 @@ def create_plan_dag_spec(
         forward_only=request.forward_only,
         environment_expiration_ts=request.environment.expiration_ts,
         dag_start_ts=now_timestamp(),
+        deployability_index=deployability_index,
     )
 
 

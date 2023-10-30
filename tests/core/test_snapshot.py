@@ -26,6 +26,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.model.kind import TimeColumn
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     QualifiedViewName,
     Snapshot,
     SnapshotChangeCategory,
@@ -658,14 +659,10 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     )
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     snapshot.previous_versions = ()
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
 
-    # Mimic an indirect forward-only change.
+    # Mimic an indirect non-breaking change.
     previous_data_version = snapshot.data_version
     assert previous_data_version.physical_schema == "sqlmesh__default"
     snapshot.fingerprint = SnapshotFingerprint(
@@ -673,14 +670,9 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     )
     snapshot.previous_versions = (previous_data_version,)
     snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh__default.name__3078928823"
-    assert (
-        snapshot.table_name(is_dev=True, for_read=False) == "sqlmesh__default.name__781051917__temp"
-    )
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
+    # Indirect non-breaking snapshots reuse the dev table as well.
+    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
 
     # Mimic a direct forward-only change.
     snapshot.fingerprint = SnapshotFingerprint(
@@ -688,40 +680,15 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     )
     snapshot.previous_versions = (previous_data_version,)
     snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh__default.name__3078928823"
-    assert (
-        snapshot.table_name(is_dev=True, for_read=False)
-        == "sqlmesh__default.name__3049392110__temp"
-    )
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh__default.name__3078928823"
-    assert (
-        snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh__default.name__3049392110__temp"
-    )
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3049392110__temp"
-
-    # Mimic a propmoted forward-only snapshot.
-    snapshot.set_unpaused_ts(to_datetime("2022-01-01"))
-    assert snapshot.table_name(is_dev=False, for_read=False) == "sqlmesh__default.name__3078928823"
-    assert (
-        snapshot.table_name(is_dev=True, for_read=False)
-        == "sqlmesh__default.name__3049392110__temp"
-    )
-    assert snapshot.table_name(is_dev=False, for_read=True) == "sqlmesh__default.name__3078928823"
-    assert (
-        snapshot.table_name(is_dev=True, for_read=True) == "sqlmesh__default.name__3049392110__temp"
-    )
-    assert snapshot.table_name_for_mapping(is_dev=False) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "sqlmesh__default.name__3078928823"
-    snapshot.physical_schema_ = "private"
-    assert snapshot.table_name_for_mapping(is_dev=True) == "private.name__3078928823"
+    assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
+    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3049392110__temp"
 
     fully_qualified_snapshot = make_snapshot(
         SqlModel(name='"my-catalog".db.table', query=parse_one("select 1, ds"))
     )
     fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     assert (
-        fully_qualified_snapshot.table_name(is_dev=False, for_read=False)
+        fully_qualified_snapshot.table_name()
         == f'"my-catalog".sqlmesh__db.my_catalog__db__table__{fully_qualified_snapshot.version}'
     )
 
@@ -1324,3 +1291,117 @@ def test_earliest_start_date(sushi_context: Context):
     cache: t.Dict[str, datetime] = {}
     earliest_start_date(sushi_context.snapshots.values(), cache)
     assert cache[model_name] == to_datetime("yesterday")
+
+
+def test_deployability_index(make_snapshot):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_b.parents = (snapshot_a.snapshot_id,)
+
+    snapshot_c = make_snapshot(SqlModel(name="c", query=parse_one("SELECT 1")))
+    snapshot_c.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+    snapshot_c.parents = (snapshot_b.snapshot_id,)
+
+    snapshot_d = make_snapshot(SqlModel(name="d", query=parse_one("SELECT 1")))
+    snapshot_d.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+    snapshot_d.parents = (snapshot_b.snapshot_id, snapshot_a.snapshot_id)
+
+    snapshot_e = make_snapshot(SqlModel(name="e", query=parse_one("SELECT 1")))
+    snapshot_e.categorize_as(SnapshotChangeCategory.NON_BREAKING)
+
+    snapshot_f = make_snapshot(SqlModel(name="f", query=parse_one("SELECT 1")))
+    snapshot_f.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+    snapshot_f.parents = (snapshot_e.snapshot_id, snapshot_a.snapshot_id)
+
+    snapshot_g = make_snapshot(SqlModel(name="g", query=parse_one("SELECT 1")))
+    snapshot_g.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
+    snapshot_g.parents = (snapshot_e.snapshot_id,)
+
+    snapshots = {
+        s.snapshot_id: s
+        for s in [
+            snapshot_a,
+            snapshot_b,
+            snapshot_c,
+            snapshot_d,
+            snapshot_e,
+            snapshot_f,
+            snapshot_g,
+        ]
+    }
+
+    deployability_index = DeployabilityIndex.create(snapshots)
+
+    assert deployability_index.is_deployable(snapshot_a)
+    assert deployability_index.is_deployable(snapshot_e)
+    assert deployability_index.is_deployable(snapshot_f)
+    assert not deployability_index.is_deployable(snapshot_g)
+    assert not deployability_index.is_deployable(snapshot_b)
+    assert not deployability_index.is_deployable(snapshot_c)
+    assert not deployability_index.is_deployable(snapshot_d)
+
+    assert deployability_index.is_representative(snapshot_a)
+    assert deployability_index.is_representative(snapshot_e)
+    assert deployability_index.is_representative(snapshot_f)
+    assert deployability_index.is_representative(snapshot_g)
+    assert not deployability_index.is_representative(snapshot_b)
+    assert not deployability_index.is_representative(snapshot_c)
+    assert not deployability_index.is_representative(snapshot_d)
+
+    all_deployable_index = deployability_index.all_deployable()
+    assert all(all_deployable_index.is_deployable(s) for s in snapshots.values())
+    assert all(all_deployable_index.is_representative(s) for s in snapshots.values())
+
+    none_deployable_index = deployability_index.none_deployable()
+    assert all(not none_deployable_index.is_deployable(s) for s in snapshots.values())
+    assert all(not none_deployable_index.is_representative(s) for s in snapshots.values())
+
+
+def test_deployability_index_unpaused_forward_only(make_snapshot):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("SELECT 1")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
+    snapshot_a.unpaused_ts = 1
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_b.parents = (snapshot_a.snapshot_id,)
+
+    deplyability_index = DeployabilityIndex.create(
+        {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}
+    )
+
+    assert not deplyability_index.is_deployable(snapshot_a)
+    assert deplyability_index.is_deployable(snapshot_b)
+
+    assert deplyability_index.is_representative(snapshot_a)
+    assert deplyability_index.is_representative(snapshot_b)
+
+
+def test_deployability_index_uncategorized_forward_only_model(make_snapshot):
+    model_a = SqlModel(
+        name="a",
+        query=parse_one("SELECT 1, ds"),
+        kind=IncrementalByTimeRangeKind(time_column="ds", forward_only=True),
+    )
+
+    snapshot_a_old = make_snapshot(model_a)
+    snapshot_a_old.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_a = make_snapshot(model_a)
+    snapshot_a.previous_versions = snapshot_a_old.all_versions
+
+    snapshot_b = make_snapshot(SqlModel(name="b", query=parse_one("SELECT 1")))
+    snapshot_b.parents = (snapshot_a.snapshot_id,)
+
+    deplyability_index = DeployabilityIndex.create(
+        {s.snapshot_id: s for s in [snapshot_a, snapshot_b]}
+    )
+
+    assert not deplyability_index.is_deployable(snapshot_a)
+    assert not deplyability_index.is_deployable(snapshot_b)
+
+    assert not deplyability_index.is_representative(snapshot_a)
+    assert not deplyability_index.is_representative(snapshot_b)
