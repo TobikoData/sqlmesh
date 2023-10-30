@@ -1121,7 +1121,15 @@
       },
       "IntervalUnit": {
         "type": "string",
-        "enum": ["year", "month", "day", "hour", "minute"],
+        "enum": [
+          "year",
+          "month",
+          "day",
+          "hour",
+          "half_hour",
+          "quarter_hour",
+          "five_minute"
+        ],
         "title": "IntervalUnit",
         "description": "IntervalUnit is the inferred granularity of an incremental node.\n\nIntervalUnit can be one of 5 types, YEAR, MONTH, DAY, HOUR, MINUTE. The unit is inferred\nbased on the cron schedule of a node. The minimum time delta between a sample set of dates\nis used to determine which unit a node's schedule is."
       },
