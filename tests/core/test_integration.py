@@ -418,7 +418,8 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
 @pytest.mark.integration
 @pytest.mark.core_integration
 @pytest.mark.parametrize(
-    "context_fixture", ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context"]
+    "context_fixture",
+    ["sushi_context", "sushi_dbt_context", "sushi_test_dbt_context", "sushi_default_catalog"],
 )
 def test_model_add(context_fixture: Context, request):
     initial_add(request.getfixturevalue(context_fixture), "dev")

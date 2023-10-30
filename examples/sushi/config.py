@@ -113,3 +113,14 @@ environment_suffix_config = Config(
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     environment_suffix_target=EnvironmentSuffixTarget.TABLE,
 )
+
+CATALOGS = {
+    "in_memory": ":memory:",
+    "other_catalog": f":memory:",
+}
+
+local_catalogs = Config(
+    default_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
+    default_test_connection=DuckDBConnectionConfig(catalogs=CATALOGS),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+)

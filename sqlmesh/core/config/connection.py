@@ -115,28 +115,27 @@ class DuckDBConnectionConfig(ConnectionConfig):
     @property
     def _connection_factory(self) -> t.Callable:
         import duckdb
-
-        return duckdb.connect
-
-    def create_engine_adapter(self) -> EngineAdapter:
-        """Returns a new instance of the Engine Adapter."""
         from duckdb import BinderException
 
-        engine_adapter = super().create_engine_adapter()
-        for i, (alias, path) in enumerate((self.catalogs or {}).items()):
-            try:
-                engine_adapter.execute(f"ATTACH '{path}' AS {alias}")
-            except BinderException as e:
-                # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
-                # then we don't want to raise since this happens by default. They are just doing this to
-                # set it as the default catalog.
-                if not (
-                    'database with name "memory" already exists' in str(e) and path == ":memory:"
-                ):
-                    raise e
-            if i == 0 and not self.database:
-                engine_adapter.set_current_catalog(alias)
-        return engine_adapter
+        def connect_and_init_catalogs(**kwargs: t.Any) -> duckdb.DuckDBPyConnection:
+            conn = duckdb.connect(**kwargs)
+            for i, (alias, path) in enumerate((self.catalogs or {}).items()):
+                try:
+                    conn.execute(f"ATTACH '{path}' AS {alias}")
+                except BinderException as e:
+                    # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
+                    # then we don't want to raise since this happens by default. They are just doing this to
+                    # set it as the default catalog.
+                    if not (
+                        'database with name "memory" already exists' in str(e)
+                        and path == ":memory:"
+                    ):
+                        raise e
+                if i == 0 and not self.database:
+                    conn.execute(f"USE {alias}")
+            return conn
+
+        return connect_and_init_catalogs
 
 
 class SnowflakeConnectionConfig(ConnectionConfig):
