@@ -16,6 +16,7 @@ from sqlmesh.core.model import Model, ModelKindMixin, ModelKindName, ViewKind
 from sqlmesh.core.model.definition import _Model
 from sqlmesh.core.node import IntervalUnit, NodeType
 from sqlmesh.utils import sanitize_name
+from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
@@ -255,33 +256,22 @@ class SnapshotInfoMixin(ModelKindMixin):
     def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
         return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
 
-    def _table_name(self, version: str, is_dev: bool, for_read: bool) -> str:
+    def _table_name(self, version: str, is_deployable: bool) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
             version: The snapshot version.
-            is_dev: Whether the table name will be used in development mode.
-            for_read: Whether the table name will be used for reading by a different snapshot.
+            is_deployable: Indicates whether to return the table name for deployment to production.
         """
-        if is_dev and for_read:
-            # If this snapshot is used for **reading**, return a temporary table
-            # only if this snapshot captures a direct forward-only change applied to its model.
-            is_temp = self.is_forward_only
-        elif is_dev:
-            # Use a temporary table in the dev environment when **writing** a forward-only snapshot
-            # which was modified either directly or indirectly.
-            is_temp = self.is_forward_only or self.is_indirect_non_breaking
-        else:
-            is_temp = False
-
-        if is_temp:
+        is_dev_table = not is_deployable
+        if is_dev_table:
             version = self.temp_version or self.fingerprint.to_version()
 
         return table_name(
             self.physical_schema,
             self.name,
             version,
-            is_temp=is_temp,
+            is_dev_table=is_dev_table,
         )
 
     @property
@@ -312,14 +302,13 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
 
-    def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
+    def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
-            is_dev: Whether the table name will be used in development mode.
-            for_read: Whether the table name will be used for reading by a different snapshot.
+            is_deployable: Indicates whether to return the table name for deployment to production.
         """
-        return self._table_name(self.version, is_dev, for_read)
+        return self._table_name(self.version, is_deployable)
 
     @property
     def physical_schema(self) -> str:
@@ -663,7 +652,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             if not apply_effective_from or end <= effective_from_ts:
                 self.add_interval(start, end)
 
-        if self.identifier == other.identifier:
+        previous_ids = {s.snapshot_id(self.name) for s in self.previous_versions}
+        if self.identifier == other.identifier or (
+            # Indirect Non-Breaking snapshots share the dev table with its previous version.
+            self.is_indirect_non_breaking
+            and other.snapshot_id in previous_ids
+        ):
             for start, end in other.dev_intervals:
                 self.add_interval(start, end, is_dev=True)
 
@@ -672,7 +666,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         start: TimeLike,
         end: TimeLike,
         execution_time: t.Optional[TimeLike] = None,
-        is_dev: bool = False,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
         ignore_cron: bool = False,
     ) -> Intervals:
         """Find all missing intervals between [start, end].
@@ -686,7 +680,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             end: The end date/time of the interval (inclusive)
             execution_time: The date/time time reference to use for execution time. Defaults to now.
             restatements: A set of snapshot names being restated
-            is_dev: Indicates whether missing intervals are computed for the development environment.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             ignore_cron: Whether to ignore the node's cron schedule.
 
         Returns:
@@ -701,7 +695,11 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             and to_timestamp(end) - to_timestamp(start) < self.node.interval_unit.milliseconds
         ):
             return []
-        intervals = self.dev_intervals if is_dev and self.is_paused_forward_only else self.intervals
+
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
+        intervals = (
+            self.intervals if deployability_index.is_representative(self) else self.dev_intervals
+        )
 
         if self.is_symbolic or (self.is_seed and intervals):
             return []
@@ -781,13 +779,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             category: The change category to assign to this snapshot.
         """
+        self.temp_version = None
         is_forward_only = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
         )
         if is_forward_only and self.previous_version:
-            self.version = self.previous_version.data_version.version
-            self.physical_schema_ = self.previous_version.physical_schema
+            previous_version = self.previous_version
+            self.version = previous_version.data_version.version
+            self.physical_schema_ = previous_version.physical_schema
+            if category.is_indirect_non_breaking:
+                # Reuse the dev table for indirect non-breaking changes.
+                self.temp_version = (
+                    previous_version.data_version.temp_version
+                    or previous_version.fingerprint.to_version()
+                )
         else:
             self.version = self.fingerprint.to_version()
 
@@ -803,38 +809,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             to_timestamp(self.node.interval_unit.cron_floor(unpaused_dt)) if unpaused_dt else None
         )
 
-    def table_name(self, is_dev: bool = False, for_read: bool = False) -> str:
+    def table_name(self, is_deployable: bool = True) -> str:
         """Full table name pointing to the materialized location of the snapshot.
 
         Args:
-            is_dev: Whether the table name will be used in development mode.
-            for_read: Whether the table name will be used for reading by a different snapshot.
+            is_deployable: Indicates whether to return the table name for deployment to production.
         """
         self._ensure_categorized()
         assert self.version
-        return self._table_name(self.version, is_dev, for_read)
-
-    def table_name_for_mapping(self, is_dev: bool = False) -> str:
-        """Full table name used by a child snapshot for table mapping during evaluation.
-
-        Args:
-            is_dev: Whether the table name will be used in development mode.
-        """
-        self._ensure_categorized()
-        assert self.version
-
-        if is_dev and self.is_forward_only:
-            # If this snapshot is unpaused we shouldn't be using a temporary
-            # table for mapping purposes.
-            is_dev = self.is_paused
-
-        return self._table_name(self.version, is_dev, True)
-
-    def is_temporary_table(self, is_dev: bool) -> bool:
-        """Provided whether the snapshot is used in a development mode or not, returns True
-        if the snapshot targets a temporary table or a clone and False otherwise.
-        """
-        return is_dev and (self.is_forward_only or self.is_indirect_non_breaking) and self.is_paused
+        return self._table_name(self.version, is_deployable)
 
     def version_get_or_generate(self) -> str:
         """Helper method to get the version or generate it from the fingerprint."""
@@ -1037,12 +1020,168 @@ SnapshotInfoLike = t.Union[SnapshotTableInfo, Snapshot]
 SnapshotNameVersionLike = t.Union[SnapshotNameVersion, SnapshotTableInfo, Snapshot]
 
 
-def table_name(physical_schema: str, name: str, version: str, is_temp: bool = False) -> str:
+class DeployabilityIndex(PydanticModel, frozen=True):
+    """Contains information about deployability of every snapshot.
+
+    Deployability is defined as whether or not the output that a snapshot produces during the
+    current evaluation can be reused in (deployed to) the production environment.
+    """
+
+    indexed_ids: t.FrozenSet[str]
+    is_opposite_index: bool = False
+    representative_shared_version_ids: t.Optional[t.FrozenSet[str]] = None
+
+    @field_validator("indexed_ids", "representative_shared_version_ids", mode="before")
+    @classmethod
+    def _snapshot_ids_set_validator(cls, v: t.Any) -> t.Optional[t.FrozenSet[t.Tuple[str, str]]]:
+        if v is None:
+            return v
+        # Transforming into strings because the serialization of sets of objects / lists is broken in Pydantic.
+        return frozenset(
+            {
+                cls._snapshot_id_key(snapshot_id)
+                if isinstance(snapshot_id, SnapshotId)
+                else snapshot_id
+                for snapshot_id in v
+            }
+        )
+
+    def is_deployable(self, snapshot: SnapshotIdLike) -> bool:
+        """Returns true if the output produced by the given snapshot in a development environment can be reused
+        in (deployed to) production
+
+        Args:
+            snapshot: The snapshot to check.
+
+        Returns:
+            True if the snapshot is deployable, False otherwise.
+        """
+        snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
+        return (self.is_opposite_index and snapshot_id not in self.indexed_ids) or (
+            not self.is_opposite_index and snapshot_id in self.indexed_ids
+        )
+
+    def is_representative(self, snapshot: SnapshotIdLike) -> bool:
+        """Returns true if the output produced by the given snapshot in a development environment can be reused
+        in (deployed to) production, or if this snapshot already represents what is currently in production.
+
+        Unlike `is_deployable`, this variant also captures FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots that
+        are not deployable by their nature but are currently promoted in production. Therefore, it's safe to consider
+        them as such when constructing a plan, building a physical table mapping or computing missing intervals.
+
+        Args:
+            snapshot: The snapshot to check.
+
+        Returns:
+            True if the snapshot is representative, False otherwise.
+        """
+        snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
+        representative = (
+            self.representative_shared_version_ids is not None
+            and snapshot_id in self.representative_shared_version_ids
+        )
+        return representative or self.is_deployable(snapshot)
+
+    def with_non_deployable(self, snapshot: SnapshotIdLike) -> DeployabilityIndex:
+        """Creates a new index with the given snapshot marked as non-deployable."""
+        snapshot_id = self._snapshot_id_key(snapshot.snapshot_id)
+        indexed_ids = self.indexed_ids
+        if self.is_opposite_index:
+            indexed_ids = indexed_ids | {snapshot_id}
+        else:
+            indexed_ids = indexed_ids - {snapshot_id}
+
+        return DeployabilityIndex(
+            indexed_ids=indexed_ids,
+            is_opposite_index=self.is_opposite_index,
+            representative_shared_version_ids=self.representative_shared_version_ids,
+        )
+
+    @classmethod
+    def all_deployable(cls) -> DeployabilityIndex:
+        return cls(indexed_ids=frozenset(), is_opposite_index=True)
+
+    @classmethod
+    def none_deployable(cls) -> DeployabilityIndex:
+        return cls(indexed_ids=frozenset())
+
+    @classmethod
+    def create(
+        cls, snapshots: t.Dict[SnapshotId, Snapshot] | t.Collection[Snapshot]
+    ) -> DeployabilityIndex:
+        if not isinstance(snapshots, dict):
+            snapshots = {s.snapshot_id: s for s in snapshots}
+
+        dag = snapshots_to_dag(snapshots.values())
+        reversed_dag = dag.reversed.graph
+
+        deployability_mapping: t.Dict[SnapshotId, bool] = {}
+        representative_shared_version_ids: t.Set[SnapshotId] = set()
+
+        def _visit(node: SnapshotId, deployable: bool = True) -> None:
+            if deployability_mapping.get(node) in (False, deployable):
+                return
+
+            if deployable:
+                snapshot = snapshots[node]
+                # Capture uncategorized snapshot which represents a forward-only model.
+                is_forward_only_model = (
+                    snapshot.previous_versions and snapshot.is_model and snapshot.model.forward_only
+                )
+                if (
+                    snapshot.is_forward_only
+                    or snapshot.is_indirect_non_breaking
+                    or is_forward_only_model
+                ):
+                    # FORWARD_ONLY and INDIRECT_NON_BREAKING snapshots are not deployable by nature.
+                    this_deployable = False
+                    if not snapshot.is_paused or snapshot.is_indirect_non_breaking:
+                        # This snapshot represents what's currently deployed in prod.
+                        representative_shared_version_ids.add(node)
+                else:
+                    this_deployable = True
+                children_deployable = not (
+                    snapshot.is_paused and (snapshot.is_forward_only or is_forward_only_model)
+                )
+            else:
+                this_deployable, children_deployable = False, False
+                representative_shared_version_ids.discard(node)
+
+            deployability_mapping[node] = deployability_mapping.get(node, True) and this_deployable
+            for child in reversed_dag[node]:
+                _visit(child, children_deployable)
+
+        for node in dag.roots:
+            _visit(node)
+
+        deployable_ids = {
+            snapshot_id for snapshot_id, deployable in deployability_mapping.items() if deployable
+        }
+        non_deployable_ids = set(snapshots) - deployable_ids
+
+        # Pick the smaller set to reduce the size of the serialized object.
+        if len(deployable_ids) <= len(non_deployable_ids):
+            return cls(
+                indexed_ids=deployable_ids,
+                representative_shared_version_ids=representative_shared_version_ids,
+            )
+        return cls(
+            indexed_ids=non_deployable_ids,
+            is_opposite_index=True,
+            representative_shared_version_ids=representative_shared_version_ids,
+        )
+
+    @staticmethod
+    def _snapshot_id_key(snapshot_id: SnapshotId) -> str:
+        return f"{snapshot_id.name}__{snapshot_id.identifier}"
+
+
+def table_name(physical_schema: str, name: str, version: str, is_dev_table: bool = False) -> str:
     table = exp.to_table(name)
 
     # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
     name = "__".join(sanitize_name(part.name) for part in table.parts)
-    temp_suffix = "__temp" if is_temp else ""
+    temp_suffix = "__temp" if is_dev_table else ""
 
     table.set("this", exp.to_identifier(f"{name}__{version}{temp_suffix}"))
     table.set("db", exp.to_identifier(physical_schema))
@@ -1185,9 +1324,12 @@ def remove_interval(intervals: Intervals, remove_start: int, remove_end: int) ->
     return modified
 
 
-def to_table_mapping(snapshots: t.Iterable[Snapshot], is_dev: bool) -> t.Dict[str, str]:
+def to_table_mapping(
+    snapshots: t.Iterable[Snapshot], deployability_index: t.Optional[DeployabilityIndex]
+) -> t.Dict[str, str]:
+    deployability_index = deployability_index or DeployabilityIndex.all_deployable()
     return {
-        snapshot.name: snapshot.table_name_for_mapping(is_dev=is_dev)
+        snapshot.name: snapshot.table_name(deployability_index.is_representative(snapshot))
         for snapshot in snapshots
         if snapshot.version and not snapshot.is_symbolic
     }
@@ -1212,7 +1354,7 @@ def missing_intervals(
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
     restatements: t.Optional[t.Dict[str, Interval]] = None,
-    is_dev: bool = False,
+    deployability_index: t.Optional[DeployabilityIndex] = None,
     ignore_cron: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
     """Returns all missing intervals given a collection of snapshots."""
@@ -1225,6 +1367,8 @@ def missing_intervals(
         else earliest_start_date(snapshots, cache=cache, relative_to=end_date)
     )
     restatements = restatements or {}
+
+    deployability_index = deployability_index or DeployabilityIndex.all_deployable()
 
     for snapshot in snapshots:
         if snapshot.is_symbolic:
@@ -1245,7 +1389,7 @@ def missing_intervals(
             ),
             snapshot_end_date,
             execution_time=execution_time,
-            is_dev=is_dev,
+            deployability_index=deployability_index,
             ignore_cron=ignore_cron,
         )
         if intervals:
@@ -1320,3 +1464,10 @@ def start_date(
 
     cache[key] = earliest
     return earliest
+
+
+def snapshots_to_dag(snapshots: t.Collection[Snapshot]) -> DAG[SnapshotId]:
+    dag: DAG[SnapshotId] = DAG()
+    for snapshot in snapshots:
+        dag.add(snapshot.snapshot_id, snapshot.parents)
+    return dag

@@ -129,7 +129,8 @@ def duck_conn() -> duckdb.DuckDBPyConnection:
 def push_plan(context: Context, plan: Plan) -> None:
     plan_evaluator = BuiltInPlanEvaluator(context.state_sync, context.snapshot_evaluator)
     plan_evaluator._push(plan)
-    plan_evaluator._promote(plan)
+    promotion_result = plan_evaluator._promote(plan)
+    plan_evaluator._update_views(plan, promotion_result)
 
 
 @pytest.fixture()
@@ -174,6 +175,13 @@ def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
     context, plan = init_and_plan_context("tests/fixtures/dbt/sushi_test", mocker)
     init_raw_schema(context.engine_adapter)
 
+    context.apply(plan)
+    return context
+
+
+@pytest.fixture()
+def sushi_default_catalog(mocker: MockerFixture) -> Context:
+    context, plan = init_and_plan_context("examples/sushi", mocker, "local_catalogs")
     context.apply(plan)
     return context
 

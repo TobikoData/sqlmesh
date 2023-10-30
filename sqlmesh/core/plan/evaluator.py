@@ -25,12 +25,14 @@ from sqlmesh.core.notification_target import (
 from sqlmesh.core.plan.definition import Plan
 from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotEvaluator,
     SnapshotId,
     SnapshotInfoLike,
 )
 from sqlmesh.core.state_sync import StateSync
+from sqlmesh.core.state_sync.base import PromotionResult
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common as airflow_common
 from sqlmesh.schedulers.airflow.client import AirflowClient, BaseAirflowClient
@@ -77,27 +79,32 @@ class BuiltInPlanEvaluator(PlanEvaluator):
     def evaluate(self, plan: Plan) -> None:
         snapshots = {s.snapshot_id: s for s in plan.snapshots}
         all_names = {s.name for s in plan.snapshots}
+        deployability_index = DeployabilityIndex.create(snapshots)
         if plan.is_dev:
             before_promote_snapshots = all_names
             after_promote_snapshots = set()
         else:
             before_promote_snapshots = {
-                s.name for s in snapshots.values() if can_evaluate_before_promote(s, snapshots)
+                s.name for s in snapshots.values() if deployability_index.is_representative(s)
             }
             after_promote_snapshots = all_names - before_promote_snapshots
+            deployability_index = DeployabilityIndex.all_deployable()
 
         update_intervals_for_new_snapshots(plan.new_snapshots, self.state_sync)
 
-        self._push(plan)
+        self._push(plan, deployability_index)
         self._restate(plan)
-        self._backfill(plan, before_promote_snapshots)
-        self._promote(plan)
-        self._backfill(plan, after_promote_snapshots)
+        self._backfill(plan, before_promote_snapshots, deployability_index)
+        promotion_result = self._promote(plan, deployability_index)
+        self._backfill(plan, after_promote_snapshots, deployability_index)
+        self._update_views(plan, promotion_result, deployability_index)
 
         if not plan.requires_backfill:
             self.console.log_success("Virtual Update executed successfully")
 
-    def _backfill(self, plan: Plan, selected_snapshots: t.Set[str]) -> None:
+    def _backfill(
+        self, plan: Plan, selected_snapshots: t.Set[str], deployability_index: DeployabilityIndex
+    ) -> None:
         """Backfill missing intervals for snapshots that are part of the given plan.
 
         Args:
@@ -123,17 +130,19 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             restatements=plan.restatements,
             ignore_cron=True,
             selected_snapshots=selected_snapshots,
+            deployability_index=deployability_index,
         )
         if not is_run_successful:
             raise SQLMeshError("Plan application failed.")
 
-    def _push(self, plan: Plan) -> None:
+    def _push(self, plan: Plan, deployability_index: t.Optional[DeployabilityIndex] = None) -> None:
         """Push the snapshots to the state sync.
 
         As a part of plan pushing, snapshot tables are created.
 
         Args:
             plan: The plan to source snapshots from.
+            deployability_index: Indicates which snapshots are deployable in the context of this creation.
         """
         snapshot_id_to_snapshot = {s.snapshot_id: s for s in plan.snapshots}
         new_model_snapshot_count = len([s for s in plan.new_snapshots if s.is_model])
@@ -149,6 +158,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.snapshot_evaluator.create(
                 plan.new_snapshots,
                 snapshot_id_to_snapshot,
+                deployability_index=deployability_index,
                 on_complete=on_complete,
             )
             completed = True
@@ -157,20 +167,17 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         self.state_sync.push_snapshots(plan.new_snapshots)
 
-    def _promote(self, plan: Plan) -> None:
+    def _promote(
+        self, plan: Plan, deployability_index: t.Optional[DeployabilityIndex] = None
+    ) -> PromotionResult:
         """Promote a plan.
-
-        Promotion creates views with a model's name + env pointing to a physical snapshot.
 
         Args:
             plan: The plan to promote.
+            deployability_index: Indicates which snapshots are deployable in the context of this promotion.
         """
-        environment = plan.environment
-
-        promotion_result = self.state_sync.promote(environment, no_gaps=plan.no_gaps)
-
-        self.console.start_promotion_progress(
-            environment.name, len(promotion_result.added) + len(promotion_result.removed)
+        promotion_result = self.state_sync.promote(
+            plan.environment, deployability_index=deployability_index, no_gaps=plan.no_gaps
         )
 
         if not plan.is_dev:
@@ -180,6 +187,27 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             )
             self.state_sync.unpause_snapshots(promotion_result.added, now())
 
+        return promotion_result
+
+    def _update_views(
+        self,
+        plan: Plan,
+        promotion_result: PromotionResult,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+    ) -> None:
+        """Update environment views.
+
+        Args:
+            plan: The plan to promote.
+            promotion_result: The result of the promotion.
+            deployability_index: Indicates which snapshots are deployable in the context of this promotion.
+        """
+        environment = plan.environment
+
+        self.console.start_promotion_progress(
+            environment.name, len(promotion_result.added) + len(promotion_result.removed)
+        )
+
         def on_complete(snapshot: SnapshotInfoLike) -> None:
             self.console.update_promotion_progress(1)
 
@@ -188,7 +216,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self.snapshot_evaluator.promote(
                 [plan.context_diff.snapshots[s.name] for s in promotion_result.added],
                 environment.naming_info,
-                is_dev=plan.is_dev,
+                deployability_index=deployability_index,
                 on_complete=on_complete,
             )
             if promotion_result.removed_environment_naming_info:
@@ -373,14 +401,6 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
-
-
-def can_evaluate_before_promote(
-    snapshot: Snapshot, snapshots: t.Dict[SnapshotId, Snapshot]
-) -> bool:
-    return not snapshot.is_paused_forward_only and not any(
-        snapshots[p_id].is_paused_forward_only for p_id in snapshot.parents
-    )
 
 
 def update_intervals_for_new_snapshots(

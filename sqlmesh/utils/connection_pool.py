@@ -116,6 +116,7 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
         self,
         connection_factory: t.Callable[[], t.Any],
         cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
     ):
         self._connection_factory = connection_factory
         self._thread_connections: t.Dict[t.Hashable, t.Any] = {}
@@ -126,12 +127,15 @@ class ThreadLocalConnectionPool(_TransactionManagementMixin):
         self._thread_cursors_lock = Lock()
         self._thread_transactions_lock = Lock()
         self._cursor_kwargs = cursor_kwargs or {}
+        self._cursor_init = cursor_init
 
     def get_cursor(self) -> t.Any:
         thread_id = get_ident()
         with self._thread_cursors_lock:
             if thread_id not in self._thread_cursors:
                 self._thread_cursors[thread_id] = self.get().cursor(**self._cursor_kwargs)
+                if self._cursor_init:
+                    self._cursor_init(self._thread_cursors[thread_id])
             return self._thread_cursors[thread_id]
 
     def get(self) -> t.Any:
@@ -206,6 +210,7 @@ class SingletonConnectionPool(_TransactionManagementMixin):
         self,
         connection_factory: t.Callable[[], t.Any],
         cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
     ):
         self._connection_factory = connection_factory
         self._connection: t.Optional[t.Any] = None
@@ -213,10 +218,13 @@ class SingletonConnectionPool(_TransactionManagementMixin):
         self._cursor_kwargs = cursor_kwargs or {}
         self._attributes: t.Dict[str, t.Any] = {}
         self._is_transaction_active: bool = False
+        self._cursor_init = cursor_init
 
     def get_cursor(self) -> t.Any:
         if not self._cursor:
             self._cursor = self.get().cursor(**self._cursor_kwargs)
+            if self._cursor_init:
+                self._cursor_init(self._cursor)
         return self._cursor
 
     def get(self) -> t.Any:
@@ -266,11 +274,16 @@ def create_connection_pool(
     connection_factory: t.Callable[[], t.Any],
     multithreaded: bool,
     cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+    cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
 ) -> ConnectionPool:
     return (
-        ThreadLocalConnectionPool(connection_factory, cursor_kwargs=cursor_kwargs)
+        ThreadLocalConnectionPool(
+            connection_factory, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
+        )
         if multithreaded
-        else SingletonConnectionPool(connection_factory, cursor_kwargs=cursor_kwargs)
+        else SingletonConnectionPool(
+            connection_factory, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
+        )
     )
 
 

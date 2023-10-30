@@ -7,6 +7,7 @@ from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.scheduler import Interval
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
@@ -81,6 +82,7 @@ class PlanDagSpec(PydanticModel):
     forward_only: t.Optional[bool] = None
     environment_expiration_ts: t.Optional[int] = None
     dag_start_ts: t.Optional[int] = None
+    deployability_index: DeployabilityIndex = DeployabilityIndex.all_deployable()
 
 
 class EnvironmentsResponse(PydanticModel):

@@ -18,6 +18,7 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Intervals,
     Snapshot,
     SnapshotChangeCategory,
@@ -352,18 +353,24 @@ class Plan:
 
             snapshot.indirect_versions[child] = child_snapshot.all_versions
 
-            # If any other snapshot specified breaking this child, then that child
-            # needs to be backfilled as a part of the plan.
             for upstream in self.directly_modified:
                 if child in upstream.indirect_versions:
                     data_version = upstream.indirect_versions[child][-1]
                     if data_version.is_new_version:
+                        # If any other snapshot specified breaking this child, then that child
+                        # needs to be backfilled as a part of the plan.
                         child_snapshot.categorize_as(
                             SnapshotChangeCategory.FORWARD_ONLY
                             if is_forward_only_child
                             else SnapshotChangeCategory.INDIRECT_BREAKING
                         )
                         break
+                    elif (
+                        data_version.change_category == SnapshotChangeCategory.FORWARD_ONLY
+                        and child_snapshot.is_indirect_non_breaking
+                    ):
+                        # FORWARD_ONLY takes precedence over INDIRECT_NON_BREAKING.
+                        child_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
         # Invalidate caches.
         self._categorized = None
@@ -426,6 +433,12 @@ class Plan:
                 if new.is_forward_only:
                     new.dev_intervals = new.intervals.copy()
 
+            deployability_index = (
+                DeployabilityIndex.create(self.snapshots)
+                if self.is_dev
+                else DeployabilityIndex.all_deployable()
+            )
+
             self.__missing_intervals = {
                 (snapshot.name, snapshot.version_get_or_generate()): missing
                 for snapshot, missing in missing_intervals(
@@ -434,7 +447,7 @@ class Plan:
                     end=self._end,
                     execution_time=self._execution_time,
                     restatements=self.restatements,
-                    is_dev=self.is_dev,
+                    deployability_index=deployability_index,
                     ignore_cron=True,
                 ).items()
             }
@@ -728,33 +741,13 @@ class Plan:
         )
 
     def _is_forward_only_model(self, model_name: str) -> bool:
-        def _is_forward_only_expected(snapshot: Snapshot) -> bool:
-            # Returns True if the snapshot is not categorized yet but is expected
-            # to be categorized as forward-only. Checking the previous versions to make
-            # sure that the snapshot doesn't represent a newly added model.
-            return (
-                snapshot.node.is_model
-                and snapshot.model.forward_only
-                and not snapshot.change_category
-                and bool(snapshot.previous_versions)
-            )
-
         snapshot = self._snapshot_mapping[model_name]
-        if _is_forward_only_expected(snapshot):
-            return True
-
-        for upstream in self._dag.upstream(model_name):
-            upstream_snapshot = self._snapshot_mapping.get(upstream)
-            if (
-                upstream_snapshot
-                and upstream_snapshot.is_paused
-                and (
-                    upstream_snapshot.is_forward_only
-                    or _is_forward_only_expected(upstream_snapshot)
-                )
-            ):
-                return True
-        return False
+        return (
+            snapshot.is_model
+            and snapshot.model.forward_only
+            and not snapshot.change_category
+            and bool(snapshot.previous_versions)
+        )
 
 
 class PlanStatus(str, Enum):

@@ -9,6 +9,5 @@ from sqlmesh.core.plan.evaluator import (
     BuiltInPlanEvaluator,
     MWAAPlanEvaluator,
     PlanEvaluator,
-    can_evaluate_before_promote,
     update_intervals_for_new_snapshots,
 )

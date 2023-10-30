@@ -164,13 +164,14 @@ The SQLMesh UI default view contains five panes:
 
 ![SQLMesh web UI panes](./ui/ui-quickstart_ui-startup-panes.png)
 
-It also contains five buttons:
+It also contains six buttons:
 
 1. Add new tab opens a new code editor window.
 2. Toggle Editor/Docs view toggles between the Code Editor (default) and Docs views.
 3. Run plan command executes the [`sqlmesh plan` command](../reference/cli.md#plan).
 4. Run query command executes the [`sqlmesh fetchdf` command](../reference/cli.md#fetchdf).
-5. Change SQL dialect specifies the SQL dialect of the current tab for custom SQL queries. It does not affect the SQL dialect for the project.
+5. Format SQL query reformats the SQL query using SQLGlot's pretty layout.
+6. Change SQL dialect specifies the SQL dialect of the current tab for custom SQL queries. It does not affect the SQL dialect for the project.
 
 ![SQLMesh web UI buttons](./ui/ui-quickstart_ui-startup-buttons.png)
 
@@ -211,8 +212,6 @@ The pane contains multiple pieces of information about the plan:
 
     1. The incremental model specifies that date in the `start` property of its `MODEL` statement and
     2. The full model depends on the incremental model
-
-    The `seed_model` date range begins on the same day the plan was made because `SEED` models have no temporality associated with them other than whether they have been modified since the previous SQLMesh plan.
 
 ??? info "Learn more about the project's models"
 
@@ -328,7 +327,7 @@ Click the blue `Run` button to create the new plan:
 
 ![Run plan on dev pane output](./ui/ui-quickstart_run-plan-dev-output.png)
 
-The `Backfill` section shows that only a virtual update will occur.
+The `Backfill` section shows that only a virtual update will occur. The project has not been modified, so no new computations need to run.
 
 Click the blue `Apply Virtual Update` button to perform the virtual update:
 
@@ -341,9 +340,9 @@ The output confirms that the virtual update has completed. Click the blue `Done`
 Now that we have have populated both `prod` and `dev` environments, let's modify one of the SQL models, validate it in `dev`, and push it to `prod`.
 
 ### 3.1 Edit the configuration
-To modify the incremental SQL model, open it in the editor by clicking on it in the project directory pane.
+To modify the incremental SQL model, open it in the editor by clicking on it in the project directory pane on the left side of the window.
 
-The inspector pane on the right now shows the `Actions` tab, where you can specify parameters and [`Evaluate`](../reference/cli.md#evaluate) the SQLMesh model. The `Docs` tab displays information about the model query, including its columns and the rendered query.
+The inspector pane on the right now shows the `Actions` tab, where you can specify parameters and [`Evaluate`](../reference/cli.md#evaluate) the SQLMesh model. The other tabs display information about the model, including its columns and the rendered query.
 
 The `Details` pane at the bottom displays the project's table and column lineage.
 
@@ -411,7 +410,7 @@ Click the blue `Apply Virtual Update` button to apply the plan and execute the b
 
 ![`prod` environment after applying plan](./ui/ui-quickstart_apply-plan-prod-modified.png)
 
-Note that a backfill was not necessary and only a Virtual Update occurred. Click the blue `Done` button to close the pane.
+Note that a backfill was not necessary and only a Virtual Update occurred - the computations have already occurred when backfilling the model in `dev`. Click the blue `Done` button to close the pane.
 
 ### 4.3. Validate updates in prod
 Double-check that the data updated in `prod` by re-running the SQL query from the editor. Click the `Run Query` button to execute the query:
