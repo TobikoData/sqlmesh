@@ -18,7 +18,6 @@ from sqlmesh.core.engine_adapter.mixins import (
     HiveMetastoreTablePropertiesMixin,
     LogicalReplaceQueryMixin,
     PandasNativeFetchDFSupportMixin,
-    ReplaceQueryInsteadOfRowLevelMixin,
 )
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 
@@ -34,7 +33,6 @@ class TrinoEngineAdapter(
     LogicalReplaceQueryMixin,
     HiveMetastoreTablePropertiesMixin,
     GetCurrentCatalogFromFunctionMixin,
-    ReplaceQueryInsteadOfRowLevelMixin,
 ):
     DIALECT = "trino"
     ESCAPE_JSON = False

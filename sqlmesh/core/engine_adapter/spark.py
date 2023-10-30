@@ -13,10 +13,7 @@ from sqlmesh.core.engine_adapter.base import (
     InsertOverwriteStrategy,
     SourceQuery,
 )
-from sqlmesh.core.engine_adapter.mixins import (
-    HiveMetastoreTablePropertiesMixin,
-    ReplaceQueryInsteadOfRowLevelMixin,
-)
+from sqlmesh.core.engine_adapter.mixins import HiveMetastoreTablePropertiesMixin
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
@@ -37,7 +34,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin, ReplaceQueryInsteadOfRowLevelMixin):
+class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
     DIALECT = "spark"
     ESCAPE_JSON = True
     SUPPORTS_TRANSACTIONS = False
