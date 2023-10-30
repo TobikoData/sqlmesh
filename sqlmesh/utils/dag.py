@@ -92,13 +92,28 @@ class DAG(t.Generic[T]):
             self._sorted = []
 
             unprocessed_nodes = self.graph
+            last_processed_nodes: t.Set[T] = set()
+
             while unprocessed_nodes:
                 next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
 
                 if not next_nodes:
+                    cycle_candidates_msg = (
+                        "\nPossible model candidates to check for circular references: "
+                        + ", ".join(str(node) for node in unprocessed_nodes)
+                    )
+
+                    if last_processed_nodes:
+                        last_processed_msg = "\nLast models added to the DAG: " + ", ".join(
+                            str(node) for node in last_processed_nodes
+                        )
+                    else:
+                        last_processed_msg = ""
+
                     raise SQLMeshError(
                         "Detected a cycle in the DAG. "
                         "Please make sure there are no circular references between models."
+                        f"{last_processed_msg}{cycle_candidates_msg}"
                     )
 
                 for node in next_nodes:
@@ -110,6 +125,8 @@ class DAG(t.Generic[T]):
                 # Sort to make the order deterministic
                 # TODO: Make protocol that makes the type var both hashable and sortable once we are on Python 3.8+
                 self._sorted.extend(sorted(next_nodes))  # type: ignore
+
+                last_processed_nodes = next_nodes
 
         return self._sorted
 
