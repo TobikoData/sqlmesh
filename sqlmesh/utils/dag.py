@@ -100,9 +100,10 @@ class DAG(t.Generic[T]):
                 next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
 
                 if not next_nodes:
+                    # Sort cycle candidates to make the order deterministic
                     cycle_candidates_msg = (
                         "\nPossible candidates to check for circular references: "
-                        + ", ".join(str(node) for node in cycle_candidates)
+                        + ", ".join(str(node) for node in sorted(cycle_candidates))
                     )
 
                     if last_processed_nodes:
@@ -129,12 +130,12 @@ class DAG(t.Generic[T]):
                     if deps_before_subtraction == deps:
                         nodes_with_unaffected_deps.add(node)
 
-                last_processed_nodes = next_nodes
                 cycle_candidates = nodes_with_unaffected_deps or unprocessed_nodes
 
                 # Sort to make the order deterministic
                 # TODO: Make protocol that makes the type var both hashable and sortable once we are on Python 3.8+
-                self._sorted.extend(sorted(next_nodes))  # type: ignore
+                last_processed_nodes = sorted(next_nodes)  # type: ignore
+                self._sorted.extend(last_processed_nodes)
 
         return self._sorted
 
