@@ -178,6 +178,13 @@ def sushi_test_dbt_context(mocker: MockerFixture) -> Context:
     return context
 
 
+@pytest.fixture()
+def sushi_default_catalog(mocker: MockerFixture) -> Context:
+    context, plan = init_and_plan_context("examples/sushi", mocker, "local_catalogs")
+    context.apply(plan)
+    return context
+
+
 def init_and_plan_context(
     paths: str | t.List[str],
     mocker: MockerFixture,

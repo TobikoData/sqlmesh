@@ -62,6 +62,11 @@ class ConnectionConfig(abc.ABC, BaseConfig):
         """Key-value arguments that will be passed during cursor construction."""
         return None
 
+    @property
+    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
+        """A function that is called to initialize the cursor"""
+        return None
+
     def create_engine_adapter(self) -> EngineAdapter:
         """Returns a new instance of the Engine Adapter."""
         return self._engine_adapter(
@@ -73,6 +78,7 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             ),
             multithreaded=self.concurrent_tasks > 1,
             cursor_kwargs=self._cursor_kwargs,
+            cursor_init=self._cursor_init,
             **self._extra_engine_config,
         )
 
@@ -118,25 +124,29 @@ class DuckDBConnectionConfig(ConnectionConfig):
 
         return duckdb.connect
 
-    def create_engine_adapter(self) -> EngineAdapter:
-        """Returns a new instance of the Engine Adapter."""
+    @property
+    def _cursor_init(self) -> t.Optional[t.Callable[[t.Any], None]]:
+        """A function that is called to initialize the cursor"""
+        import duckdb
         from duckdb import BinderException
 
-        engine_adapter = super().create_engine_adapter()
-        for i, (alias, path) in enumerate((self.catalogs or {}).items()):
-            try:
-                engine_adapter.execute(f"ATTACH '{path}' AS {alias}")
-            except BinderException as e:
-                # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
-                # then we don't want to raise since this happens by default. They are just doing this to
-                # set it as the default catalog.
-                if not (
-                    'database with name "memory" already exists' in str(e) and path == ":memory:"
-                ):
-                    raise e
-            if i == 0 and not self.database:
-                engine_adapter.set_current_catalog(alias)
-        return engine_adapter
+        def init_catalogs(cursor: duckdb.DuckDBPyConnection) -> None:
+            for i, (alias, path) in enumerate((self.catalogs or {}).items()):
+                try:
+                    cursor.execute(f"ATTACH '{path}' AS {alias}")
+                except BinderException as e:
+                    # If a user tries to create a catalog pointing at `:memory:` and with the name `memory`
+                    # then we don't want to raise since this happens by default. They are just doing this to
+                    # set it as the default catalog.
+                    if not (
+                        'database with name "memory" already exists' in str(e)
+                        and path == ":memory:"
+                    ):
+                        raise e
+                if i == 0 and not self.database:
+                    cursor.execute(f"USE {alias}")
+
+        return init_catalogs
 
 
 class SnowflakeConnectionConfig(ConnectionConfig):

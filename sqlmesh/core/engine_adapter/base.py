@@ -164,11 +164,12 @@ class EngineAdapter:
         sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
         multithreaded: bool = False,
         cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
+        cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
         self._connection_pool = create_connection_pool(
-            connection_factory, multithreaded, cursor_kwargs=cursor_kwargs
+            connection_factory, multithreaded, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
         )
         self.sql_gen_kwargs = sql_gen_kwargs or {}
         self._extra_config = kwargs
