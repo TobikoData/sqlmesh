@@ -662,7 +662,7 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
     assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
 
-    # Mimic an indirect forward-only change.
+    # Mimic an indirect non-breaking change.
     previous_data_version = snapshot.data_version
     assert previous_data_version.physical_schema == "sqlmesh__default"
     snapshot.fingerprint = SnapshotFingerprint(
@@ -671,7 +671,8 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     snapshot.previous_versions = (previous_data_version,)
     snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
     assert snapshot.table_name(is_deployable=True) == "sqlmesh__default.name__3078928823"
-    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__781051917__temp"
+    # Indirect non-breaking snapshots reuse the dev table as well.
+    assert snapshot.table_name(is_deployable=False) == "sqlmesh__default.name__3078928823__temp"
 
     # Mimic a direct forward-only change.
     snapshot.fingerprint = SnapshotFingerprint(

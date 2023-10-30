@@ -407,7 +407,7 @@ def update_intervals_for_new_snapshots(
     snapshots: t.Collection[Snapshot], state_sync: StateSync
 ) -> None:
     for snapshot in state_sync.refresh_snapshot_intervals(snapshots):
-        if snapshot.is_forward_only or snapshot.is_indirect_non_breaking:
+        if snapshot.is_forward_only:
             snapshot.dev_intervals = snapshot.intervals.copy()
             for start, end in snapshot.dev_intervals:
                 state_sync.add_interval(snapshot, start, end, is_dev=True)

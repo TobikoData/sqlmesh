@@ -353,18 +353,24 @@ class Plan:
 
             snapshot.indirect_versions[child] = child_snapshot.all_versions
 
-            # If any other snapshot specified breaking this child, then that child
-            # needs to be backfilled as a part of the plan.
             for upstream in self.directly_modified:
                 if child in upstream.indirect_versions:
                     data_version = upstream.indirect_versions[child][-1]
                     if data_version.is_new_version:
+                        # If any other snapshot specified breaking this child, then that child
+                        # needs to be backfilled as a part of the plan.
                         child_snapshot.categorize_as(
                             SnapshotChangeCategory.FORWARD_ONLY
                             if is_forward_only_child
                             else SnapshotChangeCategory.INDIRECT_BREAKING
                         )
                         break
+                    elif (
+                        data_version.change_category == SnapshotChangeCategory.FORWARD_ONLY
+                        and child_snapshot.is_indirect_non_breaking
+                    ):
+                        # FORWARD_ONLY takes precedence over INDIRECT_NON_BREAKING.
+                        child_snapshot.categorize_as(SnapshotChangeCategory.FORWARD_ONLY)
 
         # Invalidate caches.
         self._categorized = None
@@ -424,7 +430,7 @@ class Plan:
                 if not old:
                     continue
                 new.merge_intervals(old)
-                if new.is_forward_only or new.is_indirect_non_breaking:
+                if new.is_forward_only:
                     new.dev_intervals = new.intervals.copy()
 
             deployability_index = (

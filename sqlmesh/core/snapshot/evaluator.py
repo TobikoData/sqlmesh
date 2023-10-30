@@ -438,11 +438,7 @@ class SnapshotEvaluator:
             self.adapter.execute(snapshot.model.render_pre_statements(**render_kwargs))
 
             if (
-                snapshot.change_category
-                in (
-                    SnapshotChangeCategory.FORWARD_ONLY,
-                    SnapshotChangeCategory.INDIRECT_NON_BREAKING,
-                )
+                snapshot.is_forward_only
                 and snapshot.is_materialized
                 and snapshot.previous_versions
                 and self.adapter.SUPPORTS_CLONING

@@ -652,7 +652,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             if not apply_effective_from or end <= effective_from_ts:
                 self.add_interval(start, end)
 
-        if self.identifier == other.identifier:
+        previous_ids = {s.snapshot_id(self.name) for s in self.previous_versions}
+        if self.identifier == other.identifier or (
+            # Indirect Non-Breaking snapshots share the dev table with its previous version.
+            self.is_indirect_non_breaking
+            and other.snapshot_id in previous_ids
+        ):
             for start, end in other.dev_intervals:
                 self.add_interval(start, end, is_dev=True)
 
@@ -774,13 +779,21 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         Args:
             category: The change category to assign to this snapshot.
         """
+        self.temp_version = None
         is_forward_only = category in (
             SnapshotChangeCategory.FORWARD_ONLY,
             SnapshotChangeCategory.INDIRECT_NON_BREAKING,
         )
         if is_forward_only and self.previous_version:
-            self.version = self.previous_version.data_version.version
-            self.physical_schema_ = self.previous_version.physical_schema
+            previous_version = self.previous_version
+            self.version = previous_version.data_version.version
+            self.physical_schema_ = previous_version.physical_schema
+            if category.is_indirect_non_breaking:
+                # Reuse the dev table for indirect non-breaking changes.
+                self.temp_version = (
+                    previous_version.data_version.temp_version
+                    or previous_version.fingerprint.to_version()
+                )
         else:
             self.version = self.fingerprint.to_version()
 
