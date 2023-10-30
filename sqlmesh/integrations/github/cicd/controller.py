@@ -307,7 +307,7 @@ class GithubController:
         self._reviews: t.Iterable[PullRequestReview] = self._pull_request.get_reviews()
         # TODO: The python module says that user names can be None and this is not currently handled
         self._approvers: t.Set[str] = {
-            review.user.name or "UNKNOWN"
+            review.user.login or "UNKNOWN"
             for review in self._reviews
             if review.state.lower() == "approved"
         }
