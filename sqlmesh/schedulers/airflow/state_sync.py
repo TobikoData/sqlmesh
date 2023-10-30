@@ -6,6 +6,7 @@ import typing as t
 from sqlmesh.core.console import Console
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
@@ -227,13 +228,19 @@ class HttpStateSync(StateSync):
             "Refreshing snapshot intervals is not supported by the Airflow state sync."
         )
 
-    def promote(self, environment: Environment, no_gaps: bool = False) -> PromotionResult:
+    def promote(
+        self,
+        environment: Environment,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        no_gaps: bool = False,
+    ) -> PromotionResult:
         """Update the environment to reflect the current state.
 
         This method verifies that snapshots have been pushed.
 
         Args:
             environment: The environment to promote.
+            deployability_index: Determines snapshots that are deployable in the context of this promotion.
             no_gaps:  Whether to ensure that new snapshots for models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.

@@ -514,10 +514,13 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return
 
         logger.info(
-            "Adding interval (%s, %s) for snapshot %s", start_ts, end_ts, snapshot.snapshot_id
+            "Adding %s (%s, %s) for snapshot %s",
+            "dev interval" if is_dev else "interval",
+            start_ts,
+            end_ts,
+            snapshot.snapshot_id,
         )
 
-        is_dev = snapshot.is_temporary_table(is_dev)
         self.engine_adapter.insert_append(
             self.intervals_table,
             _intervals_to_df([(snapshot, (start_ts, end_ts))], is_dev, False),

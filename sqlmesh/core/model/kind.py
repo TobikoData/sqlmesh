@@ -48,6 +48,14 @@ class ModelKindMixin:
         return self.model_kind_name == ModelKindName.INCREMENTAL_UNMANAGED
 
     @property
+    def is_incremental(self) -> bool:
+        return (
+            self.is_incremental_by_time_range
+            or self.is_incremental_by_unique_key
+            or self.is_incremental_unmanaged
+        )
+
+    @property
     def is_full(self) -> bool:
         return self.model_kind_name == ModelKindName.FULL
 

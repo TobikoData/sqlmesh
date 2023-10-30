@@ -81,6 +81,7 @@ from sqlmesh.core.scheduler import Scheduler
 from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotEvaluator,
     SnapshotFingerprint,
@@ -186,20 +187,19 @@ class ExecutionContext(BaseContext):
     Args:
         engine_adapter: The engine adapter to execute queries against.
         snapshots: All upstream snapshots (by model name) to use for expansion and mapping of physical locations.
-        is_dev: Indicates whether the evaluation happens in the development mode and temporary
-            tables / table clones should be used where applicable.
+        deployability_index: Determines snapshots that are deployable in the context of this evaluation.
     """
 
     def __init__(
         self,
         engine_adapter: EngineAdapter,
         snapshots: t.Dict[str, Snapshot],
-        is_dev: bool,
+        deployability_index: t.Optional[DeployabilityIndex],
     ):
         self.snapshots = snapshots
-        self.is_dev = is_dev
+        self.deployability_index = deployability_index
         self._engine_adapter = engine_adapter
-        self.__model_tables = to_table_mapping(snapshots.values(), is_dev)
+        self.__model_tables = to_table_mapping(snapshots.values(), deployability_index)
 
     @property
     def engine_adapter(self) -> EngineAdapter:
@@ -312,10 +312,14 @@ class Context(BaseContext):
             )
         return self._snapshot_evaluator
 
-    def execution_context(self, is_dev: bool = False) -> ExecutionContext:
+    def execution_context(
+        self, deployability_index: t.Optional[DeployabilityIndex] = None
+    ) -> ExecutionContext:
         """Returns an execution context."""
         return ExecutionContext(
-            engine_adapter=self._engine_adapter, snapshots=self.snapshots, is_dev=is_dev
+            engine_adapter=self._engine_adapter,
+            snapshots=self.snapshots,
+            deployability_index=deployability_index,
         )
 
     def upsert_model(self, model: t.Union[str, Model], **kwargs: t.Any) -> Model:

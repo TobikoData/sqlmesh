@@ -18,6 +18,7 @@ from sqlmesh.core.model import (
 )
 from sqlmesh.core.node import NodeType
 from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
     Snapshot,
     SnapshotChangeCategory,
     SnapshotFingerprint,
@@ -172,6 +173,7 @@ def test_create_plan_dag_spec(
         is_dev=False,
         forward_only=True,
         dag_start_ts=to_timestamp("2023-01-01"),
+        deployability_index=DeployabilityIndex.all_deployable(),
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -282,6 +284,7 @@ def test_restatement(
         is_dev=False,
         forward_only=True,
         dag_start_ts=to_timestamp(now_value),
+        deployability_index=DeployabilityIndex.all_deployable(),
     )
 
     state_sync_mock.get_snapshots.assert_called_once()

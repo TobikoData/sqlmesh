@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 from sqlmesh.core.engine_adapter import create_engine_adapter
 from sqlmesh.core.environment import EnvironmentNamingInfo
 from sqlmesh.core.model import SeedModel
-from sqlmesh.core.snapshot import Snapshot, SnapshotEvaluator, SnapshotTableInfo
+from sqlmesh.core.snapshot import (
+    DeployabilityIndex,
+    Snapshot,
+    SnapshotEvaluator,
+    SnapshotTableInfo,
+)
 from sqlmesh.engines import commands
 from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.utils.date import TimeLike
@@ -102,8 +107,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
         start: The start of the interval to evaluate.
         end: The end of the interval to evaluate.
         execution_time: The date/time time reference to use for execution time. Defaults to now.
-        is_dev: Indicates whether the evaluation happens in the development mode and temporary
-            tables / table clones should be used where applicable.
+        deployability_index: Determines snapshots that are deployable in the context of this evaluation.
     """
 
     command_type: commands.CommandType = commands.CommandType.EVALUATE
@@ -117,7 +121,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
     start: t.Optional[TimeLike] = None
     end: t.Optional[TimeLike] = None
     execution_time: t.Optional[TimeLike] = None
-    is_dev: bool
+    deployability_index: DeployabilityIndex
 
     def post_hook(
         self,
@@ -129,7 +133,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
                 self.snapshot,
                 self._get_start(context),
                 self._get_end(context),
-                is_dev=self.is_dev,
+                is_dev=not self.deployability_index.is_deployable(self.snapshot),
             )
 
     def _get_command_payload(self, context: Context) -> t.Optional[commands.EvaluateCommandPayload]:
@@ -146,7 +150,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
             start=self._get_start(context),
             end=self._get_end(context),
             execution_time=self._get_execution_time(context),
-            is_dev=self.is_dev,
+            deployability_index=self.deployability_index,
         )
 
     def _get_start(self, context: Context) -> TimeLike:
@@ -179,8 +183,7 @@ class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], Pydant
         environment_naming_info: Naming information for the target environment.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL
             operations (table / view creation, deletion, etc). Default: 1.
-        is_dev: Indicates whether the promotion happens in the development mode and temporary
-            tables / table clones should be used where applicable.
+        deployability_index: Determines snapshots that are deployable in the context of this promotion.
     """
 
     command_type: commands.CommandType = commands.CommandType.PROMOTE
@@ -191,13 +194,13 @@ class SnapshotPromotionTarget(BaseTarget[commands.PromoteCommandPayload], Pydant
     snapshots: t.List[Snapshot]
     environment_naming_info: EnvironmentNamingInfo
     ddl_concurrent_tasks: int
-    is_dev: bool
+    deployability_index: DeployabilityIndex
 
     def _get_command_payload(self, context: Context) -> t.Optional[commands.PromoteCommandPayload]:
         return commands.PromoteCommandPayload(
             snapshots=self.snapshots,
             environment_naming_info=self.environment_naming_info,
-            is_dev=self.is_dev,
+            deployability_index=self.deployability_index,
         )
 
 
@@ -269,6 +272,7 @@ class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload]
 
     new_snapshots: t.List[Snapshot]
     ddl_concurrent_tasks: int
+    deployability_index: DeployabilityIndex
 
     def _get_command_payload(
         self, context: Context
@@ -279,6 +283,7 @@ class SnapshotCreateTablesTarget(BaseTarget[commands.CreateTablesCommandPayload]
         return commands.CreateTablesCommandPayload(
             target_snapshot_ids=[s.snapshot_id for s in self.new_snapshots],
             snapshots=_get_snapshots_with_parents(self.new_snapshots),
+            deployability_index=self.deployability_index,
         )
 
 
