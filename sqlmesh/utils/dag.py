@@ -92,19 +92,21 @@ class DAG(t.Generic[T]):
             self._sorted = []
 
             unprocessed_nodes = self.graph
+
             last_processed_nodes: t.Set[T] = set()
+            cycle_candidates: t.Collection = unprocessed_nodes
 
             while unprocessed_nodes:
                 next_nodes = {node for node, deps in unprocessed_nodes.items() if not deps}
 
                 if not next_nodes:
                     cycle_candidates_msg = (
-                        "\nPossible model candidates to check for circular references: "
-                        + ", ".join(str(node) for node in unprocessed_nodes)
+                        "\nPossible candidates to check for circular references: "
+                        + ", ".join(str(node) for node in cycle_candidates)
                     )
 
                     if last_processed_nodes:
-                        last_processed_msg = "\nLast models added to the DAG: " + ", ".join(
+                        last_processed_msg = "\nLast nodes added to the DAG: " + ", ".join(
                             str(node) for node in last_processed_nodes
                         )
                     else:
@@ -112,21 +114,27 @@ class DAG(t.Generic[T]):
 
                     raise SQLMeshError(
                         "Detected a cycle in the DAG. "
-                        "Please make sure there are no circular references between models."
+                        "Please make sure there are no circular references between nodes."
                         f"{last_processed_msg}{cycle_candidates_msg}"
                     )
 
                 for node in next_nodes:
                     unprocessed_nodes.pop(node)
 
-                for deps in unprocessed_nodes.values():
+                nodes_with_unaffected_deps: t.Set[T] = set()
+                for node, deps in unprocessed_nodes.items():
+                    deps_before_subtraction = deps
+
                     deps -= next_nodes
+                    if deps_before_subtraction == deps:
+                        nodes_with_unaffected_deps.add(node)
+
+                last_processed_nodes = next_nodes
+                cycle_candidates = nodes_with_unaffected_deps or unprocessed_nodes
 
                 # Sort to make the order deterministic
                 # TODO: Make protocol that makes the type var both hashable and sortable once we are on Python 3.8+
                 self._sorted.extend(sorted(next_nodes))  # type: ignore
-
-                last_processed_nodes = next_nodes
 
         return self._sorted
 
