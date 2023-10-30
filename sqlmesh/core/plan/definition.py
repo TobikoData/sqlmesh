@@ -424,7 +424,7 @@ class Plan:
                 if not old:
                     continue
                 new.merge_intervals(old)
-                if new.is_forward_only:
+                if new.is_forward_only or new.is_indirect_non_breaking:
                     new.dev_intervals = new.intervals.copy()
 
             deployability_index = (

@@ -264,7 +264,6 @@ class SnapshotInfoMixin(ModelKindMixin):
             is_deployable: Indicates whether to return the table name for deployment to production.
         """
         is_dev_table = not is_deployable
-
         if is_dev_table:
             version = self.temp_version or self.fingerprint.to_version()
 
@@ -1133,6 +1132,7 @@ class DeployabilityIndex(PydanticModel, frozen=True):
                 )
             else:
                 this_deployable, children_deployable = False, False
+                representative_shared_version_ids.discard(node)
 
             deployability_mapping[node] = deployability_mapping.get(node, True) and this_deployable
             for child in reversed_dag[node]:
