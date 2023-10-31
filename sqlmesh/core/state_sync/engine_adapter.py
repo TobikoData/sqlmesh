@@ -59,6 +59,14 @@ from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
 
+try:
+    # We can't import directly from the root package due to circular dependency
+    from sqlmesh._version import __version__ as SQLMESH_VERSION  # type: ignore
+except ImportError:
+    logger.error(
+        'Unable to set __version__, run "pip install -e ." or "python setup.py develop" first.'
+    )
+
 
 class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
     """Manages state of nodes and snapshot with an existing engine adapter.
@@ -133,6 +141,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self._version_columns_to_types = {
             "schema_version": exp.DataType.build("int"),
             "sqlglot_version": exp.DataType.build("text"),
+            "sqlmesh_version": exp.DataType.build("text"),
         }
 
     @transactional()
@@ -204,12 +213,21 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self,
         schema_version: int = SCHEMA_VERSION,
         sqlglot_version: str = SQLGLOT_VERSION,
+        sqlmesh_version: str = SQLMESH_VERSION,
     ) -> None:
         self.engine_adapter.delete_from(self.versions_table, "TRUE")
 
         self.engine_adapter.insert_append(
             self.versions_table,
-            pd.DataFrame([{"schema_version": schema_version, "sqlglot_version": sqlglot_version}]),
+            pd.DataFrame(
+                [
+                    {
+                        "schema_version": schema_version,
+                        "sqlglot_version": sqlglot_version,
+                        "sqlmesh_version": sqlmesh_version,
+                    }
+                ]
+            ),
             columns_to_types=self._version_columns_to_types,
         )
 
@@ -452,7 +470,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
-        no_version = Versions(schema_version=0, sqlglot_version="0.0.0")
+        no_version = Versions(schema_version=0, sqlglot_version="0.0.0", sqlmesh_version="0.0.0")
 
         if not self.engine_adapter.table_exists(self.versions_table):
             return no_version
@@ -463,7 +481,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         row = self.engine_adapter.fetchone(query, quote_identifiers=True)
         if not row:
             return no_version
-        return Versions(schema_version=row[0], sqlglot_version=row[1])
+        return Versions(schema_version=row[0], sqlglot_version=row[1], sqlmesh_version=row[2])
 
     def _get_environment(
         self, environment: str, lock_for_update: bool = False
