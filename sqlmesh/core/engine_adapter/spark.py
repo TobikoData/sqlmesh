@@ -345,6 +345,8 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
 
         # Self-referential queries: cannot insert overwrite a SELECT from itself, so
         # use LogicalReplaceQuery (which creates a temp table and SELECTs from it)
+        if len(source_queries) > 1:
+            raise SQLMeshError("Cannot replace table with a batched data frame")
         with source_queries[0] as query:
             target_table = exp.to_table(table_name)
             self_referencing = any(
@@ -353,7 +355,7 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
             )
 
             if self_referencing:
-                LogicalReplaceQueryMixin.replace_query(self, table_name, query, columns_to_types)  # type: ignore
+                return LogicalReplaceQueryMixin.replace_query(self, table_name, query, columns_to_types)  # type: ignore
 
         self.create_table(table_name, columns_to_types)
         return self._insert_overwrite_by_condition(
@@ -399,3 +401,7 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
         super().create_view(
             view_name, query_or_df, columns_to_types, replace, materialized, **create_kwargs
         )
+
+    def _truncate_table(self, table_name: TableName) -> str:
+        table = quote_identifiers(exp.to_table(table_name))
+        return f"TRUNCATE TABLE {table.sql(dialect=self.dialect)}"
