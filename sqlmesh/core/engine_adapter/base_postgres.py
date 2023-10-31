@@ -5,17 +5,19 @@ import typing as t
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter import EngineAdapter
+from sqlmesh.core.engine_adapter.base import CatalogSupport
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType
 from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import SchemaName, TableName
-    from sqlmesh.core.engine_adapter.base import QueryOrDF
+    from sqlmesh.core.engine_adapter._typing import QueryOrDF
 
 
 class BasePostgresEngineAdapter(EngineAdapter):
     DEFAULT_BATCH_SIZE = 1000
     COLUMNS_TABLE = "information_schema.columns"
+    CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
 
     def columns(
         self, table_name: TableName, include_pseudo_columns: bool = False
