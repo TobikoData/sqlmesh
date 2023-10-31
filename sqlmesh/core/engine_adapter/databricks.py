@@ -4,7 +4,7 @@ import logging
 import typing as t
 
 import pandas as pd
-from sqlglot import Dialect, exp
+from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import CatalogSupport, InsertOverwriteStrategy
 from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
@@ -34,25 +34,8 @@ class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAda
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     CURRENT_CATALOG_FUNCTION = "current_catalog()"
 
-    def __init__(
-        self,
-        connection_factory: t.Callable[[], t.Any],
-        dialect: str = "",
-        sql_gen_kwargs: t.Optional[t.Dict[str, Dialect | bool | str]] = None,
-        multithreaded: bool = False,
-        cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
-        cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
-        **kwargs: t.Any,
-    ):
-        super().__init__(
-            connection_factory,
-            dialect,
-            sql_gen_kwargs,
-            multithreaded,
-            cursor_kwargs,
-            cursor_init,
-            **kwargs,
-        )
+    def __init__(self, *args: t.Any, **kwargs: t.Any):
+        super().__init__(*args, **kwargs)
         self._spark: t.Optional[PySparkSession] = None
 
     @classproperty

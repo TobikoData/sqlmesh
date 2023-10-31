@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import os
+import pathlib
 import sys
 import typing as t
 from enum import Enum
@@ -78,9 +79,20 @@ class ConnectionConfig(abc.ABC, BaseConfig):
             ),
             multithreaded=self.concurrent_tasks > 1,
             cursor_kwargs=self._cursor_kwargs,
+            default_catalog=self.get_catalog(),
             cursor_init=self._cursor_init,
             **self._extra_engine_config,
         )
+
+    def get_catalog(self) -> t.Optional[str]:
+        """The catalog for this connection"""
+        if hasattr(self, "catalog"):
+            return self.catalog
+        if hasattr(self, "database"):
+            return self.database
+        if hasattr(self, "db"):
+            return self.db
+        return None
 
 
 class DuckDBConnectionConfig(ConnectionConfig):
@@ -147,6 +159,14 @@ class DuckDBConnectionConfig(ConnectionConfig):
                     cursor.execute(f"USE {alias}")
 
         return init_catalogs
+
+    def get_catalog(self) -> t.Optional[str]:
+        if self.database:
+            # Remove `:` from the database name in order to handle if `:memory:` is passed in
+            return pathlib.Path(self.database.replace(":", "")).stem
+        if self.catalogs:
+            return list(self.catalogs)[0]
+        return None
 
 
 class SnowflakeConnectionConfig(ConnectionConfig):
