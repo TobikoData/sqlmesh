@@ -47,6 +47,56 @@ default_scheduler:
     password: <Airflow Password>
 ```
 
+## External signals
+
+Sometimes there is a need to postpone the model evaluation until certain external conditions are met.
+
+For example, a model might refer to an external table and should only be evaluated when the data actually lands upstream. This can be achieved using external signals.
+
+Signals are defined as part of the model's definition using arbitrary key-value pairs. Additionally, `@start_*` and `@end_*` [macros](../concepts/macros/macro_variables.md) can be used within these values. The macro values will be resolved accordingly at the time of evaluation.
+
+```sql linenums="1"
+MODEL (
+    name test_db.test_name,
+    signals [
+        (
+            table_name = 'upstream_table_a',
+            ds = @end_ds,
+        ),
+        (
+            table_name = 'upstream_table_b',
+            ds = @end_ds,
+            hour = @end_hour,
+        ),
+    ],
+)
+```
+
+Note that in the example above, `table_name`, `ds`, and `hour` are arbitrary keys defined by the user.
+
+Now, as part of the SQLMesh integration module, a function needs to be passed into the `SQLMeshAirflow` constructor. This function should accept signal payload and return an Airflow Sensor instance representing this signal.
+
+```python linenums="1"
+import typing  as t
+from airflow.sensors.base import BaseSensorOperator
+from sqlmesh.schedulers.airflow.integration import SQLMeshAirflow
+
+
+def create_external_sensor(signal: t.Dict[str, t.Any]) -> BaseSensorOperator:
+    table_name = signal["table_name"]
+    ds = signal["ds"]
+    hour = signal["hour"]
+    return MyCustomSensor(partition=f"{table_name}/ds={ds}/hour={hour:02}")
+
+
+sqlmesh_airflow = SQLMeshAirflow(
+    "spark",
+    external_table_sensor_factory=create_external_sensor,
+)
+```
+
+The `create_external_sensor` function in the example above takes the `signal` dictionary as an argument and returns an instance of `BaseSensorOperator`. The keys in the signal dictionary match the keys provided in the model definition.
+
 ## Engine support
 SQLMesh supports a variety of engines in Airflow. Support for each engine is provided by a custom Airflow operator implementation. Below is a list of links to operators supported out of the box with information on how to configure them.
 
