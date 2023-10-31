@@ -96,21 +96,29 @@ class LogicalReplaceQueryMixin(EngineAdapter):
             with source_queries[0] as query:
                 target_table = exp.to_table(table_name)
                 # Check if self-referencing
-                matching_tables = [
-                    table
+                self_referencing = any(
+                    quote_identifiers(table) == quote_identifiers(target_table)
                     for table in query.find_all(exp.Table)
-                    if quote_identifiers(table) == quote_identifiers(target_table)
-                ]
-                if matching_tables:
+                )
+                if self_referencing:
                     with self.temp_table(
                         exp.select(*columns_to_types).from_(target_table),
                         target_table,
                         columns_to_types,
                     ) as temp_table:
-                        for table in matching_tables:
-                            table.replace(temp_table.copy())
+
+                        def replace_table(
+                            node: exp.Expression, curr_table: exp.Table, new_table: exp.Table
+                        ) -> exp.Expression:
+                            if isinstance(node, exp.Table) and node == curr_table:
+                                return new_table
+                            return node
+
+                        temp_query = query.transform(
+                            replace_table, curr_table=target_table, new_table=temp_table
+                        )
                         self.execute(self._truncate_table(table_name))
-                        return self._insert_append_query(table_name, query, columns_to_types)
+                        return self._insert_append_query(table_name, temp_query, columns_to_types)
                 self.execute(self._truncate_table(table_name))
                 return self._insert_append_query(table_name, query, columns_to_types)
 

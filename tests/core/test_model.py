@@ -1919,10 +1919,10 @@ def test_custom_interval_unit():
 def test_model_table_properties(sushi_context):
     # # Validate python model table properties
     assert sushi_context.models["sushi.items"].table_properties == {
-        "string_prop": exp.Literal.string("some_value"),
-        "int_prop": exp.Literal.number(1),
-        "float_prop": exp.Literal.number(1.0),
-        "bool_prop": exp.true(),
+        "format": exp.Literal.string("PARQUET"),
+        "bucket_count": exp.Literal.number(0),
+        "orc_bloom_filter_fpp": exp.Literal.number(0.05),
+        "auto_purge": exp.false(),
     }
     # Validate a tuple.
     model = load_sql_based_model(
