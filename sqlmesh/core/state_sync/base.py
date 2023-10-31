@@ -171,9 +171,14 @@ class StateReader(abc.ABC):
                     f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). "
                     "Please run a migration ('sqlmesh migrate' command)."
                 )
+
+            if remote_package_version:
+                upgrade_suggestion = f" Please upgrade {lib} ('pip install --upgrade \"{lib.lower()}=={remote_package_version}\"' command)."
+            else:
+                upgrade_suggestion = ""
+
             raise SQLMeshError(
-                f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote). "
-                f"Please upgrade {lib} ('pip install --upgrade \"{lib.lower()}=={remote_package_version or remote}\"' command)."
+                f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote).{upgrade_suggestion}"
             )
 
         if SCHEMA_VERSION < versions.schema_version:
@@ -185,7 +190,12 @@ class StateReader(abc.ABC):
             )
 
         if major_minor(SQLGLOT_VERSION) < major_minor(versions.sqlglot_version):
-            raise_error("SQLGlot", SQLGLOT_VERSION, versions.sqlglot_version)
+            raise_error(
+                "SQLGlot",
+                SQLGLOT_VERSION,
+                versions.sqlglot_version,
+                remote_package_version=versions.sqlglot_version,
+            )
 
         if validate:
             if SCHEMA_VERSION > versions.schema_version:
