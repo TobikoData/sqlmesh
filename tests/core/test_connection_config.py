@@ -22,7 +22,7 @@ def make_config() -> t.Callable:
     return _make_function
 
 
-def test_snowflake_auth(make_config):
+def test_snowflake(make_config):
     # Authenticator and user/password is fine
     config = make_config(
         type="snowflake",
@@ -88,6 +88,16 @@ def test_snowflake_auth(make_config):
             user="test",
             authenticator="externalbrowser",
         )
+    config = make_config(
+        type="snowflake",
+        account="test",
+        user="test",
+        password="test",
+        authenticator="externalbrowser",
+        database="test_catalog",
+    )
+    assert isinstance(config, SnowflakeConnectionConfig)
+    assert config.get_catalog() == "test_catalog"
 
 
 def test_validator():
@@ -127,6 +137,7 @@ def test_trino(make_config):
     assert config.catalog == "catalog"
     assert config.http_scheme == "https"
     assert config.port == 443
+    assert config.get_catalog() == "catalog"
 
     # Validate Basic Auth
     config = make_config(method="basic", password="password", **required_kwargs)
