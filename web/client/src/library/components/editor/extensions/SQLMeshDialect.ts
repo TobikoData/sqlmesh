@@ -100,7 +100,7 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
 
         const text = ctx.state.doc.toJSON().join('\n')
         const matchModels = text.match(/MODEL \(([\s\S]+?)\);/g) ?? []
-        const isInMODEL = matchModels
+        const isInModel = matchModels
           .filter(str => str.includes(word.text))
           .map<[number, number]>(str => [
             text.indexOf(str),
@@ -111,7 +111,7 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
               ctx.pos >= start && ctx.pos <= end,
           )
 
-        if (isInMODEL) {
+        if (isInModel) {
           let suggestions = SQLMeshModelDictionary.get('keywords')
 
           if (isNotNil(keywordKind)) {
