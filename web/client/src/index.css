@@ -3,43 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  .scrollbar--horizontal::-webkit-scrollbar {
-    height: 0.2rem;
-  }
-
-  .scrollbar--horizontal-md::-webkit-scrollbar {
-    height: 0.4rem;
-  }
-
-  .scrollbar--vertical::-webkit-scrollbar {
-    width: 0.2rem;
-  }
-
-  .scrollbar--vertical-md::-webkit-scrollbar {
-    width: 0.4rem;
-  }
-
-  .scrollbar::-webkit-scrollbar-track {
-    background-color: transparent;
-  }
-
-  .scrollbar::-webkit-scrollbar-thumb {
-    background: var(--color-brand);
-    border-radius: 1rem;
-  }
-}
-
-@layer components {
-  .input-ring {
-    @apply ring-accent-200 ring-offset-accent-500;
-  }
-
-  .input-ring:focus {
-    @apply outline-none ring-offset-2 ring-4;
-  }
-}
-
-@layer base {
   :root {
     font-synthesis: none;
     text-rendering: optimizeLegibility;
@@ -194,6 +157,37 @@
     /* General */
     --unit: 16px;
     --leading: 1.5;
+
+    --scrollbar-size: 6px;
+    --scrollbar-radius: 1rem;
+    --scrollbar-backgroud: var(--color-brand);
+  }
+
+  .scrollbar--horizontal::-webkit-scrollbar {
+    height: var(--scrollbar-size);
+  }
+
+  .scrollbar--vertical::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+  }
+
+  .scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-backgroud);
+    border-radius: var(--scrollbar-radius);
+  }
+}
+
+@layer components {
+  .input-ring {
+    @apply ring-accent-200 ring-offset-accent-500;
+  }
+
+  .input-ring:focus {
+    @apply outline-none ring-offset-2 ring-4;
   }
 }
 

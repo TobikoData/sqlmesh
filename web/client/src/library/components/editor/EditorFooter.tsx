@@ -2,8 +2,7 @@ import { getLanguageByExtension, showIndicatorDialects } from './help'
 import EditorIndicator from './EditorIndicator'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { useEffect } from 'react'
-import { isFalse, isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
-import { EnumFileExtensions } from '@models/file'
+import { isNil, isNotNil, isStringEmptyOrNil } from '~/utils'
 import Input from '@components/input/Input'
 import { EnumSize } from '~/types/enum'
 
@@ -33,23 +32,6 @@ export default function EditorFooter({ tab }: { tab: EditorTab }): JSX.Element {
 
   return (
     <div className="flex w-full mr-4 overflow-hidden items-center">
-      {tab.file.isSQLMeshModelSQL && (
-        <EditorIndicator
-          className="mr-2"
-          text="Valid"
-        >
-          <EditorIndicator.Light ok={tab.isValid} />
-        </EditorIndicator>
-      )}
-      {tab.file.extension === EnumFileExtensions.SQL &&
-        isFalse(tab.file.isSQLMeshModelSQL) && (
-          <EditorIndicator
-            className="mr-2"
-            text="Valid SQL"
-          >
-            <EditorIndicator.Light ok={tab.isValid} />
-          </EditorIndicator>
-        )}
       {tab.file.isRemote && (
         <EditorIndicator
           className="mr-2"
