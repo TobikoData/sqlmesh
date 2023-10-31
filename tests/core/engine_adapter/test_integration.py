@@ -49,7 +49,9 @@ class TestContext:
 
     @columns_to_types.setter
     def columns_to_types(self, value: t.Dict[str, t.Union[str, exp.DataType]]):
-        self._columns_to_types = {k: exp.DataType.build(v) for k, v in value.items()}
+        self._columns_to_types = {
+            k: exp.DataType.build(v, dialect=self.dialect) for k, v in value.items()
+        }
 
     @property
     def time_columns(self) -> t.List[str]:
