@@ -1,6 +1,7 @@
 """Add new 'sqlmesh_version' column to the version state table."""
 from sqlglot import exp
 
+
 def migrate(state_sync):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     versions_table = "_versions"
