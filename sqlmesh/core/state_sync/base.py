@@ -172,7 +172,7 @@ class StateReader(abc.ABC):
                     "Please run a migration ('sqlmesh migrate' command)."
                 )
 
-            if remote_package_version and remote_package_version != "0.0.0":
+            if remote_package_version:
                 upgrade_suggestion = f" Please upgrade {lib} ('pip install --upgrade \"{lib.lower()}=={remote_package_version}\"' command)."
             else:
                 upgrade_suggestion = ""
