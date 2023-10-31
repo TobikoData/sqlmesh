@@ -87,12 +87,17 @@ class InsertOverwriteStrategy(Enum):
 
 class CatalogSupport(Enum):
     UNSUPPORTED = 1
-    REQUIRES_SET_CATALOG = 2
-    FULL_SUPPORT = 3
+    SINGLE_CATALOG_ONLY = 2
+    REQUIRES_SET_CATALOG = 3
+    FULL_SUPPORT = 4
 
     @property
     def is_unsupported(self) -> bool:
         return self == CatalogSupport.UNSUPPORTED
+
+    @property
+    def is_single_catalog_only(self) -> bool:
+        return self == CatalogSupport.SINGLE_CATALOG_ONLY
 
     @property
     def is_requires_set_catalog(self) -> bool:
@@ -165,6 +170,7 @@ class EngineAdapter:
         multithreaded: bool = False,
         cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
+        default_catalog: t.Optional[str] = None,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -172,6 +178,7 @@ class EngineAdapter:
             connection_factory, multithreaded, cursor_kwargs=cursor_kwargs, cursor_init=cursor_init
         )
         self.sql_gen_kwargs = sql_gen_kwargs or {}
+        self.default_catalog = default_catalog
         self._extra_config = kwargs
 
     @property

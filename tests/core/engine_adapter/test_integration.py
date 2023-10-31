@@ -18,6 +18,7 @@ from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject
 from sqlmesh.utils import nullsafe_join
 from sqlmesh.utils.date import to_ds
+from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -281,7 +282,10 @@ def ctx(engine_adapter, test_type):
 
 
 def test_catalog_operations(ctx: TestContext):
-    if ctx.dialect in {"mysql", "redshift", "postgres"}:
+    if (
+        ctx.engine_adapter.CATALOG_SUPPORT.is_unsupported
+        or ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only
+    ):
         pytest.skip(
             f"Engine adapter {ctx.engine_adapter.dialect} doesn't support catalog operations"
         )
@@ -363,7 +367,13 @@ def test_drop_schema_catalog(ctx: TestContext):
         catalog_name = "tobiko-test"
 
     schema = ctx.schema("drop_schema_catalog_test", catalog_name)
-    drop_schema_and_validate(schema)
+    if ctx.engine_adapter.CATALOG_SUPPORT.is_single_catalog_only:
+        with pytest.raises(
+            UnsupportedCatalogOperationError,
+            match=".*requires that all catalog operations be against a single catalog.*",
+        ):
+            drop_schema_and_validate(schema)
+        return
     create_objects_and_validate(schema)
     drop_schema_and_validate(schema)
 
