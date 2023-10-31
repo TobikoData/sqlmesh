@@ -37,6 +37,7 @@ class Versions(PydanticModel):
 
     schema_version: int
     sqlglot_version: str
+    sqlmesh_version: str
 
     @property
     def minor_sqlglot_version(self) -> t.Tuple[int, int]:
@@ -158,17 +159,30 @@ class StateReader(abc.ABC):
         """
         versions = self._get_versions()
 
-        def raise_error(lib: str, local: str | int, remote: str | int, ahead: bool = False) -> None:
+        def raise_error(
+            lib: str,
+            local: str | int,
+            remote: str | int,
+            remote_package_version: t.Optional[str] = None,
+            ahead: bool = False,
+        ) -> None:
             if ahead:
                 raise SQLMeshError(
-                    f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). Please run a migration ('sqlmesh migrate' command)."
+                    f"{lib} (local) is using version '{local}' which is ahead of '{remote}' (remote). "
+                    "Please run a migration ('sqlmesh migrate' command)."
                 )
             raise SQLMeshError(
-                f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote). Please upgrade {lib} ('pip install --upgrade \"{lib.lower()}=={remote}\"' command)."
+                f"{lib} (local) is using version '{local}' which is behind '{remote}' (remote). "
+                f"Please upgrade {lib} ('pip install --upgrade \"{lib.lower()}=={remote_package_version or remote}\"' command)."
             )
 
         if SCHEMA_VERSION < versions.schema_version:
-            raise_error("SQLMesh", SCHEMA_VERSION, versions.schema_version)
+            raise_error(
+                "SQLMesh",
+                SCHEMA_VERSION,
+                versions.schema_version,
+                remote_package_version=versions.sqlmesh_version,
+            )
 
         if major_minor(SQLGLOT_VERSION) < major_minor(versions.sqlglot_version):
             raise_error("SQLGlot", SQLGLOT_VERSION, versions.sqlglot_version)
