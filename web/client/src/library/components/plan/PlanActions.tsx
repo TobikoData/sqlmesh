@@ -45,12 +45,12 @@ export default function PlanActions({
 
   const isRun = planAction === EnumPlanAction.Run
   const isDone = planAction === EnumPlanAction.Done
-  const isCanceling = planAction === EnumPlanAction.Cancelling
+  const isCancelling = planAction === EnumPlanAction.Cancelling
   const isApplyVirtual = planAction === EnumPlanAction.ApplyVirtual
   const isApplyBackfill = planAction === EnumPlanAction.ApplyBackfill
   const isApplying = planAction === EnumPlanAction.Applying
   const isRunning = planAction === EnumPlanAction.Running
-  const isProcessing = isRunning || isApplying || isCanceling
+  const isProcessing = isRunning || isApplying || isCancelling
 
   function handleClose(e: MouseEvent): void {
     e.stopPropagation()
@@ -191,7 +191,7 @@ export default function PlanActions({
               onClick={handleCancel}
               variant={EnumVariant.Danger}
               className="justify-self-end"
-              disabled={isCanceling || disabled}
+              disabled={isCancelling || disabled}
             >
               {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
             </Button>

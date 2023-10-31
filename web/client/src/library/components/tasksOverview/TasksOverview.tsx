@@ -1,7 +1,13 @@
 import clsx from 'clsx'
 import React, { type RefObject, useMemo } from 'react'
 import { type PlanTaskStatus, type PlanTasks } from '~/context/plan'
-import { isArrayNotEmpty, isNotNil, toDateFormat, toRatio } from '~/utils'
+import {
+  isArrayNotEmpty,
+  isNil,
+  isNotNil,
+  toDateFormat,
+  toRatio,
+} from '~/utils'
 import { Divider } from '../divider/Divider'
 import Progress from '../progress/Progress'
 import pluralize from 'pluralize'
@@ -206,7 +212,7 @@ function TasksDetails({
                     <TaskDivider />
                     {showProgress && (
                       <>
-                        {task.end == null || task.start == null ? (
+                        {isNil(task.end) || isNil(task.start) ? (
                           <TaskProgress
                             total={task.total}
                             completed={task.completed}
@@ -270,7 +276,7 @@ function TasksDetails({
                   <TaskDivider />
                   {showProgress && (
                     <>
-                      {task.end == null || task.start == null ? (
+                      {isNil(task.end) || isNil(task.start) ? (
                         <TaskProgress
                           total={task.total}
                           completed={task.completed}

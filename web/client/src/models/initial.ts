@@ -10,7 +10,7 @@ export class ModelInitial<T extends object = any> {
 
   constructor(initial?: Initial<T> | InitialWithId<T>) {
     if (isNil(initial)) {
-      this._initial = Object.assign(initial ?? {}, {
+      this._initial = Object.assign({
         id: uid(),
       }) as InitialWithId<T>
     } else {

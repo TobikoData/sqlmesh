@@ -47,6 +47,7 @@ import {
   type PlanStageBackfills,
   type PlanStageChanges,
   type PlanStageValidation,
+  SnapshotChangeCategory,
 } from '@api/client'
 import { type PlanTrackerMeta } from '@models/tracker-plan'
 
@@ -410,14 +411,14 @@ function StageBackfill({
         Record<string, boolean[]>
       >((acc, { category, change }) => {
         change?.indirect?.forEach(model => {
-          if (acc[model] == null) {
+          if (isNil(acc[model])) {
             acc[model] = []
           }
 
-          acc[model]?.push(category.value !== 1)
+          acc[model]?.push(category.value !== SnapshotChangeCategory.NUMBER_1)
         })
 
-        if (category.value === 3) {
+        if (category.value === SnapshotChangeCategory.NUMBER_3) {
           acc[change.model_name] = [true]
         }
 

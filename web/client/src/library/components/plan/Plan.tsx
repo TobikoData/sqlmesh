@@ -72,7 +72,7 @@ function Plan({
       planOverviewTracker.isBackfillUpdate
     ) {
       setPlanAction(EnumPlanAction.ApplyBackfill)
-    } else if (planCancelTracker.isCanceling) {
+    } else if (planCancelTracker.isCancelling) {
       setPlanAction(EnumPlanAction.Cancelling)
     } else {
       setPlanAction(EnumPlanAction.Run)
@@ -202,7 +202,7 @@ function CancellingPlanApply(): JSX.Element {
             className="w-3 h-3 border border-neutral-10 mr-4"
           />
           <h3 className="text-2xl text-warning-500 font-bold">
-            Canceling Plan...
+            Cancelling Plan...
           </h3>
         </Loading>
       </div>

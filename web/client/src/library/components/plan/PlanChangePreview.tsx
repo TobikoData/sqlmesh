@@ -196,7 +196,7 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
 
   return (
     <RadioGroup
-      className={clsx('flex flex-col mt-2')}
+      className="flex flex-col mt-2"
       value={change_categorization.get(change.model_name)?.category}
       onChange={(category: Category) => {
         dispatch({

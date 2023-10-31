@@ -56,11 +56,12 @@ async def cancel_plan(
     request: Request,
 ) -> models.PlanCancelStageTracker:
     """Cancel a plan application"""
-    if not hasattr(request.app.state, "task") or not request.app.state.task.cancel():
+    if not hasattr(request.app.state, "task") or request.app.state.task.done():
         raise ApiException(
-            message="Plan/apply is already running",
+            message="No plan/apply running",
             origin="API -> plan -> cancel_plan",
         )
+    request.app.state.task.cancel()
     tracker = models.PlanCancelStageTracker()
     api_console.start_plan_tracker(tracker)
     tracker_stage_cancel = models.PlanStageCancel()

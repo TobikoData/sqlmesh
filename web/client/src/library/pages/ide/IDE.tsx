@@ -265,7 +265,7 @@ export default function PageIDE(): JSX.Element {
 
     // This use case is happening when user refreshes the page
     // while plan is still applying
-    if (isFalse(isRunningPlan) && isFalse(planCancel.isCanceling)) {
+    if (isFalse(isRunningPlan) && isFalse(planCancel.isCancelling)) {
       void planRun()
     }
   }, [dataEnvironments])
@@ -275,7 +275,7 @@ export default function PageIDE(): JSX.Element {
       void getEnvironments()
     }
 
-    if (hasSynchronizedEnvironments() && isFalse(planCancel.isCanceling)) {
+    if (hasSynchronizedEnvironments() && isFalse(planCancel.isCancelling)) {
       void planRun()
     }
   }, [models])
@@ -289,20 +289,10 @@ export default function PageIDE(): JSX.Element {
 
     if (
       isNotNil(promote) &&
-      isTrue(promote.meta?.done) &&
-      promote.meta?.status === Status.success
+      isTrue(meta?.done) &&
+      meta?.status === Status.success
     ) {
       void getEnvironments()
-    }
-
-    if (isTrue(meta?.done)) {
-      if (meta?.status === Status.success) {
-        console.log('Plan Apply Tracking Done Successfully')
-      } else if (meta?.status === Status.fail) {
-        console.log('Plan Apply Tracking Failed')
-      } else {
-        console.log('Plan Apply Tracking Done but status is unknown')
-      }
     }
   }, [planApply])
 
