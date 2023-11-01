@@ -911,6 +911,38 @@ The methods are available because the `column` argument is parsed as a SQLGlot [
 
 Column expressions are sub-classes of the [Condition class](https://sqlglot.com/sqlglot/expressions.html#Condition), so they have builder methods like [`between`](https://sqlglot.com/sqlglot/expressions.html#Condition.between) and [`like`](https://sqlglot.com/sqlglot/expressions.html#Condition.like).
 
+#### Accessing model schemas
+
+Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types` method, when they can be statically determined.
+
+For example, consider the following macro function which aims to rename the columns of a target model by adding a prefix to them:
+
+```python linenums="1"
+from sqlglot import exp
+from sqlmesh.core.macros import macro
+
+@macro()
+def foo(evaluator, model_name, prefix):
+    prefix = prefix.name
+    renamed_projections = []
+
+    for name, dtype in evaluator.columns_to_types(model_name.sql()).items():
+        new_name = prefix + name
+        renamed_projections.append(exp.cast(exp.column(name), dtype).as_(new_name))
+
+    return renamed_projections
+
+```
+
+Having access to the schema of an upstream model can be useful for various reasons:
+
+- Normalizing columns so that downstream consumers are not tightly coupled e.g. to external or source tables
+- Projecting only a subset of columns that satisfy some criteria
+- Adding necessary casts
+- Computing common columns
+
+It also encourages writing code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as one can implement these transformations in a single python function instead of manually duplicating them for each model of interest.
+
 ## Mixing macro systems
 
 SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways.

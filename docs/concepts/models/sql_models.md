@@ -100,7 +100,9 @@ def entrypoint(evaluator: MacroEvaluator) -> str | exp.Expression:
     )
 ```
 
-Note that one could also define this model by simply returning a string that contained the SQL query of the SQL-based example. Strings used as pre/post-statements or return values in Python-based models will be parsed into SQLGlot expressions, which means that SQLMesh will still be able to understand them semantically and thus provide information such as column-level lineage.
+One could also define this model by simply returning a string that contained the SQL query of the SQL-based example. Strings used as pre/post-statements or return values in Python-based models will be parsed into SQLGlot expressions, which means that SQLMesh will still be able to understand them semantically and thus provide information such as column-level lineage.
+
+**Note:** Since python models have access to the macro evaluation context (`MacroEvaluator`), they can also [access model schemas](../macros/sqlmesh_macros.md#accessing-model-schemas) through its `columns_to_types` method.
 
 ### `@model` decorator
 
