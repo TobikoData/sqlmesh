@@ -8,6 +8,7 @@ from pathlib import Path
 
 from sqlglot import __version__ as SQLGLOT_VERSION
 
+from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -118,4 +119,4 @@ class FileCache(t.Generic[T]):
                 entry_id,
             ]
         )
-        return self._path / entry_file_name
+        return self._path / sanitize_name(entry_file_name)
