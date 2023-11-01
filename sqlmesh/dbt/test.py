@@ -79,7 +79,7 @@ class TestConfig(GeneralConfig):
     package_name: str = ""
     alias: t.Optional[str] = None
     schema_: t.Optional[str] = Field("", alias="schema")
-    database: str
+    database: t.Optional[str] = None
     severity: Severity = Severity.ERROR
     store_failures: t.Optional[bool] = None
     where: t.Optional[str] = None
