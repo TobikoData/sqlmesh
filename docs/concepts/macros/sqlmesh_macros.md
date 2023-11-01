@@ -931,7 +931,6 @@ def foo(evaluator, model_name, prefix):
         renamed_projections.append(exp.cast(exp.column(name), dtype).as_(new_name))
 
     return renamed_projections
-
 ```
 
 Having access to the schema of an upstream model can be useful for various reasons:
