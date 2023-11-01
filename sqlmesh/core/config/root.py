@@ -109,6 +109,26 @@ class Config(BaseConfig):
         except Exception:
             return value
 
+    @field_validator("gateways")
+    @classmethod
+    def _gateways_state_connection(cls, value: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        for name, gate in value.items():
+            if (
+                gate.connection is not None
+                and gate.connection.type_ in ("spark", "trino")
+                and gate.state_connection is None
+            ) or (
+                gate.state_connection is not None
+                and gate.state_connection.type_ in ("spark", "trino")
+            ):
+                bad_gate_name = f"The '{name}'" if name else "A"
+                conn_type = gate.connection.type_
+                raise ConfigError(
+                    f"{bad_gate_name} gateway's state connection uses a '{conn_type}' engine, which cannot be used to store SQLMesh state. "
+                    + "Please specify a `state_connection` engine other than Spark or Trino - see https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#gateways for more information."
+                )
+        return value
+
     @model_validator(mode="before")
     @classmethod
     def _normalize_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:

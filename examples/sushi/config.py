@@ -52,7 +52,8 @@ airflow_config = Config(  # type: ignore
             config={
                 "spark.hadoop.javax.jdo.option.ConnectionURL": "jdbc:postgresql://localhost:5432/metastore_db"
             },
-        )
+        ),
+        state_connection=DuckDBConnectionConfig(),
     ),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
@@ -61,7 +62,9 @@ airflow_config = Config(  # type: ignore
 # Due to a 3.7 mypy bug we ignore. Can remove once 3.7 support is dropped.
 airflow_config_docker = Config(  # type: ignore
     default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
-    gateways=GatewayConfig(connection=SparkConnectionConfig()),
+    gateways=GatewayConfig(
+        connection=SparkConnectionConfig(), state_connection=DuckDBConnectionConfig()
+    ),
     model_defaults=ModelDefaultsConfig(dialect="duckdb"),
 )
 
