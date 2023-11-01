@@ -1,10 +1,12 @@
 import typing as t
 from pathlib import Path
+from unittest.mock import PropertyMock
 
 import pytest
 from dbt.adapters.base import BaseRelation, Column
 from dbt.adapters.duckdb.relation import DuckDBRelation
 from dbt.contracts.relation import Policy
+from pytest_mock import MockerFixture
 
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
@@ -307,7 +309,7 @@ def test_source_config(sushi_test_project: Project):
     assert source_configs["streaming.order_items"].sql_name == "raw.order_items"
 
 
-def test_seed_config(sushi_test_project: Project):
+def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     seed_configs = sushi_test_project.packages["sushi"].seeds
     assert set(seed_configs) == {"waiter_names"}
     raw_items_seed = seed_configs["waiter_names"]
@@ -320,6 +322,10 @@ def test_seed_config(sushi_test_project: Project):
     assert actual_config == expected_config
 
     assert raw_items_seed.sql_name == "sushi.waiter_names"
+    assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == "sushi.waiter_names"
+    mock_dialect = PropertyMock(return_value="snowflake")
+    mocker.patch("sqlmesh.dbt.context.DbtContext.dialect", mock_dialect)
+    assert raw_items_seed.to_sqlmesh(sushi_test_project.context).name == "SUSHI.WAITER_NAMES"
 
 
 def test_quoting():
