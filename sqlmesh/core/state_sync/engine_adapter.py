@@ -485,9 +485,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return no_version
 
         return Versions(
-            schema_version=row[0],
-            sqlglot_version=row[1],
-            sqlmesh_version=seq_get(row, 2) or "0.0.0",
+            schema_version=row[0], sqlglot_version=row[1], sqlmesh_version=seq_get(row, 2)
         )
 
     def _get_environment(

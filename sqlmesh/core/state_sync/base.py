@@ -37,7 +37,7 @@ class Versions(PydanticModel):
 
     schema_version: int
     sqlglot_version: str
-    sqlmesh_version: str
+    sqlmesh_version: str = "0.0.0"
 
     @property
     def minor_sqlglot_version(self) -> t.Tuple[int, int]:
