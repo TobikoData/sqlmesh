@@ -1632,6 +1632,7 @@ def create_seed_model(
     name: str,
     seed_kind: SeedKind,
     *,
+    dialect: t.Optional[str] = None,
     pre_statements: t.Optional[t.List[exp.Expression]] = None,
     post_statements: t.Optional[t.List[exp.Expression]] = None,
     defaults: t.Optional[t.Dict[str, t.Any]] = None,
@@ -1678,6 +1679,7 @@ def create_seed_model(
     return _create_model(
         SeedModel,
         name,
+        dialect=dialect,
         defaults=defaults,
         path=path,
         seed=seed,
