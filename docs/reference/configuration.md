@@ -87,6 +87,8 @@ A named gateway key may define any or all of a data warehouse connection, state 
 
 The state and test connections default to `connection`. The `connection` key may be omitted if a [`default_connection`](#default-connectionsscheduler) is specified.
 
+NOTE: Spark and Trino engines may not be used for the state connection.
+
 | Option             | Description                                                                                                            |                  Type                   |                                Required                                |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------- | :-------------------------------------: | :--------------------------------------------------------------------: |
 | `connection`       | The data warehouse connection for core SQLMesh functions.                                                              | [connection configuration](#connection) | N (if [`default_connection`](#default-connectionsscheduler) specified) |

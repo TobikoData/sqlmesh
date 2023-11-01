@@ -425,6 +425,8 @@ These pages describe the connection configuration options for each execution eng
 
 Configuration for the state backend connection if different from the data warehouse connection. The data warehouse connection is used if the `state_connection` key is not specified.
 
+NOTE: Spark and Trino engines may not be used for the state connection.
+
 Example postgres state connection configuration:
 
 === "YAML"

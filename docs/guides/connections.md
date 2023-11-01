@@ -33,6 +33,8 @@ gateways:
             database: state.db
 ```
 
+NOTE: Spark and Trino engines may not be used for the state connection.
+
 ## Default connection
 
 Additionally, you can set a default connection by defining its configuration in the `default_connection` key:
