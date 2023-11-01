@@ -940,7 +940,7 @@ Having access to the schema of an upstream model can be useful for various reaso
 - Adding necessary casts
 - Computing common columns
 
-It also encourages writing code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as one can implement these transformations in a single python function instead of manually duplicating them for each model of interest.
+It also encourages writing code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as one can implement these transformations in a single function instead of manually duplicating them for each model of interest.
 
 ## Mixing macro systems
 
