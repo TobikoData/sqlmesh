@@ -59,6 +59,14 @@ class Console(abc.ABC):
     with them when their input is needed."""
 
     @abc.abstractmethod
+    def start_plan_evaluation(self, plan: Plan) -> None:
+        """Indicates that a new evaluation has begun."""
+
+    @abc.abstractmethod
+    def stop_plan_evaluation(self) -> None:
+        """Indicates that the evaluation has ended."""
+
+    @abc.abstractmethod
     def start_evaluation_progress(
         self,
         batches: t.Dict[Snapshot, int],
@@ -215,6 +223,12 @@ class TerminalConsole(Console):
 
     def _confirm(self, message: str, **kwargs: t.Any) -> bool:
         return Confirm.ask(message, console=self.console, **kwargs)
+
+    def start_plan_evaluation(self, plan: Plan) -> None:
+        pass
+
+    def stop_plan_evaluation(self) -> None:
+        pass
 
     def start_evaluation_progress(
         self,

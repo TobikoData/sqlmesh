@@ -8,18 +8,11 @@ import {
 import clsx from 'clsx'
 import { useState, useEffect, Fragment, type MouseEvent } from 'react'
 import { apiDeleteEnvironment, useApiPlanRun } from '~/api'
-import { type ContextEnvironment } from '~/api/client'
 import { useStoreContext } from '~/context/context'
-import {
-  useStorePlan,
-  EnumPlanState,
-  EnumPlanAction,
-  type PlanAction,
-  type PlanState,
-} from '~/context/plan'
+import { useStorePlan } from '~/context/plan'
 import { type ModelEnvironment } from '~/models/environment'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
-import { isArrayNotEmpty, includes, isFalse, isStringEmptyOrNil } from '~/utils'
+import { isArrayNotEmpty, isFalse, isStringEmptyOrNil, isNil } from '~/utils'
 import { Button, makeButton, type ButtonSize } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Input from '@components/input/Input'
@@ -30,35 +23,29 @@ import {
 } from '@components/plan/context'
 import PlanChangePreview from '@components/plan/PlanChangePreview'
 import { EnumErrorKey, useIDE } from './context'
+import { type ModelPlanOverviewTracker } from '@models/tracker-plan-overview'
+import { type ModelPlanApplyTracker } from '@models/tracker-plan-apply'
 
 export default function RunPlan(): JSX.Element {
   const { setIsPlanOpen } = useIDE()
 
-  const planState = useStorePlan(s => s.state)
-  const planAction = useStorePlan(s => s.action)
-  const setPlanState = useStorePlan(s => s.setState)
-  const setPlanAction = useStorePlan(s => s.setAction)
-  const setActivePlan = useStorePlan(s => s.setActivePlan)
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planApply = useStorePlan(s => s.planApply)
+  const setPlanOverview = useStorePlan(s => s.setPlanOverview)
 
+  const isRunningPlan = useStoreContext(s => s.isRunningPlan)
   const addConfirmation = useStoreContext(s => s.addConfirmation)
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
-  const setInitialDates = useStoreContext(s => s.setInitialDates)
   const hasSynchronizedEnvironments = useStoreContext(
     s => s.hasSynchronizedEnvironments,
   )
 
-  const [hasChanges, setHasChanges] = useState(false)
-  const [plan, setPlan] = useState<ContextEnvironment | undefined>()
   const [shouldStartPlanAutomatically, setShouldStartPlanAutomatically] =
     useState(false)
 
-  const {
-    refetch: planRun,
-    data: dataPlan,
-    isFetching,
-  } = useApiPlanRun(environment.name, {
+  const { refetch: planRun, isFetching } = useApiPlanRun(environment.name, {
     planOptions: { skip_tests: true, include_unmodified: true },
   })
 
@@ -73,27 +60,12 @@ export default function RunPlan(): JSX.Element {
     void planRun()
   }, [environment])
 
-  useEffect(() => {
-    if (dataPlan == null) return
-
-    setPlan(dataPlan)
-    setInitialDates(dataPlan.start, dataPlan.end)
-    setHasChanges(
-      [
-        dataPlan.changes?.added,
-        dataPlan.changes?.removed,
-        dataPlan.changes?.modified?.direct,
-        dataPlan.changes?.modified?.indirect,
-        dataPlan.changes?.modified?.metadata,
-      ].some(isArrayNotEmpty),
-    )
-  }, [dataPlan])
-
   function startPlan(): void {
-    setActivePlan(undefined)
-    setPlanState(EnumPlanState.Init)
-    setPlanAction(EnumPlanAction.Run)
     setIsPlanOpen(true)
+
+    planOverview.reset()
+
+    setPlanOverview(planOverview)
   }
 
   const showRunButton =
@@ -101,22 +73,15 @@ export default function RunPlan(): JSX.Element {
   const showSelectEnvironmentButton =
     showRunButton &&
     (isFalse(environment.isDefault) || isFalse(environment.isInitial))
-  const isProcessingPlan = includes(
-    [EnumPlanState.Applying, EnumPlanState.Running, EnumPlanState.Cancelling],
-    planState,
-  )
+
   const shouldDisableActions =
-    isFetching ||
-    planAction !== EnumPlanAction.None ||
-    planState === EnumPlanState.Applying ||
-    planState === EnumPlanState.Running ||
-    planState === EnumPlanState.Cancelling
+    isFetching || planOverview.isRunning || planApply.isRunning
 
   return (
     <div
       className={clsx(
         'flex items-center',
-        environment == null &&
+        isNil(environment) &&
           'opacity-50 pointer-events-none cursor-not-allowed',
       )}
     >
@@ -127,13 +92,17 @@ export default function RunPlan(): JSX.Element {
             isFalse(environment.isInitial && environment.isDefault) &&
               'rounded-none rounded-l-lg border-r',
           )}
-          disabled={shouldDisableActions}
           variant={EnumVariant.Alternative}
           size={EnumSize.sm}
           onClick={(e: React.MouseEvent) => {
             e.stopPropagation()
 
-            if (environment.isDefault && isFalse(environment.isInitial)) {
+            if (isRunningPlan) {
+              setIsPlanOpen(true)
+            } else if (
+              environment.isDefault &&
+              isFalse(environment.isInitial)
+            ) {
               addConfirmation({
                 headline: 'Running Plan Directly On Prod Environment!',
                 description: `Are you sure you want to run your changes directly on prod? Safer choice will be to select or add new environment first.`,
@@ -159,12 +128,7 @@ export default function RunPlan(): JSX.Element {
                             setShowConfirmation(false)
                           }}
                           size={EnumSize.md}
-                          disabled={
-                            isFetching ||
-                            planAction !== EnumPlanAction.None ||
-                            planState === EnumPlanState.Applying ||
-                            planState === EnumPlanState.Cancelling
-                          }
+                          disabled={shouldDisableActions}
                         />
                       )}
                       <AddEnvironemnt
@@ -184,9 +148,9 @@ export default function RunPlan(): JSX.Element {
             }
           }}
         >
-          {isProcessingPlan && <Spinner className="w-3 h-3 mr-1" />}
+          {isRunningPlan && <Spinner className="w-3 h-3 mr-1" />}
           <span className="inline-block">
-            {getPlanStatus(planState, planAction)}
+            {getPlanStatus(planOverview, planApply)}
           </span>
         </Button>
         {showSelectEnvironmentButton && (
@@ -199,29 +163,28 @@ export default function RunPlan(): JSX.Element {
       </div>
       <PlanChanges
         environment={environment}
-        plan={plan}
-        isLoading={isFetching}
-        hasChanges={hasChanges}
+        isRunningPlanOverview={isFetching || planOverview.isRunning}
+        isRunningPlanApply={planApply.isRunning}
       />
     </div>
   )
 }
 
 function PlanChanges({
-  isLoading,
-  hasChanges,
   environment,
-  plan,
+  isRunningPlanOverview,
+  isRunningPlanApply,
 }: {
   environment: ModelEnvironment
-  plan?: ContextEnvironment
-  isLoading: boolean
-  hasChanges: boolean
+  isRunningPlanOverview: boolean
+  isRunningPlanApply: boolean
 }): JSX.Element {
+  const planOverview = useStorePlan(s => s.planOverview)
+
   return (
     <span className="flex align-center h-full w-full">
       <>
-        {isLoading ? (
+        {isRunningPlanOverview ? (
           <span className="flex items-center ml-2">
             <Spinner className="w-3 h-3 mr-1" />
             <span className="inline-block text-xs text-neutral-500">
@@ -238,44 +201,53 @@ function PlanChanges({
                 New
               </span>
             )}
-            {[hasChanges, isLoading, environment.isLocal].every(isFalse) && (
-              <span
-                title="Latest"
-                className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
-              >
-                <span>Latest</span>
-              </span>
-            )}
-            {isArrayNotEmpty(plan?.changes?.added) && (
+            {planOverview.isLatest &&
+              [
+                isRunningPlanOverview,
+                isRunningPlanApply,
+                environment.isLocal,
+              ].every(isFalse) && (
+                <span
+                  title="Latest"
+                  className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
+                >
+                  <span>Latest</span>
+                </span>
+              )}
+            {isArrayNotEmpty(planOverview.added) && (
               <ChangesPreview
                 headline="Added Models"
                 type={EnumPlanChangeType.Add}
-                changes={plan!.changes!.added}
+                changes={planOverview.added ?? []}
               />
             )}
-            {isArrayNotEmpty(plan?.changes?.modified.direct) && (
+            {isArrayNotEmpty(planOverview.modified?.direct) && (
               <ChangesPreview
                 headline="Direct Changes"
                 type={EnumPlanChangeType.Direct}
-                changes={plan!.changes!.modified.direct.map(
-                  ({ model_name }) => model_name,
-                )}
+                changes={
+                  planOverview.modified?.direct.map(
+                    ({ model_name }) => model_name,
+                  ) ?? []
+                }
               />
             )}
-            {isArrayNotEmpty(plan?.changes?.modified.indirect) && (
+            {isArrayNotEmpty(planOverview.modified?.indirect) && (
               <ChangesPreview
                 headline="Indirectly Modified"
                 type={EnumPlanChangeType.Indirect}
-                changes={plan!.changes!.modified.indirect.map(
-                  ci => ci.model_name,
-                )}
+                changes={
+                  planOverview.modified?.indirect.map(
+                    ({ model_name }) => model_name,
+                  ) ?? []
+                }
               />
             )}
-            {isArrayNotEmpty(plan?.changes?.removed) && (
+            {isArrayNotEmpty(planOverview.removed) && (
               <ChangesPreview
                 headline="Removed Models"
                 type={EnumPlanChangeType.Remove}
-                changes={plan!.changes!.removed}
+                changes={planOverview.removed ?? []}
               />
             )}
           </>
@@ -577,7 +549,8 @@ function ChangesPreview({
                 'bg-secondary-500 border-secondary-500',
               type === EnumPlanChangeType.Indirect &&
                 'bg-warning-500 border-warning-500',
-              type === 'metadata' && 'bg-neutral-500 border-neutral-500',
+              type === EnumPlanChangeType.Default &&
+                'bg-neutral-500 border-neutral-500',
             )}
           >
             {changes.length}
@@ -611,11 +584,12 @@ function ChangesPreview({
   )
 }
 
-function getPlanStatus(planState: PlanState, planAction: PlanAction): string {
-  if (planState === EnumPlanState.Running) return 'Running Plan...'
-  if (planState === EnumPlanState.Applying) return 'Applying Plan...'
-  if (planState === EnumPlanState.Cancelling) return 'Cancelling Plan...'
-  if (planAction === EnumPlanAction.None) return 'Run Plan'
+function getPlanStatus(
+  planOverview: ModelPlanOverviewTracker,
+  planApply: ModelPlanApplyTracker,
+): string {
+  if (planApply.isRunning) return 'Applying Plan...'
+  if (planOverview.isRunning) return 'Getting Changes...'
 
-  return 'Setting Plan...'
+  return 'Plan'
 }

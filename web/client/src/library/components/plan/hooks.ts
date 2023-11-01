@@ -5,7 +5,7 @@ import {
   type PlanOptions,
 } from '~/api/client'
 import { type ModelEnvironment } from '~/models/environment'
-import { isFalse, isStringEmptyOrNil } from '~/utils'
+import { isStringEmptyOrNil } from '~/utils'
 import { usePlan } from './context'
 
 export function usePlanPayload({
@@ -91,19 +91,18 @@ export function useApplyPayload({
     include_unmodified,
     no_auto_categorization,
     restate_models,
-    hasBackfills,
     create_from,
     change_categorization,
   } = usePlan()
 
   const planDates = useMemo(() => {
-    if (isInitialPlanRun || isFalse(hasBackfills)) return
+    if (isInitialPlanRun) return
 
     return {
       start,
       end,
     }
-  }, [hasBackfills, start, end, isInitialPlanRun])
+  }, [start, end, isInitialPlanRun])
 
   const categories = useMemo(() => {
     return Array.from(

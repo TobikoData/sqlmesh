@@ -1,12 +1,7 @@
 import { type Confirmation } from '@components/modal/ModalConfirmation'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { create } from 'zustand'
-import {
-  type Model,
-  type ContextEnvironmentEnd,
-  type ContextEnvironmentStart,
-  type Environment,
-} from '~/api/client'
+import { type Model, type Environment } from '~/api/client'
 import {
   EnumRelativeLocation,
   type EnvironmentName,
@@ -16,16 +11,16 @@ import { isNil, isStringEmptyOrNil } from '~/utils'
 
 interface ContextStore {
   version?: string
+  isRunningPlan: boolean
   showConfirmation: boolean
   confirmations: Confirmation[]
   environment: ModelEnvironment
   environments: Set<ModelEnvironment>
   defaultEnvironment?: ModelEnvironment
   pinnedEnvironments: ModelEnvironment[]
-  initialStartDate?: ContextEnvironmentStart
-  initialEndDate?: ContextEnvironmentEnd
   models: Map<string, ModelSQLMeshModel>
   setVersion: (version?: string) => void
+  setIsRunningPlan: (isRunningPlan: boolean) => void
   setShowConfirmation: (showConfirmation: boolean) => void
   addConfirmation: (confirmation: Confirmation) => void
   removeConfirmation: () => void
@@ -46,10 +41,6 @@ interface ContextStore {
     pinnedEnvironments?: string[],
   ) => void
   hasSynchronizedEnvironments: () => boolean
-  setInitialDates: (
-    initialStartDate?: ContextEnvironmentStart,
-    initialEndDate?: ContextEnvironmentEnd,
-  ) => void
 }
 
 const environments = new Set(ModelEnvironment.getEnvironments())
@@ -57,6 +48,7 @@ const environment = environments.values().next().value
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
+  isRunningPlan: false,
   showConfirmation: false,
   confirmations: [],
   environment,
@@ -66,6 +58,11 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
+  setIsRunningPlan(isRunningPlan) {
+    set(() => ({
+      isRunningPlan,
+    }))
+  },
   setVersion(version) {
     set(() => ({
       version,
@@ -116,12 +113,6 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   },
   getNextEnvironment() {
     return get().environments.values().next().value
-  },
-  setInitialDates(initialStartDate, initialEndDate) {
-    set({
-      initialStartDate,
-      initialEndDate,
-    })
   },
   isExistingEnvironment(environment) {
     const s = get()

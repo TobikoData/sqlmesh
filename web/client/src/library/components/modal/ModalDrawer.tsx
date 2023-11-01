@@ -23,6 +23,7 @@ export default function ModalDrawer({
         as="div"
         className="relative z-[100] w-full h-full "
         onClose={onClose}
+        tabIndex={1}
       >
         <Transition.Child
           as={Fragment}
