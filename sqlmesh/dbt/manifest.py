@@ -172,13 +172,15 @@ class ManifestHelper:
             )
 
             test_model = _test_model(node)
+            node_config = _node_base_config(node)
+            node_config["database"] = node.database or self.target.database
 
             test = TestConfig(
                 sql=sql,
                 model_name=test_model,
                 test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
                 dependencies=dependencies,
-                **_node_base_config(node),
+                **node_config,
             )
             self._tests_per_package[node.package_name][node.name.lower()] = test
             if test_model:
