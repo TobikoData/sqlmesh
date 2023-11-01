@@ -21,7 +21,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ApplyResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/PlanApplyStageTracker"
+                }
               }
             }
           },
@@ -382,7 +384,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/ContextEnvironment" }
+                "schema": {
+                  "$ref": "#/components/schemas/PlanOverviewStageTracker"
+                }
               }
             }
           },
@@ -408,8 +412,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "null",
-                  "title": "Response Cancel Plan Api Plan Cancel Post"
+                  "$ref": "#/components/schemas/PlanCancelStageTracker"
                 }
               }
             }
@@ -741,34 +744,40 @@
         "required": ["timestamp", "message", "origin"],
         "title": "ApiExceptionPayload"
       },
-      "ApplyResponse": {
-        "properties": { "type": { "$ref": "#/components/schemas/ApplyType" } },
+      "BackfillDetails": {
+        "properties": {
+          "model_name": { "type": "string", "title": "Model Name" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "interval": {
+            "items": [{ "type": "string" }, { "type": "string" }],
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Interval"
+          },
+          "batches": { "type": "integer", "title": "Batches" }
+        },
         "type": "object",
-        "required": ["type"],
-        "title": "ApplyResponse"
+        "required": ["view_name", "interval", "batches"],
+        "title": "BackfillDetails"
       },
-      "ApplyType": {
-        "type": "string",
-        "enum": ["virtual", "backfill"],
-        "title": "ApplyType",
-        "description": "An enumeration of possible apply types."
+      "BackfillTask": {
+        "properties": {
+          "completed": { "type": "integer", "title": "Completed" },
+          "total": { "type": "integer", "title": "Total" },
+          "view_name": { "type": "string", "title": "View Name" },
+          "start": { "type": "integer", "title": "Start" },
+          "end": { "type": "integer", "title": "End" }
+        },
+        "type": "object",
+        "required": ["completed", "total", "view_name", "start"],
+        "title": "BackfillTask"
       },
       "Body_apply_api_commands_apply_post": {
         "properties": {
           "environment": { "type": "string", "title": "Environment" },
           "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
-          "plan_options": {
-            "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
-            "title": "Plan Options",
-            "default": {
-              "skip_tests": false,
-              "skip_backfill": false,
-              "no_gaps": false,
-              "forward_only": false,
-              "no_auto_categorization": false,
-              "include_unmodified": false
-            }
-          },
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
           "categories": {
             "additionalProperties": {
               "$ref": "#/components/schemas/SnapshotChangeCategory"
@@ -783,18 +792,7 @@
         "properties": {
           "environment": { "type": "string", "title": "Environment" },
           "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
-          "plan_options": {
-            "allOf": [{ "$ref": "#/components/schemas/PlanOptions" }],
-            "title": "Plan Options",
-            "default": {
-              "skip_tests": false,
-              "skip_backfill": false,
-              "no_gaps": false,
-              "forward_only": false,
-              "no_auto_categorization": false,
-              "include_unmodified": false
-            }
-          }
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" }
         },
         "type": "object",
         "title": "Body_run_plan_api_plan_post"
@@ -853,82 +851,6 @@
         "type": "object",
         "required": ["name", "type"],
         "title": "Column"
-      },
-      "ContextEnvironment": {
-        "properties": {
-          "environment": { "type": "string", "title": "Environment" },
-          "start": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "Start"
-          },
-          "end": {
-            "anyOf": [
-              { "type": "string", "format": "date" },
-              { "type": "string", "format": "date-time" },
-              { "type": "string" },
-              { "type": "integer" },
-              { "type": "number" }
-            ],
-            "title": "End"
-          },
-          "changes": {
-            "$ref": "#/components/schemas/ContextEnvironmentChanges"
-          },
-          "backfills": {
-            "items": {
-              "$ref": "#/components/schemas/ContextEnvironmentBackfill"
-            },
-            "type": "array",
-            "title": "Backfills",
-            "default": []
-          }
-        },
-        "type": "object",
-        "required": ["environment", "start", "end"],
-        "title": "ContextEnvironment"
-      },
-      "ContextEnvironmentBackfill": {
-        "properties": {
-          "model_name": { "type": "string", "title": "Model Name" },
-          "view_name": { "type": "string", "title": "View Name" },
-          "interval": {
-            "items": [{ "type": "string" }, { "type": "string" }],
-            "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
-            "title": "Interval"
-          },
-          "batches": { "type": "integer", "title": "Batches" }
-        },
-        "type": "object",
-        "required": ["model_name", "view_name", "interval", "batches"],
-        "title": "ContextEnvironmentBackfill"
-      },
-      "ContextEnvironmentChanges": {
-        "properties": {
-          "added": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
-            "title": "Added"
-          },
-          "removed": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
-            "title": "Removed"
-          },
-          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
-        },
-        "type": "object",
-        "required": ["added", "removed", "modified"],
-        "title": "ContextEnvironmentChanges"
       },
       "Directory": {
         "properties": {
@@ -1150,7 +1072,14 @@
         "title": "LineageColumn"
       },
       "Meta": {
-        "properties": { "version": { "type": "string", "title": "Version" } },
+        "properties": {
+          "version": { "type": "string", "title": "Version" },
+          "has_running_task": {
+            "type": "boolean",
+            "title": "Has Running Task",
+            "default": false
+          }
+        },
         "type": "object",
         "required": ["version"],
         "title": "Meta"
@@ -1286,6 +1215,69 @@
         "title": "NodeType",
         "description": "An enumeration."
       },
+      "PlanApplyStageTracker": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "environment": { "type": "string", "title": "Environment" },
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
+          "creation": { "$ref": "#/components/schemas/PlanStageCreation" },
+          "restate": { "$ref": "#/components/schemas/PlanStageRestate" },
+          "backfill": { "$ref": "#/components/schemas/PlanStageBackfill" },
+          "promote": { "$ref": "#/components/schemas/PlanStagePromote" }
+        },
+        "type": "object",
+        "title": "PlanApplyStageTracker"
+      },
+      "PlanCancelStageTracker": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "environment": { "type": "string", "title": "Environment" },
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
+          "cancel": { "$ref": "#/components/schemas/PlanStageCancel" }
+        },
+        "type": "object",
+        "title": "PlanCancelStageTracker"
+      },
       "PlanDates": {
         "properties": {
           "start": {
@@ -1349,6 +1341,137 @@
         },
         "type": "object",
         "title": "PlanOptions"
+      },
+      "PlanOverviewStageTracker": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              { "type": "string", "format": "date" },
+              { "type": "string", "format": "date-time" },
+              { "type": "string" },
+              { "type": "integer" },
+              { "type": "number" }
+            ],
+            "title": "End"
+          },
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "environment": { "type": "string", "title": "Environment" },
+          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
+          "validation": { "$ref": "#/components/schemas/PlanStageValidation" },
+          "changes": { "$ref": "#/components/schemas/PlanStageChanges" },
+          "backfills": { "$ref": "#/components/schemas/PlanStageBackfills" }
+        },
+        "type": "object",
+        "title": "PlanOverviewStageTracker"
+      },
+      "PlanStageBackfill": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "queue": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Queue",
+            "default": []
+          },
+          "tasks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackfillTask"
+            },
+            "type": "object",
+            "title": "Tasks",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "PlanStageBackfill"
+      },
+      "PlanStageBackfills": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "models": {
+            "items": { "$ref": "#/components/schemas/BackfillDetails" },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "title": "PlanStageBackfills"
+      },
+      "PlanStageCancel": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
+        },
+        "type": "object",
+        "title": "PlanStageCancel"
+      },
+      "PlanStageChanges": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "added": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Added"
+          },
+          "removed": {
+            "items": { "type": "string" },
+            "type": "array",
+            "uniqueItems": true,
+            "title": "Removed"
+          },
+          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
+        },
+        "type": "object",
+        "title": "PlanStageChanges"
+      },
+      "PlanStageCreation": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "total_tasks": { "type": "integer", "title": "Total Tasks" },
+          "num_tasks": { "type": "integer", "title": "Num Tasks" }
+        },
+        "type": "object",
+        "required": ["total_tasks", "num_tasks"],
+        "title": "PlanStageCreation"
+      },
+      "PlanStagePromote": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" },
+          "total_tasks": { "type": "integer", "title": "Total Tasks" },
+          "num_tasks": { "type": "integer", "title": "Num Tasks" },
+          "target_environment": {
+            "type": "string",
+            "title": "Target Environment"
+          }
+        },
+        "type": "object",
+        "required": ["total_tasks", "num_tasks", "target_environment"],
+        "title": "PlanStagePromote"
+      },
+      "PlanStageRestate": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
+        },
+        "type": "object",
+        "title": "PlanStageRestate"
+      },
+      "PlanStageValidation": {
+        "properties": {
+          "meta": { "$ref": "#/components/schemas/TrackableMeta" }
+        },
+        "type": "object",
+        "title": "PlanStageValidation"
       },
       "Query": {
         "properties": { "sql": { "type": "string", "title": "Sql" } },
@@ -1571,6 +1694,12 @@
         ],
         "title": "SnapshotTableInfo"
       },
+      "Status": {
+        "type": "string",
+        "enum": ["init", "success", "fail"],
+        "title": "Status",
+        "description": "An enumeration of statuses."
+      },
       "TableDiff": {
         "properties": {
           "schema_diff": { "$ref": "#/components/schemas/SchemaDiff" },
@@ -1632,6 +1761,19 @@
         "type": "object",
         "required": ["name", "path", "reason"],
         "title": "TestSkipped"
+      },
+      "TrackableMeta": {
+        "properties": {
+          "status": {
+            "allOf": [{ "$ref": "#/components/schemas/Status" }],
+            "default": "init"
+          },
+          "start": { "type": "integer", "title": "Start" },
+          "end": { "type": "integer", "title": "End" },
+          "done": { "type": "boolean", "title": "Done", "default": false }
+        },
+        "type": "object",
+        "title": "TrackableMeta"
       },
       "ValidationError": {
         "properties": {

@@ -11,12 +11,10 @@ import {
   type QueryMeta,
 } from '@tanstack/react-query'
 import {
-  type ContextEnvironment,
   type BodyWriteFileApiFilesPathPost,
   type PlanDates,
   type File,
   type Directory,
-  type ApplyResponse,
   type PlanOptions,
   getFileApiFilesPathGet,
   getFilesApiFilesGet,
@@ -47,6 +45,8 @@ import {
   type ApiExceptionPayload,
   deleteEnvironmentApiEnvironmentsEnvironmentDelete as apiDeleteEnvironment,
   type Environments,
+  type PlanOverviewStageTracker,
+  type PlanApplyStageTracker,
 } from './client'
 import {
   useIDE,
@@ -225,19 +225,20 @@ export function useApiPlanRun(
     planOptions?: PlanOptions
   },
   options?: ApiOptions,
-): UseQueryWithTimeoutOptions<ContextEnvironment> {
+): UseQueryWithTimeoutOptions<PlanOverviewStageTracker> {
   return useQueryWithTimeout(
     {
       queryKey: ['/api/plan', environment],
-      queryFn: async ({ signal }) =>
-        await runPlanApiPlanPost(
+      async queryFn({ signal }) {
+        return await runPlanApiPlanPost(
           {
             environment,
             plan_dates: inputs?.planDates,
             plan_options: inputs?.planOptions,
           },
           { signal },
-        ),
+        )
+      },
     },
     {
       ...options,
@@ -255,12 +256,12 @@ export function useApiPlanApply(
     categories?: BodyApplyApiCommandsApplyPostCategories
   },
   options?: ApiOptions,
-): UseQueryWithTimeoutOptions<ApplyResponse> {
+): UseQueryWithTimeoutOptions<PlanApplyStageTracker> {
   return useQueryWithTimeout(
     {
       queryKey: ['/api/commands/apply', environment],
-      queryFn: async ({ signal }) =>
-        await applyApiCommandsApplyPost(
+      async queryFn({ signal }) {
+        return await applyApiCommandsApplyPost(
           {
             environment,
             plan_dates: inputs?.planDates,
@@ -268,7 +269,8 @@ export function useApiPlanApply(
             categories: inputs?.categories,
           },
           { signal },
-        ),
+        )
+      },
     },
     {
       ...options,
