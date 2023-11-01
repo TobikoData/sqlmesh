@@ -57,8 +57,8 @@ def create_schema_file(
         def _get_columns(table: str) -> t.Optional[t.Dict[str, t.Any]]:
             try:
                 return adapter.columns(table, include_pseudo_columns=True)
-            except:
-                logger.warning(f"Unable to get schema for '{table}'")
+            except Exception as e:
+                logger.warning(f"Unable to get schema for '{table}': '{e}'.")
                 return None
 
         schemas = [
