@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 class Versions(PydanticModel):
     """Represents the various versions of dependencies in the state sync."""
 
-    schema_version: int
-    sqlglot_version: str
+    schema_version: int = 0
+    sqlglot_version: str = "0.0.0"
     sqlmesh_version: str = "0.0.0"
 
     @property

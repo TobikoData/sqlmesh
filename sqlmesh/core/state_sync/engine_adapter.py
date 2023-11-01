@@ -471,7 +471,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
-        no_version = Versions(schema_version=0, sqlglot_version="0.0.0", sqlmesh_version="0.0.0")
+        no_version = Versions()
 
         if not self.engine_adapter.table_exists(self.versions_table):
             return no_version
