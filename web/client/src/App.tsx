@@ -11,11 +11,15 @@ import { useStoreContext } from '@context/context'
 
 export default function App(): JSX.Element {
   const setVersion = useStoreContext(s => s.setVersion)
+  const setIsRunningPlan = useStoreContext(s => s.setIsRunningPlan)
 
   const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta()
 
   useEffect(() => {
-    void getMeta().then(({ data }) => setVersion(data?.version))
+    void getMeta().then(({ data }) => {
+      setVersion(data?.version)
+      setIsRunningPlan(data?.has_running_task ?? false)
+    })
 
     return () => {
       void cancelRequestMeta()

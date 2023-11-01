@@ -45,6 +45,7 @@ def project_context(project_tmp_path: Path) -> Context:
 @pytest.fixture
 def web_sushi_context(sushi_context: Context) -> Context:
     def get_context_override() -> Context:
+        sushi_context.console = api_console
         return sushi_context
 
     app.dependency_overrides[get_loaded_context] = get_context_override
@@ -378,10 +379,10 @@ def test_apply(project_tmp_path: Path) -> None:
 
 
 def test_apply_test_failures(web_sushi_context: Context, mocker: MockerFixture) -> None:
-    mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError("foo"))
+    mocker.patch.object(web_sushi_context, "_run_plan_tests", side_effect=PlanError())
     response = client.post("/api/commands/apply", json={"environment": "dev"})
     assert response.status_code == 422
-    assert response.json()["message"] == "foo"
+    assert response.json()["message"] == "Unable to run a plan"
 
 
 def test_plan(web_sushi_context: Context) -> None:
@@ -389,7 +390,7 @@ def test_plan(web_sushi_context: Context) -> None:
     assert response.status_code == 200
     plan = response.json()
     assert plan["environment"] == "dev"
-    assert "backfills" in plan
+    assert "validation" in plan
     assert "changes" in plan
 
 
@@ -405,7 +406,7 @@ async def test_cancel() -> None:
     app.state.task = asyncio.create_task(asyncio.sleep(1))
     response = client.post("/api/plan/cancel")
     await asyncio.sleep(0.1)
-    assert response.status_code == 204
+    assert response.status_code == 200
     assert app.state.task.cancelled()
 
 

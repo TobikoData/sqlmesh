@@ -5,7 +5,7 @@ import pathlib
 import typing as t
 
 import pydantic
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlglot import exp
 from watchfiles import Change
 
@@ -13,7 +13,7 @@ from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.node import IntervalUnit
 from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
-from sqlmesh.utils.date import TimeLike
+from sqlmesh.utils.date import TimeLike, now_timestamp
 from sqlmesh.utils.pydantic import (
     PYDANTIC_MAJOR_VERSION,
     field_validator,
@@ -37,6 +37,36 @@ class ApplyType(str, enum.Enum):
 
     virtual = "virtual"
     backfill = "backfill"
+
+
+class ConsoleEvent(str, enum.Enum):
+    """An enumeration of console events."""
+
+    plan_apply = "plan-apply"
+    plan_overview = "plan-overview"
+    plan_cancel = "plan-cancel"
+    tests = "tests"
+
+
+class Status(str, enum.Enum):
+    """An enumeration of statuses."""
+
+    init = "init"
+    success = "success"
+    fail = "fail"
+
+
+class PlanStage(str, enum.Enum):
+    """An enumeration of plan apply stages."""
+
+    validation = "validation"
+    changes = "changes"
+    backfills = "backfills"
+    creation = "creation"
+    restate = "restate"
+    backfill = "backfill"
+    promote = "promote"
+    cancel = "cancel"
 
 
 class File(BaseModel):
@@ -74,6 +104,7 @@ class Directory(BaseModel):
 
 class Meta(BaseModel):
     version: str
+    has_running_task: bool = False
 
 
 class ChangeDirect(BaseModel):
@@ -147,27 +178,6 @@ class ModelsDiff(BaseModel):
             indirect=indirect,
             metadata=metadata,
         )
-
-
-class ContextEnvironmentChanges(BaseModel):
-    added: t.Set[str]
-    removed: t.Set[str]
-    modified: ModelsDiff
-
-
-class ContextEnvironmentBackfill(BaseModel):
-    model_name: str
-    view_name: str
-    interval: t.Tuple[str, str]
-    batches: int
-
-
-class ContextEnvironment(BaseModel):
-    environment: str
-    start: TimeLike
-    end: TimeLike
-    changes: t.Optional[ContextEnvironmentChanges] = None
-    backfills: t.List[ContextEnvironmentBackfill] = []
 
 
 class Environments(BaseModel):
@@ -276,10 +286,6 @@ class Query(BaseModel):
     sql: str
 
 
-class ApplyResponse(BaseModel):
-    type: ApplyType
-
-
 class ApiExceptionPayload(BaseModel):
     timestamp: int
     message: str
@@ -362,3 +368,132 @@ class ArtifactChange(BaseModel):
     path: str
     type: t.Optional[ArtifactType] = None
     file: t.Optional[File] = None
+
+
+class ReportTestsResult(BaseModel):
+    message: str
+
+
+class ReportTestDetails(ReportTestsResult):
+    details: str
+
+
+class ReportTestsFailure(ReportTestsResult):
+    total: int
+    failures: int
+    errors: int
+    successful: int
+    dialect: str
+    details: t.List[ReportTestDetails]
+    traceback: str
+
+
+class BackfillDetails(BaseModel):
+    model_name: t.Optional[str] = None
+    view_name: str
+    interval: t.Tuple[str, str]
+    batches: int
+
+
+class BackfillTask(BaseModel):
+    completed: int
+    total: int
+    view_name: str
+    start: int
+    end: t.Optional[int] = None
+
+
+class TrackableMeta(BaseModel):
+    status: Status = Status.init
+    start: int = Field(default_factory=now_timestamp)
+    end: t.Optional[int] = None
+    done: bool = False
+
+    @property
+    def duration(self) -> int | None:
+        return self.end - self.start if self.start and self.end else None
+
+    def dict(self, *args: t.Any, **kwargs: t.Any) -> t.Dict[str, t.Any]:
+        data = super().dict(*args, **kwargs)
+        data["duration"] = self.duration
+        return data
+
+
+class Trackable(BaseModel):
+    meta: TrackableMeta = Field(default_factory=TrackableMeta)
+
+    def stop(self, success: bool = True) -> None:
+        if success:
+            self.meta.status = Status.success
+        else:
+            self.meta.status = Status.fail
+
+        self.meta.end = now_timestamp()
+        self.meta.done = bool(self.meta.start and self.meta.end)
+
+    def update(self, data: t.Dict[str, t.Any]) -> None:
+        for k, v in data.items():
+            setattr(self, k, v)
+
+
+class PlanStageValidation(Trackable):
+    pass
+
+
+class PlanStageCancel(Trackable):
+    pass
+
+
+class PlanStageChanges(Trackable):
+    added: t.Optional[t.Set[str]] = None
+    removed: t.Optional[t.Set[str]] = None
+    modified: t.Optional[ModelsDiff] = None
+
+
+class PlanStageBackfills(Trackable):
+    models: t.Optional[t.List[BackfillDetails]] = None
+
+
+class PlanStageCreation(Trackable):
+    total_tasks: int
+    num_tasks: int
+
+
+class PlanStageRestate(Trackable):
+    pass
+
+
+class PlanStageBackfill(Trackable):
+    queue: t.Set[str] = set()
+    tasks: t.Dict[str, BackfillTask] = {}
+
+
+class PlanStagePromote(Trackable):
+    total_tasks: int
+    num_tasks: int
+    target_environment: str
+
+
+class PlanStageTracker(Trackable, PlanDates):
+    environment: t.Optional[str] = None
+    plan_options: t.Optional[PlanOptions] = None
+
+    def add_stage(self, stage: PlanStage, data: Trackable) -> None:
+        setattr(self, stage, data)
+
+
+class PlanOverviewStageTracker(PlanStageTracker):
+    validation: t.Optional[PlanStageValidation] = None
+    changes: t.Optional[PlanStageChanges] = None
+    backfills: t.Optional[PlanStageBackfills] = None
+
+
+class PlanApplyStageTracker(PlanStageTracker):
+    creation: t.Optional[PlanStageCreation] = None
+    restate: t.Optional[PlanStageRestate] = None
+    backfill: t.Optional[PlanStageBackfill] = None
+    promote: t.Optional[PlanStagePromote] = None
+
+
+class PlanCancelStageTracker(PlanStageTracker):
+    cancel: t.Optional[PlanStageCancel] = None

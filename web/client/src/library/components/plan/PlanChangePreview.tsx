@@ -8,7 +8,6 @@ import {
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { type ChangeDirect, type ChangeIndirect } from '~/api/client'
-import { EnumPlanState, useStorePlan } from '~/context/plan'
 import { Divider } from '../divider/Divider'
 import {
   type Category,
@@ -37,12 +36,12 @@ function PlanChangePreview({
   return (
     <div
       className={clsx(
-        'flex flex-col rounded-md p-4 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal',
+        'flex flex-col rounded-md p-4',
         type === EnumPlanChangeType.Add && 'bg-success-10',
         type === EnumPlanChangeType.Remove && 'bg-danger-10',
         type === EnumPlanChangeType.Direct && 'bg-secondary-10',
         type === EnumPlanChangeType.Indirect && 'bg-warning-10',
-        type === 'metadata' && 'bg-neutral-10',
+        type === EnumPlanChangeType.Default && 'bg-neutral-5',
         className,
       )}
     >
@@ -58,7 +57,7 @@ function PlanChangePreview({
               'text-secondary-600 dark:text-secondary-300',
             type === EnumPlanChangeType.Indirect &&
               'text-warning-600 dark:text-warning-300',
-            type === EnumPlanChangeType.Metadata &&
+            type === EnumPlanChangeType.Default &&
               'text-neutral-600 dark:text-neutral-300',
           )}
         >
@@ -92,7 +91,7 @@ function PlanChangePreviewDefault({
               'text-secondary-600 dark:text-secondary-300',
             type === EnumPlanChangeType.Indirect &&
               'text-warning-600 dark:text-warning-300',
-            type === EnumPlanChangeType.Metadata &&
+            type === EnumPlanChangeType.Default &&
               'text-neutral-600 dark:text-neutral-300',
           )}
         >
@@ -124,57 +123,62 @@ function PlanChangePreviewDirect({
       {changes.map(change => (
         <li
           key={change.model_name}
-          className="text-secondary-500 dark:text-primary-500"
+          className="text-secondary-500 dark:text-primary-500 mt-1"
         >
           <Disclosure>
             {({ open }) => (
               <>
-                <Disclosure.Button className="flex items-start w-full justify-between rounded-lg text-left">
-                  <div className="w-full">
-                    <PlanChangePreviewTitle model_name={change.model_name} />
-                  </div>
+                <Disclosure.Button className="flex items-center w-full justify-between rounded-lg text-left">
+                  <PlanChangePreviewTitle
+                    className="w-full"
+                    model_name={change.model_name}
+                  />
                   {(() => {
                     const Tag = open ? MinusCircleIcon : PlusCircleIcon
 
                     return (
-                      <Tag className="max-h-[1rem] min-w-[1rem] dark:text-primary-500 mt-0.5" />
+                      <Tag className="max-h-[1rem] min-w-[1rem] dark:text-primary-500" />
                     )
                   })()}
                 </Disclosure.Button>
-                <Disclosure.Panel className="text-sm px-4 mb-4">
-                  <PlanChangePreviewRelations
-                    type="indirect"
-                    models={change.indirect ?? []}
-                  />
+                <Disclosure.Panel className="text-sm px-4 mb-4 overflow-hidden">
+                  {isArrayNotEmpty(change.indirect) && (
+                    <PlanChangePreviewRelations
+                      type="indirect"
+                      models={change.indirect}
+                    />
+                  )}
                   <Divider className="border-neutral-200 mt-2" />
                   <ChangeCategories change={change} />
                   <Divider className="border-neutral-200 mt-2" />
-                  {change?.diff != null && (
-                    <PlanChangePreviewDiff diff={change?.diff} />
-                  )}
-                  {(() => {
-                    const model = models.get(change.model_name)
+                  <div className="flex flex-col w-full h-full overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal">
+                    {change?.diff != null && (
+                      <PlanChangePreviewDiff diff={change?.diff} />
+                    )}
+                    {(() => {
+                      const model = models.get(change.model_name)
 
-                    if (model == null) return <></>
+                      if (model == null) return <></>
 
-                    return (
-                      <div className="h-[16rem] bg-theme-lighter rounded-xl p-2">
-                        <LineageFlowProvider withColumns={false}>
-                          <ModelLineage
-                            key={model.id}
-                            fingerprint={model.id}
-                            model={model}
-                            highlightedNodes={{
-                              'border-4 border-secondary-500': [model.name],
-                              'border-4 border-warning-500':
-                                change.indirect ?? [],
-                              '*': ['opacity-50 hover:opacity-100'],
-                            }}
-                          />
-                        </LineageFlowProvider>
-                      </div>
-                    )
-                  })()}
+                      return (
+                        <div className="h-[16rem] bg-theme-lighter rounded-xl p-2">
+                          <LineageFlowProvider withColumns={false}>
+                            <ModelLineage
+                              key={model.id}
+                              fingerprint={model.id}
+                              model={model}
+                              highlightedNodes={{
+                                'border-4 border-secondary-500': [model.name],
+                                'border-4 border-warning-500':
+                                  change.indirect ?? [],
+                                '*': ['opacity-50 hover:opacity-100'],
+                              }}
+                            />
+                          </LineageFlowProvider>
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </Disclosure.Panel>
               </>
             )}
@@ -190,16 +194,9 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
 
   const { change_categorization, categories } = usePlan()
 
-  const planState = useStorePlan(s => s.state)
-
   return (
     <RadioGroup
-      className={clsx(
-        'flex flex-col mt-2',
-        planState === EnumPlanState.Finished
-          ? 'opacity-50 cursor-not-allowed'
-          : 'cursor-pointer',
-      )}
+      className="flex flex-col mt-2"
       value={change_categorization.get(change.model_name)?.category}
       onChange={(category: Category) => {
         dispatch({
@@ -208,7 +205,6 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
           change,
         })
       }}
-      disabled={planState === EnumPlanState.Finished}
     >
       {categories.map(category => (
         <RadioGroup.Option
@@ -219,7 +215,7 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
           {({ checked }) => (
             <div
               className={clsx(
-                'text-sm flex px-2 py-1 w-full rounded-lg',
+                'text-sm flex items-center px-2 py-1 w-full rounded-lg',
                 checked
                   ? 'text-secondary-500 dark:text-primary-300'
                   : 'text-prose',
@@ -293,14 +289,16 @@ function PlanChangePreviewIndirect({
 
 function PlanChangePreviewTitle({
   model_name,
+  className,
 }: {
   model_name: string
+  className?: string
 }): JSX.Element {
   const { change_categorization } = usePlan()
   const category = change_categorization.get(model_name)?.category
 
   return (
-    <div className="flex items-center font-bold">
+    <div className={clsx('flex items-center font-bold', className)}>
       <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
       <small className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden">
         {model_name}

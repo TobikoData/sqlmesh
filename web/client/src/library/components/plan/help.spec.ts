@@ -47,17 +47,6 @@ describe('getActionName', () => {
     expect(result).toBe(expected)
   })
 
-  it('should return "Resetting..." when action is EnumPlanAction.Resetting', () => {
-    const action = EnumPlanAction.Resetting
-    const options = [EnumPlanAction.Resetting]
-    const fallback = 'Start'
-    const expected = 'Resetting...'
-
-    const result = getActionName(action, options, fallback)
-
-    expect(result).toBe(expected)
-  })
-
   it('should return "Run" when action is EnumPlanAction.Run', () => {
     const action = EnumPlanAction.Run
     const options = [EnumPlanAction.Run]
@@ -69,15 +58,23 @@ describe('getActionName', () => {
     expect(result).toBe(expected)
   })
 
-  it('should return "Apply" when action is EnumPlanAction.Apply', () => {
-    const action = EnumPlanAction.Apply
-    const options = [EnumPlanAction.Apply]
+  it('should return "Apply" when action is EnumPlanAction.ApplyBackfill', () => {
     const fallback = 'Start'
-    const expected = 'Apply'
+    let result = getActionName(
+      EnumPlanAction.ApplyBackfill,
+      [EnumPlanAction.ApplyBackfill],
+      fallback,
+    )
 
-    const result = getActionName(action, options, fallback)
+    expect(result).toBe('Apply Backfill')
 
-    expect(result).toBe(expected)
+    result = getActionName(
+      EnumPlanAction.ApplyVirtual,
+      [EnumPlanAction.ApplyVirtual],
+      fallback,
+    )
+
+    expect(result).toBe('Apply Virtual')
   })
 
   it('should return fallback when action is not included in options', () => {
