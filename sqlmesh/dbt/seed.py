@@ -23,5 +23,6 @@ class SeedConfig(BaseModelConfig):
         return create_seed_model(
             self.sql_name,
             SeedKind(path=self.path.absolute().as_posix()),
+            dialect=context.dialect,
             **self.sqlmesh_model_kwargs(context),
         )

@@ -3,40 +3,43 @@ import React from 'react'
 import { EnumVariant, type Variant } from '~/types/enum'
 
 function Banner({
-  variant,
+  variant = EnumVariant.Info,
+  hasBorder = false,
+  isFull = false,
+  isCenter = false,
   children,
   className,
 }: {
-  variant: Variant
   children: React.ReactNode
+  variant?: Variant
+  isCenter?: boolean
+  isFull?: boolean
+  hasBorder?: boolean
   className?: string
 }): JSX.Element {
   return (
     <div
       className={clsx(
-        'mt-4 mb-2 flex items-center w-full text-sm overflow-hidden',
+        'w-full text-sm overflow-hidden p-4 rounded-lg',
+        isFull && 'h-full',
+        isCenter && 'flex justify-center items-center',
+        hasBorder && 'border-2',
+        variant === EnumVariant.Primary &&
+          'bg-primary-10 border-primary-400 text-primary-600 dark:text-primary-400',
+        variant === EnumVariant.Secondary &&
+          'bg-secondary-10 border-secondary-400 text-secondary-600 dark:text-secondary-400',
+        variant === EnumVariant.Success &&
+          'bg-success-10 border-success-400 text-success-600 dark:text-success-400',
+        variant === EnumVariant.Warning &&
+          'bg-warning-10 border-warning-400 text-warning-600 dark:text-warning-400',
+        variant === EnumVariant.Danger &&
+          'bg-danger-10 border-danger-400 text-danger-600 dark:text-danger-400',
+        variant === EnumVariant.Info &&
+          'bg-neutral-5 border-neutral-400 text-neutral-600 dark:text-neutral-400',
         className,
       )}
     >
-      <div
-        className={clsx(
-          'p-4 w-full h-full border-2 rounded-lg',
-          variant === EnumVariant.Primary &&
-            'bg-primary-10 border-primary-400 text-primary-600',
-          variant === EnumVariant.Secondary &&
-            'bg-secondary-10 border-secondary-400 text-secondary-600',
-          variant === EnumVariant.Success &&
-            'bg-success-10 border-success-400 text-success-600',
-          variant === EnumVariant.Warning &&
-            'bg-warning-10 border-warning-400 text-warning-600',
-          variant === EnumVariant.Danger &&
-            'bg-danger-10 border-danger-400 text-danger-600',
-          variant === EnumVariant.Info &&
-            'bg-neutral-10 border-neutral-400 text-neutral-400',
-        )}
-      >
-        {children}
-      </div>
+      {children}
     </div>
   )
 }

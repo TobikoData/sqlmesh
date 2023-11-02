@@ -53,6 +53,14 @@ def create_schema_file(
         external_tables -= existing_models
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
+
+        def _get_columns(table: str) -> t.Optional[t.Dict[str, t.Any]]:
+            try:
+                return adapter.columns(table, include_pseudo_columns=True)
+            except Exception as e:
+                logger.warning(f"Unable to get schema for '{table}': '{e}'.")
+                return None
+
         schemas = [
             {
                 "name": table,
@@ -60,10 +68,11 @@ def create_schema_file(
             }
             for table, columns in sorted(
                 pool.map(
-                    lambda table: (table, adapter.columns(table, include_pseudo_columns=True)),
+                    lambda table: (table, _get_columns(table)),
                     external_tables,
                 )
             )
+            if columns
         ]
 
         with open(path, "w", encoding="utf-8") as file:

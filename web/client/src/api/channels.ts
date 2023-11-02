@@ -1,6 +1,10 @@
 import { isFalse, isNil, isNotNil } from '../utils'
 
 type ChannelCallback<TData = any> = (data: TData) => void
+interface Channel {
+  subscribe: () => void
+  unsubscribe: () => void
+}
 
 const DELAY_AND_RECONNECT = 20000
 const DELAY_AND_RETRY = 3000
@@ -120,15 +124,20 @@ const Connection = new EventSourceConnection('/api/events', DELAY_AND_RECONNECT)
 
 export function useChannelEvents(): <TData = any>(
   topic: string,
-  callback: ChannelCallback<TData>,
-) => Optional<() => void> {
-  return (topic, callback) => {
-    if (isNotNil(topic) && isFalse(Connection.hasChannel(topic))) {
-      Connection.addChannel(topic, callback)
-    }
-
-    return () => {
+  callback?: ChannelCallback<TData>,
+) => Channel {
+  return (topic, callback) => ({
+    subscribe() {
+      if (
+        isNotNil(topic) &&
+        isNotNil(callback) &&
+        isFalse(Connection.hasChannel(topic))
+      ) {
+        Connection.addChannel(topic, callback)
+      }
+    },
+    unsubscribe() {
       Connection.removeChannel(topic)
-    }
-  }
+    },
+  })
 }

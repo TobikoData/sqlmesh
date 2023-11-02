@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import functools
 import io
 import typing as t
 
@@ -13,6 +12,8 @@ from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.errors import PlanError
 from web.server import models
+from web.server.api.endpoints.plan import get_plan_tracker
+from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
 from web.server.utils import (
@@ -24,65 +25,50 @@ from web.server.utils import (
 router = APIRouter()
 
 
-@router.post("/apply", response_model=models.ApplyResponse)
+@router.post(
+    "/apply", response_model=models.PlanApplyStageTracker, response_model_exclude_unset=True
+)
 async def apply(
     request: Request,
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
-    plan_options: models.PlanOptions = models.PlanOptions(),
+    plan_options: t.Optional[models.PlanOptions] = None,
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
-) -> models.ApplyResponse:
+) -> models.PlanApplyStageTracker:
     """Apply a plan"""
-
+    plan_options = plan_options or models.PlanOptions()
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-
-    plan_func = functools.partial(
-        context.plan,
-        environment=environment,
-        no_prompts=True,
-        include_unmodified=plan_options.include_unmodified,
-        start=plan_dates.start if plan_dates else None,
-        end=plan_dates.end if plan_dates else None,
-        skip_tests=plan_options.skip_tests,
-        no_gaps=plan_options.no_gaps,
-        restate_models=plan_options.restate_models,
-        create_from=plan_options.create_from,
-        skip_backfill=plan_options.skip_backfill,
-        forward_only=plan_options.forward_only,
-        no_auto_categorization=plan_options.no_auto_categorization,
+    _, plan = get_plan_tracker(
+        context=context, environment=environment, plan_options=plan_options, plan_dates=plan_dates
     )
-    request.app.state.task = plan_task = asyncio.create_task(run_in_executor(plan_func))
-    try:
-        plan = await plan_task
-    except PlanError as e:
-        raise ApiException(
-            message=str(e),
-            origin="API -> commands -> apply",
-        )
 
     if categories is not None:
         for new, _ in plan.context_diff.modified_snapshots.values():
             if plan.is_new_snapshot(new) and new.name in categories:
                 plan.set_choice(new, categories[new.name])
 
+    tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
+    tracker_apply.start = plan.start
+    tracker_apply.end = plan.end
+    api_console.start_plan_tracker(tracker_apply)
     request.app.state.task = apply_task = asyncio.create_task(run_in_executor(context.apply, plan))
     if not plan.requires_backfill or plan_options.skip_backfill:
         try:
             await apply_task
+            api_console.stop_plan_tracker(tracker_apply, success=True)
         except PlanError as e:
+            api_console.stop_plan_tracker(tracker_apply, success=False)
             raise ApiException(
                 message=str(e),
                 origin="API -> commands -> apply",
             )
 
-    return models.ApplyResponse(
-        type=models.ApplyType.backfill if plan.requires_backfill else models.ApplyType.virtual
-    )
+    return tracker_apply
 
 
 @router.post("/evaluate")

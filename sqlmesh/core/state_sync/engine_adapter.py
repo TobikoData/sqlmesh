@@ -25,6 +25,7 @@ from copy import deepcopy
 import pandas as pd
 from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlglot import exp
+from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import ModelAudit
@@ -470,7 +471,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         return [Snapshot(**json.loads(row[0])) for row in snapshot_rows]
 
     def _get_versions(self, lock_for_update: bool = False) -> Versions:
-        no_version = Versions(schema_version=0, sqlglot_version="0.0.0", sqlmesh_version="0.0.0")
+        no_version = Versions()
 
         if not self.engine_adapter.table_exists(self.versions_table):
             return no_version
@@ -478,10 +479,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         query = exp.select("*").from_(self.versions_table)
         if lock_for_update:
             query.lock(copy=False)
+
         row = self.engine_adapter.fetchone(query, quote_identifiers=True)
         if not row:
             return no_version
-        return Versions(schema_version=row[0], sqlglot_version=row[1], sqlmesh_version=row[2])
+
+        return Versions(
+            schema_version=row[0], sqlglot_version=row[1], sqlmesh_version=seq_get(row, 2)
+        )
 
     def _get_environment(
         self, environment: str, lock_for_update: bool = False
