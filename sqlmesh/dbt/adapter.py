@@ -272,9 +272,9 @@ class RuntimeAdapter(BaseAdapter):
 
     def drop_relation(self, relation: BaseRelation) -> None:
         if relation.schema is not None and relation.identifier is not None:
-            schema = self._normalize(relation.schema, self.quote_policy.schema).name
-            identifier = self._normalize(relation.identifier, self.quote_policy.identifier).name
-            self.engine_adapter.drop_table(f"{schema}.{identifier}")
+            schema = self._normalize(relation.schema, self.quote_policy.schema)
+            identifier = self._normalize(relation.identifier, self.quote_policy.identifier)
+            self.engine_adapter.drop_table(exp.Table(this=identifier, db=schema))
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False

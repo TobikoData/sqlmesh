@@ -56,7 +56,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
 
         if isinstance(schema_name, exp.Table):
             # Ensures we don't generate identifier quotes
-            schema_name = ".".join(part.name for part in schema_name.parts if part)
+            schema_name = ".".join(part.name for part in schema_name.parts)
 
         query = f"""
             SELECT
