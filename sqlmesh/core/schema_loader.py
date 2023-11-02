@@ -5,6 +5,7 @@ import typing as t
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from sqlglot import exp
 from sqlglot.dialects.dialect import DialectType
 
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -63,7 +64,7 @@ def create_schema_file(
 
         schemas = [
             {
-                "name": table,
+                "name": exp.to_table(table).sql(dialect=dialect),
                 "columns": {c: t.sql(dialect=dialect) for c, t in columns.items()},
             }
             for table, columns in sorted(
