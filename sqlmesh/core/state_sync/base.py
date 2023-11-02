@@ -43,6 +43,16 @@ class Versions(PydanticModel):
     def minor_sqlglot_version(self) -> t.Tuple[int, int]:
         return major_minor(self.sqlglot_version)
 
+    @field_validator("sqlglot_version", "sqlmesh_version", mode="before")
+    @classmethod
+    def _package_version_validator(cls, v: t.Any) -> str:
+        return "0.0.0" if v is None else str(v)
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def _schema_version_validator(cls, v: t.Any) -> int:
+        return 0 if v is None else int(v)
+
 
 MIGRATIONS = [
     importlib.import_module(f"sqlmesh.migrations.{migration}")
