@@ -270,6 +270,8 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
         """
         table = super()._get_temp_table(table, table_only=table_only)
         table_name_id = table.args["this"]
+        # Spark with local filesystem has an issue with temp tables that start with __temp so
+        # we update here to remove the leading double underscore
         table_name_id.set("this", table_name_id.this.replace("__temp_", "temp_"))
         return table
 
