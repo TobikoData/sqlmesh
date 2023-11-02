@@ -180,7 +180,7 @@ class MetadataResults(PydanticModel):
 
     @property
     def non_temp_tables(self) -> t.List[str]:
-        return [x for x in self.tables if not x.startswith("__temp")]
+        return [x for x in self.tables if not x.startswith("__temp") and not x.startswith("temp")]
 
 
 @pytest.fixture(params=["df", "query", "pyspark"])
