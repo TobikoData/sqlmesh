@@ -1797,7 +1797,9 @@ def _create_model(
                 "jinja_macros": jinja_macros,
                 "dialect": dialect,
                 "depends_on": depends_on,
-                "physical_schema_override": physical_schema_override.get(exp.to_table(name).db),
+                "physical_schema_override": physical_schema_override.get(
+                    exp.to_table(name, dialect=dialect).db
+                ),
                 **kwargs,
             },
         )
