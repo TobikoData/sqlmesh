@@ -12,7 +12,7 @@ from sqlmesh.utils.errors import SQLMeshError
 
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
-    from sqlmesh.core.engine_adapter._typing import DF
+    from sqlmesh.core.engine_adapter._typing import DF, Query
     from sqlmesh.core.engine_adapter.base import QueryOrDF
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,38 @@ class LogicalMergeMixin(EngineAdapter):
 
 
 class LogicalReplaceQueryMixin(EngineAdapter):
+    @classmethod
+    def overwrite_target_from_temp(
+        cls,
+        engine_adapter: EngineAdapter,
+        query: Query,
+        columns_to_types: t.Dict[str, exp.DataType],
+        target_table: TableName,
+    ) -> None:
+        """
+        Overwrites the target table from the temp table. This is used when the target table is self-referencing.
+        """
+        with engine_adapter.temp_table(
+            exp.select(*columns_to_types).from_(target_table),
+            target_table,
+            columns_to_types,
+        ) as temp_table:
+
+            def replace_table(
+                node: exp.Expression, curr_table: exp.Table, new_table: exp.Table
+            ) -> exp.Expression:
+                if isinstance(node, exp.Table) and quote_identifiers(node) == quote_identifiers(
+                    curr_table
+                ):
+                    return new_table
+                return node
+
+            temp_query = query.transform(
+                replace_table, curr_table=target_table, new_table=temp_table
+            )
+            engine_adapter.execute(engine_adapter._truncate_table(target_table))
+            return engine_adapter._insert_append_query(target_table, temp_query, columns_to_types)
+
     def replace_query(
         self,
         table_name: TableName,
@@ -101,24 +133,9 @@ class LogicalReplaceQueryMixin(EngineAdapter):
                     for table in query.find_all(exp.Table)
                 )
                 if self_referencing:
-                    with self.temp_table(
-                        exp.select(*columns_to_types).from_(target_table),
-                        target_table,
-                        columns_to_types,
-                    ) as temp_table:
-
-                        def replace_table(
-                            node: exp.Expression, curr_table: exp.Table, new_table: exp.Table
-                        ) -> exp.Expression:
-                            if isinstance(node, exp.Table) and node == curr_table:
-                                return new_table
-                            return node
-
-                        temp_query = query.transform(
-                            replace_table, curr_table=target_table, new_table=temp_table
-                        )
-                        self.execute(self._truncate_table(table_name))
-                        return self._insert_append_query(table_name, temp_query, columns_to_types)
+                    return self.overwrite_target_from_temp(
+                        self, query, columns_to_types, target_table
+                    )
                 self.execute(self._truncate_table(table_name))
                 return self._insert_append_query(table_name, query, columns_to_types)
 
