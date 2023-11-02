@@ -8,6 +8,7 @@ import pandas as pd
 from dbt.contracts.relation import Policy
 from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -212,9 +213,11 @@ class RuntimeAdapter(BaseAdapter):
         from dbt.contracts.relation import RelationType
 
         assert schema_relation.schema is not None
-        data_objects = self.engine_adapter._get_data_objects(
-            schema_(schema_relation.schema, schema_relation.database)
-        )
+
+        database = self._normalize(schema_relation.database, self.quote_policy.database)
+        schema = self._normalize(schema_relation.schema, self.quote_policy.schema)
+
+        data_objects = self.engine_adapter._get_data_objects(schema_(schema, database))
         relations = [
             self.relation_type.create(
                 database=do.catalog,
@@ -233,7 +236,11 @@ class RuntimeAdapter(BaseAdapter):
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
         from dbt.adapters.base.column import Column
 
-        mapped_table = self._map_table_name(relation.database, relation.schema, relation.identifier)
+        database = self._normalize(relation.database, self.quote_policy.database)
+        schema = self._normalize(relation.schema, self.quote_policy.schema)
+        identifier = self._normalize(relation.identifier, self.quote_policy.identifier)
+
+        mapped_table = self._map_table_name(database, schema, identifier)
 
         return [
             Column.from_description(
@@ -255,15 +262,19 @@ class RuntimeAdapter(BaseAdapter):
 
     def create_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
-            self.engine_adapter.create_schema(relation.schema)
+            schema = self._normalize(relation.schema, self.quote_policy.schema)
+            self.engine_adapter.create_schema(schema)
 
     def drop_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
-            self.engine_adapter.drop_schema(relation.schema)
+            schema = self._normalize(relation.schema, self.quote_policy.schema)
+            self.engine_adapter.drop_schema(schema)
 
     def drop_relation(self, relation: BaseRelation) -> None:
         if relation.schema is not None and relation.identifier is not None:
-            self.engine_adapter.drop_table(f"{relation.schema}.{relation.identifier}")
+            schema = self._normalize(relation.schema, self.quote_policy.schema).name
+            identifier = self._normalize(relation.identifier, self.quote_policy.identifier).name
+            self.engine_adapter.drop_table(f"{schema}.{identifier}")
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
@@ -274,7 +285,7 @@ class RuntimeAdapter(BaseAdapter):
         from sqlmesh.dbt.util import pandas_to_agate
 
         # mypy bug: https://github.com/python/mypy/issues/10740
-        exec_func: t.Callable[[exp.Expression], None | pd.DataFrame] = (
+        exec_func: t.Callable[..., None | pd.DataFrame] = (
             self.engine_adapter.fetchdf if fetch else self.engine_adapter.execute  # type: ignore
         )
 
@@ -284,9 +295,9 @@ class RuntimeAdapter(BaseAdapter):
         if auto_begin:
             # TODO: This could be a bug. I think dbt leaves the transaction open while we close immediately.
             with self.engine_adapter.transaction():
-                resp = exec_func(expression)
+                resp = exec_func(expression, quote_identifiers=False)
         else:
-            resp = exec_func(expression)
+            resp = exec_func(expression, quote_identifiers=False)
 
         # TODO: Properly fill in adapter response
         if fetch:
@@ -309,9 +320,16 @@ class RuntimeAdapter(BaseAdapter):
         return identifier
 
     def _map_table_name(
-        self, database: t.Optional[str], schema: t.Optional[str], identifier: t.Optional[str]
+        self,
+        database: t.Optional[str | exp.Identifier],
+        schema: t.Optional[str | exp.Identifier],
+        identifier: t.Optional[str | exp.Identifier],
     ) -> exp.Table:
-        name = ".".join(p for p in (database, schema, identifier) if p is not None)
+        name = ".".join(
+            p.name if isinstance(p, exp.Identifier) else p
+            for p in (database, schema, identifier)
+            if p is not None
+        )
         if name not in self.table_mapping:
             return exp.to_table(name, dialect=self.engine_adapter.dialect)
 
@@ -319,3 +337,17 @@ class RuntimeAdapter(BaseAdapter):
         logger.debug("Resolved ref '%s' to snapshot table '%s'", name, physical_table_name)
 
         return exp.to_table(physical_table_name, dialect=self.engine_adapter.dialect)
+
+    @t.overload
+    def _normalize(self, name: None, quoted: bool = True) -> None:
+        ...
+
+    @t.overload
+    def _normalize(self, name: str, quoted: bool = True) -> exp.Identifier:
+        ...
+
+    def _normalize(self, name: t.Optional[str], quoted: bool = True) -> t.Optional[exp.Identifier]:
+        if name is None:
+            return name
+
+        return exp.to_identifier(name, quoted=True) if quoted else normalize_identifiers(name)
