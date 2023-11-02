@@ -203,10 +203,7 @@ class RuntimeAdapter(BaseAdapter):
         return seq_get(matching_relations, 0)
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        reference_relation = self.relation_type.create(
-            database=database,
-            schema=schema,
-        )
+        reference_relation = self.relation_type.create(database=database, schema=schema)
         return self.list_relations_without_caching(reference_relation)
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
@@ -350,4 +347,8 @@ class RuntimeAdapter(BaseAdapter):
         if name is None:
             return name
 
-        return exp.to_identifier(name, quoted=True) if quoted else normalize_identifiers(name)
+        return (
+            exp.to_identifier(name, quoted=True)
+            if quoted
+            else normalize_identifiers(name, dialect=self.engine_adapter.dialect)
+        )
