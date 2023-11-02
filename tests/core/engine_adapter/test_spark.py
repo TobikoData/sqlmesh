@@ -129,6 +129,38 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     ]
 
 
+def test_replace_query_self_ref(
+    make_mocked_engine_adapter: t.Callable, mocker: MockerFixture, make_temp_table_name: t.Callable
+):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter.cursor.fetchone.return_value = (1,)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "db.table"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.LogicalReplaceQueryMixin.table_exists",
+        return_value=True,
+    )
+    mocker.patch(
+        "sqlmesh.core.engine_adapter.spark.SparkEngineAdapter.columns",
+        return_value={"col": exp.DataType(this=exp.DataType.Type.INT)},
+    )
+
+    adapter.replace_query(table_name, parse_one(f"SELECT col + 1 AS col FROM {table_name}"))
+
+    assert to_sql_calls(adapter) == [
+        "DESCRIBE `db`.`table`",
+        "CREATE SCHEMA IF NOT EXISTS `db`",
+        f"CREATE TABLE IF NOT EXISTS `db`.`__temp_table_{temp_table_id}` AS SELECT `col` FROM `db`.`table`",
+        "TRUNCATE TABLE `db`.`table`",
+        f"INSERT INTO `db`.`table` (`col`) SELECT `col` + 1 AS `col` FROM `db`.`__temp_table_{temp_table_id}`",
+        f"DROP TABLE IF EXISTS `db`.`__temp_table_{temp_table_id}`",
+    ]
+
+
 def test_create_table_table_options(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 

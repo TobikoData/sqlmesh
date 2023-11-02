@@ -6,6 +6,7 @@ from functools import partial
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.optimizer.qualify_columns import quote_identifiers
 
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter.base import (
@@ -13,7 +14,10 @@ from sqlmesh.core.engine_adapter.base import (
     InsertOverwriteStrategy,
     SourceQuery,
 )
-from sqlmesh.core.engine_adapter.mixins import HiveMetastoreTablePropertiesMixin
+from sqlmesh.core.engine_adapter.mixins import (
+    HiveMetastoreTablePropertiesMixin,
+    LogicalReplaceQueryMixin,
+)
 from sqlmesh.core.engine_adapter.shared import DataObject, DataObjectType, set_catalog
 from sqlmesh.utils import classproperty
 from sqlmesh.utils.errors import SQLMeshError
@@ -338,6 +342,21 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
         columns_to_types = columns_to_types or self.columns(table_name)
         if not columns_to_types:
             raise SQLMeshError("Cannot replace table without columns to types")
+
+        # Self-referential queries: cannot insert overwrite a SELECT from itself, so
+        # use LogicalReplaceQuery (which creates a temp table and SELECTs from it)
+        if len(source_queries) > 1:
+            raise SQLMeshError("Cannot replace table with a batched dataframe")
+        with source_queries[0] as query:
+            target_table = exp.to_table(table_name)
+            self_referencing = any(
+                quote_identifiers(table) == quote_identifiers(target_table)
+                for table in query.find_all(exp.Table)
+            )
+
+            if self_referencing:
+                return LogicalReplaceQueryMixin.replace_query(self, table_name, query, columns_to_types)  # type: ignore
+
         self.create_table(table_name, columns_to_types)
         return self._insert_overwrite_by_condition(
             table_name, source_queries, columns_to_types, where=exp.true()
@@ -382,3 +401,7 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
         super().create_view(
             view_name, query_or_df, columns_to_types, replace, materialized, **create_kwargs
         )
+
+    def _truncate_table(self, table_name: TableName) -> str:
+        table = quote_identifiers(exp.to_table(table_name))
+        return f"TRUNCATE TABLE {table.sql(dialect=self.dialect)}"

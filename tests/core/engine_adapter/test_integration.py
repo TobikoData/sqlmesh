@@ -138,7 +138,7 @@ class TestContext:
         return self._format_df(data, to_datetime=self.dialect != "trino")
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        return self._format_df(data, include_tz=self.dialect in ("spark", "databricks"))
+        return self._format_df(data, include_tz=self.dialect == "databricks")
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
         return exp.to_table(
@@ -737,17 +737,9 @@ def test_merge(ctx: TestContext):
 
 
 def test_scd_type_2(ctx: TestContext):
-    if ctx.dialect == "tsql":
-        pytest.skip(f"MSSQL scd type 2 functionality waiting on sqlglot cte in FROM fix")
-    if ctx.dialect == "spark":
-        pytest.skip(
-            "Spark SCD Type 2 does not currently work due to this error: `[UNSUPPORTED_OVERWRITE.TABLE] Can't overwrite the target that is also being read from`"
-        )
-
-    name_type = "varchar(max)" if ctx.dialect == "tsql" else "string"
     ctx.columns_to_types = {
         "id": "int",
-        "name": name_type,
+        "name": "string",
         "updated_at": "timestamp",
         "valid_from": "timestamp",
         "valid_to": "timestamp",
