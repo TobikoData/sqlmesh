@@ -1062,6 +1062,14 @@ def test_get_version(state_sync: EngineAdapterStateSync) -> None:
         state_sync.get_versions()
     state_sync.get_versions(validate=False)
 
+    for empty_versions in (
+        Versions(),
+        Versions(schema_version=None, sqlglot_version=None, sqlmesh_version=None),
+    ):
+        assert empty_versions.schema_version == 0
+        assert empty_versions.sqlglot_version == "0.0.0"
+        assert empty_versions.sqlmesh_version == "0.0.0"
+
 
 def test_migrate(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> None:
     from sqlmesh import __version__ as SQLMESH_VERSION
