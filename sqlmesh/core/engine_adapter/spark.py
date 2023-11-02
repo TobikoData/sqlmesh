@@ -346,7 +346,7 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
         # Self-referential queries: cannot insert overwrite a SELECT from itself, so
         # use LogicalReplaceQuery (which creates a temp table and SELECTs from it)
         if len(source_queries) > 1:
-            raise SQLMeshError("Cannot replace table with a batched data frame")
+            raise SQLMeshError("Cannot replace table with a batched dataframe")
         with source_queries[0] as query:
             target_table = exp.to_table(table_name)
             self_referencing = any(
