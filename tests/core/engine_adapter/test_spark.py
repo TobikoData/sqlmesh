@@ -1,5 +1,6 @@
 # type: ignore
 import typing as t
+from datetime import datetime
 from unittest.mock import call
 
 import pandas as pd
@@ -152,12 +153,11 @@ def test_replace_query_self_ref(
     adapter.replace_query(table_name, parse_one(f"SELECT col + 1 AS col FROM {table_name}"))
 
     assert to_sql_calls(adapter) == [
-        "DESCRIBE `db`.`table`",
         "CREATE SCHEMA IF NOT EXISTS `db`",
-        f"CREATE TABLE IF NOT EXISTS `db`.`__temp_table_{temp_table_id}` AS SELECT `col` FROM `db`.`table`",
+        f"CREATE TABLE IF NOT EXISTS `db`.`temp_table_{temp_table_id}` AS SELECT `col` FROM `db`.`table`",
         "TRUNCATE TABLE `db`.`table`",
-        f"INSERT INTO `db`.`table` (`col`) SELECT `col` + 1 AS `col` FROM `db`.`__temp_table_{temp_table_id}`",
-        f"DROP TABLE IF EXISTS `db`.`__temp_table_{temp_table_id}`",
+        f"INSERT INTO `db`.`table` (`col`) SELECT `col` + 1 AS `col` FROM `db`.`temp_table_{temp_table_id}`",
+        f"DROP TABLE IF EXISTS `db`.`temp_table_{temp_table_id}`",
     ]
 
 
@@ -378,3 +378,213 @@ def test_spark_struct_complex_to_col_to_types(type_name, spark_type):
     )
     expected = {f"col_{type_name}": exp.DataType.build(type_name, dialect="spark")}
     assert actual == expected
+
+
+def test_scd_type_2(
+    make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
+):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
+    table_name = "db.target"
+    temp_table_id = "abcdefgh"
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
+
+    adapter.scd_type_2(
+        target_table="db.target",
+        source_table=t.cast(
+            exp.Select, parse_one("SELECT id, name, price, test_updated_at FROM db.source")
+        ),
+        unique_key=[exp.func("COALESCE", "id", "''")],
+        valid_from_name="test_valid_from",
+        valid_to_name="test_valid_to",
+        updated_at_name="test_updated_at",
+        columns_to_types={
+            "id": exp.DataType.Type.INT,
+            "name": exp.DataType.Type.VARCHAR,
+            "price": exp.DataType.Type.DOUBLE,
+            "test_updated_at": exp.DataType.Type.TIMESTAMP,
+            "test_valid_from": exp.DataType.Type.TIMESTAMP,
+            "test_valid_to": exp.DataType.Type.TIMESTAMP,
+        },
+        execution_time=datetime(2020, 1, 1, 0, 0, 0),
+    )
+
+    assert to_sql_calls(adapter) == [
+        "CREATE SCHEMA IF NOT EXISTS `db`",
+        "CREATE TABLE IF NOT EXISTS `db`.`temp_target_abcdefgh` AS SELECT `id`, `name`, `price`, `test_updated_at`, `test_valid_from`, `test_valid_to` FROM `db`.`target`",
+        "TRUNCATE TABLE `db`.`target`",
+        parse_one(
+            """INSERT INTO `db`.`target` (
+  `id`,
+  `name`,
+  `price`,
+  `test_updated_at`,
+  `test_valid_from`,
+  `test_valid_to`
+)
+SELECT
+  `id`,
+  `name`,
+  `price`,
+  `test_updated_at`,
+  `test_valid_from`,
+  `test_valid_to`
+FROM (
+  WITH `source` AS (
+    SELECT
+      TRUE AS `_exists`,
+      `id`,
+      `name`,
+      `price`,
+      `test_updated_at`
+    FROM (
+      SELECT
+        TRUE AS `_exists`,
+        `id`,
+        `name`,
+        `price`,
+        `test_updated_at`,
+        ROW_NUMBER() OVER (PARTITION BY COALESCE(`id`, '') ORDER BY COALESCE(`id`, '')) AS _row_number
+      FROM (
+        SELECT
+          `id`,
+          `name`,
+          `price`,
+          `test_updated_at`
+        FROM `db`.`source`
+      ) AS `raw_source`
+    ) AS _t
+    WHERE
+      _row_number = 1
+  ), `static` AS (
+    SELECT
+      `id`,
+      `name`,
+      `price`,
+      `test_updated_at`,
+      `test_valid_from`,
+      `test_valid_to`
+    FROM `db`.`temp_target_abcdefgh`
+    WHERE
+      NOT `test_valid_to` IS NULL
+  ), `latest` AS (
+    SELECT
+      `id`,
+      `name`,
+      `price`,
+      `test_updated_at`,
+      `test_valid_from`,
+      `test_valid_to`
+    FROM `db`.`temp_target_abcdefgh`
+    WHERE
+      `test_valid_to` IS NULL
+  ), `deleted` AS (
+    SELECT
+      `static`.`id`,
+      `static`.`name`,
+      `static`.`price`,
+      `static`.`test_updated_at`,
+      `static`.`test_valid_from`,
+      `static`.`test_valid_to`
+    FROM `static`
+    LEFT JOIN `latest`
+      ON COALESCE(`static`.`id`, '') = COALESCE(`latest`.`id`, '')
+    WHERE
+      `latest`.`test_valid_to` IS NULL
+  ), `latest_deleted` AS (
+    SELECT
+      TRUE AS `_exists`,
+      COALESCE(`id`, '') AS `_key0`,
+      MAX(`test_valid_to`) AS `test_valid_to`
+    FROM `deleted`
+    GROUP BY
+      COALESCE(`id`, '')
+  ), `joined` AS (
+    SELECT
+      `source`.`_exists`,
+      `latest`.`id` AS `t_id`,
+      `latest`.`name` AS `t_name`,
+      `latest`.`price` AS `t_price`,
+      `latest`.`test_updated_at` AS `t_test_updated_at`,
+      `latest`.`test_valid_from` AS `t_test_valid_from`,
+      `latest`.`test_valid_to` AS `t_test_valid_to`,
+      `source`.`id` AS `id`,
+      `source`.`name` AS `name`,
+      `source`.`price` AS `price`,
+      `source`.`test_updated_at` AS `test_updated_at`
+    FROM `latest`
+    LEFT JOIN `source`
+      ON COALESCE(`latest`.`id`, '') = COALESCE(`source`.`id`, '')
+    UNION
+    SELECT
+      `source`.`_exists`,
+      `latest`.`id` AS `t_id`,
+      `latest`.`name` AS `t_name`,
+      `latest`.`price` AS `t_price`,
+      `latest`.`test_updated_at` AS `t_test_updated_at`,
+      `latest`.`test_valid_from` AS `t_test_valid_from`,
+      `latest`.`test_valid_to` AS `t_test_valid_to`,
+      `source`.`id` AS `id`,
+      `source`.`name` AS `name`,
+      `source`.`price` AS `price`,
+      `source`.`test_updated_at` AS `test_updated_at`
+    FROM `latest`
+    RIGHT JOIN `source`
+      ON COALESCE(`latest`.`id`, '') = COALESCE(`source`.`id`, '')
+  ), `updated_rows` AS (
+    SELECT
+      COALESCE(`joined`.`t_id`, `joined`.`id`) AS `id`,
+      COALESCE(`joined`.`t_name`, `joined`.`name`) AS `name`,
+      COALESCE(`joined`.`t_price`, `joined`.`price`) AS `price`,
+      COALESCE(`joined`.`t_test_updated_at`, `joined`.`test_updated_at`) AS `test_updated_at`,
+      CASE
+        WHEN `t_test_valid_from` IS NULL AND NOT `latest_deleted`.`_exists` IS NULL
+        THEN CASE
+          WHEN `latest_deleted`.`test_valid_to` > `test_updated_at`
+          THEN `latest_deleted`.`test_valid_to`
+          ELSE `test_updated_at`
+        END
+        WHEN `t_test_valid_from` IS NULL
+        THEN CAST('1970-01-01 00:00:00' AS TIMESTAMP)
+        ELSE `t_test_valid_from`
+      END AS `test_valid_from`,
+      CASE
+        WHEN `test_updated_at` > `t_test_updated_at`
+        THEN `test_updated_at`
+        WHEN `joined`.`_exists` IS NULL
+        THEN CAST('2020-01-01 00:00:00' AS TIMESTAMP)
+        ELSE `t_test_valid_to`
+      END AS `test_valid_to`
+    FROM `joined`
+    LEFT JOIN `latest_deleted`
+      ON COALESCE(`joined`.`id`, '') = `latest_deleted`.`_key0`
+  ), `inserted_rows` AS (
+    SELECT
+      `id`,
+      `name`,
+      `price`,
+      `test_updated_at`,
+      `test_updated_at` AS `test_valid_from`,
+      CAST(NULL AS TIMESTAMP) AS `test_valid_to`
+    FROM `joined`
+    WHERE
+      `test_updated_at` > `t_test_updated_at`
+  )
+  SELECT
+    *
+  FROM `static`
+  UNION ALL
+  SELECT
+    *
+  FROM `updated_rows`
+  UNION ALL
+  SELECT
+    *
+  FROM `inserted_rows`
+) AS `_ordered_projections`
+        """,
+            dialect="spark",
+        ).sql(dialect="spark"),
+        "DROP TABLE IF EXISTS `db`.`temp_target_abcdefgh`",
+    ]
