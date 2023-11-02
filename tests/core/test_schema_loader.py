@@ -10,7 +10,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.config import Config, DuckDBConnectionConfig, GatewayConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
-from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.model import SqlModel, create_external_model, load_sql_based_model
 from sqlmesh.core.schema_loader import create_schema_file
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.yaml import YAML
@@ -108,17 +108,32 @@ def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
     state_reader_mock = mocker.Mock()
     state_reader_mock.nodes_exist.return_value = {"model_b"}
 
-    model = SqlModel(name="a", query=parse_one("select * FROM model_b, tbl_c"))
+    model_a = SqlModel(name="a", query=parse_one("select * FROM model_b, tbl_c"))
+    model_b = SqlModel(name="b", query=parse_one("select * FROM `tbl-d`", read="bigquery"))
 
     schema_file = tmp_path / c.SCHEMA_YAML
-    create_schema_file(schema_file, {"a": model}, engine_adapter_mock, state_reader_mock, "")
+    create_schema_file(
+        schema_file,
+        {
+            "a": model_a,
+            "b": model_b,
+        },
+        engine_adapter_mock,
+        state_reader_mock,
+        "bigquery",
+    )
 
     with open(schema_file, "r") as fd:
         schema = YAML().load(fd)
 
-    assert len(schema) == 1
-    assert schema[0]["name"] == "tbl_c"
+    assert len(schema) == 2
+    assert schema[0]["name"] == "`tbl-d`"
     assert list(schema[0]["columns"]) == ["b", "a"]
+    assert schema[1]["name"] == "tbl_c"
+    assert list(schema[1]["columns"]) == ["b", "a"]
+
+    for row in schema:
+        create_external_model(**row, dialect="bigquery")
 
 
 def test_missing_table(tmp_path: Path):
