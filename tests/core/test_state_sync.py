@@ -35,6 +35,7 @@ from sqlmesh.core.state_sync import (
     cleanup_expired_views,
 )
 from sqlmesh.core.state_sync.base import (
+    MIGRATIONS,
     SCHEMA_VERSION,
     SQLGLOT_VERSION,
     PromotionResult,
@@ -1553,3 +1554,89 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
     assert len(snapshots) == 3
     calls = mock.fetchall.call_args_list
     assert len(calls) == 2
+
+
+def test_migrate_only_to_add_sqlmesh_version_column(duck_conn, monkeypatch) -> None:
+    from sqlmesh import __version__ as SQLMESH_VERSION
+
+    n_migrations_before_sqlmesh_version = 31
+    migrations = MIGRATIONS[:n_migrations_before_sqlmesh_version]
+
+    monkeypatch.setattr("sqlmesh.core.state_sync.base.MIGRATIONS", migrations)
+    monkeypatch.setattr("sqlmesh.core.state_sync.engine_adapter.MIGRATIONS", migrations)
+    monkeypatch.setattr(
+        "sqlmesh.core.state_sync.base.SCHEMA_VERSION", n_migrations_before_sqlmesh_version
+    )
+    monkeypatch.setattr(
+        "sqlmesh.core.state_sync.engine_adapter.SCHEMA_VERSION", n_migrations_before_sqlmesh_version
+    )
+
+    state_sync = EngineAdapterStateSync(
+        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
+    )
+
+    def _update_versions_excluding_sqlmesh(
+        schema_version: int = SCHEMA_VERSION,
+        sqlglot_version: str = SQLGLOT_VERSION,
+        sqlmesh_version: str = SQLMESH_VERSION,
+    ) -> None:
+        state_sync.engine_adapter.delete_from(state_sync.versions_table, "TRUE")
+
+        state_sync.engine_adapter.insert_append(
+            state_sync.versions_table,
+            pd.DataFrame(
+                [
+                    {
+                        "schema_version": n_migrations_before_sqlmesh_version,
+                        "sqlglot_version": sqlglot_version,
+                    }
+                ]
+            ),
+            columns_to_types={
+                "schema_version": exp.DataType.build("int"),
+                "sqlglot_version": exp.DataType.build("text"),
+            },
+        )
+
+    # Need to temporarily patch this method because otherwise we try to insert into sqlmesh_version
+    # which doesn't exist yet. The provided closure should simulate the previous logic (before v32).
+    _update_versions = state_sync._update_versions
+    setattr(state_sync, "_update_versions", _update_versions_excluding_sqlmesh)
+
+    # v0001 -> v0031
+    state_sync.migrate()
+
+    # We don't have a sqlmesh_version column yet so it just gets set to the default version value
+    assert state_sync.get_versions() == Versions(
+        schema_version=n_migrations_before_sqlmesh_version,
+        sqlglot_version=SQLGLOT_VERSION,
+        sqlmesh_version="0.0.0",
+    )
+
+    assert len(state_sync.engine_adapter.fetchdf("SELECT * FROM sqlmesh._versions").columns) == 2
+
+    migrations_up_to_sqlmesh_version = n_migrations_before_sqlmesh_version + 1
+    migrations = MIGRATIONS[:migrations_up_to_sqlmesh_version]
+
+    monkeypatch.setattr("sqlmesh.core.state_sync.base.MIGRATIONS", migrations)
+    monkeypatch.setattr("sqlmesh.core.state_sync.engine_adapter.MIGRATIONS", migrations)
+    monkeypatch.setattr(
+        "sqlmesh.core.state_sync.base.SCHEMA_VERSION", migrations_up_to_sqlmesh_version
+    )
+    monkeypatch.setattr(
+        "sqlmesh.core.state_sync.engine_adapter.SCHEMA_VERSION", migrations_up_to_sqlmesh_version
+    )
+    monkeypatch.setattr(state_sync, "_update_versions", _update_versions)
+
+    # v0031 -> v0032
+    state_sync.migrate()
+
+    assert state_sync.get_versions() == Versions(
+        schema_version=migrations_up_to_sqlmesh_version,
+        sqlglot_version=SQLGLOT_VERSION,
+        sqlmesh_version=SQLMESH_VERSION,
+    )
+
+    assert state_sync.engine_adapter.fetchdf("SELECT sqlmesh_version FROM sqlmesh._versions")[
+        "sqlmesh_version"
+    ].to_list() == [SQLMESH_VERSION]
