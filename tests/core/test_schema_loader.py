@@ -1,4 +1,6 @@
+import logging
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 from pytest_mock.plugin import MockerFixture
@@ -117,3 +119,21 @@ def test_no_internal_model_conversion(tmp_path: Path, mocker: MockerFixture):
     assert len(schema) == 1
     assert schema[0]["name"] == "tbl_c"
     assert list(schema[0]["columns"]) == ["b", "a"]
+
+
+def test_missing_table(tmp_path: Path):
+    config = Config(gateways=GatewayConfig(connection=DuckDBConnectionConfig()))
+    context = Context(paths=[str(tmp_path.absolute())], config=config)
+    model = SqlModel(name="a", query=parse_one("select * FROM tbl_source"))
+
+    schema_file = tmp_path / c.SCHEMA_YAML
+    logger = logging.getLogger("sqlmesh.core.schema_loader")
+    with patch.object(logger, "warning") as mock_logger:
+        create_schema_file(
+            schema_file, {"a": model}, context.engine_adapter, context.state_reader, ""
+        )
+    assert "Unable to get schema for 'tbl_source'" in mock_logger.call_args[0][0]
+
+    with open(schema_file, "r") as fd:
+        schema = YAML().load(fd)
+    assert len(schema) == 0
