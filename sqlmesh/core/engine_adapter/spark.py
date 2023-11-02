@@ -260,6 +260,19 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
         )
         return self.spark.createDataFrame(df, **kwargs)  # type: ignore
 
+    def _get_temp_table(
+        self,
+        table: TableName,
+        table_only: bool = False,
+    ) -> exp.Table:
+        """
+        Returns the name of the temp table that should be used for the given table name.
+        """
+        table = super()._get_temp_table(table, table_only=table_only)
+        table_name_id = table.args["this"]
+        table_name_id.set("this", table_name_id.this.replace("__temp_", "temp_"))
+        return table
+
     def fetchdf(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
     ) -> pd.DataFrame:
@@ -355,7 +368,9 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
             )
 
             if self_referencing:
-                return LogicalReplaceQueryMixin.replace_query(self, table_name, query, columns_to_types)  # type: ignore
+                return LogicalReplaceQueryMixin.overwrite_target_from_temp(
+                    self, query, columns_to_types, target_table
+                )
 
         self.create_table(table_name, columns_to_types)
         return self._insert_overwrite_by_condition(
