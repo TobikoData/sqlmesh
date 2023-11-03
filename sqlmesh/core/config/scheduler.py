@@ -10,8 +10,6 @@ from requests import Session
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.config.common import concurrent_tasks_validator
 from sqlmesh.core.console import Console
-from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
-from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 from sqlmesh.core.plan import (
     AirflowPlanEvaluator,
     BuiltInPlanEvaluator,
@@ -63,9 +61,9 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
         engine_adapter = (
             state_connection.create_engine_adapter() if state_connection else context.engine_adapter
         )
-        if isinstance(engine_adapter, (SparkEngineAdapter, TrinoEngineAdapter)):
+        if not engine_adapter.SUPPORTS_ROW_LEVEL_OP:
             raise ConfigError(
-                f"Spark and Trino engines cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
+                f"The {engine_adapter.DIALECT.upper()} engine cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
                 + " See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#gateways for more information."
             )
         schema = context.config.get_state_schema(context.gateway)
