@@ -7,7 +7,7 @@ from pydantic import Field
 
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig
-from sqlmesh.dbt.common import GeneralConfig, QuotingConfig
+from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils import AttributeDict
 
 
@@ -38,7 +38,7 @@ class SourceConfig(GeneralConfig):
     overrides: t.Optional[str] = None
     freshness: t.Optional[t.Dict[str, t.Any]] = {}
     loaded_at_field: t.Optional[str] = None
-    quoting: QuotingConfig = Field(default_factory=QuotingConfig)
+    quoting: t.Dict[str, t.Optional[bool]] = {}
     external: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
 
@@ -67,6 +67,6 @@ class SourceConfig(GeneralConfig):
                 "schema": self.schema_,
                 "identifier": self.table_name,
                 "type": RelationType.External.value,
-                "quote_policy": AttributeDict(self.quoting.dict()),
+                "quote_policy": AttributeDict(self.quoting),
             }
         )

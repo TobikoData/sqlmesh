@@ -85,6 +85,7 @@ class TestConfig(GeneralConfig):
     fail_calc: str = "count(*)"
     warn_if: str = "!=0"
     error_if: str = "!=0"
+    quoting: t.Dict[str, t.Optional[bool]] = {}
 
     _sql_validator = sql_str_validator
 

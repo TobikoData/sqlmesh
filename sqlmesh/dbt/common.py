@@ -4,7 +4,6 @@ import re
 import typing as t
 from pathlib import Path
 
-from pydantic import Field
 from ruamel.yaml.constructor import DuplicateKeyError
 from sqlglot.helper import ensure_list
 
@@ -60,19 +59,6 @@ sql_str_validator = field_validator("sql", mode="before", check_fields=False)(
 
 class DbtConfig(BaseConfig, extra="allow", validate_assignment=True, frozen=False):
     pass
-
-
-class QuotingConfig(DbtConfig):
-    database: t.Optional[bool] = None
-    schema_: t.Optional[bool] = Field(default=None, alias="schema")
-    identifier: t.Optional[bool] = None
-
-    @field_validator("database", "schema_", "identifier", mode="before")
-    @classmethod
-    def _validate_bool(cls, v: t.Optional[bool]) -> t.Optional[bool]:
-        if v is None:
-            return None
-        return ensure_bool(v)
 
 
 class GeneralConfig(DbtConfig):
