@@ -12,7 +12,6 @@ from sqlmesh.core.audit import Audit, ModelAudit, StandaloneAudit
 from sqlmesh.dbt.common import (
     Dependencies,
     GeneralConfig,
-    QuotingConfig,
     SqlStr,
     extract_jinja_config,
     sql_str_validator,
@@ -194,7 +193,7 @@ class TestConfig(GeneralConfig):
                 "schema": self.schema_,
                 "identifier": self.name,
                 "type": None,
-                "quote_policy": AttributeDict(QuotingConfig().dict()),
+                "quote_policy": AttributeDict(),
             }
         )
 
