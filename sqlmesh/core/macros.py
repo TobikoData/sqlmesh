@@ -141,7 +141,7 @@ class MacroEvaluator:
             return func(self, *args)
         except Exception as e:
             print_exception(e, self.python_env)
-            raise MacroEvalError(f"Error trying to eval macro.") from e
+            raise MacroEvalError("Error trying to eval macro.") from e
 
     def transform(
         self, expression: exp.Expression
@@ -213,7 +213,7 @@ class MacroEvaluator:
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):
-            result: t.Optional[t.Union[exp.Expression | t.List[exp.Expression]]] = exp.convert(
+            result: t.Optional[exp.Expression | t.List[exp.Expression]] = exp.convert(
                 self.eval_expression(node)
             )
         else:
@@ -657,7 +657,7 @@ def star(
     prefix: exp.Literal = exp.Literal.string(""),
     suffix: exp.Literal = exp.Literal.string(""),
     quote_identifiers: exp.Boolean = exp.true(),
-) -> t.List[exp.Expression]:
+) -> t.List[exp.Alias]:
     """Returns a list of projections for the given relation.
 
     Example:
@@ -677,7 +677,7 @@ def star(
         raise SQLMeshError(f"Invalid suffix '{suffix}'. Expected a literal.")
     if not isinstance(quote_identifiers, exp.Boolean):
         raise SQLMeshError(f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean.")
-    projections = []
+    projections: t.List[exp.Alias] = []
     exclude = set()
     kwargs = {"quoted": quote_identifiers.this}
     if alias:
@@ -710,7 +710,9 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifi
     """
     default_null_value = exp.Literal.string("_sqlmesh_surrogate_key_null_")
     string_fields = []
-    for field in fields:
+    for i, field in enumerate(fields):
+        if i > 0:
+            string_fields.append(exp.Literal.string("|"))
         string_fields.append(
             exp.func(
                 "COALESCE",
