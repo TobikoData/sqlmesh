@@ -143,7 +143,7 @@ def init(
     type=str,
     help="The SQL dialect to render the query as.",
 )
-@click.option("--no-pretty-print", is_flag=True, help="Disable pretty printing of the query.")
+@click.option("--no-format", is_flag=True, help="Disable fancy formatting of the query.")
 @click.pass_context
 @error_handler
 def render(
@@ -154,7 +154,7 @@ def render(
     execution_time: t.Optional[TimeLike] = None,
     expand: t.Optional[t.Union[bool, t.Iterable[str]]] = None,
     dialect: t.Optional[str] = None,
-    no_pretty_print: bool = False,
+    no_format: bool = False,
 ) -> None:
     """Renders a model's query, optionally expanding referenced models."""
     rendered = ctx.obj.render(
@@ -166,7 +166,7 @@ def render(
     )
 
     sql = rendered.sql(pretty=True, dialect=ctx.obj.config.dialect if dialect is None else dialect)
-    if no_pretty_print:
+    if no_format:
         print(sql)
     else:
         ctx.obj.console.show_sql(sql)
