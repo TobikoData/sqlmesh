@@ -21,6 +21,7 @@ from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 logger = logging.getLogger(__name__)
@@ -161,7 +162,17 @@ class DbtLoader(Loader):
             context.add_macros(macro_infos, package=package_name)
 
         # TODO this needs to make its way into engine adapter's default database
-        context.default_database = context.render("{{ generate_database_name() }}")
+        generate_database_name = context.get_callable_macro("generate_database_name")
+        if not generate_database_name:
+            raise ConfigError(
+                "Cannot get default database: 'generate_database_name' macro not found."
+            )
+        try:
+            context.default_database = generate_database_name()
+        except Exception as e:
+            raise ConfigError(
+                f"Cannot get default database: 'generate_database_name' macro failed with exception '{e}'."
+            )
 
         self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 
@@ -169,7 +180,7 @@ class DbtLoader(Loader):
 
     @classmethod
     def _to_sqlmesh(cls, config: BMC, context: DbtContext) -> Model:
-        logger.debug("Converting '%s' to sqlmesh format", config.sql_name)
+        logger.debug("Converting '%s' to sqlmesh format", config.canonical_name)
         return config.to_sqlmesh(context)
 
     def _compute_yaml_max_mtime_per_subfolder(self, root: Path) -> t.Dict[Path, float]:

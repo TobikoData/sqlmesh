@@ -313,7 +313,7 @@ def test_source_config(sushi_test_project: Project):
     assert actual_config == expected_config
 
     assert (
-        source_configs["streaming.order_items"].sql_name(sushi_test_project.context)
+        source_configs["streaming.order_items"].canonical_name(sushi_test_project.context)
         == "raw.order_items"
     )
 
@@ -331,7 +331,7 @@ def test_seed_config(sushi_test_project: Project, mocker: MockerFixture):
     assert actual_config == expected_config
 
     context = sushi_test_project.context
-    assert raw_items_seed.sql_name(context) == "sushi.waiter_names"
+    assert raw_items_seed.canonical_name(context) == "sushi.waiter_names"
     assert raw_items_seed.to_sqlmesh(context).name == "sushi.waiter_names"
     mock_dialect = PropertyMock(return_value="snowflake")
     mocker.patch("sqlmesh.dbt.context.DbtContext.dialect", mock_dialect)

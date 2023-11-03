@@ -9,6 +9,7 @@ from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils import AttributeDict
+from sqlmesh.utils.errors import ConfigError
 
 if t.TYPE_CHECKING:
     from sqlmesh.dbt.context import DbtContext
@@ -45,7 +46,7 @@ class SourceConfig(GeneralConfig):
     external: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
 
-    _sql_name: t.Optional[str] = None
+    _canonical_name: t.Optional[str] = None
 
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
@@ -60,13 +61,25 @@ class SourceConfig(GeneralConfig):
     def config_name(self) -> str:
         return f"{self.source_name_}.{self.name}"
 
-    def sql_name(self, context: DbtContext) -> str:
-        if self._sql_name is None:
-            self._sql_name = context.render(
-                "{{ " + f'source("{self.source_name_}", "{self.name}")' + " }}"
-            )
+    def canonical_name(self, context: DbtContext) -> str:
+        if self._canonical_name is None:
+            source = context.get_callable_macro("source")
+            if not source:
+                raise ConfigError("'source' macro not found.")
+            try:
+                relation = source(self.source_name_, self.name)
+                database = (
+                    relation.database if relation.database != context.default_database else None
+                )
+                self._canonical_name = ".".join(
+                    part for part in (database, relation.schema, relation.identifier) if part
+                )
+            except Exception as e:
+                raise ConfigError(
+                    f"'source' macro failed for '{self.config_name}' with exeception '{e}'."
+                )
             # TODO if default database, remove
-        return self._sql_name
+        return self._canonical_name
 
     @property
     def relation_info(self) -> AttributeDict:

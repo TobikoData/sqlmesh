@@ -172,7 +172,7 @@ class ModelConfig(BaseModelConfig):
                     logger.warning(
                         "SQLMesh incremental by time strategy is not compatible with '%s' incremental strategy in model '%s'. Supported strategies include %s.",
                         strategy,
-                        self.full_sql_name,
+                        self.fqn,
                         collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
                     )
 
@@ -190,14 +190,14 @@ class ModelConfig(BaseModelConfig):
                     and strategy not in INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES
                 ):
                     raise ConfigError(
-                        f"{self.full_sql_name}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
+                        f"{self.fqn}: SQLMesh incremental by unique key strategy is not compatible with '{strategy}'"
                         f" incremental strategy. Supported strategies include {collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES)}."
                     )
                 return IncrementalByUniqueKeyKind(unique_key=self.unique_key, **incremental_kwargs)
 
             logger.warning(
                 "Using unmanaged incremental materialization for model '%s'. Some features might not be available. Consider adding either a time_column (%s) or a unique_key (%s) configuration to mitigate this",
-                self.full_sql_name,
+                self.fqn,
                 collection_to_str(INCREMENTAL_BY_TIME_STRATEGIES),
                 collection_to_str(INCREMENTAL_BY_UNIQUE_KEY_STRATEGIES.union(["none"])),
             )
@@ -242,7 +242,7 @@ class ModelConfig(BaseModelConfig):
         if data_type == "int64":
             if "range" not in self.partition_by:
                 raise ConfigError(
-                    f"Range is required for int64 partitioning in model '{self.full_sql_name}'."
+                    f"Range is required for int64 partitioning in model '{self.fqn}'."
                 )
 
             range_ = self.partition_by["range"]
@@ -286,7 +286,7 @@ class ModelConfig(BaseModelConfig):
             ]
 
         if not context.target:
-            raise ConfigError(f"Target required to load '{self.full_sql_name}' into SQLMesh.")
+            raise ConfigError(f"Target required to load '{self.fqn}' into SQLMesh.")
 
         model_kwargs = self.sqlmesh_model_kwargs(context)
         if self.sql_header:
@@ -307,7 +307,7 @@ class ModelConfig(BaseModelConfig):
                 model_kwargs["table_properties"] = table_properties
 
         return create_sql_model(
-            self.sql_name(context),
+            self.canonical_name(context),
             query,
             dialect=dialect,
             kind=self.model_kind(context.target),

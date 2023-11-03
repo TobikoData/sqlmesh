@@ -170,7 +170,7 @@ class BaseModelConfig(GeneralConfig):
         return f"{self.package_name}.{self.name}"
 
     @property
-    def full_sql_name(self) -> str:
+    def fqn(self) -> str:
         """
         Get the fully qualified model name
 
@@ -181,7 +181,7 @@ class BaseModelConfig(GeneralConfig):
             part for part in (self.database, self.table_schema, self.table_name) if part
         )
 
-    def sql_name(self, context: DbtContext) -> str:
+    def canonical_name(self, context: DbtContext) -> str:
         """
         Get the sqlmesh model name
 
@@ -255,9 +255,9 @@ class BaseModelConfig(GeneralConfig):
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns, context.dialect) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {model.sql_name(context) for model in model_context.refs.values()}.union(
-                {source.sql_name(context) for source in model_context.sources.values()}
-            ),
+            "depends_on": {
+                model.canonical_name(context) for model in model_context.refs.values()
+            }.union({source.canonical_name(context) for source in model_context.sources.values()}),
             "jinja_macros": jinja_macros,
             "path": self.path,
             "hash_raw_query": True,

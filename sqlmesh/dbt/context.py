@@ -9,7 +9,12 @@ from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry, MacroInfo
+from sqlmesh.utils.jinja import (
+    JinjaGlobalAttribute,
+    JinjaMacroRegistry,
+    MacroInfo,
+    MacroReference,
+)
 
 if t.TYPE_CHECKING:
     from jinja2 import Environment
@@ -194,6 +199,13 @@ class DbtContext:
 
     def render(self, source: str, **kwargs: t.Any) -> str:
         return self.jinja_environment.from_string(source).render(**kwargs)
+
+    def get_callable_macro(
+        self, name: str, package: t.Optional[str] = None
+    ) -> t.Optional[t.Callable]:
+        return self.jinja_macros.build_macro(
+            MacroReference(name=name, package=package), **self.jinja_globals
+        )
 
     def copy(self) -> DbtContext:
         return replace(self)
