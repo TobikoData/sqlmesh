@@ -158,7 +158,10 @@ class DbtLoader(Loader):
             )
 
         for package_name, macro_infos in context.manifest.all_macros.items():
-            context.jinja_macros.add_macros(macro_infos, package=package_name)
+            context.add_macros(macro_infos, package=package_name)
+
+        # TODO this needs to make its way into engine adapter's default database
+        context.default_database = context.render("{{ generate_database_name() }}")
 
         self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 

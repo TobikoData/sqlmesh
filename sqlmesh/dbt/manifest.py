@@ -111,13 +111,9 @@ class ManifestHelper:
 
     def _load_sources(self) -> None:
         for source in self._manifest.sources.values():
-            source_dict = source.to_dict()
-            if source_dict.get("database") == self.target.database:
-                source_dict.pop("database", None)  # Only needed if overrides project's db
-
             source_config = SourceConfig(
                 **_config(source),
-                **source_dict,
+                **source.to_dict(),
             )
             self._sources_per_package[source.package_name][
                 source_config.config_name
@@ -177,15 +173,13 @@ class ManifestHelper:
             )
 
             test_model = _test_model(node)
-            node_config = _node_base_config(node)
-            node_config["database"] = node.database or self.target.database
 
             test = TestConfig(
                 sql=sql,
                 model_name=test_model,
                 test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
                 dependencies=dependencies,
-                **node_config,
+                **_node_base_config(node),
             )
             self._tests_per_package[node.package_name][node.name.lower()] = test
             if test_model:
@@ -426,11 +420,9 @@ def _test_model(node: ManifestNode) -> t.Optional[str]:
 
 
 def _node_base_config(node: ManifestNode) -> t.Dict[str, t.Any]:
-    node_dict = node.to_dict()
-    node_dict.pop("database", None)  # picked up from the `config` attribute
     return {
         **_config(node),
-        **node_dict,
+        **node.to_dict(),
         "path": Path(node.original_file_path),
     }
 

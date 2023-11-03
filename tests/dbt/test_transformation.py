@@ -40,8 +40,25 @@ from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
 
 def test_model_name():
-    assert ModelConfig(schema="foo", path="models/bar.sql").sql_name == "foo.bar"
-    assert ModelConfig(schema="foo", path="models/bar.sql", alias="baz").sql_name == "foo.baz"
+    context = DbtContext()
+    context.default_database = "default"
+    assert ModelConfig(schema="foo", path="models/bar.sql").sql_name(context) == "foo.bar"
+    assert (
+        ModelConfig(schema="foo", path="models/bar.sql", alias="baz").sql_name(context) == "foo.baz"
+    )
+    assert (
+        ModelConfig(database="default", schema="foo", path="models/bar.sql", alias="baz").sql_name(
+            context
+        )
+        == "foo.baz"
+        == "foo.baz"
+    )
+    assert (
+        ModelConfig(database="other", schema="foo", path="models/bar.sql", alias="baz").sql_name(
+            context
+        )
+        == "other.foo.baz"
+    )
 
 
 def test_model_kind():

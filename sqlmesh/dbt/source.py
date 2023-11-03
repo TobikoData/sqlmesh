@@ -10,6 +10,9 @@ from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils import AttributeDict
 
+if t.TYPE_CHECKING:
+    from sqlmesh.dbt.context import DbtContext
+
 
 class SourceConfig(GeneralConfig):
     """
@@ -42,6 +45,8 @@ class SourceConfig(GeneralConfig):
     external: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
 
+    _sql_name: t.Optional[str] = None
+
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
         **{"columns": UpdateStrategy.KEY_EXTEND},
@@ -55,9 +60,13 @@ class SourceConfig(GeneralConfig):
     def config_name(self) -> str:
         return f"{self.source_name_}.{self.name}"
 
-    @property
-    def sql_name(self) -> str:
-        return ".".join(part for part in (self.database, self.schema_, self.table_name) if part)
+    def sql_name(self, context: DbtContext) -> str:
+        if self._sql_name is None:
+            self._sql_name = context.render(
+                "{{ " + f'source("{self.source_name_}", "{self.name}")' + " }}"
+            )
+            # TODO if default database, remove
+        return self._sql_name
 
     @property
     def relation_info(self) -> AttributeDict:

@@ -9,7 +9,7 @@ from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
-from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry
+from sqlmesh.utils.jinja import JinjaGlobalAttribute, JinjaMacroRegistry, MacroInfo
 
 if t.TYPE_CHECKING:
     from jinja2 import Environment
@@ -33,6 +33,7 @@ class DbtContext:
             create_builtins_module=SQLMESH_DBT_PACKAGE, top_level_packages=["dbt"]
         )
     )
+    default_database: t.Optional[str] = None
 
     sqlmesh_config: SQLMeshConfig = field(default_factory=SQLMeshConfig)
 
@@ -117,6 +118,10 @@ class DbtContext:
                 raise ConfigError(f"Failed to render variable '{k}', value '{v}': {ex}") from ex
 
         self.variables = rendered_variables
+
+    def add_macros(self, macros: t.Dict[str, MacroInfo], package: str) -> None:
+        self.jinja_macros.add_macros(macros, package=package)
+        self._jinja_environment = None
 
     @property
     def models(self) -> t.Dict[str, ModelConfig]:

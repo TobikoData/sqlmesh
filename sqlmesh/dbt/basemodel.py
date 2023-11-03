@@ -170,16 +170,28 @@ class BaseModelConfig(GeneralConfig):
         return f"{self.package_name}.{self.name}"
 
     @property
-    def sql_name(self) -> str:
+    def full_sql_name(self) -> str:
+        """
+        Get the fully qualified model name
+
+        Returns:
+            The fully qualified model name
+        """
+        return ".".join(
+            part for part in (self.database, self.table_schema, self.table_name) if part
+        )
+
+    def sql_name(self, context: DbtContext) -> str:
         """
         Get the sqlmesh model name
 
         Returns:
             The sqlmesh model name
         """
-        return ".".join(
-            part for part in (self.database, self.table_schema, self.table_name) if part
-        )
+        # TODO add back in conditional database
+        # database = self.database if self.database != context.default_database else None
+        database = self.database
+        return ".".join(part for part in (database, self.table_schema, self.table_name) if part)
 
     @property
     def model_materialization(self) -> Materialization:
@@ -243,8 +255,8 @@ class BaseModelConfig(GeneralConfig):
             "audits": [(test.name, {}) for test in self.tests],
             "columns": column_types_to_sqlmesh(self.columns, context.dialect) or None,
             "column_descriptions_": column_descriptions_to_sqlmesh(self.columns) or None,
-            "depends_on": {model.sql_name for model in model_context.refs.values()}.union(
-                {source.sql_name for source in model_context.sources.values()}
+            "depends_on": {model.sql_name(context) for model in model_context.refs.values()}.union(
+                {source.sql_name(context) for source in model_context.sources.values()}
             ),
             "jinja_macros": jinja_macros,
             "path": self.path,

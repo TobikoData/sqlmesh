@@ -146,8 +146,8 @@ class TestConfig(GeneralConfig):
                 skip=skip,
                 query=query,
                 jinja_macros=jinja_macros,
-                depends_on={model.sql_name for model in test_context.refs.values()}.union(
-                    {source.sql_name for source in test_context.sources.values()}
+                depends_on={model.sql_name(context) for model in test_context.refs.values()}.union(
+                    {source.sql_name(context) for source in test_context.sources.values()}
                 ),
                 tags=self.tags,
                 hash_raw_query=True,
