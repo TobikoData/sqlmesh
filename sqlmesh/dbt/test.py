@@ -127,7 +127,6 @@ class TestConfig(GeneralConfig):
         jinja_macros.add_globals(
             {
                 "config": self.config_attribute_dict,
-                "this": self.relation_info,
                 **test_context.jinja_globals,  # type: ignore
             }
         )
