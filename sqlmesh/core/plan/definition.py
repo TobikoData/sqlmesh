@@ -218,14 +218,16 @@ class Plan:
     @property
     def _snapshot_mapping(self) -> t.Dict[str, Snapshot]:
         """Gets a mapping of snapshot name to snapshot."""
-        return self.__snapshot_mapping or self.context_diff.snapshots
+        if self.__snapshot_mapping is None:
+            raise SQLMeshError(
+                "Plan not properly initialized and `__snapshot_mapping` is not defined."
+            )
+        return self.__snapshot_mapping
 
     @property
     def _dag(self) -> DAG[str]:
         if self.__dag is None:
-            self.__dag = DAG()
-            for name, snapshot in self._snapshot_mapping.items():
-                self.__dag.add(name, snapshot.node.depends_on)
+            raise SQLMeshError("Plan not properly initialized and `__dag` is not defined.")
         return self.__dag
 
     @property
