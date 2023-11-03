@@ -194,6 +194,7 @@ class ManifestHelper:
                 self._tests_by_owner[node.name]
                 + self._tests_by_owner[f"{node.package_name}.{node.name}"]
             )
+            node_config = _node_base_config(node)
 
             if node.resource_type == "model":
                 sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
@@ -209,13 +210,13 @@ class ManifestHelper:
                     sql=sql,
                     dependencies=dependencies,
                     tests=tests,
-                    **_node_base_config(node),
+                    **node_config,
                 )
             else:
                 self._seeds_per_package[node.package_name][node.name] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
                     tests=tests,
-                    **_node_base_config(node),
+                    **node_config,
                 )
 
     @property

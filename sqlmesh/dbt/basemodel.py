@@ -21,7 +21,6 @@ from sqlmesh.dbt.common import (
     DbtConfig,
     Dependencies,
     GeneralConfig,
-    QuotingConfig,
     SqlStr,
     sql_str_validator,
 )
@@ -102,7 +101,7 @@ class BaseModelConfig(GeneralConfig):
     full_refresh: t.Optional[bool] = None
     grants: t.Dict[str, t.List[str]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
-    quoting: QuotingConfig = Field(default_factory=QuotingConfig)
+    quoting: t.Dict[str, t.Optional[bool]] = {}
 
     @field_validator("pre_hook", "post_hook", mode="before")
     @classmethod
@@ -201,7 +200,7 @@ class BaseModelConfig(GeneralConfig):
                 "schema": self.table_schema,
                 "identifier": self.table_name,
                 "type": relation_type.value,
-                "quote_policy": AttributeDict(self.quoting.dict()),
+                "quote_policy": AttributeDict(self.quoting),
             }
         )
 

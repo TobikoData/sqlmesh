@@ -10,7 +10,7 @@ from pytest_mock import MockerFixture
 
 from sqlmesh.core.dialect import jinja_query
 from sqlmesh.core.model import SqlModel
-from sqlmesh.dbt.common import Dependencies, QuotingConfig
+from sqlmesh.dbt.common import Dependencies
 from sqlmesh.dbt.context import DbtContext
 from sqlmesh.dbt.model import IncrementalByUniqueKeyKind, Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
@@ -332,13 +332,13 @@ def test_quoting():
     model = ModelConfig(alias="bar", schema="foo")
     assert str(BaseRelation.create(**model.relation_info)) == '"foo"."bar"'
 
-    model.quoting.identifier = False
+    model.quoting["identifier"] = False
     assert str(BaseRelation.create(**model.relation_info)) == '"foo".bar'
 
     source = SourceConfig(identifier="bar", schema="foo")
     assert str(BaseRelation.create(**source.relation_info)) == '"foo"."bar"'
 
-    source.quoting.schema_ = False
+    source.quoting["schema"] = False
     assert str(BaseRelation.create(**source.relation_info)) == 'foo."bar"'
 
 
@@ -507,20 +507,6 @@ def test_bigquery_config():
             "outputs",
             "dev",
         )
-
-
-def test_quoting_config():
-    assert QuotingConfig.parse_obj(
-        {"database": None, "identifier": None, "schema": None}
-    ) == QuotingConfig(database=None, identifier=None, schema=None)
-
-    assert QuotingConfig.parse_obj(
-        {"database": False, "identifier": False, "schema": False}
-    ) == QuotingConfig(database=False, identifier=False, schema=False)
-
-    assert QuotingConfig.parse_obj(
-        {"database": True, "identifier": True, "schema": True}
-    ) == QuotingConfig(database=True, identifier=True, schema=True)
 
 
 def test_db_type_to_relation_class():
