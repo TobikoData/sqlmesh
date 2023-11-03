@@ -154,7 +154,7 @@ class SnapshotEvaluator:
             start=start,
             end=end,
             execution_time=execution_time,
-            has_intervals=bool(snapshot.intervals),
+            snapshot=snapshot,
             runtime_stage=RuntimeStage.EVALUATING,
             **kwargs,
         )

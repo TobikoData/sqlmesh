@@ -71,7 +71,7 @@ class BaseExpressionRenderer:
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
         table_mapping: t.Optional[t.Dict[str, str]] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
-        runtime_stage: t.Optional[RuntimeStage] = None,
+        runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
     ) -> t.List[exp.Expression]:
         """Renders a expression, expanding macros with provided kwargs
@@ -91,15 +91,15 @@ class BaseExpressionRenderer:
         """
 
         cache_key = self._cache_key(start, end, execution_time, runtime_stage)
-        start_dt, end_dt, execution_dt, runtime_stage = cache_key
+
         if cache_key not in self._cache:
             expressions = [self._expression]
 
             render_kwargs = {
                 **date_dict(
-                    execution_dt,
-                    start_dt if not self._only_execution_time else None,
-                    end_dt if not self._only_execution_time else None,
+                    cache_key[2],
+                    cache_key[0] if not self._only_execution_time else None,
+                    cache_key[1] if not self._only_execution_time else None,
                 ),
                 **kwargs,
             }
@@ -136,6 +136,15 @@ class BaseExpressionRenderer:
                 jinja_env=jinja_env,
                 schema=self.schema,
                 runtime_stage=runtime_stage,
+                resolve_tables=lambda e: self._resolve_tables(
+                    e,
+                    snapshots=snapshots,
+                    table_mapping=table_mapping,
+                    deployability_index=deployability_index,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                ),
             )
 
             for definition in self._macro_definitions:
@@ -212,12 +221,12 @@ class BaseExpressionRenderer:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
-        runtime_stage: t.Optional[RuntimeStage] = None,
+        runtime_stage: RuntimeStage = RuntimeStage.LOADING,
     ) -> CacheKey:
         return (
             *make_inclusive(start or c.EPOCH, end or c.EPOCH),
             to_datetime(execution_time or c.EPOCH),
-            runtime_stage or RuntimeStage.LOADING,
+            runtime_stage,
         )
 
 
@@ -296,7 +305,7 @@ class QueryRenderer(BaseExpressionRenderer):
         deployability_index: t.Optional[DeployabilityIndex] = None,
         expand: t.Iterable[str] = tuple(),
         optimize: bool = True,
-        runtime_stage: t.Optional[RuntimeStage] = None,
+        runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         **kwargs: t.Any,
     ) -> t.Optional[exp.Subqueryable]:
         """Renders a query, expanding macros with provided kwargs, and optionally expanding referenced models.

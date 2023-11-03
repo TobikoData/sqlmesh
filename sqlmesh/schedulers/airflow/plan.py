@@ -18,7 +18,7 @@ from sqlmesh.utils.errors import SQLMeshError
 
 
 class PlanDagState:
-    def __init__(self, engine_adapter: EngineAdapter, plan_dags_table: str):
+    def __init__(self, engine_adapter: EngineAdapter, plan_dags_table: exp.Table):
         self.engine_adapter = engine_adapter
 
         self._plan_dags_table = plan_dags_table
