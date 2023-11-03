@@ -16,6 +16,7 @@ from sqlmesh.dbt.common import (
     extract_jinja_config,
     sql_str_validator,
 )
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.pydantic import field_validator
 
 if t.TYPE_CHECKING:
@@ -50,7 +51,7 @@ class TestConfig(GeneralConfig):
         package_name: Name of the package that defines the test.
         alias: The alias for the materialized table where failures are stored (Not supported).
         schema: The schema for the materialized table where the failures are stored (Not supported).
-        database: The database for the materilized table where the failures are stored (Not supported).
+        database: The database for the materialized table where the failures are stored (Not supported).
         severity: The severity of a failure: ERROR blocks execution and WARN continues execution.
         store_failures: Failures are stored in a materialized table when True (Not supported).
         where: Additional where clause to add to the test.
@@ -138,6 +139,7 @@ class TestConfig(GeneralConfig):
 
         audit: Audit
         if self.is_standalone:
+            jinja_macros.add_globals({"this": self.relation_info})
             audit = StandaloneAudit(
                 name=self.name,
                 dialect=context.dialect,
@@ -181,6 +183,19 @@ class TestConfig(GeneralConfig):
                 kwargs[key] = value
 
         return ", ".join(f"{key}={value}" for key, value in kwargs.items())
+
+    @property
+    def relation_info(self) -> AttributeDict:
+        return AttributeDict(
+            {
+                "name": self.name,
+                "database": self.database,
+                "schema": self.schema_,
+                "identifier": self.name,
+                "type": None,
+                "quote_policy": AttributeDict(),
+            }
+        )
 
 
 def _remove_jinja_braces(jinja_str: str) -> str:

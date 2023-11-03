@@ -12,6 +12,7 @@ from dbt.exceptions import CompilationError
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, parse_one
 
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import (
     EmbeddedKind,
@@ -34,6 +35,7 @@ from sqlmesh.dbt.model import Materialization, ModelConfig
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.seed import SeedConfig
 from sqlmesh.dbt.target import BigQueryConfig, DuckDbConfig, SnowflakeConfig
+from sqlmesh.dbt.test import TestConfig
 from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
 
@@ -283,7 +285,7 @@ def test_config_jinja(sushi_test_project: Project):
     assert model.render_pre_statements()[0].sql() == '"bar"'
 
 
-def test_this(assert_exp_eq, sushi_test_project: Project):
+def test_model_this(assert_exp_eq, sushi_test_project: Project):
     model_config = ModelConfig(
         name="model",
         package_name="package",
@@ -293,6 +295,23 @@ def test_this(assert_exp_eq, sushi_test_project: Project):
     context = sushi_test_project.context
     assert_exp_eq(
         model_config.to_sqlmesh(context).render_query_or_raise().sql(),
+        'SELECT 1 AS "one" FROM "test" AS "test"',
+    )
+
+
+def test_test_this(assert_exp_eq, sushi_test_project: Project):
+    test_config = TestConfig(
+        name="test",
+        alias="alias",
+        database="database",
+        schema_="schema",
+        standalone=True,
+        sql="SELECT 1 AS one FROM {{ this.identifier }}",
+    )
+    context = sushi_test_project.context
+    audit = t.cast(StandaloneAudit, test_config.to_sqlmesh(context))
+    assert_exp_eq(
+        audit.render_query(audit).sql(),
         'SELECT 1 AS "one" FROM "test" AS "test"',
     )
 
