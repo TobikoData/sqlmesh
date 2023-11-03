@@ -690,6 +690,23 @@ def star(
     return projections
 
 
+@macro()
+def generate_surrogate_key(
+    _: MacroEvaluator, *fields: exp.Column | exp.Identifier
+) -> exp.Func:
+    default_null_value = exp.Literal.string("_sqlmesh_surrogate_key_null_")
+    string_fields = []
+    for field in fields:
+        string_fields.append(
+            exp.func(
+                "COALESCE",
+                exp.cast(field, exp.DataType.build("string")),
+                default_null_value,
+            )
+        )
+    return exp.func("MD5", exp.func("CONCAT", *string_fields))
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
