@@ -85,7 +85,6 @@ def test_normalization(
 
     # bla and bob will be normalized to uppercase since we're dealing with Snowflake
     schema_bla = schema_("BLA")
-    schema_bob = schema_("BOB")
     relation_bla_bob = exp.table_("BOB", db="BLA")
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")

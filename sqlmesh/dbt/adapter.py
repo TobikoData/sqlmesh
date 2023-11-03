@@ -309,16 +309,9 @@ class RuntimeAdapter(BaseAdapter):
         return identifier
 
     def _map_table_name(
-        self,
-        database: t.Optional[str | exp.Identifier],
-        schema: t.Optional[str | exp.Identifier],
-        identifier: t.Optional[str | exp.Identifier],
+        self, database: t.Optional[str], schema: t.Optional[str], identifier: t.Optional[str]
     ) -> exp.Table:
-        name = ".".join(
-            p.name if isinstance(p, exp.Identifier) else p
-            for p in (database, schema, identifier)
-            if p is not None
-        )
+        name = ".".join(p for p in (database, schema, identifier) if p is not None)
         if name not in self.table_mapping:
             return exp.to_table(name, dialect=self.engine_adapter.dialect)
 
