@@ -10,14 +10,13 @@ from dbt.contracts.relation import Policy
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
+from sqlmesh.core.dialect import schema_
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import SnowflakeConfig
 from sqlmesh.utils.errors import ConfigError
 
 
-def test_adapter_relation(
-    sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
-):
+def test_adapter_relation(sushi_test_project: Project, runtime_renderer: t.Callable):
     context = sushi_test_project.context
     assert context.target
     engine_adapter = context.target.to_sqlmesh().create_engine_adapter()
@@ -63,6 +62,13 @@ def test_adapter_relation(
         == "[]"
     )
 
+
+def test_normalization(
+    sushi_test_project: Project, runtime_renderer: t.Callable, mocker: MockerFixture
+):
+    context = sushi_test_project.context
+    assert context.target
+
     adapter_mock = mocker.MagicMock()
     adapter_mock.dialect = "snowflake"
 
@@ -78,29 +84,30 @@ def test_adapter_relation(
     renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
     # bla and bob will be normalized to uppercase since we're dealing with Snowflake
-    bla_id = exp.to_identifier("BLA", quoted=False)
-    bob_id = exp.to_identifier("BOB", quoted=False)
+    schema_bla = schema_("BLA")
+    schema_bob = schema_("BOB")
+    relation_bla_bob = exp.table_("BOB", db="BLA")
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock._get_data_objects.assert_has_calls([call(exp.Table(db=bla_id))])
+    adapter_mock._get_data_objects.assert_has_calls([call(schema_bla)])
 
     renderer(
         "{%- set relation = api.Relation.create(schema='bla') -%}"
         "{{ adapter.create_schema(relation) }}"
     )
-    adapter_mock.create_schema.assert_has_calls([call(bla_id)])
+    adapter_mock.create_schema.assert_has_calls([call(schema_bla)])
 
     renderer(
         "{%- set relation = api.Relation.create(schema='bla') -%}"
         "{{ adapter.drop_schema(relation) }}"
     )
-    adapter_mock.drop_schema.assert_has_calls([call(bla_id)])
+    adapter_mock.drop_schema.assert_has_calls([call(schema_bla)])
 
     renderer(
         "{%- set relation = api.Relation.create(schema='bla', identifier='bob') -%}"
         "{{ adapter.drop_relation(relation) }}"
     )
-    adapter_mock.drop_table.assert_has_calls([call(exp.Table(this=bob_id, db=bla_id))])
+    adapter_mock.drop_table.assert_has_calls([call(relation_bla_bob)])
 
     select_star_query: exp.Select = exp.maybe_parse("SELECT * FROM t", dialect="snowflake")
 
@@ -131,7 +138,7 @@ def test_adapter_relation(
         "{%- set relation = api.Relation.create(schema='bla', identifier='bob') -%}"
         "{{ adapter.drop_relation(relation) }}"
     )
-    adapter_mock.drop_table.assert_has_calls([call(exp.Table(this=bob_id, db=bla_id))])
+    adapter_mock.drop_table.assert_has_calls([call(exp.table_("bob", db="bla", quoted=True))])
 
 
 def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Callable):

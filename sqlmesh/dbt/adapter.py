@@ -210,11 +210,8 @@ class RuntimeAdapter(BaseAdapter):
         from dbt.contracts.relation import RelationType
 
         assert schema_relation.schema is not None
+        schema = self._normalize(schema_(schema_relation.schema, schema_relation.database))
 
-        database = self._normalize(schema_relation.database, self.quote_policy.database)
-        schema = self._normalize(schema_relation.schema, self.quote_policy.schema)
-
-        data_objects = self.engine_adapter._get_data_objects(schema_(schema, database))
         relations = [
             self.relation_type.create(
                 database=do.catalog,
@@ -226,18 +223,15 @@ class RuntimeAdapter(BaseAdapter):
                 if do.type.is_unknown
                 else RelationType(do.type.lower().replace("_", "")),
             )
-            for do in data_objects
+            for do in self.engine_adapter._get_data_objects(schema)
         ]
         return relations
 
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
         from dbt.adapters.base.column import Column
 
-        database = self._normalize(relation.database, self.quote_policy.database)
-        schema = self._normalize(relation.schema, self.quote_policy.schema)
-        identifier = self._normalize(relation.identifier, self.quote_policy.identifier)
-
-        mapped_table = self._map_table_name(database, schema, identifier)
+        table = self._normalize(self._relation_to_table(relation))
+        mapped_table = self._map_table_name(table.catalog, table.db, table.name)
 
         return [
             Column.from_description(
@@ -259,19 +253,17 @@ class RuntimeAdapter(BaseAdapter):
 
     def create_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
-            schema = self._normalize(relation.schema, self.quote_policy.schema)
+            schema = self._normalize(schema_(relation.schema, relation.database))
             self.engine_adapter.create_schema(schema)
 
     def drop_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
-            schema = self._normalize(relation.schema, self.quote_policy.schema)
+            schema = self._normalize(schema_(relation.schema, relation.database))
             self.engine_adapter.drop_schema(schema)
 
     def drop_relation(self, relation: BaseRelation) -> None:
         if relation.schema is not None and relation.identifier is not None:
-            schema = self._normalize(relation.schema, self.quote_policy.schema)
-            identifier = self._normalize(relation.identifier, self.quote_policy.identifier)
-            self.engine_adapter.drop_table(exp.Table(this=identifier, db=schema))
+            self.engine_adapter.drop_table(self._normalize(self._relation_to_table(relation)))
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
@@ -335,20 +327,16 @@ class RuntimeAdapter(BaseAdapter):
 
         return exp.to_table(physical_table_name, dialect=self.engine_adapter.dialect)
 
-    @t.overload
-    def _normalize(self, name: None, quoted: bool = True) -> None:
-        ...
+    def _relation_to_table(self, relation: BaseRelation) -> exp.Table:
+        assert relation.identifier is not None
+        return exp.table_(relation.identifier, db=relation.schema, catalog=relation.database)
 
-    @t.overload
-    def _normalize(self, name: str, quoted: bool = True) -> exp.Identifier:
-        ...
+    def _normalize(self, table: exp.Table) -> exp.Table:
+        if self.quote_policy.identifier and isinstance(table.this, exp.Identifier):
+            table.this.set("quoted", True)
+        if self.quote_policy.schema and isinstance(table.args.get("db"), exp.Identifier):
+            table.args["db"].set("quoted", True)
+        if self.quote_policy.database and isinstance(table.args.get("catalog"), exp.Identifier):
+            table.args["catalog"].set("quoted", True)
 
-    def _normalize(self, name: t.Optional[str], quoted: bool = True) -> t.Optional[exp.Identifier]:
-        if name is None:
-            return name
-
-        return (
-            exp.to_identifier(name, quoted=True)
-            if quoted
-            else normalize_identifiers(name, dialect=self.engine_adapter.dialect)
-        )
+        return normalize_identifiers(table, dialect=self.engine_adapter.dialect)
