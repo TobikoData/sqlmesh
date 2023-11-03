@@ -654,8 +654,8 @@ def star(
     relation: exp.Table,
     alias: t.Optional[exp.Identifier | exp.Column] = None,
     except_: t.Optional[exp.Array | exp.Tuple] = None,
-    prefix: t.Optional[exp.Literal] = None,
-    suffix: t.Optional[exp.Literal] = None,
+    prefix: exp.Literal = exp.Literal.string(""),
+    suffix: exp.Literal = exp.Literal.string(""),
     quote_identifiers: exp.Boolean = exp.true(),
 ) -> t.List[exp.Expression]:
     """Returns a list of projections for the given relation.
@@ -680,16 +680,16 @@ def star(
             f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean."
         )
     projections = []
-    exclude = []
+    exclude = set()
     kwargs = {"quoted": quote_identifiers.this}
     if alias:
         kwargs["table"] = alias.name
-    if except_ and isinstance(except_.expressions, list):
-        exclude.extend(
+    if except_:
+        exclude |= {
             e.name
             for e in except_.expressions
             if isinstance(e, (exp.Identifier, exp.Column))
-        )
+        }
     for column, type_ in evaluator.columns_to_types(relation.sql()).items():
         if column in exclude:
             continue
@@ -697,7 +697,7 @@ def star(
         s = suffix.this if suffix else ""
         projections.append(
             exp.cast(exp.column(column, **kwargs), type_).as_(
-                f"{p}{column}{s}", quoted=kwargs["quoted"]
+                f"{prefix.this}{column}{suffix.this}", quoted=kwargs["quoted"]
             )
         )
     return projections
