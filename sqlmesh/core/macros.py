@@ -676,9 +676,7 @@ def star(
     if suffix and not isinstance(suffix, exp.Literal):
         raise SQLMeshError(f"Invalid suffix '{suffix}'. Expected a literal.")
     if not isinstance(quote_identifiers, exp.Boolean):
-        raise SQLMeshError(
-            f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean."
-        )
+        raise SQLMeshError(f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean.")
     projections = []
     exclude = set()
     kwargs = {"quoted": quote_identifiers.this}
@@ -686,9 +684,7 @@ def star(
         kwargs["table"] = alias.name
     if except_:
         exclude |= {
-            e.name
-            for e in except_.expressions
-            if isinstance(e, (exp.Identifier, exp.Column))
+            e.name for e in except_.expressions if isinstance(e, (exp.Identifier, exp.Column))
         }
     for column, type_ in evaluator.columns_to_types(relation.sql()).items():
         if column in exclude:
@@ -704,9 +700,7 @@ def star(
 
 
 @macro()
-def generate_surrogate_key(
-    _: MacroEvaluator, *fields: exp.Column | exp.Identifier
-) -> exp.Func:
+def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifier) -> exp.Func:
     """Generates a surrogate key for the given fields.
 
     Example:
