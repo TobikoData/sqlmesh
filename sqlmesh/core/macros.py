@@ -689,8 +689,6 @@ def star(
     for column, type_ in evaluator.columns_to_types(relation.sql()).items():
         if column in exclude:
             continue
-        p = prefix.this if prefix else ""
-        s = suffix.this if suffix else ""
         projections.append(
             exp.cast(exp.column(column, **kwargs), type_).as_(
                 f"{prefix.this}{column}{suffix.this}", quoted=kwargs["quoted"]
