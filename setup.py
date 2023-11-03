@@ -66,6 +66,7 @@ setup(
             "black==22.6.0",
             "dbt-core",
             "dbt-duckdb>=1.4.2",
+            "dbt-snowflake",
             "Faker",
             "freezegun",
             "google-auth",
