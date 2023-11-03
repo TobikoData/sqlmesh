@@ -423,7 +423,9 @@ These pages describe the connection configuration options for each execution eng
 
 #### State connection
 
-Configuration for the state backend connection if different from the data warehouse connection. The data warehouse connection is used if the `state_connection` key is not specified.
+Configuration for the state backend connection if different from the data warehouse connection.
+
+The data warehouse connection is used if the `state_connection` key is not specified, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers and no state connection is specified, the state connection defaults to the scheduler's database.
 
 NOTE: Spark and Trino engines may not be used for the state connection.
 
