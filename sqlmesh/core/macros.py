@@ -648,6 +648,48 @@ def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
     return evaluator.eval_expression(condition)
 
 
+@macro()
+def star(
+    evaluator: MacroEvaluator,
+    relation: exp.Table,
+    alias: t.Optional[exp.Identifier] = None,
+    except_: t.Optional[exp.Array] = None,
+    prefix: t.Optional[exp.Literal] = None,
+    suffix: t.Optional[exp.Literal] = None,
+    quote_identifiers: exp.Boolean = exp.Boolean(this=True),
+) -> t.List[exp.Expression]:
+    if alias and not isinstance(alias, exp.Identifier):
+        raise SQLMeshError(f"Invalid alias '{alias}'. Expected an identifier.")
+    if except_ and not isinstance(except_, (exp.Array, exp.Tuple)):
+        raise SQLMeshError(f"Invalid except '{except_}'. Expected an array.")
+    if prefix and not isinstance(prefix, exp.Literal):
+        raise SQLMeshError(f"Invalid prefix '{prefix}'. Expected a literal.")
+    if suffix and not isinstance(suffix, exp.Literal):
+        raise SQLMeshError(f"Invalid suffix '{suffix}'. Expected a literal.")
+    if not isinstance(quote_identifiers, exp.Boolean):
+        raise SQLMeshError(
+            f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean."
+        )
+    projections = []
+    exclude = []
+    quoted = quote_identifiers.this
+    if except_ and isinstance(except_.expressions, list):
+        exclude.extend(
+            e.name for e in except_.expressions if isinstance(e, exp.Identifier)
+        )
+    for column, type_ in evaluator.columns_to_types(relation.sql()).items():
+        if column in exclude:
+            continue
+        p = prefix.this if prefix else ""
+        s = suffix.this if suffix else ""
+        projections.append(
+            exp.cast(exp.column(column, quoted=quoted), type_).as_(
+                f"{p}{column}{s}", quoted=quoted
+            )
+        )
+    return projections
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
