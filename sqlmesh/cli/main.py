@@ -143,9 +143,7 @@ def init(
     type=str,
     help="The SQL dialect to render the query as.",
 )
-@click.option(
-    "--no-pretty-print", is_flag=True, help="Disable pretty printing of the query."
-)
+@click.option("--no-pretty-print", is_flag=True, help="Disable pretty printing of the query.")
 @click.pass_context
 @error_handler
 def render(
