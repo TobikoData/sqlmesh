@@ -656,7 +656,7 @@ def star(
     except_: t.Optional[exp.Array | exp.Tuple] = None,
     prefix: t.Optional[exp.Literal] = None,
     suffix: t.Optional[exp.Literal] = None,
-    quote_identifiers: exp.Boolean = exp.Boolean(this=True),
+    quote_identifiers: exp.Boolean = exp.true(),
 ) -> t.List[exp.Expression]:
     """Returns a list of projections for the given relation.
 
@@ -707,6 +707,15 @@ def star(
 def generate_surrogate_key(
     _: MacroEvaluator, *fields: exp.Column | exp.Identifier
 ) -> exp.Func:
+    """Generates a surrogate key for the given fields.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @GENERATE_SURROGATE_KEY(a, b, c) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT MD5(CONCAT(COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'), COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'), COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_'))) FROM foo"
+    """
     default_null_value = exp.Literal.string("_sqlmesh_surrogate_key_null_")
     string_fields = []
     for field in fields:
