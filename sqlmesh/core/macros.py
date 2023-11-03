@@ -652,13 +652,22 @@ def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
 def star(
     evaluator: MacroEvaluator,
     relation: exp.Table,
-    alias: t.Optional[exp.Identifier] = None,
-    except_: t.Optional[exp.Array] = None,
+    alias: t.Optional[exp.Identifier | exp.Column] = None,
+    except_: t.Optional[exp.Array | exp.Tuple] = None,
     prefix: t.Optional[exp.Literal] = None,
     suffix: t.Optional[exp.Literal] = None,
     quote_identifiers: exp.Boolean = exp.Boolean(this=True),
 ) -> t.List[exp.Expression]:
-    if alias and not isinstance(alias, exp.Identifier):
+    """Returns a list of projections for the given relation.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @STAR(foo, bar, [c], 'baz_') FROM foo AS bar"
+        >>> MacroEvaluator(schema={"foo": {"a": "string", "b": "string", "c": "string", "d": "int"}}).transform(parse_one(sql)).sql()
+        'SELECT CAST("bar"."a" AS TEXT) AS "baz_a", CAST("bar"."b" AS TEXT) AS "baz_b", CAST("bar"."d" AS INT) AS "baz_d" FROM foo AS bar'
+    """
+    if alias and not isinstance(alias, (exp.Identifier, exp.Column)):
         raise SQLMeshError(f"Invalid alias '{alias}'. Expected an identifier.")
     if except_ and not isinstance(except_, (exp.Array, exp.Tuple)):
         raise SQLMeshError(f"Invalid except '{except_}'. Expected an array.")
@@ -672,10 +681,14 @@ def star(
         )
     projections = []
     exclude = []
-    quoted = quote_identifiers.this
+    kwargs = {"quoted": quote_identifiers.this}
+    if alias:
+        kwargs["table"] = alias.name
     if except_ and isinstance(except_.expressions, list):
         exclude.extend(
-            e.name for e in except_.expressions if isinstance(e, exp.Identifier)
+            e.name
+            for e in except_.expressions
+            if isinstance(e, (exp.Identifier, exp.Column))
         )
     for column, type_ in evaluator.columns_to_types(relation.sql()).items():
         if column in exclude:
@@ -683,8 +696,8 @@ def star(
         p = prefix.this if prefix else ""
         s = suffix.this if suffix else ""
         projections.append(
-            exp.cast(exp.column(column, quoted=quoted), type_).as_(
-                f"{p}{column}{s}", quoted=quoted
+            exp.cast(exp.column(column, **kwargs), type_).as_(
+                f"{p}{column}{s}", quoted=kwargs["quoted"]
             )
         )
     return projections
