@@ -6,6 +6,7 @@ from unittest.mock import call
 import pytest
 from dbt.adapters.base import BaseRelation
 from dbt.adapters.base.column import Column
+from dbt.contracts.relation import Policy
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
 
@@ -77,8 +78,8 @@ def test_adapter_relation(
     renderer = runtime_renderer(context, engine_adapter=adapter_mock)
 
     # bla and bob will be normalized to uppercase since we're dealing with Snowflake
-    bla_id = exp.Identifier(this="BLA", quoted=False)
-    bob_id = exp.Identifier(this="BOB", quoted=False)
+    bla_id = exp.to_identifier("BLA", quoted=False)
+    bob_id = exp.to_identifier("BOB", quoted=False)
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
     adapter_mock._get_data_objects.assert_has_calls([call(exp.Table(db=bla_id))])
@@ -95,6 +96,37 @@ def test_adapter_relation(
     )
     adapter_mock.drop_schema.assert_has_calls([call(bla_id)])
 
+    renderer(
+        "{%- set relation = api.Relation.create(schema='bla', identifier='bob') -%}"
+        "{{ adapter.drop_relation(relation) }}"
+    )
+    adapter_mock.drop_table.assert_has_calls([call(exp.Table(this=bob_id, db=bla_id))])
+
+    select_star_query: exp.Select = exp.maybe_parse("SELECT * FROM t", dialect="snowflake")
+
+    # The following call to run_query won't return dataframes and so we're expected to
+    # raise in adapter.execute right before returning from the method
+    with pytest.raises(AssertionError):
+        renderer("{{ run_query('SELECT * FROM t') }}")
+    adapter_mock.fetchdf.assert_has_calls([call(select_star_query, quote_identifiers=False)])
+
+    renderer("{% call statement('something') %} {{ 'SELECT * FROM t' }} {% endcall %}")
+    adapter_mock.execute.assert_has_calls([call(select_star_query, quote_identifiers=False)])
+
+    # Enforce case-sensitivity for database object names
+    setattr(
+        context.target.__class__,
+        "quote_policy",
+        Policy(database=True, schema=True, identifier=True),
+    )
+
+    adapter_mock.drop_table.reset_mock()
+    renderer = runtime_renderer(context, engine_adapter=adapter_mock)
+
+    bla_id = exp.to_identifier("bla", quoted=True)
+    bob_id = exp.to_identifier("bob", quoted=True)
+
+    # Ensures we'll pass lowercase names to the engine
     renderer(
         "{%- set relation = api.Relation.create(schema='bla', identifier='bob') -%}"
         "{{ adapter.drop_relation(relation) }}"
