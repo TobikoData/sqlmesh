@@ -172,13 +172,15 @@ class ManifestHelper:
             )
 
             test_model = _test_model(node)
+            node_config = _node_base_config(node)
+            node_config["database"] = node.database or self.target.database
 
             test = TestConfig(
                 sql=sql,
                 model_name=test_model,
                 test_kwargs=node.test_metadata.kwargs if hasattr(node, "test_metadata") else {},
                 dependencies=dependencies,
-                **_node_base_config(node),
+                **node_config,
             )
             self._tests_per_package[node.package_name][node.name.lower()] = test
             if test_model:
@@ -194,6 +196,7 @@ class ManifestHelper:
                 self._tests_by_owner[node.name]
                 + self._tests_by_owner[f"{node.package_name}.{node.name}"]
             )
+            node_config = _node_base_config(node)
 
             if node.resource_type == "model":
                 sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
@@ -209,13 +212,13 @@ class ManifestHelper:
                     sql=sql,
                     dependencies=dependencies,
                     tests=tests,
-                    **_node_base_config(node),
+                    **node_config,
                 )
             else:
                 self._seeds_per_package[node.package_name][node.name] = SeedConfig(
                     dependencies=Dependencies(macros=macro_references),
                     tests=tests,
-                    **_node_base_config(node),
+                    **node_config,
                 )
 
     @property
