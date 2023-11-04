@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing as t
+from collections import OrderedDict
 from enum import Enum
 from functools import reduce
 from string import Template
@@ -706,7 +707,7 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifi
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT @GENERATE_SURROGATE_KEY(a, b, c) FROM foo"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT MD5(CONCAT(COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'), COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'), COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_'))) FROM foo"
+        "SELECT MD5(CONCAT(COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_'))) FROM foo"
     """
     default_null_value = exp.Literal.string("_sqlmesh_surrogate_key_null_")
     string_fields: t.List[exp.Expression] = []
@@ -724,8 +725,8 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifi
 
 
 @macro()
-def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
-    """Adds numbers together, returning NULL if all terms are NULL.
+def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Case:
+    """Adds numbers together, substitutes nulls for 0s and only returns null if all fields are null.
 
     Example:
         >>> from sqlglot import parse_one
@@ -734,45 +735,73 @@ def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         "SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) END FROM foo"
     """
-    null_cond = exp.and_(*[exp.func("IS_NULL", field) for field in fields])
+    null_cond = exp.and_(*[field.is_(exp.null()) for field in fields])
     case = exp.Case().when(null_cond, exp.null())
-    terms = []
+    terms: t.List[exp.Func | exp.Add] = []
     for field in fields:
-        terms.append(exp.func("COALESCE", field, exp.Literal.number(0)))
-    return case.else_(reduce(lambda a, b: a + b, terms))  # type: ignore
+        terms.append(exp.func("COALESCE", field, 0))
+    return case.else_(reduce(lambda a, b: a + b, terms))
 
 
 @macro()
-def safe_subtract(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
-    """Subtract numbers, returning NULL if all terms are NULL.
+def safe_sub(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
+    """Subtract numbers, substitutes nulls for 0s and only returns null if all fields are null.
 
     Example:
         >>> from sqlglot import parse_one
         >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "SELECT @SAFE_SUBTRACT(a, b) FROM foo"
+        >>> sql = "SELECT @SAFE_SUB(a, b) FROM foo"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         "SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) END FROM foo"
     """
-    null_cond = exp.and_(*[exp.func("IS_NULL", field) for field in fields])
+    null_cond = exp.and_(*[field.is_(exp.null()) for field in fields])
     case = exp.Case().when(null_cond, exp.null())
-    terms = []
+    terms: t.List[exp.Func | exp.Sub] = []
     for field in fields:
-        terms.append(exp.func("COALESCE", field, exp.Literal.number(0)))
-    return case.else_(reduce(lambda a, b: a - b, terms))  # type: ignore
+        terms.append(exp.func("COALESCE", field, 0))
+    return case.else_(reduce(lambda a, b: a - b, terms))
 
 
 @macro()
-def safe_divide(_: MacroEvaluator, numerator: exp.Column, denominator: exp.Column) -> exp.Div:
-    """Divides numbers, returning NULL if all terms are NULL.
+def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expression) -> exp.Div:
+    """Divides numbers, returns null if the denominator is 0.
 
     Example:
         >>> from sqlglot import parse_one
         >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "SELECT @SAFE_DIVIDE(a, b) FROM foo"
+        >>> sql = "SELECT @SAFE_DIV(a, b) FROM foo"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT a / NULLIF(b, 0) FROM foo"
+        "SELECT a / CASE WHEN b = 0 THEN NULL ELSE b FROM foo"
     """
-    return numerator / exp.func("NULLIF", denominator, exp.Literal.number(0))
+    return numerator / exp.Case().when(denominator.eq(0), exp.null()).else_(denominator)
+
+
+@macro()
+def union(evaluator: MacroEvaluator, *tables: exp.Table) -> exp.Union:
+    """Returns a UNION of the given tables.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@UNION(foo, bar)"
+        >>> MacroEvaluator(...).transform(parse_one(sql)).sql()
+        TODO: add example
+    """
+    column_sets: t.Dict[str, t.Set[t.Tuple[str, exp.DataType]]] = {}
+    columns_seen: t.Dict[str, None] = OrderedDict()  # Ensure order is deterministic
+    for table in tables:
+        map = evaluator.columns_to_types(table.sql())
+        column_sets[table.sql()] = set(map.items())
+        for c in map:
+            columns_seen[c] = None
+    superset = reduce(lambda a, b: a | b, column_sets.values())
+    precedence = {c: i for i, c in enumerate(columns_seen.keys())}
+    projection = [
+        exp.cast(exp.column(name), typ).as_(name)
+        for name, typ in sorted(superset, key=lambda c: precedence[c[0]])
+    ]
+    selects: t.List[exp.Unionable] = [exp.select(*projection).from_(t) for t in tables]
+    return t.cast(exp.Union, reduce(lambda a, b: a.union(b), selects))
 
 
 def normalize_macro_name(name: str) -> str:
