@@ -804,6 +804,32 @@ def union(evaluator: MacroEvaluator, *tables: exp.Table) -> exp.Union:
     return t.cast(exp.Union, reduce(lambda a, b: a.union(b), selects))
 
 
+@macro()
+def width_bucket(
+    evaluator: MacroEvaluator,
+    value: exp.Expression,
+    lower: exp.Expression | exp.Literal,
+    upper: exp.Expression | exp.Literal,
+    num_buckets: exp.Literal | exp.Expression = exp.Literal.number(10),
+) -> exp.Add:
+    """Returns the bucket number to which a value can be assigned.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @WIDTH_BUCKET(a, 1, 10, 5) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT CASE WHEN (CAST(a AS FLOAT) % CAST(((10 - 1) / CASE WHEN 5 = 0 THEN NULL ELSE 5 END) AS FLOAT)) = 0 THEN 1 ELSE 0 END + LEAST(CAST(CEIL((a - 1) / ((10 - 1) / CASE WHEN 5 = 0 THEN NULL ELSE 5 END)) AS INT), 5 + 1) FROM foo'
+    """
+    num = exp.Literal.number
+    bin_size = exp.Paren(this=safe_div(evaluator, (upper - lower), num_buckets))
+    return exp.Case().when(
+        (exp.cast(value, "FLOAT") % exp.cast(bin_size, "FLOAT")).eq(num(0)), num(1)
+    ).else_(num(0)) + exp.func(
+        "LEAST", exp.cast(exp.func("CEIL", (value - lower) / bin_size), "INT"), num_buckets + 1
+    )
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
