@@ -871,6 +871,43 @@ def haversine_distance(
     )
 
 
+@macro()
+def pivot(
+    evaluator: MacroEvaluator,
+    column: exp.Column,
+    values: exp.Array | exp.Tuple,
+    alias: exp.Boolean = exp.true(),
+    agg: exp.Literal = exp.Literal.string("SUM"),
+    cmp: exp.Literal = exp.Literal.string("="),
+    prefix: exp.Literal = exp.Literal.string(""),
+    suffix: exp.Literal = exp.Literal.string(""),
+    then_value: exp.Literal = exp.Literal.number(1),
+    else_value: exp.Literal = exp.Literal.number(0),
+    quote: exp.Boolean = exp.true(),
+    distinct: exp.Boolean = exp.false(),
+) -> t.List[exp.Expression]:
+    """Returns a list of projections as a result of pivoting the given column on the given values.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT date_day, @PIVOT(status, ['cancelled', 'completed']) FROM rides GROUP BY 1"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT date_day, SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) FROM rides GROUP BY 1"
+    """
+    aggregates: t.List[exp.Expression] = []
+    for value in values.expressions:
+        proj = f"{agg.this}("
+        if distinct.this:
+            proj += "DISTINCT "
+        proj += f"CASE WHEN {column} {cmp.this} {value} THEN {then_value} ELSE {else_value} END) "
+        node = evaluator.parse_one(proj)
+        if alias.this:
+            node.as_(f"{prefix.this}{value}{suffix.this}", quoted=quote.this, copy=False)
+        aggregates.append(node)
+    return aggregates
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
