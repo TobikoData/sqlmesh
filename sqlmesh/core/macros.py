@@ -709,7 +709,7 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifi
         "SELECT MD5(CONCAT(COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'), COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'), COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_'))) FROM foo"
     """
     default_null_value = exp.Literal.string("_sqlmesh_surrogate_key_null_")
-    string_fields = []
+    string_fields: t.List[exp.Expression] = []
     for i, field in enumerate(fields):
         if i > 0:
             string_fields.append(exp.Literal.string("|"))
@@ -721,6 +721,58 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifi
             )
         )
     return exp.func("MD5", exp.func("CONCAT", *string_fields))
+
+
+@macro()
+def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
+    """Adds numbers together, returning NULL if all terms are NULL.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @SAFE_ADD(a, b) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) END FROM foo"
+    """
+    null_cond = exp.and_(*[exp.func("IS_NULL", field) for field in fields])
+    case = exp.Case().when(null_cond, exp.null())
+    terms = []
+    for field in fields:
+        terms.append(exp.func("COALESCE", field, exp.Literal.number(0)))
+    return case.else_(reduce(lambda a, b: a + b, terms)) # type: ignore
+
+
+@macro()
+def safe_subtract(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
+    """Subtract numbers, returning NULL if all terms are NULL.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @SAFE_SUBTRACT(a, b) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) END FROM foo"
+    """
+    null_cond = exp.and_(*[exp.func("IS_NULL", field) for field in fields])
+    case = exp.Case().when(null_cond, exp.null())
+    terms = []
+    for field in fields:
+        terms.append(exp.func("COALESCE", field, exp.Literal.number(0)))
+    return case.else_(reduce(lambda a, b: a - b, terms)) # type: ignore
+
+
+@macro()
+def safe_divide(_: MacroEvaluator, numerator: exp.Column, denominator: exp.Column) -> exp.Div:
+    """Divides numbers, returning NULL if all terms are NULL.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @SAFE_DIVIDE(a, b) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT a / NULLIF(b, 0) FROM foo"
+    """
+    return numerator / exp.func("NULLIF", denominator, exp.Literal.number(0))
 
 
 def normalize_macro_name(name: str) -> str:
