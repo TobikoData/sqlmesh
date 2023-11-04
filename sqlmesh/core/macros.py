@@ -830,6 +830,47 @@ def width_bucket(
     )
 
 
+@macro()
+def haversine_distance(
+    _: MacroEvaluator,
+    lat1: exp.Expression,
+    lon1: exp.Expression,
+    lat2: exp.Expression,
+    lon2: exp.Expression,
+    unit: exp.Literal = exp.Literal.string("mi"),
+) -> exp.Mul:
+    """Returns the haversine distance between two points.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @HAVERSINE_DISTANCE(driver_y, driver_x, passenger_y, passenger_x, 'mi') FROM rides"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT 7922 * ASIN(SQRT((POWER(SIN(RADIANS((passenger_y - driver_y) / 2)), 2)) + (COS(RADIANS(driver_y)) * COS(RADIANS(passenger_y)) * POWER(SIN(RADIANS((passenger_x - driver_x) / 2)), 2)))) * 1 FROM rides'
+    """
+    if unit.this == "mi":
+        conversion_rate = 1
+    elif unit.this == "km":
+        conversion_rate = 1.60934
+    else:
+        raise SQLMeshError(f"Invalid unit '{unit}'. Expected 'mi' or 'km'.")
+    return (
+        2
+        * 3961
+        * exp.func(
+            "ASIN",
+            exp.func(
+                "SQRT",
+                exp.func("POWER", exp.func("SIN", exp.func("RADIANS", (lat2 - lat1) / 2)), 2)
+                + exp.func("COS", exp.func("RADIANS", lat1))
+                * exp.func("COS", exp.func("RADIANS", lat2))
+                * exp.func("POWER", exp.func("SIN", exp.func("RADIANS", (lon2 - lon1) / 2)), 2),
+            ),
+        )
+        * conversion_rate
+    )
+
+
 def normalize_macro_name(name: str) -> str:
     """Prefix macro name with @ and upcase"""
     return f"@{name.upper()}"
