@@ -739,7 +739,7 @@ def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
     terms = []
     for field in fields:
         terms.append(exp.func("COALESCE", field, exp.Literal.number(0)))
-    return case.else_(reduce(lambda a, b: a + b, terms)) # type: ignore
+    return case.else_(reduce(lambda a, b: a + b, terms))  # type: ignore
 
 
 @macro()
@@ -758,7 +758,7 @@ def safe_subtract(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
     terms = []
     for field in fields:
         terms.append(exp.func("COALESCE", field, exp.Literal.number(0)))
-    return case.else_(reduce(lambda a, b: a - b, terms)) # type: ignore
+    return case.else_(reduce(lambda a, b: a - b, terms))  # type: ignore
 
 
 @macro()
