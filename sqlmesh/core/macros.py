@@ -733,7 +733,7 @@ def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Case:
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT @SAFE_ADD(a, b) FROM foo"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) END FROM foo"
+        'SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) END FROM foo'
     """
     null_cond = exp.and_(*[field.is_(exp.null()) for field in fields])
     case = exp.Case().when(null_cond, exp.null())
@@ -752,7 +752,7 @@ def safe_sub(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT @SAFE_SUB(a, b) FROM foo"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) END FROM foo"
+        'SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) END FROM foo'
     """
     null_cond = exp.and_(*[field.is_(exp.null()) for field in fields])
     case = exp.Case().when(null_cond, exp.null())
@@ -771,7 +771,7 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT @SAFE_DIV(a, b) FROM foo"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        "SELECT a / CASE WHEN b = 0 THEN NULL ELSE b FROM foo"
+        'SELECT a / CASE WHEN b = 0 THEN NULL ELSE b END FROM foo'
     """
     return numerator / exp.Case().when(denominator.eq(0), exp.null()).else_(denominator)
 
@@ -784,8 +784,8 @@ def union(evaluator: MacroEvaluator, *tables: exp.Table) -> exp.Union:
         >>> from sqlglot import parse_one
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@UNION(foo, bar)"
-        >>> MacroEvaluator(...).transform(parse_one(sql)).sql()
-        TODO: add example
+        >>> MacroEvaluator(schema={"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"a": "int", "b": "int", "c": "string"}}).transform(parse_one(sql)).sql()
+        'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
     """
     column_sets: t.Dict[str, t.Set[t.Tuple[str, exp.DataType]]] = {}
     columns_seen: t.Dict[str, None] = OrderedDict()  # Ensure order is deterministic
@@ -794,7 +794,7 @@ def union(evaluator: MacroEvaluator, *tables: exp.Table) -> exp.Union:
         column_sets[table.sql()] = set(map.items())
         for c in map:
             columns_seen[c] = None
-    superset = reduce(lambda a, b: a | b, column_sets.values())
+    superset = reduce(lambda a, b: a.intersection(b), column_sets.values())
     precedence = {c: i for i, c in enumerate(columns_seen.keys())}
     projection = [
         exp.cast(exp.column(name), typ).as_(name)
