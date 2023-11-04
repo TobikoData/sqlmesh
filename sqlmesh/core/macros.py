@@ -849,7 +849,7 @@ def haversine_distance(
         'SELECT 7922 * ASIN(SQRT((POWER(SIN(RADIANS((passenger_y - driver_y) / 2)), 2)) + (COS(RADIANS(driver_y)) * COS(RADIANS(passenger_y)) * POWER(SIN(RADIANS((passenger_x - driver_x) / 2)), 2)))) * 1 FROM rides'
     """
     if unit.this == "mi":
-        conversion_rate = 1
+        conversion_rate = 1.0
     elif unit.this == "km":
         conversion_rate = 1.60934
     else:
