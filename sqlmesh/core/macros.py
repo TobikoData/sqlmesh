@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-from collections import OrderedDict
 from enum import Enum
 from functools import reduce
 from string import Template
@@ -777,31 +776,38 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
 
 
 @macro()
-def union(evaluator: MacroEvaluator, *tables: exp.Table) -> exp.Union:
+def union(
+    evaluator: MacroEvaluator,
+    type_: exp.Literal = exp.Literal.string("ALL"),
+    *tables: exp.Table,
+) -> exp.Union:
     """Returns a UNION of the given tables.
 
     Example:
         >>> from sqlglot import parse_one
         >>> from sqlmesh.core.macros import MacroEvaluator
-        >>> sql = "@UNION(foo, bar)"
+        >>> sql = "@UNION('distinct', foo, bar)"
         >>> MacroEvaluator(schema={"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"a": "int", "b": "int", "c": "string"}}).transform(parse_one(sql)).sql()
         'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
     """
-    column_sets: t.Dict[str, t.Set[t.Tuple[str, exp.DataType]]] = {}
-    columns_seen: t.Dict[str, None] = OrderedDict()  # Ensure order is deterministic
+    if type_.this.upper() not in ("ALL", "DISTINCT"):
+        raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
+    column_sets: t.List[t.Set[t.Tuple[str, exp.DataType]]] = []
+    columns_seen: t.Dict[str, None] = {}  # Ensure order is deterministic, 3.6+ dicts are ordered
     for table in tables:
         map = evaluator.columns_to_types(table.sql())
-        column_sets[table.sql()] = set(map.items())
+        column_sets.append(set(map.items()))
         for c in map:
             columns_seen[c] = None
-    superset = reduce(lambda a, b: a.intersection(b), column_sets.values())
+    superset = reduce(lambda a, b: a.intersection(b), column_sets)
     precedence = {c: i for i, c in enumerate(columns_seen.keys())}
     projection = [
         exp.cast(exp.column(name), typ).as_(name)
         for name, typ in sorted(superset, key=lambda c: precedence[c[0]])
     ]
+    disinct = type_.this.upper() == "DISTINCT"
     selects: t.List[exp.Unionable] = [exp.select(*projection).from_(t) for t in tables]
-    return t.cast(exp.Union, reduce(lambda a, b: a.union(b), selects))
+    return t.cast(exp.Union, reduce(lambda a, b: a.union(b, disinct=disinct), selects))
 
 
 @macro()
