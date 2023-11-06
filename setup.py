@@ -46,7 +46,7 @@ setup(
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
-        "sqlglot~=19.0.2",
+        "sqlglot~=19.0.3",
     ],
     extras_require={
         "bigquery": [
@@ -66,6 +66,7 @@ setup(
             "black==22.6.0",
             "dbt-core",
             "dbt-duckdb>=1.4.2",
+            "dbt-snowflake",
             "Faker",
             "freezegun",
             "google-auth",

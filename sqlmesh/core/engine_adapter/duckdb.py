@@ -53,6 +53,11 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
         Returns all the data objects that exist in the given schema and optionally catalog.
         """
         current_catalog = self.get_current_catalog()
+
+        if isinstance(schema_name, exp.Table):
+            # Ensures we don't generate identifier quotes
+            schema_name = ".".join(part.name for part in schema_name.parts)
+
         query = f"""
             SELECT
               '{current_catalog}' as catalog,

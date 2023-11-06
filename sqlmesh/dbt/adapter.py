@@ -8,6 +8,7 @@ import pandas as pd
 from dbt.contracts.relation import Policy
 from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -202,19 +203,15 @@ class RuntimeAdapter(BaseAdapter):
         return seq_get(matching_relations, 0)
 
     def list_relations(self, database: t.Optional[str], schema: str) -> t.List[BaseRelation]:
-        reference_relation = self.relation_type.create(
-            database=database,
-            schema=schema,
-        )
+        reference_relation = self.relation_type.create(database=database, schema=schema)
         return self.list_relations_without_caching(reference_relation)
 
     def list_relations_without_caching(self, schema_relation: BaseRelation) -> t.List[BaseRelation]:
         from dbt.contracts.relation import RelationType
 
         assert schema_relation.schema is not None
-        data_objects = self.engine_adapter._get_data_objects(
-            schema_(schema_relation.schema, schema_relation.database)
-        )
+        schema = self._normalize(schema_(schema_relation.schema, schema_relation.database))
+
         relations = [
             self.relation_type.create(
                 database=do.catalog,
@@ -226,14 +223,15 @@ class RuntimeAdapter(BaseAdapter):
                 if do.type.is_unknown
                 else RelationType(do.type.lower().replace("_", "")),
             )
-            for do in data_objects
+            for do in self.engine_adapter._get_data_objects(schema)
         ]
         return relations
 
     def get_columns_in_relation(self, relation: BaseRelation) -> t.List[Column]:
         from dbt.adapters.base.column import Column
 
-        mapped_table = self._map_table_name(relation.database, relation.schema, relation.identifier)
+        table = self._normalize(self._relation_to_table(relation))
+        mapped_table = self._map_table_name(table.catalog, table.db, table.name)
 
         return [
             Column.from_description(
@@ -255,15 +253,17 @@ class RuntimeAdapter(BaseAdapter):
 
     def create_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
-            self.engine_adapter.create_schema(relation.schema)
+            schema = self._normalize(schema_(relation.schema, relation.database))
+            self.engine_adapter.create_schema(schema)
 
     def drop_schema(self, relation: BaseRelation) -> None:
         if relation.schema is not None:
-            self.engine_adapter.drop_schema(relation.schema)
+            schema = self._normalize(schema_(relation.schema, relation.database))
+            self.engine_adapter.drop_schema(schema)
 
     def drop_relation(self, relation: BaseRelation) -> None:
         if relation.schema is not None and relation.identifier is not None:
-            self.engine_adapter.drop_table(f"{relation.schema}.{relation.identifier}")
+            self.engine_adapter.drop_table(self._normalize(self._relation_to_table(relation)))
 
     def execute(
         self, sql: str, auto_begin: bool = False, fetch: bool = False
@@ -274,7 +274,7 @@ class RuntimeAdapter(BaseAdapter):
         from sqlmesh.dbt.util import pandas_to_agate
 
         # mypy bug: https://github.com/python/mypy/issues/10740
-        exec_func: t.Callable[[exp.Expression], None | pd.DataFrame] = (
+        exec_func: t.Callable[..., None | pd.DataFrame] = (
             self.engine_adapter.fetchdf if fetch else self.engine_adapter.execute  # type: ignore
         )
 
@@ -284,9 +284,9 @@ class RuntimeAdapter(BaseAdapter):
         if auto_begin:
             # TODO: This could be a bug. I think dbt leaves the transaction open while we close immediately.
             with self.engine_adapter.transaction():
-                resp = exec_func(expression)
+                resp = exec_func(expression, quote_identifiers=False)
         else:
-            resp = exec_func(expression)
+            resp = exec_func(expression, quote_identifiers=False)
 
         # TODO: Properly fill in adapter response
         if fetch:
@@ -319,3 +319,17 @@ class RuntimeAdapter(BaseAdapter):
         logger.debug("Resolved ref '%s' to snapshot table '%s'", name, physical_table_name)
 
         return exp.to_table(physical_table_name, dialect=self.engine_adapter.dialect)
+
+    def _relation_to_table(self, relation: BaseRelation) -> exp.Table:
+        assert relation.identifier is not None
+        return exp.table_(relation.identifier, db=relation.schema, catalog=relation.database)
+
+    def _normalize(self, table: exp.Table) -> exp.Table:
+        if self.quote_policy.identifier and isinstance(table.this, exp.Identifier):
+            table.this.set("quoted", True)
+        if self.quote_policy.schema and isinstance(table.args.get("db"), exp.Identifier):
+            table.args["db"].set("quoted", True)
+        if self.quote_policy.database and isinstance(table.args.get("catalog"), exp.Identifier):
+            table.args["catalog"].set("quoted", True)
+
+        return normalize_identifiers(table, dialect=self.engine_adapter.dialect)
