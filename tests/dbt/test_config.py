@@ -519,3 +519,11 @@ def test_db_type_to_column_class():
 
 def test_db_type_to_quote_policy():
     assert isinstance(TARGET_TYPE_TO_CONFIG_CLASS["duckdb"].quote_policy, Policy)
+
+
+def test_variable_override():
+    project_root = "tests/fixtures/dbt/sushi_test"
+    project = Project.load(
+        DbtContext(project_root=Path(project_root)), variables={"yet_another_var": 2}
+    )
+    assert project.packages["sushi"].variables["yet_another_var"] == 2

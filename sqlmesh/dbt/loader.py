@@ -33,6 +33,7 @@ def sqlmesh_config(
     project_root: t.Optional[Path] = None,
     state_connection: t.Optional[ConnectionConfig] = None,
     dbt_target_name: t.Optional[str] = None,
+    variables: t.Optional[t.Dict[str, t.Any]] = None,
     **kwargs: t.Any,
 ) -> Config:
     project_root = project_root or Path()
@@ -41,17 +42,23 @@ def sqlmesh_config(
     model_defaults = kwargs.get("model_defaults", ModelDefaultsConfig())
     model_defaults.dialect = profile.target.type
 
+    loader_kwargs = kwargs.pop("loader_kwargs", {})
+    if variables is not None:
+        loader_kwargs["variables"] = variables
+
     return Config(
         default_gateway=profile.target_name,
         gateways={profile.target_name: GatewayConfig(connection=profile.target.to_sqlmesh(), state_connection=state_connection)},  # type: ignore
         loader=DbtLoader,
+        loader_kwargs=loader_kwargs,
         model_defaults=model_defaults,
         **kwargs,
     )
 
 
 class DbtLoader(Loader):
-    def __init__(self) -> None:
+    def __init__(self, variables: t.Optional[t.Dict[str, t.Any]] = None) -> None:
+        self._variables = variables
         self._project: t.Optional[Project] = None
         self._macros_max_mtime: t.Optional[float] = None
         super().__init__()
@@ -128,7 +135,8 @@ class DbtLoader(Loader):
                 project_root=self._context.path,
                 target_name=target_name,
                 sqlmesh_config=self._context.config,
-            )
+            ),
+            variables=self._variables,
         )
         for path in self._project.project_files:
             self._track_file(path)
