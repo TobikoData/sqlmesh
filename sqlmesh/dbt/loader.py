@@ -229,7 +229,12 @@ class DbtLoader(Loader):
 
         def _cache_entry_id(self, target_path: Path) -> str:
             max_mtime = self._max_mtime_for_path(target_path)
-            return str(int(max_mtime)) if max_mtime is not None else "na"
+            return "__".join(
+                [
+                    str(int(max_mtime)) if max_mtime is not None else "na",
+                    self._loader._context.config.fingerprint,
+                ]
+            )
 
         def _max_mtime_for_path(self, target_path: Path) -> t.Optional[float]:
             project_root = self._project.context.project_root
