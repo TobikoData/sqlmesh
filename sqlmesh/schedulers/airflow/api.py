@@ -46,7 +46,7 @@ def apply_plan() -> Response:
             PlanDagState.from_state_sync(state_sync).add_dag_spec(spec)
             return make_response(jsonify(request_id=spec.request_id), 201)
     except Exception as ex:
-        logger.exception("Failed to create a plan DAG spec")
+        logger.exception("Failed to create a plan DAG spec from request:\n%s", request.json)
         return _error(str(ex))
 
 
