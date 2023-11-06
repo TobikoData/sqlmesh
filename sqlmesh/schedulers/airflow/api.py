@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import typing as t
 from functools import wraps
 
@@ -14,6 +15,9 @@ from sqlmesh.schedulers.airflow import common, util
 from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
+
+logger = logging.getLogger(__name__)
+
 
 sqlmesh_api_v1 = Blueprint(
     c.SQLMESH,
@@ -42,6 +46,7 @@ def apply_plan() -> Response:
             PlanDagState.from_state_sync(state_sync).add_dag_spec(spec)
             return make_response(jsonify(request_id=spec.request_id), 201)
     except Exception as ex:
+        logger.exception("Failed to create a plan DAG spec")
         return _error(str(ex))
 
 
