@@ -16,7 +16,6 @@ from sqlmesh import Config, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject
-from sqlmesh.utils import nullsafe_join
 from sqlmesh.utils.date import to_ds
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -147,7 +146,7 @@ class TestContext:
 
     def schema(self, schema_name: str, catalog_name: t.Optional[str] = None) -> str:
         return normalize_model_name(
-            nullsafe_join(".", catalog_name, schema_name), dialect=self.dialect
+            ".".join(p for p in (catalog_name, schema_name) if p), dialect=self.dialect
         )
 
     def get_current_data(self, table: exp.Table) -> pd.DataFrame:
