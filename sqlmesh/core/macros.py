@@ -28,6 +28,7 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
 if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
 
 
@@ -278,12 +279,18 @@ class MacroEvaluator:
             self._jinja_env = JinjaMacroRegistry().build_environment(**jinja_env_methods)
         return self._jinja_env
 
-    def columns_to_types(self, model_name: str) -> t.Dict[str, exp.DataType]:
+    def columns_to_types(self, model_name: TableName | exp.Column) -> t.Dict[str, exp.DataType]:
         """Returns the columns-to-types mapping corresponding to the specified model."""
         if not isinstance(self._schema, MappingSchema):
             self.columns_to_types_called = True
             return {"__schema_unavailable_at_load__": exp.DataType.build("unknown")}
 
+        if isinstance(model_name, exp.Column):
+            model_name = exp.table_(
+                model_name.this,
+                db=model_name.args.get("table"),
+                catalog=model_name.args.get("db"),
+            )
         columns_to_types = self._schema.find(exp.to_table(model_name))
         if columns_to_types is None:
             raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
@@ -680,13 +687,24 @@ def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
 def star(
     evaluator: MacroEvaluator,
     relation: exp.Table,
-    alias: t.Optional[exp.Identifier | exp.Column] = None,
-    except_: t.Optional[exp.Array | exp.Tuple] = None,
+    alias: exp.Column = exp.column(""),
+    except_: exp.Array | exp.Tuple = exp.Tuple(this=[]),
     prefix: exp.Literal = exp.Literal.string(""),
     suffix: exp.Literal = exp.Literal.string(""),
     quote_identifiers: exp.Boolean = exp.true(),
 ) -> t.List[exp.Alias]:
     """Returns a list of projections for the given relation.
+
+    Args:
+        evaluator: MacroEvaluator that invoked the macro
+        relation: The relation to select star from
+        alias: The alias of the relation
+        except_: Columns to exclude
+        prefix: A prefix to use for all selections
+        suffix: A suffix to use for all selections
+        quote_identifiers: Whether or not quote the resulting aliases, defaults to true
+    Returns:
+        An array of columns.
 
     Example:
         >>> from sqlglot import parse_one
@@ -705,28 +723,21 @@ def star(
         raise SQLMeshError(f"Invalid suffix '{suffix}'. Expected a literal.")
     if not isinstance(quote_identifiers, exp.Boolean):
         raise SQLMeshError(f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean.")
-    projections: t.List[exp.Alias] = []
-    exclude = set()
-    kwargs = {"quoted": quote_identifiers.this}
-    if alias:
-        kwargs["table"] = alias.name
-    if except_:
-        exclude |= {
-            e.name for e in except_.expressions if isinstance(e, (exp.Identifier, exp.Column))
-        }
-    for column, type_ in evaluator.columns_to_types(relation.sql()).items():
-        if column in exclude:
-            continue
-        projections.append(
-            exp.cast(exp.column(column, **kwargs), type_).as_(
-                f"{prefix.this}{column}{suffix.this}", quoted=kwargs["quoted"]
-            )
+
+    exclude = {e.name for e in except_.expressions}
+    quoted = quote_identifiers.this
+
+    return [
+        exp.cast(exp.column(column, table=alias.name, quoted=quoted), type_).as_(
+            f"{prefix.this}{column}{suffix.this}", quoted=quoted
         )
-    return projections
+        for column, type_ in evaluator.columns_to_types(relation).items()
+        if column not in exclude
+    ]
 
 
 @macro()
-def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifier) -> exp.Func:
+def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column) -> exp.Func:
     """Generates a surrogate key for the given fields.
 
     Example:
@@ -736,7 +747,6 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifi
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         "SELECT MD5(CONCAT(COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_'))) FROM foo"
     """
-    default_null_value = exp.Literal.string("_sqlmesh_surrogate_key_null_")
     string_fields: t.List[exp.Expression] = []
     for i, field in enumerate(fields):
         if i > 0:
@@ -744,8 +754,8 @@ def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifi
         string_fields.append(
             exp.func(
                 "COALESCE",
-                exp.cast(field, exp.DataType.build("string")),
-                default_null_value,
+                exp.cast(field, exp.DataType.build("text")),
+                exp.Literal.string("_sqlmesh_surrogate_key_null_"),
             )
         )
     return exp.func("MD5", exp.func("CONCAT", *string_fields))
@@ -762,12 +772,11 @@ def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Case:
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) END FROM foo'
     """
-    null_cond = exp.and_(*[field.is_(exp.null()) for field in fields])
-    case = exp.Case().when(null_cond, exp.null())
-    terms: t.List[exp.Func | exp.Add] = []
-    for field in fields:
-        terms.append(exp.func("COALESCE", field, 0))
-    return case.else_(reduce(lambda a, b: a + b, terms))
+    return (
+        exp.Case()
+        .when(exp.and_(*(field.is_(exp.null()) for field in fields)), exp.null())
+        .else_(reduce(lambda a, b: a + b, [exp.func("COALESCE", field, 0) for field in fields]))  # type: ignore
+    )
 
 
 @macro()
@@ -781,12 +790,11 @@ def safe_sub(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
         'SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) END FROM foo'
     """
-    null_cond = exp.and_(*[field.is_(exp.null()) for field in fields])
-    case = exp.Case().when(null_cond, exp.null())
-    terms: t.List[exp.Func | exp.Sub] = []
-    for field in fields:
-        terms.append(exp.func("COALESCE", field, 0))
-    return case.else_(reduce(lambda a, b: a - b, terms))
+    return (
+        exp.Case()
+        .when(exp.and_(*(field.is_(exp.null()) for field in fields)), exp.null())
+        .else_(reduce(lambda a, b: a - b, [exp.func("COALESCE", field, 0) for field in fields]))  # type: ignore
+    )
 
 
 @macro()
@@ -798,44 +806,48 @@ def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expr
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT @SAFE_DIV(a, b) FROM foo"
         >>> MacroEvaluator().transform(parse_one(sql)).sql()
-        'SELECT a / CASE WHEN b = 0 THEN NULL ELSE b END FROM foo'
+        'SELECT a / NULLIF(b, 0) FROM foo'
     """
-    return numerator / exp.Case().when(denominator.eq(0), exp.null()).else_(denominator)
+    return numerator / exp.func("NULLIF", denominator, 0)
 
 
 @macro()
 def union(
     evaluator: MacroEvaluator,
     type_: exp.Literal = exp.Literal.string("ALL"),
-    *tables: exp.Table,
-) -> exp.Union:
-    """Returns a UNION of the given tables.
+    *tables: exp.Column,  # These represent tables but the ast node will be columns
+) -> exp.Unionable:
+    """Returns a UNION of the given tables. Only choosing columns that have the same name and type.
 
     Example:
         >>> from sqlglot import parse_one
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@UNION('distinct', foo, bar)"
-        >>> MacroEvaluator(schema={"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"a": "int", "b": "int", "c": "string"}}).transform(parse_one(sql)).sql()
+        >>> MacroEvaluator(schema={"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}}).transform(parse_one(sql)).sql()
         'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
     """
-    if type_.this.upper() not in ("ALL", "DISTINCT"):
+    kind = type_.name.upper()
+    if kind not in ("ALL", "DISTINCT"):
         raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
-    column_sets: t.List[t.Set[t.Tuple[str, exp.DataType]]] = []
-    columns_seen: t.Dict[str, None] = {}  # Ensure order is deterministic, 3.6+ dicts are ordered
-    for table in tables:
-        map = evaluator.columns_to_types(table.sql())
-        column_sets.append(set(map.items()))
-        for c in map:
-            columns_seen[c] = None
-    superset = reduce(lambda a, b: a.intersection(b), column_sets)
-    precedence = {c: i for i, c in enumerate(columns_seen.keys())}
-    projection = [
-        exp.cast(exp.column(name), typ).as_(name)
-        for name, typ in sorted(superset, key=lambda c: precedence[c[0]])
+
+    columns = {
+        column
+        for column, _ in reduce(
+            lambda a, b: a & b,  # type: ignore
+            (evaluator.columns_to_types(table).items() for table in tables),
+        )
+    }
+
+    projections = [
+        exp.cast(column, type_).as_(column)
+        for column, type_ in evaluator.columns_to_types(tables[0]).items()
+        if column in columns
     ]
-    disinct = type_.this.upper() == "DISTINCT"
-    selects: t.List[exp.Unionable] = [exp.select(*projection).from_(t) for t in tables]
-    return t.cast(exp.Union, reduce(lambda a, b: a.union(b, disinct=disinct), selects))
+
+    return reduce(
+        lambda a, b: a.union(b, distinct=kind == "DISTINCT"),  # type: ignore
+        [exp.select(*projections).from_(t) for t in tables],
+    )
 
 
 @macro()
