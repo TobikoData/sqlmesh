@@ -27,6 +27,9 @@ from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, has_jinja
 from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_exception
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.engine_adapter import EngineAdapter
+
 
 class RuntimeStage(Enum):
     LOADING = "loading"
@@ -109,6 +112,7 @@ class MacroEvaluator:
         jinja_env: t.Optional[Environment] = None,
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
+        resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -118,6 +122,7 @@ class MacroEvaluator:
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
         self._schema = MappingSchema(schema, dialect=dialect, normalize=False) if schema else {}
+        self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
 
         prepare_env(self.python_env, self.env)
@@ -284,6 +289,29 @@ class MacroEvaluator:
             raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
 
         return columns_to_types
+
+    def resolve_tables(self, query: exp.Expression) -> exp.Expression:
+        """Resolves queries with references to SQLMesh model names to their physical tables."""
+        if not self._resolve_tables:
+            raise SQLMeshError(
+                "Macro evaluator not properly initialized with resolve_tables lambda."
+            )
+        return self._resolve_tables(query)
+
+    @property
+    def runtime_stage(self) -> RuntimeStage:
+        """Returns the current runtime stage of the macro evaluation."""
+        return self.locals["runtime_stage"]
+
+    @property
+    def engine_adapter(self) -> EngineAdapter:
+        engine_adapter = self.locals.get("engine_adapter")
+        if not engine_adapter:
+            raise SQLMeshError(
+                "The engine adapter is not available while models are loading."
+                " You can gate these calls by checking in Python: evaluator.runtime_stage != 'loading' or SQL: @runtime_stage <> 'loading'."
+            )
+        return self.locals["engine_adapter"]
 
 
 class macro(registry_decorator):

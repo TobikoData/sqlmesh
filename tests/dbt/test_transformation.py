@@ -592,7 +592,7 @@ def test_relation_info_to_relation():
     ).quote_policy == Policy(database=False, schema=False, identifier=False)
 
 
-def test_is_incremental(sushi_test_project: Project, assert_exp_eq):
+def test_is_incremental(sushi_test_project: Project, assert_exp_eq, mocker):
     model_config = ModelConfig(
         name="model",
         package_name="package",
@@ -611,8 +611,11 @@ def test_is_incremental(sushi_test_project: Project, assert_exp_eq):
         'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a"',
     )
 
+    snapshot = mocker.Mock()
+    snapshot.intervals = [1]
+
     assert_exp_eq(
-        model_config.to_sqlmesh(context).render_query_or_raise(has_intervals=True).sql(),
+        model_config.to_sqlmesh(context).render_query_or_raise(snapshot=snapshot).sql(),
         'SELECT 1 AS "one" FROM "tbl_a" AS "tbl_a" WHERE "ds" > (SELECT MAX("ds") FROM "model" AS "model")',
     )
 
