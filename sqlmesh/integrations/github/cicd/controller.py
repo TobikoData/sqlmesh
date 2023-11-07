@@ -272,7 +272,7 @@ class GithubEvent:
 
 class GithubController:
     BOT_HEADER_MSG = "**SQLMesh Bot Info**"
-    MAX_CHAR_LENGTH = 65535
+    MAX_BYTE_LENGTH = 65535
 
     def __init__(
         self,
@@ -576,13 +576,15 @@ class GithubController:
             kwargs["completed_at"] = current_time
         if conclusion:
             kwargs["conclusion"] = conclusion.value
-        full_summary = full_summary or title
+        full_summary_bytes = (full_summary or title).encode("utf-8")
         summary, text, *truncated = [
-            full_summary[i : i + self.MAX_CHAR_LENGTH]
-            for i in range(0, len(full_summary), self.MAX_CHAR_LENGTH)
+            full_summary_bytes[i : i + self.MAX_BYTE_LENGTH].decode("utf-8", "ignore")
+            for i in range(0, len(full_summary_bytes), self.MAX_BYTE_LENGTH)
         ] + [None]
         if truncated and truncated[0] is not None:
-            logger.warning(f"Summary was too long so we truncated it. Full text: {full_summary}")
+            logger.warning(
+                f'Summary was too long so we truncated it. Full text: {full_summary_bytes.decode("utf-8", "ignore")}'
+            )
         kwargs["output"] = {"title": title, "summary": summary}
         if text:
             kwargs["output"]["text"] = text
