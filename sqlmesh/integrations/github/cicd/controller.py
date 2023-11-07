@@ -17,6 +17,7 @@ from hyperscript import Element, h
 from rich.console import Console
 from sqlglot.helper import seq_get
 
+from sqlmesh import debug_mode_enabled
 from sqlmesh.core import constants as c
 from sqlmesh.core.console import MarkdownConsole
 from sqlmesh.core.context import Context
@@ -285,6 +286,8 @@ class GithubController:
         from github import Github
 
         print("Within Controller")
+        logger.info("Initializing Github Controller")
+        print("Debug Enabled? " + str(debug_mode_enabled()))
         self._paths = paths
         self._config = config
         self._token = token
