@@ -18,6 +18,7 @@ from sqlmesh.core.plan import (
 )
 from sqlmesh.core.state_sync import EngineAdapterStateSync, StateSync
 from sqlmesh.schedulers.airflow.client import AirflowClient
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import model_validator
 
 if t.TYPE_CHECKING:
@@ -60,6 +61,11 @@ class _EngineAdapterStateSyncSchedulerConfig(_SchedulerConfig):
         engine_adapter = (
             state_connection.create_engine_adapter() if state_connection else context.engine_adapter
         )
+        if not engine_adapter.SUPPORTS_ROW_LEVEL_OP:
+            raise ConfigError(
+                f"The {engine_adapter.DIALECT.upper()} engine cannot be used to store SQLMesh state - please specify a different `state_connection` engine."
+                + " See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#gateways for more information."
+            )
         schema = context.config.get_state_schema(context.gateway)
         return EngineAdapterStateSync(engine_adapter, schema=schema, console=context.console)
 

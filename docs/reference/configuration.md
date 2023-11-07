@@ -64,7 +64,7 @@ gateways:
     gate1:
         connection:
             ...
-        state_connection: # defaults to `connection` if omitted
+        state_connection: # defaults to `connection` if omitted and not using airflow or google cloud composer scheduler
             ...
         test_connection: # defaults to `connection` if omitted
             ...
@@ -85,12 +85,18 @@ Configuration for each named gateway.
 
 A named gateway key may define any or all of a data warehouse connection, state backend connection, state schema name, test backend connection, and scheduler.
 
-The state and test connections default to `connection`. The `connection` key may be omitted if a [`default_connection`](#default-connectionsscheduler) is specified.
+Some connections use default values if not specified:
+
+- The `connection` key may be omitted if a [`default_connection`](#default-connectionsscheduler) is specified.
+- The state connection defaults to `connection` unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers, the state connection defaults to the scheduler's database.
+- The test connection defaults to `connection` if omitted.
+
+NOTE: Spark and Trino engines may not be used for the state connection.
 
 | Option             | Description                                                                                                            |                  Type                   |                                Required                                |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------- | :-------------------------------------: | :--------------------------------------------------------------------: |
 | `connection`       | The data warehouse connection for core SQLMesh functions.                                                              | [connection configuration](#connection) | N (if [`default_connection`](#default-connectionsscheduler) specified) |
-| `state_connection` | The data warehouse connection where SQLMesh will store internal information about the project. (Default: `connection`) | [connection configuration](#connection) |                                   N                                    |
+| `state_connection` | The data warehouse connection where SQLMesh will store internal information about the project. (Default: `connection` if using builtin scheduler, otherwise scheduler database) | [connection configuration](#connection) |                                   N                                    |
 | `state_schema`     | The name of the schema where state information should be stored. (Default: `sqlmesh`)                                  |                 string                  |                                   N                                    |
 | `test_connection`  | The data warehouse connection SQLMesh will use to execute tests. (Default: `connection`)                               | [connection configuration](#connection) |                                   N                                    |
 | `scheduler`        | The scheduler SQLMesh will use to execute tests. (Default: `builtin`)                                                  |  [scheduler configuration](#scheduler)  |                                   N                                    |

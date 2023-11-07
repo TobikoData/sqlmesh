@@ -23,7 +23,9 @@ sqlmesh --gateway local_db plan
 
 ## State connection
 
-By default, the data warehouse connection is also used to store the SQLMesh state. This behavior can be changed by providing different connection settings in the `state_connection` key of the gateway configuration:
+By default, the data warehouse connection is also used to store the SQLMesh state, unless the configuration uses an Airflow or Google Cloud Composer scheduler. If using one of those schedulers, the state connection defaults to the scheduler's database.
+
+The state connection can be changed by providing different connection settings in the `state_connection` key of the gateway configuration:
 
 ```yaml linenums="1"
 gateways:
@@ -32,6 +34,8 @@ gateways:
             type: duckdb
             database: state.db
 ```
+
+NOTE: Spark and Trino engines may not be used for the state connection.
 
 ## Default connection
 

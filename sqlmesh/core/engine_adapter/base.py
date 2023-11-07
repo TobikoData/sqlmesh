@@ -161,6 +161,7 @@ class EngineAdapter:
     SCHEMA_DIFFER = SchemaDiffer()
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
+    SUPPORTS_ROW_LEVEL_OP = True
 
     def __init__(
         self,

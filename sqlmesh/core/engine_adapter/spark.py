@@ -44,6 +44,7 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
     SUPPORTS_TRANSACTIONS = False
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
+    SUPPORTS_ROW_LEVEL_OP = False
 
     @property
     def spark(self) -> PySparkSession:

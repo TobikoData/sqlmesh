@@ -14,11 +14,15 @@ gateways:
       catalog: datalake
       http_scheme: http
       retries: 20
+    state_connection:
+      type: duckdb
   inttest_spark:
     connection:
       type: spark
       config:
         spark.remote: sc://localhost
+    state_connection:
+      type: duckdb
   inttest_mssql:
     connection:
       type: mssql

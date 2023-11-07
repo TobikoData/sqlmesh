@@ -3,6 +3,8 @@
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `spark`
 
+NOTE: Spark may not be used for the SQLMesh [state connection](../../reference/configuration.md#connections).
+
 ### Connection options
 
 | Option          | Description                                               |  Type  | Required |
