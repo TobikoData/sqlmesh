@@ -324,6 +324,7 @@ def create_builtin_globals(
     )
 
     if engine_adapter is not None:
+        builtin_globals["flags"] = Flags(which="run")
         adapter: BaseAdapter = RuntimeAdapter(
             engine_adapter,
             jinja_macros,
@@ -331,7 +332,6 @@ def create_builtin_globals(
                 **builtin_globals,
                 **jinja_globals,
                 "engine_adapter": engine_adapter,
-                "flags": Flags(which="run"),
             },
             relation_type=api.Relation,
             quote_policy=api.quote_policy,
@@ -340,9 +340,10 @@ def create_builtin_globals(
             deployability_index=jinja_globals.get("deployability_index", False),
         )
     else:
+        builtin_globals["flags"] = Flags(which="run")
         adapter = ParsetimeAdapter(
             jinja_macros,
-            jinja_globals={**builtin_globals, **jinja_globals, "flags": Flags(which="parse")},
+            jinja_globals={**builtin_globals, **jinja_globals},
             dialect=dialect,
         )
 
