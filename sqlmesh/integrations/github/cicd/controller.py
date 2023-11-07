@@ -577,15 +577,16 @@ class GithubController:
         if conclusion:
             kwargs["conclusion"] = conclusion.value
         full_summary = full_summary or title
+        full_summary = ("å" * (self.MAX_CHAR_LENGTH - 1000)).encode("utf-8")
         summary, text, *truncated = [
             full_summary[i : i + self.MAX_CHAR_LENGTH]
             for i in range(0, len(full_summary), self.MAX_CHAR_LENGTH)
         ] + [None]
         if truncated and truncated[0] is not None:
             logger.warning(f"Summary was too long so we truncated it. Full text: {full_summary}")
-        kwargs["output"] = {"title": title, "summary": "å" * (self.MAX_CHAR_LENGTH)}
-        # if text:
-        #     kwargs["output"]["text"] = text
+        kwargs["output"] = {"title": title, "summary": summary.decode("utf-8", "ignore")}
+        if text:
+            kwargs["output"]["text"] = text.decode("utf-8", "ignore")
         logger.debug(f"Updating check with kwargs: {kwargs}")
         if name in self._check_run_mapping:
             logger.debug(f"Found check run in mapping so updating it. Name: {name}")
