@@ -913,7 +913,7 @@ Column expressions are sub-classes of the [Condition class](https://sqlglot.com/
 
 #### Accessing model schemas
 
-Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types` method, when they can be statically determined. For instance, a schema of an external model can be accessed only after the `sqlmesh create_external_models` command has been executed.
+Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types` method, when they can be statically determined. For instance, a schema of an [external model](../models/external_models.md) can be accessed only after the `sqlmesh create_external_models` command has been executed.
 
 As an example, consider the following macro function which aims to rename the columns of a target model by adding a prefix to them:
 
