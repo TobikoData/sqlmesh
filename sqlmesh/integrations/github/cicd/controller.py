@@ -583,9 +583,9 @@ class GithubController:
         ] + [None]
         if truncated and truncated[0] is not None:
             logger.warning(f"Summary was too long so we truncated it. Full text: {full_summary}")
-        kwargs["output"] = {"title": title, "summary": summary}
-        if text:
-            kwargs["output"]["text"] = text
+        kwargs["output"] = {"title": title, "summary": "a" * self.MAX_CHAR_LENGTH}
+        # if text:
+        #     kwargs["output"]["text"] = text
         logger.debug(f"Updating check with kwargs: {kwargs}")
         if name in self._check_run_mapping:
             logger.debug(f"Found check run in mapping so updating it. Name: {name}")
