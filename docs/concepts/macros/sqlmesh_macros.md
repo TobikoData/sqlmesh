@@ -940,7 +940,7 @@ def prefix_columns(evaluator, model_name, prefix):
     return renamed_projections
 ```
 
-One example of this macro being used in the query of a SQL model is shown below:
+This can then be used in a SQL model as shown below:
 
 ```sql linenums="1"
 MODEL (
