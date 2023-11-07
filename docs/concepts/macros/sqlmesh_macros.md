@@ -933,7 +933,7 @@ def prefix_columns(evaluator, model_name, prefix):
     # because in that case `model_name.sql()` would produce an invalid lookup key.
     model_name_sql = model_name.sql()
 
-    for name, dtype in evaluator.columns_to_types(model_name_sql).items():
+    for name in evaluator.columns_to_types(model_name_sql):
         new_name = prefix + name
         renamed_projections.append(exp.column(name).as_(new_name))
 
