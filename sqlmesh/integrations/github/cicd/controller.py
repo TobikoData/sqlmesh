@@ -337,7 +337,7 @@ class GithubController:
             if user.is_required_approver and user.github_username
         ]
         logger.debug(
-            f"Required approvers: {', '.join([user.github_username for user in required_approvers if user.github_username])}"
+            f"Required approvers: {', '.join(user.github_username for user in required_approvers if user.github_username)}"
         )
         return required_approvers
 
@@ -362,7 +362,7 @@ class GithubController:
     def do_required_approval_check(self) -> bool:
         """We want to skip required approval check if no users have this role"""
         do_required_approval_check = bool(self._required_approvers)
-        logger.debug(f"Do required approval check: {str(do_required_approval_check)}")
+        logger.debug(f"Do required approval check: {do_required_approval_check}")
         return do_required_approval_check
 
     @property
@@ -777,9 +777,7 @@ class GithubController:
                         + " Stack trace: "
                         + traceback.format_exc()
                     )
-                    failure_msg = (
-                        f"This is an unexpected error.\n\n**Exception:**\n{traceback.format_exc()}"
-                    )
+                    failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
                 conclusion_to_summary = {
                     GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
                     GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n{failure_msg}",
