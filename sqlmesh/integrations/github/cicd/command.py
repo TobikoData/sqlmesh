@@ -14,6 +14,8 @@ from sqlmesh.utils.errors import CICDBotError, PlanError
 
 logger = logging.getLogger(__name__)
 
+print("HERE I AM")
+
 
 @click.group(no_args_is_help=True)
 @click.option(

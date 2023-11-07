@@ -284,6 +284,7 @@ class GithubController:
     ) -> None:
         from github import Github
 
+        print("Within Controller")
         self._paths = paths
         self._config = config
         self._token = token
