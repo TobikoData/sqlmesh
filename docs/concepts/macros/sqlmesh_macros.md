@@ -943,9 +943,15 @@ def prefix_columns(evaluator, model_name, prefix):
 One example of this macro being used in the query of a SQL model is shown below:
 
 ```sql linenums="1"
-MODEL (name schema.child, kind FULL);
+MODEL (
+  name schema.child,
+  kind FULL
+);
 
-SELECT @prefix_columns(schema.parent, 'stg_') FROM schema.parent
+SELECT
+  @prefix_columns(schema.parent, 'stg_')
+FROM
+  schema.parent
 ```
 
 Note that `columns_to_types` expects an _unquoted model name_, such as `schema.parent`. Since macro arguments are SQLGlot expressions, they need to be processed accordingly in order to extract meaningful information from them. For instance, the lookup key in the above macro definition is extracted by generating the SQL code for `model_name` using the `sql` method.
