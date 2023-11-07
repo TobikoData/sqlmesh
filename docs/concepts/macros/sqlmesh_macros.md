@@ -913,7 +913,7 @@ Column expressions are sub-classes of the [Condition class](https://sqlglot.com/
 
 #### Accessing model schemas
 
-Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types` method, when they can be statically determined.
+Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types` method, when they can be statically determined. For instance, a schema of an external model can be accessed only after the `sqlmesh create_external_models` command has been executed.
 
 For example, consider the following macro function which aims to rename the columns of a target model by adding a prefix to them:
 
@@ -926,19 +926,30 @@ def foo(evaluator, model_name, prefix):
     prefix = prefix.name
     renamed_projections = []
 
-    for name, dtype in evaluator.columns_to_types(model_name.sql()).items():
+    model_name_sql = model_name.sql()
+
+    for name, dtype in evaluator.columns_to_types(model_name_sql).items():
         new_name = prefix + name
         renamed_projections.append(exp.cast(exp.column(name), dtype).as_(new_name))
 
     return renamed_projections
 ```
 
+One example of this macro being used in the query of a SQL model is shown below:
+
+```sql linenums="1"
+MODEL (name schema.child, kind FULL);
+
+SELECT @prefix_and_cast_columns(schema.parent, 'stg_') FROM schema.parent
+```
+
+Note that `columns_to_types` expects an _unquoted model name_, such as `schema.parent`. Since macro arguments are SQLGlot expressions, they need to be processed accordingly in order to extract meaningful information from them. For instance, the lookup key in the above macro definition is extracted by generating the SQL code for `model_name` using the `sql` method.
+
 Having access to the schema of an upstream model can be useful for various reasons:
 
-- Normalizing columns so that downstream consumers are not tightly coupled e.g. to external or source tables
-- Projecting only a subset of columns that satisfy some criteria
-- Adding necessary casts
-- Computing common columns
+- Renaming columns so that downstream consumers are not tightly coupled to external or source tables
+- Selecting only a subset of columns that satisfy some criteria (e.g., columns whose names start with a specific prefix)
+- Applying transformations to columns, such as adding casts or computing statistics of columns that match some target type(s)
 
 It also encourages writing code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as one can implement these transformations in a single function instead of manually duplicating them for each model of interest.
 
