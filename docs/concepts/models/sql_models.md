@@ -62,6 +62,8 @@ Optional pre/post-statements can help prepare the model's query and execute "cle
 
 However, be careful not to run any statement that could conflict with the execution of another statement if the models run concurrently, such as creating a physical table.
 
+Pre/post-statements are evaluated twice: when the models' tables are created and when their logic is evaluated. Since executing such statements more than once can have unintended side-effects, it is also possible to [conditionally execute](../macros/sqlmesh_macros.md#if) them depending on SQLMesh's [runtime stage](../macros/macro_variables.md#predefined-variables).
+
 ### The model query
 The model must contain a standalone query, which can be a single `SELECT` expression, or multiple `SELECT` expressions combined with the `UNION`, `INTERSECT`, or `EXCEPT` operators. The result of this query will be used to populate the model's table or view.
 
