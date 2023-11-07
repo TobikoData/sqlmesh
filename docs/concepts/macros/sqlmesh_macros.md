@@ -959,8 +959,8 @@ Note that `columns_to_types` expects an _unquoted model name_, such as `schema.p
 Having access to the schema of an upstream model can be useful for various reasons:
 
 - Renaming columns so that downstream consumers are not tightly coupled to external or source tables
-- Selecting only a subset of columns that satisfy some criteria (e.g., columns whose names start with a specific prefix)
-- Applying transformations to columns, such as masking PII or computing different statistics based on the column types
+- Selecting only a subset of columns that satisfy some criteria (e.g. columns whose names start with a specific prefix)
+- Applying transformations to columns, such as masking PII or computing various statistics based on the column types
 
 It also encourages writing code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as one can implement these transformations in a single function instead of manually duplicating them for each model of interest.
 
