@@ -949,7 +949,7 @@ Having access to the schema of an upstream model can be useful for various reaso
 
 - Renaming columns so that downstream consumers are not tightly coupled to external or source tables
 - Selecting only a subset of columns that satisfy some criteria (e.g., columns whose names start with a specific prefix)
-- Applying transformations to columns, such as adding casts or computing statistics of columns that match some target type(s)
+- Applying transformations to columns, such as masking PII or computing different statistics based on the column types
 
 It also encourages writing code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as one can implement these transformations in a single function instead of manually duplicating them for each model of interest.
 
