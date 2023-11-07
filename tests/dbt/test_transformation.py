@@ -391,7 +391,7 @@ def test_flags(sushi_test_project: Project):
 
     assert context.render("{{ flags.FULL_REFRESH }}") == "None"
     assert context.render("{{ flags.STORE_FAILURES }}") == "None"
-    assert context.render("{{ flags.WHICH }}") == "run"
+    assert context.render("{{ flags.WHICH }}") == "parse"
 
 
 def test_relation(sushi_test_project: Project):

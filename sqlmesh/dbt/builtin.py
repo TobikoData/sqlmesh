@@ -340,7 +340,7 @@ def create_builtin_globals(
             deployability_index=jinja_globals.get("deployability_index", False),
         )
     else:
-        builtin_globals["flags"] = Flags(which="run")
+        builtin_globals["flags"] = Flags(which="parse")
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
