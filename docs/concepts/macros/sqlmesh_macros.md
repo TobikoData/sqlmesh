@@ -928,8 +928,9 @@ def prefix_columns(evaluator, model_name, prefix):
 
     # Convert the SQLGlot expression to a lookup key.
     #
-    # Assumes that `model_name` will not contain quotes - if it did, we would have to
-    # generate SQL for each part of `model_name` separately and then concatenate them.
+    # Assumes that `model_name` does not contain quotes - if it did, we would have to
+    # generate SQL for each part of `model_name` separately and then concatenate them,
+    # because in that case `model_name.sql()` would produce an invalid lookup key.
     model_name_sql = model_name.sql()
 
     for name, dtype in evaluator.columns_to_types(model_name_sql).items():
