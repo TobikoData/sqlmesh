@@ -284,10 +284,13 @@ class GithubController:
     ) -> None:
         from github import Github
 
+        logger.debug(f"Initializing GithubController with paths: {paths} and config: {config}")
+
         self._paths = paths
         self._config = config
         self._token = token
         self._event = event or GithubEvent.from_env()
+        logger.debug(f"Github event: {json.dumps(self._event.payload)}")
         self._pr_plan: t.Optional[Plan] = None
         self._prod_plan: t.Optional[Plan] = None
         self._prod_plan_with_gaps: t.Optional[Plan] = None
@@ -311,6 +314,7 @@ class GithubController:
             for review in self._reviews
             if review.state.lower() == "approved"
         }
+        logger.debug(f"Approvers: {', '.join(self._approvers)}")
         self._context: Context = Context(
             paths=self._paths,
             config=self._config,
@@ -327,7 +331,15 @@ class GithubController:
 
     @property
     def _required_approvers(self) -> t.List[User]:
-        return [user for user in self._context.users if user.is_required_approver]
+        required_approvers = [
+            user
+            for user in self._context.users
+            if user.is_required_approver and user.github_username
+        ]
+        logger.debug(
+            f"Required approvers: {', '.join(user.github_username for user in required_approvers if user.github_username)}"
+        )
+        return required_approvers
 
     @property
     def _required_approvers_with_approval(self) -> t.List[User]:
@@ -349,7 +361,9 @@ class GithubController:
     @property
     def do_required_approval_check(self) -> bool:
         """We want to skip required approval check if no users have this role"""
-        return bool(self._required_approvers)
+        do_required_approval_check = bool(self._required_approvers)
+        logger.debug(f"Do required approval check: {do_required_approval_check}")
+        return do_required_approval_check
 
     @property
     def has_required_approval(self) -> bool:
@@ -359,7 +373,9 @@ class GithubController:
         TODO: Allow defining requiring some number, or all, required approvers.
         """
         if not self._required_approvers or self._required_approvers_with_approval:
+            logger.debug("Has required Approval")
             return True
+        logger.debug("Does not have required approval")
         return False
 
     @property
@@ -404,9 +420,11 @@ class GithubController:
 
     @property
     def bot_config(self) -> GithubCICDBotConfig:
-        return self._context.config.cicd_bot or GithubCICDBotConfig(
+        bot_config = self._context.config.cicd_bot or GithubCICDBotConfig(
             auto_categorize_changes=self._context.auto_categorize_changes
         )
+        logger.debug(f"Bot config: {bot_config.json(indent=2)}")
+        return bot_config
 
     def get_plan_summary(self, plan: Plan) -> str:
         try:
@@ -434,7 +452,9 @@ class GithubController:
             0,
         )
         if not comment:
-            comment = self._issue.create_comment(header)
+            logger.debug(f"Did not find comment so creating one with header: {header}")
+            return self._issue.create_comment(header)
+        logger.debug(f"Found comment with header: {header}")
         return comment
 
     def _get_merge_state_status(self) -> MergeStateStatus:
@@ -461,9 +481,11 @@ class GithubController:
             headers=headers,
         )
         if request.status_code == 200:
-            return MergeStateStatus(
+            merge_status = MergeStateStatus(
                 request.json()["data"]["repository"]["pullRequest"]["mergeStateStatus"].lower()
             )
+            logger.debug(f"Merge state status: {merge_status.value}")
+            return merge_status
         raise CICDBotError(f"Unable to get merge state status. Error: {request.text}")
 
     def update_sqlmesh_comment_info(
@@ -564,12 +586,15 @@ class GithubController:
         kwargs["output"] = {"title": title, "summary": summary}
         if text:
             kwargs["output"]["text"] = text
+        logger.debug(f"Updating check with kwargs: {kwargs}")
         if name in self._check_run_mapping:
+            logger.debug(f"Found check run in mapping so updating it. Name: {name}")
             check_run = self._check_run_mapping[name]
             check_run.edit(
                 **{k: v for k, v in kwargs.items() if k not in ("name", "head_sha", "started_at")}
             )
         else:
+            logger.debug(f"Did not find check run in mapping so creating it. Name: {name}")
             self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
 
     def _update_check_handler(
@@ -741,9 +766,18 @@ class GithubController:
                     skip_reason = "A prior stage failed resulting in skipping PR creation."
 
                 if isinstance(exception, NodeExecutionFailedError):
+                    logger.debug(
+                        "Got Node Execution Failed Error. Stack trace: " + traceback.format_exc()
+                    )
                     failure_msg = f"Node `{exception.node.name}` failed to apply.\n\n**Stack Trace:**\n```\n{traceback.format_exc()}\n```"
                 else:
-                    failure_msg = f"This is an unexpected error.\n\n**Exception:**\n{exception}"
+                    logger.debug(
+                        "Got unexpected error. Error Type: "
+                        + str(type(exception))
+                        + " Stack trace: "
+                        + traceback.format_exc()
+                    )
+                    failure_msg = f"This is an unexpected error.\n\n**Exception:**\n```\n{traceback.format_exc()}\n```"
                 conclusion_to_summary = {
                     GithubCheckConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}`. {skip_reason}",
                     GithubCheckConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`.\n{failure_msg}",
@@ -859,15 +893,21 @@ class GithubController:
         performed
         """
         if self.bot_config.merge_method:
+            logger.debug(f"Merging PR with merge method: {self.bot_config.merge_method.value}")
             self._pull_request.merge(merge_method=self.bot_config.merge_method.value)
+        else:
+            logger.debug("No merge method defined so skipping merge")
 
     def get_command_from_comment(self) -> BotCommand:
         """
         Gets the command from the comment
         """
         if not self._event.is_comment_added:
+            logger.debug("Event is not a comment so returning invalid")
             return BotCommand.INVALID
-        assert self._event.pull_request_comment_body is not None
+        if self._event.pull_request_comment_body is None:
+            raise CICDBotError("Unable to get comment body")
+        logger.debug(f"Getting command from comment body: {self._event.pull_request_comment_body}")
         return BotCommand.from_comment_body(
             self._event.pull_request_comment_body, self.bot_config.command_namespace
         )
