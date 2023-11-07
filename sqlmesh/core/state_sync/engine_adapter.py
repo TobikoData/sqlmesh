@@ -54,11 +54,15 @@ from sqlmesh.core.snapshot.definition import (
 )
 from sqlmesh.core.state_sync.base import MIGRATIONS, SCHEMA_VERSION, StateSync, Versions
 from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
-from sqlmesh.utils import major_minor, nullsafe_join, random_id
+from sqlmesh.utils import major_minor, random_id
 from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
 
 logger = logging.getLogger(__name__)
+
+
+if t.TYPE_CHECKING:
+    from sqlmesh.core._typing import TableName
 
 try:
     # We can't import directly from the root package due to circular dependency
@@ -92,12 +96,12 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.schema = schema or None
         self.engine_adapter = engine_adapter
         self.console = console or get_console()
-        self.snapshots_table = nullsafe_join(".", self.schema, "_snapshots")
-        self.environments_table = nullsafe_join(".", self.schema, "_environments")
-        self.seeds_table = nullsafe_join(".", self.schema, "_seeds")
-        self.intervals_table = nullsafe_join(".", self.schema, "_intervals")
-        self.plan_dags_table = nullsafe_join(".", self.schema, "_plan_dags")
-        self.versions_table = nullsafe_join(".", self.schema, "_versions")
+        self.snapshots_table = exp.table_("_snapshots", db=self.schema)
+        self.environments_table = exp.table_("_environments", db=self.schema)
+        self.seeds_table = exp.table_("_seeds", db=self.schema)
+        self.intervals_table = exp.table_("_intervals", db=self.schema)
+        self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
+        self.versions_table = exp.table_("_versions", db=self.schema)
 
         self._snapshot_columns_to_types = {
             "name": exp.DataType.build("text"),
@@ -741,8 +745,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
 
     def _restore_table(
         self,
-        table_name: str,
-        backup_table_name: str,
+        table_name: TableName,
+        backup_table_name: TableName,
     ) -> None:
         self.engine_adapter.drop_table(table_name)
         self.engine_adapter.rename_table(
@@ -792,7 +796,9 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             for table in tables + optional_tables:
                 self.engine_adapter.drop_table(table)
         else:
-            if not all(self.engine_adapter.table_exists(f"{table}_backup") for table in tables):
+            if not all(
+                self.engine_adapter.table_exists(_backup_table_name(table)) for table in tables
+            ):
                 raise SQLMeshError("There are no prior migrations to roll back to.")
             for table in tables:
                 self._restore_table(table, _backup_table_name(table))
@@ -1106,8 +1112,10 @@ def _environment_to_df(environment: Environment) -> pd.DataFrame:
     )
 
 
-def _backup_table_name(table_name: str) -> str:
-    return f"{table_name}_backup"
+def _backup_table_name(table_name: TableName) -> exp.Table:
+    table = exp.to_table(table_name).copy()
+    table.set("this", exp.to_identifier(table.name + "_backup"))
+    return table
 
 
 def _snapshot_to_json(snapshot: Snapshot) -> str:
