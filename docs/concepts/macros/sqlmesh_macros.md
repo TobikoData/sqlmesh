@@ -911,6 +911,58 @@ The methods are available because the `column` argument is parsed as a SQLGlot [
 
 Column expressions are sub-classes of the [Condition class](https://sqlglot.com/sqlglot/expressions.html#Condition), so they have builder methods like [`between`](https://sqlglot.com/sqlglot/expressions.html#Condition.between) and [`like`](https://sqlglot.com/sqlglot/expressions.html#Condition.like).
 
+#### Accessing model schemas
+
+Model schemas can be accessed within a Python macro function through its evaluation context's `column_to_types` method, when they can be statically determined. For instance, a schema of an [external model](../models/external_models.md) can be accessed only after the `sqlmesh create_external_models` command has been executed.
+
+As an example, consider the following macro function which aims to rename the columns of a target model by adding a prefix to them:
+
+```python linenums="1"
+from sqlglot import exp
+from sqlmesh.core.macros import macro
+
+@macro()
+def prefix_columns(evaluator, model_name, prefix):
+    prefix = prefix.name
+    renamed_projections = []
+
+    # The following converts `model_name`, which is a SQLGlot expression, into a lookup key,
+    # assuming that it does not contain quotes. If it did, we would have to generate SQL for
+    # each part of `model_name` separately and then concatenate these parts, because in that
+    # case `model_name.sql()` would produce an invalid lookup key.
+    model_name_sql = model_name.sql()
+
+    for name in evaluator.columns_to_types(model_name_sql):
+        new_name = prefix + name
+        renamed_projections.append(exp.column(name).as_(new_name))
+
+    return renamed_projections
+```
+
+This can then be used in a SQL model as shown below:
+
+```sql linenums="1"
+MODEL (
+  name schema.child,
+  kind FULL
+);
+
+SELECT
+  @prefix_columns(schema.parent, 'stg_')
+FROM
+  schema.parent
+```
+
+Note that `columns_to_types` expects an _unquoted model name_, such as `schema.parent`. Since macro arguments are SQLGlot expressions, they need to be processed accordingly in order to extract meaningful information from them. For instance, the lookup key in the above macro definition is extracted by generating the SQL code for `model_name` using the `sql` method.
+
+Having access to the schema of an upstream model can be useful for various reasons:
+
+- Renaming columns so that downstream consumers are not tightly coupled to external or source tables
+- Selecting only a subset of columns that satisfy some criteria (e.g. columns whose names start with a specific prefix)
+- Applying transformations to columns, such as masking PII or computing various statistics based on the column types
+
+Thus, leveraging `columns_to_types` can also enable one to write code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as they can implement these transformations in a single function instead of duplicating them in each model of interest.
+
 ## Mixing macro systems
 
 SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways.
