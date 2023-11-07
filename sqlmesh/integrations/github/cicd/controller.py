@@ -583,7 +583,7 @@ class GithubController:
         ] + [None]
         if truncated and truncated[0] is not None:
             logger.warning(f"Summary was too long so we truncated it. Full text: {full_summary}")
-        kwargs["output"] = {"title": title, "summary": "a" * self.MAX_CHAR_LENGTH}
+        kwargs["output"] = {"title": title, "summary": "a" * (self.MAX_CHAR_LENGTH + 1)}
         # if text:
         #     kwargs["output"]["text"] = text
         logger.debug(f"Updating check with kwargs: {kwargs}")
