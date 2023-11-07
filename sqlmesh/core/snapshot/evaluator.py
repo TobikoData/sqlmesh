@@ -458,7 +458,10 @@ class SnapshotEvaluator:
                 finally:
                     self.adapter.drop_table(tmp_table_name)
             else:
-                for is_table_deployable in (False, True):
+                table_deployability_flags = [False]
+                if not snapshot.is_indirect_non_breaking:
+                    table_deployability_flags.append(True)
+                for is_table_deployable in table_deployability_flags:
                     evaluation_strategy.create(
                         snapshot,
                         snapshot.table_name(is_deployable=is_table_deployable),
@@ -1064,8 +1067,11 @@ class ViewStrategy(PromotableStrategy):
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         if (
             isinstance(query_or_df, exp.Expression)
+            and deployability_index.is_deployable(snapshot)
+            and snapshot.intervals  # Re-create the view during the first evaluation.
             and model.render_query(
                 snapshots=snapshots,
                 deployability_index=deployability_index,
@@ -1105,11 +1111,6 @@ class ViewStrategy(PromotableStrategy):
         is_snapshot_deployable: bool,
         **render_kwargs: t.Any,
     ) -> None:
-        if is_table_deployable and not is_snapshot_deployable:
-            # Avoid creating a deployable view which reference non-deployable upstream tables.
-            # The deployable version will be created during the first evaluation in prod.
-            return
-
         model = snapshot.model
 
         logger.info("Creating view '%s'", name)
