@@ -1,7 +1,7 @@
 """Creates the '_plan_dags' table if Airflow is used."""
 from sqlglot import exp
 
-from sqlmesh.utils.migration import index_text_type
+from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 
 def migrate(state_sync):  # type: ignore
@@ -13,14 +13,15 @@ def migrate(state_sync):  # type: ignore
         engine_adapter.create_schema(schema)
         plan_dags_table = f"{schema}.{plan_dags_table}"
 
-    text_type = index_text_type(engine_adapter.dialect)
+    index_type = index_text_type(engine_adapter.dialect)
+    blob_type = blob_text_type(engine_adapter.dialect)
 
     engine_adapter.create_state_table(
         plan_dags_table,
         {
-            "request_id": exp.DataType.build(text_type),
-            "dag_id": exp.DataType.build(text_type),
-            "dag_spec": exp.DataType.build("text"),
+            "request_id": exp.DataType.build(index_type),
+            "dag_id": exp.DataType.build(index_type),
+            "dag_spec": exp.DataType.build(blob_type),
         },
         primary_key=("request_id",),
     )

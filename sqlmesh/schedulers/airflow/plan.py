@@ -15,6 +15,7 @@ from sqlmesh.core.state_sync.base import DelegatingStateSync
 from sqlmesh.schedulers.airflow import common
 from sqlmesh.utils.date import now, now_timestamp
 from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 
 class PlanDagState:
@@ -22,10 +23,14 @@ class PlanDagState:
         self.engine_adapter = engine_adapter
 
         self._plan_dags_table = plan_dags_table
+
+        index_type = index_text_type(self.engine_adapter.dialect)
+        blob_type = blob_text_type(self.engine_adapter.dialect)
+
         self._plan_dag_columns_to_types = {
-            "request_id": exp.DataType.build("text"),
-            "dag_id": exp.DataType.build("text"),
-            "dag_spec": exp.DataType.build("text"),
+            "request_id": exp.DataType.build(index_type),
+            "dag_id": exp.DataType.build(index_type),
+            "dag_spec": exp.DataType.build(blob_type),
         }
 
     @classmethod

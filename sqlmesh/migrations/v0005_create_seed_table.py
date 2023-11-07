@@ -1,7 +1,7 @@
 """Create a dedicated table to store the content of seeds."""
 from sqlglot import exp
 
-from sqlmesh.utils.migration import index_text_type
+from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 
 def migrate(state_sync):  # type: ignore
@@ -10,14 +10,15 @@ def migrate(state_sync):  # type: ignore
     if state_sync.schema:
         seeds_table = f"{state_sync.schema}.{seeds_table}"
 
-    text_type = index_text_type(engine_adapter.dialect)
+    index_type = index_text_type(engine_adapter.dialect)
+    blob_type = blob_text_type(engine_adapter.dialect)
 
     engine_adapter.create_state_table(
         seeds_table,
         {
-            "name": exp.DataType.build(text_type),
-            "identifier": exp.DataType.build(text_type),
-            "content": exp.DataType.build("text"),
+            "name": exp.DataType.build(index_type),
+            "identifier": exp.DataType.build(index_type),
+            "content": exp.DataType.build(blob_type),
         },
         primary_key=("name", "identifier"),
     )
