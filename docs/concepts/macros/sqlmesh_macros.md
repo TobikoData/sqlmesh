@@ -922,7 +922,7 @@ from sqlglot import exp
 from sqlmesh.core.macros import macro
 
 @macro()
-def prefix_and_cast_columns(evaluator, model_name, prefix):
+def prefix_columns(evaluator, model_name, prefix):
     prefix = prefix.name
     renamed_projections = []
 
@@ -934,7 +934,7 @@ def prefix_and_cast_columns(evaluator, model_name, prefix):
 
     for name, dtype in evaluator.columns_to_types(model_name_sql).items():
         new_name = prefix + name
-        renamed_projections.append(exp.cast(exp.column(name), dtype).as_(new_name))
+        renamed_projections.append(exp.column(name).as_(new_name))
 
     return renamed_projections
 ```
@@ -944,7 +944,7 @@ One example of this macro being used in the query of a SQL model is shown below:
 ```sql linenums="1"
 MODEL (name schema.child, kind FULL);
 
-SELECT @prefix_and_cast_columns(schema.parent, 'stg_') FROM schema.parent
+SELECT @prefix_columns(schema.parent, 'stg_') FROM schema.parent
 ```
 
 Note that `columns_to_types` expects an _unquoted model name_, such as `schema.parent`. Since macro arguments are SQLGlot expressions, they need to be processed accordingly in order to extract meaningful information from them. For instance, the lookup key in the above macro definition is extracted by generating the SQL code for `model_name` using the `sql` method.
