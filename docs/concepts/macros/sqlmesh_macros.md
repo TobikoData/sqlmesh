@@ -926,7 +926,7 @@ def prefix_columns(evaluator, model_name, prefix):
     prefix = prefix.name
     renamed_projections = []
 
-    # Convert the SQLGlot expression to a lookup key.
+    # Convert the SQLGlot expression into a lookup key.
     #
     # Assumes that `model_name` does not contain quotes - if it did, we would have to
     # generate SQL for each part of `model_name` separately and then concatenate them,
