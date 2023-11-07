@@ -3,6 +3,8 @@
 ## Local/Built-in Scheduler
 **Engine Adapter Type**: `trino`
 
+NOTE: Trino may not be used for the SQLMesh [state connection](../../reference/configuration.md#connections).
+
 ## Installation
 ```
 pip install "sqlmesh[trino]"

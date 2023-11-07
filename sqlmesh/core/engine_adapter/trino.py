@@ -42,6 +42,7 @@ class TrinoEngineAdapter(
     # disable transactions. If we need to get them enabled again then we would need to disable auto commit on the
     # connector and then figure out how to get insert/overwrite to work correctly without it.
     SUPPORTS_TRANSACTIONS = False
+    SUPPORTS_ROW_LEVEL_OP = False
 
     @property
     def connection(self) -> TrinoConnection:
