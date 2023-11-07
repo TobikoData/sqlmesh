@@ -962,7 +962,7 @@ Having access to the schema of an upstream model can be useful for various reaso
 - Selecting only a subset of columns that satisfy some criteria (e.g. columns whose names start with a specific prefix)
 - Applying transformations to columns, such as masking PII or computing various statistics based on the column types
 
-It also encourages writing code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as one can implement these transformations in a single function instead of manually duplicating them for each model of interest.
+Thus, leveraging `columns_to_types` can also enable one to write code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as they can implement these transformations in a single function instead of duplicating them in each model of interest.
 
 ## Mixing macro systems
 
