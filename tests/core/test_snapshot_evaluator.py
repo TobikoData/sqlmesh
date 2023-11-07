@@ -370,6 +370,7 @@ def test_evaluate_materialized_view(
 
     snapshot = make_snapshot(model)
     snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot.add_interval("2023-01-01", "2023-01-01")
 
     evaluator.evaluate(
         snapshot,
