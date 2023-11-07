@@ -541,10 +541,8 @@ class SnapshotDagGenerator:
 
     def _create_hwm_sensors(self, snapshot: Snapshot) -> t.List[BaseSensorOperator]:
         output: t.List[BaseSensorOperator] = []
-        depends_on = snapshot.node.depends_on
         for upstream_snapshot_id in snapshot.parents:
             upstream_snapshot = self._snapshots[upstream_snapshot_id]
-            depends_on.discard(upstream_snapshot.name)
             if not upstream_snapshot.is_symbolic and not upstream_snapshot.is_seed:
                 output.append(
                     HighWaterMarkSensor(

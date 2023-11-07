@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import typing as t
@@ -46,11 +47,13 @@ class ManifestHelper:
         profiles_path: Path,
         profile_name: str,
         target: TargetConfig,
+        variable_overrides: t.Optional[t.Dict[str, t.Any]] = None,
     ):
         self.project_path = project_path
         self.profiles_path = profiles_path
         self.profile_name = profile_name
         self.target = target
+        self.variable_overrides = variable_overrides or {}
 
         self.__manifest: t.Optional[Manifest] = None
         self._project_name: str = ""
@@ -230,8 +233,14 @@ class ManifestHelper:
     def _load_manifest(self) -> Manifest:
         do_not_track()
 
+        variables = (
+            self.variable_overrides
+            if DBT_VERSION >= (1, 5)
+            else json.dumps(self.variable_overrides)
+        )
+
         args: Namespace = Namespace(
-            vars={} if DBT_VERSION >= (1, 5) else "{}",
+            vars=variables,
             profile=self.profile_name,
             profiles_dir=str(self.profiles_path),
             target=self.target.name,

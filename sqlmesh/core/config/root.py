@@ -50,6 +50,7 @@ class Config(BaseConfig):
         username: Name of a single user who should receive approvals/notification, instead of all users in the `users` list.
         pinned_environments: A list of development environment names that should not be deleted by the janitor task.
         loader: Loader class used for loading project files.
+        loader_kwargs: Key-value arguments to pass to the loader instance.
         env_vars: A dictionary of environmental variable names and values.
         model_defaults: Default values for model definitions.
         include_unmodified: Indicates whether to include unmodified models in the target development environment.
@@ -74,6 +75,7 @@ class Config(BaseConfig):
     model_defaults: ModelDefaultsConfig = ModelDefaultsConfig()
     pinned_environments: t.Set[str] = set()
     loader: t.Type[Loader] = SqlMeshLoader
+    loader_kwargs: t.Dict[str, t.Any] = {}
     env_vars: t.Dict[str, str] = {}
     username: str = ""
     include_unmodified: bool = False
@@ -95,6 +97,7 @@ class Config(BaseConfig):
         "pinned_environments": UpdateStrategy.EXTEND,
         "physical_schema_override": UpdateStrategy.KEY_UPDATE,
         "run": UpdateStrategy.NESTED_UPDATE,
+        "loader_kwargs": UpdateStrategy.KEY_UPDATE,
     }
 
     _connection_config_validator = connection_config_validator

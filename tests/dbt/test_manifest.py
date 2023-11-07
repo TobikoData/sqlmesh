@@ -72,3 +72,20 @@ def test_tests_referencing_disabled_models():
 
     assert "disabled_model" not in helper.models()
     assert "not_null_disabled_model_one" not in helper.tests()
+
+
+def test_variable_override():
+    project_path = Path("tests/fixtures/dbt/sushi_test")
+    profile = Profile.load(DbtContext(project_path))
+
+    helper = ManifestHelper(project_path, project_path, "sushi", profile.target)
+    assert helper.models()["top_waiters"].limit_value == 10
+
+    helper = ManifestHelper(
+        project_path,
+        project_path,
+        "sushi",
+        profile.target,
+        variable_overrides={"top_waiters:limit": 1},
+    )
+    assert helper.models()["top_waiters"].limit_value == 1
