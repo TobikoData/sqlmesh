@@ -146,7 +146,7 @@ class MacroEvaluator:
             return func(self, *args)
         except Exception as e:
             print_exception(e, self.python_env)
-            raise MacroEvalError(f"Error trying to eval macro.") from e
+            raise MacroEvalError("Error trying to eval macro.") from e
 
     def transform(
         self, expression: exp.Expression
@@ -218,7 +218,7 @@ class MacroEvaluator:
             return node
 
         if isinstance(node, (MacroSQL, MacroStrReplace)):
-            result: t.Optional[t.Union[exp.Expression | t.List[exp.Expression]]] = exp.convert(
+            result: t.Optional[exp.Expression | t.List[exp.Expression]] = exp.convert(
                 self.eval_expression(node)
             )
         else:
@@ -674,6 +674,246 @@ def eval_(evaluator: MacroEvaluator, condition: exp.Condition) -> t.Any:
         '2'
     """
     return evaluator.eval_expression(condition)
+
+
+@macro()
+def star(
+    evaluator: MacroEvaluator,
+    relation: exp.Table,
+    alias: t.Optional[exp.Identifier | exp.Column] = None,
+    except_: t.Optional[exp.Array | exp.Tuple] = None,
+    prefix: exp.Literal = exp.Literal.string(""),
+    suffix: exp.Literal = exp.Literal.string(""),
+    quote_identifiers: exp.Boolean = exp.true(),
+) -> t.List[exp.Alias]:
+    """Returns a list of projections for the given relation.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @STAR(foo, bar, [c], 'baz_') FROM foo AS bar"
+        >>> MacroEvaluator(schema={"foo": {"a": "string", "b": "string", "c": "string", "d": "int"}}).transform(parse_one(sql)).sql()
+        'SELECT CAST("bar"."a" AS TEXT) AS "baz_a", CAST("bar"."b" AS TEXT) AS "baz_b", CAST("bar"."d" AS INT) AS "baz_d" FROM foo AS bar'
+    """
+    if alias and not isinstance(alias, (exp.Identifier, exp.Column)):
+        raise SQLMeshError(f"Invalid alias '{alias}'. Expected an identifier.")
+    if except_ and not isinstance(except_, (exp.Array, exp.Tuple)):
+        raise SQLMeshError(f"Invalid except '{except_}'. Expected an array.")
+    if prefix and not isinstance(prefix, exp.Literal):
+        raise SQLMeshError(f"Invalid prefix '{prefix}'. Expected a literal.")
+    if suffix and not isinstance(suffix, exp.Literal):
+        raise SQLMeshError(f"Invalid suffix '{suffix}'. Expected a literal.")
+    if not isinstance(quote_identifiers, exp.Boolean):
+        raise SQLMeshError(f"Invalid quote_identifiers '{quote_identifiers}'. Expected a boolean.")
+    projections: t.List[exp.Alias] = []
+    exclude = set()
+    kwargs = {"quoted": quote_identifiers.this}
+    if alias:
+        kwargs["table"] = alias.name
+    if except_:
+        exclude |= {
+            e.name for e in except_.expressions if isinstance(e, (exp.Identifier, exp.Column))
+        }
+    for column, type_ in evaluator.columns_to_types(relation.sql()).items():
+        if column in exclude:
+            continue
+        projections.append(
+            exp.cast(exp.column(column, **kwargs), type_).as_(
+                f"{prefix.this}{column}{suffix.this}", quoted=kwargs["quoted"]
+            )
+        )
+    return projections
+
+
+@macro()
+def generate_surrogate_key(_: MacroEvaluator, *fields: exp.Column | exp.Identifier) -> exp.Func:
+    """Generates a surrogate key for the given fields.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @GENERATE_SURROGATE_KEY(a, b, c) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT MD5(CONCAT(COALESCE(CAST(a AS TEXT), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(b AS TEXT), '_sqlmesh_surrogate_key_null_'), '|', COALESCE(CAST(c AS TEXT), '_sqlmesh_surrogate_key_null_'))) FROM foo"
+    """
+    default_null_value = exp.Literal.string("_sqlmesh_surrogate_key_null_")
+    string_fields: t.List[exp.Expression] = []
+    for i, field in enumerate(fields):
+        if i > 0:
+            string_fields.append(exp.Literal.string("|"))
+        string_fields.append(
+            exp.func(
+                "COALESCE",
+                exp.cast(field, exp.DataType.build("string")),
+                default_null_value,
+            )
+        )
+    return exp.func("MD5", exp.func("CONCAT", *string_fields))
+
+
+@macro()
+def safe_add(_: MacroEvaluator, *fields: exp.Column) -> exp.Case:
+    """Adds numbers together, substitutes nulls for 0s and only returns null if all fields are null.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @SAFE_ADD(a, b) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) + COALESCE(b, 0) END FROM foo'
+    """
+    null_cond = exp.and_(*[field.is_(exp.null()) for field in fields])
+    case = exp.Case().when(null_cond, exp.null())
+    terms: t.List[exp.Func | exp.Add] = []
+    for field in fields:
+        terms.append(exp.func("COALESCE", field, 0))
+    return case.else_(reduce(lambda a, b: a + b, terms))
+
+
+@macro()
+def safe_sub(_: MacroEvaluator, *fields: exp.Expression) -> exp.Case:
+    """Subtract numbers, substitutes nulls for 0s and only returns null if all fields are null.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @SAFE_SUB(a, b) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT CASE WHEN a IS NULL AND b IS NULL THEN NULL ELSE COALESCE(a, 0) - COALESCE(b, 0) END FROM foo'
+    """
+    null_cond = exp.and_(*[field.is_(exp.null()) for field in fields])
+    case = exp.Case().when(null_cond, exp.null())
+    terms: t.List[exp.Func | exp.Sub] = []
+    for field in fields:
+        terms.append(exp.func("COALESCE", field, 0))
+    return case.else_(reduce(lambda a, b: a - b, terms))
+
+
+@macro()
+def safe_div(_: MacroEvaluator, numerator: exp.Expression, denominator: exp.Expression) -> exp.Div:
+    """Divides numbers, returns null if the denominator is 0.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @SAFE_DIV(a, b) FROM foo"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT a / CASE WHEN b = 0 THEN NULL ELSE b END FROM foo'
+    """
+    return numerator / exp.Case().when(denominator.eq(0), exp.null()).else_(denominator)
+
+
+@macro()
+def union(
+    evaluator: MacroEvaluator,
+    type_: exp.Literal = exp.Literal.string("ALL"),
+    *tables: exp.Table,
+) -> exp.Union:
+    """Returns a UNION of the given tables.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "@UNION('distinct', foo, bar)"
+        >>> MacroEvaluator(schema={"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"a": "int", "b": "int", "c": "string"}}).transform(parse_one(sql)).sql()
+        'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
+    """
+    if type_.this.upper() not in ("ALL", "DISTINCT"):
+        raise SQLMeshError(f"Invalid type '{type_}'. Expected 'ALL' or 'DISTINCT'.")
+    column_sets: t.List[t.Set[t.Tuple[str, exp.DataType]]] = []
+    columns_seen: t.Dict[str, None] = {}  # Ensure order is deterministic, 3.6+ dicts are ordered
+    for table in tables:
+        map = evaluator.columns_to_types(table.sql())
+        column_sets.append(set(map.items()))
+        for c in map:
+            columns_seen[c] = None
+    superset = reduce(lambda a, b: a.intersection(b), column_sets)
+    precedence = {c: i for i, c in enumerate(columns_seen.keys())}
+    projection = [
+        exp.cast(exp.column(name), typ).as_(name)
+        for name, typ in sorted(superset, key=lambda c: precedence[c[0]])
+    ]
+    disinct = type_.this.upper() == "DISTINCT"
+    selects: t.List[exp.Unionable] = [exp.select(*projection).from_(t) for t in tables]
+    return t.cast(exp.Union, reduce(lambda a, b: a.union(b, disinct=disinct), selects))
+
+
+@macro()
+def haversine_distance(
+    _: MacroEvaluator,
+    lat1: exp.Expression,
+    lon1: exp.Expression,
+    lat2: exp.Expression,
+    lon2: exp.Expression,
+    unit: exp.Literal = exp.Literal.string("mi"),
+) -> exp.Mul:
+    """Returns the haversine distance between two points.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT @HAVERSINE_DISTANCE(driver_y, driver_x, passenger_y, passenger_x, 'mi') FROM rides"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        'SELECT 7922 * ASIN(SQRT((POWER(SIN(RADIANS((passenger_y - driver_y) / 2)), 2)) + (COS(RADIANS(driver_y)) * COS(RADIANS(passenger_y)) * POWER(SIN(RADIANS((passenger_x - driver_x) / 2)), 2)))) * 1.0 FROM rides'
+    """
+    if unit.this == "mi":
+        conversion_rate = 1.0
+    elif unit.this == "km":
+        conversion_rate = 1.60934
+    else:
+        raise SQLMeshError(f"Invalid unit '{unit}'. Expected 'mi' or 'km'.")
+    return (
+        2
+        * 3961
+        * exp.func(
+            "ASIN",
+            exp.func(
+                "SQRT",
+                exp.func("POWER", exp.func("SIN", exp.func("RADIANS", (lat2 - lat1) / 2)), 2)
+                + exp.func("COS", exp.func("RADIANS", lat1))
+                * exp.func("COS", exp.func("RADIANS", lat2))
+                * exp.func("POWER", exp.func("SIN", exp.func("RADIANS", (lon2 - lon1) / 2)), 2),
+            ),
+        )
+        * conversion_rate
+    )
+
+
+@macro()
+def pivot(
+    evaluator: MacroEvaluator,
+    column: exp.Column,
+    values: exp.Array | exp.Tuple,
+    alias: exp.Boolean = exp.true(),
+    agg: exp.Literal = exp.Literal.string("SUM"),
+    cmp: exp.Literal = exp.Literal.string("="),
+    prefix: exp.Literal = exp.Literal.string(""),
+    suffix: exp.Literal = exp.Literal.string(""),
+    then_value: exp.Literal = exp.Literal.number(1),
+    else_value: exp.Literal = exp.Literal.number(0),
+    quote: exp.Boolean = exp.true(),
+    distinct: exp.Boolean = exp.false(),
+) -> t.List[exp.Expression]:
+    """Returns a list of projections as a result of pivoting the given column on the given values.
+
+    Example:
+        >>> from sqlglot import parse_one
+        >>> from sqlmesh.core.macros import MacroEvaluator
+        >>> sql = "SELECT date_day, @PIVOT(status, ['cancelled', 'completed']) FROM rides GROUP BY 1"
+        >>> MacroEvaluator().transform(parse_one(sql)).sql()
+        "SELECT date_day, SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END), SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) FROM rides GROUP BY 1"
+    """
+    aggregates: t.List[exp.Expression] = []
+    for value in values.expressions:
+        proj = f"{agg.this}("
+        if distinct.this:
+            proj += "DISTINCT "
+        proj += f"CASE WHEN {column} {cmp.this} {value} THEN {then_value} ELSE {else_value} END) "
+        node = evaluator.parse_one(proj)
+        if alias.this:
+            node.as_(f"{prefix.this}{value}{suffix.this}", quoted=quote.this, copy=False)
+        aggregates.append(node)
+    return aggregates
 
 
 def normalize_macro_name(name: str) -> str:
