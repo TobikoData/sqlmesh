@@ -5,7 +5,7 @@ import zlib
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.utils.migration import blob_text_type, index_text_type
+from sqlmesh.utils.migration import index_text_type
 
 
 def _hash(data):  # type: ignore
@@ -80,14 +80,13 @@ def migrate(state_sync):  # type: ignore
         engine_adapter.delete_from(environments_table, "TRUE")
 
         index_type = index_text_type(engine_adapter.dialect)
-        blob_type = blob_text_type(engine_adapter.dialect)
 
         engine_adapter.insert_append(
             environments_table,
             pd.DataFrame(new_environments),
             columns_to_types={
                 "name": exp.DataType.build(index_type),
-                "snapshots": exp.DataType.build(blob_type),
+                "snapshots": exp.DataType.build("text"),
                 "start_at": exp.DataType.build("text"),
                 "end_at": exp.DataType.build("text"),
                 "plan_id": exp.DataType.build("text"),

@@ -4,7 +4,7 @@ import json
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.utils.migration import blob_text_type, index_text_type
+from sqlmesh.utils.migration import index_text_type
 
 
 def migrate(state_sync):  # type: ignore
@@ -15,7 +15,6 @@ def migrate(state_sync):  # type: ignore
         snapshots_table = f"{schema}.{snapshots_table}"
 
     index_type = index_text_type(engine_adapter.dialect)
-    blob_type = blob_text_type(engine_adapter.dialect)
 
     alter_table_exp = exp.AlterTable(
         this=exp.to_table(snapshots_table),
@@ -55,7 +54,7 @@ def migrate(state_sync):  # type: ignore
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "version": exp.DataType.build(index_type),
-                "snapshot": exp.DataType.build(blob_type),
+                "snapshot": exp.DataType.build("text"),
                 "kind_name": exp.DataType.build(index_type),
             },
             contains_json=True,

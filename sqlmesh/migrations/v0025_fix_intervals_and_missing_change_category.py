@@ -7,7 +7,7 @@ from sqlglot import exp
 
 from sqlmesh.utils import random_id
 from sqlmesh.utils.date import now_timestamp
-from sqlmesh.utils.migration import blob_text_type, index_text_type
+from sqlmesh.utils.migration import index_text_type
 
 
 def migrate(state_sync):  # type: ignore
@@ -78,7 +78,6 @@ def migrate(state_sync):  # type: ignore
 
     if migration_required:
         index_type = index_text_type(engine_adapter.dialect)
-        blob_type = blob_text_type(engine_adapter.dialect)
 
         engine_adapter.delete_from(snapshots_table, "TRUE")
         engine_adapter.insert_append(
@@ -88,7 +87,7 @@ def migrate(state_sync):  # type: ignore
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "version": exp.DataType.build(index_type),
-                "snapshot": exp.DataType.build(blob_type),
+                "snapshot": exp.DataType.build("text"),
                 "kind_name": exp.DataType.build(index_type),
             },
             contains_json=True,

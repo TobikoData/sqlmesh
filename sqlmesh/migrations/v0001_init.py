@@ -5,7 +5,7 @@ the running model may not be able to load them. Make sure that these migration f
 """
 from sqlglot import exp
 
-from sqlmesh.utils.migration import blob_text_type, index_text_type
+from sqlmesh.utils.migration import index_text_type
 
 
 def migrate(state_sync):  # type: ignore
@@ -22,7 +22,6 @@ def migrate(state_sync):  # type: ignore
         versions_table = f"{schema}.{versions_table}"
 
     index_type = index_text_type(engine_adapter.dialect)
-    blob_type = blob_text_type(engine_adapter.dialect)
 
     engine_adapter.create_state_table(
         snapshots_table,
@@ -30,7 +29,7 @@ def migrate(state_sync):  # type: ignore
             "name": exp.DataType.build(index_type),
             "identifier": exp.DataType.build(index_type),
             "version": exp.DataType.build(index_type),
-            "snapshot": exp.DataType.build(blob_type),
+            "snapshot": exp.DataType.build("text"),
         },
         primary_key=("name", "identifier"),
     )
@@ -41,7 +40,7 @@ def migrate(state_sync):  # type: ignore
         environments_table,
         {
             "name": exp.DataType.build(index_type),
-            "snapshots": exp.DataType.build(blob_type),
+            "snapshots": exp.DataType.build("text"),
             "start_at": exp.DataType.build("text"),
             "end_at": exp.DataType.build("text"),
             "plan_id": exp.DataType.build("text"),

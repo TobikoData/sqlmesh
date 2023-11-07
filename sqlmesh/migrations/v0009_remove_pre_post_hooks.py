@@ -4,7 +4,7 @@ import json
 import pandas as pd
 from sqlglot import exp
 
-from sqlmesh.utils.migration import blob_text_type, index_text_type
+from sqlmesh.utils.migration import index_text_type
 
 
 def migrate(state_sync):  # type: ignore
@@ -47,7 +47,6 @@ def migrate(state_sync):  # type: ignore
         engine_adapter.delete_from(snapshots_table, "TRUE")
 
         index_type = index_text_type(engine_adapter.dialect)
-        blob_type = blob_text_type(engine_adapter.dialect)
 
         engine_adapter.insert_append(
             snapshots_table,
@@ -56,7 +55,7 @@ def migrate(state_sync):  # type: ignore
                 "name": exp.DataType.build(index_type),
                 "identifier": exp.DataType.build(index_type),
                 "version": exp.DataType.build(index_type),
-                "snapshot": exp.DataType.build(blob_type),
+                "snapshot": exp.DataType.build("text"),
             },
             contains_json=True,
         )
