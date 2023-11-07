@@ -922,7 +922,7 @@ from sqlglot import exp
 from sqlmesh.core.macros import macro
 
 @macro()
-def foo(evaluator, model_name, prefix):
+def prefix_and_cast_columns(evaluator, model_name, prefix):
     prefix = prefix.name
     renamed_projections = []
 
