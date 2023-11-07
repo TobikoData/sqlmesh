@@ -7,12 +7,11 @@ import typing as t
 
 import click
 
-from sqlmesh import enable_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
-from sqlmesh.utils import debug_mode_enabled, enable_debug_mode
+from sqlmesh.utils import configure_logging
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
 
@@ -75,21 +74,7 @@ def cli(
     if "--help" in sys.argv:
         return
 
-    debug = debug or debug_mode_enabled()
-    if debug:
-        import faulthandler
-        import signal
-
-        enable_debug_mode()
-
-        # Enable threadumps.
-        faulthandler.enable()
-        # Windows doesn't support register so we check for it here
-        if hasattr(faulthandler, "register"):
-            faulthandler.register(signal.SIGUSR1.value)
-        enable_logging(level=logging.DEBUG, write_to_file=True)
-    elif ignore_warnings:
-        logging.getLogger().setLevel(logging.ERROR)
+    configure_logging(debug, ignore_warnings)
 
     try:
         context = Context(

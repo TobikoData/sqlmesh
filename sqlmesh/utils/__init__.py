@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import importlib
+import logging
 import os
 import random
 import re
@@ -18,6 +19,8 @@ from functools import lru_cache, reduce, wraps
 from pathlib import Path
 
 from sqlglot.dialects.dialect import Dialects
+
+logger = logging.getLogger(__name__)
 
 T = t.TypeVar("T")
 KEY = t.TypeVar("KEY", bound=t.Hashable)
@@ -207,6 +210,26 @@ def enable_debug_mode() -> None:
 
 def debug_mode_enabled() -> bool:
     return _debug_mode_enabled or str_to_bool(os.environ.get("SQLMESH_DEBUG"))
+
+
+def configure_logging(force_debug: bool = False, ignore_warnings: bool = False) -> None:
+    from sqlmesh import enable_logging
+
+    debug = force_debug or debug_mode_enabled()
+    if debug:
+        import faulthandler
+        import signal
+
+        enable_debug_mode()
+
+        # Enable threadumps.
+        faulthandler.enable()
+        # Windows doesn't support register so we check for it here
+        if hasattr(faulthandler, "register"):
+            faulthandler.register(signal.SIGUSR1.value)
+        enable_logging(level=logging.DEBUG, write_to_file=True)
+    elif ignore_warnings:
+        logging.getLogger().setLevel(logging.ERROR)
 
 
 def ttl_cache(ttl: int = 60, maxsize: int = 128000) -> t.Callable:
