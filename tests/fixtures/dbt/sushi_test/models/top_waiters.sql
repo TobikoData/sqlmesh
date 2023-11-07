@@ -1,6 +1,7 @@
 {{
     config(
-        materialized='view'
+        materialized='view',
+        limit_value=var('top_waiters:limit'),
     )
 }}
 

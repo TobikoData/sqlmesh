@@ -35,12 +35,13 @@ class Project:
         self.packages = packages
 
     @classmethod
-    def load(cls, context: DbtContext) -> Project:
+    def load(cls, context: DbtContext, variables: t.Optional[t.Dict[str, t.Any]] = None) -> Project:
         """
         Loads the configuration for the specified DBT project
 
         Args:
-            context: DBT context for this project
+            context: dbt context for this project
+            variables: dbt variable overrides
 
         Returns:
             Project instance for the specified DBT project
@@ -53,7 +54,8 @@ class Project:
             raise ConfigError(f"Could not find {PROJECT_FILENAME} in {context.project_root}")
         project_yaml = load_yaml(project_file_path)
 
-        variables = project_yaml.get("vars", {})
+        variable_overrides = variables
+        variables = {**project_yaml.get("vars", {}), **(variables or {})}
         global_variables = {
             name: var for name, var in variables.items() if not isinstance(var, dict)
         }
@@ -70,7 +72,11 @@ class Project:
         context.target = profile.target
 
         context.manifest = ManifestHelper(
-            project_file_path.parent, profile.path.parent, profile_name, target=profile.target
+            project_file_path.parent,
+            profile.path.parent,
+            profile_name,
+            target=profile.target,
+            variable_overrides=variable_overrides,
         )
 
         extra_fields = profile.target.extra
