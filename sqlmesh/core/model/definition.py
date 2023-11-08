@@ -553,16 +553,17 @@ class _Model(ModelMeta, frozen=True):
                     {k: v.sql(dialect=self.dialect) for k, v in mapping_schema.items()},
                 )
             else:
+                logger.warning(
+                    "Missing schema for model '%s' referenced in model '%s'. "
+                    "Run `sqlmesh create_external_models` and / or make sure that the model '%s' "
+                    "can be rendered at parse time",
+                    dep,
+                    self.name,
+                    dep,
+                )
+
                 # Reset the entire mapping if at least one upstream dependency is missing from the mapping
                 # to prevent partial mappings from being used.
-                if self.contains_star_projection:
-                    logger.warning(
-                        "Missing schema for model '%s' referenced in model '%s'. Run `sqlmesh create_external_models` "
-                        "and / or make sure that the model '%s' can be rendered at parse time",
-                        dep,
-                        self.name,
-                        dep,
-                    )
                 self.mapping_schema.clear()
                 return
 
