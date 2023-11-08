@@ -740,6 +740,7 @@ class EngineAdapter:
                 lambda t: not t[0].startswith("#"),
                 describe_output,
             )
+            if column_name and column_name.strip() and column_type and column_type.strip()
         }
 
     @set_catalog()
