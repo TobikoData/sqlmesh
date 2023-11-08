@@ -57,7 +57,6 @@ from sqlmesh.core.state_sync.common import CommonStateSyncMixin, transactional
 from sqlmesh.utils import major_minor, random_id
 from sqlmesh.utils.date import TimeLike, now_timestamp, time_like_to_str
 from sqlmesh.utils.errors import SQLMeshError
-from sqlmesh.utils.migration import blob_text_type, index_text_type
 
 logger = logging.getLogger(__name__)
 
@@ -104,20 +103,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         self.plan_dags_table = exp.table_("_plan_dags", db=self.schema)
         self.versions_table = exp.table_("_versions", db=self.schema)
 
-        index_type = index_text_type(self.engine_adapter.dialect)
-        blob_type = blob_text_type(self.engine_adapter.dialect)
-
         self._snapshot_columns_to_types = {
-            "name": exp.DataType.build(index_type),
-            "identifier": exp.DataType.build(index_type),
-            "version": exp.DataType.build(index_type),
-            "snapshot": exp.DataType.build(blob_type),
-            "kind_name": exp.DataType.build(index_type),
+            "name": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
+            "version": exp.DataType.build("text"),
+            "snapshot": exp.DataType.build("text"),
+            "kind_name": exp.DataType.build("text"),
         }
 
         self._environment_columns_to_types = {
-            "name": exp.DataType.build(index_type),
-            "snapshots": exp.DataType.build(blob_type),
+            "name": exp.DataType.build("text"),
+            "snapshots": exp.DataType.build("text"),
             "start_at": exp.DataType.build("text"),
             "end_at": exp.DataType.build("text"),
             "plan_id": exp.DataType.build("text"),
@@ -129,17 +125,17 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         }
 
         self._seed_columns_to_types = {
-            "name": exp.DataType.build(index_type),
-            "identifier": exp.DataType.build(index_type),
-            "content": exp.DataType.build(blob_type),
+            "name": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
+            "content": exp.DataType.build("text"),
         }
 
         self._interval_columns_to_types = {
-            "id": exp.DataType.build(index_type),
+            "id": exp.DataType.build("text"),
             "created_ts": exp.DataType.build("bigint"),
-            "name": exp.DataType.build(index_type),
-            "identifier": exp.DataType.build(index_type),
-            "version": exp.DataType.build(index_type),
+            "name": exp.DataType.build("text"),
+            "identifier": exp.DataType.build("text"),
+            "version": exp.DataType.build("text"),
             "start_ts": exp.DataType.build("bigint"),
             "end_ts": exp.DataType.build("bigint"),
             "is_dev": exp.DataType.build("boolean"),
