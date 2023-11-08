@@ -552,20 +552,6 @@ class _Model(ModelMeta, frozen=True):
                     tuple(str(part) for part in table.parts),
                     {k: v.sql(dialect=self.dialect) for k, v in mapping_schema.items()},
                 )
-            else:
-                logger.warning(
-                    "Missing schema for model '%s' referenced in model '%s'. "
-                    "Run `sqlmesh create_external_models` and / or make sure that the model '%s' "
-                    "can be rendered at parse time",
-                    dep,
-                    self.name,
-                    dep,
-                )
-
-                # Reset the entire mapping if at least one upstream dependency is missing from the mapping
-                # to prevent partial mappings from being used.
-                self.mapping_schema.clear()
-                return
 
     @property
     def depends_on(self) -> t.Set[str]:
@@ -575,12 +561,6 @@ class _Model(ModelMeta, frozen=True):
             A list of all the upstream table names.
         """
         return self.depends_on_ or set()
-
-    @property
-    def contains_star_projection(self) -> t.Optional[bool]:
-        """Returns True if the model contains a star projection, False if it does not, and None if this
-        cannot be determined at parse time."""
-        return False
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:
@@ -1026,13 +1006,6 @@ class SqlModel(_SqlBasedModel):
 
             self._depends_on -= {self.name}
         return self._depends_on
-
-    @property
-    def contains_star_projection(self) -> t.Optional[bool]:
-        query = self._query_renderer.render(optimize=False)
-        if query is None:
-            return None
-        return any(isinstance(expression, exp.Star) for expression in query.expressions)
 
     @property
     def columns_to_types(self) -> t.Optional[t.Dict[str, exp.DataType]]:

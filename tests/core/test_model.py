@@ -31,7 +31,6 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.common import parse_expression
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
-from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
@@ -1698,16 +1697,14 @@ def test_update_schema():
     )
 
     model = load_sql_based_model(expressions)
-
     schema = MappingSchema(normalize=False)
-    schema.add_table("table_a", {"a": exp.DataType.build("int")})
 
-    # Make sure that the partial schema is not applied.
+    # Even though the partial schema is applied, we won't optimize the model
+    schema.add_table("table_a", {"a": exp.DataType.build("int")})
     model.update_schema(schema)
-    assert not model.mapping_schema
+    assert model.mapping_schema == {"table_a": {"a": "INT"}}
 
     schema.add_table("table_b", {"b": exp.DataType.build("int")})
-
     model.update_schema(schema)
     assert model.mapping_schema == {
         "table_a": {"a": "INT"},
@@ -1757,36 +1754,6 @@ def test_check_schema_mapping_when_rendering_at_runtime(assert_exp_eq):
     assert_exp_eq(
         model.render_query(), """SELECT * FROM "table_a" AS "table_a", "table_b" AS "table_b" """
     )
-
-
-def test_contains_star_projection():
-    expression_with_star = d.parse(
-        """
-        MODEL (name db.table);
-        SELECT * FROM table_a
-        """
-    )
-
-    model = load_sql_based_model(expression_with_star)
-    assert model.contains_star_projection
-    assert model.columns_to_types is None
-
-    # Simulate a query that cannot be rendered at parse time.
-    with patch.object(QueryRenderer, "render", return_value=None) as render_query_mock:
-        model._columns_to_types = None
-        assert model.contains_star_projection is None
-        assert model.columns_to_types is None
-
-    expression_without_star = d.parse(
-        """
-        MODEL (name db.table);
-        SELECT a FROM table_a
-        """
-    )
-
-    model = load_sql_based_model(expression_without_star)
-    assert model.contains_star_projection is False
-    assert "a" in model.columns_to_types
 
 
 def test_model_normalization():
