@@ -523,6 +523,7 @@ class Context(BaseContext):
                 self.notification_target_manager.notify(
                     NotificationEvent.RUN_FAILURE, traceback.format_exc()
                 )
+                logger.error(f"Run Failure: {traceback.format_exc()}")
                 raise e
 
         if success:
@@ -926,6 +927,7 @@ class Context(BaseContext):
             self.notification_target_manager.notify(
                 NotificationEvent.APPLY_FAILURE, traceback.format_exc()
             )
+            logger.error(f"Apply Failure: {traceback.format_exc()}")
             raise e
         self.notification_target_manager.notify(
             NotificationEvent.APPLY_END, environment=plan.environment.name
