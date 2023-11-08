@@ -72,7 +72,6 @@ ModelQueryTypes = t.Union[exp.Subqueryable, d.JinjaQuery, d.MacroFunc]
 
 class PydanticModel(pydantic.BaseModel):
     if PYDANTIC_MAJOR_VERSION >= 2:
-
         model_config = pydantic.ConfigDict(  # type: ignore
             arbitrary_types_allowed=True,
             extra="forbid",  # type: ignore
@@ -239,7 +238,6 @@ elif PYDANTIC_MAJOR_VERSION >= 2:
     SQLGlotBool = Annotated[bool, BeforeValidator(bool_validator)]
     SQLGlotPositiveInt = Annotated[int, BeforeValidator(positive_int_validator)]
 else:
-
     T = t.TypeVar("T")
 
     class PydanticTypeProxy(t.Generic[T]):

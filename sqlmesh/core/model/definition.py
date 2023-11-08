@@ -1779,7 +1779,6 @@ def _create_model(
     physical_schema_override: t.Optional[t.Dict[str, str]] = None,
     **kwargs: t.Any,
 ) -> Model:
-
     _validate_model_fields(klass, {"name", *kwargs} - {"grain"}, path)
 
     dialect = dialect or ""

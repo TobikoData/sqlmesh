@@ -586,7 +586,6 @@ def test_fingerprint_seed_model():
 
 
 def test_fingerprint_jinja_macros(model: Model):
-
     model = SqlModel(
         **{
             **model.dict(),

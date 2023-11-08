@@ -31,7 +31,7 @@ def test_interval_params(scheduler: Scheduler, sushi_context_fixed_date: Context
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
 
-    assert compute_interval_params([orders, waiter_revenue], start=start_ds, end=end_ds,) == {
+    assert compute_interval_params([orders, waiter_revenue], start=start_ds, end=end_ds) == {
         orders: [
             (to_datetime(start_ds), to_datetime("2022-01-31")),
             (to_datetime("2022-01-31"), to_datetime("2022-02-06")),
