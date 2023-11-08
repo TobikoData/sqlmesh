@@ -134,6 +134,18 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_called_once_with('DESCRIBE "test_table"')
 
 
+def test_iceberg_corrupt(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+    adapter.cursor.fetchall.return_value = [
+        ("id", "int"),
+        (" ", ""),
+        ("", b"\n"),
+    ]
+    assert adapter.columns("test_table") == {
+        "id": exp.DataType.build("int"),
+    }
+
+
 def test_table_exists(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(EngineAdapter)
     assert adapter.table_exists("test_table")
