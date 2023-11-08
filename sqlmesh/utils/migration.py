@@ -20,3 +20,7 @@ def index_text_type(dialect: DialectType) -> str:
         if dialect in MAX_TEXT_INDEX_LENGTH
         else "TEXT"
     )
+
+
+def blob_text_type(dialect: DialectType) -> str:
+    return "LONGTEXT" if dialect == "mysql" else "TEXT"
