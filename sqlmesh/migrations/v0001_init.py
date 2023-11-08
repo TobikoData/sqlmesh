@@ -21,14 +21,14 @@ def migrate(state_sync):  # type: ignore
         environments_table = f"{schema}.{environments_table}"
         versions_table = f"{schema}.{versions_table}"
 
-    text_type = index_text_type(engine_adapter.dialect)
+    index_type = index_text_type(engine_adapter.dialect)
 
     engine_adapter.create_state_table(
         snapshots_table,
         {
-            "name": exp.DataType.build(text_type),
-            "identifier": exp.DataType.build(text_type),
-            "version": exp.DataType.build(text_type),
+            "name": exp.DataType.build(index_type),
+            "identifier": exp.DataType.build(index_type),
+            "version": exp.DataType.build(index_type),
             "snapshot": exp.DataType.build("text"),
         },
         primary_key=("name", "identifier"),
@@ -39,7 +39,7 @@ def migrate(state_sync):  # type: ignore
     engine_adapter.create_state_table(
         environments_table,
         {
-            "name": exp.DataType.build(text_type),
+            "name": exp.DataType.build(index_type),
             "snapshots": exp.DataType.build("text"),
             "start_at": exp.DataType.build("text"),
             "end_at": exp.DataType.build("text"),

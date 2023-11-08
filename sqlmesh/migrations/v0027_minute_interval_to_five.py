@@ -40,17 +40,17 @@ def migrate(state_sync):  # type: ignore
     if new_snapshots:
         engine_adapter.delete_from(snapshots_table, "TRUE")
 
-        text_type = index_text_type(engine_adapter.dialect)
+        index_type = index_text_type(engine_adapter.dialect)
 
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
             columns_to_types={
-                "name": exp.DataType.build(text_type),
-                "identifier": exp.DataType.build(text_type),
-                "version": exp.DataType.build(text_type),
+                "name": exp.DataType.build(index_type),
+                "identifier": exp.DataType.build(index_type),
+                "version": exp.DataType.build(index_type),
                 "snapshot": exp.DataType.build("text"),
-                "kind_name": exp.DataType.build(text_type),
+                "kind_name": exp.DataType.build(index_type),
             },
             contains_json=True,
         )

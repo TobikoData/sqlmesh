@@ -10,16 +10,16 @@ def migrate(state_sync):  # type: ignore
     if state_sync.schema:
         intervals_table = f"{state_sync.schema}.{intervals_table}"
 
-    text_type = index_text_type(engine_adapter.dialect)
+    index_type = index_text_type(engine_adapter.dialect)
 
     engine_adapter.create_state_table(
         intervals_table,
         {
-            "id": exp.DataType.build(text_type),
+            "id": exp.DataType.build(index_type),
             "created_ts": exp.DataType.build("bigint"),
-            "name": exp.DataType.build(text_type),
-            "identifier": exp.DataType.build(text_type),
-            "version": exp.DataType.build(text_type),
+            "name": exp.DataType.build(index_type),
+            "identifier": exp.DataType.build(index_type),
+            "version": exp.DataType.build(index_type),
             "start_ts": exp.DataType.build("bigint"),
             "end_ts": exp.DataType.build("bigint"),
             "is_dev": exp.DataType.build("boolean"),
