@@ -401,16 +401,21 @@ class QueryRenderer(BaseExpressionRenderer):
         should_optimize = True
 
         dependencies = d.find_tables(query, dialect=self._dialect) - {self._model_name}
+        deps_with_missing_schemas: t.Set[str] = set()
+
         for dependency in dependencies:
             if schema.find(exp.to_table(dependency)) is None:
                 should_optimize = False
+                deps_with_missing_schemas.add(dependency)
 
-                if self._model_name is not None:
-                    logger.warning(
-                        f"Query cannot be optimized due to missing schema for model '{dependency}'. "
-                        "Run `sqlmesh create_external_models` and / or make sure that the model "
-                        f"'{self._model_name}' can be rendered at parse time.",
-                    )
+        if deps_with_missing_schemas and self._model_name is not None:
+            # Sort the dependencies with missing schemas to make their order deterministic
+            deps = ", ".join(f"'{dep}'" for dep in sorted(deps_with_missing_schemas))
+            logger.warning(
+                f"Query cannot be optimized due to missing schema(s) for model(s): {deps}. "
+                "Run `sqlmesh create_external_models` and / or make sure that the model "
+                f"'{self._model_name}' can be rendered at parse time.",
+            )
 
         should_optimize = should_optimize or not dependencies
 

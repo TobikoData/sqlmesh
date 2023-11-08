@@ -38,6 +38,15 @@ from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable
 
 
+def missing_schema_warning_msg(model, deps):
+    deps = ", ".join(f"'{dep}'" for dep in sorted(deps))
+    return (
+        f"Query cannot be optimized due to missing schema(s) for model(s): {deps}. "
+        f"Run `sqlmesh create_external_models` and / or make sure that the model '{model}' "
+        "can be rendered at parse time."
+    )
+
+
 def test_load(assert_exp_eq):
     expressions = d.parse(
         """
@@ -1707,11 +1716,7 @@ def test_update_schema():
     logger = logging.getLogger("sqlmesh.core.renderer")
     with patch.object(logger, "warning") as mock_logger:
         model.render_query(optimize=True)
-        assert mock_logger.call_args[0][0] == (
-            "Query cannot be optimized due to missing schema for model 'table_b'. "
-            "Run `sqlmesh create_external_models` and / or make sure that the model 'db.table' "
-            "can be rendered at parse time."
-        )
+        assert mock_logger.call_args[0][0] == missing_schema_warning_msg("db.table", ("table_b",))
 
     schema.add_table("table_b", {"b": exp.DataType.build("int")})
     model.update_schema(schema)
@@ -1719,6 +1724,32 @@ def test_update_schema():
         "table_a": {"a": "INT"},
         "table_b": {"b": "INT"},
     }
+    model.render_query(optimize=True)
+
+
+def test_missing_schema_warnings():
+    logger = logging.getLogger("sqlmesh.core.renderer")
+
+    # Star query, only external sources
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM b JOIN a"))
+        model.render_query(optimize=True)
+        assert mock_logger.call_args[0][0] == missing_schema_warning_msg("test", ("a", "b"))
+
+    # Projections are known, both external and non-external sources are mixed
+    # Q: should we print a warning here?
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(d.parse("MODEL (name test); SELECT x::INT FROM a JOIN b"))
+        model.update_schema(MappingSchema({"a": {"x": exp.DataType.build("int")}}, normalize=False))
+        model.render_query(optimize=True)
+        assert mock_logger.call_args[0][0] == missing_schema_warning_msg("test", ("b",))
+
+    # Projections are known, only external sources
+    # TODO: get this test to pass
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(d.parse("MODEL (name test); SELECT x::INT FROM a JOIN b"))
+        model.render_query(optimize=True)
+        assert mock_logger.call_args is None
 
 
 def test_user_provided_depends_on():
