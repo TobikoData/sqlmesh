@@ -1713,7 +1713,6 @@ def test_update_schema():
             "can be rendered at parse time."
         )
 
-
     schema.add_table("table_b", {"b": exp.DataType.build("int")})
     model.update_schema(schema)
     assert model.mapping_schema == {
