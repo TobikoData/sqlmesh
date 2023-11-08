@@ -1704,6 +1704,16 @@ def test_update_schema():
     model.update_schema(schema)
     assert model.mapping_schema == {"table_a": {"a": "INT"}}
 
+    logger = logging.getLogger("sqlmesh.core.renderer")
+    with patch.object(logger, "warning") as mock_logger:
+        model.render_query(optimize=True)
+        assert mock_logger.call_args[0][0] == (
+            "Query cannot be optimized due to missing schema for model 'table_b'. "
+            "Run `sqlmesh create_external_models` and / or make sure that the model 'db.table' "
+            "can be rendered at parse time."
+        )
+
+
     schema.add_table("table_b", {"b": exp.DataType.build("int")})
     model.update_schema(schema)
     assert model.mapping_schema == {
