@@ -272,19 +272,32 @@ class Plan:
         return self._restatements
 
     @property
-    def loaded_snapshot_intervals(self) -> t.List[LoadedSnapshotIntervals]:
+    def loaded_snapshot_intervals(
+        self,
+    ) -> t.Tuple[t.List[LoadedSnapshotIntervals], t.List[Snapshot]]:
         loaded_snapshots = []
+        unloaded_snapshots = []
         for snapshot in self.directly_modified:
-            if not snapshot.change_category:
-                continue
-            loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
+            if snapshot.change_category:
+                loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
+            else:
+                logger.debug(f"Got an unloaded snapshot. Snapshot: {snapshot.name}")
+                unloaded_snapshots.append(snapshot)
             for downstream_indirect in self.indirectly_modified.get(snapshot.name, set()):
                 downstream_snapshot = self._snapshot_mapping[downstream_indirect]
                 # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                 if downstream_snapshot.is_indirect_non_breaking:
                     continue
-                loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(downstream_snapshot))
-        return loaded_snapshots
+                if downstream_snapshot.change_category:
+                    loaded_snapshots.append(
+                        LoadedSnapshotIntervals.from_snapshot(downstream_snapshot)
+                    )
+                else:
+                    logger.debug(
+                        f"Got an unloaded indirectly-modified snapshot. Snapshot: {downstream_snapshot.name}"
+                    )
+                    unloaded_snapshots.append(downstream_snapshot)
+        return loaded_snapshots, unloaded_snapshots
 
     @property
     def has_changes(self) -> bool:
