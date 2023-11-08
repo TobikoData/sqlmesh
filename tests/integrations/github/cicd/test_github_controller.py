@@ -1,14 +1,22 @@
 # type: ignore
-from unittest.mock import call
+from unittest.mock import PropertyMock, call
 
 import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import CategorizerConfig
+from sqlmesh.core.dialect import parse_one
+from sqlmesh.core.model import SqlModel
+from sqlmesh.core.plan import LoadedSnapshotIntervals
+from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.core.user import User, UserRole
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig, MergeMethod
-from sqlmesh.integrations.github.cicd.controller import BotCommand, MergeStateStatus
+from sqlmesh.integrations.github.cicd.controller import (
+    BotCommand,
+    GithubCheckStatus,
+    MergeStateStatus,
+)
 from tests.integrations.github.cicd.fixtures import MockIssueComment
 
 pytest_plugins = ["tests.integrations.github.cicd.fixtures"]
@@ -503,3 +511,52 @@ def test_bot_command_parsing(
         ),
     )
     assert controller.get_command_from_comment() == command
+
+
+def test_unloaded_snapshots(
+    mocker,
+    github_client,
+    make_controller,
+    make_snapshot,
+    make_mock_check_run,
+    make_mock_issue_comment,
+):
+    snapshot_categrozied = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
+    snapshot_categrozied.categorize_as(SnapshotChangeCategory.BREAKING)
+    snapshot_uncategorized = make_snapshot(SqlModel(name="b", query=parse_one("select 1, ds")))
+    mocker.patch(
+        "sqlmesh.core.plan.Plan.loaded_snapshot_intervals",
+        PropertyMock(
+            return_value=(
+                [LoadedSnapshotIntervals.from_snapshot(snapshot_categrozied)],
+                [snapshot_uncategorized],
+            )
+        ),
+    )
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json", github_client
+    )
+    controller.update_pr_environment_check(GithubCheckStatus.COMPLETED)
+
+    assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
+    pr_environment_check_run = controller._check_run_mapping[
+        "SQLMesh - PR Environment Synced"
+    ].all_kwargs
+    assert len(pr_environment_check_run) == 1
+    assert (
+        pr_environment_check_run[0]["output"]["summary"]
+        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>a</td><td>Breaking</td><td>N/A</td></tr><tr><td>b</td><td>Uncategorized</td><td>N/A</td></tr></tbody></table>"""
+    )
