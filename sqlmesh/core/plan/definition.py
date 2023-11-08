@@ -276,10 +276,18 @@ class Plan:
         loaded_snapshots = []
         for snapshot in self.directly_modified:
             if not snapshot.change_category:
+                logger.debug(
+                    f"Got a directly modified snapshot without a change category so now including it in loaded snapshot intervals. Snapshot: {snapshot.name}"
+                )
                 continue
             loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
             for downstream_indirect in self.indirectly_modified.get(snapshot.name, set()):
                 downstream_snapshot = self._snapshot_mapping[downstream_indirect]
+                if not downstream_snapshot.change_category:
+                    logger.debug(
+                        f"Got an indirectly-modified snapshot without a change category so now including it in loaded snapshot intervals. Snapshot: {downstream_snapshot.name}"
+                    )
+                    continue
                 # We don't want to display indirect non-breaking since to users these are effectively no-op changes
                 if downstream_snapshot.is_indirect_non_breaking:
                     continue

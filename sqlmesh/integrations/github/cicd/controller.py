@@ -548,6 +548,11 @@ class GithubController:
             self._context.invalidate_environment(self.pr_environment_name)
 
     def get_loaded_snapshot_intervals(self) -> t.List[LoadedSnapshotIntervals]:
+        """
+        Note: It is possible that the prod plan with gaps can be run against a prod which is different then the prod
+        that was used to create the PR environment. Therefore, we can have new uncateogrized snapshots that
+        will not be included in the loaded snapshot intervals.
+        """
         return self.prod_plan_with_gaps.loaded_snapshot_intervals
 
     def _update_check(
