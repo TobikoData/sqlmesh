@@ -55,11 +55,16 @@ class Api:
 
 
 class Flags:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        full_refresh: t.Optional[str] = None,
+        store_failures: t.Optional[str] = None,
+        which: t.Optional[str] = None,
+    ) -> None:
         # Temporary placeholder values for now (these are generally passed from the CLI)
-        self.FULL_REFRESH = None
-        self.STORE_FAILURES = None
-        self.WHICH = None
+        self.FULL_REFRESH = full_refresh
+        self.STORE_FAILURES = store_failures
+        self.WHICH = which
 
 
 class Modules:
@@ -253,7 +258,6 @@ BUILTIN_GLOBALS = {
     "dbt_version": version.__version__,
     "env_var": env_var,
     "exceptions": Exceptions(),
-    "flags": Flags(),
     "fromjson": from_json,
     "fromyaml": from_yaml,
     "log": log,
@@ -320,6 +324,7 @@ def create_builtin_globals(
     )
 
     if engine_adapter is not None:
+        builtin_globals["flags"] = Flags(which="run")
         adapter: BaseAdapter = RuntimeAdapter(
             engine_adapter,
             jinja_macros,
@@ -335,6 +340,7 @@ def create_builtin_globals(
             deployability_index=jinja_globals.get("deployability_index", False),
         )
     else:
+        builtin_globals["flags"] = Flags(which="parse")
         adapter = ParsetimeAdapter(
             jinja_macros,
             jinja_globals={**builtin_globals, **jinja_globals},
