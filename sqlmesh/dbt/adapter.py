@@ -191,8 +191,10 @@ class RuntimeAdapter(BaseAdapter):
     ) -> t.Optional[BaseRelation]:
         mapped_table = self._map_table_name(database, schema, identifier)
         schema, identifier = mapped_table.db, mapped_table.name
+        logger.debug(f"GET_RELATION SCHEMA='{schema}' IDENTIFIER='{identifier}'")
 
         relations_list = self.list_relations(database, schema)
+        logger.debug(f"RELATIONS: {relations_list}")
         matching_relations = [
             r
             for r in relations_list
