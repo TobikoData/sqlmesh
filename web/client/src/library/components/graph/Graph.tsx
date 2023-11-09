@@ -947,7 +947,7 @@ function ModelColumnLineage({
           position="top-right"
           className="bg-theme !m-0 w-full"
         >
-          <GrpahControls nodes={nodes} />
+          <GraphControls nodes={nodes} />
         </Panel>
         <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
         <Background
@@ -987,7 +987,7 @@ function ColumnLoading({
   )
 }
 
-function GrpahControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
+function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
   const {
     withColumns,
     models,
