@@ -398,26 +398,23 @@ class QueryRenderer(BaseExpressionRenderer):
         schema = MappingSchema(self.schema, dialect=self._dialect, normalize=False)
         original = query
         failure = False
-        should_optimize = True
+        missing_deps = set()
+        all_deps = d.find_tables(query, dialect=self._dialect) - {self._model_name}
+        should_optimize = not schema.empty or not all_deps
 
-        dependencies = d.find_tables(query, dialect=self._dialect) - {self._model_name}
-        deps_with_missing_schemas: t.Set[str] = set()
-
-        for dependency in dependencies:
-            if schema.find(exp.to_table(dependency)) is None:
+        for dep in all_deps:
+            if not schema.find(exp.to_table(dep)):
                 should_optimize = False
-                deps_with_missing_schemas.add(dependency)
+                missing_deps.add(dep)
 
-        if deps_with_missing_schemas and self._model_name is not None:
-            # Sort the dependencies with missing schemas to make their order deterministic
-            deps = ", ".join(f"'{dep}'" for dep in sorted(deps_with_missing_schemas))
+        if not should_optimize and any(s.is_star for s in query.selects):
+            deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
+
             logger.warning(
-                f"Query cannot be optimized due to missing schema(s) for model(s): {deps}. "
+                f"SELECT * cannot be expanded due to missing schema(s) for model(s): {deps}. "
                 "Run `sqlmesh create_external_models` and / or make sure that the model "
                 f"'{self._model_name}' can be rendered at parse time.",
             )
-
-        should_optimize = should_optimize or not dependencies
 
         try:
             if should_optimize:
