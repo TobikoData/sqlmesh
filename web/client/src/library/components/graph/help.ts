@@ -35,6 +35,7 @@ export {
   hasActiveEdge,
   hasActiveEdgeConnector,
   getModelNodeTypeTitle,
+  getModelAncestors,
 }
 
 async function createGraphLayout({
@@ -90,12 +91,12 @@ function getEdges(lineage: Record<string, Lineage> = {}): Edge[] {
     for (const targetColumnName in targetModel.columns) {
       const sourceModel = targetModel.columns[targetColumnName]
 
-      if (sourceModel == null || sourceModel.models == null) continue
+      if (isNil(sourceModel) || isNil(sourceModel.models)) continue
 
       for (const sourceModelName in sourceModel.models) {
         const sourceColumns = sourceModel.models[sourceModelName]
 
-        if (sourceColumns == null) continue
+        if (isNil(sourceColumns)) continue
 
         for (const sourceColumnName of sourceColumns) {
           const sourceHandler = toNodeOrEdgeId(
@@ -512,6 +513,23 @@ function getLineageIndex(lineage: Record<string, Lineage> = {}): string {
     }, [])
     .sort()
     .join('')
+}
+
+function getModelAncestors(
+  lineage: Record<string, Lineage> = {},
+  name: string,
+): string[] {
+  const model = lineage[name]
+
+  if (isNil(model) || isNil(model.models)) return []
+
+  const models = new Set(model.models)
+
+  model.models.forEach(modelName => {
+    getModelAncestors(lineage, modelName).forEach(m => models.add(m))
+  })
+
+  return Array.from(models)
 }
 
 function getActiveNodes(
