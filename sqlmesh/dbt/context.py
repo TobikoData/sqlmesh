@@ -4,7 +4,10 @@ import typing as t
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from dbt.adapters.base import BaseRelation
+
 from sqlmesh.core.config import Config as SQLMeshConfig
+from sqlmesh.dbt.builtin import _relation_info_to_relation
 from sqlmesh.dbt.manifest import ManifestHelper
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import AttributeDict
@@ -264,6 +267,13 @@ class DbtContext:
         dependency_context._refs = {**dependency_context._seeds, **dependency_context._models}  # type: ignore
 
         return dependency_context
+
+    def create_relation(self, relation_info: AttributeDict[str, t.Any]) -> BaseRelation:
+        if not self.target:
+            raise SQLMeshError("Target must be configured before calling create_relation.")
+        return _relation_info_to_relation(
+            relation_info, self.target.relation_class, self.target.quote_policy
+        )
 
 
 SQLMESH_DBT_PACKAGE = "sqlmesh.dbt"

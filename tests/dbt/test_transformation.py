@@ -41,6 +41,7 @@ from sqlmesh.utils.errors import ConfigError, MacroEvalError, SQLMeshError
 
 def test_model_name():
     context = DbtContext()
+    context._target = DuckDbConfig(name="duckdb", schema="foo")
     context.default_database = "default"
     assert ModelConfig(schema="foo", path="models/bar.sql").canonical_name(context) == "foo.bar"
     assert (

@@ -4,6 +4,8 @@ import typing as t
 
 from dbt.contracts.relation import RelationType
 from pydantic import Field
+from sqlglot import exp
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig
@@ -68,17 +70,17 @@ class SourceConfig(GeneralConfig):
                 raise ConfigError("'source' macro not found.")
             try:
                 relation = source(self.source_name_, self.name)
-                database = (
-                    relation.database if relation.database != context.default_database else None
+                # TODO add back in conditional database
+                # if relation.database == context.default_database:
+                #    relation.database = None
+                table = normalize_identifiers(
+                    exp.to_table(relation.render(), dialect=context.dialect)
                 )
-                self._canonical_name = ".".join(
-                    part for part in (database, relation.schema, relation.identifier) if part
-                )
+                self._canonical_name = exp.table_name(table, dialect=context.dialect)
             except Exception as e:
                 raise ConfigError(
                     f"'source' macro failed for '{self.config_name}' with exeception '{e}'."
                 )
-            # TODO if default database, remove
         return self._canonical_name
 
     @property

@@ -7,7 +7,9 @@ from pathlib import Path
 
 from dbt.contracts.relation import RelationType
 from pydantic import Field
+from sqlglot import exp
 from sqlglot.helper import ensure_list
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
@@ -103,6 +105,8 @@ class BaseModelConfig(GeneralConfig):
     columns: t.Dict[str, ColumnConfig] = {}
     quoting: t.Dict[str, t.Optional[bool]] = {}
 
+    _canonical_name: t.Optional[str] = None
+
     @field_validator("pre_hook", "post_hook", mode="before")
     @classmethod
     def _validate_hooks(cls, v: t.Union[str, t.List[t.Union[SqlStr, str]]]) -> t.List[Hook]:
@@ -188,10 +192,14 @@ class BaseModelConfig(GeneralConfig):
         Returns:
             The sqlmesh model name
         """
-        # TODO add back in conditional database
-        # database = self.database if self.database != context.default_database else None
-        database = self.database
-        return ".".join(part for part in (database, self.table_schema, self.table_name) if part)
+        if not self._canonical_name:
+            relation = context.create_relation(self.relation_info)
+            # TODO add back in conditional database
+            # if relation.database == context.default_database:
+            #    relation.database = None
+            table = normalize_identifiers(exp.to_table(relation.render(), dialect=context.dialect))
+            self._canonical_name = exp.table_name(table, dialect=context.dialect)
+        return self._canonical_name
 
     @property
     def model_materialization(self) -> Materialization:
