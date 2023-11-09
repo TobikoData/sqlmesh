@@ -33,6 +33,7 @@ class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAda
     )
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
     CURRENT_CATALOG_FUNCTION = "current_catalog()"
+    SUPPORTS_ROW_LEVEL_OP = True
 
     def __init__(self, *args: t.Any, **kwargs: t.Any):
         super().__init__(*args, **kwargs)
