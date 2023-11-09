@@ -1,6 +1,6 @@
 import React, { Fragment, useMemo, useRef, useState } from 'react'
 import Input from '@components/input/Input'
-import { isArrayEmpty, isNil } from '@utils/index'
+import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
 import { EnumSize, type Size } from '~/types/enum'
 import { EMPTY_STRING, filterListBy, highlightMatch } from './help'
 import { useNavigate } from 'react-router-dom'
@@ -60,19 +60,27 @@ export default function SearchList<
   size = EnumSize.sm,
   searchBy,
   displayBy,
+  descriptionBy,
   onSelect,
   to,
+  placeholder = 'Search',
   autoFocus = false,
   isFullWidth = false,
+  showIndex = true,
+  className,
 }: {
   list: T[]
   searchBy: string
   displayBy: string
+  descriptionBy?: string
+  placeholder?: string
   onSelect?: (item: T) => void
   autoFocus?: boolean
+  showIndex?: boolean
   to?: (item: T) => string
   size?: Size
   isFullWidth?: boolean
+  className?: string
 }): JSX.Element {
   const navigate = useNavigate()
 
@@ -116,7 +124,7 @@ export default function SearchList<
 
   return (
     <div
-      className="px-2 py-1 relative"
+      className={clsx('px-2 py-1 relative', className)}
       ref={ref}
       onKeyDown={(e: React.KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -131,7 +139,7 @@ export default function SearchList<
           className="w-full !m-0"
           size={size}
           value={search}
-          placeholder="Search"
+          placeholder={placeholder}
           onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
             setSearch(e.target.value.trim())
           }}
@@ -156,7 +164,7 @@ export default function SearchList<
             static
             focus
             className={clsx(
-              'absolute z-10  transform cursor-pointer rounded-lg bg-theme border-4 border-primary-20',
+              'absolute z-10 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
               'p-2 bg-theme dark:bg-theme-lighter max-h-[25vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
               size === EnumSize.sm && 'mt-10',
               size === EnumSize.md && 'mt-12',
@@ -213,7 +221,7 @@ export default function SearchList<
                   data-index={idx}
                   className={clsx(
                     'cursor-pointer rounded-lg',
-                    activeIndex === idx && 'bg-primary-20',
+                    activeIndex === idx && 'bg-neutral-5',
                   )}
                 >
                   <SearchResult<T>
@@ -221,7 +229,9 @@ export default function SearchList<
                     index={index}
                     search={search}
                     displayBy={displayBy}
+                    descriptionBy={descriptionBy}
                     size={size}
+                    showIndex={showIndex}
                     onClick={(e: React.MouseEvent) => {
                       e.stopPropagation()
                       e.preventDefault()
@@ -244,14 +254,18 @@ function SearchResult<T extends Record<string, any> = Record<string, any>>({
   index,
   search,
   displayBy,
+  descriptionBy,
   size,
+  showIndex = true,
   onClick,
 }: {
   item: T
   index: string
   search: string
-  displayBy: string
   size: Size
+  displayBy: string
+  descriptionBy?: string
+  showIndex?: boolean
   onClick?: (e: React.MouseEvent) => void
 }): JSX.Element {
   return (
@@ -264,13 +278,29 @@ function SearchResult<T extends Record<string, any> = Record<string, any>>({
         size === EnumSize.lg && 'text-lg py-3',
       )}
     >
-      <span className="font-bold">{item[displayBy]}</span>
-      <small
-        className="block text-neutral-600 italic overflow-hidden whitespace-nowrap overflow-ellipsis"
-        dangerouslySetInnerHTML={{
-          __html: highlightMatch(index, search),
-        }}
-      />
+      {showIndex ? (
+        <>
+          <span className="font-bold">{item[displayBy]}</span>
+          <small
+            className="block text-neutral-600 italic overflow-hidden whitespace-nowrap overflow-ellipsis"
+            dangerouslySetInnerHTML={{
+              __html: highlightMatch(index, search),
+            }}
+          ></small>
+        </>
+      ) : (
+        <span
+          className="font-bold"
+          dangerouslySetInnerHTML={{
+            __html: highlightMatch(item[displayBy], search),
+          }}
+        ></span>
+      )}
+      {isNotNil(descriptionBy) && (
+        <small className="block text-neutral-600 italic overflow-hidden whitespace-nowrap overflow-ellipsis">
+          {item[descriptionBy]}
+        </small>
+      )}
     </div>
   )
 }

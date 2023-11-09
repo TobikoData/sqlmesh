@@ -37,6 +37,7 @@ import {
   getUpdatedEdges,
   getUpdatedNodes,
   getModelNodeTypeTitle,
+  getModelAncestors,
 } from './help'
 import {
   debounceSync,
@@ -75,6 +76,7 @@ import { useSQLMeshModelExtensions } from '@components/editor/hooks'
 import { useApiColumnLineage } from '@api/index'
 import ModelNode from './ModelNode'
 import ListboxShow from '@components/listbox/ListboxShow'
+import SearchList from '@components/search/SearchList'
 
 export const EnumLineageNodeModelType = {
   python: 'python',
@@ -756,18 +758,12 @@ function ModelColumnLineage({
     withImpacted,
     withSecondary,
     hasBackground,
-    activeNodes,
     activeEdges,
     connectedNodes,
     connections,
-    highlightedNodes,
     setWithColumns,
     handleError,
-    setWithConnected,
     setActiveNodes,
-    setWithImpacted,
-    setWithSecondary,
-    setHasBackground,
   } = useLineageFlow()
   const { setCenter } = useReactFlow()
 
@@ -925,27 +921,6 @@ function ModelColumnLineage({
     setEdges(applyEdgeChanges(changes, edges))
   }
 
-  const countSelected = selectedNodes.size
-  const countImpact = connectedNodes.size - 1
-  const countSecondary = nodes.filter(n =>
-    isFalse(connectedNodes.has(n.id)),
-  ).length
-  const countActive =
-    activeNodes.size > 0 ? activeNodes.size : connectedNodes.size
-  const countHidden = nodes.filter(n => n.hidden).length
-  const countVisible = nodes.filter(n => isFalse(n.hidden)).length
-  const countDataSources = nodes.filter(
-    n =>
-      isFalse(n.hidden) &&
-      (models.get(n.id)?.type === EnumLineageNodeModelType.external ||
-        models.get(n.id)?.type === EnumLineageNodeModelType.seed),
-  ).length
-  const countCTEs = nodes.filter(
-    n =>
-      isFalse(n.hidden) &&
-      models.get(n.id)?.type === EnumLineageNodeModelType.cte,
-  ).length
-
   return (
     <div className={clsx('px-1 w-full h-full relative', className)}>
       {isBuildingLayout && (
@@ -970,80 +945,9 @@ function ModelColumnLineage({
       >
         <Panel
           position="top-right"
-          className="bg-theme !m-0 w-full opacity-90"
+          className="bg-theme !m-0 w-full"
         >
-          <div className="pl-2 flex items-center text-xs text-neutral-400 pb-2">
-            <div className="flex w-full whitespace-nowrap overflow-auto hover:scrollbar scrollbar--horizontal">
-              <span className="mr-2">
-                <b>Model:</b> {mainNode}
-              </span>
-              {isNotNil(highlightedNodes) ?? (
-                <span className="mr-2">
-                  <b>Highlighted:</b>{' '}
-                  {Object.keys(highlightedNodes ?? {}).length}
-                </span>
-              )}
-              {countSelected > 0 && (
-                <span className="mr-2">
-                  <b>Selected:</b> {countSelected}
-                </span>
-              )}
-              {withImpacted && countSelected === 0 && countImpact > 0 && (
-                <span className="mr-2">
-                  <b>Impact:</b> {countImpact}
-                </span>
-              )}
-              {withSecondary && countSelected === 0 && countSecondary > 0 && (
-                <span className="mr-2">
-                  <b>Secondary:</b> {countSecondary}
-                </span>
-              )}
-              <span className="mr-2">
-                <b>Active:</b> {countActive}
-              </span>
-              {countVisible > 0 && countVisible !== countActive && (
-                <span className="mr-2">
-                  <b>Visible:</b> {countVisible}
-                </span>
-              )}
-              {countHidden > 0 && (
-                <span className="mr-2">
-                  <b>Hidden:</b> {countHidden}
-                </span>
-              )}
-              {countDataSources > 0 && (
-                <span className="mr-2">
-                  <b>Data Sources</b>: {countDataSources}
-                </span>
-              )}
-              {countCTEs > 0 && (
-                <span className="mr-2">
-                  <b>CTEs:</b> {countCTEs}
-                </span>
-              )}
-            </div>
-            <ListboxShow
-              options={{
-                Background: setHasBackground,
-                Columns:
-                  activeNodes.size > 0 && selectedNodes.size === 0
-                    ? undefined
-                    : setWithColumns,
-                Connected: activeNodes.size > 0 ? undefined : setWithConnected,
-                Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
-                Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
-              }}
-              value={
-                [
-                  withColumns && 'Columns',
-                  hasBackground && 'Background',
-                  withConnected && 'Connected',
-                  withImpacted && 'Impact',
-                  withSecondary && 'Secondary',
-                ].filter(Boolean) as string[]
-              }
-            />
-          </div>
+          <GrpahControls nodes={nodes} />
         </Panel>
         <Controls className="bg-light p-1 rounded-md !border-none !shadow-lg" />
         <Background
@@ -1080,5 +984,169 @@ function ColumnLoading({
         <ExclamationCircleIcon className="w-4 h-4 text-danger-500 mr-1" />
       )}
     </>
+  )
+}
+
+function GrpahControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
+  const {
+    withColumns,
+    models,
+    lineage,
+    mainNode,
+    selectedNodes,
+    withConnected,
+    withImpacted,
+    withSecondary,
+    hasBackground,
+    activeNodes,
+    connectedNodes,
+    highlightedNodes,
+    setSelectedNodes,
+    setWithColumns,
+    setWithConnected,
+    setWithImpacted,
+    setWithSecondary,
+    setHasBackground,
+  } = useLineageFlow()
+
+  const currentModels = useMemo(() => {
+    if (isNil(mainNode) || isNil(lineage)) return []
+
+    const ancestors = getModelAncestors(lineage, mainNode)
+
+    return Object.keys(lineage)
+      .map(model => ({
+        name: model,
+        description: `${
+          ancestors.includes(model) ? 'Upstream' : 'Downstream'
+        } | Directly Connected: ${connectedNodes.has(model) ? 'Yes' : 'No'}`,
+      }))
+      .filter(Boolean) as Array<{ name: string; description: string }>
+  }, [lineage, mainNode])
+
+  const countSelected = selectedNodes.size
+  const countImpact = connectedNodes.size - 1
+  const countSecondary = nodes.filter(n =>
+    isFalse(connectedNodes.has(n.id)),
+  ).length
+  const countActive =
+    activeNodes.size > 0 ? activeNodes.size : connectedNodes.size
+  const countHidden = nodes.filter(n => n.hidden).length
+  const countVisible = nodes.filter(n => isFalse(n.hidden)).length
+  const countDataSources = nodes.filter(
+    n =>
+      isFalse(n.hidden) &&
+      (models.get(n.id)?.type === EnumLineageNodeModelType.external ||
+        models.get(n.id)?.type === EnumLineageNodeModelType.seed),
+  ).length
+  const countCTEs = nodes.filter(
+    n =>
+      isFalse(n.hidden) &&
+      models.get(n.id)?.type === EnumLineageNodeModelType.cte,
+  ).length
+  const highlightedNodeModels = useMemo(
+    () => Object.values(highlightedNodes ?? {}).flat(),
+    [highlightedNodes],
+  )
+
+  function handleSelect(model: { name: string; description: string }): void {
+    if (highlightedNodeModels.includes(model.name) || mainNode === model.name)
+      return
+
+    setSelectedNodes(current => {
+      if (current.has(model.name)) {
+        current.delete(model.name)
+      } else {
+        current.add(model.name)
+      }
+
+      return new Set(current)
+    })
+  }
+
+  return (
+    <div className="pl-2 flex items-center text-xs text-neutral-400">
+      <div className="flex w-full whitespace-nowrap">
+        <span className="mr-2">
+          <b>Model:</b> {mainNode}
+        </span>
+        {isNotNil(highlightedNodes) ?? (
+          <span className="mr-2">
+            <b>Highlighted:</b> {Object.keys(highlightedNodes ?? {}).length}
+          </span>
+        )}
+        {countSelected > 0 && (
+          <span className="mr-2">
+            <b>Selected:</b> {countSelected}
+          </span>
+        )}
+        {withImpacted && countSelected === 0 && countImpact > 0 && (
+          <span className="mr-2">
+            <b>Impact:</b> {countImpact}
+          </span>
+        )}
+        {withSecondary && countSelected === 0 && countSecondary > 0 && (
+          <span className="mr-2">
+            <b>Secondary:</b> {countSecondary}
+          </span>
+        )}
+        <span className="mr-2">
+          <b>Active:</b> {countActive}
+        </span>
+        {countVisible > 0 && countVisible !== countActive && (
+          <span className="mr-2">
+            <b>Visible:</b> {countVisible}
+          </span>
+        )}
+        {countHidden > 0 && (
+          <span className="mr-2">
+            <b>Hidden:</b> {countHidden}
+          </span>
+        )}
+        {countDataSources > 0 && (
+          <span className="mr-2">
+            <b>Data Sources</b>: {countDataSources}
+          </span>
+        )}
+        {countCTEs > 0 && (
+          <span className="mr-2">
+            <b>CTEs:</b> {countCTEs}
+          </span>
+        )}
+      </div>
+      <SearchList<{ name: string; description: string }>
+        list={currentModels}
+        placeholder="Find"
+        searchBy="name"
+        displayBy="name"
+        descriptionBy="description"
+        showIndex={false}
+        size={EnumSize.sm}
+        onSelect={handleSelect}
+        className="w-full min-w-[15rem] max-w-[20rem]"
+        isFullWidth={true}
+      />
+      <ListboxShow
+        options={{
+          Background: setHasBackground,
+          Columns:
+            activeNodes.size > 0 && selectedNodes.size === 0
+              ? undefined
+              : setWithColumns,
+          Connected: activeNodes.size > 0 ? undefined : setWithConnected,
+          Impact: activeNodes.size > 0 ? undefined : setWithImpacted,
+          Secondary: activeNodes.size > 0 ? undefined : setWithSecondary,
+        }}
+        value={
+          [
+            withColumns && 'Columns',
+            hasBackground && 'Background',
+            withConnected && 'Connected',
+            withImpacted && 'Impact',
+            withSecondary && 'Secondary',
+          ].filter(Boolean) as string[]
+        }
+      />
+    </div>
   )
 }
