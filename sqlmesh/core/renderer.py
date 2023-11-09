@@ -398,34 +398,28 @@ class QueryRenderer(BaseExpressionRenderer):
         schema = MappingSchema(self.schema, dialect=self._dialect, normalize=False)
         original = query
         failure = False
+        missing_deps = set()
+        all_deps = d.find_tables(query, dialect=self._dialect) - {self._model_name}
+        should_optimize = not schema.empty or not all_deps
 
-        dependencies = d.find_tables(query, dialect=self._dialect) - {self._model_name}
-        for dependency in dependencies:
-            if schema.find(exp.to_table(dependency)) is None:
-                if self._model_name is not None:
-                    logger.warning(
-                        "Query cannot be optimized due to missing schema for model '%s'. "
-                        "Run `sqlmesh create_external_models` and / or make sure that the model '%s' can be rendered at parse time",
-                        dependency,
-                        self._model_name,
-                    )
-                schema = MappingSchema(None, dialect=self._dialect, normalize=False)
-                break
+        for dep in all_deps:
+            if not schema.find(exp.to_table(dep)):
+                should_optimize = False
+                missing_deps.add(dep)
 
-        should_optimize = not schema.empty or not dependencies
+        if not should_optimize and any(s.is_star for s in query.selects):
+            deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
+
+            logger.warning(
+                f"SELECT * cannot be expanded due to missing schema(s) for model(s): {deps}. "
+                "Run `sqlmesh create_external_models` and / or make sure that the model "
+                f"'{self._model_name}' can be rendered at parse time.",
+            )
 
         try:
             if should_optimize:
                 query = query.copy()
-
-                simplify(
-                    qualify(
-                        query,
-                        dialect=self._dialect,
-                        schema=schema,
-                        infer_schema=False,
-                    )
-                )
+                simplify(qualify(query, dialect=self._dialect, schema=schema, infer_schema=False))
         except SqlglotError as ex:
             failure = True
             logger.error(
