@@ -106,8 +106,6 @@ export const LineageFlowContext = createContext<LineageFlow>({
   setConnections: () => {},
   setSelectedNodes: () => {},
   setMainNode: () => {},
-  // setNodes: () => {},
-  // setEdges: () => {},
   setActiveNodes: () => {},
 })
 
