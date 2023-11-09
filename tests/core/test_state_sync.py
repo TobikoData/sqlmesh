@@ -35,6 +35,7 @@ from sqlmesh.core.state_sync import (
     cleanup_expired_views,
 )
 from sqlmesh.core.state_sync.base import (
+    MIGRATIONS,
     SCHEMA_VERSION,
     SQLGLOT_VERSION,
     PromotionResult,
@@ -1557,3 +1558,31 @@ def test_snapshot_batching(state_sync, mocker, make_snapshot):
     assert len(snapshots) == 3
     calls = mock.fetchall.call_args_list
     assert len(calls) == 2
+
+
+def test_migrate_to_last_version(duck_conn, monkeypatch) -> None:
+    second_to_last = SCHEMA_VERSION - 1
+    migrations = MIGRATIONS[:second_to_last]
+
+    monkeypatch.setattr("sqlmesh.core.state_sync.base.MIGRATIONS", migrations)
+    monkeypatch.setattr("sqlmesh.core.state_sync.engine_adapter.MIGRATIONS", migrations)
+    monkeypatch.setattr("sqlmesh.core.state_sync.base.SCHEMA_VERSION", second_to_last)
+    monkeypatch.setattr("sqlmesh.core.state_sync.engine_adapter.SCHEMA_VERSION", second_to_last)
+
+    state_sync = EngineAdapterStateSync(
+        create_engine_adapter(lambda: duck_conn, "duckdb"), schema=c.SQLMESH
+    )
+
+    # Migrate up to the second-to-last schema version
+    state_sync.migrate()
+
+    last = second_to_last + 1
+    migrations = MIGRATIONS[:last]
+
+    monkeypatch.setattr("sqlmesh.core.state_sync.base.MIGRATIONS", migrations)
+    monkeypatch.setattr("sqlmesh.core.state_sync.engine_adapter.MIGRATIONS", migrations)
+    monkeypatch.setattr("sqlmesh.core.state_sync.base.SCHEMA_VERSION", last)
+    monkeypatch.setattr("sqlmesh.core.state_sync.engine_adapter.SCHEMA_VERSION", last)
+
+    # Migrate from the second-to-last to the last version
+    state_sync.migrate()
