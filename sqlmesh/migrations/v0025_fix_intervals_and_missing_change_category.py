@@ -77,18 +77,18 @@ def migrate(state_sync):  # type: ignore
         )
 
     if migration_required:
-        text_type = index_text_type(engine_adapter.dialect)
+        index_type = index_text_type(engine_adapter.dialect)
 
         engine_adapter.delete_from(snapshots_table, "TRUE")
         engine_adapter.insert_append(
             snapshots_table,
             pd.DataFrame(new_snapshots),
             columns_to_types={
-                "name": exp.DataType.build(text_type),
-                "identifier": exp.DataType.build(text_type),
-                "version": exp.DataType.build(text_type),
+                "name": exp.DataType.build(index_type),
+                "identifier": exp.DataType.build(index_type),
+                "version": exp.DataType.build(index_type),
                 "snapshot": exp.DataType.build("text"),
-                "kind_name": exp.DataType.build("text"),
+                "kind_name": exp.DataType.build(index_type),
             },
             contains_json=True,
         )
@@ -98,11 +98,11 @@ def migrate(state_sync):  # type: ignore
                 intervals_table,
                 pd.DataFrame(new_intervals),
                 columns_to_types={
-                    "id": exp.DataType.build(text_type),
+                    "id": exp.DataType.build(index_type),
                     "created_ts": exp.DataType.build("bigint"),
-                    "name": exp.DataType.build(text_type),
-                    "identifier": exp.DataType.build(text_type),
-                    "version": exp.DataType.build(text_type),
+                    "name": exp.DataType.build(index_type),
+                    "identifier": exp.DataType.build(index_type),
+                    "version": exp.DataType.build(index_type),
                     "start_ts": exp.DataType.build("bigint"),
                     "end_ts": exp.DataType.build("bigint"),
                     "is_dev": exp.DataType.build("boolean"),

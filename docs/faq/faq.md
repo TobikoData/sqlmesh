@@ -163,7 +163,7 @@
 
 ## Warnings and Errors
 
-??? question "Why did I get the warning 'Query cannot be optimized due to missing schema for model [...]'?"
+??? question "Why did I get the warning 'Query cannot be optimized due to missing schema(s) for model(s): [...]'?"
     SQLMesh uses its knowledge of table schema (column names and data types) to optimize model queries and create column-level lineage. SQLMesh does not have schema knowledge for data sources outside the project and will generate this warning when a model selects from one.
 
     You can resolve this by creating an [`external` model](../concepts/models/external_models.md) for each external data source. The `sqlmesh create_external_models` command captures schema information for external data sources and stores them in the project's `schema.yml` file. You can create the file manually instead, if desired.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import traceback
 import typing as t
 from datetime import datetime
 
@@ -181,6 +182,7 @@ class Scheduler:
                 self.notification_target_manager.notify_user(
                     NotificationEvent.AUDIT_FAILURE, snapshot.node.owner, e
                 )
+            logger.error(f"Audit Failure: {traceback.format_exc()}")
             raise e
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
 

@@ -22,6 +22,7 @@ class PlanDagState:
         self.engine_adapter = engine_adapter
 
         self._plan_dags_table = plan_dags_table
+
         self._plan_dag_columns_to_types = {
             "request_id": exp.DataType.build("text"),
             "dag_id": exp.DataType.build("text"),

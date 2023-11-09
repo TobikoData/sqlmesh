@@ -10,7 +10,7 @@ from sqlglot import exp, parse_one
 from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.dialect import schema_
+from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.snapshot import DeployabilityIndex, Snapshot, to_table_mapping
 from sqlmesh.utils.errors import ConfigError, ParsetimeAdapterCallError
@@ -311,7 +311,10 @@ class RuntimeAdapter(BaseAdapter):
     def _map_table_name(
         self, database: t.Optional[str], schema: t.Optional[str], identifier: t.Optional[str]
     ) -> exp.Table:
-        name = ".".join(p for p in (database, schema, identifier) if p is not None)
+        name = normalize_model_name(
+            exp.table_(identifier or "", db=schema, catalog=database),
+            dialect=self.engine_adapter.dialect,
+        )
         if name not in self.table_mapping:
             return exp.to_table(name, dialect=self.engine_adapter.dialect)
 

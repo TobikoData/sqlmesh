@@ -79,13 +79,13 @@ def migrate(state_sync):  # type: ignore
     if new_environments:
         engine_adapter.delete_from(environments_table, "TRUE")
 
-        text_type = index_text_type(engine_adapter.dialect)
+        index_type = index_text_type(engine_adapter.dialect)
 
         engine_adapter.insert_append(
             environments_table,
             pd.DataFrame(new_environments),
             columns_to_types={
-                "name": exp.DataType.build(text_type),
+                "name": exp.DataType.build(index_type),
                 "snapshots": exp.DataType.build("text"),
                 "start_at": exp.DataType.build("text"),
                 "end_at": exp.DataType.build("text"),
