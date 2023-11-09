@@ -201,9 +201,7 @@ class MSSQLEngineAdapter(
                     else:  # type: ignore
                         df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
 
-            self.create_table(
-                temp_table, columns_to_types_tztext if columns_to_types_tztext else columns_to_types
-            )
+            self.create_table(temp_table, columns_to_types_tztext or columns_to_types)
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
             conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
