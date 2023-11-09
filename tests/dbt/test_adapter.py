@@ -88,7 +88,7 @@ def test_normalization(
     relation_bla_bob = exp.table_("BOB", db="BLA")
 
     renderer("{{ adapter.get_relation(database=None, schema='bla', identifier='bob') }}")
-    adapter_mock._get_data_objects.assert_has_calls([call(schema_bla)])
+    adapter_mock.table_exists.assert_has_calls([call(relation_bla_bob)])
 
     renderer(
         "{%- set relation = api.Relation.create(schema='bla') -%}"
@@ -137,7 +137,7 @@ def test_normalization(
         "{%- set relation = api.Relation.create(schema='bla', identifier='bob') -%}"
         "{{ adapter.drop_relation(relation) }}"
     )
-    adapter_mock.drop_table.assert_has_calls([call(exp.table_("bob", db="bla", quoted=True))])
+    adapter_mock.drop_table.assert_has_calls([call(relation_bla_bob)])
 
 
 def test_adapter_dispatch(sushi_test_project: Project, runtime_renderer: t.Callable):

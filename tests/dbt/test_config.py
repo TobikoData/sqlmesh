@@ -155,9 +155,9 @@ def test_test_to_sqlmesh_fields():
 
 
 def test_singular_test_to_standalone_audit():
-    sql = "SELECT * FROM FOO WHERE cost > 100"
+    sql = "SELECT * FROM FOO.BAR WHERE cost > 100"
     test_config = TestConfig(
-        name="foo_test",
+        name="bar_test",
         description="test description",
         owner="Sally",
         stamp="bump",
@@ -166,12 +166,12 @@ def test_singular_test_to_standalone_audit():
         sql=sql,
         severity="ERROR",
         enabled=True,
-        dependencies=Dependencies(refs=["foo"]),
+        dependencies=Dependencies(refs=["bar"]),
     )
 
     assert test_config.is_standalone == True
 
-    model = ModelConfig(name="foo", alias="foo")
+    model = ModelConfig(schema="foo", name="bar", alias="bar")
 
     context = DbtContext()
     context.add_models({model.name: model})
@@ -179,7 +179,7 @@ def test_singular_test_to_standalone_audit():
     context.target = DuckDbConfig(name="target", schema="foo")
     standalone_audit = test_config.to_sqlmesh(context)
 
-    assert standalone_audit.name == "foo_test"
+    assert standalone_audit.name == "bar_test"
     assert standalone_audit.description == "test description"
     assert standalone_audit.owner == "Sally"
     assert standalone_audit.stamp == "bump"
@@ -187,7 +187,7 @@ def test_singular_test_to_standalone_audit():
     assert standalone_audit.interval_unit.value == "day"
     assert standalone_audit.dialect == "duckdb"
     assert standalone_audit.query == jinja_query(sql)
-    assert standalone_audit.depends_on == {"foo"}
+    assert standalone_audit.depends_on == {"foo.bar"}
 
 
 def test_model_config_sql_no_config():

@@ -9,7 +9,6 @@ from dbt.contracts.relation import RelationType
 from pydantic import Field
 from sqlglot import exp
 from sqlglot.helper import ensure_list
-from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
 from sqlmesh.core import dialect as d
 from sqlmesh.core.config.base import UpdateStrategy
@@ -197,8 +196,8 @@ class BaseModelConfig(GeneralConfig):
             # TODO add back in conditional database
             # if relation.database == context.default_database:
             #    relation.database = None
-            table = normalize_identifiers(exp.to_table(relation.render(), dialect=context.dialect))
-            self._canonical_name = exp.table_name(table, dialect=context.dialect)
+            table = exp.to_table(relation.render(), dialect=context.dialect)
+            self._canonical_name = d.normalize_model_name(table, dialect=context.dialect)
         return self._canonical_name
 
     @property
