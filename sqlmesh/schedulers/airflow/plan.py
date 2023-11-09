@@ -126,7 +126,7 @@ def create_plan_dag_spec(
 
     if not request.skip_backfill:
         backfill_batches = scheduler.compute_interval_params(
-            all_snapshots.values(),
+            [s for s in all_snapshots.values() if request.is_selected_for_backfill(s.name)],
             start=request.environment.start_at,
             end=end,
             execution_time=now(),

@@ -1078,3 +1078,46 @@ def test_restatement_intervals_after_updating_start(sushi_context: Context):
     new_restatement_interval = plan.restatements["sushi.waiter_revenue_by_day"]
     assert new_restatement_interval[0] == to_timestamp(new_start)
     assert new_restatement_interval != restatement_interval
+
+
+def test_models_selected_for_backfill(make_snapshot, mocker: MockerFixture):
+    snapshot_a = make_snapshot(SqlModel(name="a", query=parse_one("select 1 as one, ds")))
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(
+        SqlModel(name="b", query=parse_one("select one, ds from a")),
+        nodes={snapshot_a.name: snapshot_a.model},
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    context_diff_mock = mocker.Mock()
+    context_diff_mock.snapshots = {"a": snapshot_a, "b": snapshot_b}
+    context_diff_mock.added = set()
+    context_diff_mock.removed_snapshots = set()
+    context_diff_mock.modified_snapshots = {}
+    context_diff_mock.new_snapshots = {}
+    context_diff_mock.added_materialized_models = set()
+
+    with pytest.raises(
+        PlanError,
+        match="Selecting models to backfill is only supported for development environments",
+    ):
+        Plan(context_diff_mock, backfill_models={"a"})
+
+    plan = Plan(context_diff_mock)
+    assert plan.is_selected_for_backfill("a")
+    assert plan.is_selected_for_backfill("b")
+    assert plan.models_to_backfill is None
+    assert {i.snapshot_name for i in plan.missing_intervals} == {"a", "b"}
+
+    plan = Plan(context_diff_mock, is_dev=True, backfill_models={"a"})
+    assert plan.is_selected_for_backfill("a")
+    assert not plan.is_selected_for_backfill("b")
+    assert plan.models_to_backfill == {"a"}
+    assert {i.snapshot_name for i in plan.missing_intervals} == {"a"}
+
+    plan = Plan(context_diff_mock, is_dev=True, backfill_models={"b"})
+    assert plan.is_selected_for_backfill("a")
+    assert plan.is_selected_for_backfill("b")
+    assert plan.models_to_backfill == {"a", "b"}
+    assert {i.snapshot_name for i in plan.missing_intervals} == {"a", "b"}

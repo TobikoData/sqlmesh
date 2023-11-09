@@ -58,6 +58,7 @@ class Plan:
         restate_models: A list of models for which the data should be restated for the time range
             specified in this plan. Note: models defined outside SQLMesh (external) won't be a part
             of the restatement.
+        backfill_models: A list of models for which the data should be backfilled as part of this plan.
         no_gaps:  Whether to ensure that new snapshots for nodes that are already a
             part of the target environment have no data gaps when compared against previous
             snapshots for same nodes.
@@ -82,6 +83,7 @@ class Plan:
         execution_time: t.Optional[TimeLike] = None,
         apply: t.Optional[t.Callable[[Plan], None]] = None,
         restate_models: t.Optional[t.Iterable[str]] = None,
+        backfill_models: t.Optional[t.Iterable[str]] = None,
         no_gaps: bool = False,
         skip_backfill: bool = False,
         is_dev: bool = False,
@@ -124,6 +126,9 @@ class Plan:
         self.__missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
         self._categorized: t.Optional[t.List[Snapshot]] = None
         self._uncategorized: t.Optional[t.List[Snapshot]] = None
+
+        self._input_backfill_models = backfill_models
+        self._models_to_backfill: t.Optional[t.Set[str]] = None
 
         self._refresh_dag_and_ignored_snapshots()
 
@@ -272,6 +277,11 @@ class Plan:
         return self._restatements
 
     @property
+    def models_to_backfill(self) -> t.Optional[t.Set[str]]:
+        """Names of the models that should be backfilled as part of this plan. None means all models."""
+        return self._models_to_backfill
+
+    @property
     def loaded_snapshot_intervals(
         self,
     ) -> t.Tuple[t.List[LoadedSnapshotIntervals], t.List[Snapshot]]:
@@ -315,6 +325,10 @@ class Plan:
     def is_new_snapshot(self, snapshot: Snapshot) -> bool:
         """Returns True if the given snapshot is a new snapshot in this plan."""
         return snapshot.snapshot_id in {s.snapshot_id for s in self.new_snapshots}
+
+    def is_selected_for_backfill(self, model_name: str) -> bool:
+        """Returns True if a model with the given name should be backfilled as part of this plan."""
+        return self._models_to_backfill is None or model_name in self._models_to_backfill
 
     def apply(self) -> None:
         """Runs apply if an apply function was passed in."""
@@ -455,7 +469,7 @@ class Plan:
             self.__missing_intervals = {
                 (snapshot.name, snapshot.version_get_or_generate()): missing
                 for snapshot, missing in missing_intervals(
-                    self.snapshots,
+                    [s for s in self.snapshots if self.is_selected_for_backfill(s.name)],
                     start=self._start,
                     end=self._end,
                     execution_time=self._execution_time,
@@ -699,6 +713,13 @@ class Plan:
                 "Model changes and restatements can't be a part of the same plan. "
                 "Revert or apply changes before proceeding with restatements."
             )
+
+        if self._input_backfill_models is not None:
+            if not self.is_dev:
+                raise PlanError(
+                    "Selecting models to backfill is only supported for development environments."
+                )
+            self._models_to_backfill = set(self.__dag.subdag(*self._input_backfill_models).sorted)
 
         self._add_restatements()
         self.__missing_intervals = None
