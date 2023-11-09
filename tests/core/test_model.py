@@ -31,12 +31,20 @@ from sqlmesh.core.model import (
 from sqlmesh.core.model.common import parse_expression
 from sqlmesh.core.model.seed import CsvSettings
 from sqlmesh.core.node import IntervalUnit, _Node
-from sqlmesh.core.renderer import QueryRenderer
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils.date import to_datetime, to_timestamp
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
 from sqlmesh.utils.metaprogramming import Executable
+
+
+def missing_schema_warning_msg(model, deps):
+    deps = ", ".join(f"'{dep}'" for dep in sorted(deps))
+    return (
+        f"SELECT * cannot be expanded due to missing schema(s) for model(s): {deps}. "
+        f"Run `sqlmesh create_external_models` and / or make sure that the model '{model}' "
+        "can be rendered at parse time."
+    )
 
 
 def test_load(assert_exp_eq):
@@ -1693,26 +1701,101 @@ def test_update_schema():
         """
         MODEL (name db.table);
 
-        SELECT a, b FROM table_a JOIN table_b
+        SELECT * FROM table_a JOIN table_b
         """
     )
 
     model = load_sql_based_model(expressions)
-
     schema = MappingSchema(normalize=False)
-    schema.add_table("table_a", {"a": exp.DataType.build("int")})
 
-    # Make sure that the partial schema is not applied.
+    # Even though the partial schema is applied, we won't optimize the model
+    schema.add_table("table_a", {"a": exp.DataType.build("int")})
     model.update_schema(schema)
-    assert not model.mapping_schema
+    assert model.mapping_schema == {"table_a": {"a": "INT"}}
+
+    logger = logging.getLogger("sqlmesh.core.renderer")
+    with patch.object(logger, "warning") as mock_logger:
+        model.render_query(optimize=True)
+        assert mock_logger.call_args[0][0] == missing_schema_warning_msg("db.table", ("table_b",))
 
     schema.add_table("table_b", {"b": exp.DataType.build("int")})
-
     model.update_schema(schema)
     assert model.mapping_schema == {
         "table_a": {"a": "INT"},
         "table_b": {"b": "INT"},
     }
+    model.render_query(optimize=True)
+
+
+def test_missing_schema_warnings():
+    logger = logging.getLogger("sqlmesh.core.renderer")
+
+    full_schema = MappingSchema(
+        {
+            "a": {"x": exp.DataType.build("int")},
+            "b": {"y": exp.DataType.build("int")},
+        },
+        normalize=False,
+    )
+
+    partial_schema = MappingSchema(
+        {
+            "a": {"x": exp.DataType.build("int")},
+        },
+        normalize=False,
+    )
+
+    # star, no schema, no deps
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM (SELECT 1 a) x"))
+        model.render_query(optimize=True)
+        mock_logger.assert_not_called()
+
+    # star, full schema
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
+        model.update_schema(full_schema)
+        model.render_query(optimize=True)
+        mock_logger.assert_not_called()
+
+    # star, partial schema
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM a CROSS JOIN b"))
+        model.update_schema(partial_schema)
+        model.render_query(optimize=True)
+        assert mock_logger.call_args[0][0] == missing_schema_warning_msg("test", ("b",))
+
+    # star, no schema
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(d.parse("MODEL (name test); SELECT * FROM b JOIN a"))
+        model.render_query(optimize=True)
+        assert mock_logger.call_args[0][0] == missing_schema_warning_msg("test", ("a", "b"))
+
+    # no star, full schema
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(
+            d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
+        )
+        model.update_schema(full_schema)
+        model.render_query(optimize=True)
+        mock_logger.assert_not_called()
+
+    # no star, partial schema
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(
+            d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
+        )
+        model.update_schema(partial_schema)
+        model.render_query(optimize=True)
+        mock_logger.assert_not_called()
+
+    # no star, empty schema
+    with patch.object(logger, "warning") as mock_logger:
+        model = load_sql_based_model(
+            d.parse("MODEL (name test); SELECT x::INT FROM a CROSS JOIN b")
+        )
+        model.render_query(optimize=True)
+        mock_logger.assert_not_called()
 
 
 def test_user_provided_depends_on():
@@ -1757,36 +1840,6 @@ def test_check_schema_mapping_when_rendering_at_runtime(assert_exp_eq):
     assert_exp_eq(
         model.render_query(), """SELECT * FROM "table_a" AS "table_a", "table_b" AS "table_b" """
     )
-
-
-def test_contains_star_projection():
-    expression_with_star = d.parse(
-        """
-        MODEL (name db.table);
-        SELECT * FROM table_a
-        """
-    )
-
-    model = load_sql_based_model(expression_with_star)
-    assert model.contains_star_projection
-    assert model.columns_to_types is None
-
-    # Simulate a query that cannot be rendered at parse time.
-    with patch.object(QueryRenderer, "render", return_value=None) as render_query_mock:
-        model._columns_to_types = None
-        assert model.contains_star_projection is None
-        assert model.columns_to_types is None
-
-    expression_without_star = d.parse(
-        """
-        MODEL (name db.table);
-        SELECT a FROM table_a
-        """
-    )
-
-    model = load_sql_based_model(expression_without_star)
-    assert model.contains_star_projection is False
-    assert "a" in model.columns_to_types
 
 
 def test_model_normalization():
