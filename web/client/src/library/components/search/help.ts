@@ -14,10 +14,16 @@ function filterListBy<T extends Record<string, any> = Record<string, any>>(
   indices: Array<[T, string]> = [],
   search: string,
 ): Array<[T, string]> {
-  return indices.reduce((acc: Array<[T, string]>, [model, index]) => {
-    const idx = index.indexOf(search.toLocaleLowerCase())
+  search = search.toLocaleLowerCase()
 
-    if (idx > -1) {
+  return indices.reduce((acc: Array<[T, string]>, [model, index]) => {
+    const idx = index.indexOf(search)
+
+    if (idx < 0) return acc
+
+    if (index.length < MATCHED_LENGTH_TO_DISPLAY) {
+      acc.push([model, index])
+    } else {
       const min = Math.max(0, idx - MATCHED_LENGTH_TO_DISPLAY)
       const max = Math.min(
         index.length - 1,
