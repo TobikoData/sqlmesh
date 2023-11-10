@@ -83,7 +83,7 @@ options:
             [--restate-model [RESTATE_MODEL ...]] [--no-gaps]
             [--skip-backfill] [--forward-only]
             [--effective-from EFFECTIVE_FROM] [--no-prompts] [--auto-apply]
-            [--no-auto-categorization]
+            [--no-auto-categorization] [--no-diff]
 
 
 Goes through a set of prompts to both establish a plan and apply it
@@ -122,6 +122,7 @@ options:
   --auto-apply          Automatically applies the new plan after creation.
   --no-auto-categorization
                         Disable automatic change categorization.
+  --no-diff             Hide text differences for changed models.
 ```
 
 ## evaluate
