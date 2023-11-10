@@ -288,6 +288,12 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     help="Select specific model changes that should be included in the plan.",
 )
 @click.option(
+    "--backfill-model",
+    type=str,
+    multiple=True,
+    help="Backfill only the models whose names match the expression. This is supported only when targeting a development environment.",
+)
+@click.option(
     "--no-diff",
     is_flag=True,
     help="Hide text differences for changed models.",
@@ -299,7 +305,14 @@ def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.An
     context = ctx.obj
     restate_models = kwargs.pop("restate_model", None)
     select_models = kwargs.pop("select_model", None)
-    context.plan(environment, restate_models=restate_models, select_models=select_models, **kwargs)
+    backfill_models = kwargs.pop("backfill_model", None)
+    context.plan(
+        environment,
+        restate_models=restate_models,
+        select_models=select_models,
+        backfill_models=backfill_models,
+        **kwargs,
+    )
 
 
 @cli.command("run")

@@ -113,6 +113,7 @@ def test_create_plan_dag_spec(
         users=[],
         is_dev=False,
         forward_only=True,
+        models_to_backfill=None,
     )
 
     deleted_snapshot = SnapshotTableInfo(
@@ -235,6 +236,7 @@ def test_restatement(
         users=[],
         is_dev=False,
         forward_only=True,
+        models_to_backfill=None,
     )
     old_environment = Environment(
         name=environment_name,
@@ -302,6 +304,97 @@ def test_restatement(
     ]
 
 
+def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_snapshot):
+    snapshot_a = make_snapshot(
+        create_sql_model(
+            "a",
+            parse_one("SELECT 1, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            start="2022-01-01",
+        ),
+    )
+    snapshot_a.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    snapshot_b = make_snapshot(
+        create_sql_model(
+            "b",
+            parse_one("SELECT 2, ds"),
+            kind=IncrementalByTimeRangeKind(time_column="ds"),
+            start="2022-01-01",
+        ),
+    )
+    snapshot_b.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    environment_name = random_name()
+    new_environment = Environment(
+        name=environment_name,
+        snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+        start_at="2022-01-01",
+        end_at="2022-01-04",
+        plan_id="test_plan_id",
+        suffix_target=EnvironmentSuffixTarget.TABLE,
+    )
+
+    plan_request = common.PlanApplicationRequest(
+        request_id="test_request_id",
+        new_snapshots=[snapshot_a, snapshot_b],
+        environment=new_environment,
+        no_gaps=True,
+        skip_backfill=False,
+        restatements={},
+        notification_targets=[],
+        backfill_concurrent_tasks=1,
+        ddl_concurrent_tasks=1,
+        users=[],
+        is_dev=False,
+        forward_only=True,
+        models_to_backfill={snapshot_b.name},
+    )
+
+    state_sync_mock = mocker.Mock()
+    state_sync_mock.get_snapshots.return_value = {}
+    state_sync_mock.get_environment.return_value = None
+    state_sync_mock.get_snapshot_intervals.return_value = []
+    state_sync_mock.refresh_snapshot_intervals.return_value = []
+
+    with mock.patch(
+        "sqlmesh.schedulers.airflow.plan.now_timestamp",
+        side_effect=lambda: to_timestamp("2023-01-01"),
+    ):
+        plan_spec = create_plan_dag_spec(plan_request, state_sync_mock)
+
+    assert plan_spec == common.PlanDagSpec(
+        request_id="test_request_id",
+        environment_naming_info=EnvironmentNamingInfo(
+            name=environment_name, suffix_target=EnvironmentSuffixTarget.TABLE
+        ),
+        new_snapshots=[snapshot_a, snapshot_b],
+        backfill_intervals_per_snapshot=[
+            common.BackfillIntervalsPerSnapshot(
+                snapshot_id=snapshot_b.snapshot_id,
+                intervals=[(to_datetime("2022-01-01"), to_datetime("2022-01-05"))],
+                before_promote=True,
+            )
+        ],
+        promoted_snapshots=[snapshot_a.table_info, snapshot_b.table_info],
+        demoted_snapshots=[],
+        start="2022-01-01",
+        end="2022-01-04",
+        unpaused_dt=None,
+        no_gaps=True,
+        plan_id="test_plan_id",
+        previous_plan_id=None,
+        notification_targets=[],
+        backfill_concurrent_tasks=1,
+        ddl_concurrent_tasks=1,
+        users=[],
+        is_dev=False,
+        forward_only=True,
+        dag_start_ts=to_timestamp("2023-01-01"),
+        deployability_index=DeployabilityIndex.all_deployable(),
+    )
+
+
 @pytest.mark.airflow
 def test_create_plan_dag_spec_duplicated_snapshot(
     mocker: MockerFixture, snapshot: Snapshot, random_name
@@ -328,6 +421,7 @@ def test_create_plan_dag_spec_duplicated_snapshot(
         users=[],
         is_dev=False,
         forward_only=False,
+        models_to_backfill=None,
     )
 
     dag_run_mock = mocker.Mock()
@@ -376,6 +470,7 @@ def test_create_plan_dag_spec_unbounded_end(
         users=[],
         is_dev=False,
         forward_only=False,
+        models_to_backfill=None,
     )
 
     state_sync_mock = mocker.Mock()
