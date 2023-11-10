@@ -74,7 +74,7 @@ def cli(
     if "--help" in sys.argv:
         return
 
-    configure_logging(debug, ignore_warnings)
+    configure_logging(debug, ignore_warnings, write_to_stdout=False)
 
     try:
         context = Context(

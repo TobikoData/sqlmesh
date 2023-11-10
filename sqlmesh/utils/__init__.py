@@ -217,7 +217,12 @@ def debug_mode_enabled() -> bool:
     return _debug_mode_enabled or str_to_bool(os.environ.get("SQLMESH_DEBUG"))
 
 
-def configure_logging(force_debug: bool = False, ignore_warnings: bool = False) -> None:
+def configure_logging(
+    force_debug: bool = False,
+    ignore_warnings: bool = False,
+    write_to_stdout: bool = True,
+    write_to_file: bool = True,
+) -> None:
     from sqlmesh import enable_logging
 
     debug = force_debug or debug_mode_enabled()
@@ -232,7 +237,9 @@ def configure_logging(force_debug: bool = False, ignore_warnings: bool = False) 
         # Windows doesn't support register so we check for it here
         if hasattr(faulthandler, "register"):
             faulthandler.register(signal.SIGUSR1.value)
-        enable_logging(level=logging.DEBUG, write_to_file=True)
+        enable_logging(
+            level=logging.DEBUG, write_to_stdout=write_to_stdout, write_to_file=write_to_file
+        )
     elif ignore_warnings:
         logging.getLogger().setLevel(logging.ERROR)
 

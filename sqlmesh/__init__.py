@@ -89,7 +89,7 @@ if runtime_env.is_notebook:
         pass
 
 
-LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+LOG_FORMAT = "%(asctime)s - %(threadName)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
 
 
 # SO: https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
@@ -116,16 +116,19 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-def enable_logging(level: t.Optional[int] = None, write_to_file: bool = False) -> None:
+def enable_logging(
+    level: t.Optional[int] = None, write_to_stdout: bool = True, write_to_file: bool = False
+) -> None:
     """Enable logging to send to stdout and color different levels"""
     level = level or (logging.DEBUG if debug_mode_enabled() else logging.INFO)
     logger = logging.getLogger()
     logger.setLevel(level if not debug_mode_enabled() else logging.DEBUG)
     if not logger.hasHandlers():
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(level)
-        handler.setFormatter(CustomFormatter())
-        logger.addHandler(handler)
+        if write_to_stdout:
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setLevel(level)
+            handler.setFormatter(CustomFormatter())
+            logger.addHandler(handler)
 
         if write_to_file:
             os.makedirs("logs", exist_ok=True)
