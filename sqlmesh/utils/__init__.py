@@ -117,12 +117,14 @@ class registry_decorator:
     ) -> t.Callable[..., DECORATOR_RETURN_TYPE]:
         self.func = func
 
+        registry = self.registry()
+        func_name = (self.name or func.__name__).lower()
+
         try:
-            func_name = (self.name or func.__name__).lower()
-            self.registry()[func_name] = self
+            registry[func_name] = self
         except ValueError:
             # No need to raise due to duplicate key if the functions are identical
-            if func.__code__.co_code != self.registry()[func_name].func.__code__.co_code:
+            if func.__code__.co_code != registry[func_name].func.__code__.co_code:
                 raise
 
         @wraps(func)
