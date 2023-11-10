@@ -62,7 +62,7 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
         "nchar": exp.DataType.build("nchar(1)", dialect=adapter.dialect),
         "nvarchar_n": exp.DataType.build("nvarchar(10)", dialect=adapter.dialect),
         "nvarchar": exp.DataType.build("nvarchar(1)", dialect=adapter.dialect),
-        "nvarchar": exp.DataType.build("nvarchar(max)", dialect=adapter.dialect),
+        "nvarchar_max": exp.DataType.build("nvarchar(max)", dialect=adapter.dialect),
     }
 
     adapter.cursor.execute.assert_called_once_with(
