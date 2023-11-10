@@ -544,12 +544,12 @@ class TerminalConsole(Console):
                     direct.add(
                         f"[direct]{name}"
                         if no_diff
-                        else Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql")
+                        else Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql", word_wrap=True)
                     )
                 elif context_diff.indirectly_modified(name):
                     indirect.add(f"[indirect]{name}")
                 elif context_diff.metadata_updated(name):
-                    metadata.add(Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql"))
+                    metadata.add(Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql", word_wrap=True))
             if direct.children:
                 tree.add(direct)
             if indirect.children:
@@ -584,7 +584,7 @@ class TerminalConsole(Console):
 
         for snapshot in plan.uncategorized:
             if not no_diff:
-                self._print(Syntax(plan.context_diff.text_diff(snapshot.name), "sql"))
+                self.show_sql(plan.context_diff.text_diff(snapshot.name))
             tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name}")
             indirect_tree = None
 
@@ -613,7 +613,7 @@ class TerminalConsole(Console):
                     plan.context_diff.snapshots[child].change_category
                 ]
                 indirect_tree.add(f"[indirect]{child} ({child_category_str})")
-            self._print(Syntax(context_diff.text_diff(snapshot.name), "sql"))
+            self._print(Syntax(context_diff.text_diff(snapshot.name), "sql", word_wrap=True))
             self._print(tree)
 
     def _show_missing_dates(self, plan: Plan) -> None:

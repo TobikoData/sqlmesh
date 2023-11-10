@@ -2172,9 +2172,8 @@ def test_model_jinja_macro_rendering():
     model = load_sql_based_model(expressions, jinja_macros=jinja_macros)
     definition = model.render_definition()
 
-    assert definition[1].sql() == "test_int = 1\ntest_str = 'value'"
-    assert definition[2].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_b_body\nJINJA_END;"
-    assert definition[3].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_a_body\nJINJA_END;"
+    assert definition[1].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_b_body\nJINJA_END;"
+    assert definition[2].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_a_body\nJINJA_END;"
 
 
 def test_view_model_data_hash():
