@@ -1,7 +1,8 @@
+import logging
 import pathlib
 from datetime import date, timedelta
 from tempfile import TemporaryDirectory
-from unittest.mock import call
+from unittest.mock import call, patch
 
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -291,15 +292,17 @@ def test():
     assert "test" in context._macros
 
 
-def test_plan_apply(sushi_context) -> None:
-    plan = sushi_context.plan(
-        "dev",
-        start=yesterday_ds(),
-        end=yesterday_ds(),
-        include_unmodified=True,
-    )
-    sushi_context.apply(plan)
-    assert sushi_context.state_reader.get_environment("dev")
+def test_plan_apply(sushi_context_pre_scheduling) -> None:
+    logger = logging.getLogger("sqlmesh.core.renderer")
+    with patch.object(logger, "warning") as mock_logger:
+        sushi_context_pre_scheduling.plan(
+            "dev",
+            auto_apply=True,
+            no_prompts=True,
+            include_unmodified=True,
+        )
+        mock_logger.assert_not_called()
+    assert sushi_context_pre_scheduling.state_reader.get_environment("dev")
 
 
 def test_project_config_person_config_overrides(tmp_path: pathlib.Path):
