@@ -287,6 +287,11 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     multiple=True,
     help="Select specific model changes that should be included in the plan.",
 )
+@click.option(
+    "--no-diff",
+    is_flag=True,
+    help="Hide text differences for changed models.",
+)
 @click.pass_context
 @error_handler
 def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:

@@ -128,13 +128,13 @@ class Console(abc.ABC):
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
-        detailed: bool = False,
+        no_diff: bool = True,
         ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Displays a summary of differences for the given models."""
 
     @abc.abstractmethod
-    def plan(self, plan: Plan, auto_apply: bool) -> None:
+    def plan(self, plan: Plan, auto_apply: bool, no_diff: bool = False) -> None:
         """The main plan flow.
 
         The console should present the user with choices on how to backfill and version the snapshots
@@ -143,6 +143,7 @@ class Console(abc.ABC):
         Args:
             plan: The plan to make choices for.
             auto_apply: Whether to automatically apply the plan after all choices have been made.
+            no_diff: Hide text differences for changed models.
         """
 
     @abc.abstractmethod
@@ -422,14 +423,14 @@ class TerminalConsole(Console):
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
-        detailed: bool = False,
+        no_diff: bool = True,
         ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
         Args:
             context_diff: The context diff to use to print the summary
-            detailed: Show the actual SQL differences if True.
+            no_diff: Hide the actual SQL differences.
             ignored_snapshot_names: A set of snapshot names that are ignored
         """
         ignored_snapshot_names = ignored_snapshot_names or set()
@@ -451,18 +452,18 @@ class TerminalConsole(Console):
             context_diff,
             "Models",
             lambda x: x.is_model,
-            detailed=detailed,
+            no_diff=no_diff,
             ignored_names=ignored_snapshot_names,
         )
         self._show_summary_tree_for(
             context_diff,
             "Standalone Audits",
             lambda x: x.is_audit,
-            detailed=detailed,
+            no_diff=no_diff,
             ignored_names=ignored_snapshot_names,
         )
 
-    def plan(self, plan: Plan, auto_apply: bool) -> None:
+    def plan(self, plan: Plan, auto_apply: bool, no_diff: bool = False) -> None:
         """The main plan flow.
 
         The console should present the user with choices on how to backfill and version the snapshots
@@ -471,8 +472,9 @@ class TerminalConsole(Console):
         Args:
             plan: The plan to make choices for.
             auto_apply: Whether to automatically apply the plan after all choices have been made.
+            no_diff: Hide text differences for changed models.
         """
-        self._prompt_categorize(plan, auto_apply)
+        self._prompt_categorize(plan, auto_apply, no_diff=no_diff)
         self._show_options_after_categorization(plan, auto_apply)
 
         if auto_apply:
@@ -494,7 +496,7 @@ class TerminalConsole(Console):
         context_diff: ContextDiff,
         header: str,
         snapshot_selector: t.Callable[[SnapshotInfoLike], bool],
-        detailed: bool = False,
+        no_diff: bool = True,
         ignored_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         ignored_names = ignored_names or set()
@@ -540,15 +542,14 @@ class TerminalConsole(Console):
             for name in modified_names:
                 if context_diff.directly_modified(name):
                     direct.add(
-                        Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql")
-                        if detailed
-                        else f"[direct]{name}"
+                        f"[direct]{name}"
+                        if no_diff
+                        else Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql")
                     )
                 elif context_diff.indirectly_modified(name):
                     indirect.add(f"[indirect]{name}")
                 elif context_diff.metadata_updated(name):
                     metadata.add(Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql"))
-                    # metadata.add(f"[metadata]{name}")
             if direct.children:
                 tree.add(direct)
             if indirect.children:
@@ -572,16 +573,18 @@ class TerminalConsole(Console):
             self.log_status_update("\n[bold]Virtually updating unmodified models\n")
             self._prompt_promote(plan)
 
-    def _prompt_categorize(self, plan: Plan, auto_apply: bool) -> None:
+    def _prompt_categorize(self, plan: Plan, auto_apply: bool, no_diff: bool = False) -> None:
         """Get the user's change category for the directly modified models."""
         self.show_model_difference_summary(
             plan.context_diff, ignored_snapshot_names=plan.ignored_snapshot_names
         )
 
-        self._show_categorized_snapshots(plan)
+        if not no_diff:
+            self._show_categorized_snapshots(plan)
 
         for snapshot in plan.uncategorized:
-            self._print(Syntax(plan.context_diff.text_diff(snapshot.name), "sql"))
+            if not no_diff:
+                self._print(Syntax(plan.context_diff.text_diff(snapshot.name), "sql"))
             tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name}")
             indirect_tree = None
 
@@ -601,7 +604,6 @@ class TerminalConsole(Console):
 
             category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
             tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})")
-            syntax_dff = Syntax(context_diff.text_diff(snapshot.name), "sql")
             indirect_tree = None
             for child in plan.indirectly_modified[snapshot.name]:
                 if not indirect_tree:
@@ -611,7 +613,7 @@ class TerminalConsole(Console):
                     plan.context_diff.snapshots[child].change_category
                 ]
                 indirect_tree.add(f"[indirect]{child} ({child_category_str})")
-            self._print(syntax_dff)
+            self._print(Syntax(context_diff.text_diff(snapshot.name), "sql"))
             self._print(tree)
 
     def _show_missing_dates(self, plan: Plan) -> None:
@@ -1148,14 +1150,14 @@ class MarkdownConsole(CaptureTerminalConsole):
     def show_model_difference_summary(
         self,
         context_diff: ContextDiff,
-        detailed: bool = False,
+        no_diff: bool = True,
         ignored_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> None:
         """Shows a summary of the differences.
 
         Args:
             context_diff: The context diff to use to print the summary.
-            detailed: Show the actual SQL differences if True.
+            no_diff: Hide the actual SQL differences.
             ignored_snapshot_names: A set of snapshot names that are ignored
         """
         ignored_snapshot_names = ignored_snapshot_names or set()
@@ -1224,7 +1226,7 @@ class MarkdownConsole(CaptureTerminalConsole):
                 self._print(f"**Directly Modified:**\n")
                 for model_name in directly_modified:
                     self._print(f"- `{model_name}`\n")
-                    if detailed:
+                    if not no_diff:
                         self._print(f"```diff\n{context_diff.text_diff(model_name)}\n```\n")
                 self._print("\n")
             if indirectly_modified:

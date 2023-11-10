@@ -209,6 +209,7 @@ Options:
                             development environment.
   --model-selections        Model selection strings to filter the
                             models that should be included in this plan.
+  --no-diff                 Hide text differences for changed models.
   --help                    Show this message and exit.
 ```
 
