@@ -407,7 +407,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 should_optimize = False
                 missing_deps.add(dep)
 
-        if not should_optimize and any(s.is_star for s in query.selects):
+        if self._model_name and not should_optimize and any(s.is_star for s in query.selects):
             deps = ", ".join(f"'{dep}'" for dep in sorted(missing_deps))
 
             logger.warning(
