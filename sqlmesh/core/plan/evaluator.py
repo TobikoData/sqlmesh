@@ -81,14 +81,17 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         try:
             snapshots = {s.snapshot_id: s for s in plan.snapshots}
-            all_names = {s.name for s in plan.snapshots}
+            all_names = {s.name for s in plan.snapshots if plan.is_selected_for_backfill(s.name)}
             deployability_index = DeployabilityIndex.create(snapshots)
             if plan.is_dev:
                 before_promote_snapshots = all_names
                 after_promote_snapshots = set()
             else:
                 before_promote_snapshots = {
-                    s.name for s in snapshots.values() if deployability_index.is_representative(s)
+                    s.name
+                    for s in snapshots.values()
+                    if deployability_index.is_representative(s)
+                    and plan.is_selected_for_backfill(s.name)
                 }
                 after_promote_snapshots = all_names - before_promote_snapshots
                 deployability_index = DeployabilityIndex.all_deployable()
@@ -351,6 +354,7 @@ class AirflowPlanEvaluator(BaseAirflowPlanEvaluator):
             users=self.users,
             is_dev=plan.is_dev,
             forward_only=plan.forward_only,
+            models_to_backfill=plan.models_to_backfill,
         )
 
 
@@ -403,6 +407,7 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
             users=self.users or [],
             is_dev=plan.is_dev,
             forward_only=plan.forward_only,
+            models_to_backfill=plan.models_to_backfill,
         )
         plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
         PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)

@@ -94,6 +94,7 @@ def test_airflow_evaluator(sushi_plan: Plan, mocker: MockerFixture):
         users=[],
         is_dev=True,
         forward_only=False,
+        models_to_backfill=None,
     )
 
     airflow_client_mock.wait_for_dag_run_completion.assert_called_once()

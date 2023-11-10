@@ -720,6 +720,55 @@ def test_forward_only_precedence_over_indirect_non_breaking(mocker: MockerFixtur
     assert not context.plan("prod", no_prompts=True, skip_tests=True).requires_backfill
 
 
+@freeze_time("2023-01-08 15:00:00")
+@pytest.mark.integration
+@pytest.mark.core_integration
+def test_select_models_for_backfill(mocker: MockerFixture):
+    context, _ = init_and_plan_context("examples/sushi", mocker)
+
+    expected_intervals = [
+        (to_timestamp("2023-01-01"), to_timestamp("2023-01-02")),
+        (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+        (to_timestamp("2023-01-03"), to_timestamp("2023-01-04")),
+        (to_timestamp("2023-01-04"), to_timestamp("2023-01-05")),
+        (to_timestamp("2023-01-05"), to_timestamp("2023-01-06")),
+        (to_timestamp("2023-01-06"), to_timestamp("2023-01-07")),
+        (to_timestamp("2023-01-07"), to_timestamp("2023-01-08")),
+    ]
+
+    plan = context.plan(
+        "dev", backfill_models=["*waiter_revenue_by_day"], no_prompts=True, skip_tests=True
+    )
+    assert plan.missing_intervals == [
+        SnapshotIntervals(
+            snapshot_name="sushi.items",
+            intervals=expected_intervals,
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.orders",
+            intervals=expected_intervals,
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.order_items",
+            intervals=expected_intervals,
+        ),
+        SnapshotIntervals(
+            snapshot_name="sushi.waiter_revenue_by_day",
+            intervals=expected_intervals,
+        ),
+    ]
+
+    context.apply(plan)
+
+    dev_df = context.engine_adapter.fetchdf(
+        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+    )
+    assert len(dev_df) == 7
+
+    dev_df = context.engine_adapter.fetchdf("SELECT * FROM sushi__dev.customer_revenue_by_day")
+    assert dev_df.empty
+
+
 @pytest.mark.integration
 @pytest.mark.core_integration
 @pytest.mark.parametrize(

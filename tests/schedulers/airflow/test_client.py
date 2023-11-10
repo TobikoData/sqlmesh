@@ -58,7 +58,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
     request_id = "test_request_id"
 
     client = AirflowClient(airflow_url=common.AIRFLOW_LOCAL_URL, session=requests.Session())
-    client.apply_plan([snapshot], environment, request_id)
+    client.apply_plan([snapshot], environment, request_id, models_to_backfill={"test_model"})
 
     apply_plan_mock.assert_called_once()
     args, data = apply_plan_mock.call_args_list[0]
@@ -153,6 +153,7 @@ def test_apply_plan(mocker: MockerFixture, snapshot: Snapshot):
         "users": [],
         "is_dev": False,
         "forward_only": False,
+        "models_to_backfill": ["test_model"],
     }
 
 
