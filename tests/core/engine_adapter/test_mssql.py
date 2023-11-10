@@ -38,6 +38,7 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
         ("nchar", "nchar", 1, None, None),
         ("nvarchar_n", "nvarchar", 10, None, None),
         ("nvarchar", "nvarchar", 1, None, None),
+        ("nvarchar_max", "nvarchar", -1, None, None),
     ]
 
     assert adapter.columns("db.table") == {
@@ -61,6 +62,7 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
         "nchar": exp.DataType.build("nchar(1)", dialect=adapter.dialect),
         "nvarchar_n": exp.DataType.build("nvarchar(10)", dialect=adapter.dialect),
         "nvarchar": exp.DataType.build("nvarchar(1)", dialect=adapter.dialect),
+        "nvarchar": exp.DataType.build("nvarchar(max)", dialect=adapter.dialect),
     }
 
     adapter.cursor.execute.assert_called_once_with(
