@@ -473,9 +473,9 @@ def print_exception(
 
 
 def import_python_file(path: Path, relative_base: Path = Path()) -> types.ModuleType:
-    module_name = str(
-        path.absolute().relative_to(relative_base.absolute()).with_suffix("")
-    ).replace(os.path.sep, ".")
+    relative_path = path.absolute().relative_to(relative_base.absolute())
+    module_name = str(relative_path.with_suffix("")).replace(os.path.sep, ".")
+
     # remove the entire module hierarchy in case they were already loaded
     parts = module_name.split(".")
     for i in range(len(parts)):

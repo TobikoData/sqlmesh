@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import abc
-import importlib
 import linecache
 import logging
 import os
-import sys
-import types
 import typing as t
 from collections import defaultdict
 from dataclasses import dataclass
@@ -33,7 +30,7 @@ from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroExtractor
-from sqlmesh.utils.metaprogramming import Executable
+from sqlmesh.utils.metaprogramming import Executable, import_python_file
 from sqlmesh.utils.yaml import YAML
 
 if t.TYPE_CHECKING:
@@ -233,7 +230,7 @@ class SqlMeshLoader(Loader):
 
         for context_path, config in self._context.configs.items():
             for path in self._glob_paths(context_path / c.MACROS, config=config, extension=".py"):
-                if self._import_python_file(path, context_path):
+                if import_python_file(path, context_path):
                     self._track_file(path)
                     macro_file_mtime = self._path_mtimes[path]
                     macros_max_mtime = (
@@ -337,7 +334,7 @@ class SqlMeshLoader(Loader):
                     continue
 
                 self._track_file(path)
-                self._import_python_file(path, context_path)
+                import_python_file(path, context_path)
                 new = registry.keys() - registered
                 registered |= new
                 for name in new:
@@ -396,16 +393,6 @@ class SqlMeshLoader(Loader):
                         raise ConfigError(f"Failed to parse metric definitions at '{path}': {ex}.")
 
         return metrics
-
-    def _import_python_file(self, file: Path, context_path: Path) -> types.ModuleType:
-        relative_path = file.relative_to(context_path)
-        module_name = str(relative_path.with_suffix("")).replace(os.path.sep, ".")
-        # remove the entire module hierarchy in case they were already loaded
-        parts = module_name.split(".")
-        for i in range(len(parts)):
-            sys.modules.pop(".".join(parts[0 : i + 1]), None)
-
-        return importlib.import_module(module_name)
 
     def _glob_paths(
         self, path: Path, config: Config, extension: str
