@@ -346,18 +346,8 @@ class JinjaMacroRegistry(PydanticModel):
             top_level_packages=[*self.top_level_packages, *other.top_level_packages],
         )
 
-    def to_expressions(self, include_objs: bool = False) -> t.List[Expression]:
+    def to_expressions(self) -> t.List[Expression]:
         output: t.List[Expression] = []
-
-        if self.global_objs and include_objs:
-            output.append(
-                d.PythonCode(
-                    expressions=[
-                        f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
-                        for k, v in sorted(self.global_objs.items())
-                    ]
-                )
-            )
 
         for macro_name, macro_info in sorted(self.root_macros.items()):
             output.append(d.jinja_statement(macro_info.definition))

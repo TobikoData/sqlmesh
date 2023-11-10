@@ -544,12 +544,16 @@ class TerminalConsole(Console):
                     direct.add(
                         f"[direct]{name}"
                         if no_diff
-                        else Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql", word_wrap=True)
+                        else Syntax(
+                            f"{name}\n{context_diff.text_diff(name)}", "sql", word_wrap=True
+                        )
                     )
                 elif context_diff.indirectly_modified(name):
                     indirect.add(f"[indirect]{name}")
                 elif context_diff.metadata_updated(name):
-                    metadata.add(Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql", word_wrap=True))
+                    metadata.add(
+                        Syntax(f"{name}\n{context_diff.text_diff(name)}", "sql", word_wrap=True)
+                    )
             if direct.children:
                 tree.add(direct)
             if indirect.children:
