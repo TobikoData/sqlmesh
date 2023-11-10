@@ -786,6 +786,7 @@ class Context(BaseContext):
         include_unmodified: t.Optional[bool] = None,
         select_models: t.Optional[t.Collection[str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
+        no_diff: bool = False,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -823,6 +824,7 @@ class Context(BaseContext):
             effective_from: The effective date from which to apply forward-only changes on production.
             include_unmodified: Indicates whether to include unmodified models in the target development environment.
             select_models: A list of model selection strings to filter the models that should be included into this plan.
+            no_diff: Hide text differences for changed models.
 
         Returns:
             The populated Plan object.
@@ -895,7 +897,7 @@ class Context(BaseContext):
         )
 
         if not no_prompts:
-            self.console.plan(plan, auto_apply)
+            self.console.plan(plan, auto_apply, no_diff=no_diff)
         elif auto_apply:
             self.apply(plan)
 
@@ -951,7 +953,9 @@ class Context(BaseContext):
         """
         environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
-        self.console.show_model_difference_summary(self._context_diff(environment), detailed)
+        self.console.show_model_difference_summary(
+            self._context_diff(environment), no_diff=not detailed
+        )
 
     def table_diff(
         self,
