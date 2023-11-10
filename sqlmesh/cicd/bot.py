@@ -4,10 +4,10 @@ import typing as t
 
 import click
 
+from sqlmesh import configure_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.integrations.github.cicd.command import github
-from sqlmesh.utils import configure_logging
 
 
 @click.group(no_args_is_help=True)

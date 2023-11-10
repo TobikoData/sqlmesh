@@ -217,33 +217,6 @@ def debug_mode_enabled() -> bool:
     return _debug_mode_enabled or str_to_bool(os.environ.get("SQLMESH_DEBUG"))
 
 
-def configure_logging(
-    force_debug: bool = False,
-    ignore_warnings: bool = False,
-    write_to_stdout: bool = True,
-    write_to_file: bool = True,
-) -> None:
-    from sqlmesh import enable_logging
-
-    debug = force_debug or debug_mode_enabled()
-    if debug:
-        import faulthandler
-        import signal
-
-        enable_debug_mode()
-
-        # Enable threadumps.
-        faulthandler.enable()
-        # Windows doesn't support register so we check for it here
-        if hasattr(faulthandler, "register"):
-            faulthandler.register(signal.SIGUSR1.value)
-        enable_logging(
-            level=logging.DEBUG, write_to_stdout=write_to_stdout, write_to_file=write_to_file
-        )
-    elif ignore_warnings:
-        logging.getLogger().setLevel(logging.ERROR)
-
-
 def ttl_cache(ttl: int = 60, maxsize: int = 128000) -> t.Callable:
     """Caches a function that clears whenever the current epoch / ttl seconds changes.
 
