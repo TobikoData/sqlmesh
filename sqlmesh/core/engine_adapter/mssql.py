@@ -81,7 +81,7 @@ class MSSQLEngineAdapter(
             var_len_chars = ("binary", "varbinary", "char", "varchar", "nchar", "nvarchar")
             if row[1] in var_len_chars and row[2] > 0:
                 return (row[0], f"{row[1]}({row[2]})")
-            if row[1] in ("varbinary", "varchar") and row[2] == -1:
+            if row[1] in ("varbinary", "varchar", "nvarchar") and row[2] == -1:
                 return (row[0], f"{row[1]}(max)")
             if row[1] in (
                 "decimal",
