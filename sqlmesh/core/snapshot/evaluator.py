@@ -1070,6 +1070,7 @@ class ViewStrategy(PromotableStrategy):
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         if (
             isinstance(query_or_df, exp.Expression)
+            and snapshot.is_materialized_view
             and deployability_index.is_deployable(snapshot)
             and snapshot.intervals  # Re-create the view during the first evaluation.
             and model.render_query(
