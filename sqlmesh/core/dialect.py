@@ -281,14 +281,6 @@ def _parse_order(
     return macro
 
 
-def _parse_prop_value(self: Parser) -> t.Optional[exp.Expression]:
-    this = self._parse_string() or self._parse_function() or self._parse_id_var()
-    if self._match(TokenType.EQ):
-        this = exp.EQ(this=this, expression=self._parse_string() or self._parse_id_var())
-
-    return this
-
-
 def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     key = self._parse_id_var(any_token=True)
     if not key:
@@ -298,9 +290,7 @@ def _parse_props(self: Parser) -> t.Optional[exp.Expression]:
     if name == "when_matched":
         value: t.Optional[exp.Expression] = self._parse_when_matched()[0]
     elif self._match(TokenType.L_PAREN):
-        value = self.expression(
-            exp.Tuple, expressions=self._parse_csv(lambda: _parse_prop_value(self))
-        )
+        value = self.expression(exp.Tuple, expressions=self._parse_csv(self._parse_equality))
         self._match_r_paren()
     else:
         value = self._parse_bracket(self._parse_field(any_token=True))
