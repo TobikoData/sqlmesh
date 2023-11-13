@@ -372,7 +372,7 @@ class RedshiftConfig(TargetConfig):
 
             return RedshiftColumn
         else:
-            return super(RedshiftConfig, cls).column_class()
+            return super(RedshiftConfig, cls).column_class
 
     def to_sqlmesh(self) -> ConnectionConfig:
         return RedshiftConnectionConfig(
