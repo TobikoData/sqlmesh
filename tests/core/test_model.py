@@ -2311,6 +2311,24 @@ def test_scd_type_2_defaults():
     assert scd_type_2_model.kind.forward_only
     assert scd_type_2_model.kind.disable_restatement
 
+    # Checks we can parse coalesced key with or without parentheses
+    for coalesced_id in ("""COALESCE("id", '')""", """(COALESCE("id", ''))"""):
+        model = load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (
+                    name db.table,
+                    kind SCD_TYPE_2 (
+                        unique_key {coalesced_id},
+                    ),
+                );
+
+                SELECT 1 AS "id"
+                """
+            )
+        )
+        assert model.unique_key == [exp.func("COALESCE", exp.column("id", quoted=True), "''")]
+
 
 def test_scd_type_2_overrides():
     view_model_expressions = d.parse(
