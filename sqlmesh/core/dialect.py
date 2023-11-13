@@ -282,7 +282,7 @@ def _parse_order(
 
 
 def _parse_prop_value(self: Parser) -> t.Optional[exp.Expression]:
-    this = self._parse_string() or self._parse_id_var()
+    this = self._parse_string() or self._parse_function() or self._parse_id_var()
     if self._match(TokenType.EQ):
         this = exp.EQ(this=this, expression=self._parse_string() or self._parse_id_var())
 
