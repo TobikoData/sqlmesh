@@ -312,6 +312,11 @@ class SQLMeshMagics(Magics):
         nargs="*",
         help="Select specific model changes that should be included in the plan.",
     )
+    @argument(
+        "--no-diff",
+        action="store_true",
+        help="Hide text differences for changed models.",
+    )
     @line_magic
     def plan(self, line: str) -> None:
         """Goes through a set of prompts to both establish a plan and apply it"""
@@ -339,6 +344,7 @@ class SQLMeshMagics(Magics):
             effective_from=args.effective_from,
             include_unmodified=args.include_unmodified,
             select_models=args.select_model,
+            no_diff=args.no_diff,
         )
         self._context.console = console
 

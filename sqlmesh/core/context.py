@@ -785,7 +785,9 @@ class Context(BaseContext):
         effective_from: t.Optional[TimeLike] = None,
         include_unmodified: t.Optional[bool] = None,
         select_models: t.Optional[t.Collection[str]] = None,
+        backfill_models: t.Optional[t.Collection[str]] = None,
         categorizer_config: t.Optional[CategorizerConfig] = None,
+        no_diff: bool = False,
     ) -> Plan:
         """Interactively create a migration plan.
 
@@ -823,6 +825,8 @@ class Context(BaseContext):
             effective_from: The effective date from which to apply forward-only changes on production.
             include_unmodified: Indicates whether to include unmodified models in the target development environment.
             select_models: A list of model selection strings to filter the models that should be included into this plan.
+            backfill_models: A list of model selection strings to filter the models for which the data should be backfilled.
+            no_diff: Hide text differences for changed models.
 
         Returns:
             The populated Plan object.
@@ -864,6 +868,11 @@ class Context(BaseContext):
         if restate_models is not None:
             restate_models = model_selector.expand_model_selections(restate_models)
 
+        if backfill_models:
+            backfill_models = model_selector.expand_model_selections(backfill_models)
+        else:
+            backfill_models = None
+
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
         default_end = self.state_sync.max_interval_end_for_environment(c.PROD) if is_dev else None
@@ -880,6 +889,7 @@ class Context(BaseContext):
             execution_time=execution_time,
             apply=self.apply,
             restate_models=restate_models,
+            backfill_models=backfill_models,
             no_gaps=no_gaps,
             skip_backfill=skip_backfill,
             is_dev=is_dev,
@@ -895,7 +905,7 @@ class Context(BaseContext):
         )
 
         if not no_prompts:
-            self.console.plan(plan, auto_apply)
+            self.console.plan(plan, auto_apply, no_diff=no_diff)
         elif auto_apply:
             self.apply(plan)
 
@@ -951,7 +961,9 @@ class Context(BaseContext):
         """
         environment = environment or self.config.default_target_environment
         environment = Environment.normalize_name(environment)
-        self.console.show_model_difference_summary(self._context_diff(environment), detailed)
+        self.console.show_model_difference_summary(
+            self._context_diff(environment), no_diff=not detailed
+        )
 
     def table_diff(
         self,

@@ -181,7 +181,7 @@ Options:
   --execution-time TEXT     The execution time (defaults to now).
   --create-from TEXT        The environment to create the target environment
                             from if it doesn't exist. Default: prod.
-  --skip-tests TEXT         Skip tests prior to generating the plan if they
+  --skip-tests              Skip tests prior to generating the plan if they
                             are defined.
   -r, --restate-model TEXT  Restate data for specified models and models
                             downstream from the one specified. For production
@@ -203,12 +203,14 @@ Options:
                             will fail.
   --auto-apply              Automatically apply the new plan after creation.
   --no-auto-categorization  Disable automatic change categorization.
-  --effective-from          The effective date from which to apply forward-only
-                            changes on production.
-  --include-unmodified      Whether to include unmodified models in the target
-                            development environment.
-  --model-selections        Model selection strings to filter the
-                            models that should be included in this plan.
+  --include-unmodified      Include unmodified models in the target
+                            environment.
+  --select-model TEXT       Select specific model changes that should be
+                            included in the plan.
+  --backfill-model TEXT     Backfill only the models whose names match the
+                            expression. This is supported only when targeting
+                            a development environment.
+  --no-diff                 Hide text differences for changed models.
   --help                    Show this message and exit.
 ```
 

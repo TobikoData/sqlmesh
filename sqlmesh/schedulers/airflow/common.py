@@ -53,6 +53,10 @@ class PlanApplicationRequest(PydanticModel):
     users: t.List[User]
     is_dev: bool
     forward_only: bool
+    models_to_backfill: t.Optional[t.Set[str]]
+
+    def is_selected_for_backfill(self, model_name: str) -> bool:
+        return self.models_to_backfill is None or model_name in self.models_to_backfill
 
 
 class BackfillIntervalsPerSnapshot(PydanticModel):

@@ -20,7 +20,7 @@ from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.macros import macro
 from sqlmesh.core.model import Model, model
 from sqlmesh.core.snapshot import Snapshot
-from sqlmesh.utils import debug_mode_enabled
+from sqlmesh.utils import debug_mode_enabled, enable_debug_mode
 
 try:
     from sqlmesh._version import __version__, __version_tuple__  # type: ignore
@@ -89,7 +89,7 @@ if runtime_env.is_notebook:
         pass
 
 
-LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+LOG_FORMAT = "%(asctime)s - %(threadName)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
 
 
 # SO: https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
@@ -116,21 +116,42 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
-def enable_logging(level: t.Optional[int] = None, write_to_file: bool = False) -> None:
-    """Enable logging to send to stdout and color different levels"""
-    level = level or (logging.DEBUG if debug_mode_enabled() else logging.INFO)
+def configure_logging(
+    force_debug: bool = False,
+    ignore_warnings: bool = False,
+    write_to_stdout: bool = True,
+    write_to_file: bool = True,
+) -> None:
     logger = logging.getLogger()
-    logger.setLevel(level if not debug_mode_enabled() else logging.DEBUG)
-    if not logger.hasHandlers():
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(level)
-        handler.setFormatter(CustomFormatter())
-        logger.addHandler(handler)
 
-        if write_to_file:
-            os.makedirs("logs", exist_ok=True)
-            filename = f"logs/sqlmesh_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
-            file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
-            file_handler.setLevel(level)
-            file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-            logger.addHandler(file_handler)
+    debug = force_debug or debug_mode_enabled()
+    if debug:
+        import faulthandler
+        import signal
+
+        enable_debug_mode()
+
+        # Enable threadumps.
+        faulthandler.enable()
+        # Windows doesn't support register so we check for it here
+        if hasattr(faulthandler, "register"):
+            faulthandler.register(signal.SIGUSR1.value)
+
+        level = logging.DEBUG
+        logger.setLevel(level)
+        if not logger.hasHandlers():
+            if write_to_stdout:
+                handler = logging.StreamHandler(sys.stdout)
+                handler.setLevel(level)
+                handler.setFormatter(CustomFormatter())
+                logger.addHandler(handler)
+
+            if write_to_file:
+                os.makedirs("logs", exist_ok=True)
+                filename = f"logs/sqlmesh_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
+                file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
+                file_handler.setLevel(level)
+                file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+                logger.addHandler(file_handler)
+    elif ignore_warnings:
+        logger.setLevel(logging.ERROR)

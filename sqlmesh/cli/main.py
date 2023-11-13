@@ -7,11 +7,11 @@ import typing as t
 
 import click
 
+from sqlmesh import configure_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
 from sqlmesh.core.context import Context
-from sqlmesh.utils import configure_logging
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
 
@@ -74,7 +74,7 @@ def cli(
     if "--help" in sys.argv:
         return
 
-    configure_logging(debug, ignore_warnings)
+    configure_logging(debug, ignore_warnings, write_to_stdout=False)
 
     try:
         context = Context(
@@ -287,6 +287,17 @@ def diff(ctx: click.Context, environment: t.Optional[str] = None) -> None:
     multiple=True,
     help="Select specific model changes that should be included in the plan.",
 )
+@click.option(
+    "--backfill-model",
+    type=str,
+    multiple=True,
+    help="Backfill only the models whose names match the expression. This is supported only when targeting a development environment.",
+)
+@click.option(
+    "--no-diff",
+    is_flag=True,
+    help="Hide text differences for changed models.",
+)
 @click.pass_context
 @error_handler
 def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.Any) -> None:
@@ -294,7 +305,14 @@ def plan(ctx: click.Context, environment: t.Optional[str] = None, **kwargs: t.An
     context = ctx.obj
     restate_models = kwargs.pop("restate_model", None)
     select_models = kwargs.pop("select_model", None)
-    context.plan(environment, restate_models=restate_models, select_models=select_models, **kwargs)
+    backfill_models = kwargs.pop("backfill_model", None)
+    context.plan(
+        environment,
+        restate_models=restate_models,
+        select_models=select_models,
+        backfill_models=backfill_models,
+        **kwargs,
+    )
 
 
 @cli.command("run")

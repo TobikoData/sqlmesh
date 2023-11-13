@@ -164,7 +164,7 @@ The `unique_key` values can either be column names or SQL expressions. For examp
 MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
-    unique_key (COALESCE("ds", ''))
+    unique_key COALESCE("ds", '')
   )
 );
 ```

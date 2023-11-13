@@ -2172,9 +2172,8 @@ def test_model_jinja_macro_rendering():
     model = load_sql_based_model(expressions, jinja_macros=jinja_macros)
     definition = model.render_definition()
 
-    assert definition[1].sql() == "test_int = 1\ntest_str = 'value'"
-    assert definition[2].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_b_body\nJINJA_END;"
-    assert definition[3].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_a_body\nJINJA_END;"
+    assert definition[1].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_b_body\nJINJA_END;"
+    assert definition[2].sql() == "JINJA_STATEMENT_BEGIN;\nmacro_a_body\nJINJA_END;"
 
 
 def test_view_model_data_hash():
@@ -2311,6 +2310,24 @@ def test_scd_type_2_defaults():
     assert scd_type_2_model.kind.is_materialized
     assert scd_type_2_model.kind.forward_only
     assert scd_type_2_model.kind.disable_restatement
+
+    # Checks we can parse coalesced key with or without parentheses
+    for coalesced_id in ("""COALESCE("id", '')""", """(COALESCE("id", ''))"""):
+        model = load_sql_based_model(
+            d.parse(
+                f"""
+                MODEL (
+                    name db.table,
+                    kind SCD_TYPE_2 (
+                        unique_key {coalesced_id},
+                    ),
+                );
+
+                SELECT 1 AS "id"
+                """
+            )
+        )
+        assert model.unique_key == [exp.func("COALESCE", exp.column("id", quoted=True), "''")]
 
 
 def test_scd_type_2_overrides():
