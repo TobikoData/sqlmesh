@@ -182,8 +182,6 @@ class MSSQLEngineAdapter(
         temp_table = self._get_temp_table(target_table or "pandas")
 
         def query_factory() -> Query:
-            columns_to_types_tztext = None
-
             # pymssql doesn't convert Pandas Timestamp (datetime64) types
             # - this code is based on snowflake adapter implementation
             for column, kind in (columns_to_types or {}).copy().items():
@@ -200,7 +198,7 @@ class MSSQLEngineAdapter(
                     else:  # type: ignore
                         df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
 
-            self.create_table(temp_table, columns_to_types_tztext or columns_to_types)
+            self.create_table(temp_table, columns_to_types)
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
             conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
