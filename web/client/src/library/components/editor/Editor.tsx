@@ -159,8 +159,6 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
 
   const updateFileContent = useCallback(
     function updateFileContent(value: string): void {
-      if (tab == null) return
-
       tab.file.content = value
 
       refreshTab()
