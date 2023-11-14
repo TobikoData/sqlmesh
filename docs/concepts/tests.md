@@ -19,6 +19,7 @@ Test suites are defined using YAML format within `.yaml` files in the `tests/` f
     * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
     * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query
 * [Optional] The dictionary of values for macro variables that will be set during model testing
+    * There are three special macros that can be overridden, `start`, `end`, and `execution_time`. Overriding each will allow you to override the date macros in your SQL queries. For example, setting execution_time: 2022-01-01 -> execution_ds in your queries.
 
 The YAML format is defined as follows:
 
@@ -38,6 +39,9 @@ The YAML format is defined as follows:
         rows:
           - <column_name>: <column_value>
   vars:  # Optional
+    start: 2022-01-01
+    end: 2022-01-01
+    execution_time: 2022-01-01
     <macro_variable_name>: <macro_variable_value>
 ```
 
