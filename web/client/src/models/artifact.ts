@@ -1,4 +1,4 @@
-import { isStringEmptyOrNil, toUniqueName } from '@utils/index'
+import { PATH_SEPARATOR, isStringEmptyOrNil, toUniqueName } from '@utils/index'
 import { type ModelDirectory } from './directory'
 import { ModelInitial } from './initial'
 
@@ -75,11 +75,15 @@ export class ModelArtifact<
 
   private toPath(name: string, fallback: string = ''): string {
     return ModelArtifact.toPath(
-      this.withParent ? `${this.parent?.path ?? ''}/${name}` : fallback,
+      this.withParent
+        ? `${this.parent?.path ?? ''}${PATH_SEPARATOR}${name}`
+        : fallback,
     )
   }
 
   static toPath(...paths: string[]): string {
-    return paths.flatMap(path => path.split('/').filter(Boolean)).join('/')
+    return paths
+      .flatMap(path => path.split(PATH_SEPARATOR).filter(Boolean))
+      .join(PATH_SEPARATOR)
   }
 }

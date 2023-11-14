@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import pathlib
 import typing as t
 from pathlib import Path
 
@@ -74,7 +73,7 @@ async def write_file(
         replace_file(settings.project_path / path, settings.project_path / path_or_new_path)
     else:
         full_path = settings.project_path / path
-        if content and pathlib.Path(path_or_new_path).suffix == ".sql":
+        if content and Path(path_or_new_path).suffix == ".sql":
             path_to_model_mapping = await get_path_to_model_mapping(settings=settings)
             model = path_to_model_mapping.get(Path(full_path))
             default_dialect = context.config_for_path(Path(path_or_new_path)).dialect
