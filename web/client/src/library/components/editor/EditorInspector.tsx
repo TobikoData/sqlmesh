@@ -29,7 +29,7 @@ import TabList from '@components/tab/Tab'
 import { getTableDataFromArrowStreamResult } from '@components/table/help'
 import Spinner from '@components/logo/Spinner'
 import { ModelColumns } from '@components/graph/Graph'
-import { CodeEditorDefault, CodeEditorRemoteFile } from './EditorCode'
+import { CodeEditorDefault } from './EditorCode'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from './hooks'
 import { useLineageFlow } from '@components/graph/context'
@@ -138,16 +138,12 @@ function InspectorModel({
           unmount={false}
           className="text-xs w-full h-full ring-white ring-opacity-60 ring-offset-2 ring-offset-blue-400 focus:outline-none focus:ring-2 p-2"
         >
-          <CodeEditorRemoteFile path={model.path}>
-            {() => (
-              <CodeEditorDefault
-                type={EnumFileExtensions.SQL}
-                content={model.sql ?? ''}
-                extensions={modelExtensions}
-                className="text-xs"
-              />
-            )}
-          </CodeEditorRemoteFile>
+          <CodeEditorDefault
+            type={EnumFileExtensions.SQL}
+            content={model.sql ?? ''}
+            extensions={modelExtensions}
+            className="text-xs"
+          />
         </Tab.Panel>
         {list.length > 1 && environment.isSynchronized && (
           <Tab.Panel
