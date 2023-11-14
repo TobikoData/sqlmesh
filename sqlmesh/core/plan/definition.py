@@ -639,7 +639,11 @@ class Plan:
                         for upstream in self._dag.upstream(name)
                     )
                 ):
-                    snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+                    snapshot.categorize_as(
+                        SnapshotChangeCategory.FORWARD_ONLY
+                        if self._is_forward_only_model(name)
+                        else SnapshotChangeCategory.INDIRECT_BREAKING
+                    )
 
             elif name in self.context_diff.added and self.is_new_snapshot(snapshot):
                 snapshot.categorize_as(
@@ -675,8 +679,7 @@ class Plan:
                 )
             ):
                 raise PlanError(
-                    f"Detected an existing version of model '{name}' that has been previously superseded by a forward-only change. "
-                    "To proceed with the change, restamp this model's definition to produce a new version."
+                    f"Attempted to revert to an unrevertable version of model '{name}'. Run `sqlmesh plan` again to mitigate the issue."
                 )
 
     def _ensure_no_broken_references(self) -> None:
