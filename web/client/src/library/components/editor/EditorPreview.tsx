@@ -51,9 +51,7 @@ export default function EditorPreview({
   const [activeTabIndex, setActiveTabIndex] = useState(-1)
 
   const modelExtensions = useSQLMeshModelExtensions(tab.file.path, model => {
-    navigate(
-      `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(model.name)}`,
-    )
+    navigate(`${EnumRoutes.IdeDocsModels}/${model.name}`)
   })
 
   const tabs: string[] = useMemo(

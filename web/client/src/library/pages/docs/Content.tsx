@@ -15,18 +15,14 @@ export default function Content(): JSX.Element {
   const navigate = useNavigate()
 
   const models = useStoreContext(s => s.models)
-  const model = isNil(modelName)
-    ? undefined
-    : models.get(ModelSQLMeshModel.decodeName(modelName))
+  const model = isNil(modelName) ? undefined : models.get(modelName)
 
   function handleClickModel(modelName: string): void {
     const model = models.get(modelName)
 
     if (isNil(model)) return
 
-    navigate(
-      EnumRoutes.IdeDocsModels + '/' + ModelSQLMeshModel.encodeName(model.name),
-    )
+    navigate(EnumRoutes.IdeDocsModels + '/' + model.name)
   }
 
   function handleError(error: ErrorIDE): void {

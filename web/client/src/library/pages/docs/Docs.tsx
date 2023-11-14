@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useParams } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { isArrayNotEmpty } from '@utils/index'
+import { isArrayNotEmpty, isNil } from '@utils/index'
 import { useStoreContext } from '@context/context'
 import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import Container from '@components/container/Container'
@@ -21,10 +21,7 @@ export default function PageDocs(): JSX.Element {
   const filtered = Array.from(models.entries()).reduce(
     (acc: ModelSQLMeshModel[], [key, model]) => {
       if (model.name === key) return acc
-      if (
-        modelName == null ||
-        model.name !== ModelSQLMeshModel.decodeName(modelName)
-      ) {
+      if (isNil(modelName) || model.name !== modelName) {
         acc.push(model)
       }
 
@@ -63,11 +60,7 @@ export default function PageDocs(): JSX.Element {
               size={EnumSize.lg}
               searchBy="index"
               displayBy="name"
-              to={model =>
-                `${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(
-                  model.name,
-                )}`
-              }
+              to={model => `${EnumRoutes.IdeDocsModels}/${model.name}`}
               isFullWidth={true}
             />
           )}
