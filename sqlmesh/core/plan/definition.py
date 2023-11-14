@@ -679,8 +679,7 @@ class Plan:
                 )
             ):
                 raise PlanError(
-                    f"Detected an existing version of model '{name}' that has been previously superseded by a forward-only change. "
-                    "To proceed with the change, restamp this model's definition to produce a new version."
+                    f"Attempted to revert to an unrevertable version of model '{name}'. Run `sqlmesh plan` again to mitigate the issue."
                 )
 
     def _ensure_no_broken_references(self) -> None:
