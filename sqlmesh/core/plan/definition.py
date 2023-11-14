@@ -639,7 +639,11 @@ class Plan:
                         for upstream in self._dag.upstream(name)
                     )
                 ):
-                    snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
+                    snapshot.categorize_as(
+                        SnapshotChangeCategory.FORWARD_ONLY
+                        if self._is_forward_only_model(name)
+                        else SnapshotChangeCategory.INDIRECT_BREAKING
+                    )
 
             elif name in self.context_diff.added and self.is_new_snapshot(snapshot):
                 snapshot.categorize_as(
