@@ -186,7 +186,7 @@ class MSSQLEngineAdapter(
 
             # pymssql doesn't convert Pandas Timestamp (datetime64) types
             # - this code is based on snowflake adapter implementation
-            for column, kind in (columns_to_types or {}).items():
+            for column, kind in (columns_to_types or {}).copy().items():
                 if is_datetime64_any_dtype(df.dtypes[column]):
                     if kind.is_type("date"):  # type: ignore
                         df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
@@ -196,8 +196,7 @@ class MSSQLEngineAdapter(
 
                         # bulk_copy() doesn't work with TZ timestamp, so load into string column and cast to
                         # timestamp in SELECT statement
-                        columns_to_types_tztext = columns_to_types.copy()
-                        columns_to_types_tztext[column] = exp.DataType.build("TEXT")
+                        columns_to_types[column] = exp.DataType.build("TEXT")
                     else:  # type: ignore
                         df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
 
@@ -205,11 +204,7 @@ class MSSQLEngineAdapter(
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
             conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
-            return exp.select(
-                *self._casted_columns(columns_to_types)  # type: ignore
-                if columns_to_types_tztext
-                else columns_to_types
-            ).from_(temp_table)
+            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
 
         return [
             SourceQuery(
