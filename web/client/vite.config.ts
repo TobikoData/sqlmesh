@@ -37,7 +37,13 @@ export default defineConfig({
       ? {}
       : {
           proxy: {
-            '/api': 'http://api:8000',
+            '/api': {
+              target: 'http://api:8000',
+            },
+            '/docs': {
+              target: 'http://app:8001',
+              rewrite: path => '/',
+            },
           },
         },
   preview: {

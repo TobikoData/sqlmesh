@@ -61,9 +61,7 @@ export default function SourceList({
               className={clsx('text-sm font-normal')}
             >
               <NavLink
-                to={`${EnumRoutes.IdeDocsModels}/${ModelSQLMeshModel.encodeName(
-                  model.name,
-                )}`}
+                to={`${EnumRoutes.IdeDocsModels}/${model.name}`}
                 className={({ isActive }) =>
                   clsx(
                     'block px-2 overflow-hidden whitespace-nowrap overflow-ellipsis py-1 rounded-md w-full hover:bg-primary-10',

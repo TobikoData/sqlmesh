@@ -6,8 +6,6 @@ export interface InitialSQLMeshModel extends Model {
   lineage?: Record<string, Lineage>
 }
 
-const REPLACE_DOT_SYMBOL = '@'
-
 export class ModelSQLMeshModel<
   T extends InitialSQLMeshModel = InitialSQLMeshModel,
 > extends ModelInitial<T> {
@@ -69,13 +67,5 @@ export class ModelSQLMeshModel<
           value as string
       }
     }
-  }
-
-  static encodeName(modelName: string): string {
-    return modelName.replaceAll('.', REPLACE_DOT_SYMBOL)
-  }
-
-  static decodeName(modelName: string): string {
-    return modelName.replaceAll(REPLACE_DOT_SYMBOL, '.')
   }
 }
