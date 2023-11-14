@@ -207,6 +207,8 @@ export const useStoreEditor = create<EditorStore>((set, get) => ({
   closeTab(file) {
     const s = get()
 
+    file.removeChanges()
+
     s.tabs.delete(file)
 
     if (s.tabs.size === 0) {
