@@ -1,5 +1,14 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import { ModelDirectory } from './directory'
+
+vi.mock('../utils/index', async () => {
+  const actual: any = await vi.importActual('../utils/index')
+
+  return {
+    ...actual,
+    PATH_SEPARATOR: '\\',
+  }
+})
 
 describe('Model Directory', () => {
   test('should create directory with nested atrifacts', () => {
@@ -15,7 +24,7 @@ describe('Model Directory', () => {
 
     const folder1 = ModelDirectory.findArtifactByPath(
       directory,
-      'test/folder_1',
+      'test\\folder_1',
     ) as ModelDirectory
 
     expect(folder1).toBeTruthy()
@@ -23,7 +32,7 @@ describe('Model Directory', () => {
 
     const folder3 = ModelDirectory.findArtifactByPath(
       directory,
-      'test/folder_1/folder_2/folder_3',
+      'test\\folder_1\\folder_2\\folder_3',
     ) as ModelDirectory
 
     expect(folder3).toBeTruthy()
@@ -39,10 +48,10 @@ describe('Model Directory', () => {
     expect(found?.path).toBe('')
     expect(found?.level).toBe(0)
 
-    found = ModelDirectory.findParentByPath(directory, 'test/folder_1')
+    found = ModelDirectory.findParentByPath(directory, 'test\\folder_1')
 
     expect(found).toBe(directory.directories[0]?.directories[0])
-    expect(found?.path).toBe('test/folder_1')
+    expect(found?.path).toBe('test\\folder_1')
     expect(found?.level).toBe(2)
   })
 })
@@ -58,15 +67,15 @@ function getFakePayloadDirectoryWithChildren(): any {
         directories: [
           {
             name: 'folder_1',
-            path: 'test/folder_1',
+            path: 'test\\folder_1',
             directories: [
               {
                 name: 'folder_2',
-                path: 'test/folder_1/folder_2',
+                path: 'test\\folder_1\\folder_2',
                 directories: [
                   {
                     name: 'folder_3',
-                    path: 'test/folder_1/folder_2/folder_3',
+                    path: 'test\\folder_1\\folder_2\\folder_3',
                   },
                 ],
               },

@@ -1,4 +1,9 @@
-import { isFalse, isNotNil, isStringEmptyOrNil } from '@utils/index'
+import {
+  PATH_SEPARATOR,
+  isFalse,
+  isNotNil,
+  isStringEmptyOrNil,
+} from '@utils/index'
 import type { Directory, File } from '../api/client'
 import { type InitialArtifact, ModelArtifact } from './artifact'
 import { ModelFile } from './file'
@@ -208,14 +213,14 @@ export class ModelDirectory extends ModelArtifact<InitialDirectory> {
     path: string,
   ): ModelDirectory {
     const directories = directory.allDirectories
-    const chain = path.split('/').reduce((acc: string[], path) => {
+    const chain = path.split(PATH_SEPARATOR).reduce((acc: string[], path) => {
       if (acc.length === 0) return [path]
 
       if (isStringEmptyOrNil(path)) return acc
 
       const last = acc[acc.length - 1] ?? ''
 
-      acc.push(`${last}/${path}`)
+      acc.push(`${last}${PATH_SEPARATOR}${path}`)
 
       return acc
     }, [])
