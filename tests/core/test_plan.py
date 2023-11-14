@@ -275,7 +275,7 @@ def test_forward_only_revert_not_allowed(make_snapshot, mocker: MockerFixture):
 
     with pytest.raises(
         PlanError,
-        match=r"Detected an existing version of model 'a' that has been previously superseded by a forward-only change.*",
+        match=r"Attempted to revert to an unrevertable version of model.*",
     ):
         Plan(context_diff_mock, forward_only=True)
 
