@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from fastapi import APIRouter, Depends
+from sqlglot import exp
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model import Model
@@ -85,6 +86,10 @@ def get_all_models(context: Context) -> t.List[models.Model]:
             annotated=model.annotated,
         )
 
+        query = model.render_query() or (
+            model.query if hasattr(model, "query") else exp.select('"FAILED TO RENDER QUERY"')
+        )
+
         output.append(
             models.Model(
                 name=model.name,
@@ -93,7 +98,7 @@ def get_all_models(context: Context) -> t.List[models.Model]:
                 columns=columns,
                 details=details,
                 description=model.description,
-                sql=model.render_query_or_raise().sql(pretty=True, dialect=model.dialect),
+                sql=query.sql(pretty=True, dialect=model.dialect),
                 type=type,
             )
         )
