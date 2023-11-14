@@ -182,6 +182,8 @@ class MSSQLEngineAdapter(
         temp_table = self._get_temp_table(target_table or "pandas")
 
         def query_factory() -> Query:
+            columns_to_types_orig = columns_to_types.copy()
+
             # pymssql doesn't convert Pandas Timestamp (datetime64) types
             # - this code is based on snowflake adapter implementation
             for column, kind in (columns_to_types or {}).copy().items():
@@ -202,7 +204,7 @@ class MSSQLEngineAdapter(
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
             conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
-            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
+            return exp.select(*self._casted_columns(columns_to_types_orig)).from_(temp_table)  # type: ignore
 
         return [
             SourceQuery(
