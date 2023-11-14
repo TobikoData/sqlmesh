@@ -17,6 +17,7 @@ from sqlmesh.core.snapshot import (
 )
 from sqlmesh.core.snapshot.definition import Interval as SnapshotInterval
 from sqlmesh.core.user import User
+from sqlmesh.utils import sanitize_name
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -143,7 +144,7 @@ def dag_id_for_snapshot_info(info: SnapshotInfoLike) -> str:
 
 
 def dag_id_for_name_version(name: str, version: str) -> str:
-    return f"sqlmesh_snapshot_{name}_{version}_dag"
+    return f"sqlmesh_snapshot_{sanitize_name(name)}_{version}_dag"
 
 
 def plan_application_dag_id(environment: str, request_id: str) -> str:
