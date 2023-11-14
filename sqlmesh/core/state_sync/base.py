@@ -11,7 +11,6 @@ from sqlglot import __version__ as SQLGLOT_VERSION
 from sqlmesh import migrations
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.snapshot import (
-    DeployabilityIndex,
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
@@ -326,8 +325,8 @@ class StateSync(StateReader, abc.ABC):
     def promote(
         self,
         environment: Environment,
-        deployability_index: t.Optional[DeployabilityIndex] = None,
         no_gaps: bool = False,
+        no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> PromotionResult:
         """Update the environment to reflect the current state.
 
@@ -335,10 +334,11 @@ class StateSync(StateReader, abc.ABC):
 
         Args:
             environment: The environment to promote.
-            deployability_index: Determines snapshots that are deployable in the context of this promotion.
             no_gaps:  Whether to ensure that new snapshots for models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
+            no_gaps_snapshot_names: A set of snapshot names to check for data gaps. If not provided,
+                all snapshots will be checked.
 
         Returns:
            A tuple of (added snapshot table infos, removed snapshot table infos)

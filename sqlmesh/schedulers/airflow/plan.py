@@ -146,6 +146,12 @@ def create_plan_dag_spec(
         for s, intervals in backfill_batches.items()
     ]
 
+    no_gaps_snapshot_names = (
+        {s.name for s in all_snapshots.values() if initial_deployability_index.is_representative(s)}
+        if request.no_gaps and not request.is_dev
+        else None
+    )
+
     return common.PlanDagSpec(
         request_id=request.request_id,
         environment_naming_info=request.environment.naming_info,
@@ -168,6 +174,7 @@ def create_plan_dag_spec(
         environment_expiration_ts=request.environment.expiration_ts,
         dag_start_ts=now_timestamp(),
         deployability_index=deployability_index,
+        no_gaps_snapshot_names=no_gaps_snapshot_names,
     )
 
 

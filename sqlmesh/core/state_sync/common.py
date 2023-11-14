@@ -10,7 +10,6 @@ from functools import wraps
 from sqlmesh.core.dialect import schema_
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.snapshot import (
-    DeployabilityIndex,
     Snapshot,
     SnapshotId,
     SnapshotIdLike,
@@ -100,8 +99,8 @@ class CommonStateSyncMixin(StateSync):
     def promote(
         self,
         environment: Environment,
-        deployability_index: t.Optional[DeployabilityIndex] = None,
         no_gaps: bool = False,
+        no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> PromotionResult:
         """Update the environment to reflect the current state.
 
@@ -109,10 +108,11 @@ class CommonStateSyncMixin(StateSync):
 
         Args:
             environment: The environment to promote.
-            deployability_index: Determines snapshots that are deployable in the context of this promotion.
             no_gaps:  Whether to ensure that new snapshots for models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
+            no_gaps_snapshot_names: A set of snapshot names to check for data gaps. If not provided,
+                all snapshots will be checked.
 
         Returns:
            A tuple of (added snapshot table infos, removed snapshot table infos, and environment target suffix for the removed table infos)
@@ -149,7 +149,7 @@ class CommonStateSyncMixin(StateSync):
                 self._ensure_no_gaps(
                     snapshots,
                     existing_environment,
-                    deployability_index or DeployabilityIndex.all_deployable(),
+                    no_gaps_snapshot_names,
                 )
 
             existing_table_infos = {
@@ -295,7 +295,7 @@ class CommonStateSyncMixin(StateSync):
         self,
         target_snapshots: t.Iterable[Snapshot],
         target_environment: Environment,
-        deployability_index: DeployabilityIndex,
+        snapshot_names: t.Optional[t.Set[str]],
     ) -> None:
         target_snapshots_by_name = {s.name: s for s in target_snapshots}
 
@@ -314,7 +314,7 @@ class CommonStateSyncMixin(StateSync):
         for prev_snapshot in prev_snapshots:
             target_snapshot = target_snapshots_by_name[prev_snapshot.name]
             if (
-                deployability_index.is_representative(target_snapshot)
+                (snapshot_names is None or prev_snapshot.name in snapshot_names)
                 and target_snapshot.is_incremental
                 and prev_snapshot.is_incremental
                 and prev_snapshot.intervals

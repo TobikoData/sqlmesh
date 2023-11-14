@@ -297,8 +297,8 @@ class SnapshotDagGenerator:
             python_callable=promotion_update_state_task,
             op_kwargs={
                 "environment": environment,
-                "deployability_index": request.deployability_index,
                 "no_gaps": request.no_gaps,
+                "no_gaps_snapshot_names": request.no_gaps_snapshot_names,
             },
         )
 
@@ -571,11 +571,13 @@ def creation_update_state_task(new_snapshots: t.Iterable[Snapshot]) -> None:
 
 def promotion_update_state_task(
     environment: Environment,
-    deployability_index: DeployabilityIndex,
     no_gaps: bool,
+    no_gaps_snapshot_names: t.Optional[t.Set[str]],
 ) -> None:
     with util.scoped_state_sync() as state_sync:
-        state_sync.promote(environment, deployability_index=deployability_index, no_gaps=no_gaps)
+        state_sync.promote(
+            environment, no_gaps=no_gaps, no_gaps_snapshot_names=no_gaps_snapshot_names
+        )
 
 
 def promotion_unpause_snapshots_task(
