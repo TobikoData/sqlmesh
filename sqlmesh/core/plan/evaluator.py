@@ -186,7 +186,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             If not provided, all snapshots are checked.
         """
         promotion_result = self.state_sync.promote(
-            plan.environment, no_gaps=plan.no_gaps, no_gaps_snapshot_names=no_gaps_snapshot_names
+            plan.environment,
+            no_gaps_snapshot_names=no_gaps_snapshot_names if plan.no_gaps else set(),
         )
 
         if not plan.is_dev:

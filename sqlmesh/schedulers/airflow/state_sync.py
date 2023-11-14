@@ -230,7 +230,6 @@ class HttpStateSync(StateSync):
     def promote(
         self,
         environment: Environment,
-        no_gaps: bool = False,
         no_gaps_snapshot_names: t.Optional[t.Set[str]] = None,
     ) -> PromotionResult:
         """Update the environment to reflect the current state.
@@ -239,10 +238,10 @@ class HttpStateSync(StateSync):
 
         Args:
             environment: The environment to promote.
-            no_gaps:  Whether to ensure that new snapshots for models that are already a
+            no_gaps_snapshot_names: A set of snapshot names to check for data gaps. If None,
+                all snapshots will be checked. The data gap check ensures that models that are already a
                 part of the target environment have no data gaps when compared against previous
                 snapshots for same models.
-            no_gaps_snapshot_names: A set of snapshot names to check for data gaps. If not provided,
 
         Returns:
            A promotion result object containing added, removed, and removed environment naming info

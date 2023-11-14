@@ -150,6 +150,8 @@ def create_plan_dag_spec(
         {s.name for s in all_snapshots.values() if initial_deployability_index.is_representative(s)}
         if request.no_gaps and not request.is_dev
         else None
+        if request.no_gaps
+        else set()
     )
 
     return common.PlanDagSpec(

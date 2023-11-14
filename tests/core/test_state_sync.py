@@ -89,7 +89,9 @@ def promote_snapshots(
         plan_id="test_plan_id",
         previous_plan_id="test_plan_id",
     )
-    return state_sync.promote(env, no_gaps=no_gaps, no_gaps_snapshot_names=no_gaps_snapshot_names)
+    return state_sync.promote(
+        env, no_gaps_snapshot_names=no_gaps_snapshot_names if no_gaps else set()
+    )
 
 
 def delete_versions(state_sync: EngineAdapterStateSync) -> None:
