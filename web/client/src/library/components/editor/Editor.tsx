@@ -6,6 +6,7 @@ import {
   debounceSync,
   isFalse,
   isNil,
+  isNotNil,
   isStringEmptyOrNil,
 } from '../../../utils'
 import EditorFooter from './EditorFooter'
@@ -177,9 +178,11 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
 
   const sizesCodeEditorAndPreview = useMemo(() => {
     const model = models.get(tab.file.path)
+    const showLineage =
+      isFalse(tab.file.isEmpty) && isNotNil(model) && tab.file.isSQLMeshModel
     const showPreview =
       (tab.file.isLocal && [previewTable, previewDiff].some(Boolean)) ||
-      (tab.file.isSQLMeshModel && model != null)
+      showLineage
 
     return showPreview ? [70, 30] : [100, 0]
   }, [tab, models, previewTable, previewDiff])
