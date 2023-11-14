@@ -1,7 +1,7 @@
 import { type File, FileType } from '../api/client'
 import { type ModelDirectory } from './directory'
 import { type InitialArtifact, ModelArtifact } from './artifact'
-import { isFalse, isStringEmptyOrNil, toUniqueName } from '@utils/index'
+import { isFalse, isNil, isStringEmptyOrNil, toUniqueName } from '@utils/index'
 
 export const EnumFileExtensions = {
   SQL: '.sql',
@@ -109,7 +109,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
   }
 
   update(newFile?: File): void {
-    if (newFile == null) {
+    if (isNil(newFile)) {
       this.updateContent('')
     } else {
       this.is_supported = newFile.is_supported ?? false
@@ -123,7 +123,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
 }
 
 function getFileType(path?: string): FileType | undefined {
-  if (path == null || isStringEmptyOrNil(path)) return
+  if (isStringEmptyOrNil(path)) return
 
   if (path.startsWith('models')) return FileType.model
 }
