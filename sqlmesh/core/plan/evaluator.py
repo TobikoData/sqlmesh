@@ -101,7 +101,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             self._push(plan, deployability_index)
             self._restate(plan)
             self._backfill(plan, before_promote_snapshots, deployability_index)
-            promotion_result = self._promote(plan, deployability_index)
+            promotion_result = self._promote(plan, before_promote_snapshots)
             self._backfill(plan, after_promote_snapshots, deployability_index)
             self._update_views(plan, promotion_result, deployability_index)
 
@@ -176,16 +176,18 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self.state_sync.push_snapshots(plan.new_snapshots)
 
     def _promote(
-        self, plan: Plan, deployability_index: t.Optional[DeployabilityIndex] = None
+        self, plan: Plan, no_gaps_snapshot_names: t.Optional[t.Set[str]] = None
     ) -> PromotionResult:
         """Promote a plan.
 
         Args:
             plan: The plan to promote.
-            deployability_index: Indicates which snapshots are deployable in the context of this promotion.
+            no_gaps_snapshot_names: The names of snapshots to check for gaps if the no gaps check is enabled in the plan.
+            If not provided, all snapshots are checked.
         """
         promotion_result = self.state_sync.promote(
-            plan.environment, deployability_index=deployability_index, no_gaps=plan.no_gaps
+            plan.environment,
+            no_gaps_snapshot_names=no_gaps_snapshot_names if plan.no_gaps else set(),
         )
 
         if not plan.is_dev:

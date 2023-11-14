@@ -3,9 +3,9 @@ import { Disclosure, Tab } from '@headlessui/react'
 import { MinusCircleIcon, PlusCircleIcon } from '@heroicons/react/24/solid'
 import { EnumFileExtensions } from '@models/file'
 import {
+  PATH_SEPARATOR,
   isArrayNotEmpty,
   isFalse,
-  isNil,
   isString,
   isTrue,
   toDateFormat,
@@ -52,7 +52,10 @@ const Documentation = function Documentation({
           <ul className="px-2 w-full">
             <DetailsItem
               name="Path"
-              value={model.path.split('/').slice(0, -1).join('/')}
+              value={model.path
+                .split(PATH_SEPARATOR)
+                .slice(0, -1)
+                .join(PATH_SEPARATOR)}
             />
             <DetailsItem
               name="Name"

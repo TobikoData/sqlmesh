@@ -87,6 +87,7 @@ class PlanDagSpec(PydanticModel):
     environment_expiration_ts: t.Optional[int] = None
     dag_start_ts: t.Optional[int] = None
     deployability_index: DeployabilityIndex = DeployabilityIndex.all_deployable()
+    no_gaps_snapshot_names: t.Optional[t.Set[str]] = None
 
 
 class EnvironmentsResponse(PydanticModel):

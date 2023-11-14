@@ -141,6 +141,8 @@ def test_create_plan_dag_spec(
     state_sync_mock.get_snapshot_intervals.return_value = []
     state_sync_mock.refresh_snapshot_intervals.return_value = []
 
+    expected_no_gaps_snapshot_names = {the_snapshot.name} if not paused_forward_only else set()
+
     with mock.patch(
         "sqlmesh.schedulers.airflow.plan.now_timestamp",
         side_effect=lambda: to_timestamp("2023-01-01"),
@@ -174,7 +176,7 @@ def test_create_plan_dag_spec(
         is_dev=False,
         forward_only=True,
         dag_start_ts=to_timestamp("2023-01-01"),
-        deployability_index=DeployabilityIndex.all_deployable(),
+        no_gaps_snapshot_names=expected_no_gaps_snapshot_names,
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -286,7 +288,7 @@ def test_restatement(
         is_dev=False,
         forward_only=True,
         dag_start_ts=to_timestamp(now_value),
-        deployability_index=DeployabilityIndex.all_deployable(),
+        no_gaps_snapshot_names={the_snapshot.name},
     )
 
     state_sync_mock.get_snapshots.assert_called_once()
@@ -392,6 +394,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         forward_only=True,
         dag_start_ts=to_timestamp("2023-01-01"),
         deployability_index=DeployabilityIndex.all_deployable(),
+        no_gaps_snapshot_names={"a", "b"},
     )
 
 

@@ -1,3 +1,5 @@
+export const PATH_SEPARATOR = navigator.userAgent.includes('Win') ? '\\' : '/'
+
 export function isTrue(value: unknown): boolean {
   return value === true
 }
@@ -50,7 +52,7 @@ export function isObjectNotEmpty(value: unknown): boolean {
 
 export function isObject(value: unknown): boolean {
   return (
-    typeof value === 'object' && value !== null && value.constructor === Object
+    typeof value === 'object' && isNotNil(value) && value.constructor === Object
   )
 }
 
@@ -141,7 +143,7 @@ export function debounceSync(
   let timeoutID: ReturnType<typeof setTimeout> | undefined
 
   return function callback(...args: any) {
-    const callNow = immediate && timeoutID == null
+    const callNow = immediate && isNil(timeoutID)
 
     clearTimeout(timeoutID)
 
@@ -170,7 +172,7 @@ export function toUniqueName(prefix?: string, suffix?: string): string {
   // Should be enough for now
   const hex = (Date.now() % 100000).toString(16)
 
-  return `${prefix == null ? '' : `${prefix}_`}${hex}${
+  return `${isNil(prefix) ? '' : `${prefix}_`}${hex}${
     suffix ?? ''
   }`.toLowerCase()
 }
