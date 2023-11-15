@@ -1,3 +1,4 @@
+import json
 import sys
 import typing as t
 from functools import wraps
@@ -110,8 +111,10 @@ class PydanticModel(pydantic.BaseModel):
         kwargs.update(DEFAULT_ARGS)
         if PYDANTIC_MAJOR_VERSION >= 2:
             # Pydantic v2 doesn't support arbitrary arguments for json.dump().
-            kwargs.pop("sort_keys", None)
-            return super().model_dump_json(**kwargs)  # type: ignore
+            if kwargs.pop("sort_keys", False):
+                return json.dumps(super().model_dump(mode="json", **kwargs), sort_keys=True)  # type: ignore
+            else:
+                return super().model_dump_json(**kwargs)  # type: ignore
         return super().json(**kwargs)  # type: ignore
 
     def copy(self: "Model", **kwargs: t.Any) -> "Model":
