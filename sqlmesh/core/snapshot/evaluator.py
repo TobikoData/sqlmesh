@@ -1007,6 +1007,7 @@ class FullRefreshStrategy(MaterializableStrategy):
             partitioned_by=model.partitioned_by,
             partition_interval_unit=model.interval_unit,
             clustered_by=model.clustered_by,
+            table_properties=model.table_properties,
         )
 
 
