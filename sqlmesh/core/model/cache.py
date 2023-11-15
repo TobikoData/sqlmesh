@@ -4,6 +4,7 @@ import typing as t
 from pathlib import Path
 
 from sqlglot import exp
+from sqlglot.optimizer.simplify import gen
 
 from sqlmesh.core.model.definition import Model, SqlModel
 from sqlmesh.utils.cache import FileCache
@@ -105,7 +106,7 @@ class OptimizedQueryCache:
     @staticmethod
     def _entry_id(model: SqlModel, unoptimized_query: exp.Expression) -> str:
         data = OptimizedQueryCache._mapping_schema_hash_data(model.mapping_schema)
-        data.append(unoptimized_query.sql())
+        data.append(gen(unoptimized_query))
         return crc32(data)
 
     @staticmethod
