@@ -1896,14 +1896,15 @@ def test_model_normalization():
         MODEL (
             name foo,
             kind INCREMENTAL_BY_UNIQUE_KEY (
-                unique_key [a, COALESCE(b, '')]
+                unique_key [a, COALESCE(b, ''), "c"]
             ),
             dialect snowflake
         );
 
         SELECT
           x.a AS a,
-          x.b AS b
+          x.b AS b,
+          x."c" AS c
         FROM test.x AS x
         """
     )
@@ -1911,6 +1912,7 @@ def test_model_normalization():
     assert model.unique_key == [
         exp.column("A", quoted=False),
         exp.func("COALESCE", exp.column("B", quoted=False), "''"),
+        exp.column("c", quoted=True),
     ]
 
 
