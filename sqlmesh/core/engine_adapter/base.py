@@ -162,6 +162,7 @@ class EngineAdapter:
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
     SUPPORTS_ROW_LEVEL_OP = True
+    HAS_VIEW_BINDING = False
 
     def __init__(
         self,
