@@ -26,6 +26,7 @@ class PostgresEngineAdapter(
 ):
     DIALECT = "postgres"
     SUPPORTS_INDEXES = True
+    HAS_VIEW_BINDING = True
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False
