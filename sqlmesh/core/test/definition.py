@@ -79,8 +79,8 @@ class ModelTest(unittest.TestCase):
 
             for index, (column, dtype) in enumerate(columns_to_types.items()):
                 if column not in df:
-                    # Fill in missing columns with NaN (NULL) values
-                    df.insert(index, column, np.nan)
+                    # Fill in missing columns with NULL values
+                    df.insert(index, column, None)
 
             table = exp.to_table(table_name)
 
