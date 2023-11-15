@@ -1985,12 +1985,12 @@ def test_model_table_properties() -> None:
     def my_model(context, **kwargs):
         pass
 
-    m = model.get_registry()["my_model"].model(
+    python_model = model.get_registry()["my_model"].model(
         module_path=Path("."),
         path=Path("."),
     )
 
-    assert m.table_properties == {
+    assert python_model.table_properties == {
         "format": exp.Literal.string("PARQUET"),
         "bucket_count": exp.Literal.number(0),
         "orc_bloom_filter_fpp": exp.Literal.number(0.05),
