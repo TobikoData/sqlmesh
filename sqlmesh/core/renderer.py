@@ -202,19 +202,54 @@ class BaseExpressionRenderer:
         if not snapshots and not table_mapping and not expand:
             return expression
 
+        from sqlmesh.core.snapshot import to_table_mapping
+
         expression = expression.copy()
         with _normalize_and_quote(expression, self._dialect) as expression:
-            return _resolve_tables(
-                expression,
-                snapshots=snapshots,
-                table_mapping=table_mapping,
-                expand=expand,
-                deployability_index=deployability_index,
-                start=start,
-                end=end,
-                execution_time=execution_time,
-                **kwargs,
-            )
+            snapshots = snapshots or {}
+            table_mapping = table_mapping or {}
+            mapping = {**to_table_mapping(snapshots.values(), deployability_index), **table_mapping}
+            expand = {d.normalize_model_name(name, dialect=self._dialect) for name in expand} | {
+                name for name, snapshot in snapshots.items() if snapshot.is_embedded
+            }
+
+            if expand:
+
+                def _expand(node: exp.Expression) -> exp.Expression:
+                    if isinstance(node, exp.Table) and snapshots:
+                        name = exp.table_name(node)
+                        model = snapshots[name].model if name in snapshots else None
+                        if (
+                            name in expand
+                            and model
+                            and not model.is_seed
+                            and not model.kind.is_external
+                        ):
+                            nested_query = model.render_query(
+                                start=start,
+                                end=end,
+                                execution_time=execution_time,
+                                snapshots=snapshots,
+                                table_mapping=table_mapping,
+                                expand=expand,
+                                deployability_index=deployability_index,
+                                **kwargs,
+                            )
+                            if nested_query is not None:
+                                return nested_query.subquery(
+                                    alias=node.alias or model.view_name,
+                                    copy=False,
+                                )
+                            else:
+                                logger.warning("Failed to expand the nested model '%s'", name)
+                    return node
+
+                expression = expression.transform(_expand, copy=False)
+
+            if mapping:
+                expression = exp.replace_tables(expression, mapping, copy=False)
+
+            return expression
 
     def _cache_key(
         self,
@@ -452,51 +487,3 @@ def _normalize_and_quote(query: E, dialect: str) -> t.Iterator[E]:
     normalize_identifiers(query, dialect=dialect)
     yield query
     quote_identifiers(query, dialect=dialect)
-
-
-def _resolve_tables(
-    expression: E,
-    *,
-    snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
-    table_mapping: t.Optional[t.Dict[str, str]] = None,
-    expand: t.Iterable[str] = tuple(),
-    deployability_index: t.Optional[DeployabilityIndex] = None,
-    **render_kwargs: t.Any,
-) -> E:
-    from sqlmesh.core.snapshot import to_table_mapping
-
-    snapshots = snapshots or {}
-    table_mapping = table_mapping or {}
-    mapping = {**to_table_mapping(snapshots.values(), deployability_index), **table_mapping}
-    # if a snapshot is provided but not mapped, we need to expand it or the query
-    # won't be valid
-    expand = set(expand) | {name for name in snapshots if name not in mapping}
-
-    if expand:
-
-        def _expand(node: exp.Expression) -> exp.Expression:
-            if isinstance(node, exp.Table) and snapshots:
-                name = exp.table_name(node)
-                model = snapshots[name].model if name in snapshots else None
-                if name in expand and model and not model.is_seed and not model.kind.is_external:
-                    nested_query = model.render_query(
-                        snapshots=snapshots,
-                        expand=expand,
-                        deployability_index=deployability_index,
-                        **render_kwargs,
-                    )
-                    if nested_query is not None:
-                        return nested_query.subquery(
-                            alias=node.alias or model.view_name,
-                            copy=False,
-                        )
-                    else:
-                        logger.warning("Failed to expand the nested model '%s'", name)
-            return node
-
-        expression = expression.transform(_expand, copy=False)
-
-    if mapping:
-        expression = exp.replace_tables(expression, mapping, copy=False)
-
-    return expression

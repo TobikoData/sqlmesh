@@ -132,7 +132,7 @@ def test_render(sushi_context, assert_exp_eq):
         """,
     )
 
-    # unpushed render still works
+    # unpushed render should not expand
     unpushed = Context(paths="examples/sushi")
     assert_exp_eq(
         unpushed.render(snapshot.name),
@@ -141,37 +141,10 @@ def test_render(sushi_context, assert_exp_eq):
           CAST("o"."waiter_id" AS INT) AS "waiter_id", /* Waiter id */
           CAST(SUM("oi"."quantity" * "i"."price") AS DOUBLE) AS "revenue", /* Revenue from orders taken by this waiter */
           CAST("o"."ds" AS TEXT) AS "ds" /* Date */
-        FROM (
-          SELECT
-            CAST(NULL AS INT) AS "id",
-            CAST(NULL AS INT) AS "customer_id",
-            CAST(NULL AS INT) AS "waiter_id",
-            CAST(NULL AS INT) AS "start_ts",
-            CAST(NULL AS INT) AS "end_ts",
-            CAST(NULL AS TEXT) AS "ds"
-          FROM (VALUES
-            (1)) AS "t"("dummy")
-        ) AS "o"
-        LEFT JOIN (
-          SELECT
-            CAST(NULL AS INT) AS "id",
-            CAST(NULL AS INT) AS "order_id",
-            CAST(NULL AS INT) AS "item_id",
-            CAST(NULL AS INT) AS "quantity",
-            CAST(NULL AS TEXT) AS "ds"
-          FROM (VALUES
-            (1)) AS "t"("dummy")
-        ) AS "oi"
+        FROM "sushi"."orders" AS "o"
+        LEFT JOIN "sushi"."order_items" AS "oi"
           ON "o"."ds" = "oi"."ds" AND "o"."id" = "oi"."order_id"
-        LEFT JOIN (
-          SELECT
-            CAST(NULL AS INT) AS "id",
-            CAST(NULL AS TEXT) AS "name",
-            CAST(NULL AS DOUBLE) AS "price",
-            CAST(NULL AS TEXT) AS "ds"
-          FROM (VALUES
-            (1)) AS "t"("dummy")
-        ) AS "i"
+        LEFT JOIN "sushi"."items" AS "i"
           ON "oi"."ds" = "i"."ds" AND "oi"."item_id" = "i"."id"
         WHERE
           "o"."ds" <= '1970-01-01' AND "o"."ds" >= '1970-01-01'
