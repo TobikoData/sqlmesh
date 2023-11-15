@@ -714,7 +714,11 @@ class EngineAdapter:
         )
 
     def drop_view(
-        self, view_name: TableName, ignore_if_not_exists: bool = True, materialized: bool = False, cascade: bool = False
+        self,
+        view_name: TableName,
+        ignore_if_not_exists: bool = True,
+        materialized: bool = False,
+        cascade: bool = False,
     ) -> None:
         """Drop a view."""
         self.execute(
