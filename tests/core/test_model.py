@@ -1910,7 +1910,7 @@ def test_model_normalization():
     model = SqlModel.parse_raw(load_sql_based_model(expr).json())
     assert model.unique_key == [
         exp.column("A", quoted=False),
-        exp.func("COALESCE", exp.column("B", quoted=False)),
+        exp.func("COALESCE", exp.column("B", quoted=False), "''"),
     ]
 
 
