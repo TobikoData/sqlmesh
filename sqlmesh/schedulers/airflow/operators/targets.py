@@ -152,7 +152,6 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
             end=self._get_end(context),
             execution_time=self._get_execution_time(context),
             deployability_index=self.deployability_index,
-            plan_id=self.plan_id,
         )
 
     def _get_start(self, context: Context) -> TimeLike:

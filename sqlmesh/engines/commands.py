@@ -37,7 +37,6 @@ class EvaluateCommandPayload(PydanticModel):
     end: TimeLike
     execution_time: TimeLike
     deployability_index: DeployabilityIndex
-    plan_id: t.Optional[str]
 
 
 class PromoteCommandPayload(PydanticModel):
@@ -83,7 +82,6 @@ def evaluate(
         command_payload.execution_time,
         snapshots=parent_snapshots,
         deployability_index=command_payload.deployability_index,
-        plan_id=command_payload.plan_id,
     )
     evaluator.audit(
         snapshot=command_payload.snapshot,
@@ -92,7 +90,6 @@ def evaluate(
         execution_time=command_payload.execution_time,
         snapshots=parent_snapshots,
         deployability_index=command_payload.deployability_index,
-        plan_id=command_payload.plan_id,
     )
 
 
