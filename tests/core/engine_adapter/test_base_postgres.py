@@ -41,7 +41,7 @@ def test_create_view(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.execute.assert_has_calls(
         [
             # 1st call
-            call('DROP VIEW IF EXISTS "db"."view"'),
+            call('DROP VIEW IF EXISTS "db"."view" CASCADE'),
             call('CREATE VIEW "db"."view" AS SELECT 1'),
             # 2nd call
             call('CREATE VIEW "db"."view" AS SELECT 1'),

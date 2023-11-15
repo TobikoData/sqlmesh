@@ -832,7 +832,8 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
         )
         environments = self.get_environments()
 
-        snapshot_mapping = {}
+        snapshot_id_mapping: t.Dict[SnapshotId, SnapshotId] = {}
+        new_snapshots: t.Dict[SnapshotId, Snapshot] = {}
 
         if all_snapshots:
             self.console.start_migration_progress(len(all_snapshots))
@@ -902,10 +903,18 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 logger.debug(f"{new_snapshot.snapshot_id} exists.")
                 continue
 
-            snapshot_mapping[snapshot.snapshot_id] = new_snapshot
-            logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot.snapshot_id}.")
+            new_snapshot_id = new_snapshot.snapshot_id
 
-        if not snapshot_mapping:
+            if (
+                new_snapshot_id not in new_snapshots
+                or new_snapshot.updated_ts > new_snapshots[new_snapshot_id].updated_ts
+            ):
+                new_snapshots[new_snapshot_id] = new_snapshot
+
+            snapshot_id_mapping[snapshot.snapshot_id] = new_snapshot_id
+            logger.debug(f"{snapshot.snapshot_id} mapped to {new_snapshot_id}.")
+
+        if not snapshot_id_mapping:
             logger.debug("No changes to snapshots detected.")
             return
 
@@ -915,14 +924,15 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             version_ids = ((version.snapshot_id(name), version) for version in versions)
 
             return tuple(
-                snapshot_mapping[version_id].data_version
-                if version_id in snapshot_mapping
+                new_snapshots[snapshot_id_mapping[version_id]].data_version
+                if version_id in snapshot_id_mapping
                 else version
                 for version_id, version in version_ids
             )
 
-        for from_snapshot_id, to_snapshot in snapshot_mapping.items():
+        for from_snapshot_id, to_snapshot_id in snapshot_id_mapping.items():
             from_snapshot = all_snapshots[from_snapshot_id]
+            to_snapshot = new_snapshots[to_snapshot_id]
             to_snapshot.previous_versions = map_data_versions(
                 from_snapshot.name, from_snapshot.previous_versions
             )
@@ -931,15 +941,14 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 for name, versions in from_snapshot.indirect_versions.items()
             }
 
-        new_snapshots = set(snapshot_mapping.values())
-        self._push_snapshots(new_snapshots, overwrite=True)
+        self._push_snapshots(new_snapshots.values(), overwrite=True)
 
         updated_prod_environment: t.Optional[Environment] = None
         updated_environments = []
         for environment in environments:
             snapshots = [
-                snapshot_mapping[info.snapshot_id].table_info
-                if info.snapshot_id in snapshot_mapping
+                new_snapshots[snapshot_id_mapping[info.snapshot_id]].table_info
+                if info.snapshot_id in snapshot_id_mapping
                 else info
                 for info in environment.snapshots
             ]
