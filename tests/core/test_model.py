@@ -1374,7 +1374,7 @@ def test_python_models_returning_sql(assert_exp_eq) -> None:
     assert isinstance(model2.query, d.MacroFunc)
     assert model2.depends_on == {"MODEL1"}
     assert_exp_eq(
-        context.render("model2"),
+        context.render("model2", expand=["model1"]),
         """
         SELECT
           "MODEL1"."X" AS "X",
@@ -1441,7 +1441,7 @@ def test_star_expansion(assert_exp_eq) -> None:
     context.upsert_model(model3)
 
     assert_exp_eq(
-        context.render("db.model2"),
+        context.render("db.model2", expand=["db.model1"]),
         """
         SELECT
           "model1"."id" AS "id",
@@ -1465,7 +1465,7 @@ def test_star_expansion(assert_exp_eq) -> None:
         """,
     )
     assert_exp_eq(
-        context.render("db.model3"),
+        context.render("db.model3", expand=["db.model1", "db.model2"]),
         """
         SELECT
           "model2"."id" AS "id",

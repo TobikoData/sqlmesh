@@ -162,6 +162,7 @@ class EngineAdapter:
     SUPPORTS_TUPLE_IN = True
     CATALOG_SUPPORT = CatalogSupport.UNSUPPORTED
     SUPPORTS_ROW_LEVEL_OP = True
+    HAS_VIEW_BINDING = False
 
     def __init__(
         self,
@@ -714,7 +715,11 @@ class EngineAdapter:
         )
 
     def drop_view(
-        self, view_name: TableName, ignore_if_not_exists: bool = True, materialized: bool = False
+        self,
+        view_name: TableName,
+        ignore_if_not_exists: bool = True,
+        materialized: bool = False,
+        cascade: bool = False,
     ) -> None:
         """Drop a view."""
         self.execute(
@@ -722,6 +727,7 @@ class EngineAdapter:
                 this=exp.to_table(view_name),
                 exists=ignore_if_not_exists,
                 materialized=materialized,
+                cascade=cascade,
                 kind="VIEW",
             )
         )

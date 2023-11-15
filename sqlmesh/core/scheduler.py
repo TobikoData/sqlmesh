@@ -290,16 +290,21 @@ class Scheduler:
 
         self.console.stop_evaluation_progress(success=not errors)
 
+        skipped_snapshots = {i[0] for i in skipped_intervals}
+        for skipped in skipped_snapshots:
+            log_message = f"SKIPPED snapshot {skipped}\n"
+            self.console.log_status_update(log_message)
+            logger.info(log_message)
+
         for error in errors:
             if isinstance(error.__cause__, CircuitBreakerError):
                 raise error.__cause__
             sid = error.node[0]
             formatted_exception = "".join(format_exception(error.__cause__ or error))
-            self.console.log_error(f"FAILED processing snapshot {sid}\n{formatted_exception}")
-
-        skipped_snapshots = {i[0] for i in skipped_intervals}
-        for skipped in skipped_snapshots:
-            self.console.log_status_update(f"SKIPPED snapshot {skipped}\n")
+            log_message = f"FAILED processing snapshot {sid}\n{formatted_exception}"
+            self.console.log_error(log_message)
+            # Log with INFO level to prevent duplicate messages in the console.
+            logger.info(log_message)
 
         return not errors
 
