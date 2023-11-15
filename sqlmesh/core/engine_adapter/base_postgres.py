@@ -86,7 +86,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
         """
         with self.transaction():
             if replace:
-                self.drop_view(view_name, materialized=materialized)
+                self.drop_view(view_name, materialized=materialized, cascade=True)
             super().create_view(
                 view_name,
                 query_or_df,
