@@ -63,7 +63,9 @@ def parse_expressions(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.Li
     results = []
 
     for expr in expressions:
-        expr = normalize_identifiers(exp.column(expr) if isinstance(expr, exp.Identifier) else expr)
+        expr = normalize_identifiers(
+            exp.column(expr) if isinstance(expr, exp.Identifier) else expr, dialect=dialect
+        )
         expr.meta["dialect"] = dialect
         results.append(expr)
 
