@@ -63,12 +63,6 @@ ITEMS = [
         ("not_null", {"columns": [to_column("name"), to_column("price")]}),
         ("assert_items_price_exceeds_threshold", {"price": 0}),
     ],
-    table_properties={
-        "format": "PARQUET",
-        "bucket_count": 0,
-        "orc_bloom_filter_fpp": 0.05,
-        "auto_purge": False,
-    },
     session_properties={
         "string_prop": "some_value",
         "int_prop": 1,
