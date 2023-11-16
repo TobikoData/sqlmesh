@@ -1891,6 +1891,30 @@ def test_model_normalization():
     assert model.clustered_by == ["A"]
     assert model.depends_on == {"BLA"}
 
+    expr = d.parse(
+        """
+        MODEL (
+            name foo,
+            kind INCREMENTAL_BY_UNIQUE_KEY (
+                unique_key [a, COALESCE(b, ''), "c"]
+            ),
+            dialect snowflake
+        );
+
+        SELECT
+          x.a AS a,
+          x.b AS b,
+          x."c" AS c
+        FROM test.x AS x
+        """
+    )
+    model = SqlModel.parse_raw(load_sql_based_model(expr).json())
+    assert model.unique_key == [
+        exp.column("A", quoted=False),
+        exp.func("COALESCE", exp.column("B", quoted=False), "''"),
+        exp.column("c", quoted=True),
+    ]
+
 
 def test_incremental_unmanaged_validation():
     model = create_sql_model(
