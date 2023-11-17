@@ -45,6 +45,17 @@ The YAML format is defined as follows:
     <macro_variable_name>: <macro_variable_value>
 ```
 
+Note: the `rows` key is optional in the above format, so the following would also be valid:
+
+```
+<unique_test_name>:
+  model: <target_model_name>
+  inputs:
+    <upstream_model_or_external_table_name>:
+      - <column_name>: <column_value>
+...
+```
+
 ### Example
 
 In this example, we'll use the `sqlmesh_example.full_model` model, which is provided as part of the `sqlmesh init` command and defined as follows:
