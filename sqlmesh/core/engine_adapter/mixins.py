@@ -76,6 +76,7 @@ class LogicalReplaceQueryMixin(EngineAdapter):
         query: Query,
         columns_to_types: t.Dict[str, exp.DataType],
         target_table: TableName,
+        **kwargs: t.Any,
     ) -> None:
         """
         Overwrites the target table from the temp table. This is used when the target table is self-referencing.
@@ -84,6 +85,7 @@ class LogicalReplaceQueryMixin(EngineAdapter):
             exp.select(*columns_to_types).from_(target_table),
             target_table,
             columns_to_types,
+            **kwargs,
         ) as temp_table:
 
             def replace_table(
