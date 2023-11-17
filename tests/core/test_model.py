@@ -1891,29 +1891,45 @@ def test_model_normalization():
     assert model.clustered_by == ["A"]
     assert model.depends_on == {"BLA"}
 
+    # Check possible variations of unique_key definitions
+    for key in ("""[a, COALESCE(b, ''), "c"]""", """(a, COALESCE(b, ''), "c")"""):
+        expr = d.parse(
+            f"""
+            MODEL (
+                name foo,
+                kind INCREMENTAL_BY_UNIQUE_KEY (
+                    unique_key {key}
+                ),
+                dialect snowflake
+            );
+
+            SELECT
+              x.a AS a,
+              x.b AS b,
+              x."c" AS c
+            FROM test.x AS x
+            """
+        )
+        model = SqlModel.parse_raw(load_sql_based_model(expr).json())
+        assert model.unique_key == [
+            exp.column("A", quoted=False),
+            exp.func("COALESCE", exp.column("B", quoted=False), "''"),
+            exp.column("c", quoted=True),
+        ]
+
     expr = d.parse(
         """
         MODEL (
             name foo,
-            kind INCREMENTAL_BY_UNIQUE_KEY (
-                unique_key [a, COALESCE(b, ''), "c"]
-            ),
-            dialect snowflake
+            dialect snowflake,
+            kind INCREMENTAL_BY_UNIQUE_KEY(unique_key a)
         );
 
-        SELECT
-          x.a AS a,
-          x.b AS b,
-          x."c" AS c
-        FROM test.x AS x
+        SELECT x.a AS a FROM test.x AS x
         """
     )
     model = SqlModel.parse_raw(load_sql_based_model(expr).json())
-    assert model.unique_key == [
-        exp.column("A", quoted=False),
-        exp.func("COALESCE", exp.column("B", quoted=False), "''"),
-        exp.column("c", quoted=True),
-    ]
+    assert model.unique_key == [exp.column("A", quoted=False)]
 
 
 def test_incremental_unmanaged_validation():
