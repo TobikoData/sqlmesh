@@ -14,12 +14,14 @@ Test suites are defined using YAML format within `.yaml` files in the `tests/` f
 * The name of the model targeted by this test
 * Test inputs, which are defined per external table or upstream model referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
-    * The list of rows defined as a mapping from a column name to a value associated with it. If an input column is excluded, it will be implicitly added and populated with `NULL` values. This can be useful when specifying input data for e.g. wide tables, where some columns may not be required to define a test.
+    * The list of rows defined as a mapping from a column name to a value associated with it
 * Expected outputs, which are defined as follows:
     * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
     * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query
 * [Optional] The dictionary of values for macro variables that will be set during model testing
     * There are three special macros that can be overridden, `start`, `end`, and `execution_time`. Overriding each will allow you to override the date macros in your SQL queries. For example, setting execution_time: 2022-01-01 -> execution_ds in your queries.
+
+If a column (either input or output) is omitted in the test, it will be implicitly added and populated with `NULL` values. This can be useful when specifying input data for e.g. wide tables, where some columns may not be required to define a test.
 
 The YAML format is defined as follows:
 
@@ -117,11 +119,10 @@ test_full_model:
   outputs:
     query:
       rows:
-      - item_id: null
-        num_orders: 3
+      - num_orders: 3
 ```
 
-Leaving out the input column `item_id` means that it will be implicitly added and populated with `NULL` values. Thus, we expect the corresponding output column to also contain `NULL` values, which is indeed reflected in the above test.
+Leaving out the input column `item_id` means that it will be implicitly added and populated with `NULL` values. Thus, we expect the corresponding output column to also contain `NULL` values. This is reflected in the above test since the `item_id` column is also omitted from the `query` output, meaning that the output value is also `NULL` for this column.
 
 ### Testing CTEs
 
