@@ -90,6 +90,7 @@ class BasePostgresEngineAdapter(EngineAdapter):
             super().create_view(
                 view_name,
                 query_or_df,
+                columns_to_types=columns_to_types,
                 replace=False,
                 materialized=materialized,
                 **create_kwargs,

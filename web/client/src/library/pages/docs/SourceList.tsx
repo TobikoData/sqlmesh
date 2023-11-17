@@ -1,7 +1,7 @@
 import { type LineageNodeModelType } from '@components/graph/Graph'
 import { getModelNodeTypeTitle } from '@components/graph/help'
 import Input from '@components/input/Input'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
+import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { isArrayEmpty, isArrayNotEmpty } from '@utils/index'
 import clsx from 'clsx'
 import { NavLink } from 'react-router-dom'

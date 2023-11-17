@@ -1891,6 +1891,46 @@ def test_model_normalization():
     assert model.clustered_by == ["A"]
     assert model.depends_on == {"BLA"}
 
+    # Check possible variations of unique_key definitions
+    for key in ("""[a, COALESCE(b, ''), "c"]""", """(a, COALESCE(b, ''), "c")"""):
+        expr = d.parse(
+            f"""
+            MODEL (
+                name foo,
+                kind INCREMENTAL_BY_UNIQUE_KEY (
+                    unique_key {key}
+                ),
+                dialect snowflake
+            );
+
+            SELECT
+              x.a AS a,
+              x.b AS b,
+              x."c" AS c
+            FROM test.x AS x
+            """
+        )
+        model = SqlModel.parse_raw(load_sql_based_model(expr).json())
+        assert model.unique_key == [
+            exp.column("A", quoted=False),
+            exp.func("COALESCE", exp.column("B", quoted=False), "''"),
+            exp.column("c", quoted=True),
+        ]
+
+    expr = d.parse(
+        """
+        MODEL (
+            name foo,
+            dialect snowflake,
+            kind INCREMENTAL_BY_UNIQUE_KEY(unique_key a)
+        );
+
+        SELECT x.a AS a FROM test.x AS x
+        """
+    )
+    model = SqlModel.parse_raw(load_sql_based_model(expr).json())
+    assert model.unique_key == [exp.column("A", quoted=False)]
+
 
 def test_incremental_unmanaged_validation():
     model = create_sql_model(
@@ -1969,16 +2009,36 @@ def test_custom_interval_unit():
         )
 
 
-def test_model_table_properties(sushi_context):
-    # # Validate python model table properties
-    assert sushi_context.models["sushi.items"].table_properties == {
+def test_model_table_properties() -> None:
+    # Validate python model table properties
+    @model(
+        "my_model",
+        kind="full",
+        columns={"id": "int"},
+        table_properties={
+            "format": "PARQUET",
+            "bucket_count": 0,
+            "orc_bloom_filter_fpp": 0.05,
+            "auto_purge": False,
+        },
+    )
+    def my_model(context, **kwargs):
+        pass
+
+    python_model = model.get_registry()["my_model"].model(
+        module_path=Path("."),
+        path=Path("."),
+    )
+
+    assert python_model.table_properties == {
         "format": exp.Literal.string("PARQUET"),
         "bucket_count": exp.Literal.number(0),
         "orc_bloom_filter_fpp": exp.Literal.number(0.05),
         "auto_purge": exp.false(),
     }
+
     # Validate a tuple.
-    model = load_sql_based_model(
+    sql_model = load_sql_based_model(
         d.parse(
             """
         MODEL (
@@ -1994,18 +2054,18 @@ def test_model_table_properties(sushi_context):
         """
         )
     )
-    assert model.table_properties == {
+    assert sql_model.table_properties == {
         "key_a": exp.convert("value_a"),
         "key_b": exp.convert(1),
         "key_c": exp.convert(True),
         "key_d": exp.convert(2.0),
     }
-    assert model.table_properties_ == d.parse_one(
+    assert sql_model.table_properties_ == d.parse_one(
         """(key_a = 'value_a', 'key_b' = 1, key_c = TRUE, "key_d" = 2.0)"""
     )
 
     # Validate a tuple with one item.
-    model = load_sql_based_model(
+    sql_model = load_sql_based_model(
         d.parse(
             """
             MODEL (
@@ -2016,14 +2076,14 @@ def test_model_table_properties(sushi_context):
             """
         )
     )
-    assert model.table_properties == {"key_a": exp.convert("value_a")}
+    assert sql_model.table_properties == {"key_a": exp.convert("value_a")}
     assert (
-        model.table_properties_.sql()
+        sql_model.table_properties_.sql()  # type: ignore
         == exp.Tuple(expressions=[d.parse_one("key_a = 'value_a'")]).sql()
     )
 
     # Validate an array.
-    model = load_sql_based_model(
+    sql_model = load_sql_based_model(
         d.parse(
             """
         MODEL (
@@ -2037,14 +2097,14 @@ def test_model_table_properties(sushi_context):
         """
         )
     )
-    assert model.table_properties == {
+    assert sql_model.table_properties == {
         "key_a": exp.convert("value_a"),
         "key_b": exp.convert(1),
     }
-    assert model.table_properties_ == d.parse_one("""(key_a = 'value_a', 'key_b' = 1)""")
+    assert sql_model.table_properties_ == d.parse_one("""(key_a = 'value_a', 'key_b' = 1)""")
 
     # Validate empty.
-    model = load_sql_based_model(
+    sql_model = load_sql_based_model(
         d.parse(
             """
         MODEL (
@@ -2054,11 +2114,11 @@ def test_model_table_properties(sushi_context):
         """
         )
     )
-    assert model.table_properties == {}
-    assert model.table_properties_ is None
+    assert sql_model.table_properties == {}
+    assert sql_model.table_properties_ is None
 
     # Validate sql expression.
-    model = load_sql_based_model(
+    sql_model = load_sql_based_model(
         d.parse(
             """
         MODEL (
@@ -2071,11 +2131,11 @@ def test_model_table_properties(sushi_context):
         """
         )
     )
-    assert model.table_properties == {"key": d.parse_one("['value']")}
-    assert model.table_properties_ == exp.Tuple(expressions=[d.parse_one("key = ['value']")])
+    assert sql_model.table_properties == {"key": d.parse_one("['value']")}
+    assert sql_model.table_properties_ == exp.Tuple(expressions=[d.parse_one("key = ['value']")])
 
     # Validate dict parsing.
-    model = create_sql_model(
+    sql_model = create_sql_model(
         name="test_schema.test_model",
         query=d.parse_one("SELECT a FROM tbl"),
         table_properties={
@@ -2085,13 +2145,13 @@ def test_model_table_properties(sushi_context):
             "key_d": exp.Literal.number(2.0),
         },
     )
-    assert model.table_properties == {
+    assert sql_model.table_properties == {
         "key_a": exp.convert("value_a"),
         "key_b": exp.convert(1),
         "key_c": exp.convert(True),
         "key_d": exp.convert(2.0),
     }
-    assert model.table_properties_ == d.parse_one(
+    assert sql_model.table_properties_ == d.parse_one(
         """('key_a' = 'value_a', 'key_b' = 1, 'key_c' = TRUE, 'key_d' = 2.0)"""
     )
 

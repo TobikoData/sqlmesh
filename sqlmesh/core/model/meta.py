@@ -281,10 +281,17 @@ class ModelMeta(_Node, extra="allow"):
                 if values.get(field) and not kind.is_materialized:
                     raise ValueError(f"{field} field cannot be set for {kind} models")
 
+            dialect = values.get("dialect")
+
             if hasattr(kind, "time_column"):
                 kind.time_column.column = normalize_identifiers(
-                    kind.time_column.column, dialect=values.get("dialect")
+                    kind.time_column.column, dialect=dialect
                 ).name
+
+            if hasattr(kind, "unique_key"):
+                kind.unique_key = [
+                    normalize_identifiers(key, dialect=dialect) for key in kind.unique_key
+                ]
 
         return values
 

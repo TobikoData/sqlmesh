@@ -165,7 +165,6 @@ function PlanChangePreviewDirect({
                           <LineageFlowProvider withColumns={false}>
                             <ModelLineage
                               key={model.id}
-                              fingerprint={model.id}
                               model={model}
                               highlightedNodes={{
                                 'border-4 border-secondary-500': [model.name],

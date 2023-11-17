@@ -899,9 +899,6 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             if new_snapshot.fingerprint == snapshot.fingerprint:
                 logger.debug(f"{new_snapshot.snapshot_id} is unchanged.")
                 continue
-            if new_snapshot.snapshot_id in all_snapshots:
-                logger.debug(f"{new_snapshot.snapshot_id} exists.")
-                continue
 
             new_snapshot_id = new_snapshot.snapshot_id
 
@@ -919,23 +916,16 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
             return
 
         def map_data_versions(
-            name: str, versions: t.Sequence[SnapshotDataVersion]
+            name: str, versions: t.Tuple[SnapshotDataVersion, ...]
         ) -> t.Tuple[SnapshotDataVersion, ...]:
-            version_ids = ((version.snapshot_id(name), version) for version in versions)
-
-            return tuple(
-                new_snapshots[snapshot_id_mapping[version_id]].data_version
-                if version_id in snapshot_id_mapping
-                else version
-                for version_id, version in version_ids
-            )
+            if versions and versions[-1].snapshot_id(name) in snapshot_id_mapping:
+                new_snapshot = new_snapshots[snapshot_id_mapping[versions[-1].snapshot_id(name)]]
+                return new_snapshot.all_versions
+            return versions
 
         for from_snapshot_id, to_snapshot_id in snapshot_id_mapping.items():
             from_snapshot = all_snapshots[from_snapshot_id]
             to_snapshot = new_snapshots[to_snapshot_id]
-            to_snapshot.previous_versions = map_data_versions(
-                from_snapshot.name, from_snapshot.previous_versions
-            )
             to_snapshot.indirect_versions = {
                 name: map_data_versions(name, versions)
                 for name, versions in from_snapshot.indirect_versions.items()

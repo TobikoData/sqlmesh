@@ -5,7 +5,6 @@ import { useStoreContext } from '@context/context'
 import { useNavigate, useParams } from 'react-router-dom'
 import NotFound from '../root/NotFound'
 import { EnumRoutes } from '~/routes'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import LineageFlowProvider from '@components/graph/context'
 import { type ErrorIDE } from '../ide/context'
 import { isNil } from '@utils/index'
@@ -58,9 +57,8 @@ export default function Content(): JSX.Element {
             </div>
             <div className="flex flex-col h-full px-2">
               <ModelLineage
-                model={model}
                 key={model.id}
-                fingerprint={model.id}
+                model={model}
               />
             </div>
           </SplitPane>

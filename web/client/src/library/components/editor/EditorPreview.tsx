@@ -1,12 +1,11 @@
 import { lazy, useEffect, useMemo, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
-import { isArrayEmpty, isNotNil } from '~/utils'
+import { isArrayEmpty, isFalse, isNotNil } from '~/utils'
 import { type EditorTab, useStoreEditor } from '~/context/editor'
 import { ViewColumnsIcon } from '@heroicons/react/24/solid'
 import { Button } from '@components/button/Button'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { ModelSQLMeshModel } from '@models/sqlmesh-model'
 import { useLineageFlow } from '@components/graph/context'
 import { EnumFileExtensions } from '@models/file'
 import { CodeEditorDefault } from './EditorCode'
@@ -54,15 +53,19 @@ export default function EditorPreview({
     navigate(`${EnumRoutes.IdeDocsModels}/${model.name}`)
   })
 
+  const model = models.get(tab.file.path)
+  const showLineage =
+    isFalse(tab.file.isEmpty) && isNotNil(model) && tab.file.isSQLMeshModel
+
   const tabs: string[] = useMemo(
     () =>
       [
         isNotNil(previewTable) && EnumEditorPreviewTabs.Table,
         isNotNil(previewQuery) && EnumEditorPreviewTabs.Query,
-        tab.file.isSQLMeshModel && EnumEditorPreviewTabs.Lineage,
+        showLineage && EnumEditorPreviewTabs.Lineage,
         isNotNil(previewDiff) && EnumEditorPreviewTabs.Diff,
       ].filter(Boolean) as string[],
-    [tab.id, previewTable, previewQuery, previewDiff],
+    [tab.id, previewTable, previewQuery, previewDiff, showLineage],
   )
 
   useEffect(() => {
@@ -70,12 +73,10 @@ export default function EditorPreview({
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Diff))
     } else if (isNotNil(previewTable)) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Table))
-    } else if (tab.file.isSQLMeshModel) {
+    } else if (showLineage) {
       setActiveTabIndex(tabs.indexOf(EnumEditorPreviewTabs.Lineage))
     }
-  }, [tabs])
-
-  const model = models.get(tab.file.path)
+  }, [tabs, previewTable, previewQuery, previewDiff, showLineage])
 
   return (
     <div
@@ -140,7 +141,7 @@ export default function EditorPreview({
                 </div>
               </Tab.Panel>
             )}
-            {isNotNil(model) && (
+            {showLineage && (
               <Tab.Panel
                 unmount={false}
                 className={clsx(
@@ -149,7 +150,6 @@ export default function EditorPreview({
               >
                 <ModelLineage
                   key={tab.file.fingerprint}
-                  fingerprint={tab.file.fingerprint}
                   model={model}
                 />
               </Tab.Panel>
