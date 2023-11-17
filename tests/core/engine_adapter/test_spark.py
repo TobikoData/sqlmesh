@@ -56,6 +56,35 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         )
 
 
+def test_replace_query_table_properties(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    columns_to_types = {
+        "cola": exp.DataType.build("INT"),
+        "colb": exp.DataType.build("TEXT"),
+        "colc": exp.DataType.build("TEXT"),
+    }
+    adapter.replace_query(
+        "test_table",
+        parse_one("SELECT 1 AS cola, '2' AS colb, '3' AS colc"),
+        columns_to_types=columns_to_types,
+        partitioned_by=[exp.to_column("colb")],
+        storage_format="ICEBERG",
+        table_properties={"a": exp.convert(1)},
+    )
+
+    adapter.cursor.execute.assert_has_calls(
+        [
+            call(
+                "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`) TBLPROPERTIES ('a'=1)"
+            ),
+            call(
+                "INSERT OVERWRITE TABLE `test_table` (`cola`, `colb`, `colc`) SELECT `cola`, `colb`, `colc` FROM (SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`) AS `_subquery` WHERE TRUE"
+            ),
+        ]
+    )
+
+
 def test_create_view_properties(make_mocked_engine_adapter: t.Callable):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
 

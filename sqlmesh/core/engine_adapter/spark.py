@@ -372,10 +372,10 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
 
             if self_referencing:
                 return LogicalReplaceQueryMixin.overwrite_target_from_temp(
-                    self, query, columns_to_types, target_table
+                    self, query, columns_to_types, target_table, **kwargs
                 )
 
-        self.create_table(table_name, columns_to_types)
+        self.create_table(table_name, columns_to_types, **kwargs)
         return self._insert_overwrite_by_condition(
             table_name, source_queries, columns_to_types, where=exp.true()
         )
