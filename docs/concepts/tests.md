@@ -105,7 +105,7 @@ test_full_model:
         num_orders: 1
 ```
 
-One can observe that since `ds` is not referenced in `full_model`, it can be omitted. Additionally, let's assume that we are only interested in testing the `num_orders` output column, i.e. we only care about the `id` input column of `sqlmesh_example.incremental_model`. Then, we could rewrite the above test more compactly as follows:
+One may observe that since `ds` is not referenced in `full_model`, it can be omitted. Additionally, let's assume that we are only interested in testing the `num_orders` output column, i.e. we only care about the `id` input column of `sqlmesh_example.incremental_model`. Then, we could rewrite the above test more compactly as follows:
 
 ```yaml linenums="1"
 test_full_model:
