@@ -107,9 +107,7 @@ test_full_model:
     query:
       rows:
       - item_id: null
-        num_orders: 2
-      - item_id: null
-        num_orders: 1
+        num_orders: 3
 ```
 
 Leaving out the input column `item_id` means that it will be implicitly added and populated with `NULL` values. Thus, we expect the corresponding output column to also contain `NULL` values, which is indeed reflected in the above test.
