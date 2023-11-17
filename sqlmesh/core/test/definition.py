@@ -77,7 +77,11 @@ class ModelTest(unittest.TestCase):
                     v = v.real if hasattr(v, "real") else v
                     columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
 
-            columns_to_types = {k: v for k, v in columns_to_types.items() if k in df}
+            for index, (column, dtype) in enumerate(columns_to_types.items()):
+                if column not in df:
+                    # Fill in missing columns with NULL values
+                    df.insert(index, column, None)  # type: ignore
+
             table = exp.to_table(table_name)
 
             if table.db:
