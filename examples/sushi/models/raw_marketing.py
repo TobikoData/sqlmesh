@@ -23,7 +23,7 @@ from sqlmesh.core.model import FullKind
     columns={
         "customer_id": "int",
         "status": "text",
-        "updated_at": "timestamptz",
+        "updated_at": "timestamp",
     },
 )
 def execute(
