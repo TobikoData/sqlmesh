@@ -14,7 +14,7 @@ Test suites are defined using YAML format within `.yaml` files in the `tests/` f
 * The name of the model targeted by this test
 * Test inputs, which are defined per external table or upstream model referenced by the target model. Each test input consists of the following:
     * The name of an upstream model or external table
-    * The list of rows defined as a mapping from a column name to a value associated with it
+    * The list of rows defined as a mapping from a column name to a value associated with it. If an input column is excluded, it will be implicitly added and populated with `NULL` values. This can be useful when specifying input data for e.g. wide tables, where some columns may not be required to define a test.
 * Expected outputs, which are defined as follows:
     * The list of rows that are expected to be returned by the model's query defined as a mapping from a column name to a value associated with it
     * [Optional] The list of expected rows per each individual [Common Table Expression](glossary.md#cte) (CTE) defined in the model's query
@@ -47,11 +47,11 @@ The YAML format is defined as follows:
 
 ### Example
 
-In this example, we'll use the `sqlmesh_example.example_full_model` model, which is provided as part of the `sqlmesh init` command and defined as follows:
+In this example, we'll use the `sqlmesh_example.full_model` model, which is provided as part of the `sqlmesh init` command and defined as follows:
 
 ```sql linenums="1"
 MODEL (
-  name sqlmesh_example.example_full_model,
+  name sqlmesh_example.full_model,
   kind FULL,
   cron '@daily'
 );
@@ -60,19 +60,19 @@ SELECT
   item_id,
   COUNT(distinct id) AS num_orders,
 FROM
-    sqlmesh_example.example_incremental_model
+    sqlmesh_example.incremental_model
 GROUP BY item_id
 ```
 
-Notice how the query of the model definition above references one upstream model: `sqlmesh_example.example_incremental_model`.
+Notice how the query of the model definition above references one upstream model: `sqlmesh_example.incremental_model`.
 
-The test definition for this model may look like following:
+The test definition for this model may look like the following:
 
 ```yaml linenums="1"
-test_example_full_model:
-  model: sqlmesh_example.example_full_model
+test_full_model:
+  model: sqlmesh_example.full_model
   inputs:
-    sqlmesh_example.example_incremental_model:
+    sqlmesh_example.incremental_model:
         rows:
         - id: 1
           item_id: 1
@@ -92,6 +92,28 @@ test_example_full_model:
         num_orders: 1
 ```
 
+One can observe that since `ds` is not referenced in `full_model`, it can be omitted. Additionally, let's assume that we are only interested in testing the `num_orders` output column, i.e. we only care about the `id` input column of `sqlmesh_example.incremental_model`. Then, we could rewrite the above test more compactly as follows:
+
+```yaml linenums="1"
+test_full_model:
+  model: sqlmesh_example.full_model
+  inputs:
+    sqlmesh_example.incremental_model:
+        rows:
+        - id: 1
+        - id: 2
+        - id: 3
+  outputs:
+    query:
+      rows:
+      - item_id: null
+        num_orders: 2
+      - item_id: null
+        num_orders: 1
+```
+
+Leaving out the input column `item_id` means that it will be implicitly added and populated with `NULL` values. Thus, we expect the corresponding output column to also contain `NULL` values, which is indeed reflected in the above test.
+
 ### Testing CTEs
 
 Individual CTEs within the model's query can also be tested. Let's slightly modify the query of the model used in the previous example:
@@ -102,7 +124,7 @@ WITH filtered_orders_cte AS (
       id,
       item_id
     FROM
-        sqlmesh_example.example_incremental_model
+        sqlmesh_example.incremental_model
     WHERE
         item_id = 1
 )
@@ -117,10 +139,10 @@ GROUP BY item_id
 Below is the example of a test that verifies individual rows returned by the `filtered_orders_cte` CTE before aggregation takes place:
 
 ```yaml linenums="1" hl_lines="16-22"
-test_example_full_model:
-  model: sqlmesh_example.example_full_model
+test_full_model:
+  model: sqlmesh_example.full_model
   inputs:
-    sqlmesh_example.example_incremental_model:
+    sqlmesh_example.incremental_model:
         rows:
         - id: 1
           item_id: 1
@@ -169,7 +191,7 @@ The command returns a non-zero exit code if there are any failures, and reports 
 $ sqlmesh test
 F
 ======================================================================
-FAIL: test_example_full_model (/Users/izeigerman/github/tmp/tests/test_suite.yaml:1)
+FAIL: test_full_model (/Users/izeigerman/github/tmp/tests/test_suite.yaml:1)
 ----------------------------------------------------------------------
 AssertionError: Data differs
 - {'item_id': 1, 'num_orders': 3}
@@ -189,7 +211,7 @@ FAILED (failures=1)
 To run a specific model test, pass in the suite file name followed by `::` and the name of the test:
 
 ```
-sqlmesh test tests/test_suite.yaml::test_example_full_model
+sqlmesh test tests/test_suite.yaml::test_full_model
 ```
 
 You can also run tests that match a pattern or substring using a glob pathname expansion syntax:
