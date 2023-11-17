@@ -375,7 +375,7 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
                     self, query, columns_to_types, target_table
                 )
 
-        self.create_table(table_name, columns_to_types)
+        self.create_table(table_name, columns_to_types, **kwargs)
         return self._insert_overwrite_by_condition(
             table_name, source_queries, columns_to_types, where=exp.true()
         )
