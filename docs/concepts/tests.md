@@ -21,7 +21,7 @@ Test suites are defined using YAML format within `.yaml` files in the `tests/` f
 * [Optional] The dictionary of values for macro variables that will be set during model testing
     * There are three special macros that can be overridden, `start`, `end`, and `execution_time`. Overriding each will allow you to override the date macros in your SQL queries. For example, setting execution_time: 2022-01-01 -> execution_ds in your queries.
 
-If a column is omitted in a test, it will be implicitly added and populated with `NULL` values. This can be useful when specifying input data for wide tables where some columns may not be required to define a test.
+If a column is omitted from a row (either input or output), it is implicitly added and its value is `NULL`. For example, this can be useful when specifying input data for wide tables where some columns may not be required to define a test.
 
 The YAML format is defined as follows:
 
