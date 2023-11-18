@@ -579,7 +579,7 @@ class ChunkType(Enum):
 
 
 def parse_one(sql: str, dialect: t.Optional[str] = None) -> exp.Expression:
-    expressions = parse(sql, default_dialect=dialect)
+    expressions = parse(sql, default_dialect=dialect, match_dialect=False)
     if not expressions:
         raise SQLMeshError(f"No expressions found in '{sql}'")
     elif len(expressions) > 1:
@@ -587,7 +587,9 @@ def parse_one(sql: str, dialect: t.Optional[str] = None) -> exp.Expression:
     return expressions[0]
 
 
-def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expression]:
+def parse(
+    sql: str, default_dialect: t.Optional[str] = None, match_dialect: bool = True
+) -> t.List[exp.Expression]:
     """Parse a sql string.
 
     Supports parsing model definition.
@@ -600,7 +602,7 @@ def parse(sql: str, default_dialect: t.Optional[str] = None) -> t.List[exp.Expre
     Returns:
         A list of the parsed expressions: [Model, *Statements, Query, *Statements]
     """
-    match = DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
+    match = match_dialect and DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
     dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)()
 
     tokens = dialect.tokenizer.tokenize(sql)
