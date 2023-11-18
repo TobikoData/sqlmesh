@@ -1786,7 +1786,7 @@ def _create_model(
     return t.cast(Model, model)
 
 
-INSERT_SEED_MACRO_CALL = d.parse("@INSERT_SEED()")[0]
+INSERT_SEED_MACRO_CALL = d.parse_one("@INSERT_SEED()")
 
 
 def _split_sql_model_statements(
