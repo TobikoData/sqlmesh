@@ -16,6 +16,7 @@ from sqlmesh.core.snapshot.definition import Interval
 from sqlmesh.core.state_sync import Versions
 from sqlmesh.core.user import User
 from sqlmesh.schedulers.airflow import common
+from sqlmesh.utils import unique
 from sqlmesh.utils.errors import (
     ApiClientError,
     ApiServerError,
@@ -154,9 +155,11 @@ class AirflowClient(BaseAirflowClient):
         session: requests.Session,
         airflow_url: str,
         console: t.Optional[Console] = None,
+        snapshot_ids_batch_size: t.Optional[int] = None,
     ):
         super().__init__(airflow_url, console)
         self._session = session
+        self._snapshot_ids_batch_size = snapshot_ids_batch_size
 
     def apply_plan(
         self,
@@ -199,22 +202,35 @@ class AirflowClient(BaseAirflowClient):
     def get_snapshots(
         self, snapshot_ids: t.Optional[t.List[SnapshotId]], hydrate_seeds: bool = False
     ) -> t.List[Snapshot]:
-        params: t.Dict[str, str] = {}
-        if snapshot_ids is not None:
-            params["ids"] = _list_to_json(snapshot_ids)
-
         flags = ["hydrate_seeds"] if hydrate_seeds else []
 
-        return common.SnapshotsResponse.parse_obj(
-            self._get(SNAPSHOTS_PATH, *flags, **params)
-        ).snapshots
+        output = []
+
+        if snapshot_ids is not None:
+            for ids_batch in _list_to_json(
+                unique(snapshot_ids), batch_size=self._snapshot_ids_batch_size
+            ):
+                output.extend(
+                    common.SnapshotsResponse.parse_obj(
+                        self._get(SNAPSHOTS_PATH, *flags, ids=ids_batch)
+                    ).snapshots
+                )
+            return output
+
+        return common.SnapshotsResponse.parse_obj(self._get(SNAPSHOTS_PATH, *flags)).snapshots
 
     def snapshots_exist(self, snapshot_ids: t.List[SnapshotId]) -> t.Set[SnapshotId]:
-        return set(
-            common.SnapshotIdsResponse.parse_obj(
-                self._get(SNAPSHOTS_PATH, "check_existence", ids=_list_to_json(snapshot_ids))
-            ).snapshot_ids
-        )
+        output = set()
+        for ids_batch in _list_to_json(
+            unique(snapshot_ids), batch_size=self._snapshot_ids_batch_size
+        ):
+            output |= set(
+                common.SnapshotIdsResponse.parse_obj(
+                    self._get(SNAPSHOTS_PATH, "check_existence", ids=ids_batch)
+                ).snapshot_ids
+            )
+
+        return output
 
     def nodes_exist(self, names: t.Iterable[str], exclude_external: bool = False) -> t.Set[str]:
         flags = ["exclude_external"] if exclude_external else []
@@ -287,8 +303,13 @@ class AirflowClient(BaseAirflowClient):
 T = t.TypeVar("T", bound=PydanticModel)
 
 
-def _list_to_json(models: t.List[T]) -> str:
-    return json.dumps([m.dict() for m in models], separators=(",", ":"))
+def _list_to_json(models: t.Collection[T], batch_size: t.Optional[int] = None) -> t.List[str]:
+    serialized = [m.dict() for m in models]
+    if batch_size is not None:
+        batches = [serialized[i : i + batch_size] for i in range(0, len(serialized), batch_size)]
+    else:
+        batches = [serialized]
+    return [json.dumps(batch, separators=(",", ":")) for batch in batches]
 
 
 def raise_for_status(response: Response) -> None:
