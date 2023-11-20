@@ -455,76 +455,25 @@ class Context(BaseContext):
         Returns:
             True if the run was successful, False otherwise.
         """
-        environment = environment or self.config.default_target_environment
-
-        if not skip_janitor and environment.lower() == c.PROD:
-            self._run_janitor()
-
         self.notification_target_manager.notify(
             NotificationEvent.RUN_START, environment=environment
         )
-
-        env_check_attempts_num = max(
-            1,
-            self.config.run.environment_check_max_wait
-            // self.config.run.environment_check_interval,
-        )
-
-        def _block_until_finalized() -> str:
-            for _ in range(env_check_attempts_num):
-                assert environment is not None  # mypy
-                environment_state = self.state_sync.get_environment(environment)
-                if not environment_state:
-                    raise SQLMeshError(f"Environment '{environment}' was not found.")
-                if environment_state.finalized_ts:
-                    return environment_state.plan_id
-                logger.warning(
-                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
-                    environment,
-                    environment_state.plan_id,
-                    self.config.run.environment_check_interval,
-                )
-                time.sleep(self.config.run.environment_check_interval)
-            raise SQLMeshError(
-                f"Exceeded the maximum wait time for environment '{environment}' to be ready. "
-                "This means that the environment either failed to update or the update is taking longer than expected. "
-                "See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#run to adjust the timeout settings."
+        success = False
+        try:
+            success = self._run(
+                environment=environment,
+                start=start,
+                end=end,
+                execution_time=execution_time,
+                skip_janitor=skip_janitor,
+                ignore_cron=ignore_cron,
             )
-
-        done = False
-        while not done:
-            plan_id_at_start = _block_until_finalized()
-
-            def _has_environment_changed() -> bool:
-                assert environment is not None  # mypy
-                current_environment_state = self.state_sync.get_environment(environment)
-                return (
-                    not current_environment_state
-                    or current_environment_state.plan_id != plan_id_at_start
-                    or not current_environment_state.finalized_ts
-                )
-
-            try:
-                success = self.scheduler(environment=environment).run(
-                    environment,
-                    start=start,
-                    end=end,
-                    execution_time=execution_time,
-                    ignore_cron=ignore_cron,
-                    circuit_breaker=_has_environment_changed,
-                )
-                done = True
-            except CircuitBreakerError:
-                logger.warning(
-                    "Environment '%s' has been modified while running. Restarting the run...",
-                    environment,
-                )
-            except Exception as e:
-                self.notification_target_manager.notify(
-                    NotificationEvent.RUN_FAILURE, traceback.format_exc()
-                )
-                logger.error(f"Run Failure: {traceback.format_exc()}")
-                raise e
+        except Exception as e:
+            self.notification_target_manager.notify(
+                NotificationEvent.RUN_FAILURE, traceback.format_exc()
+            )
+            logger.error(f"Run Failure: {traceback.format_exc()}")
+            raise e
 
         if success:
             self.notification_target_manager.notify(
@@ -534,7 +483,6 @@ class Context(BaseContext):
             self.notification_target_manager.notify(
                 NotificationEvent.RUN_FAILURE, environment=environment
             )
-            return success
 
         return success
 
@@ -1272,6 +1220,79 @@ class Context(BaseContext):
         """Releases all resources allocated by this context."""
         self.snapshot_evaluator.close()
         self.state_sync.close()
+
+    def _run(
+        self,
+        environment: t.Optional[str],
+        *,
+        start: t.Optional[TimeLike],
+        end: t.Optional[TimeLike],
+        execution_time: t.Optional[TimeLike],
+        skip_janitor: bool,
+        ignore_cron: bool,
+    ) -> bool:
+        environment = environment or self.config.default_target_environment
+
+        if not skip_janitor and environment.lower() == c.PROD:
+            self._run_janitor()
+
+        env_check_attempts_num = max(
+            1,
+            self.config.run.environment_check_max_wait
+            // self.config.run.environment_check_interval,
+        )
+
+        def _block_until_finalized() -> str:
+            for _ in range(env_check_attempts_num):
+                assert environment is not None  # mypy
+                environment_state = self.state_sync.get_environment(environment)
+                if not environment_state:
+                    raise SQLMeshError(f"Environment '{environment}' was not found.")
+                if environment_state.finalized_ts:
+                    return environment_state.plan_id
+                logger.warning(
+                    "Environment '%s' is being updated by plan '%s'. Retrying in %s seconds...",
+                    environment,
+                    environment_state.plan_id,
+                    self.config.run.environment_check_interval,
+                )
+                time.sleep(self.config.run.environment_check_interval)
+            raise SQLMeshError(
+                f"Exceeded the maximum wait time for environment '{environment}' to be ready. "
+                "This means that the environment either failed to update or the update is taking longer than expected. "
+                "See https://sqlmesh.readthedocs.io/en/stable/reference/configuration/#run to adjust the timeout settings."
+            )
+
+        done = False
+        while not done:
+            plan_id_at_start = _block_until_finalized()
+
+            def _has_environment_changed() -> bool:
+                assert environment is not None  # mypy
+                current_environment_state = self.state_sync.get_environment(environment)
+                return (
+                    not current_environment_state
+                    or current_environment_state.plan_id != plan_id_at_start
+                    or not current_environment_state.finalized_ts
+                )
+
+            try:
+                success = self.scheduler(environment=environment).run(
+                    environment,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                    ignore_cron=ignore_cron,
+                    circuit_breaker=_has_environment_changed,
+                )
+                done = True
+            except CircuitBreakerError:
+                logger.warning(
+                    "Environment '%s' has been modified while running. Restarting the run...",
+                    environment,
+                )
+
+        return success
 
     def _run_tests(self) -> t.Tuple[unittest.result.TestResult, str]:
         test_output_io = StringIO()
