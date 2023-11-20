@@ -18,6 +18,9 @@ from sqlmesh.schedulers.airflow.dag_generator import SnapshotDagGenerator
 from sqlmesh.schedulers.airflow.operators import targets
 from sqlmesh.schedulers.airflow.plan import PlanDagState
 
+if t.TYPE_CHECKING:
+    from sqlmesh.core.snapshot import Snapshot, SnapshotId
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,14 +113,7 @@ class SQLMeshAirflow:
             # TODO: Remove this once all DAG specs are moved into the internal state (after about 1 week)
             plan_dag_specs += _get_plan_dag_specs_from_variables()
 
-        dag_generator = SnapshotDagGenerator(
-            self._engine_operator,
-            self._engine_operator_args,
-            self._ddl_engine_operator,
-            self._ddl_engine_operator_args,
-            self._external_table_sensor_factory,
-            stored_snapshots,
-        )
+        dag_generator = self._create_dag_generator(stored_snapshots)
 
         prod_env = state_sync.get_environment(c.PROD)
         cadence_dags = dag_generator.generate_cadence_dags(prod_env.snapshots) if prod_env else []
@@ -165,6 +161,18 @@ class SQLMeshAirflow:
             catchup=False,
             is_paused_upon_creation=False,
             tags=[common.SQLMESH_AIRFLOW_TAG],
+        )
+
+    def _create_dag_generator(
+        self, snapshots: t.Dict[SnapshotId, Snapshot]
+    ) -> SnapshotDagGenerator:
+        return SnapshotDagGenerator(
+            self._engine_operator,
+            self._engine_operator_args,
+            self._ddl_engine_operator,
+            self._ddl_engine_operator_args,
+            self._external_table_sensor_factory,
+            snapshots,
         )
 
 
