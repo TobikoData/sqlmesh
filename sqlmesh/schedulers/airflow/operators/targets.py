@@ -122,6 +122,7 @@ class SnapshotEvaluationTarget(BaseTarget[commands.EvaluateCommandPayload], Pyda
     end: t.Optional[TimeLike] = None
     execution_time: t.Optional[TimeLike] = None
     deployability_index: DeployabilityIndex
+    plan_id: t.Optional[str] = None
 
     def post_hook(
         self,

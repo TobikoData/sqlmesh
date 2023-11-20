@@ -103,7 +103,7 @@ def get_plan_tracker(
     except Exception:
         tracker_stage_validate.stop(success=False)
         tracker.stop(success=False)
-        api_console.log_event_plan_apply()
+        api_console.log_event_plan_overview()
         raise ApiException(
             message="Unable to run a plan",
             origin="API -> plan -> run_plan",

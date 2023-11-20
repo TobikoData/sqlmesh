@@ -3,10 +3,10 @@ from __future__ import annotations
 import typing as t
 
 from sqlglot import exp
-from sqlglot.helper import ensure_list, seq_get
+from sqlglot.helper import ensure_list
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh.core.dialect import parse, parse_one
+from sqlmesh.core.dialect import parse_one
 from sqlmesh.utils import str_to_bool
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 from sqlmesh.utils.pydantic import field_validator, field_validator_v1_args
@@ -29,16 +29,11 @@ def parse_expression(
 
     if isinstance(v, list):
         return [
-            e
-            for expressions in (
-                parse(i, default_dialect=dialect) if not isinstance(i, exp.Expression) else [i]
-                for i in v
-            )
-            for e in expressions
+            parse_one(e, dialect=dialect) if not isinstance(e, exp.Expression) else e for e in v
         ]
 
     if isinstance(v, str):
-        return seq_get(parse(v, default_dialect=dialect), 0)
+        return parse_one(v, dialect=dialect)
 
     if not v:
         raise ConfigError(f"Could not parse {v}")
@@ -63,7 +58,9 @@ def parse_expressions(cls: t.Type, v: t.Any, values: t.Dict[str, t.Any]) -> t.Li
     results = []
 
     for expr in expressions:
-        expr = normalize_identifiers(exp.column(expr) if isinstance(expr, exp.Identifier) else expr)
+        expr = normalize_identifiers(
+            exp.column(expr) if isinstance(expr, exp.Identifier) else expr, dialect=dialect
+        )
         expr.meta["dialect"] = dialect
         results.append(expr)
 

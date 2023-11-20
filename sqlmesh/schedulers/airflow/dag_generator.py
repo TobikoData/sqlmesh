@@ -123,7 +123,7 @@ class SnapshotDagGenerator:
         ) as dag:
             hwm_sensor_tasks = self._create_hwm_sensors(snapshot=snapshot)
 
-            evaluator_task = self._create_snapshot_evaluator_operator(
+            evaluator_task = self._create_snapshot_evaluation_operator(
                 snapshots=self._snapshots,
                 snapshot=snapshot,
                 task_id="snapshot_evaluator",
@@ -182,6 +182,7 @@ class SnapshotDagGenerator:
                 [i for i in plan_dag_spec.backfill_intervals_per_snapshot if i.before_promote],
                 all_snapshots,
                 plan_dag_spec.deployability_index,
+                plan_dag_spec.plan_id,
                 "before_promote",
             )
 
@@ -192,6 +193,7 @@ class SnapshotDagGenerator:
                 [i for i in plan_dag_spec.backfill_intervals_per_snapshot if not i.before_promote],
                 all_snapshots,
                 plan_dag_spec.deployability_index,
+                plan_dag_spec.plan_id,
                 "after_promote",
             )
 
@@ -378,6 +380,7 @@ class SnapshotDagGenerator:
         backfill_intervals: t.List[common.BackfillIntervalsPerSnapshot],
         snapshots: t.Dict[SnapshotId, Snapshot],
         deployability_index: DeployabilityIndex,
+        plan_id: str,
         task_id_suffix: str,
     ) -> t.Tuple[BaseOperator, BaseOperator]:
         snapshot_to_tasks = {}
@@ -391,15 +394,16 @@ class SnapshotDagGenerator:
             snapshot = snapshots[sid]
             sanitized_snapshot_name = sanitize_name(snapshot.name)
 
-            task_id_prefix = f"snapshot_evaluator__{sanitized_snapshot_name}__{snapshot.identifier}"
+            task_id_prefix = f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}"
             tasks = [
-                self._create_snapshot_evaluator_operator(
+                self._create_snapshot_evaluation_operator(
                     snapshots=snapshots,
                     snapshot=snapshot,
                     task_id=f"{task_id_prefix}__{start.strftime(TASK_ID_DATE_FORMAT)}__{end.strftime(TASK_ID_DATE_FORMAT)}",
                     start=start,
                     end=end,
                     deployability_index=deployability_index,
+                    plan_id=plan_id,
                 )
                 for (start, end) in intervals_per_snapshot.intervals
             ]
@@ -517,7 +521,7 @@ class SnapshotDagGenerator:
             task_id=task_id,
         )
 
-    def _create_snapshot_evaluator_operator(
+    def _create_snapshot_evaluation_operator(
         self,
         snapshots: t.Dict[SnapshotId, Snapshot],
         snapshot: Snapshot,
@@ -525,6 +529,7 @@ class SnapshotDagGenerator:
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
+        plan_id: t.Optional[str] = None,
     ) -> BaseOperator:
         parent_snapshots = {sid.name: snapshots[sid] for sid in snapshot.parents}
 
@@ -536,6 +541,7 @@ class SnapshotDagGenerator:
                 start=start,
                 end=end,
                 deployability_index=deployability_index or DeployabilityIndex.all_deployable(),
+                plan_id=plan_id,
             ),
             task_id=task_id,
         )

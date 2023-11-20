@@ -16,6 +16,7 @@ PANDAS_TYPE_MAPPINGS = {
     np.dtype("float64"): exp.DataType.build("double"),
     np.dtype("O"): exp.DataType.build("text"),
     np.dtype("bool"): exp.DataType.build("boolean"),
+    np.dtype("datetime64"): exp.DataType.build("timestamp"),
     pd.Int8Dtype(): exp.DataType.build("tinyint"),
     pd.Int16Dtype(): exp.DataType.build("smallint"),
     pd.Int32Dtype(): exp.DataType.build("int"),

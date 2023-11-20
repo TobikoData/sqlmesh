@@ -77,14 +77,13 @@ class ModelTest(unittest.TestCase):
                     v = v.real if hasattr(v, "real") else v
                     columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
 
-            columns_to_types = {k: v for k, v in columns_to_types.items() if k in df}
             table = exp.to_table(table_name)
-
             if table.db:
                 self.engine_adapter.create_schema(
                     schema_(table.args["db"], table.args.get("catalog"))
                 )
 
+            self._add_missing_columns(df, columns_to_types)
             self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
 
     def tearDown(self) -> None:
@@ -94,9 +93,13 @@ class ModelTest(unittest.TestCase):
 
     def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
         """Compare two DataFrames"""
+        self._add_missing_columns(expected, actual)
+
+        # Two astypes are necessary, pandas converts strings to times as NS, but if the actual
+        # is US, it doesn't take affect until the 2nd try!
         actual_types = actual.dtypes.to_dict()
-        # two astypes are necessary, pandas converts strings to times as NS, but if the actual is US, it doesn't take affect until the 2nd try!
         expected = expected.astype(actual_types).astype(actual_types)
+
         expected = expected.replace({np.nan: None, "nan": None})
         actual = actual.replace({np.nan: None, "nan": None})
 
@@ -163,6 +166,12 @@ class ModelTest(unittest.TestCase):
 
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path})"
+
+    def _add_missing_columns(self, df: pd.DataFrame, columns: t.Iterable) -> None:
+        """Add missing columns to a given dataframe with None values."""
+        for index, column in enumerate(columns):
+            if column not in df:
+                df.insert(index, column, None)  # type: ignore
 
     def _normalize_test(self, dialect: str | None) -> None:
         """Normalizes all identifiers in this test according to the given dialect."""

@@ -277,6 +277,58 @@ test_foo:
     assert result and result.wasSuccessful()
 
 
+def test_partial_inputs(sushi_context: Context) -> None:
+    model = t.cast(
+        SqlModel,
+        sushi_context.upsert_model(
+            load_sql_based_model(
+                parse(
+                    """
+                    MODEL (
+                        name sushi.foo,
+                        kind FULL
+                    );
+
+                    WITH source AS (
+                        SELECT id, name FROM sushi.waiter_names
+                    )
+                    SELECT id, name FROM source;
+                    """,
+                ),
+            ),
+        ),
+    )
+
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    sushi.waiter_names:
+      - id: 1
+      - id: 2
+        name: null
+      - id: 3
+        name: 'bob'
+  outputs:
+    ctes:
+      source:
+        - id: 1
+        - id: 2
+          name: null
+        - id: 3
+          name: 'bob'
+    query:
+      - id: 1
+      - id: 2
+      - id: 3
+        name: 'bob'
+        """
+    )
+    result = _create_test(body, "test_foo", model, sushi_context).run()
+    assert result and result.wasSuccessful()
+
+
 @pytest.mark.parametrize("full_model_without_ctes", ["snowflake"], indirect=True)
 def test_normalization(full_model_without_ctes: SqlModel) -> None:
     body = load_yaml(
