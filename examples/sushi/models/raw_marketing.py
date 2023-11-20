@@ -5,6 +5,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from helper import iter_dates  # type: ignore
+from sqlglot import exp
 
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import FullKind
@@ -31,8 +32,13 @@ def execute(
     execution_time: datetime,
     **kwargs: t.Any,
 ) -> pd.DataFrame:
+    # Generate query with sqlglot dialect/quoting
     existing_table = context.table("sushi.raw_marketing")
-    df_existing = context.fetchdf(f"SELECT customer_id, status, updated_at FROM {existing_table}")
+    df_existing = context.fetchdf(
+        exp.select("customer_id", "status", "updated_at").from_(existing_table),
+        quote_identifiers=True,
+    )
+
     seed = int(end.strftime("%Y%m%d"))
     np.random.seed(seed)
     num_customers = random.randint(30, 100)
