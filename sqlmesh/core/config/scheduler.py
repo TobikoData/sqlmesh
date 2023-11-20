@@ -133,8 +133,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
             whether a DAG has been created.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
-        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single request to the Airflow
-            Webserver in a GET request.
+        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
     """
 
     airflow_url: str = "http://localhost:8080/"
@@ -177,8 +176,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
             whether a DAG has been created.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
-        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single request to the Airflow
-            Webserver in a GET request.
+        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
     """
 
     airflow_url: str
