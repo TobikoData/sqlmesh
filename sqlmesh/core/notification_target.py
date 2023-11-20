@@ -156,7 +156,7 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
         Args:
             exc: The exception stack trace.
         """
-        self.send(NotificationStatus.FAILURE, "Failed to run SQLMesh.\n{exc}")
+        self.send(NotificationStatus.FAILURE, f"Failed to run SQLMesh.\n{exc}")
 
     @notify(NotificationEvent.AUDIT_FAILURE)
     def notify_audit_failure(self, audit_error: AuditError) -> None:
