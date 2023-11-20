@@ -394,13 +394,7 @@ class SnapshotDagGenerator:
             snapshot = snapshots[sid]
             sanitized_snapshot_name = sanitize_name(snapshot.name)
 
-            snapshot_start_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start"
-            )
-            snapshot_end_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end"
-            )
-            previous_task: BaseOperator = snapshot_start_task
+            snapshot_intervals_chain: t.List[t.Union[BaseOperator, t.List[BaseOperator]]] = []
 
             task_id_prefix = f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}"
             for start, end in intervals_per_snapshot.intervals:
@@ -419,33 +413,22 @@ class SnapshotDagGenerator:
                 )
                 if external_sensor_task:
                     if snapshot.depends_on_past:
-                        snapshot_intervals_chain = [
-                            previous_task,
-                            external_sensor_task,
-                            evaluation_task,
-                        ]
+                        snapshot_intervals_chain.extend([external_sensor_task, evaluation_task])
                     else:
-                        snapshot_intervals_chain = [
-                            snapshot_start_task,
-                            external_sensor_task,
-                            evaluation_task,
-                            snapshot_end_task,
-                        ]
+                        snapshot_intervals_chain.append([external_sensor_task, evaluation_task])
                 else:
-                    if snapshot.depends_on_past:
-                        snapshot_intervals_chain = [previous_task, evaluation_task]
-                    else:
-                        snapshot_intervals_chain = [
-                            snapshot_start_task,
-                            evaluation_task,
-                            snapshot_end_task,
-                        ]
+                    snapshot_intervals_chain.append(
+                        evaluation_task if snapshot.depends_on_past else [evaluation_task]
+                    )
 
-                baseoperator.chain(*snapshot_intervals_chain)
-                previous_task = evaluation_task
+            snapshot_start_task = EmptyOperator(
+                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start"
+            )
+            snapshot_end_task = EmptyOperator(
+                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end"
+            )
 
-            if snapshot.depends_on_past:
-                previous_task >> snapshot_end_task
+            baseoperator.chain(snapshot_start_task, *snapshot_intervals_chain, snapshot_end_task)
 
             snapshot_to_tasks[snapshot.snapshot_id] = (
                 snapshot_start_task,
