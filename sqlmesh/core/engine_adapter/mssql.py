@@ -186,7 +186,7 @@ class MSSQLEngineAdapter(
 
             # pymssql doesn't convert Pandas Timestamp (datetime64) types
             # - this code is based on snowflake adapter implementation
-            for column, kind in (columns_to_types_create or {}).items():
+            for column, kind in columns_to_types_create.items():
                 if is_datetime64_any_dtype(df.dtypes[column]):
                     if kind.is_type("date"):  # type: ignore
                         df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
