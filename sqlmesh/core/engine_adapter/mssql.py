@@ -182,23 +182,29 @@ class MSSQLEngineAdapter(
         temp_table = self._get_temp_table(target_table or "pandas")
 
         def query_factory() -> Query:
+            columns_to_types_create = columns_to_types.copy()
+
             # pymssql doesn't convert Pandas Timestamp (datetime64) types
             # - this code is based on snowflake adapter implementation
-            for column, kind in (columns_to_types or {}).items():
+            for column, kind in columns_to_types_create.items():
                 if is_datetime64_any_dtype(df.dtypes[column]):
                     if kind.is_type("date"):  # type: ignore
                         df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
                     elif getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
                         # MSSQL requires a colon in the offset (+00:00) so we use isoformat() instead of strftime()
                         df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))  # type: ignore
+
+                        # bulk_copy() doesn't work with TZ timestamp, so load into string column and cast to
+                        # timestamp in SELECT statement
+                        columns_to_types_create[column] = exp.DataType.build("TEXT")
                     else:  # type: ignore
                         df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
 
-            self.create_table(temp_table, columns_to_types)
+            self.create_table(temp_table, columns_to_types_create)
             rows: t.List[t.Tuple[t.Any, ...]] = list(df.itertuples(index=False, name=None))  # type: ignore
             conn = self._connection_pool.get()
             conn.bulk_copy(temp_table.sql(dialect=self.dialect), rows)
-            return exp.select(*columns_to_types).from_(temp_table)
+            return exp.select(*self._casted_columns(columns_to_types)).from_(temp_table)  # type: ignore
 
         return [
             SourceQuery(
