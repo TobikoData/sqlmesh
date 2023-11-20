@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import difflib
 import pathlib
 import typing as t
 import unittest
@@ -111,13 +110,8 @@ class ModelTest(unittest.TestCase):
                 check_datetimelike_compat=True,
             )
         except AssertionError as e:
-            diff = "\n".join(
-                difflib.ndiff(
-                    [str(x) for x in expected.to_dict("records")],
-                    [str(x) for x in actual.to_dict("records")],
-                )
-            )
-            e.args = (f"Data differs\n{diff}",)
+            diff = expected.compare(actual).rename(columns={"self": "expected", "other": "actual"})
+            e.args = (f"Data differs\n\n{diff}",)
             raise e
 
     def runTest(self) -> None:
