@@ -394,9 +394,17 @@ class SnapshotDagGenerator:
             snapshot = snapshots[sid]
             sanitized_snapshot_name = sanitize_name(snapshot.name)
 
+            snapshot_start_task = EmptyOperator(
+                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start"
+            )
+            snapshot_end_task = EmptyOperator(
+                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end"
+            )
+            previous_task: BaseOperator = snapshot_start_task
+
             task_id_prefix = f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}"
-            tasks = [
-                self._create_snapshot_evaluation_operator(
+            for start, end in intervals_per_snapshot.intervals:
+                evaluation_task = self._create_snapshot_evaluation_operator(
                     snapshots=snapshots,
                     snapshot=snapshot,
                     task_id=f"{task_id_prefix}__{start.strftime(TASK_ID_DATE_FORMAT)}__{end.strftime(TASK_ID_DATE_FORMAT)}",
@@ -405,18 +413,40 @@ class SnapshotDagGenerator:
                     deployability_index=deployability_index,
                     plan_id=plan_id,
                 )
-                for (start, end) in intervals_per_snapshot.intervals
-            ]
-            snapshot_start_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__start"
-            )
-            snapshot_end_task = EmptyOperator(
-                task_id=f"snapshot_backfill__{sanitized_snapshot_name}__{snapshot.identifier}__end"
-            )
+
+                external_sensor_task = self._create_hwm_external_sensor(
+                    snapshot, start=start, end=end
+                )
+                if external_sensor_task:
+                    if snapshot.depends_on_past:
+                        snapshot_intervals_chain = [
+                            previous_task,
+                            external_sensor_task,
+                            evaluation_task,
+                        ]
+                    else:
+                        snapshot_intervals_chain = [
+                            snapshot_start_task,
+                            external_sensor_task,
+                            evaluation_task,
+                            snapshot_end_task,
+                        ]
+                else:
+                    if snapshot.depends_on_past:
+                        snapshot_intervals_chain = [previous_task, evaluation_task]
+                    else:
+                        snapshot_intervals_chain = [
+                            snapshot_start_task,
+                            evaluation_task,
+                            snapshot_end_task,
+                        ]
+
+                baseoperator.chain(*snapshot_intervals_chain)
+                previous_task = evaluation_task
+
             if snapshot.depends_on_past:
-                baseoperator.chain(snapshot_start_task, *tasks, snapshot_end_task)
-            else:
-                snapshot_start_task >> tasks >> snapshot_end_task
+                previous_task >> snapshot_end_task
+
             snapshot_to_tasks[snapshot.snapshot_id] = (
                 snapshot_start_task,
                 snapshot_end_task,
@@ -559,16 +589,27 @@ class SnapshotDagGenerator:
                     )
                 )
 
-        if self._external_table_sensor_factory and snapshot.model.signals:
-            output.append(
-                HighWaterMarkExternalSensor(
-                    snapshot=snapshot,
-                    external_table_sensor_factory=self._external_table_sensor_factory,
-                    task_id="external_high_water_mark_sensor",
-                )
-            )
+        external_sesnor = self._create_hwm_external_sensor(snapshot)
+        if external_sesnor:
+            output.append(external_sesnor)
 
         return output
+
+    def _create_hwm_external_sensor(
+        self,
+        snapshot: Snapshot,
+        start: t.Optional[TimeLike] = None,
+        end: t.Optional[TimeLike] = None,
+    ) -> t.Optional[BaseSensorOperator]:
+        if self._external_table_sensor_factory and snapshot.model.signals:
+            return HighWaterMarkExternalSensor(
+                snapshot=snapshot,
+                external_table_sensor_factory=self._external_table_sensor_factory,
+                task_id="external_high_water_mark_sensor",
+                start=start,
+                end=end,
+            )
+        return None
 
 
 def creation_update_state_task(new_snapshots: t.Iterable[Snapshot]) -> None:
