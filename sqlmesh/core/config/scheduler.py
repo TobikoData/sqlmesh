@@ -133,6 +133,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
             whether a DAG has been created.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
     """
 
     airflow_url: str = "http://localhost:8080/"
@@ -144,6 +145,8 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
 
     backfill_concurrent_tasks: int = 4
     ddl_concurrent_tasks: int = 4
+
+    max_snapshot_ids_per_request: t.Optional[int] = None
 
     type_: Literal["airflow"] = Field(alias="type", default="airflow")
 
@@ -158,6 +161,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
             session=session,
             airflow_url=self.airflow_url,
             console=console,
+            snapshot_ids_batch_size=self.max_snapshot_ids_per_request,
         )
 
 
@@ -172,6 +176,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
             whether a DAG has been created.
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
+        max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
     """
 
     airflow_url: str
@@ -181,6 +186,8 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
 
     backfill_concurrent_tasks: int = 4
     ddl_concurrent_tasks: int = 4
+
+    max_snapshot_ids_per_request: t.Optional[int] = 40
 
     type_: Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
 
@@ -207,6 +214,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
             airflow_url=self.airflow_url,
             session=self.session,
             console=console,
+            snapshot_ids_batch_size=self.max_snapshot_ids_per_request,
         )
 
     @model_validator(mode="before")
