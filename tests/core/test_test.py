@@ -329,6 +329,30 @@ test_foo:
     assert result and result.wasSuccessful()
 
 
+def test_missing_column_failure(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
+    model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes))
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    raw:
+      - id: 1
+        value: 2
+        ds: 3
+  outputs:
+    query:
+      - id: 1
+        value: null
+            """
+    )
+    result = _create_test(body, "test_foo", model, sushi_context).run()
+    assert result and not result.wasSuccessful()
+
+    expected_msg = "AssertionError: Data differs (exp: expected, act: actual)\n\n  value        ds    \n    exp act   exp act\n0  None   2  None   3\n"
+    assert expected_msg in result.failures[0][1]
+
+
 @pytest.mark.parametrize("full_model_without_ctes", ["snowflake"], indirect=True)
 def test_normalization(full_model_without_ctes: SqlModel) -> None:
     body = load_yaml(
