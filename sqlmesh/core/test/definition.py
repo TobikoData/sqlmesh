@@ -112,8 +112,8 @@ class ModelTest(unittest.TestCase):
                 check_datetimelike_compat=True,
             )
         except AssertionError as e:
-            diff = expected.compare(actual).rename(columns={"self": "expected", "other": "actual"})
-            e.args = (f"Data differs\n\n{diff}",)
+            diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
+            e.args = (f"Data differs (exp: expected, act: actual)\n\n{diff}",)
             raise e
 
     def runTest(self) -> None:

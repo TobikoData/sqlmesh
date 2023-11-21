@@ -349,7 +349,7 @@ test_foo:
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and not result.wasSuccessful()
 
-    expected_msg = "AssertionError: Data differs\n\n     value              ds       \n  expected actual expected actual\n0     None      2     None      3\n"
+    expected_msg = "AssertionError: Data differs (exp: expected, act: actual)\n\n  value        ds    \n    exp act   exp act\n0  None   2  None   3\n"
     assert expected_msg in result.failures[0][1]
 
 
