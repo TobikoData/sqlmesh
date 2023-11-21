@@ -603,6 +603,6 @@ def test_test_failure(project_context: Context) -> None:
         {
             "name": "test_foo",
             "path": "tests/test_foo.yaml",
-            "tb": "AssertionError: Data differs\n\n        ds       \n  expected actual\n0        2      1\n",
+            "tb": "AssertionError: Data differs (exp: expected, act: actual)\n\n   ds    \n  exp act\n0   2   1\n",
         }
     ]
