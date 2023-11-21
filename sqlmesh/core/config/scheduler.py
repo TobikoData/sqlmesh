@@ -85,7 +85,7 @@ class BuiltInSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig, BaseConfig)
         )
 
 
-class _BaseAirflowSchedulerConfig(_SchedulerConfig):
+class _BaseAirflowSchedulerConfig(_EngineAdapterStateSyncSchedulerConfig):
     dag_run_poll_interval_secs: int
     dag_creation_poll_interval_secs: int
     dag_creation_max_retry_attempts: int
@@ -93,11 +93,16 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
     backfill_concurrent_tasks: int
     ddl_concurrent_tasks: int
 
+    use_state_connection: bool
+
     @abc.abstractmethod
     def get_client(self, console: t.Optional[Console] = None) -> AirflowClient:
         """Constructs the Airflow Client instance."""
 
     def create_state_sync(self, context: Context) -> StateSync:
+        if self.use_state_connection:
+            return super().create_state_sync(context)
+
         from sqlmesh.schedulers.airflow.state_sync import HttpStateSync
 
         return HttpStateSync(
@@ -117,6 +122,7 @@ class _BaseAirflowSchedulerConfig(_SchedulerConfig):
             backfill_concurrent_tasks=self.backfill_concurrent_tasks,
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,
             users=context.users,
+            state_sync=context.state_sync if self.use_state_connection else None,
         )
 
 
@@ -134,6 +140,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
         max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
+        use_state_connection: Whether to use the `state_connection` configuration to access the SQLMesh state.
     """
 
     airflow_url: str = "http://localhost:8080/"
@@ -147,6 +154,7 @@ class AirflowSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig):
     ddl_concurrent_tasks: int = 4
 
     max_snapshot_ids_per_request: t.Optional[int] = None
+    use_state_connection: bool = False
 
     type_: Literal["airflow"] = Field(alias="type", default="airflow")
 
@@ -177,6 +185,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
         backfill_concurrent_tasks: The number of concurrent tasks used for model backfilling during plan application.
         ddl_concurrent_tasks: The number of concurrent tasks used for DDL operations (table / view creation, deletion, etc).
         max_snapshot_ids_per_request: The maximum number of snapshot IDs that can be sent in a single HTTP GET request to the Airflow Webserver.
+        use_state_connection: Whether to use the `state_connection` configuration to access the SQLMesh state.
     """
 
     airflow_url: str
@@ -188,6 +197,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
     ddl_concurrent_tasks: int = 4
 
     max_snapshot_ids_per_request: t.Optional[int] = 40
+    use_state_connection: bool = False
 
     type_: Literal["cloud_composer"] = Field(alias="type", default="cloud_composer")
 
