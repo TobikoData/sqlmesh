@@ -190,8 +190,7 @@ class MSSQLEngineAdapter(
                 # pymssql errors if the column contains a datetime.date object
                 if kind.is_type("date"):  # type: ignore
                     df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d")  # type: ignore
-
-                if is_datetime64_any_dtype(df.dtypes[column]):
+                elif is_datetime64_any_dtype(df.dtypes[column]):
                     if getattr(df.dtypes[column], "tz", None) is not None:  # type: ignore
                         # MSSQL requires a colon in the offset (+00:00) so we use isoformat() instead of strftime()
                         df[column] = pd.to_datetime(df[column]).map(lambda x: x.isoformat(" "))  # type: ignore
