@@ -63,6 +63,7 @@ class SQLMeshAirflow:
         plan_application_dag_ttl: Determines the time-to-live period for finished plan application DAGs.
             Once this period is exceeded, finished plan application DAGs are deleted by the janitor. Default: 2 days.
         external_table_sensor_factory: A factory function that creates a sensor operator for a given signal payload.
+        generate_cadence_dags: Whether to generate cadence DAGs for model versions that are currently deployed to production.
     """
 
     def __init__(
@@ -76,6 +77,7 @@ class SQLMeshAirflow:
         external_table_sensor_factory: t.Optional[
             t.Callable[[t.Dict[str, t.Any]], BaseSensorOperator]
         ] = None,
+        generate_cadence_dags: bool = True,
     ):
         if isinstance(engine_operator, str):
             if not ddl_engine_operator:
@@ -98,6 +100,7 @@ class SQLMeshAirflow:
         self._janitor_interval = janitor_interval
         self._plan_application_dag_ttl = plan_application_dag_ttl
         self._external_table_sensor_factory = external_table_sensor_factory
+        self._generate_cadence_dags = generate_cadence_dags
 
     @property
     def dags(self) -> t.List[DAG]:
@@ -115,8 +118,13 @@ class SQLMeshAirflow:
 
         dag_generator = self._create_dag_generator(stored_snapshots)
 
-        prod_env = state_sync.get_environment(c.PROD)
-        cadence_dags = dag_generator.generate_cadence_dags(prod_env.snapshots) if prod_env else []
+        if self._generate_cadence_dags:
+            prod_env = state_sync.get_environment(c.PROD)
+            cadence_dags = (
+                dag_generator.generate_cadence_dags(prod_env.snapshots) if prod_env else []
+            )
+        else:
+            cadence_dags = []
 
         plan_application_dags = [
             dag_generator.generate_plan_application_dag(s) for s in plan_dag_specs
