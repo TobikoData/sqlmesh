@@ -364,10 +364,27 @@ def dag(ctx: click.Context, file: str) -> None:
 @opt.match_pattern
 @opt.verbose
 @click.argument("tests", nargs=-1)
+@click.option(
+    "--no-truncate",
+    is_flag=True,
+    default=False,
+    help="Show the maximum number of mismatching columns in case of failure.",
+)
 @click.pass_obj
 @error_handler
-def test(obj: Context, k: t.List[str], verbose: bool, tests: t.List[str]) -> None:
+def test(
+    obj: Context,
+    k: t.List[str],
+    verbose: bool,
+    tests: t.List[str],
+    no_truncate: bool,
+) -> None:
     """Run model unit tests."""
+    if no_truncate:
+        import pandas as pd
+
+        pd.set_option("display.max_columns", None)
+
     # Set Python unittest verbosity level
     result = obj.test(match_patterns=k, tests=tests, verbose=verbose)
     if not result.wasSuccessful():
