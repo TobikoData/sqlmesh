@@ -311,7 +311,40 @@ class BaseAirflowPlanEvaluator(PlanEvaluator):
         raise NotImplementedError
 
 
-class AirflowPlanEvaluator(BaseAirflowPlanEvaluator):
+class StateBasedAirflowPlanEvaluator(BaseAirflowPlanEvaluator):
+
+    backfill_concurrent_tasks: int
+    ddl_concurrent_tasks: int
+    notification_targets: t.Optional[t.List[NotificationTarget]]
+    users: t.Optional[t.List[User]]
+
+    def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
+        from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
+
+        plan_application_request = airflow_common.PlanApplicationRequest(
+            new_snapshots=list(plan.new_snapshots),
+            environment=plan.environment,
+            no_gaps=plan.no_gaps,
+            skip_backfill=plan.skip_backfill,
+            request_id=plan_request_id,
+            restatements=plan.restatements or {},
+            notification_targets=self.notification_targets or [],
+            backfill_concurrent_tasks=self.backfill_concurrent_tasks,
+            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
+            users=self.users or [],
+            is_dev=plan.is_dev,
+            forward_only=plan.forward_only,
+            models_to_backfill=plan.models_to_backfill,
+        )
+        plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
+        PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
+
+    @property
+    def state_sync(self) -> StateSync:
+        raise NotImplementedError
+
+
+class AirflowPlanEvaluator(StateBasedAirflowPlanEvaluator):
     def __init__(
         self,
         airflow_client: AirflowClient,
@@ -324,6 +357,7 @@ class AirflowPlanEvaluator(BaseAirflowPlanEvaluator):
         backfill_concurrent_tasks: int = 1,
         ddl_concurrent_tasks: int = 1,
         users: t.Optional[t.List[User]] = None,
+        state_sync: t.Optional[StateSync] = None,
     ):
         super().__init__(
             console,
@@ -338,11 +372,23 @@ class AirflowPlanEvaluator(BaseAirflowPlanEvaluator):
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
         self.users = users or []
 
+        self._state_sync = state_sync
+
     @property
     def client(self) -> BaseAirflowClient:
         return self._airflow_client
 
+    @property
+    def state_sync(self) -> StateSync:
+        if self._state_sync is None:
+            raise SQLMeshError("State Sync is not configured")
+        return self._state_sync
+
     def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
+        if self._state_sync is not None:
+            super()._apply_plan(plan, plan_request_id)
+            return
+
         self._airflow_client.apply_plan(
             plan.new_snapshots,
             plan.environment,
@@ -360,7 +406,7 @@ class AirflowPlanEvaluator(BaseAirflowPlanEvaluator):
         )
 
 
-class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
+class MWAAPlanEvaluator(StateBasedAirflowPlanEvaluator):
     def __init__(
         self,
         client: MWAAClient,
@@ -383,7 +429,7 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
             dag_creation_max_retry_attempts,
         )
         self._mwaa_client = client
-        self.state_sync = state_sync
+        self._state_sync = state_sync
         self.notification_targets = notification_targets or []
         self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
@@ -393,26 +439,9 @@ class MWAAPlanEvaluator(BaseAirflowPlanEvaluator):
     def client(self) -> BaseAirflowClient:
         return self._mwaa_client
 
-    def _apply_plan(self, plan: Plan, plan_request_id: str) -> None:
-        from sqlmesh.schedulers.airflow.plan import PlanDagState, create_plan_dag_spec
-
-        plan_application_request = airflow_common.PlanApplicationRequest(
-            new_snapshots=list(plan.new_snapshots),
-            environment=plan.environment,
-            no_gaps=plan.no_gaps,
-            skip_backfill=plan.skip_backfill,
-            request_id=plan_request_id,
-            restatements=plan.restatements or {},
-            notification_targets=self.notification_targets or [],
-            backfill_concurrent_tasks=self.backfill_concurrent_tasks,
-            ddl_concurrent_tasks=self.ddl_concurrent_tasks,
-            users=self.users or [],
-            is_dev=plan.is_dev,
-            forward_only=plan.forward_only,
-            models_to_backfill=plan.models_to_backfill,
-        )
-        plan_dag_spec = create_plan_dag_spec(plan_application_request, self.state_sync)
-        PlanDagState.from_state_sync(self.state_sync).add_dag_spec(plan_dag_spec)
+    @property
+    def state_sync(self) -> StateSync:
+        return self._state_sync
 
 
 def update_intervals_for_new_snapshots(
