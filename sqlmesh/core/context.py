@@ -1047,7 +1047,11 @@ class Context(BaseContext):
         stream: t.Optional[t.TextIO] = None,
     ) -> unittest.result.TestResult:
         """Discover and run model tests"""
-        verbosity = 2 if verbose else 1
+        if verbose:
+            pd.set_option("display.max_columns", None)
+            verbosity = 2
+        else:
+            verbosity = 1
 
         try:
             if tests:

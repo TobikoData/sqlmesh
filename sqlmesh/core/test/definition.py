@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import difflib
 import pathlib
 import typing as t
 import unittest
@@ -95,10 +94,12 @@ class ModelTest(unittest.TestCase):
         """Compare two DataFrames"""
         self._add_missing_columns(expected, actual)
 
-        # Two astypes are necessary, pandas converts strings to times as NS, but if the actual
-        # is US, it doesn't take affect until the 2nd try!
+        # Two astypes are necessary, pandas converts strings to times as NS,
+        # but if the actual is US, it doesn't take effect until the 2nd try!
         actual_types = actual.dtypes.to_dict()
-        expected = expected.astype(actual_types).astype(actual_types)
+        expected = expected.astype(actual_types, errors="ignore").astype(
+            actual_types, errors="ignore"
+        )
 
         expected = expected.replace({np.nan: None, "nan": None})
         actual = actual.replace({np.nan: None, "nan": None})
@@ -111,13 +112,8 @@ class ModelTest(unittest.TestCase):
                 check_datetimelike_compat=True,
             )
         except AssertionError as e:
-            diff = "\n".join(
-                difflib.ndiff(
-                    [str(x) for x in expected.to_dict("records")],
-                    [str(x) for x in actual.to_dict("records")],
-                )
-            )
-            e.args = (f"Data differs\n{diff}",)
+            diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
+            e.args = (f"Data differs (exp: expected, act: actual)\n\n{diff}",)
             raise e
 
     def runTest(self) -> None:

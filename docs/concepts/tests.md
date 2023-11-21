@@ -66,7 +66,9 @@ In this example, we'll use the `sqlmesh_example.full_model` model, which is prov
 MODEL (
   name sqlmesh_example.full_model,
   kind FULL,
-  cron '@daily'
+  cron '@daily',
+  grain item_id,
+  audits [assert_positive_order_ids],
 );
 
 SELECT
@@ -75,6 +77,7 @@ SELECT
 FROM
     sqlmesh_example.incremental_model
 GROUP BY item_id
+ORDER BY item_id
 ```
 
 Notice how the query of the model definition above references one upstream model: `sqlmesh_example.incremental_model`.
@@ -82,7 +85,7 @@ Notice how the query of the model definition above references one upstream model
 The test definition for this model may look like the following:
 
 ```yaml linenums="1"
-test_full_model:
+test_example_full_model:
   model: sqlmesh_example.full_model
   inputs:
     sqlmesh_example.incremental_model:
@@ -110,7 +113,7 @@ Note that `ds` is redundant in the above test, since it is not referenced in `fu
 Let's also assume that we are only interested in testing the `num_orders` output column, i.e. we only care about the `id` input column of `sqlmesh_example.incremental_model`. Then, we could rewrite the above test more compactly as follows:
 
 ```yaml linenums="1"
-test_full_model:
+test_example_full_model:
   model: sqlmesh_example.full_model
   inputs:
     sqlmesh_example.incremental_model:
@@ -146,12 +149,13 @@ SELECT
 FROM
     filtered_orders_cte
 GROUP BY item_id
+ORDER BY item_id
 ```
 
 Below is the example of a test that verifies individual rows returned by the `filtered_orders_cte` CTE before aggregation takes place:
 
 ```yaml linenums="1" hl_lines="16-22"
-test_full_model:
+test_example_full_model:
   model: sqlmesh_example.full_model
   inputs:
     sqlmesh_example.incremental_model:
@@ -203,27 +207,28 @@ The command returns a non-zero exit code if there are any failures, and reports 
 $ sqlmesh test
 F
 ======================================================================
-FAIL: test_full_model (/Users/izeigerman/github/tmp/tests/test_suite.yaml:1)
+FAIL: test_example_full_model (test/tests/test_full_model.yaml)
 ----------------------------------------------------------------------
-AssertionError: Data differs
-- {'item_id': 1, 'num_orders': 3}
-?                              ^
+AssertionError: Data differs (exp: expected, act: actual)
 
-+ {'item_id': 1, 'num_orders': 2}
-?                              ^
-
+  num_orders
+         exp  act
+0        3.0  2.0
 
 ----------------------------------------------------------------------
-Ran 1 test in 0.008s
+Ran 1 test in 0.012s
 
 FAILED (failures=1)
 ```
 
+Note: when there are many differing columns, the corresponding DataFrame will be truncated by default, but it can be fully rendered using the `-v` option (verbose) of the `sqlmesh test` command.
+
 ### Testing for specific models
+
 To run a specific model test, pass in the suite file name followed by `::` and the name of the test:
 
 ```
-sqlmesh test tests/test_suite.yaml::test_full_model
+sqlmesh test tests/test_full_model.yaml::test_example_full_model
 ```
 
 You can also run tests that match a pattern or substring using a glob pathname expansion syntax:
