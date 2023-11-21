@@ -1171,7 +1171,15 @@ class Context(BaseContext):
 
         Please contact your SQLMesh administrator before doing this.
         """
-        self._new_state_sync().migrate()
+        self.notification_target_manager.notify(NotificationEvent.MIGRATION_START)
+        try:
+            self._new_state_sync().migrate()
+        except Exception as e:
+            self.notification_target_manager.notify(
+                NotificationEvent.MIGRATION_FAILURE, traceback.format_exc()
+            )
+            raise e
+        self.notification_target_manager.notify(NotificationEvent.MIGRATION_END)
 
     def rollback(self) -> None:
         """Rolls back SQLMesh to the previous migration.

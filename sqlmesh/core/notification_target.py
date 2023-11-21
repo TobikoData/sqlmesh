@@ -63,9 +63,12 @@ class NotificationEvent(str, Enum):
     APPLY_END = "apply_end"
     RUN_START = "run_start"
     RUN_END = "run_end"
+    MIGRATION_START = "migration_start"
+    MIGRATION_END = "migration_end"
     APPLY_FAILURE = "apply_failure"
     RUN_FAILURE = "run_failure"
     AUDIT_FAILURE = "audit_failure"
+    MIGRATION_FAILURE = "migration_failure"
 
 
 def notify(event: NotificationEvent) -> t.Callable:
@@ -140,6 +143,16 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             NotificationStatus.SUCCESS, f"SQLMesh run finished for environment `{environment}`."
         )
 
+    @notify(NotificationEvent.MIGRATION_START)
+    def notify_migration_start(self) -> None:
+        """Notify when a SQLMesh migration starts."""
+        self.send(NotificationStatus.INFO, "SQLMesh migration started.")
+
+    @notify(NotificationEvent.MIGRATION_END)
+    def notify_migration_end(self) -> None:
+        """Notify when a SQLMesh migration ends."""
+        self.send(NotificationStatus.SUCCESS, "SQLMesh migration finished.")
+
     @notify(NotificationEvent.APPLY_FAILURE)
     def notify_apply_failure(self, exc: str) -> None:
         """Notify in the case of an apply failure.
@@ -166,6 +179,15 @@ class BaseNotificationTarget(PydanticModel, frozen=True):
             audit_error: The AuditError object.
         """
         self.send(NotificationStatus.FAILURE, str(audit_error))
+
+    @notify(NotificationEvent.MIGRATION_FAILURE)
+    def notify_migration_failure(self, exc: str) -> None:
+        """Notify in the case of a migration failure.
+
+        Args:
+            exc: The exception stack trace.
+        """
+        self.send(NotificationStatus.FAILURE, f"Failed to migration SQLMesh.\n{exc}")
 
     @property
     def is_configured(self) -> bool:
