@@ -94,10 +94,10 @@ class ModelTest(unittest.TestCase):
         """Compare two DataFrames"""
         self._add_missing_columns(expected, actual)
 
-        # Two astypes are necessary, pandas converts strings to times as NS, but if the actual
-        # is US, it doesn't take affect until the 2nd try!
+        # Two astypes are necessary, pandas converts strings to times as NS,
+        # but if the actual is US, it doesn't take effect until the 2nd try!
         actual_types = actual.dtypes.to_dict()
-        expected = expected.astype(actual_types).astype(actual_types)
+        expected = expected.astype(actual_types, errors="ignore").astype(actual_types, errors="ignore")
 
         expected = expected.replace({np.nan: None, "nan": None})
         actual = actual.replace({np.nan: None, "nan": None})
