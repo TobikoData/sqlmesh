@@ -97,7 +97,9 @@ class ModelTest(unittest.TestCase):
         # Two astypes are necessary, pandas converts strings to times as NS,
         # but if the actual is US, it doesn't take effect until the 2nd try!
         actual_types = actual.dtypes.to_dict()
-        expected = expected.astype(actual_types, errors="ignore").astype(actual_types, errors="ignore")
+        expected = expected.astype(actual_types, errors="ignore").astype(
+            actual_types, errors="ignore"
+        )
 
         expected = expected.replace({np.nan: None, "nan": None})
         actual = actual.replace({np.nan: None, "nan": None})
