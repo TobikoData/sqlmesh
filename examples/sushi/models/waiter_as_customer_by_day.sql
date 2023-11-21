@@ -2,7 +2,7 @@
 MODEL (
   name sushi.waiter_as_customer_by_day,
   kind incremental_by_time_range (
-    time_column (ds, '%Y-%m-%d')
+    time_column date
   ),
   owner jen,
   cron '@daily',
@@ -20,9 +20,10 @@ SELECT
   w.waiter_id as waiter_id,
   wn.name as waiter_name,
   {{ alias(identity(x), 'flag') }},
-  w.ds as ds
+  w.date as date
 FROM sushi.waiters AS w
 JOIN sushi.customers as c ON w.waiter_id = c.customer_id
-JOIN sushi.waiter_names as wn ON w.waiter_id = wn.id;
+JOIN sushi.waiter_names as wn ON w.waiter_id = wn.id
+WHERE w.date BETWEEN @start_date AND @end_date;
 
 JINJA_END;

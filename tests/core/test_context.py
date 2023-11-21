@@ -91,7 +91,7 @@ def test_render(sushi_context, assert_exp_eq):
         SELECT
           CAST("o"."waiter_id" AS INT) AS "waiter_id", /* Waiter id */
           CAST(SUM("oi"."quantity" * "i"."price") AS DOUBLE) AS "revenue", /* Revenue from orders taken by this waiter */
-          CAST("o"."ds" AS TEXT) AS "ds" /* Date */
+          CAST("o"."date" AS DATE) AS "date" /* Date */
         FROM (
           SELECT
             CAST(NULL AS INT) AS "id",
@@ -99,7 +99,7 @@ def test_render(sushi_context, assert_exp_eq):
             CAST(NULL AS INT) AS "waiter_id",
             CAST(NULL AS INT) AS "start_ts",
             CAST(NULL AS INT) AS "end_ts",
-            CAST(NULL AS TEXT) AS "ds"
+            CAST(NULL AS DATE) AS "date"
           FROM (VALUES
             (1)) AS "t"("dummy")
         ) AS "o"
@@ -109,26 +109,26 @@ def test_render(sushi_context, assert_exp_eq):
             CAST(NULL AS INT) AS "order_id",
             CAST(NULL AS INT) AS "item_id",
             CAST(NULL AS INT) AS "quantity",
-            CAST(NULL AS TEXT) AS "ds"
+            CAST(NULL AS DATE) AS "date"
           FROM (VALUES
             (1)) AS "t"("dummy")
         ) AS "oi"
-          ON "o"."ds" = "oi"."ds" AND "o"."id" = "oi"."order_id"
+          ON "o"."date" = "oi"."date" AND "o"."id" = "oi"."order_id"
         LEFT JOIN (
           SELECT
             CAST(NULL AS INT) AS "id",
             CAST(NULL AS TEXT) AS "name",
             CAST(NULL AS DOUBLE) AS "price",
-            CAST(NULL AS TEXT) AS "ds"
+            CAST(NULL AS DATE) AS "date"
           FROM (VALUES
             (1)) AS "t"("dummy")
         ) AS "i"
-          ON "oi"."ds" = "i"."ds" AND "oi"."item_id" = "i"."id"
+          ON "oi"."date" = "i"."date" AND "oi"."item_id" = "i"."id"
         WHERE
-          "o"."ds" <= '2021-01-01' AND "o"."ds" >= '2021-01-01'
+          "o"."date" <= CAST('2021-01-01' AS DATE) AND "o"."date" >= CAST('2021-01-01' AS DATE)
         GROUP BY
           "o"."waiter_id",
-          "o"."ds"
+          "o"."date"
         """,
     )
 
@@ -140,17 +140,17 @@ def test_render(sushi_context, assert_exp_eq):
         SELECT
           CAST("o"."waiter_id" AS INT) AS "waiter_id", /* Waiter id */
           CAST(SUM("oi"."quantity" * "i"."price") AS DOUBLE) AS "revenue", /* Revenue from orders taken by this waiter */
-          CAST("o"."ds" AS TEXT) AS "ds" /* Date */
+          CAST("o"."date" AS DATE) AS "date" /* Date */
         FROM "sushi"."orders" AS "o"
         LEFT JOIN "sushi"."order_items" AS "oi"
-          ON "o"."ds" = "oi"."ds" AND "o"."id" = "oi"."order_id"
+          ON "o"."date" = "oi"."date" AND "o"."id" = "oi"."order_id"
         LEFT JOIN "sushi"."items" AS "i"
-          ON "oi"."ds" = "i"."ds" AND "oi"."item_id" = "i"."id"
+          ON "oi"."date" = "i"."date" AND "oi"."item_id" = "i"."id"
         WHERE
-          "o"."ds" <= '1970-01-01' AND "o"."ds" >= '1970-01-01'
+          "o"."date" <= CAST('1970-01-01' AS DATE) AND "o"."date" >= CAST('1970-01-01' AS DATE)
         GROUP BY
           "o"."waiter_id",
-          "o"."ds"
+          "o"."date"
         """,
     )
 

@@ -12,4 +12,3 @@ SELECT
     updated_at::TIMESTAMP AS updated_at
 FROM
     sushi.raw_marketing
-

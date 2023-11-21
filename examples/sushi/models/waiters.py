@@ -26,7 +26,7 @@ def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
 
     SELECT DISTINCT
       waiter_id::INT AS waiter_id,
-      ds::TEXT AS ds
+      date::DATE AS date
     FROM sushi.orders AS o
     WHERE @incremental_by_ds(ds)
     """
@@ -47,6 +47,6 @@ def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
     return (
         exp.select(*projections)
         .from_("sushi.orders AS o")
-        .where(incremental_by_ds(evaluator, exp.to_column("ds")))
+        .where(incremental_by_ds(evaluator, exp.to_column("date")))
         .distinct()
     )
