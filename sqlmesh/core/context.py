@@ -236,7 +236,7 @@ class Context(BaseContext):
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
         paths: t.Union[str, t.Iterable[str]] = "",
-        config: t.Optional[t.Union[Config, str]] = None,
+        config: t.Optional[t.Union[Config, str, t.Dict[Path, Config]]] = None,
         gateway: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
         loader: t.Optional[t.Type[Loader]] = None,
