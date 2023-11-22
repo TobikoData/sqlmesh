@@ -248,13 +248,16 @@ class Context(BaseContext):
 
         self.sqlmesh_path = Path.home() / ".sqlmesh"
 
-        self.configs = self._load_configs(
-            config or "config",
-            [
-                Path(path).absolute()
-                for path in ([paths] if isinstance(paths, str) else list(paths))
-            ],
-        )
+        if isinstance(config, dict):
+            self.configs = config
+        else:
+            self.configs = self._load_configs(
+                config or "config",
+                [
+                    Path(path).absolute()
+                    for path in ([paths] if isinstance(paths, str) else list(paths))
+                ],
+            )
 
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
