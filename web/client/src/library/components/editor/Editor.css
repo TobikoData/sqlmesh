@@ -119,21 +119,23 @@
 }
 
 .sqlmesh-model__column.--is-original,
-.sqlmesh-model__column.--is-original > span {
+.sqlmesh-model__column.--is-original > span,
+.sqlmesh-model__column.--is-alias,
+.sqlmesh-model__column.--is-alias > span {
   display: inline-block;
   color: var(--color-accent-300);
   font-weight: bold;
 }
 
-.sqlmesh-model__column.--is-active-model.--is-derived,
-.sqlmesh-model__column.--is-active-model.--is-derived > span {
+.sqlmesh-model__column.--is-active-model.--is-alias,
+.sqlmesh-model__column.--is-active-model.--is-alias > span {
   display: inline-block;
   color: var(--color-brand-300);
   font-weight: bold;
   box-shadow: inset 0 -2px 0 0 transparent;
 }
-.sqlmesh-model__column.--is-active-model.--is-derived.--is-action-mode,
-.sqlmesh-model__column.--is-active-model.--is-derived.--is-action-mode > span {
+.sqlmesh-model__column.--is-active-model.--is-alias.--is-action-mode,
+.sqlmesh-model__column.--is-active-model.--is-alias.--is-action-mode > span {
   cursor: pointer;
   box-shadow: inset 0 -2px 0 0 var(--color-brand-300);
 }
