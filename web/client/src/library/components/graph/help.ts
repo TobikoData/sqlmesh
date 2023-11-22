@@ -312,6 +312,8 @@ function mergeLineageWithModels(
 ): Record<string, Lineage> {
   return Object.entries(data).reduce(
     (acc: Record<string, Lineage>, [key, models = []]) => {
+      key = encodeURI(key)
+
       acc[key] = {
         models,
         columns: currentLineage?.[key]?.columns ?? undefined,
@@ -328,14 +330,17 @@ function mergeLineageWithColumns(
   newLineage: Record<string, Record<string, LineageColumn>> = {},
 ): Record<string, Lineage> {
   for (const targetModelName in newLineage) {
-    if (isNil(currentLineage[targetModelName])) {
-      currentLineage[targetModelName] = { columns: {}, models: [] }
+    const targetModelNameEncoded = encodeURI(targetModelName)
+
+    if (isNil(currentLineage[targetModelNameEncoded])) {
+      currentLineage[targetModelNameEncoded] = { columns: {}, models: [] }
     }
 
-    const currentLineageModel = currentLineage[targetModelName]!
+    const currentLineageModel = currentLineage[targetModelNameEncoded]!
     const newLineageModel = newLineage[targetModelName]!
 
     for (const targetColumnName in newLineageModel) {
+      const targetColumnNameEncoded = encodeURI(targetColumnName)
       const newLineageModelColumn = newLineageModel[targetColumnName]!
 
       if (isNil(currentLineageModel.columns)) {
@@ -343,7 +348,7 @@ function mergeLineageWithColumns(
       }
 
       // New Column Lineage delivers fresh data, so we can just assign it
-      currentLineageModel.columns[targetColumnName] = {
+      currentLineageModel.columns[targetColumnNameEncoded] = {
         expression: newLineageModelColumn.expression,
         source: newLineageModelColumn.source,
         models: {},
@@ -353,26 +358,27 @@ function mergeLineageWithColumns(
       if (isObjectEmpty(newLineageModelColumn.models)) continue
 
       const currentLineageModelColumn =
-        currentLineageModel.columns[targetColumnName]!
+        currentLineageModel.columns[targetColumnNameEncoded]!
       const currentLineageModelColumnModels = currentLineageModelColumn.models!
 
       for (const sourceColumnName in newLineageModelColumn.models) {
+        const sourceColumnNameEncoded = encodeURI(sourceColumnName)
         const currentLineageModelColumnModel =
-          currentLineageModelColumnModels[sourceColumnName]!
+          currentLineageModelColumnModels[sourceColumnNameEncoded]!
         const newLineageModelColumnModel =
           newLineageModelColumn.models[sourceColumnName]!
 
-        currentLineageModelColumnModels[sourceColumnName] = isNil(
-          currentLineageModelColumnModel,
-        )
-          ? newLineageModelColumnModel
-          : Array.from(
-              new Set(
-                currentLineageModelColumnModel.concat(
-                  newLineageModelColumnModel,
+        currentLineageModelColumnModels[sourceColumnNameEncoded] = (
+          isNil(currentLineageModelColumnModel)
+            ? newLineageModelColumnModel
+            : Array.from(
+                new Set(
+                  currentLineageModelColumnModel.concat(
+                    newLineageModelColumnModel,
+                  ),
                 ),
-              ),
-            )
+              )
+        ).map(encodeURI)
       }
     }
   }
@@ -391,9 +397,11 @@ function mergeConnections(
 
   // We are getting lineage in format of target -> source
   for (const targetModelName in lineage) {
+    const targetModelNameEncoded = encodeURI(targetModelName)
     const model = lineage[targetModelName]!
 
     for (const targetColumnName in model) {
+      const targetColumnNameEncoded = encodeURI(targetColumnName)
       const column = model[targetColumnName]
 
       // We don't have any connectins so we skip
@@ -403,8 +411,8 @@ function mergeConnections(
       // It is a target (left handler)
       // but it can also be a source (right handler) for other connections
       const modelColumnIdTarget = toNodeOrEdgeId(
-        targetModelName,
-        targetColumnName,
+        targetModelNameEncoded,
+        targetColumnNameEncoded,
       )
 
       // We need to check if {modelColumnIdTarget} is already a source/target for other connections
@@ -415,12 +423,14 @@ function mergeConnections(
       }
 
       Object.entries(column.models).forEach(([sourceModelName, columns]) => {
+        const sourceModelNameEncoded = encodeURI(sourceModelName)
         columns.forEach(sourceColumnName => {
+          const sourceColumnNameEncoded = encodeURI(sourceColumnName)
           // It is a source (right handler)
           // but it can also be a target (left handler) for other connections
           const modelColumnIdSource = toNodeOrEdgeId(
-            sourceModelName,
-            sourceColumnName,
+            sourceModelNameEncoded,
+            sourceColumnNameEncoded,
           )
 
           // We need to check if {modelColumnIdSource} is already a source/target for other connections

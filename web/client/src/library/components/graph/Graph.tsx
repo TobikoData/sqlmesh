@@ -171,7 +171,7 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
             className={clsx('flex items-center', disabled && 'opacity-50')}
           >
             {disabled && <NoSymbolIcon className="w-3 h-3 mr-2" />}
-            <b>{columnName}</b>
+            <b>{decodeURI(columnName)}</b>
           </span>
           <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-2">
             {columnType}
@@ -326,7 +326,7 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
             )}
             onClick={handleClick}
           >
-            {label}
+            {decodeURI(label)}
           </span>
           <span className="flex justify-between mx-2 px-2 rounded-full bg-neutral-10">
             {count}
