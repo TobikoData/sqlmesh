@@ -502,7 +502,13 @@ class GithubController:
             # If we find a match against the regex then we just return since the comment has already been posted
             if seq_get(re.findall(dedup_regex, comment.body), 0):
                 return comment
-        comment.edit(body=f"{comment.body}\n{value}")
+        full_comment = f"{comment.body}\n{value}"
+        body, *truncated = self._chunk_up_api_message(f"{full_comment}")
+        if truncated:
+            logger.warning(
+                f"Comment body was too long so we truncated it. Full text: {full_comment}"
+            )
+        comment.edit(body=body)
         return comment
 
     def update_pr_environment(self) -> None:
@@ -579,15 +585,10 @@ class GithubController:
             kwargs["completed_at"] = current_time
         if conclusion:
             kwargs["conclusion"] = conclusion.value
-        full_summary_bytes = (full_summary or title).encode("utf-8")
-        summary, text, *truncated = [
-            full_summary_bytes[i : i + self.MAX_BYTE_LENGTH].decode("utf-8", "ignore")
-            for i in range(0, len(full_summary_bytes), self.MAX_BYTE_LENGTH)
-        ] + [None]
+        full_summary = full_summary or title
+        summary, text, *truncated = self._chunk_up_api_message(full_summary) + [None]
         if truncated and truncated[0] is not None:
-            logger.warning(
-                f'Summary was too long so we truncated it. Full text: {full_summary_bytes.decode("utf-8", "ignore")}'
-            )
+            logger.warning(f"Summary was too long so we truncated it. Full text: {full_summary}")
         kwargs["output"] = {"title": title, "summary": summary}
         if text:
             kwargs["output"]["text"] = text
@@ -924,3 +925,13 @@ class GithubController:
         return BotCommand.from_comment_body(
             self._event.pull_request_comment_body, self.bot_config.command_namespace
         )
+
+    def _chunk_up_api_message(self, message: str) -> t.List[str]:
+        """
+        Chunks up the message into `MAX_BYTE_LENGTH` byte chunks
+        """
+        message_encoded = message.encode("utf-8")
+        return [
+            message_encoded[i : i + self.MAX_BYTE_LENGTH].decode("utf-8", "ignore")
+            for i in range(0, len(message_encoded), self.MAX_BYTE_LENGTH)
+        ]
