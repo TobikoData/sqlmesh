@@ -345,6 +345,20 @@ update_sqlmesh_comment_info_params = [
         "**SQLMesh Bot Info**\ntest2",
         None,
     ),
+    (
+        "Ensure comments are truncated if they are too long",
+        [
+            MockIssueComment(body="**SQLMesh Bot Info**\ntest1"),
+        ],
+        # Making sure that although we will be under the character limit of `65535` we will still truncate
+        # because the byte size of this character is 3 and therefore we will be over the limit since it is based
+        # on bytes on not characters (despite what the error message may say)
+        "桜" * 65000,
+        None,
+        # ((Max Byte Length) - (Length of "**SQLMesh Bot Info**\ntest1\n")) / (Length of "桜")
+        "**SQLMesh Bot Info**\ntest1\n" + ("桜" * int((65535 - 27) / 3)),
+        None,
+    ),
 ]
 
 
