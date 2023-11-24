@@ -986,7 +986,6 @@ class TrinoConnectionConfig(ConnectionConfig):
             "host",
             "port",
             "catalog",
-            "password",
             "roles",
             "http_scheme",
             "http_headers",
