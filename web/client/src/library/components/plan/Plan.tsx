@@ -1,4 +1,4 @@
-import { isFalse, isNil, isTrue } from '~/utils'
+import { isNil, isTrue } from '~/utils'
 import { EnumPlanAction, useStorePlan, type PlanAction } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
@@ -14,11 +14,14 @@ import { EnumVariant } from '~/types/enum'
 import PlanApplyStageTracker from './PlanApplyStageTracker'
 import { useStoreContext } from '@context/context'
 import { useEffect, useState } from 'react'
+import { type ModelEnvironment } from '@models/environment'
 
 function Plan({
+  environment,
   disabled,
   onClose,
 }: {
+  environment: ModelEnvironment
   disabled: boolean
   onClose: () => void
 }): JSX.Element {
@@ -28,7 +31,6 @@ function Plan({
   const { auto_apply } = usePlan()
 
   const isRunningPlan = useStoreContext(s => s.isRunningPlan)
-  const environment = useStoreContext(s => s.environment)
 
   const planOverviewTracker = useStorePlan(s => s.planOverview)
   const planApplyTracker = useStorePlan(s => s.planApply)
@@ -42,27 +44,30 @@ function Plan({
 
   const {
     refetch: planRun,
-    isFetching: isFetchingPlan,
     cancel: cancelRequestPlanRun,
+    isFetching: isFetchingPlanRun,
   } = useApiPlanRun(environment.name, planPayload)
   const {
     refetch: planApply,
-    isFetching: isFetchingPlanApply,
     cancel: cancelRequestPlanApply,
+    isFetching: isFetchingPlanApply,
   } = useApiPlanApply(environment.name, applyPayload)
-  const { refetch: cancelPlan } = useApiCancelPlan()
+  const { refetch: cancelPlan, isFetching: isFetchingPlanCancel } =
+    useApiCancelPlan()
 
   const [planAction, setPlanAction] = useState<PlanAction>(EnumPlanAction.Run)
 
   useEffect(() => {
-    if (
-      planOverviewTracker.isFinished &&
-      (planApplyTracker.isFinished ||
-        (isFalse(planOverviewTracker.isVirtualUpdate) &&
-          isFalse(planOverviewTracker.isBackfillUpdate)))
+    if (environment.name !== planOverviewTracker.environment) {
+      setPlanAction(EnumPlanAction.Run)
+    } else if (
+      ((planOverviewTracker.isFinished || planApplyTracker.isFinished) &&
+        isNil(planOverviewTracker.applyType)) ||
+      planOverviewTracker.isFailed ||
+      planApplyTracker.isFailed
     ) {
       setPlanAction(EnumPlanAction.Done)
-    } else if (isFetchingPlan) {
+    } else if (isFetchingPlanRun) {
       setPlanAction(EnumPlanAction.Running)
     } else if (isFetchingPlanApply) {
       setPlanAction(EnumPlanAction.Applying)
@@ -89,8 +94,9 @@ function Plan({
     planOverviewTracker,
     planApplyTracker,
     isRunningPlan,
-    isFetchingPlan,
+    isFetchingPlanRun,
     isFetchingPlanApply,
+    environment
   ])
 
   function cleanUp(): void {
@@ -177,14 +183,24 @@ function Plan({
     })
   }
 
+  const isFetching =
+    isFetchingPlanRun || isFetchingPlanApply || isFetchingPlanCancel
+  const showPlanApplyTracker =
+    (planApplyTracker.isFinished || planApplyTracker.isRunning) &&
+    planApplyTracker.environment === environment.name
+  const showPlanOverviewTracker =
+    (planOverviewTracker.isFinished || planOverviewTracker.isRunning) &&
+    planOverviewTracker.environment === environment.name
+  const showPlanTracker = showPlanApplyTracker || showPlanOverviewTracker
+  const showPlanCancel = planAction === EnumPlanAction.Cancelling
+
   return (
-    <div className="flex flex-col w-full h-full overflow-hidden pt-6">
+    <div className="flex flex-col w-full h-full overflow-hidden">
       <PlanHeader />
-      <Divider />
       <div className="w-full h-full px-4 overflow-y-scroll hover:scrollbar scrollbar--vertical">
-        {planAction === EnumPlanAction.Cancelling ? (
+        {showPlanCancel ? (
           <CancellingPlanApply />
-        ) : planApplyTracker.isRunning || planOverviewTracker.isFinished ? (
+        ) : showPlanTracker ? (
           <PlanApplyStageTracker />
         ) : (
           <PlanOptions className="w-full" />
@@ -193,12 +209,12 @@ function Plan({
       <Divider />
       <PlanActions
         planAction={planAction}
-        disabled={disabled}
         apply={apply}
         run={run}
         cancel={cancel}
         close={close}
         reset={reset}
+        disabled={isFetching ?? disabled}
       />
     </div>
   )

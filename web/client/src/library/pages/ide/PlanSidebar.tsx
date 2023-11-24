@@ -5,12 +5,14 @@ import { Dialog } from '@headlessui/react'
 import { isTrue, isFalse } from '@utils/index'
 import { memo, useState } from 'react'
 import { useIDE } from './context'
+import { useStoreContext } from '@context/context'
 
 const PlanSidebar = memo(function PlanSidebar(): JSX.Element {
   const { isPlanOpen, setIsPlanOpen } = useIDE()
 
-  const [isClosingModal, setIsClosingModal] = useState(false)
+  const environment = useStoreContext(s => s.environment)
 
+  const [isClosingModal, setIsClosingModal] = useState(false)
   function closeModal(): void {
     setIsClosingModal(true)
   }
@@ -30,6 +32,8 @@ const PlanSidebar = memo(function PlanSidebar(): JSX.Element {
           <Plan
             disabled={isClosingModal}
             onClose={closeModal}
+            key={environment.name}
+            environment={environment}
           />
         </PlanProvider>
       </Dialog.Panel>

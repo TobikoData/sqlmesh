@@ -20,7 +20,7 @@ import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
 import { EnumSize, EnumVariant } from '~/types/enum'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
-import { useStoreProject } from '@context/project'
+import { type Tests, useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
 import { Status, type Directory, type Model } from '@api/client'
 import { Button } from '@components/button/Button'
@@ -81,6 +81,7 @@ export default function PageIDE(): JSX.Element {
   const refreshFiles = useStoreProject(s => s.refreshFiles)
   const findArtifactByPath = useStoreProject(s => s.findArtifactByPath)
   const setActiveRange = useStoreProject(s => s.setActiveRange)
+  const setTests = useStoreProject(s => s.setTests)
 
   const storedTabs = useStoreEditor(s => s.storedTabs)
   const storedTabId = useStoreEditor(s => s.storedTabId)
@@ -113,6 +114,7 @@ export default function PageIDE(): JSX.Element {
 
   useEffect(() => {
     const channelModels = channel<Model[]>('models', updateModels)
+    const channelTests = channel<Tests>('tests', updateTests)
     const channelErrors = channel<ErrorIDE>('errors', displayErrors)
     const channelPlanOverview = channel<any>(
       'plan-overview',
@@ -223,6 +225,7 @@ export default function PageIDE(): JSX.Element {
     channelPlanApply.subscribe()
     channelFile.subscribe()
     channelPlanCancel.subscribe()
+    channelTests.subscribe()
 
     return () => {
       void cancelRequestModels()
@@ -230,6 +233,7 @@ export default function PageIDE(): JSX.Element {
       void cancelRequestEnvironments()
       void cancelRequestPlan()
 
+      channelTests.unsubscribe()
       channelModels.unsubscribe()
       channelErrors.unsubscribe()
       channelPlanOverview.unsubscribe()
@@ -305,6 +309,10 @@ export default function PageIDE(): JSX.Element {
 
   function displayErrors(data: ErrorIDE): void {
     addError(EnumErrorKey.General, data)
+  }
+
+  function updateTests(tests?: Tests): void {
+    setTests(tests)
   }
 
   function updatePlanOverviewTracker(data: PlanOverviewTracker): void {

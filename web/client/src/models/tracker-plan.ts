@@ -30,23 +30,23 @@ export class ModelPlanTracker<
   }
 
   get environment(): Optional<string> {
-    return this._current?.environment
+    return this.current?.environment
   }
 
   get meta(): Optional<PlanTrackerMeta> {
-    return this._current?.meta
+    return this.current?.meta
   }
 
   get plan_options(): Optional<PlanOptions> {
-    return this._current?.plan_options
+    return this.current?.plan_options
   }
 
   get start(): Optional<PlanOverviewStageTrackerStart> {
-    return this._current?.start
+    return this.current?.start
   }
 
   get end(): Optional<PlanOverviewStageTrackerEnd> {
-    return this._current?.end
+    return this.current?.end
   }
 
   get duration(): number {
@@ -55,32 +55,31 @@ export class ModelPlanTracker<
 
   get isFinished(): boolean {
     return (
-      isTrue(this._current?.meta?.done) &&
-      this._current?.meta?.status !== Status.init
+      isTrue(this.current?.meta?.done) &&
+      this.current?.meta?.status !== Status.init
     )
   }
 
   get isRunning(): boolean {
     return (
-      isFalseOrNil(this._current?.meta?.done) &&
-      this._current?.meta?.status === Status.init
+      isFalseOrNil(this.current?.meta?.done) &&
+      this.current?.meta?.status === Status.init
     )
   }
 
   get isSuccessed(): boolean {
-    return this.isFinished && this._current?.meta?.status === Status.success
+    return this.isFinished && this.current?.meta?.status === Status.success
   }
 
   get isFailed(): boolean {
     return (
       this.isFinished &&
-      (isNil(this._current?.meta) ||
-        this._current?.meta?.status === Status.fail)
+      (isNil(this.current?.meta) || this.current?.meta?.status === Status.fail)
     )
   }
 
   get isEmpty(): boolean {
-    return isNil(this._current)
+    return isNil(this.current)
   }
 
   reset(): void {

@@ -32,6 +32,7 @@ export default function RunPlan(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
   const setPlanOverview = useStorePlan(s => s.setPlanOverview)
+  const setPlanApply = useStorePlan(s => s.setPlanApply)
 
   const isRunningPlan = useStoreContext(s => s.isRunningPlan)
   const addConfirmation = useStoreContext(s => s.addConfirmation)
@@ -64,8 +65,10 @@ export default function RunPlan(): JSX.Element {
     setIsPlanOpen(true)
 
     planOverview.reset()
+    planApply.reset()
 
     setPlanOverview(planOverview)
+    setPlanApply(planApply)
   }
 
   const showRunButton =

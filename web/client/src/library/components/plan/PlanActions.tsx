@@ -1,6 +1,6 @@
 import { type MouseEvent } from 'react'
 import { useStoreContext } from '~/context/context'
-import { EnumPlanAction, type PlanAction } from '~/context/plan'
+import { EnumPlanAction, useStorePlan, type PlanAction } from '~/context/plan'
 import useActiveFocus from '~/hooks/useActiveFocus'
 import { EnumVariant } from '~/types/enum'
 import { includes, isFalse, isStringEmptyOrNil } from '~/utils'
@@ -10,21 +10,21 @@ import { getActionName } from './help'
 import { Divider } from '@components/divider/Divider'
 
 export default function PlanActions({
-  disabled,
   run,
   apply,
   cancel,
-  close,
   reset,
+  close,
   planAction,
+  disabled = false,
 }: {
-  disabled: boolean
   apply: () => void
   run: () => void
   cancel: () => void
   close: () => void
   reset: () => void
   planAction: PlanAction
+  disabled: boolean
 }): JSX.Element {
   const {
     start,
@@ -40,6 +40,10 @@ export default function PlanActions({
   } = usePlan()
 
   const environment = useStoreContext(s => s.environment)
+
+  const planOverview = useStorePlan(s => s.planOverview)
+  const planApply = useStorePlan(s => s.planApply)
+  const planCancel = useStorePlan(s => s.planCancel)
 
   const setFocus = useActiveFocus<HTMLButtonElement>()
 
@@ -82,6 +86,12 @@ export default function PlanActions({
     run()
   }
 
+  const isDisabled =
+    disabled ||
+    planOverview.isRunning ||
+    planApply.isRunning ||
+    planCancel.isCancelling
+
   return (
     <div>
       {(isRun ||
@@ -89,70 +99,70 @@ export default function PlanActions({
         isApplyVirtual ||
         isApplyBackfill ||
         isApplying) && (
-        <>
-          <div className="w-full flex px-4 py-2">
-            <p className="ml-2 text-xs">
-              <span>Plan for</span>
-              <b className="text-primary-500 font-bold mx-1">
-                {environment.name}
-              </b>
-              <span className="inline-block mr-1">environment</span>
-              {
-                <span className="inline-block mr-1">
-                  from{' '}
-                  <b>
-                    {isFalse(isStringEmptyOrNil(start))
-                      ? start
-                      : 'the begining of history'}
-                  </b>
-                </span>
-              }
-              {
-                <span className="inline-block mr-1">
-                  till{' '}
-                  <b>{isFalse(isStringEmptyOrNil(start)) ? end : 'today'}</b>
-                </span>
-              }
-              {no_gaps && (
-                <span className="inline-block mr-1">
-                  with <b>No Gaps</b>
-                </span>
-              )}
-              {skip_backfill && (
-                <span className="inline-block mr-1">
-                  without <b>Backfills</b>
-                </span>
-              )}
-              {forward_only && (
-                <span className="inline-block mr-1">
-                  consider as a <b>Breaking Change</b>
-                </span>
-              )}
-              {no_auto_categorization && (
-                <span className="inline-block mr-1">
-                  also set <b>Change Category</b> manually
-                </span>
-              )}
-              {isFalse(isStringEmptyOrNil(restate_models)) && (
-                <span className="inline-block mr-1">
-                  and restate folowing models <b>{restate_models}</b>
-                </span>
-              )}
-              {include_unmodified && (
-                <span className="inline-block mr-1">
-                  with views for all models
-                </span>
-              )}
-            </p>
-          </div>
-          <Divider />
-        </>
-      )}
+          <>
+            <div className="w-full flex px-4 py-2">
+              <p className="ml-2 text-xs">
+                <span>Plan for</span>
+                <b className="text-primary-500 font-bold mx-1">
+                  {environment.name}
+                </b>
+                <span className="inline-block mr-1">environment</span>
+                {
+                  <span className="inline-block mr-1">
+                    from{' '}
+                    <b>
+                      {isFalse(isStringEmptyOrNil(start))
+                        ? start
+                        : 'the begining of history'}
+                    </b>
+                  </span>
+                }
+                {
+                  <span className="inline-block mr-1">
+                    till{' '}
+                    <b>{isFalse(isStringEmptyOrNil(start)) ? end : 'today'}</b>
+                  </span>
+                }
+                {no_gaps && (
+                  <span className="inline-block mr-1">
+                    with <b>No Gaps</b>
+                  </span>
+                )}
+                {skip_backfill && (
+                  <span className="inline-block mr-1">
+                    without <b>Backfills</b>
+                  </span>
+                )}
+                {forward_only && (
+                  <span className="inline-block mr-1">
+                    consider as a <b>Breaking Change</b>
+                  </span>
+                )}
+                {no_auto_categorization && (
+                  <span className="inline-block mr-1">
+                    also set <b>Change Category</b> manually
+                  </span>
+                )}
+                {isFalse(isStringEmptyOrNil(restate_models)) && (
+                  <span className="inline-block mr-1">
+                    and restate folowing models <b>{restate_models}</b>
+                  </span>
+                )}
+                {include_unmodified && (
+                  <span className="inline-block mr-1">
+                    with views for all models
+                  </span>
+                )}
+              </p>
+            </div>
+            <Divider />
+          </>
+        )}
       <div className="flex justify-between px-4 py-2">
         <div className="flex w-full items-center">
           {(isRun || isRunning) && (
             <Button
-              disabled={isRunning || disabled}
+              disabled={isRunning || isDisabled}
               onClick={handleRun}
               ref={setFocus}
               variant={EnumVariant.Primary}
@@ -175,7 +185,7 @@ export default function PlanActions({
           {(isApplyBackfill || isApplyVirtual || isApplying) && (
             <Button
               onClick={handleApply}
-              disabled={isApplying || disabled}
+              disabled={isApplying || isDisabled}
               ref={setFocus}
               variant={EnumVariant.Primary}
             >
@@ -191,14 +201,14 @@ export default function PlanActions({
               onClick={handleCancel}
               variant={EnumVariant.Danger}
               className="justify-self-end"
-              disabled={isCancelling || disabled}
+              disabled={isCancelling || isDisabled}
             >
               {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
             </Button>
           )}
         </div>
         <div className="flex items-center">
-          {[isProcessing, isRun, disabled].every(isFalse) && (
+          {[isProcessing, disabled, isRun].every(isFalse) && (
             <Button
               onClick={handleReset}
               variant={EnumVariant.Neutral}
@@ -210,7 +220,7 @@ export default function PlanActions({
                     EnumPlanAction.Cancelling,
                   ],
                   planAction,
-                ) || disabled
+                ) || isDisabled
               }
             >
               {getActionName(planAction, [], 'Start Over')}
@@ -225,6 +235,19 @@ export default function PlanActions({
             {getActionName(planAction, [EnumPlanAction.Done], 'Close')}
           </Button>
         </div>
+        <Button
+          onClick={handleClose}
+          variant={isDone ? EnumVariant.Primary : EnumVariant.Neutral}
+          disabled={
+            includes(
+              [EnumPlanAction.Running, EnumPlanAction.Cancelling],
+              planAction,
+            ) || disabled
+          }
+          ref={isDone || isApplying ? setFocus : undefined}
+        >
+          {getActionName(planAction, [EnumPlanAction.Done], 'Close')}
+        </Button>
       </div>
     </div>
   )
