@@ -1,4 +1,7 @@
 # type: ignore
+import os
+import pathlib
+from unittest import mock
 from unittest.mock import PropertyMock, call
 
 import pytest
@@ -388,7 +391,7 @@ def test_update_sqlmesh_comment_info(
     controller = make_controller(
         "tests/fixtures/github/pull_request_synchronized.json", github_client
     )
-    resp = controller.update_sqlmesh_comment_info(comment, dedup_regex=dedup_regex)
+    updated, resp = controller.update_sqlmesh_comment_info(comment, dedup_regex=dedup_regex)
     assert resp.body == resulting_comment
     if create_comment is None:
         assert len(created_comments) == 0
@@ -534,6 +537,7 @@ def test_unloaded_snapshots(
     make_snapshot,
     make_mock_check_run,
     make_mock_issue_comment,
+    tmp_path: pathlib.Path,
 ):
     snapshot_categrozied = make_snapshot(SqlModel(name="a", query=parse_one("select 1, ds")))
     snapshot_categrozied.categorize_as(SnapshotChangeCategory.BREAKING)
@@ -563,7 +567,11 @@ def test_unloaded_snapshots(
     controller = make_controller(
         "tests/fixtures/github/pull_request_synchronized.json", github_client
     )
-    controller.update_pr_environment_check(GithubCheckStatus.COMPLETED)
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        controller.update_pr_environment_check(GithubCheckStatus.COMPLETED)
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
     pr_environment_check_run = controller._check_run_mapping[

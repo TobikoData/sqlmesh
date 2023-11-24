@@ -25,6 +25,7 @@ from sqlmesh.core.plan import LoadedSnapshotIntervals, Plan
 from sqlmesh.core.snapshot.definition import Snapshot
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.cicd.config import GithubCICDBotConfig
+from sqlmesh.utils import word_characters_only
 from sqlmesh.utils.concurrency import NodeExecutionFailedError
 from sqlmesh.utils.date import now
 from sqlmesh.utils.errors import (
@@ -427,6 +428,15 @@ class GithubController:
         logger.debug(f"Bot config: {bot_config.json(indent=2)}")
         return bot_config
 
+    @classmethod
+    def _append_output(cls, key: str, value: str) -> None:
+        """
+        Appends the given key/value to output so they can be read by following steps
+        """
+        logger.debug(f"Setting output. Key: {key}, Value: {value}")
+        with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+            print(f"{key}={value}", file=fh)
+
     def get_plan_summary(self, plan: Plan) -> str:
         try:
             # Clear out any output that might exist from prior steps
@@ -491,7 +501,7 @@ class GithubController:
 
     def update_sqlmesh_comment_info(
         self, value: str, *, dedup_regex: t.Optional[str]
-    ) -> IssueComment:
+    ) -> t.Tuple[bool, IssueComment]:
         """
         Update the SQLMesh PR Comment for the given lookup key with the given value. If a comment does not exist then
         it creates one. It determines the comment to update by looking for a comment with the header. If a dedup
@@ -501,7 +511,7 @@ class GithubController:
         if dedup_regex:
             # If we find a match against the regex then we just return since the comment has already been posted
             if seq_get(re.findall(dedup_regex, comment.body), 0):
-                return comment
+                return False, comment
         full_comment = f"{comment.body}\n{value}"
         body, *truncated = self._chunk_up_api_message(f"{full_comment}")
         if truncated:
@@ -509,7 +519,7 @@ class GithubController:
                 f"Comment body was too long so we truncated it. Full text: {full_comment}"
             )
         comment.edit(body=body)
-        return comment
+        return True, comment
 
     def update_pr_environment(self) -> None:
         """
@@ -570,7 +580,6 @@ class GithubController:
         """
         Updates the status of the merge commit.
         """
-
         current_time = now()
         kwargs: t.Dict[str, t.Any] = {
             "name": name,
@@ -602,6 +611,10 @@ class GithubController:
         else:
             logger.debug(f"Did not find check run in mapping so creating it. Name: {name}")
             self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
+        if conclusion:
+            self._append_output(
+                word_characters_only(name.replace("SQLMesh - ", "").lower()), conclusion.value
+            )
 
     def _update_check_handler(
         self,
@@ -767,10 +780,12 @@ class GithubController:
                     table_header = h("thead", [h("tr", row) for row in header_rows])
                     table_body = h("tbody", [h("tr", row) for row in body_rows])
                     summary = str(h("table", [table_header, table_body]))
-                self.update_sqlmesh_comment_info(
+                updated_comment, _ = self.update_sqlmesh_comment_info(
                     value=f"- {check_title}",
                     dedup_regex=rf"- {check_title_static}.*",
                 )
+                if updated_comment:
+                    self._append_output("created_pr_environment", "true")
             else:
                 if isinstance(exception, NoChangesPlanError):
                     skip_reason = "No changes were detected compared to the prod environment."
@@ -801,6 +816,7 @@ class GithubController:
                 summary = conclusion_to_summary.get(
                     conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
                 )
+            self._append_output("pr_environment_name", self.pr_environment_name)
             return conclusion, check_title, summary
 
         self._update_check_handler(
