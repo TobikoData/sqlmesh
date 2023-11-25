@@ -1,4 +1,4 @@
-FROM apache/spark-py:latest AS spark
+FROM apache/spark-py:v3.4.0 AS spark
 
 FROM apache/airflow:$AIRFLOW_VERSION
 
@@ -22,8 +22,9 @@ RUN chown -R airflow /opt/spark
 ENV SPARK_HOME="/opt/spark"
 ENV PATH="$PATH:$SPARK_HOME/bin"
 
-# Install Postgres driver for Spark
-RUN curl https://jdbc.postgresql.org/download/postgresql-42.5.0.jar -o /opt/spark/jars/postgresql-42.5.0.jar
+# Install Postgres driver and Iceberg for Spark
+RUN curl https://jdbc.postgresql.org/download/postgresql-42.5.0.jar -o /opt/spark/jars/postgresql-42.5.0.jar && \
+    curl -L https://search.maven.org/remotecontent?filepath=org/apache/iceberg/iceberg-spark-runtime-3.4_2.12/1.4.2/iceberg-spark-runtime-3.4_2.12-1.4.2.jar -o /opt/spark/jars/iceberg-spark-runtime-3.4_2.12-1.4.2.jar
 
 # Install Hadoop
 RUN curl https://dlcdn.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz -o hadoop-3.3.4.tar.gz && \
