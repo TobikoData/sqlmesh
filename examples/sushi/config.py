@@ -54,7 +54,7 @@ airflow_config = Config(  # type: ignore
             },
         )
     ),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb", storage_format="iceberg"),
 )
 
 
@@ -62,7 +62,7 @@ airflow_config = Config(  # type: ignore
 airflow_config_docker = Config(  # type: ignore
     default_scheduler=AirflowSchedulerConfig(airflow_url="http://airflow-webserver:8080/"),
     gateways=GatewayConfig(connection=SparkConnectionConfig()),
-    model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    model_defaults=ModelDefaultsConfig(dialect="duckdb", storage_format="iceberg"),
 )
 
 # A DuckDB config with a physical schema map.
