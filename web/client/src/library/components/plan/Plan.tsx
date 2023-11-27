@@ -40,12 +40,16 @@ function Plan({
   const planPayload = usePlanPayload({ environment, isInitialPlanRun })
   const applyPayload = useApplyPayload({ isInitialPlanRun })
 
-  const { refetch: planRun, cancel: cancelRequestPlanRun } = useApiPlanRun(
-    environment.name,
-    planPayload,
-  )
-  const { refetch: planApply, cancel: cancelRequestPlanApply } =
-    useApiPlanApply(environment.name, applyPayload)
+  const {
+    refetch: planRun,
+    isFetching: isFetchingPlan,
+    cancel: cancelRequestPlanRun,
+  } = useApiPlanRun(environment.name, planPayload)
+  const {
+    refetch: planApply,
+    isFetching: isFetchingPlanApply,
+    cancel: cancelRequestPlanApply,
+  } = useApiPlanApply(environment.name, applyPayload)
   const { refetch: cancelPlan } = useApiCancelPlan()
 
   const [planAction, setPlanAction] = useState<PlanAction>(EnumPlanAction.Run)
@@ -58,6 +62,10 @@ function Plan({
           isFalse(planOverviewTracker.isBackfillUpdate)))
     ) {
       setPlanAction(EnumPlanAction.Done)
+    } else if (isFetchingPlan) {
+      setPlanAction(EnumPlanAction.Running)
+    } else if (isFetchingPlanApply) {
+      setPlanAction(EnumPlanAction.Applying)
     } else if (isRunningPlan && planApplyTracker.isRunning) {
       setPlanAction(EnumPlanAction.Applying)
     } else if (isRunningPlan && planOverviewTracker.isRunning) {
@@ -77,7 +85,13 @@ function Plan({
     } else {
       setPlanAction(EnumPlanAction.Run)
     }
-  }, [planOverviewTracker, planApplyTracker, isRunningPlan])
+  }, [
+    planOverviewTracker,
+    planApplyTracker,
+    isRunningPlan,
+    isFetchingPlan,
+    isFetchingPlanApply,
+  ])
 
   function cleanUp(): void {
     dispatch([

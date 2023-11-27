@@ -127,8 +127,11 @@ function getMarkDecorations(
 
     visisted.add(key)
 
-    const regex = new RegExp(name, 'ig')
-    const regex_normalized = new RegExp(alternativeNameFormat(name), 'ig')
+    const regex = new RegExp(`\\b${name}\\b`, 'ig')
+    const regex_normalized = new RegExp(
+      `\\b${alternativeNameFormat(name)}\\b`,
+      'ig',
+    )
     let found
 
     while (isNotNil((found = regex_normalized.exec(doc) ?? regex.exec(doc)))) {
