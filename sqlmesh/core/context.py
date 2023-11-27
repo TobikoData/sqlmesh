@@ -484,7 +484,7 @@ class Context(BaseContext):
             )
         else:
             self.notification_target_manager.notify(
-                NotificationEvent.RUN_FAILURE, environment=environment
+                NotificationEvent.RUN_FAILURE, "See console logs for details."
             )
 
         return success
