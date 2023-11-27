@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 import duckdb
+import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp, maybe_parse
@@ -18,7 +19,7 @@ from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.core.snapshot import Node, Snapshot
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import TimeLike, to_date, to_ds
+from sqlmesh.utils.date import TimeLike, to_date
 
 pytest_plugins = ["tests.common_fixtures"]
 
@@ -99,13 +100,13 @@ class SushiDataValidator:
         if model_name == "sushi.customer_revenue_lifetime":
             env_name = f"__{env_name}" if env_name else ""
             full_table_path = f"sushi{env_name}.customer_revenue_lifetime"
-            query = f"SELECT ds, count(*) AS the_count FROM {full_table_path} group by 1 order by 2 desc, 1 desc"
+            query = f"SELECT date, count(*) AS the_count FROM {full_table_path} group by 1 order by 2 desc, 1 desc"
             results = self.engine_adapter.fetchdf(query).to_dict()
             start_date, end_date = to_date(start), to_date(end)
             num_days_diff = (end_date - start_date).days + 1
-            assert len(results["ds"]) == num_days_diff
-            assert list(results["ds"].values()) == [
-                to_ds(end_date - datetime.timedelta(days=x)) for x in range(num_days_diff)
+            assert len(results["date"]) == num_days_diff
+            assert list(results["date"].values()) == [
+                pd.to_datetime(end_date - datetime.timedelta(days=x)) for x in range(num_days_diff)
             ]
             return results
         else:

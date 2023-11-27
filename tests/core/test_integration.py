@@ -34,14 +34,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableInfo,
 )
-from sqlmesh.utils.date import (
-    TimeLike,
-    to_date,
-    to_datetime,
-    to_ds,
-    to_timestamp,
-    to_ts,
-)
+from sqlmesh.utils.date import TimeLike, to_date, to_datetime, to_timestamp, to_ts
 from tests.conftest import DuckDBMetadata, SushiDataValidator, init_and_plan_context
 
 
@@ -153,9 +146,9 @@ def test_forward_only_plan_with_effective_date(mocker: MockerFixture):
     context.apply(plan)
 
     dev_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi__dev.waiter_revenue_by_day ORDER BY date"
     )
-    assert dev_df["ds"].tolist() == ["2023-01-06", "2023-01-07"]
+    assert dev_df["date"].tolist() == [pd.to_datetime("2023-01-06"), pd.to_datetime("2023-01-07")]
 
     prod_plan = context.plan(no_prompts=True, skip_tests=True)
     # Make sure that the previously set effective_from is respected
@@ -184,9 +177,11 @@ def test_forward_only_plan_with_effective_date(mocker: MockerFixture):
     context.apply(prod_plan)
 
     prod_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY date"
     )
-    assert prod_df["ds"].tolist() == ["2023-01-04", "2023-01-05", "2023-01-06", "2023-01-07"]
+    assert prod_df["date"].tolist() == [
+        pd.to_datetime(x) for x in ["2023-01-04", "2023-01-05", "2023-01-06", "2023-01-07"]
+    ]
 
 
 @freeze_time("2023-01-08 15:00:00")
@@ -221,9 +216,9 @@ def test_forward_only_model_regular_plan(mocker: MockerFixture):
     context.apply(plan)
 
     dev_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi__dev.waiter_revenue_by_day ORDER BY date"
     )
-    assert not dev_df["ds"].tolist()
+    assert not dev_df["date"].tolist()
 
     # Run a restatement plan to preview changes
     plan = context.plan("dev", no_prompts=True, skip_tests=True, restate_models=[model_name])
@@ -265,9 +260,9 @@ def test_forward_only_model_regular_plan(mocker: MockerFixture):
     context.apply(plan)
 
     dev_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi__dev.waiter_revenue_by_day ORDER BY date"
     )
-    assert dev_df["ds"].tolist() == ["2023-01-07"]
+    assert dev_df["date"].tolist() == [pd.to_datetime("2023-01-07")]
 
     # Promote changes to prod
     prod_plan = context.plan(no_prompts=True, skip_tests=True)
@@ -277,9 +272,9 @@ def test_forward_only_model_regular_plan(mocker: MockerFixture):
 
     # The change was applied in a forward-only manner so no values in the new column should be populated
     prod_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY date"
     )
-    assert not prod_df["ds"].tolist()
+    assert not prod_df["date"].tolist()
 
 
 @freeze_time("2023-01-08 15:00:00")
@@ -384,16 +379,19 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
     context.apply(plan)
 
     dev_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi__dev.waiter_revenue_by_day ORDER BY date"
     )
-    assert dev_df["ds"].tolist() == [
-        "2023-01-01",
-        "2023-01-02",
-        "2023-01-03",
-        "2023-01-04",
-        "2023-01-05",
-        "2023-01-06",
-        "2023-01-07",
+    assert dev_df["date"].tolist() == [
+        pd.to_datetime(x)
+        for x in [
+            "2023-01-01",
+            "2023-01-02",
+            "2023-01-03",
+            "2023-01-04",
+            "2023-01-05",
+            "2023-01-06",
+            "2023-01-07",
+        ]
     ]
 
     # Promote changes to prod
@@ -402,16 +400,19 @@ def test_plan_set_choice_is_reflected_in_missing_intervals(mocker: MockerFixture
 
     context.apply(prod_plan)
     prod_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY date"
     )
-    assert prod_df["ds"].tolist() == [
-        "2023-01-01",
-        "2023-01-02",
-        "2023-01-03",
-        "2023-01-04",
-        "2023-01-05",
-        "2023-01-06",
-        "2023-01-07",
+    assert prod_df["date"].tolist() == [
+        pd.to_datetime(x)
+        for x in [
+            "2023-01-01",
+            "2023-01-02",
+            "2023-01-03",
+            "2023-01-04",
+            "2023-01-05",
+            "2023-01-06",
+            "2023-01-07",
+        ]
     ]
 
 
@@ -435,7 +436,7 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
         plan.context_diff.snapshots["sushi.top_waiters"].change_category
         == SnapshotChangeCategory.FORWARD_ONLY
     )
-    assert plan.start == to_date("2023-01-07")
+    assert plan.start == pd.to_datetime("2023-01-07")
     assert plan.missing_intervals == [
         SnapshotIntervals(
             snapshot_name="sushi.waiter_revenue_by_day",
@@ -451,9 +452,9 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
     context.apply(plan)
 
     dev_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi__dev.waiter_revenue_by_day ORDER BY date"
     )
-    assert dev_df["ds"].tolist() == ["2023-01-07"]
+    assert dev_df["date"].tolist() == [pd.to_datetime("2023-01-07")]
 
     # FIXME: Due to freezgun freezing the time, all inteval records have the same creation timestamp.
     # As a result removal records are always being applied after any addition records. Running the plan repeatadly
@@ -520,7 +521,7 @@ def test_non_breaking_change_after_forward_only_in_dev(mocker: MockerFixture):
     context.apply(plan)
 
     prod_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi.waiter_revenue_by_day WHERE one IS NOT NULL ORDER BY date"
     )
     assert prod_df.empty
 
@@ -761,7 +762,7 @@ def test_select_models_for_backfill(mocker: MockerFixture):
     context.apply(plan)
 
     dev_df = context.engine_adapter.fetchdf(
-        "SELECT DISTINCT ds FROM sushi__dev.waiter_revenue_by_day ORDER BY ds"
+        "SELECT DISTINCT date FROM sushi__dev.waiter_revenue_by_day ORDER BY date"
     )
     assert len(dev_df) == 7
 
@@ -981,9 +982,7 @@ def validate_model_kind_change(
         "assert_item_price_above_zero",
     ]
     if kind_name == ModelKindName.INCREMENTAL_BY_TIME_RANGE:
-        kind: ModelKind = IncrementalByTimeRangeKind(
-            time_column=TimeColumn(column="ds", format="%Y-%m-%d")
-        )
+        kind: ModelKind = IncrementalByTimeRangeKind(time_column=TimeColumn(column="date"))
     elif kind_name == ModelKindName.INCREMENTAL_BY_UNIQUE_KEY:
         kind = IncrementalByUniqueKeyKind(unique_key="id")
     else:
@@ -1396,10 +1395,14 @@ def test_incremental_time_self_reference(
         # The start date must be aligned by the interval unit.
         start_date += timedelta(days=1)
 
-    df = sushi_context.engine_adapter.fetchdf("SELECT MIN(ds) FROM sushi.customer_revenue_lifetime")
-    assert df.iloc[0, 0] == to_ds(start_date)
-    df = sushi_context.engine_adapter.fetchdf("SELECT MAX(ds) FROM sushi.customer_revenue_lifetime")
-    assert df.iloc[0, 0] == to_ds(end_date)
+    df = sushi_context.engine_adapter.fetchdf(
+        "SELECT MIN(date) FROM sushi.customer_revenue_lifetime"
+    )
+    assert df.iloc[0, 0] == pd.to_datetime(start_date)
+    df = sushi_context.engine_adapter.fetchdf(
+        "SELECT MAX(date) FROM sushi.customer_revenue_lifetime"
+    )
+    assert df.iloc[0, 0] == pd.to_datetime(end_date)
     results = sushi_data_validator.validate("sushi.customer_revenue_lifetime", start_date, end_date)
     plan = sushi_context.plan(
         restate_models=["sushi.customer_revenue_lifetime", "sushi.customer_revenue_by_day"],

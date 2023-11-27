@@ -134,10 +134,12 @@ class TestContext:
             )
         elif self.test_type == "pyspark":
             return self.engine_adapter.spark.createDataFrame(data)  # type: ignore
-        return self._format_df(data, to_datetime=self.dialect != "trino")
+        return self._format_df(
+            data, to_datetime=self.dialect != "trino", include_tz=self.dialect == "bigquery"
+        )
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        return self._format_df(data, include_tz=self.dialect == "databricks")
+        return self._format_df(data, include_tz=self.dialect in ("databricks", "bigquery"))
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
         return exp.to_table(
