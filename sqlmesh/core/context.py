@@ -459,7 +459,7 @@ class Context(BaseContext):
             True if the run was successful, False otherwise.
         """
         self.notification_target_manager.notify(
-            NotificationEvent.RUN_START, environment=environment
+            NotificationEvent.RUN_START, environment=environment or c.PROD
         )
         success = False
         try:
