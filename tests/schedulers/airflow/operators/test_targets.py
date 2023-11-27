@@ -64,9 +64,9 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
 
     evaluator_evaluate_mock.assert_called_once_with(
         snapshot,
-        interval_ds,
-        interval_ds,
-        logical_ds,
+        start=interval_ds,
+        end=interval_ds,
+        execution_time=logical_ds,
         snapshots=parent_snapshots,
         deployability_index=deployability_index,
     )
@@ -121,9 +121,9 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
 
     evaluator_evaluate_mock.assert_called_once_with(
         snapshot,
-        interval_ds,
-        interval_ds,
-        logical_ds,
+        start=interval_ds,
+        end=interval_ds,
+        execution_time=logical_ds,
         snapshots={snapshot.name: snapshot},
         deployability_index=deployability_index,
     )

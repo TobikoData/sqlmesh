@@ -46,6 +46,7 @@ from sqlmesh.core.snapshot import (
     SnapshotInfoLike,
     SnapshotTableCleanupTask,
 )
+from sqlmesh.utils import random_id
 from sqlmesh.utils.concurrency import concurrent_apply_to_snapshots
 from sqlmesh.utils.date import TimeLike, now
 from sqlmesh.utils.errors import AuditError, ConfigError, SQLMeshError
@@ -87,15 +88,15 @@ class SnapshotEvaluator:
     def evaluate(
         self,
         snapshot: Snapshot,
+        *,
         start: TimeLike,
         end: TimeLike,
         execution_time: TimeLike,
         snapshots: t.Dict[str, Snapshot],
-        limit: t.Optional[int] = None,
         deployability_index: t.Optional[DeployabilityIndex] = None,
         **kwargs: t.Any,
-    ) -> t.Optional[DF]:
-        """Evaluate a snapshot, creating its schema and table if it doesn't exist and then inserting it.
+    ) -> t.Optional[str]:
+        """Renders the snapshot's model, executes it and stores the result in the snapshot's physical table.
 
         Args:
             snapshot: Snapshot to evaluate.
@@ -103,115 +104,69 @@ class SnapshotEvaluator:
             end: The end datetime to render.
             execution_time: The date/time time reference to use for execution time.
             snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
-            limit: If limit is > 0, the query will not be persisted but evaluated and returned as a dataframe.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
             kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The WAP ID of this evaluation if supported, None otherwise.
         """
-        if not snapshot.is_model:
-            return None
-
-        model = snapshot.model
-
-        logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
-
-        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
-        table_name = (
-            ""
-            if limit
-            else snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
-        )
-
-        evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
-
-        def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
-            if index > 0:
-                evaluation_strategy.append(
-                    snapshot,
-                    table_name,
-                    query_or_df,
-                    snapshots,
-                    deployability_index,
-                    start=start,
-                    end=end,
-                    execution_time=execution_time,
-                )
-            else:
-                logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
-                evaluation_strategy.insert(
-                    snapshot,
-                    table_name,
-                    query_or_df,
-                    snapshots,
-                    deployability_index,
-                    start=start,
-                    end=end,
-                    execution_time=execution_time,
-                )
-
-        from sqlmesh.core.context import ExecutionContext
-
-        common_render_kwargs = dict(
-            start=start,
-            end=end,
-            execution_time=execution_time,
-            snapshot=snapshot,
-            runtime_stage=RuntimeStage.EVALUATING,
+        result = self._evaluate_snapshot(
+            snapshot,
+            start,
+            end,
+            execution_time,
+            snapshots,
+            deployability_index=deployability_index,
             **kwargs,
         )
-
-        render_statements_kwargs = dict(
-            engine_adapter=self.adapter,
-            snapshots=snapshots,
-            deployability_index=deployability_index,
-            **common_render_kwargs,
+        if result is None or isinstance(result, str):
+            return result
+        raise SQLMeshError(
+            f"Unexpected result {result} when evaluating snapshot {snapshot.snapshot_id}."
         )
 
-        with self.adapter.transaction(), self.adapter.session():
-            if not limit:
-                self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
+    def evaluate_and_fetch(
+        self,
+        snapshot: Snapshot,
+        *,
+        start: TimeLike,
+        end: TimeLike,
+        execution_time: TimeLike,
+        snapshots: t.Dict[str, Snapshot],
+        limit: int,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        **kwargs: t.Any,
+    ) -> DF:
+        """Renders the snapshot's model, executes it and returns a dataframe with the result.
 
-            queries_or_dfs = model.render(
-                context=ExecutionContext(self.adapter, snapshots, deployability_index),
-                **common_render_kwargs,
+        Args:
+            snapshot: Snapshot to evaluate.
+            start: The start datetime to render.
+            end: The end datetime to render.
+            execution_time: The date/time time reference to use for execution time.
+            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
+            limit: The maximum number of rows to fetch.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            kwargs: Additional kwargs to pass to the renderer.
+
+        Returns:
+            The result of the evaluation as a dataframe.
+        """
+        result = self._evaluate_snapshot(
+            snapshot,
+            start,
+            end,
+            execution_time,
+            snapshots,
+            limit=limit,
+            deployability_index=deployability_index,
+            **kwargs,
+        )
+        if result is None or isinstance(result, str):
+            raise SQLMeshError(
+                f"Unexpected result {result} when evaluating snapshot {snapshot.snapshot_id}."
             )
-
-            if limit and limit > 0:
-                query_or_df = next(queries_or_dfs)
-                if isinstance(query_or_df, exp.Select):
-                    existing_limit = query_or_df.args.get("limit")
-                    if existing_limit:
-                        limit = min(
-                            limit,
-                            execute(exp.select(existing_limit.expression)).rows[0][0],
-                        )
-                return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
-            # DataFrames, unlike SQL expressions, can provide partial results by yielding dataframes. As a result,
-            # if the engine supports INSERT OVERWRITE or REPLACE WHERE and the snapshot is incremental by time range, we risk
-            # having a partial result since each dataframe write can re-truncate partitions. To avoid this, we
-            # union all the dataframes together before writing. For pandas this could result in OOM and a potential
-            # workaround for that would be to serialize pandas to disk and then read it back with Spark.
-            # Note: We assume that if multiple things are yielded from `queries_or_dfs` that they are dataframes
-            # and not SQL expressions.
-            elif (
-                self.adapter.INSERT_OVERWRITE_STRATEGY
-                in (InsertOverwriteStrategy.INSERT_OVERWRITE, InsertOverwriteStrategy.REPLACE_WHERE)
-                and snapshot.is_incremental_by_time_range
-            ):
-                query_or_df = reduce(
-                    lambda a, b: pd.concat([a, b], ignore_index=True)  # type: ignore
-                    if self.adapter.is_pandas_df(a)
-                    else a.union_all(b),  # type: ignore
-                    queries_or_dfs,
-                )
-                apply(query_or_df, index=0)
-            else:
-                for index, query_or_df in enumerate(queries_or_dfs):
-                    apply(query_or_df, index)
-
-            if not limit:
-                self.adapter.execute(model.render_post_statements(**render_statements_kwargs))
-
-            return None
+        return result
 
     def promote(
         self,
@@ -329,14 +284,15 @@ class SnapshotEvaluator:
 
     def audit(
         self,
-        *,
         snapshot: Snapshot,
+        *,
         snapshots: t.Dict[str, Snapshot],
         start: t.Optional[TimeLike] = None,
         end: t.Optional[TimeLike] = None,
         execution_time: t.Optional[TimeLike] = None,
         raise_exception: bool = True,
         deployability_index: t.Optional[DeployabilityIndex] = None,
+        wap_id: t.Optional[str] = None,
         **kwargs: t.Any,
     ) -> t.List[AuditResult]:
         """Execute a snapshot's node's audit queries.
@@ -350,6 +306,7 @@ class SnapshotEvaluator:
             raise_exception: Whether to raise an exception if the audit fails. Blocking rules determine if an
                 AuditError is thrown or if we just warn with logger
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            wap_id: The WAP ID if applicable, None otherwise.
             kwargs: Additional kwargs to pass to the renderer.
         """
         deployability_index = deployability_index or DeployabilityIndex.all_deployable()
@@ -377,9 +334,14 @@ class SnapshotEvaluator:
                     execution_time=execution_time,
                     raise_exception=raise_exception,
                     deployability_index=deployability_index,
+                    wap_id=wap_id,
                     **kwargs,
                 )
             )
+
+        if wap_id is not None:
+            self._wap_publish_snapshot(snapshot, wap_id, deployability_index)
+
         return results
 
     @contextmanager
@@ -403,6 +365,143 @@ class SnapshotEvaluator:
             self.adapter.close()
         except Exception:
             logger.exception("Failed to close Snapshot Evaluator")
+
+    def _evaluate_snapshot(
+        self,
+        snapshot: Snapshot,
+        start: TimeLike,
+        end: TimeLike,
+        execution_time: TimeLike,
+        snapshots: t.Dict[str, Snapshot],
+        limit: t.Optional[int] = None,
+        deployability_index: t.Optional[DeployabilityIndex] = None,
+        **kwargs: t.Any,
+    ) -> DF | str | None:
+        """Renders the snapshot's model and executes it. The return value depends on whether the limit was specified.
+
+        Args:
+            snapshot: Snapshot to evaluate.
+            start: The start datetime to render.
+            end: The end datetime to render.
+            execution_time: The date/time time reference to use for execution time.
+            snapshots: All upstream snapshots (by name) to use for expansion and mapping of physical locations.
+            limit: If limit is not None, the query will not be persisted but evaluated and returned as a dataframe.
+            deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            kwargs: Additional kwargs to pass to the renderer.
+        """
+        if not snapshot.is_model:
+            return None
+
+        model = snapshot.model
+
+        logger.info("Evaluating snapshot %s", snapshot.snapshot_id)
+
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
+        table_name = (
+            ""
+            if limit is not None
+            else snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
+        )
+
+        evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
+
+        wap_id: t.Optional[str] = None
+        if table_name and self.adapter.wap_supported(table_name):
+            wap_id = random_id()
+            logger.info("Using WAP ID '%s' for snapshot %s", wap_id, snapshot.snapshot_id)
+
+        def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
+            nonlocal wap_id
+            if index > 0:
+                evaluation_strategy.append(
+                    snapshot,
+                    table_name,
+                    query_or_df,
+                    snapshots,
+                    deployability_index,
+                    wap_id,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                )
+            else:
+                logger.info("Inserting batch (%s, %s) into %s'", start, end, table_name)
+                evaluation_strategy.insert(
+                    snapshot,
+                    table_name,
+                    query_or_df,
+                    snapshots,
+                    deployability_index,
+                    wap_id,
+                    start=start,
+                    end=end,
+                    execution_time=execution_time,
+                )
+
+        from sqlmesh.core.context import ExecutionContext
+
+        common_render_kwargs = dict(
+            start=start,
+            end=end,
+            execution_time=execution_time,
+            snapshot=snapshot,
+            runtime_stage=RuntimeStage.EVALUATING,
+            **kwargs,
+        )
+
+        render_statements_kwargs = dict(
+            engine_adapter=self.adapter,
+            snapshots=snapshots,
+            deployability_index=deployability_index,
+            **common_render_kwargs,
+        )
+
+        with self.adapter.transaction(), self.adapter.session():
+            if limit is None:
+                self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
+
+            queries_or_dfs = model.render(
+                context=ExecutionContext(self.adapter, snapshots, deployability_index),
+                **common_render_kwargs,
+            )
+
+            if limit is not None:
+                query_or_df = next(queries_or_dfs)
+                if isinstance(query_or_df, exp.Select):
+                    existing_limit = query_or_df.args.get("limit")
+                    if existing_limit:
+                        limit = min(
+                            limit,
+                            execute(exp.select(existing_limit.expression)).rows[0][0],
+                        )
+                return query_or_df.head(limit) if hasattr(query_or_df, "head") else self.adapter._fetch_native_df(query_or_df.limit(limit))  # type: ignore
+            # DataFrames, unlike SQL expressions, can provide partial results by yielding dataframes. As a result,
+            # if the engine supports INSERT OVERWRITE or REPLACE WHERE and the snapshot is incremental by time range, we risk
+            # having a partial result since each dataframe write can re-truncate partitions. To avoid this, we
+            # union all the dataframes together before writing. For pandas this could result in OOM and a potential
+            # workaround for that would be to serialize pandas to disk and then read it back with Spark.
+            # Note: We assume that if multiple things are yielded from `queries_or_dfs` that they are dataframes
+            # and not SQL expressions.
+            elif (
+                self.adapter.INSERT_OVERWRITE_STRATEGY
+                in (InsertOverwriteStrategy.INSERT_OVERWRITE, InsertOverwriteStrategy.REPLACE_WHERE)
+                and snapshot.is_incremental_by_time_range
+            ):
+                query_or_df = reduce(
+                    lambda a, b: pd.concat([a, b], ignore_index=True)  # type: ignore
+                    if self.adapter.is_pandas_df(a)
+                    else a.union_all(b),  # type: ignore
+                    queries_or_dfs,
+                )
+                apply(query_or_df, index=0)
+            else:
+                for index, query_or_df in enumerate(queries_or_dfs):
+                    apply(query_or_df, index)
+
+            if limit is None:
+                self.adapter.execute(model.render_post_statements(**render_statements_kwargs))
+
+            return wap_id
 
     def _create_snapshot(
         self,
@@ -540,6 +639,17 @@ class SnapshotEvaluator:
                 )
             evaluation_strategy.delete(table_name)
 
+    def _wap_publish_snapshot(
+        self,
+        snapshot: Snapshot,
+        wap_id: str,
+        deployability_index: t.Optional[DeployabilityIndex],
+    ) -> None:
+        if deployability_index is None:
+            deployability_index = DeployabilityIndex.all_deployable()
+        table_name = snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
+        self.adapter.wap_publish(table_name, wap_id)
+
     def _audit(
         self,
         audit: Audit,
@@ -551,6 +661,7 @@ class SnapshotEvaluator:
         execution_time: t.Optional[TimeLike],
         raise_exception: bool,
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> AuditResult:
         if audit.skip:
@@ -638,6 +749,7 @@ class EvaluationStrategy(abc.ABC):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         """Inserts the given query or a DataFrame into the target table or replaces a view.
@@ -648,6 +760,7 @@ class EvaluationStrategy(abc.ABC):
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            wap_id: The WAP ID if applicable, None otherwise.
         """
 
     @abc.abstractmethod
@@ -658,6 +771,7 @@ class EvaluationStrategy(abc.ABC):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         """Appends the given query or a DataFrame to the existing table.
@@ -668,6 +782,7 @@ class EvaluationStrategy(abc.ABC):
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
+            wap_id: The WAP ID if applicable, None otherwise.
         """
 
     @abc.abstractmethod
@@ -753,6 +868,7 @@ class SymbolicStrategy(EvaluationStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -764,6 +880,7 @@ class SymbolicStrategy(EvaluationStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -852,6 +969,7 @@ class MaterializableStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -917,6 +1035,7 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -939,6 +1058,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -957,6 +1077,7 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -977,6 +1098,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -985,7 +1107,15 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
                 name, query_or_df, model.partitioned_by, columns_to_types=model.columns_to_types
             )
         else:
-            self.append(snapshot, name, query_or_df, snapshots, deployability_index, **kwargs)
+            self.append(
+                snapshot,
+                name,
+                query_or_df,
+                snapshots,
+                deployability_index,
+                wap_id,
+                **kwargs,
+            )
 
 
 class FullRefreshStrategy(MaterializableStrategy):
@@ -996,6 +1126,7 @@ class FullRefreshStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1019,6 +1150,7 @@ class SCDType2Strategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1041,6 +1173,7 @@ class SCDType2Strategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1065,6 +1198,7 @@ class ViewStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1106,6 +1240,7 @@ class ViewStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
+        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         raise ConfigError(f"Cannot append to a view '{table_name}'.")

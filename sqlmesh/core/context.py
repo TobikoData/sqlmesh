@@ -679,11 +679,11 @@ class Context(BaseContext):
         """
         snapshot = self.get_snapshot(model_or_snapshot, raise_if_missing=True)
 
-        df = self.snapshot_evaluator.evaluate(
+        df = self.snapshot_evaluator.evaluate_and_fetch(
             snapshot,
-            start,
-            end,
-            execution_time,
+            start=start,
+            end=end,
+            execution_time=execution_time,
             snapshots=self.snapshots,
             limit=limit or c.DEFAULT_MAX_LIMIT,
         )
