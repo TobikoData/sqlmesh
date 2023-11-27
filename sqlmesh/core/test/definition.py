@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-import pathlib
 import typing as t
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils import yaml
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 Row = t.Dict[str, t.Any]
 
@@ -23,17 +25,17 @@ class TestError(SQLMeshError):
 
 class ModelTest(unittest.TestCase):
     __test__ = False
-    view_names: list[str] = []
+    view_names: t.List[str] = []
 
     def __init__(
         self,
-        body: dict[str, t.Any],
+        body: t.Dict[str, t.Any],
         test_name: str,
         model: Model,
-        models: dict[str, Model],
+        models: t.Dict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
-        path: pathlib.Path | None,
+        path: Path | None,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
 
@@ -66,7 +68,7 @@ class ModelTest(unittest.TestCase):
         """Load all input tables"""
         for table_name, rows in self.body.get("inputs", {}).items():
             df = pd.DataFrame.from_records(rows)  # noqa
-            columns_to_types: dict[str, exp.DataType] = {}
+            columns_to_types: t.Dict[str, exp.DataType] = {}
             if table_name in self.models:
                 columns_to_types = self.models[table_name].columns_to_types or {}
 
@@ -86,9 +88,9 @@ class ModelTest(unittest.TestCase):
             self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
 
     def tearDown(self) -> None:
-        """Drop all input tables"""
+        """Drop all fixture tables."""
         for table in self.body.get("inputs", {}):
-            self.engine_adapter.drop_view(table)
+            self.engine_adapter.drop_view(_test_fixture_name(table))
 
     def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
         """Compare two DataFrames"""
@@ -119,18 +121,24 @@ class ModelTest(unittest.TestCase):
     def runTest(self) -> None:
         raise NotImplementedError
 
-    def path_relative_to(self, other: pathlib.Path) -> pathlib.Path | None:
+    def path_relative_to(self, other: Path) -> Path | None:
         """Compute a version of this test's path relative to the `other` path"""
         return self.path.relative_to(other) if self.path else None
 
+    def _add_missing_columns(self, df: pd.DataFrame, columns: t.Iterable) -> None:
+        """Add missing columns to a given dataframe with None values."""
+        for index, column in enumerate(columns):
+            if column not in df:
+                df.insert(index, column, None)  # type: ignore
+
     @staticmethod
     def create_test(
-        body: dict[str, t.Any],
+        body: t.Dict[str, t.Any],
         test_name: str,
-        models: dict[str, Model],
+        models: t.Dict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
-        path: pathlib.Path | None,
+        path: Path | None,
     ) -> ModelTest:
         """Create a SqlModelTest or a PythonModelTest.
 
@@ -160,19 +168,67 @@ class ModelTest(unittest.TestCase):
 
         raise TestError(f"Model '{model_name}' is an unsupported model type for testing at {path}")
 
+    @staticmethod
+    def generate_test(
+        model: Model,
+        input_queries: t.Dict[str, str],
+        models: t.Dict[str, Model],
+        engine_adapter: EngineAdapter,
+    ) -> None:
+        """Automatically create a new unit test for a given model.
+
+        Args:
+            model: The model to test.
+            input_queries: Mapping of model names to queries. Each model included in this mapping
+                will be populated in the test based on the results of the corresponding query.
+            models: The context's models.
+            engine_adapter: The target engine adapter.
+        """
+        inputs: t.Dict[str, t.Any] = {}
+        for dep, query in input_queries.items():
+            if dep not in models:
+                raise ConfigError(f"Cannot find model for '{dep}'.")
+
+            inputs[dep] = engine_adapter.fetchdf(query).to_dict(orient="records")
+
+        outputs: t.Dict[str, t.Any] = {"query": {}}
+        test_name = f"test_{model.view_name}"
+        test_body = {"model": model.name, "inputs": inputs, "outputs": outputs}
+
+        test = ModelTest.create_test(
+            body=test_body,
+            test_name=test_name,
+            models=models,
+            engine_adapter=engine_adapter,
+            dialect=model.dialect,
+            path=None,
+        )
+
+        test.setUp()
+
+        if isinstance(model, SqlModel):
+            mapping = {name: _test_fixture_name(name) for name in models.keys() | inputs.keys()}
+            model_query = model.render_query_or_raise(
+                engine_adapter=engine_adapter, table_mapping=mapping
+            )
+            output = t.cast(SqlModelTest, test).execute(model_query)
+        else:
+            output = t.cast(PythonModelTest, test).evaluate()
+
+        outputs["query"] = output.to_dict(orient="records")
+
+        test.tearDown()
+
+        with open(Path(c.TESTS) / f"{test_name}.yaml", "w", encoding="utf-8") as file:
+            yaml.dump({test_name: test_body}, file)
+
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path})"
-
-    def _add_missing_columns(self, df: pd.DataFrame, columns: t.Iterable) -> None:
-        """Add missing columns to a given dataframe with None values."""
-        for index, column in enumerate(columns):
-            if column not in df:
-                df.insert(index, column, None)  # type: ignore
 
     def _normalize_test(self, dialect: str | None) -> None:
         """Normalizes all identifiers in this test according to the given dialect."""
 
-        def _normalize_rows(rows: list[Row] | dict[str, list[Row]]) -> t.List[Row]:
+        def _normalize_rows(rows: t.List[Row] | t.Dict[str, t.List[Row]]) -> t.List[Row]:
             if isinstance(rows, dict):
                 if "rows" not in rows:
                     _raise_error("Incomplete test, missing row data for table", self.path)
@@ -209,7 +265,7 @@ class ModelTest(unittest.TestCase):
 
 class SqlModelTest(ModelTest):
     def execute(self, query: exp.Expression) -> pd.DataFrame:
-        """Execute the query with the engine adapter and return a DataFrame"""
+        """Executes the query with the engine adapter and returns a DataFrame."""
         return self.engine_adapter.fetchdf(query)
 
     def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
@@ -253,13 +309,13 @@ class SqlModelTest(ModelTest):
 class PythonModelTest(ModelTest):
     def __init__(
         self,
-        body: dict[str, t.Any],
+        body: t.Dict[str, t.Any],
         test_name: str,
         model: PythonModel,
-        models: dict[str, Model],
+        models: t.Dict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
-        path: pathlib.Path | None,
+        path: Path | None,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
 
@@ -281,16 +337,17 @@ class PythonModelTest(ModelTest):
             models=models,
         )
 
+    def evaluate(self) -> pd.DataFrame:
+        """Evaluates the python model and returns a DataFrame."""
+        return t.cast(
+            pd.DataFrame,
+            next(self.model.render(context=self.context, **self.body.get("vars", {}))),
+        )
+
     def runTest(self) -> None:
         if "query" in self.body["outputs"]:
             expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
-            actual_df = next(
-                self.model.render(
-                    context=self.context,
-                    **self.body.get("vars", {}),
-                )
-            )
-            actual_df = t.cast(pd.DataFrame, actual_df)
+            actual_df = self.evaluate()
             actual_df.reset_index(drop=True, inplace=True)
             self.assert_equal(expected_df, actual_df)
 
@@ -299,7 +356,7 @@ def _test_fixture_name(name: str) -> str:
     return f"{name}__fixture"
 
 
-def _raise_error(msg: str, path: pathlib.Path | None) -> None:
+def _raise_error(msg: str, path: Path | None) -> None:
     if path:
         raise TestError(f"{msg} at {path}")
     raise TestError(msg)

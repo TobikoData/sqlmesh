@@ -94,7 +94,7 @@ from sqlmesh.core.state_sync import (
     cleanup_expired_views,
 )
 from sqlmesh.core.table_diff import TableDiff
-from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
+from sqlmesh.core.test import ModelTest, get_all_model_tests, run_model_tests, run_tests
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
 from sqlmesh.utils.dag import DAG
@@ -1041,6 +1041,22 @@ class Context(BaseContext):
             raise MissingDependencyError(
                 "Graphviz is pip-installed but the system install is missing. Instructions: https://graphviz.org/download/"
             ) from e
+
+    def create_test(self, model: str, input_queries: t.Dict[str, str]) -> None:
+        """Automatically create a new unit test for a given model.
+
+        Args:
+            model: The model to test.
+            input_queries: Mapping of model names to queries. Each model included in this mapping
+                will be populated in the test based on the results of the corresponding query.
+        """
+        # TODO: this should be prohibited if the DB hasn't been populated with model data yet
+        ModelTest.generate_test(
+            model=self.get_model(model, raise_if_missing=True),
+            input_queries=input_queries,
+            models=self._models,
+            engine_adapter=self._engine_adapter,
+        )
 
     def test(
         self,

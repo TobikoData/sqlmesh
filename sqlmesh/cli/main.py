@@ -360,6 +360,23 @@ def dag(ctx: click.Context, file: str) -> None:
         ctx.obj.console.log_success(f"Generated the dag to {rendered_dag_path}")
 
 
+@cli.command("create_test")
+@click.argument("model")
+@click.option(
+    "--query",
+    "-q",
+    "queries",
+    type=(str, str),
+    multiple=True,
+    help="Queries that will be used to generate data for the model's dependencies.",
+)
+@click.pass_obj
+@error_handler
+def create_test(obj: Context, model: str, queries: t.List[t.Tuple[str, str]]) -> None:
+    """Automatically create a new unit test for a given model."""
+    obj.create_test(model, input_queries=dict(queries))
+
+
 @cli.command("test")
 @opt.match_pattern
 @opt.verbose
