@@ -1055,7 +1055,7 @@ class Context(BaseContext):
         path: t.Optional[str] = None,
         name: t.Optional[str] = None,
     ) -> None:
-        """Automatically create a new unit test for a given model.
+        """Generate a unit test fixture for a given model.
 
         Args:
             model: The model to test.

@@ -405,7 +405,7 @@ def create_test(
     name: t.Optional[str] = None,
     path: t.Optional[str] = None,
 ) -> None:
-    """Automatically create a new unit test for a given model."""
+    """Generate a unit test fixture for a given model."""
     obj.create_test(model, input_queries=dict(queries), overwrite=overwrite, name=name, path=path)
 
 
