@@ -196,7 +196,10 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
   return (
     <RadioGroup
       className="flex flex-col mt-2"
-      value={change_categorization.get(change.model_name)?.category}
+      value={
+        change_categorization.get(change.model_name)?.category ??
+        change.change_category
+      }
       onChange={(category: Category) => {
         dispatch({
           type: EnumPlanActions.Category,
@@ -208,7 +211,7 @@ function ChangeCategories({ change }: { change: ChangeDirect }): JSX.Element {
       {categories.map(category => (
         <RadioGroup.Option
           key={category.name}
-          value={category}
+          value={category.value}
           className={() => clsx('relative flex rounded-md')}
         >
           {({ checked }) => (

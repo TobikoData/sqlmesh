@@ -29,7 +29,6 @@ import {
   type TestReportMessage,
   usePlan,
 } from './context'
-import { isModified } from './help'
 import PlanChangePreview from './PlanChangePreview'
 import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
 import Banner from '@components/banner/Banner'
@@ -429,17 +428,16 @@ function StageBackfill({
 
   const tasks: PlanTasks = useMemo(
     () =>
-      backfills?.models?.reduce((acc: PlanTasks, task) => {
-        const taskModelName = task.view_name
-        const taskInterval = task.interval as [string, string]
+      backfills?.models?.reduce((acc: PlanTasks, model) => {
+        const taskModelName = model.model_name ?? model.view_name
+        const taskInterval = model.interval as [string, string]
         const taskBackfill: PlanTaskStatus = {
           completed: 0,
-          total: task.batches,
+          total: model.batches,
           interval: taskInterval,
-          view_name: task.view_name,
+          view_name: model.view_name,
           ...backfill?.tasks?.[taskModelName],
         }
-
         const choices = categories[taskModelName]
         const shouldExclude = isNil(choices) ? false : choices.every(Boolean)
 
@@ -572,69 +570,59 @@ function PlanChanges(): JSX.Element {
       )}
       {isTrue(hasChanges) && isFalse(isRunning) && (
         <>
-          {(isArrayNotEmpty(added) || isArrayNotEmpty(removed)) && (
-            <div className="flex">
-              {isArrayNotEmpty(added) && (
-                <PlanChangePreview
-                  className="w-full my-2"
-                  headline="Added Models"
-                  type={EnumPlanChangeType.Add}
-                >
-                  <PlanChangePreview.Default
-                    type={EnumPlanChangeType.Add}
-                    changes={added}
-                  />
-                </PlanChangePreview>
-              )}
-              {isArrayNotEmpty(removed) && (
-                <PlanChangePreview
-                  className="w-full my-2"
-                  headline="Removed Models"
-                  type={EnumPlanChangeType.Remove}
-                >
-                  <PlanChangePreview.Default
-                    type={EnumPlanChangeType.Remove}
-                    changes={removed}
-                  />
-                </PlanChangePreview>
-              )}
-            </div>
+          {isArrayNotEmpty(added) && (
+            <PlanChangePreview
+              className="w-full my-2"
+              headline="Added Models"
+              type={EnumPlanChangeType.Add}
+            >
+              <PlanChangePreview.Default
+                type={EnumPlanChangeType.Add}
+                changes={added}
+              />
+            </PlanChangePreview>
           )}
-          {isModified(modified) && (
-            <>
-              {isArrayNotEmpty(modified?.direct) && (
-                <PlanChangePreview
-                  className="my-2 w-full"
-                  headline="Modified Directly"
-                  type={EnumPlanChangeType.Direct}
-                >
-                  <PlanChangePreview.Direct changes={modified.direct ?? []} />
-                </PlanChangePreview>
-              )}
-              {isArrayNotEmpty(modified.indirect) && (
-                <PlanChangePreview
-                  className="my-2 w-full"
-                  headline="Modified Indirectly"
-                  type={EnumPlanChangeType.Indirect}
-                >
-                  <PlanChangePreview.Indirect
-                    changes={modified.indirect ?? []}
-                  />
-                </PlanChangePreview>
-              )}
-              {isArrayNotEmpty(modified?.metadata) && (
-                <PlanChangePreview
-                  className="my-2 w-full"
-                  headline="Modified Metadata"
-                  type={EnumPlanChangeType.Default}
-                >
-                  <PlanChangePreview.Default
-                    type={EnumPlanChangeType.Default}
-                    changes={modified?.metadata ?? []}
-                  />
-                </PlanChangePreview>
-              )}
-            </>
+          {isArrayNotEmpty(removed) && (
+            <PlanChangePreview
+              className="w-full my-2"
+              headline="Removed Models"
+              type={EnumPlanChangeType.Remove}
+            >
+              <PlanChangePreview.Default
+                type={EnumPlanChangeType.Remove}
+                changes={removed}
+              />
+            </PlanChangePreview>
+          )}
+          {isArrayNotEmpty(modified?.direct) && (
+            <PlanChangePreview
+              className="my-2 w-full"
+              headline="Modified Directly"
+              type={EnumPlanChangeType.Direct}
+            >
+              <PlanChangePreview.Direct changes={modified.direct ?? []} />
+            </PlanChangePreview>
+          )}
+          {isArrayNotEmpty(modified?.indirect) && (
+            <PlanChangePreview
+              className="my-2 w-full"
+              headline="Modified Indirectly"
+              type={EnumPlanChangeType.Indirect}
+            >
+              <PlanChangePreview.Indirect changes={modified.indirect ?? []} />
+            </PlanChangePreview>
+          )}
+          {isArrayNotEmpty(modified?.metadata) && (
+            <PlanChangePreview
+              className="my-2 w-full"
+              headline="Modified Metadata"
+              type={EnumPlanChangeType.Default}
+            >
+              <PlanChangePreview.Default
+                type={EnumPlanChangeType.Default}
+                changes={modified?.metadata ?? []}
+              />
+            </PlanChangePreview>
           )}
         </>
       )}
