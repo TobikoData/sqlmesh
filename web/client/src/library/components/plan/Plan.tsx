@@ -96,7 +96,7 @@ function Plan({
     isRunningPlan,
     isFetchingPlanRun,
     isFetchingPlanApply,
-    environment
+    environment,
   ])
 
   function cleanUp(): void {

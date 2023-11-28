@@ -742,15 +742,15 @@ function Stage({
     meta.status === 'success'
       ? EnumVariant.Success
       : meta.status === 'fail'
-        ? EnumVariant.Danger
-        : EnumVariant.Info
+      ? EnumVariant.Danger
+      : EnumVariant.Info
   const [titleSuccess, titleFail, titleDefault] = states
   const text =
     meta.status === 'success'
       ? titleSuccess
       : meta.status === 'fail'
-        ? titleFail
-        : titleDefault
+      ? titleFail
+      : titleDefault
 
   return (
     <Disclosure defaultOpen={isOpen}>
