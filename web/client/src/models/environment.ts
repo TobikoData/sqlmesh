@@ -1,6 +1,13 @@
+import { type PlanProgress } from '@context/plan'
 import { type Environment } from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
-import { isArrayEmpty, isFalse, isNotNil, isStringEmptyOrNil } from '~/utils'
+import {
+  isArrayEmpty,
+  isFalse,
+  isNil,
+  isNotNil,
+  isStringEmptyOrNil,
+} from '~/utils'
 
 export const EnumDefaultEnvironment = {
   Empty: '',
@@ -37,6 +44,7 @@ export class ModelEnvironment {
   private _initial: InitialEnvironmemt
   private _type: RelativeLocation
   private _createFrom: EnvironmentName
+  private _plan: Optional<PlanProgress>
 
   isPinned = false
   isModel = true
@@ -67,16 +75,22 @@ export class ModelEnvironment {
     return this._type
   }
 
+  get plan(): Optional<PlanProgress> {
+    return this._plan
+  }
+
   get createFrom(): string {
     return this._createFrom
   }
 
   get isDefault(): boolean {
-    return this.name === EnumDefaultEnvironment.Prod
+    return isNil(this.name) || this.name === EnumDefaultEnvironment.Prod
   }
 
   get isInitial(): boolean {
-    return isStringEmptyOrNil(this._initial.plan_id)
+    return (
+      isNil(this._initial?.plan_id) || isStringEmptyOrNil(this._initial.plan_id)
+    )
   }
 
   get isLocal(): boolean {
@@ -97,6 +111,10 @@ export class ModelEnvironment {
 
   update(initial: InitialEnvironmemt): void {
     this._initial = initial
+  }
+
+  setPlan(plan: Optional<PlanProgress>): void {
+    this._plan = plan
   }
 
   static save({
