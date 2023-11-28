@@ -68,7 +68,8 @@ export interface ApiQueryMeta extends QueryMeta {
   onSuccess: () => void
 }
 
-const DELAY = 60 * 1000 // 1min
+const DELAY_1_MIN = 60 * 1000
+const DELAY_10_MIN = 10 * DELAY_1_MIN
 
 export type UseQueryWithTimeoutOptions<
   TData = any,
@@ -294,7 +295,7 @@ export function useApiFetchdf(
       ...options,
       errorKey: EnumErrorKey.Fetchdf,
       trigger: 'API -> useApiFetchdf',
-      delay: 10 * 60 * 1000,
+      delay: DELAY_10_MIN,
     },
   )
 }
@@ -313,7 +314,7 @@ export function useApiRender(
       ...options,
       errorKey: EnumErrorKey.RenderQuery,
       trigger: 'API -> useApiRender',
-      delay: 10 * 60 * 1000,
+      delay: DELAY_10_MIN,
     },
   )
 }
@@ -332,7 +333,7 @@ export function useApiTableDiff(
       ...options,
       errorKey: EnumErrorKey.TableDiff,
       trigger: 'API -> useApiTableDiff',
-      delay: 10 * 60 * 1000,
+      delay: DELAY_10_MIN,
     },
   )
 }
@@ -351,7 +352,7 @@ export function useApiEvaluate(
       ...options,
       errorKey: EnumErrorKey.EvaluateModel,
       trigger: 'API -> useApiEvaluate',
-      delay: 10 * 60 * 1000,
+      delay: DELAY_10_MIN,
     },
   )
 }
@@ -391,7 +392,7 @@ function useQueryWithTimeout<
     queryKey: TQueryKey
   },
   {
-    delay = DELAY,
+    delay = DELAY_1_MIN,
     removeTimeoutErrorAfter,
     errorKey = EnumErrorKey.API,
     trigger,
