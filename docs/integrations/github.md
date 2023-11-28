@@ -338,6 +338,36 @@ Example with all properties defined:
     )
     ```
 
+## Bot Output
+
+Step outputs are created by the bot that capture the status of each of the checks that reach a conclusion in a run. 
+These can be used to potentially trigger follow up steps in the workflow.
+These are the possible outputs (based on how the bot is configured) that are created by the bot:
+
+* `run_unit_tests`
+* `has_required_approval`
+* `pr_environment_synced`
+* `prod_plan_preview`
+* `prod_environment_synced`
+
+[There are many possible conclusions](https://github.com/TobikoData/sqlmesh/blob/main/sqlmesh/integrations/github/cicd/controller.py#L96-L102) so the best use case for this is likely to check for `success` conclusion in order to potentially run follow up steps. 
+Note that in error cases conclusions may not be set and therefore you will get an empty string.
+
+Example of running a step after pr environment has been synced:
+```yaml linenums="1"
+  steps:
+    - id: run-bot
+      ...
+    - id: do-after-pr-env-sync
+      if: steps.run-bot.outputs.pr_environment_synced == 'success'
+      run: ...
+```
+
+In addition, there are custom outputs listed below:
+
+* `created_pr_environment` - set to `"true"` (a string with a value of `true`) if a PR environment was created for the first time. It is absent, or considered empty string if you check for it, if it is not created for the first time
+* `pr_environment_name` - the name of the PR environment. It is output whenever PR environment synced check reaches a conclusion. Therefore make sure to check the status of `created_pr_environment` or `pr_environment_synced` before acting on this output 
+
 ## Custom Workflow Configuration
 You can configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
 ```bash
