@@ -450,11 +450,7 @@ class SnapshotEvaluator:
 
         with self.adapter.transaction(), self.adapter.session():
             wap_id: t.Optional[str] = None
-            if (
-                table_name
-                and snapshot.is_materialized
-                and (model.wap_supported or self.adapter.wap_supported(table_name))
-            ):
+            if table_name and snapshot.is_materialized and self.adapter.wap_supported(table_name):
                 wap_id = random_id()[0:8]
                 logger.info("Using WAP ID '%s' for snapshot %s", wap_id, snapshot.snapshot_id)
                 table_name = self.adapter.wap_prepare(table_name, wap_id)
