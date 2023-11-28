@@ -75,11 +75,11 @@ def evaluate(
     parent_snapshots = command_payload.parent_snapshots
     parent_snapshots[command_payload.snapshot.name] = command_payload.snapshot
 
-    evaluator.evaluate(
+    wap_id = evaluator.evaluate(
         command_payload.snapshot,
-        command_payload.start,
-        command_payload.end,
-        command_payload.execution_time,
+        start=command_payload.start,
+        end=command_payload.end,
+        execution_time=command_payload.execution_time,
         snapshots=parent_snapshots,
         deployability_index=command_payload.deployability_index,
     )
@@ -90,6 +90,7 @@ def evaluate(
         execution_time=command_payload.execution_time,
         snapshots=parent_snapshots,
         deployability_index=command_payload.deployability_index,
+        wap_id=wap_id,
     )
 
 

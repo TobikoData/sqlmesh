@@ -646,6 +646,10 @@ class _Model(ModelMeta, frozen=True):
     def disable_restatement(self) -> bool:
         return getattr(self.kind, "disable_restatement", False)
 
+    @property
+    def wap_supported(self) -> bool:
+        return self.kind.is_materialized and self.storage_format == "iceberg"
+
     def validate_definition(self) -> None:
         """Validates the model's definition.
 

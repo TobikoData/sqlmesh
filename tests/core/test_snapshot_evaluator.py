@@ -78,6 +78,7 @@ def adapter_mock(mocker: MockerFixture):
     adapter_mock.session.return_value = session_mock
     adapter_mock.dialect = "duckdb"
     adapter_mock.HAS_VIEW_BINDING = False
+    adapter_mock.wap_supported.return_value = False
     return adapter_mock
 
 
@@ -129,9 +130,9 @@ def test_evaluate(mocker: MockerFixture, adapter_mock, make_snapshot):
     evaluator.create([snapshot], {})
     evaluator.evaluate(
         snapshot,
-        "2020-01-01",
-        "2020-01-02",
-        "2020-01-02",
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
         snapshots={},
         payload=payload,
     )
@@ -205,7 +206,9 @@ def test_runtime_stages(capsys, mocker, adapter_mock, make_snapshot):
     evaluator.create([snapshot], {})
     assert f"RuntimeStage value: {RuntimeStage.CREATING.value}" in capsys.readouterr().out
 
-    evaluator.evaluate(snapshot, "2020-01-01", "2020-01-02", "2020-01-02", snapshots={})
+    evaluator.evaluate(
+        snapshot, start="2020-01-01", end="2020-01-02", execution_time="2020-01-02", snapshots={}
+    )
     assert f"RuntimeStage value: {RuntimeStage.EVALUATING.value}" in capsys.readouterr().out
 
     empty_call = call([])
@@ -375,9 +378,9 @@ def test_evaluate_materialized_view(
 
     evaluator.evaluate(
         snapshot,
-        "2020-01-01",
-        "2020-01-02",
-        "2020-01-02",
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
         snapshots={},
     )
 
@@ -424,9 +427,9 @@ def test_evaluate_materialized_view_with_execution_time_macro(
 
     evaluator.evaluate(
         snapshot,
-        "2020-01-01",
-        "2020-01-02",
-        "2020-01-02",
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
         snapshots={},
     )
 
@@ -455,9 +458,9 @@ def test_evaluate_incremental_unmanaged(
     evaluator = SnapshotEvaluator(adapter_mock)
     evaluator.evaluate(
         snapshot,
-        "2020-01-01",
-        "2020-01-02",
-        "2020-01-02",
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
         snapshots={},
     )
 
@@ -678,9 +681,9 @@ def test_evaluate_creation_duckdb(
     # test that a clean run works
     evaluator.evaluate(
         snapshot,
-        "2020-01-01",
-        "2020-01-01",
-        "2020-01-01",
+        start="2020-01-01",
+        end="2020-01-01",
+        execution_time="2020-01-01",
         snapshots={},
     )
     assert_tables_exist()
@@ -689,9 +692,9 @@ def test_evaluate_creation_duckdb(
     # test that existing tables work
     evaluator.evaluate(
         snapshot,
-        "2020-01-01",
-        "2020-01-01",
-        "2020-01-01",
+        start="2020-01-01",
+        end="2020-01-01",
+        execution_time="2020-01-01",
         snapshots={},
     )
     assert_tables_exist()
@@ -715,9 +718,9 @@ def test_migrate_duckdb(snapshot: Snapshot, duck_conn, make_snapshot):
 
     evaluator.evaluate(
         new_snapshot,
-        "2020-01-01",
-        "2020-01-01",
-        "2020-01-01",
+        start="2020-01-01",
+        end="2020-01-01",
+        execution_time="2020-01-01",
         snapshots={},
     )
 
@@ -829,9 +832,9 @@ def python_func(**kwargs):
 
     evaluator.evaluate(
         snapshot,
-        "2023-01-01",
-        "2023-01-09",
-        "2023-01-09",
+        start="2023-01-01",
+        end="2023-01-09",
+        execution_time="2023-01-09",
         snapshots={},
     )
 
@@ -1046,9 +1049,9 @@ def test_insert_into_scd_type_2(adapter_mock, make_snapshot):
 
     evaluator.evaluate(
         snapshot,
-        "2020-01-01",
-        "2020-01-02",
-        "2020-01-02",
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
         snapshots={},
     )
 
@@ -1096,9 +1099,9 @@ def test_create_incremental_by_unique_key_updated_at_exp(adapter_mock, make_snap
 
     evaluator.evaluate(
         snapshot,
-        "2020-01-01",
-        "2020-01-02",
-        "2020-01-02",
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
         snapshots={},
     )
 
@@ -1149,7 +1152,12 @@ def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
     # Evaluate
     payload = {"calls": 0}
     evaluator.evaluate(
-        snapshot, "2020-01-01", "2020-01-02", "2020-01-02", snapshots={}, payload=payload
+        snapshot,
+        start="2020-01-01",
+        end="2020-01-02",
+        execution_time="2020-01-02",
+        snapshots={},
+        payload=payload,
     )
 
     adapter_mock.assert_not_called()
