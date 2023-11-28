@@ -17,12 +17,12 @@ This example implements an `INCREMENTAL_BY_TIME_RANGE` model by specifying the `
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column ds
+    time_column event_date
   )
 );
 
 SELECT
-  event_date::TEXT as ds,
+  event_date::TEXT as event_date,
   event_payload::TEXT as payload
 FROM raw_events
 WHERE
@@ -38,7 +38,7 @@ The `time_column` is used to determine which records will be overridden during d
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column date_column
+    time_column event_date
   )
 );
 ```
@@ -48,7 +48,7 @@ By default, SQLMesh assumes the time column is in the `%Y-%m-%d` format. For oth
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column (date_column, '%Y-%m-%d')
+    time_column (event_date, '%Y-%m-%d')
   )
 );
 ```
@@ -164,7 +164,7 @@ The `unique_key` values can either be column names or SQL expressions. For examp
 MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
-    unique_key COALESCE("ds", '')
+    unique_key COALESCE("name", '')
   )
 );
 ```
@@ -172,7 +172,7 @@ MODEL (
 ### When Matched Expression
 
 The logic to use when updating columns when a match occurs (the source and target match on the given keys) by default updates all the columns. This can be overriden with custom logic like below:
-    
+
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name db.employees,
@@ -348,8 +348,8 @@ MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
     unique_key id,
-    valid_from_name my_valid_from,
-    valid_to_name my_valid_to
+    valid_from_name my_valid_from, -- Name for `valid_from` column
+    valid_to_name my_valid_to -- Name for `valid_to` column
   )
 );
 ```
@@ -372,7 +372,7 @@ MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
     unique_key id,
-    updated_at_name my_updated_at
+    updated_at_name my_updated_at -- Name for `updated_at` column
   )
 );
 

@@ -202,7 +202,7 @@ MODEL (
   name sushi.orders,
   dialect duckdb,
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column (di, '%Y%m%d')
+    time_column (order_date_int, '%Y%m%d')
   ),
 );
 
@@ -212,9 +212,9 @@ SELECT
   waiter_id::INT AS waiter_id, -- Id of waiter who took the order
   start_ts::TEXT AS start_ts, -- Start timestamp
   end_ts::TEXT AS end_ts, -- End timestamp
-  di::INT AS di -- Date of order
+  di::INT AS order_date_int -- Date of order
 FROM raw.orders
 WHERE
-  di BETWEEN @start_ds AND @end_ds
+  order_date_int BETWEEN @start_ds AND @end_ds
 ```
 SQLMesh will handle casting the start and end dates to the type of your time column. The format is reflected in the time column format string.
