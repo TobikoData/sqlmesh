@@ -172,14 +172,18 @@ function TasksDetails({
     }
   }, [changes])
 
+  const modelsInQueue = useMemo(() => {
+    if (isNil(queue)) return []
+
+    return models.filter(([modelName]) => queue.includes(modelName))
+  }, [queue, models])
+
   return (
     <>
       {isArrayNotEmpty(queue) && (
         <div className="p-4 mt-6 shadow-lg bg-neutral-5 rounded-lg">
           <Title text="Currently in proccess" />
-          <Tasks
-            models={models.filter(([modelName]) => queue?.includes(modelName))}
-          >
+          <Tasks models={modelsInQueue}>
             {([modelName, task]) => (
               <Task>
                 <TaskDetails>
@@ -233,7 +237,10 @@ function TasksDetails({
                   </TaskDetailsProgress>
                 </TaskDetails>
                 {showProgress ? (
-                  <Progress progress={toRatio(task.completed, task.total)} />
+                  <Progress
+                    startFromZero={false}
+                    progress={toRatio(task.completed, task.total)}
+                  />
                 ) : (
                   <Divider className="my-1 border-neutral-200 opacity-50" />
                 )}
@@ -297,7 +304,13 @@ function TasksDetails({
                 </TaskDetailsProgress>
               </TaskDetails>
               {showProgress ? (
-                <Progress progress={toRatio(task.completed, task.total)} />
+                <Progress
+                  progress={toRatio(task.completed, task.total)}
+                  startFromZero={
+                    modelsInQueue.findIndex(([name]) => name === modelName) ===
+                    -1
+                  }
+                />
               ) : (
                 <Divider className="my-1 border-neutral-200 opacity-50" />
               )}
