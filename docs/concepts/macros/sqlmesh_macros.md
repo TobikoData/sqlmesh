@@ -963,6 +963,24 @@ Having access to the schema of an upstream model can be useful for various reaso
 
 Thus, leveraging `columns_to_types` can also enable one to write code according to the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle, as they can implement these transformations in a single function instead of duplicating them in each model of interest.
 
+### Accessing snapshots
+
+After a SQLMesh project has been successfully loaded, its snapshots can be accessed in Python macro functions or Python models that generate SQL through the `snapshots` attribute of the `MacroEvaluator`.
+
+This enables the inspection of physical table names or the processed intervals of certain snapshots at runtime, and can be achieved as shown in the following example:
+
+```sql linenums="1"
+from sqlmesh.core.macros import macro
+
+@macro()
+def some_macro(evaluator):
+    if evaluator.runtime_stage == "evaluating":
+        # Alter the behavior of the macro depending on what intervals have been processed
+        intervals = evaluator.snapshots["some_snapshot"].intervals
+        ...
+    ...
+```
+
 ## Mixing macro systems
 
 SQLMesh supports both SQLMesh and [Jinja](./jinja_macros.md) macro systems. We strongly recommend using only one system in a model - if both are present, they may fail or behave in unintuitive ways.
