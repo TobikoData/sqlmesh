@@ -285,9 +285,6 @@ class ModelConfig(BaseModelConfig):
                 d.parse_one(c, dialect=dialect).name for c in self.cluster_by
             ]
 
-        if not context.target:
-            raise ConfigError(f"Target required to load '{self.fqn}' into SQLMesh.")
-
         model_kwargs = self.sqlmesh_model_kwargs(context)
         if self.sql_header:
             model_kwargs["pre_statements"].insert(0, d.jinja_statement(self.sql_header))

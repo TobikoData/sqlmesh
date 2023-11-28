@@ -68,17 +68,19 @@ class SourceConfig(GeneralConfig):
             source = context.get_callable_macro("source")
             if not source:
                 raise ConfigError("'source' macro not found.")
+
             try:
                 relation = source(self.source_name_, self.name)
-                # TODO add back in conditional database
-                # if relation.database == context.default_database:
-                #    relation.database = None
-                table = exp.to_table(relation.render(), dialect=context.dialect)
-                self._canonical_name = d.normalize_model_name(table, dialect=context.dialect)
             except Exception as e:
                 raise ConfigError(
                     f"'source' macro failed for '{self.config_name}' with exeception '{e}'."
                 )
+
+            if relation.database == context.target.database:
+                relation = relation.include(database=False)
+            table = exp.to_table(relation.render(), dialect=context.dialect)
+            self._canonical_name = d.normalize_model_name(table, dialect=context.dialect)
+            print(self._canonical_name)
         return self._canonical_name
 
     @property

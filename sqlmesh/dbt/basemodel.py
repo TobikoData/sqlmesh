@@ -193,11 +193,11 @@ class BaseModelConfig(GeneralConfig):
         """
         if not self._canonical_name:
             relation = context.create_relation(self.relation_info)
-            # TODO add back in conditional database
-            # if relation.database == context.default_database:
-            #    relation.database = None
+            if relation.database == context.target.database:
+                relation = relation.include(database=False)
             table = exp.to_table(relation.render(), dialect=context.dialect)
             self._canonical_name = d.normalize_model_name(table, dialect=context.dialect)
+            print(self._canonical_name)
         return self._canonical_name
 
     @property

@@ -41,7 +41,6 @@ class DbtContext:
             create_builtins_module=SQLMESH_DBT_PACKAGE, top_level_packages=["dbt"]
         )
     )
-    default_database: t.Optional[str] = None
 
     sqlmesh_config: SQLMeshConfig = field(default_factory=SQLMeshConfig)
 
@@ -189,7 +188,9 @@ class DbtContext:
         return self._refs
 
     @property
-    def target(self) -> t.Optional[TargetConfig]:
+    def target(self) -> TargetConfig:
+        if not self._target:
+            raise SQLMeshError("Target has not been set in the context.")
         return self._target
 
     @target.setter

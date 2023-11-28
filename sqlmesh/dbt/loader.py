@@ -21,7 +21,6 @@ from sqlmesh.dbt.profile import Profile
 from sqlmesh.dbt.project import Project
 from sqlmesh.dbt.target import TargetConfig
 from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 logger = logging.getLogger(__name__)
@@ -160,19 +159,6 @@ class DbtLoader(Loader):
 
         for package_name, macro_infos in context.manifest.all_macros.items():
             context.add_macros(macro_infos, package=package_name)
-
-        # TODO this needs to make its way into engine adapter's default database
-        generate_database_name = context.get_callable_macro("generate_database_name")
-        if not generate_database_name:
-            raise ConfigError(
-                "Cannot get default database: 'generate_database_name' macro not found."
-            )
-        try:
-            context.default_database = generate_database_name()
-        except Exception as e:
-            raise ConfigError(
-                f"Cannot get default database: 'generate_database_name' macro failed with exception '{e}'."
-            )
 
         self._macros_max_mtime = max(macros_mtimes) if macros_mtimes else None
 
