@@ -294,6 +294,7 @@ export function useApiFetchdf(
       ...options,
       errorKey: EnumErrorKey.Fetchdf,
       trigger: 'API -> useApiFetchdf',
+      delay: 10 * 60 * 1000,
     },
   )
 }
@@ -312,6 +313,7 @@ export function useApiRender(
       ...options,
       errorKey: EnumErrorKey.RenderQuery,
       trigger: 'API -> useApiRender',
+      delay: 10 * 60 * 1000,
     },
   )
 }
@@ -330,6 +332,7 @@ export function useApiTableDiff(
       ...options,
       errorKey: EnumErrorKey.TableDiff,
       trigger: 'API -> useApiTableDiff',
+      delay: 10 * 60 * 1000,
     },
   )
 }
@@ -348,6 +351,7 @@ export function useApiEvaluate(
       ...options,
       errorKey: EnumErrorKey.EvaluateModel,
       trigger: 'API -> useApiEvaluate',
+      delay: 10 * 60 * 1000,
     },
   )
 }
