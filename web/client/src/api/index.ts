@@ -63,6 +63,10 @@ export interface ApiOptions {
   removeTimeoutErrorAfter?: number
 }
 
+export interface ApiQueryOptions {
+  enabled?: boolean
+}
+
 export interface ApiQueryMeta extends QueryMeta {
   onError: (error: ApiExceptionPayload) => void
   onSuccess: () => void
@@ -506,7 +510,7 @@ function useQueryWithTimeout<
       new Promise(resolve => {
         q.refetch(...args, { throwOnError: true })
           .then(resolve)
-          .catch(onError)
+          .catch(err => err)
       }),
     cancel,
     isTimeout,

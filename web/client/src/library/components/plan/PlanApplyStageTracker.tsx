@@ -6,7 +6,7 @@ import {
   ExclamationCircleIcon,
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   useStorePlan,
   type PlanTasks,
@@ -23,12 +23,8 @@ import {
   isFalseOrNil,
 } from '../../../utils'
 import Spinner from '../logo/Spinner'
-import {
-  EnumPlanChangeType,
-  type TestReportError,
-  type TestReportMessage,
-  usePlan,
-} from './context'
+import { EnumPlanChangeType, usePlan } from './context'
+import { getPlanOverviewDetails } from './help'
 import PlanChangePreview from './PlanChangePreview'
 import { EnumSize, EnumVariant, type Variant } from '~/types/enum'
 import Banner from '@components/banner/Banner'
@@ -47,8 +43,11 @@ import {
   type PlanStageChanges,
   type PlanStageValidation,
   SnapshotChangeCategory,
+  type PlanOverviewStageTrackerStart,
+  type PlanOverviewStageTrackerEnd,
 } from '@api/client'
 import { type PlanTrackerMeta } from '@models/tracker-plan'
+import { type Tests, useStoreProject } from '@context/project'
 
 interface PropsPlanStageMessage extends React.HTMLAttributes<HTMLElement> {
   hasSpinner?: boolean
@@ -57,30 +56,26 @@ interface PropsPlanStageMessage extends React.HTMLAttributes<HTMLElement> {
 }
 
 export default function PlanApplyStageTracker(): JSX.Element {
-  const { testsReportMessages, testsReportErrors } = usePlan()
+  const tests = useStoreProject(s => s.tests)
 
   const planApply = useStorePlan(s => s.planApply)
   const planOverview = useStorePlan(s => s.planOverview)
 
-  const start = planApply.start ?? planOverview.start
-  const end = planApply.end ?? planOverview.end
-  const hasChanges = planApply.overview?.hasChanges ?? planOverview.hasChanges
-  const hasBackfills =
-    planApply.overview?.hasBackfills ?? planOverview.hasBackfills
-  const changes = planApply.changes ?? planOverview.changes
-  const backfills = planApply.backfills ?? planOverview.backfills
-  const validation = planApply.validation ?? planOverview.validation
-  const plan_options = planApply.plan_options ?? planOverview.plan_options
-  const isVirtualUpdate =
-    planApply.overview?.isVirtualUpdate ?? planOverview.isVirtualUpdate
-  const showStageEvaluate =
-    isNotNil(planApply.creation) ||
-    isNotNil(planApply.backfill) ||
-    isNotNil(planApply.promote)
-  const stageEvaluationStart =
-    planApply.creation?.meta?.start ??
-    planApply.backfill?.meta?.start ??
-    planApply.promote?.meta?.start
+  const {
+    start,
+    end,
+    hasChanges,
+    hasBackfills,
+    changes,
+    backfills,
+    validation,
+    plan_options,
+    isVirtualUpdate,
+  } = getPlanOverviewDetails(planApply, planOverview)
+
+  const showTestsDetails = isNotNil(tests) && Boolean(tests.total)
+  const showTestsMessage = isNotNil(tests) && Boolean(tests.message)
+  const hasFailedTests = isNotNil(tests) && Boolean(tests.failures)
 
   return (
     <div className="py-4">
@@ -103,7 +98,10 @@ export default function PlanApplyStageTracker(): JSX.Element {
           No Changes
         </PlanStageMessage>
       ) : (
-        <StageChanges report={changes} />
+        <StageChanges
+          report={changes}
+          isOpen={true}
+        />
       )}
       {isFalseOrNil(hasBackfills) || isNil(backfills) ? (
         <PlanStageMessage
@@ -123,52 +121,56 @@ export default function PlanApplyStageTracker(): JSX.Element {
           Tests Skipped
         </PlanStageMessage>
       )}
-      {isNotNil(testsReportMessages) && (
-        <StageTestsCompleted report={testsReportMessages} />
-      )}
-      {isNotNil(testsReportErrors) && (
-        <StageTestsFailed report={testsReportErrors} />
-      )}
+      {showTestsMessage && <StageTestsCompleted report={tests} />}
+      {showTestsDetails && <StageTestsFailed report={tests} />}
       {isNotNil(validation) && <StageValidate report={validation} />}
       {isTrue(isVirtualUpdate) && (
         <PlanVirtualUpdate isUpdated={isTrue(planApply.promote?.meta?.done)} />
       )}
-      {isNil(testsReportErrors) && showStageEvaluate && (
-        <StageEvaluate
-          start={stageEvaluationStart}
-          end={planApply.promote?.meta?.end}
-        >
-          {isNotNil(planApply.creation) && (
-            <StageCreation report={planApply.creation} />
-          )}
-          {isNotNil(planApply.restate) ? (
-            <StageRestate report={planApply.restate} />
-          ) : (
-            <PlanStageMessage
-              variant={EnumVariant.Info}
-              className="mt-2"
-            >
-              No Models To Restate
-            </PlanStageMessage>
-          )}
-          {isNotNil(planApply.backfill) && isNotNil(planApply.environment) && (
-            <StageBackfill
-              backfill={planApply.backfill}
-              backfills={backfills}
-              isVirtualUpdate={isVirtualUpdate}
-              environment={planApply.environment}
-            />
-          )}
-          {isNotNil(planApply.promote) && (
-            <StagePromote report={planApply.promote} />
-          )}
-        </StageEvaluate>
-      )}
+      {hasFailedTests ||
+        (planApply.showEvaluation && (
+          <StageEvaluate
+            start={planApply.evaluationStart}
+            end={planApply.evaluationEnd}
+          >
+            {isNotNil(planApply.creation) && (
+              <StageCreation report={planApply.creation} />
+            )}
+            {isNotNil(planApply.restate) ? (
+              <StageRestate report={planApply.restate} />
+            ) : (
+              <PlanStageMessage
+                variant={EnumVariant.Info}
+                className="mt-2"
+              >
+                No Models To Restate
+              </PlanStageMessage>
+            )}
+            {isNotNil(planApply.backfill) &&
+              isNotNil(planApply.environment) && (
+                <StageBackfill
+                  backfill={planApply.backfill}
+                  backfills={backfills}
+                  isVirtualUpdate={isVirtualUpdate}
+                  environment={planApply.environment}
+                />
+              )}
+            {isNotNil(planApply.promote) && (
+              <StagePromote report={planApply.promote} />
+            )}
+          </StageEvaluate>
+        ))}
     </div>
   )
 }
 
-function StageChanges({ report }: { report: PlanStageChanges }): JSX.Element {
+function StageChanges({
+  report,
+  isOpen = false,
+}: {
+  isOpen?: boolean
+  report: PlanStageChanges
+}): JSX.Element {
   return (
     <Stage
       meta={report.meta!}
@@ -177,7 +179,7 @@ function StageChanges({ report }: { report: PlanStageChanges }): JSX.Element {
         'Failed Getting Plan Changes',
         'Getting Plan Changes...',
       ]}
-      isOpen={true}
+      isOpen={isOpen}
       panel={<PlanChanges />}
     />
   )
@@ -185,7 +187,9 @@ function StageChanges({ report }: { report: PlanStageChanges }): JSX.Element {
 
 function StageBackfills({
   report,
+  isOpen = false,
 }: {
+  isOpen?: boolean
   report: PlanStageBackfills
 }): JSX.Element {
   return (
@@ -196,7 +200,7 @@ function StageBackfills({
         'Failed Getting Plan Backfills',
         'Getting Plan Backfills...',
       ]}
-      isOpen={true}
+      isOpen={isOpen}
       panel={
         <PlanChangePreview
           headline={`Models ${report.models?.length ?? 0}`}
@@ -216,11 +220,7 @@ function StageBackfills({
   )
 }
 
-function StageTestsCompleted({
-  report,
-}: {
-  report: TestReportMessage
-}): JSX.Element {
+function StageTestsCompleted({ report }: { report: Tests }): JSX.Element {
   return (
     <Stage
       meta={{
@@ -244,11 +244,7 @@ function StageTestsCompleted({
   )
 }
 
-function StageTestsFailed({
-  report,
-}: {
-  report: TestReportError
-}): JSX.Element {
+function StageTestsFailed({ report }: { report: Tests }): JSX.Element {
   return (
     <Stage
       variant={EnumVariant.Danger}
@@ -296,12 +292,26 @@ function StageEvaluate({
   end,
   children,
 }: {
-  start?: number
-  end?: number
+  start?: PlanOverviewStageTrackerStart
+  end?: PlanOverviewStageTrackerEnd
   children: React.ReactNode
 }): JSX.Element {
+  const elStageEvaluate = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      elStageEvaluate.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+  }, [])
+
   return (
-    <div className="pt-6 pb-2">
+    <div
+      ref={elStageEvaluate}
+      className="pt-6 pb-2"
+    >
       {isNotNil(start) && (
         <>
           <small className="text-neutral-500 block px-4 mb-1">
@@ -490,40 +500,55 @@ function StageBackfill({
 }
 
 function StagePromote({ report }: { report: PlanStagePromote }): JSX.Element {
+  const elStagePromote = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      elStagePromote.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+  }, [])
+
   return (
-    <Stage
-      meta={report.meta!}
-      states={[
-        'Environment Promoted',
-        'Promotion Failed',
-        'Promoting Environment...',
-      ]}
-    >
-      <TasksOverview.Block>
-        <TasksOverview.Task>
-          <TasksOverview.TaskDetails>
-            <TasksOverview.TaskInfo>
-              <TasksOverview.TaskHeadline
-                headline={`Promote Environment: ${report.target_environment}`}
-              />
-            </TasksOverview.TaskInfo>
-            <TasksOverview.DetailsProgress>
-              <TasksOverview.TaskSize
-                completed={report.total_tasks}
-                total={report.num_tasks}
-                unit="task"
-              />
-              <TasksOverview.TaskDivider />
-              <TasksOverview.TaskProgress
-                completed={report.num_tasks}
-                total={report.total_tasks}
-              />
-            </TasksOverview.DetailsProgress>
-          </TasksOverview.TaskDetails>
-          <Progress progress={toRatio(report.num_tasks, report.total_tasks)} />
-        </TasksOverview.Task>
-      </TasksOverview.Block>
-    </Stage>
+    <div ref={elStagePromote}>
+      <Stage
+        meta={report.meta!}
+        states={[
+          'Environment Promoted',
+          'Promotion Failed',
+          'Promoting Environment...',
+        ]}
+      >
+        <TasksOverview.Block>
+          <TasksOverview.Task>
+            <TasksOverview.TaskDetails>
+              <TasksOverview.TaskInfo>
+                <TasksOverview.TaskHeadline
+                  headline={`Promote Environment: ${report.target_environment}`}
+                />
+              </TasksOverview.TaskInfo>
+              <TasksOverview.DetailsProgress>
+                <TasksOverview.TaskSize
+                  completed={report.total_tasks}
+                  total={report.num_tasks}
+                  unit="task"
+                />
+                <TasksOverview.TaskDivider />
+                <TasksOverview.TaskProgress
+                  completed={report.num_tasks}
+                  total={report.total_tasks}
+                />
+              </TasksOverview.DetailsProgress>
+            </TasksOverview.TaskDetails>
+            <Progress
+              progress={toRatio(report.num_tasks, report.total_tasks)}
+            />
+          </TasksOverview.Task>
+        </TasksOverview.Block>
+      </Stage>
+    </div>
   )
 }
 
@@ -531,11 +556,8 @@ function PlanChanges(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
 
-  const isRunning = planApply.overview?.isRunning ?? planOverview.isRunning
-  const hasChanges = planApply.overview?.hasChanges ?? planOverview.hasChanges
-  const changes = planApply.changes ?? planOverview.changes
-  const isVirtualUpdate =
-    planApply.overview?.isVirtualUpdate ?? planOverview.isVirtualUpdate
+  const { hasChanges, changes, isVirtualUpdate, isRunning } =
+    getPlanOverviewDetails(planApply, planOverview)
 
   const shouldBeFullAndCenter =
     (isFalse(hasChanges) && isFalse(isRunning) && isFalse(isVirtualUpdate)) ||
@@ -786,7 +808,7 @@ function Stage({
               </div>
             )}
           </Banner>
-          <Disclosure.Panel className={clsx('px-2 text-xs')}>
+          <Disclosure.Panel className="px-2 text-xs">
             {isNotNil(children) && (
               <div
                 className={clsx(

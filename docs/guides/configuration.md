@@ -838,7 +838,7 @@ The `VIEW`, `FULL`, and `EMBEDDED` model kinds are specified by name only, while
     MODEL(
         name docs_example.incremental_model,
         kind INCREMENTAL_BY_TIME_RANGE (
-            time_column ds
+            time_column model_time_column
         )
     );
     ```

@@ -50,6 +50,10 @@ export class ModelPlanApplyTracker
     }
   }
 
+  get current(): Optional<PlanApplyTracker> {
+    return this._current ?? this._last
+  }
+
   get environment(): Optional<string> {
     return this._last?.environment ?? this._current?.environment
   }
@@ -100,6 +104,31 @@ export class ModelPlanApplyTracker
 
   get promote(): Optional<PlanStagePromote> {
     return this._last?.promote ?? this._current?.promote
+  }
+
+  get showEvaluation(): boolean {
+    return (
+      this.isFailed ||
+      isNotNil(this.creation) ||
+      isNotNil(this.backfill) ||
+      isNotNil(this.promote)
+    )
+  }
+
+  get evaluationStart(): Optional<PlanOverviewStageTrackerStart> {
+    return (
+      this.creation?.meta?.start ??
+      this.backfill?.meta?.start ??
+      this.promote?.meta?.start
+    )
+  }
+
+  get evaluationEnd(): Optional<PlanOverviewStageTrackerEnd> {
+    return (
+      this.promote?.meta?.end ??
+      this.backfill?.meta?.end ??
+      this.creation?.meta?.end
+    )
   }
 
   update(

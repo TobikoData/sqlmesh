@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query'
 import App from './App'
 import IDEProvider, { type ErrorIDE } from './library/pages/ide/context'
+import { isNotNil } from './utils'
 
 import './index.css'
 
@@ -50,7 +51,7 @@ function getRootNode(): HTMLElement {
 
   let elRoot = document.getElementById(id)
 
-  if (elRoot != null) return elRoot
+  if (isNotNil(elRoot)) return elRoot
 
   const elBody = document.body
   const firstChild = elBody.children[0]

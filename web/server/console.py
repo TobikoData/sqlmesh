@@ -61,7 +61,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.creation.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
+                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
 
     def start_restate_progress(self) -> None:
         if self.plan_apply_stage_tracker:
@@ -76,7 +76,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.restate.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
+                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
 
     def start_evaluation_progress(
         self,
@@ -128,7 +128,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.backfill.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
+                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
 
     def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
         if self.plan_apply_stage_tracker:
@@ -154,7 +154,7 @@ class ApiConsole(TerminalConsole):
             self.plan_apply_stage_tracker.promote.stop(success=success)
 
             if not success:
-                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=True)
+                self.stop_plan_tracker(tracker=self.plan_apply_stage_tracker, success=False)
 
     def start_plan_tracker(
         self,
