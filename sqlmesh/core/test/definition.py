@@ -168,60 +168,6 @@ class ModelTest(unittest.TestCase):
 
         raise TestError(f"Model '{model_name}' is an unsupported model type for testing at {path}")
 
-    @staticmethod
-    def generate_test(
-        model: Model,
-        input_queries: t.Dict[str, str],
-        models: t.Dict[str, Model],
-        engine_adapter: EngineAdapter,
-    ) -> None:
-        """Automatically create a new unit test for a given model.
-
-        Args:
-            model: The model to test.
-            input_queries: Mapping of model names to queries. Each model included in this mapping
-                will be populated in the test based on the results of the corresponding query.
-            models: The context's models.
-            engine_adapter: The target engine adapter.
-        """
-        inputs: t.Dict[str, t.Any] = {}
-        for dep, query in input_queries.items():
-            if dep not in models:
-                raise ConfigError(f"Cannot find model for '{dep}'.")
-
-            inputs[dep] = engine_adapter.fetchdf(query).to_dict(orient="records")
-
-        outputs: t.Dict[str, t.Any] = {"query": {}}
-        test_name = f"test_{model.view_name}"
-        test_body = {"model": model.name, "inputs": inputs, "outputs": outputs}
-
-        test = ModelTest.create_test(
-            body=test_body,
-            test_name=test_name,
-            models=models,
-            engine_adapter=engine_adapter,
-            dialect=model.dialect,
-            path=None,
-        )
-
-        test.setUp()
-
-        if isinstance(model, SqlModel):
-            mapping = {name: _test_fixture_name(name) for name in models.keys() | inputs.keys()}
-            model_query = model.render_query_or_raise(
-                engine_adapter=engine_adapter, table_mapping=mapping
-            )
-            output = t.cast(SqlModelTest, test)._execute(model_query)
-        else:
-            output = t.cast(PythonModelTest, test)._execute_model()
-
-        outputs["query"] = output.to_dict(orient="records")
-
-        test.tearDown()
-
-        with open(Path(c.TESTS) / f"{test_name}.yaml", "w", encoding="utf-8") as file:
-            yaml.dump({test_name: test_body}, file)
-
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path})"
 
@@ -350,6 +296,60 @@ class PythonModelTest(ModelTest):
             actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
             self.assert_equal(expected_df, actual_df)
+
+
+def generate_test(
+    model: Model,
+    input_queries: t.Dict[str, str],
+    models: t.Dict[str, Model],
+    engine_adapter: EngineAdapter,
+) -> None:
+    """Automatically create a new unit test for a given model.
+
+    Args:
+        model: The model to test.
+        input_queries: Mapping of model names to queries. Each model included in this mapping
+            will be populated in the test based on the results of the corresponding query.
+        models: The context's models.
+        engine_adapter: The target engine adapter.
+    """
+    inputs: t.Dict[str, t.Any] = {}
+    for dep, query in input_queries.items():
+        if dep not in models:
+            raise ConfigError(f"Cannot find model for '{dep}'.")
+
+        inputs[dep] = engine_adapter.fetchdf(query).to_dict(orient="records")
+
+    outputs: t.Dict[str, t.Any] = {"query": {}}
+    test_name = f"test_{model.view_name}"
+    test_body = {"model": model.name, "inputs": inputs, "outputs": outputs}
+
+    test = ModelTest.create_test(
+        body=test_body,
+        test_name=test_name,
+        models=models,
+        engine_adapter=engine_adapter,
+        dialect=model.dialect,
+        path=None,
+    )
+
+    test.setUp()
+
+    if isinstance(model, SqlModel):
+        mapping = {name: _test_fixture_name(name) for name in models.keys() | inputs.keys()}
+        model_query = model.render_query_or_raise(
+            engine_adapter=engine_adapter, table_mapping=mapping
+        )
+        output = t.cast(SqlModelTest, test)._execute(model_query)
+    else:
+        output = t.cast(PythonModelTest, test)._execute_model()
+
+    outputs["query"] = output.to_dict(orient="records")
+
+    test.tearDown()
+
+    with open(Path(c.TESTS) / f"{test_name}.yaml", "w", encoding="utf-8") as file:
+        yaml.dump({test_name: test_body}, file)
 
 
 def _test_fixture_name(name: str) -> str:

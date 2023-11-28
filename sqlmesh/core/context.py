@@ -94,7 +94,12 @@ from sqlmesh.core.state_sync import (
     cleanup_expired_views,
 )
 from sqlmesh.core.table_diff import TableDiff
-from sqlmesh.core.test import ModelTest, get_all_model_tests, run_model_tests, run_tests
+from sqlmesh.core.test import (
+    generate_test,
+    get_all_model_tests,
+    run_model_tests,
+    run_tests,
+)
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
 from sqlmesh.utils.dag import DAG
@@ -1051,7 +1056,7 @@ class Context(BaseContext):
                 will be populated in the test based on the results of the corresponding query.
         """
         # TODO: this should be prohibited if the DB hasn't been populated with model data yet
-        ModelTest.generate_test(
+        generate_test(
             model=self.get_model(model, raise_if_missing=True),
             input_queries=input_queries,
             models=self._models,

@@ -6,7 +6,7 @@ import unittest
 
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model
-from sqlmesh.core.test.definition import ModelTest
+from sqlmesh.core.test.definition import ModelTest, generate_test
 from sqlmesh.core.test.discovery import (
     ModelTestMetadata,
     filter_tests_by_patterns,
