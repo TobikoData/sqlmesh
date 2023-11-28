@@ -30,6 +30,7 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_excepti
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
+    from sqlmesh.core.snapshot import Snapshot
 
 
 class RuntimeStage(Enum):
@@ -114,6 +115,7 @@ class MacroEvaluator:
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -125,6 +127,7 @@ class MacroEvaluator:
         self._schema = MappingSchema(schema, dialect=dialect, normalize=False) if schema else {}
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
+        self.snapshots = snapshots if snapshots is not None else {}
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():

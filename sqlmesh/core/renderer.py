@@ -145,6 +145,7 @@ class BaseExpressionRenderer:
                     end=end,
                     execution_time=execution_time,
                 ),
+                snapshots=snapshots,
             )
 
             for definition in self._macro_definitions:
