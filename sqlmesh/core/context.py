@@ -1068,9 +1068,6 @@ class Context(BaseContext):
                 will be inferred from the test's name.
             name: The name of the test. This is inferred from the model name by default.
         """
-        # TODO: this command shouldn't be allowed if the models haven't been created, otherwise the
-        # queries will crash when they are executed to fetch the data needed to populate the fixture
-
         input_queries = {
             # The get_model here has two purposes: return normalized names & check for missing deps
             self.get_model(dep, raise_if_missing=True).name: query
