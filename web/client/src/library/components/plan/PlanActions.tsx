@@ -219,12 +219,7 @@ export default function PlanActions({
           <Button
             onClick={handleClose}
             variant={isDone ? EnumVariant.Primary : EnumVariant.Neutral}
-            disabled={
-              includes(
-                [EnumPlanAction.Running, EnumPlanAction.Cancelling],
-                planAction,
-              ) || disabled
-            }
+            disabled={disabled}
             ref={isDone || isApplying ? setFocus : undefined}
           >
             {getActionName(planAction, [EnumPlanAction.Done], 'Close')}
