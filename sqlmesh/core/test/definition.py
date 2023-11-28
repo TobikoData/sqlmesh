@@ -125,12 +125,6 @@ class ModelTest(unittest.TestCase):
         """Compute a version of this test's path relative to the `other` path"""
         return self.path.relative_to(other) if self.path else None
 
-    def _add_missing_columns(self, df: pd.DataFrame, columns: t.Iterable) -> None:
-        """Add missing columns to a given dataframe with None values."""
-        for index, column in enumerate(columns):
-            if column not in df:
-                df.insert(index, column, None)  # type: ignore
-
     @staticmethod
     def create_test(
         body: t.Dict[str, t.Any],
@@ -170,6 +164,12 @@ class ModelTest(unittest.TestCase):
 
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path})"
+
+    def _add_missing_columns(self, df: pd.DataFrame, columns: t.Iterable) -> None:
+        """Add missing columns to a given dataframe with None values."""
+        for index, column in enumerate(columns):
+            if column not in df:
+                df.insert(index, column, None)  # type: ignore
 
     def _normalize_test(self, dialect: str | None) -> None:
         """Normalizes all identifiers in this test according to the given dialect."""
