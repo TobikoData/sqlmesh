@@ -144,6 +144,7 @@ class BaseExpressionRenderer:
                     start=start,
                     end=end,
                     execution_time=execution_time,
+                    runtime_stage=runtime_stage,
                 ),
                 snapshots=snapshots,
             )
@@ -405,6 +406,7 @@ class QueryRenderer(BaseExpressionRenderer):
             start=start,
             end=end,
             execution_time=execution_time,
+            runtime_stage=runtime_stage,
             **kwargs,
         )
 
