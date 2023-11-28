@@ -18,13 +18,13 @@ To add a model:
         MODEL (
             name sqlmesh_example.new_model,
             kind INCREMENTAL_BY_TIME_RANGE (
-                time_column (ds, '%Y-%m-%d'),
+                time_column (model_time_column, '%Y-%m-%d'),
             ),
         );
 
         SELECT *
         FROM sqlmesh_example.incremental_model
-        WHERE ds BETWEEN @start_ds and @end_ds
+        WHERE model_time_column BETWEEN @start_ds and @end_ds
 
     **Note:** The last line in this file is required if your model is incremental. Refer to [model kinds](../concepts/models/model_kinds.md) for more information about the kinds of models you can create.
 
@@ -46,7 +46,7 @@ To evaluate a model:
 
         $ sqlmesh evaluate sqlmesh_example.incremental_model --start=2020-01-07 --end=2020-01-07
 
-        id  item_id          ds
+        id  item_id          model_time_column
         0   7        1  2020-01-07
 
 2. When you run the `evaluate` command, SQLMesh detects the changes made to the model, executes the model as a query using the options passed to `evaluate`, and shows the output returned by the model query.
@@ -77,7 +77,7 @@ SELECT
 id,
 item_id,
 +  1 AS new_column,
-ds
+model_time_column
 FROM (VALUES
 (1, 1, '2020-01-01'),
 Directly Modified: sqlmesh_example.incremental_model
@@ -133,7 +133,7 @@ SELECT
 id,
 item_id,
 -  1 AS new_column,
-ds
+model_time_column
 FROM (VALUES
     (1, 1, '2020-01-01'),
 Directly Modified: sqlmesh_example.incremental_model (Non-breaking)

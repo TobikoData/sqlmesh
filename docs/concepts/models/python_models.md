@@ -63,7 +63,7 @@ from sqlmesh.core.model import IncrementalByTimeRangeKind
 @model(
     "docs_example.incremental_model",
     kind=IncrementalByTimeRangeKind(
-        time_column="ds"
+        time_column="model_time_column"
     )
 )
 ```
