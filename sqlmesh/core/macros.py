@@ -127,7 +127,7 @@ class MacroEvaluator:
         self._schema = MappingSchema(schema, dialect=dialect, normalize=False) if schema else {}
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
-        self.snapshots = snapshots if snapshots is not None else {}
+        self._snapshots = snapshots if snapshots is not None else {}
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -299,6 +299,15 @@ class MacroEvaluator:
             raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
 
         return columns_to_types
+
+    def get_snapshot(self, model_name: TableName | exp.Column) -> t.Optional[Snapshot]:
+        """Returns the snapshot that corresponds to the given model name."""
+        if isinstance(model_name, str):
+            key = model_name
+        else:
+            key = ".".join(part.name for part in model_name.parts)
+
+        return self._snapshots.get(key)
 
     def resolve_tables(self, query: exp.Expression) -> exp.Expression:
         """Resolves queries with references to SQLMesh model names to their physical tables."""
