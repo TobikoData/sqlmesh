@@ -1,13 +1,13 @@
 import { isFalse } from '@utils/index'
 import clsx from 'clsx'
 
-const PROGRESS_START = 3
+const PROGRESS_DEFAULT_START = 3 // Start from 3% to indicate the progress is loading
 
 export default function Progress({
   progress = 0,
   delay = 0,
   duration = 0,
-  startFromZero = false,
+  startFromZero = true,
   className,
 }: {
   startFromZero?: boolean
@@ -17,7 +17,8 @@ export default function Progress({
   className?: string
 }): JSX.Element {
   if (isFalse(startFromZero)) {
-    progress = progress < PROGRESS_START ? PROGRESS_START : progress
+    progress =
+      progress < PROGRESS_DEFAULT_START ? PROGRESS_DEFAULT_START : progress
   }
 
   return (

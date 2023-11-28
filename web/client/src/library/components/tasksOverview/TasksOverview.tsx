@@ -237,7 +237,10 @@ function TasksDetails({
                   </TaskDetailsProgress>
                 </TaskDetails>
                 {showProgress ? (
-                  <Progress progress={toRatio(task.completed, task.total)} />
+                  <Progress
+                    startFromZero={false}
+                    progress={toRatio(task.completed, task.total)}
+                  />
                 ) : (
                   <Divider className="my-1 border-neutral-200 opacity-50" />
                 )}
@@ -301,7 +304,13 @@ function TasksDetails({
                 </TaskDetailsProgress>
               </TaskDetails>
               {showProgress ? (
-                <Progress progress={toRatio(task.completed, task.total)} />
+                <Progress
+                  progress={toRatio(task.completed, task.total)}
+                  startFromZero={
+                    modelsInQueue.findIndex(([name]) => name === modelName) ===
+                    -1
+                  }
+                />
               ) : (
                 <Divider className="my-1 border-neutral-200 opacity-50" />
               )}
