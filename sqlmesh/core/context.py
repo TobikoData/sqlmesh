@@ -236,7 +236,7 @@ class Context(BaseContext):
         notification_targets: t.Optional[t.List[NotificationTarget]] = None,
         state_sync: t.Optional[StateSync] = None,
         paths: t.Union[str, t.Iterable[str]] = "",
-        config: t.Optional[t.Union[Config, str]] = None,
+        config: t.Optional[t.Union[Config, str, t.Dict[Path, Config]]] = None,
         gateway: t.Optional[str] = None,
         concurrent_tasks: t.Optional[int] = None,
         loader: t.Optional[t.Type[Loader]] = None,
@@ -248,13 +248,16 @@ class Context(BaseContext):
 
         self.sqlmesh_path = Path.home() / ".sqlmesh"
 
-        self.configs = self._load_configs(
-            config or "config",
-            [
-                Path(path).absolute()
-                for path in ([paths] if isinstance(paths, str) else list(paths))
-            ],
-        )
+        if isinstance(config, dict):
+            self.configs = config
+        else:
+            self.configs = self._load_configs(
+                config or "config",
+                [
+                    Path(path).absolute()
+                    for path in ([paths] if isinstance(paths, str) else list(paths))
+                ],
+            )
 
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
@@ -456,7 +459,7 @@ class Context(BaseContext):
             True if the run was successful, False otherwise.
         """
         self.notification_target_manager.notify(
-            NotificationEvent.RUN_START, environment=environment
+            NotificationEvent.RUN_START, environment=environment or c.PROD
         )
         success = False
         try:
@@ -481,7 +484,7 @@ class Context(BaseContext):
             )
         else:
             self.notification_target_manager.notify(
-                NotificationEvent.RUN_FAILURE, environment=environment
+                NotificationEvent.RUN_FAILURE, "See console logs for details."
             )
 
         return success

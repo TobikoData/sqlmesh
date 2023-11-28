@@ -1,5 +1,7 @@
 # type: ignore
-from unittest import TestCase
+import os
+import pathlib
+from unittest import TestCase, mock
 from unittest.result import TestResult
 
 from pytest_mock.plugin import MockerFixture
@@ -24,6 +26,7 @@ def test_run_all_success_with_approvers_approved(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -66,7 +69,10 @@ def test_run_all_success_with_approvers_approved(
     ]
     controller._context.invalidate_environment = mocker.MagicMock()
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -131,6 +137,12 @@ def test_run_all_success_with_approvers_approved(
 
 **Models needing backfill (missing dates):**"""
     )
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
+        )
 
 
 def test_run_all_success_with_approvers_approved_merge_delete(
@@ -139,6 +151,7 @@ def test_run_all_success_with_approvers_approved_merge_delete(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -181,7 +194,10 @@ def test_run_all_success_with_approvers_approved_merge_delete(
     ]
     controller._context.invalidate_environment = mocker.MagicMock()
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -246,6 +262,12 @@ def test_run_all_success_with_approvers_approved_merge_delete(
 
 **Models needing backfill (missing dates):**"""
     )
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
+        )
 
 
 def test_run_all_missing_approval(
@@ -254,6 +276,7 @@ def test_run_all_missing_approval(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -298,7 +321,10 @@ def test_run_all_missing_approval(
     ]
     controller._context.invalidate_environment = mocker.MagicMock()
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[
@@ -355,6 +381,12 @@ def test_run_all_missing_approval(
         created_comments[0].body
         == """**SQLMesh Bot Info**\n- PR Virtual Data Environment: hello_world_2"""
     )
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=neutral\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
+        )
 
 
 def test_run_all_test_failed(
@@ -363,6 +395,7 @@ def test_run_all_test_failed(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -409,7 +442,10 @@ def test_run_all_test_failed(
     ]
     controller._context.invalidate_environment = mocker.MagicMock()
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -468,6 +504,13 @@ def test_run_all_test_failed(
 
     assert len(created_comments) == 0
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=failure\nhas_required_approval=success\npr_environment_name=hello_world_2\npr_environment_synced=skipped\nprod_plan_preview=skipped\nprod_environment_synced=skipped\n"
+        )
+
 
 def test_pr_update_failure(
     github_client,
@@ -475,6 +518,7 @@ def test_pr_update_failure(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -524,7 +568,10 @@ def test_pr_update_failure(
 
     controller._context.apply = mocker.MagicMock(side_effect=lambda plan: raise_on_pr_plan(plan))
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
     pr_checks_runs = controller._check_run_mapping["SQLMesh - PR Environment Synced"].all_kwargs
@@ -577,6 +624,13 @@ def test_pr_update_failure(
 
     assert len(created_comments) == 0
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\npr_environment_name=hello_world_2\npr_environment_synced=failure\nprod_plan_preview=skipped\nprod_environment_synced=skipped\n"
+        )
+
 
 def test_prod_update_failure(
     github_client,
@@ -584,6 +638,7 @@ def test_prod_update_failure(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -633,7 +688,10 @@ def test_prod_update_failure(
 
     controller._context.apply = mocker.MagicMock(side_effect=lambda plan: raise_on_prod_plan(plan))
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[
@@ -699,6 +757,13 @@ def test_prod_update_failure(
 **Models needing backfill (missing dates):**"""
     )
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=action_required\n"
+        )
+
 
 def test_comment_command_invalid(
     github_client,
@@ -707,6 +772,7 @@ def test_comment_command_invalid(
     make_mock_issue_comment,
     make_pull_request_review,
     make_event_issue_comment,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -750,7 +816,12 @@ def test_comment_command_invalid(
     ]
     controller._context.invalidate_environment = mocker.MagicMock()
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    github_output_file.touch()
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert len(controller._check_run_mapping) == 0
 
@@ -759,6 +830,10 @@ def test_comment_command_invalid(
 
     assert len(created_comments) == 0
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert output == ""
+
 
 def test_comment_command_deploy_prod(
     github_client,
@@ -766,6 +841,7 @@ def test_comment_command_deploy_prod(
     make_mock_check_run,
     make_mock_issue_comment,
     make_event_issue_comment,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -807,7 +883,10 @@ def test_comment_command_deploy_prod(
     ]
     controller._context.invalidate_environment = mocker.MagicMock()
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
     prod_plan_preview_checks_runs = controller._check_run_mapping[
@@ -868,6 +947,13 @@ def test_comment_command_deploy_prod(
 **Models needing backfill (missing dates):**"""
     )
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
+        )
+
 
 def test_comment_command_deploy_prod_not_enabled(
     github_client,
@@ -875,6 +961,7 @@ def test_comment_command_deploy_prod_not_enabled(
     make_mock_check_run,
     make_mock_issue_comment,
     make_event_issue_comment,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -914,7 +1001,12 @@ def test_comment_command_deploy_prod_not_enabled(
     controller._context.users = []
     controller._context.invalidate_environment = mocker.MagicMock()
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    github_output_file.touch()
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert controller._check_run_mapping == {}
 
@@ -924,3 +1016,7 @@ def test_comment_command_deploy_prod_not_enabled(
     assert not controller._context.invalidate_environment.called
 
     assert len(created_comments) == 0
+
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert output == ""

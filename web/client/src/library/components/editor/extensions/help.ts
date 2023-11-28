@@ -1,25 +1,35 @@
-import { syntaxTree } from '@codemirror/language'
 import {
   type EditorView,
   type DecorationSet,
   Decoration,
 } from '@codemirror/view'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { isFalse } from '@utils/index'
+import { isFalse, isNil, isNotNil } from '@utils/index'
 import { type Column } from '@api/client'
 import clsx from 'clsx'
+
+interface DecorationRange {
+  from: number
+  to: number
+}
+type MarkDecorationCallback = (
+  options: DecorationRange & {
+    name: string
+    key: string
+  },
+) => void
 
 export function findModel(
   event: MouseEvent,
   models: Map<string, ModelSQLMeshModel>,
 ): ModelSQLMeshModel | undefined {
-  if (event.target == null) return
+  if (isNil(event.target)) return
 
   const el = event.target as HTMLElement
   const modelName =
     el.getAttribute('model') ?? el.parentElement?.getAttribute('model')
 
-  if (modelName == null) return
+  if (isNil(modelName)) return
 
   return models.get(modelName)
 }
@@ -28,13 +38,13 @@ export function findColumn(
   event: MouseEvent,
   model: ModelSQLMeshModel,
 ): Column | undefined {
-  if (event.target == null) return
+  if (isNil(event.target)) return
 
   const el = event.target as HTMLElement
   const columnName =
     el.getAttribute('column') ?? el.parentElement?.getAttribute('column')
 
-  if (columnName == null) return
+  if (isNil(columnName)) return
 
   return model.columns.find(c => c.name === columnName)
 }
@@ -46,89 +56,155 @@ export function getDecorations(
   columns: Set<string>,
   isActionMode: boolean,
 ): DecorationSet {
-  const decorations: any = []
-  const modelColumns = model.columns.map(c => c.name)
+  const ranges: any = []
+  const columnNames = Array.from(columns)
+  const modelNames = Array.from(new Set(models.values())).map(m => m.name)
+  const modelColumns = model.columns.map(c => c.name.toLowerCase())
+  const validLeftCharColumn = new Set(['.', '(', '[', ' ', '\n'])
+  const validRightCharColumn = new Set([':', ')', ',', ']', ' ', '\n'])
 
   for (const range of view.visibleRanges) {
-    syntaxTree(view.state).iterate({
-      from: range.from,
-      to: range.to,
-      enter({ from, to }) {
-        // In case model name represented in qoutes
-        // like in python files, we need to remove qoutes
-        let maybeModelOrColumn = view.state.doc
-          .sliceString(from - 1, to + 1)
-          .replaceAll('"', '')
-          .replaceAll("'", '')
-        let isOriginal = false
-
-        if (
-          maybeModelOrColumn.startsWith('.') ||
-          maybeModelOrColumn.endsWith(':')
-        ) {
-          isOriginal = true
-        }
-
-        maybeModelOrColumn = maybeModelOrColumn.slice(
-          1,
-          maybeModelOrColumn.length - 1,
+    getMarkDecorations(
+      modelNames,
+      view.state.doc.sliceString(range.from, range.to),
+      range,
+      ({ from, to, name }) => {
+        ranges.push(
+          createMarkDecorationModel({
+            model: name,
+            isActionMode,
+            isActiveModel: model.name === name,
+          }).range(from, to),
         )
+      },
+    )
+
+    getMarkDecorations(
+      columnNames,
+      view.state.doc.sliceString(range.from, range.to),
+      range,
+      ({ from, to, key }) => {
+        const column = view.state.doc.sliceString(from, to)
+        const word = view.state.doc.sliceString(from - 1, to + 1)
+        const leftChar = view.state.doc.sliceString(from - 1, from)
+        const rightChar = view.state.doc.sliceString(to, to + 1)
 
         if (
-          isFalse(isOriginal) &&
-          columns.has(maybeModelOrColumn) &&
-          !modelColumns.includes(maybeModelOrColumn)
-        ) {
-          isOriginal = true
-        }
+          (isNotNil(leftChar) && isFalse(validLeftCharColumn.has(leftChar))) ||
+          (isNotNil(rightChar) && isFalse(validRightCharColumn.has(rightChar)))
+        )
+          return
 
-        let decoration
-
-        if (maybeModelOrColumn === model.name) {
-          decoration = Decoration.mark({
-            attributes: {
-              class: clsx(
-                'sqlmesh-model --is-active-model',
-                isActionMode && '--is-action-mode',
-              ),
-              model: maybeModelOrColumn,
-            },
-          }).range(from, to)
-        } else if (models.get(maybeModelOrColumn) != null) {
-          decoration = Decoration.mark({
-            attributes: {
-              class: clsx('sqlmesh-model', isActionMode && '--is-action-mode'),
-              model: maybeModelOrColumn,
-            },
-          }).range(from, to)
-        } else if (modelColumns.includes(maybeModelOrColumn)) {
-          decoration = Decoration.mark({
-            attributes: {
-              class: clsx(
-                'sqlmesh-model__column --is-active-model',
-                isOriginal ? '--is-original' : '--is-derived',
-                isActionMode && '--is-action-mode',
-              ),
-              column: maybeModelOrColumn,
-            },
-          }).range(from, to)
-        } else if (columns.has(maybeModelOrColumn)) {
-          decoration = Decoration.mark({
-            attributes: {
-              class: clsx(
-                'sqlmesh-model__column',
-                isOriginal ? '--is-original' : '--is-derived',
-                isActionMode && '--is-action-mode',
-              ),
-              column: maybeModelOrColumn,
-            },
-          }).range(from, to)
-        }
-
-        decoration != null && decorations.push(decoration)
+        ranges.push(
+          createMarkDecorationColumn({
+            column,
+            isOriginalColumn: isOriginalColumn(word),
+            isActiveModel: modelColumns.includes(key),
+            isActionMode,
+          }).range(from, to),
+        )
       },
-    })
+    )
   }
 
-  return Decoration.set(decorations)
+  return Decoration.set(
+    ranges.sort((a: DecorationRange, b: DecorationRange) => a.from - b.from),
+  )
+}
+
+function getMarkDecorations(
+  list: string[],
+  doc: string,
+  range: DecorationRange,
+  callback: MarkDecorationCallback,
+): void {
+  const visisted = new Set()
+
+  for (const name of list) {
+    const key = name.toLowerCase()
+
+    if (visisted.has(key)) continue
+
+    visisted.add(key)
+
+    const regex = new RegExp(name, 'ig')
+    const regex_normalized = new RegExp(alternativeNameFormat(name), 'ig')
+    let found
+
+    while (isNotNil((found = regex_normalized.exec(doc) ?? regex.exec(doc)))) {
+      const from = range.from + found.index
+      const to = from + found[0].length
+      const options = {
+        from,
+        to,
+        name,
+        key,
+      }
+
+      isNotNil(callback) && callback(options)
+    }
+  }
+}
+
+function createMarkDecorationModel({
+  model,
+  isActionMode,
+  isActiveModel,
+}: {
+  model: string
+  isActionMode: boolean
+  isActiveModel: boolean
+}): Decoration {
+  return Decoration.mark({
+    attributes: {
+      class: clsx(
+        'sqlmesh-model',
+        isActiveModel && '--is-active-model',
+        isActionMode && '--is-action-mode',
+      ),
+      model,
+    },
+  })
+}
+
+function createMarkDecorationColumn({
+  column,
+  isOriginalColumn,
+  isActionMode,
+  isActiveModel,
+}: {
+  column: string
+  isOriginalColumn: boolean
+  isActiveModel: boolean
+  isActionMode: boolean
+}): Decoration {
+  return Decoration.mark({
+    attributes: {
+      class: clsx(
+        'sqlmesh-model__column',
+        isOriginalColumn ? '--is-original' : '--is-alias',
+        isActiveModel && '--is-active-model',
+        isActionMode && '--is-action-mode',
+      ),
+      column,
+    },
+  })
+}
+
+function isOriginalColumn(column: string): boolean {
+  return (
+    column.startsWith('.') ||
+    column.endsWith(':') ||
+    column.startsWith('(') ||
+    column.endsWith(')')
+  )
+}
+
+function alternativeNameFormat(modelName: string): string {
+  return modelName.includes('"')
+    ? modelName
+    : modelName
+        .split('.')
+        .map(name => `"${name}"`)
+        .join('.')
 }

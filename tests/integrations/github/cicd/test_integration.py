@@ -2,9 +2,11 @@
 These integration tests are for testing integrating with SQLMesh and not integrating with Github.
 Therefore Github calls are still mocked but context is fully evaluated.
 """
+import os
+import pathlib
 import typing as t
+from unittest import mock
 
-import pytest
 from freezegun import freeze_time
 from pytest_mock.plugin import MockerFixture
 from sqlglot import exp
@@ -50,8 +52,8 @@ def test_merge_pr_has_non_breaking_change(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     """
     PR with a non-breaking change and auto-categorization will be backfilled, merged, and deployed to prod
@@ -106,7 +108,10 @@ def test_merge_pr_has_non_breaking_change(
     model.query.expressions.append(exp.alias_("1", "new_col"))
     controller._context.upsert_model(model)
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -230,6 +235,13 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 """
     )
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
+        )
+
 
 @freeze_time("2023-01-01 15:00:00")
 def test_merge_pr_has_non_breaking_change_diff_start(
@@ -238,8 +250,8 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     """
     Different PR start correctly affects only the PR environment and prod still has no gaps
@@ -294,7 +306,10 @@ def test_merge_pr_has_non_breaking_change_diff_start(
     model.query.expressions.append(exp.alias_("1", "new_col"))
     controller._context.upsert_model(model)
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -425,6 +440,13 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 """
     )
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
+        )
+
 
 @freeze_time("2023-01-01 15:00:00")
 def test_merge_pr_has_non_breaking_change_no_categorization(
@@ -433,8 +455,8 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     """
     PR without auto-categorization but with changes errors asking for user to categorize
@@ -486,7 +508,10 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
     model.query.expressions.append(exp.alias_("1", "new_col"))
     controller._context.upsert_model(model)
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -568,6 +593,13 @@ def test_merge_pr_has_non_breaking_change_no_categorization(
 
     assert len(created_comments) == 0
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\npr_environment_name=hello_world_2\npr_environment_synced=action_required\nprod_plan_preview=skipped\nprod_environment_synced=skipped\n"
+        )
+
 
 def test_merge_pr_has_no_changes(
     github_client,
@@ -575,6 +607,7 @@ def test_merge_pr_has_no_changes(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -622,7 +655,10 @@ def test_merge_pr_has_no_changes(
         User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
     ]
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -716,6 +752,13 @@ def test_merge_pr_has_no_changes(
 """
     )
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\npr_environment_name=hello_world_2\npr_environment_synced=skipped\nprod_plan_preview=success\nprod_environment_synced=success\n"
+        )
+
 
 @freeze_time("2023-01-01 15:00:00")
 def test_no_merge_since_no_deploy_signal(
@@ -724,6 +767,7 @@ def test_no_merge_since_no_deploy_signal(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -777,7 +821,10 @@ def test_no_merge_since_no_deploy_signal(
     model.query.expressions.append(exp.alias_("1", "new_col"))
     controller._context.upsert_model(model)
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -888,6 +935,13 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 - PR Virtual Data Environment: hello_world_2"""
     )
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=neutral\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=skipped\n"
+        )
+
 
 @freeze_time("2023-01-01 15:00:00")
 def test_no_merge_since_no_deploy_signal_no_approvers_defined(
@@ -896,6 +950,7 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -949,7 +1004,10 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
     model.query.expressions.append(exp.alias_("1", "new_col"))
     controller._context.upsert_model(model)
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -1043,6 +1101,13 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 - PR Virtual Data Environment: hello_world_2"""
     )
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\n"
+        )
+
 
 @freeze_time("2023-01-01 15:00:00")
 def test_deploy_comment_pre_categorized(
@@ -1051,6 +1116,7 @@ def test_deploy_comment_pre_categorized(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
 ):
     """
@@ -1114,7 +1180,10 @@ def test_deploy_comment_pre_categorized(
         skip_backfill=True,
     )
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -1226,6 +1295,13 @@ Directly Modified: sushi.waiter_revenue_by_day (Non-breaking)
 """
     )
 
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
+        )
+
 
 @freeze_time("2023-01-01 15:00:00")
 def test_error_msg_when_applying_plan_with_bug(
@@ -1234,8 +1310,8 @@ def test_error_msg_when_applying_plan_with_bug(
     make_mock_check_run,
     make_mock_issue_comment,
     make_pull_request_review,
+    tmp_path: pathlib.Path,
     mocker: MockerFixture,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     """
     PR with auto-categorization but has a mistake in the model so apply fails
@@ -1288,7 +1364,10 @@ def test_error_msg_when_applying_plan_with_bug(
     model.query.expressions.append(exp.alias_("non_existing_col", "new_col"))
     controller._context.upsert_model(model)
 
-    command._run_all(controller)
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
 
     assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
     test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
@@ -1367,3 +1446,10 @@ def test_error_msg_when_applying_plan_with_bug(
     assert not mock_pull_request.merge.called
 
     assert len(created_comments) == 0
+
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\npr_environment_name=hello_world_2\npr_environment_synced=failure\nprod_plan_preview=skipped\nprod_environment_synced=skipped\n"
+        )

@@ -58,6 +58,7 @@ async def column_lineage(
                 for model in context.dag.upstream(model_name)
                 if model in context.models
             },
+            dialect=context.models[model_name].dialect,
         )
     except Exception:
         raise ApiException(
@@ -74,6 +75,7 @@ async def column_lineage(
             column_name = exp.to_column(node.name).name
         if table in graph and column_name in graph[table]:
             continue
+
         dialect = context.models[table].dialect if table in context.models else ""
         graph[table] = {
             column_name: LineageColumn(
@@ -82,6 +84,7 @@ async def column_lineage(
                 models=_process_downstream(node.downstream),
             )
         }
+
     return graph
 
 

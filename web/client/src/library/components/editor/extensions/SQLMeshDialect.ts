@@ -23,11 +23,11 @@ export const SQLMeshDialect: ExtensionSQLMeshDialect = function SQLMeshDialect(
   options = { types: '', keywords: '' },
   dialects,
 ): LanguageSupport {
-  const SQLKeywords = options.keywords
-  const SQLTypes = options.types
+  const SQLKeywords = options.keywords + ' coalesce sum count avg min max cast'
+  const SQLTypes = options.types + ' string'
   const SQLMeshModelDictionary = getSQLMeshModelKeywords(dialects)
   const SQLMeshKeywords =
-    'columns grain grains references metric tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
+    'path threshold jinja_query_begin number_of_rows jinja_end not_null forall criteria length unique_values interval_unit unique_key columns grain grains references metric tags audit model name kind owner cron start storage_format time_column partitioned_by pre post batch_size audits dialect'
   const SQLMeshTypes =
     'expression seed full incremental_by_time_range incremental_by_unique_key view embedded'
   const lang = SQLDialect.define({
