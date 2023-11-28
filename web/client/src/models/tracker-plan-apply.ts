@@ -126,7 +126,7 @@ export class ModelPlanApplyTracker
   get evaluationEnd(): Optional<PlanOverviewStageTrackerEnd> {
     return (
       this.promote?.meta?.end ??
-      this.backfill?.meta?.start ??
+      this.backfill?.meta?.end ??
       this.creation?.meta?.end
     )
   }
