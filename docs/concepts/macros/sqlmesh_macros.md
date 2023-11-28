@@ -169,6 +169,8 @@ SELECT
 FROM table
 ```
 
+Note that this only works in a `SELECT` clause. See the `@REDUCE` macro to insert custom separators, i.e.: for use in a `WHERE` clause.
+
 #### @EACH string substitution
 
 The basic example above is too simple to be useful. Many uses of `@EACH` will involve using the values as one or both of a literal value and an identifier.
