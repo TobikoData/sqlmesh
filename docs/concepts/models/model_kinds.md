@@ -8,21 +8,33 @@ Models of the `INCREMENTAL_BY_TIME_RANGE` kind are computed incrementally based 
 
 Only missing time intervals are processed during each execution for `INCREMENTAL_BY_TIME_RANGE` models. This is in contrast to the [FULL](#full) model kind, where the entire dataset is recomputed every time the model is executed.
 
-An `INCREMENTAL_BY_TIME_RANGE` model query must contain an expression in its SQL `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`.
+An `INCREMENTAL_BY_TIME_RANGE` model has two requirements that other models do not: it must know which column contains the time data it will use to filter the data by time range, and it must contain a `WHERE` clause that filters the upstream data by time.
 
-Refer to [Macros](../macros/macro_variables.md) for more information.
+The name of the column containing time data is specified in the model's `MODEL` DDL. It is specified ih the DDL `kind` specification's `time_column` key. This example shows the `MODEL` DDL for an `INCREMENTAL_BY_TIME_RANGE` model that stores time data in the "event_date" column:
 
-This example implements an `INCREMENTAL_BY_TIME_RANGE` model by specifying the `kind` in the `MODEL` ddl and including a SQL `WHERE` clause to filter records by time range:
+```sql linenums="1"
+MODEL (
+  name db.events,
+  kind INCREMENTAL_BY_TIME_RANGE (
+    time_column event_date -- This model's time information is stored in the `event_date` column
+  )
+);
+```
+
+In addition to specifying a time column in the `MODEL` DDL, the model's query must contain a `WHERE` clause that filters the upstream records by time range. SQLMesh provides special macros that represent the start and end of the time range being processed: `@start_date` / `@end_date` and `@start_ds` / `@end_ds`. Refer to [Macros](../macros/macro_variables.md) for more information.
+
+This example implements a complete `INCREMENTAL_BY_TIME_RANGE` model that specifies the time column name `event_date` in the `MODEL` DDL and includes a SQL `WHERE` clause to filter records by time range:
+
 ```sql linenums="1" hl_lines="3-5 12-13"
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column ds
+    time_column event_date
   )
 );
 
 SELECT
-  event_date::TEXT as ds,
+  event_date::TEXT as event_date,
   event_payload::TEXT as payload
 FROM raw_events
 WHERE
@@ -32,23 +44,23 @@ WHERE
 ### Time column
 SQLMesh needs to know which column in the model's output represents the timestamp or date associated with each record.
 
-The `time_column` is used to determine which records will be overridden during data [restatement](../plans.md#restatement-plans) and provides a partition key for engines that support partitioning (such as Apache Spark):
+The time column is used to determine which records will be overwritten during data [restatement](../plans.md#restatement-plans) and provides a partition key for engines that support partitioning (such as Apache Spark). The name of the time column is specified in the `MODEL` DDL `kind` specification:
 
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column date_column
+    time_column event_date -- This model's time information is stored in the `event_date` column
   )
 );
 ```
 
-By default, SQLMesh assumes the time column is in the `%Y-%m-%d` format. For other formats, the default can be overridden as follows:
+By default, SQLMesh assumes the time column is in the `%Y-%m-%d` format. For other formats, the default can be overridden with a formatting string:
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name db.events,
   kind INCREMENTAL_BY_TIME_RANGE (
-    time_column (date_column, '%Y-%m-%d')
+    time_column (event_date, '%Y-%m-%d')
   )
 );
 ```
@@ -73,7 +85,7 @@ SELECT
   event_payload::TEXT as payload
 FROM raw_events
 WHERE
-  receipt_date BETWEEN @start_ds AND @end_ds; -- User-supplied `receipt_date` filter
+  receipt_date BETWEEN @start_ds AND @end_ds; -- Filter is based on the user-supplied `receipt_date` column
 ```
 
 At runtime, SQLMesh will automatically modify the model's query to look like this:
@@ -84,7 +96,7 @@ SELECT
 FROM raw_events
 WHERE
   receipt_date BETWEEN @start_ds AND @end_ds
-  AND event_date BETWEEN @start_ds AND @end_ds; -- `event_date` time column filter automatically added
+  AND event_date BETWEEN @start_ds AND @end_ds; -- `event_date` time column filter automatically added by SQLMesh
 ```
 
 ### Idempotency
@@ -164,7 +176,7 @@ The `unique_key` values can either be column names or SQL expressions. For examp
 MODEL (
   name db.employees,
   kind INCREMENTAL_BY_UNIQUE_KEY (
-    unique_key COALESCE("ds", '')
+    unique_key COALESCE("name", '')
   )
 );
 ```
@@ -172,7 +184,7 @@ MODEL (
 ### When Matched Expression
 
 The logic to use when updating columns when a match occurs (the source and target match on the given keys) by default updates all the columns. This can be overriden with custom logic like below:
-    
+
 ```sql linenums="1" hl_lines="4"
 MODEL (
   name db.employees,
@@ -348,8 +360,8 @@ MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
     unique_key id,
-    valid_from_name my_valid_from,
-    valid_to_name my_valid_to
+    valid_from_name my_valid_from, -- Name for `valid_from` column
+    valid_to_name my_valid_to -- Name for `valid_to` column
   )
 );
 ```
@@ -372,7 +384,7 @@ MODEL (
   name db.menu_items,
   kind SCD_TYPE_2 (
     unique_key id,
-    updated_at_name my_updated_at
+    updated_at_name my_updated_at -- Name for `updated_at` column
   )
 );
 
