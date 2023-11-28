@@ -375,7 +375,6 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
                     self, query, columns_to_types, target_table, **kwargs
                 )
 
-        self.create_table(table_name, columns_to_types, **kwargs)
         return self._insert_overwrite_by_condition(
             table_name, source_queries, columns_to_types, where=exp.true()
         )
@@ -420,6 +419,91 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
             view_name, query_or_df, columns_to_types, replace, materialized, **create_kwargs
         )
 
+    def _create_table(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
+    ) -> None:
+        super()._create_table(
+            table_name_or_schema,
+            expression,
+            exists=exists,
+            replace=replace,
+            columns_to_types=columns_to_types,
+            **kwargs,
+        )
+        table_name = (
+            table_name_or_schema.this
+            if isinstance(table_name_or_schema, exp.Schema)
+            else exp.to_table(table_name_or_schema)
+        )
+        if kwargs.get("storage_format", "").lower() == "iceberg" or self.wap_supported(table_name):
+            # Performing a dummy insert to create a dummy snapshot for Iceberg tables
+            # to workaround https://github.com/apache/iceberg/issues/8849.
+            dummy_insert = exp.insert(exp.select("*").from_(table_name), table_name)
+            self.execute(dummy_insert)
+
+    def wap_supported(self, table_name: TableName) -> bool:
+        fqn = self._ensure_fqn(table_name)
+        return (
+            self.spark.conf.get(f"spark.sql.catalog.{fqn.catalog}")
+            == "org.apache.iceberg.spark.SparkCatalog"
+        )
+
+    def wap_table_name(self, table_name: TableName, wap_id: str) -> str:
+        branch_name = _wap_branch_name(wap_id)
+        fqn = self._ensure_fqn(table_name)
+        return exp.Dot.build([fqn, exp.to_identifier(f"branch_{branch_name}")]).sql(
+            dialect=self.dialect
+        )
+
+    def wap_prepare(self, table_name: TableName, wap_id: str) -> str:
+        branch_name = _wap_branch_name(wap_id)
+        fqn = self._ensure_fqn(table_name)
+        self.execute(f"ALTER TABLE {fqn.sql(dialect=self.dialect)} CREATE BRANCH {branch_name}")
+        return self.wap_table_name(table_name, wap_id)
+
+    def wap_publish(self, table_name: TableName, wap_id: str) -> None:
+        branch_name = _wap_branch_name(wap_id)
+        fqn = self._ensure_fqn(table_name)
+
+        get_snapshot_id_query = (
+            exp.select("snapshot_id")
+            .from_(exp.Dot.build([fqn, exp.to_identifier("refs")]))
+            .where(exp.column("name").eq(branch_name))
+        )
+        iceberg_snapshot_ids = self.fetchall(get_snapshot_id_query)
+        if not iceberg_snapshot_ids:
+            raise SQLMeshError(f"Could not find Iceberg branch '{branch_name}'.")
+        iceberg_snapshot_id = iceberg_snapshot_ids[0][0]
+
+        logger.info(
+            "Cherry-picking Iceberg snapshot %s into table '%s'...", iceberg_snapshot_id, fqn
+        )
+
+        self.execute(
+            f"CALL {fqn.catalog}.system.cherrypick_snapshot('{fqn.db}.{fqn.name}', {iceberg_snapshot_id})"
+        )
+        self.execute(f"ALTER TABLE {fqn.sql(dialect=self.dialect)} DROP BRANCH {branch_name}")
+
     def _truncate_table(self, table_name: TableName) -> str:
         table = quote_identifiers(exp.to_table(table_name))
         return f"TRUNCATE TABLE {table.sql(dialect=self.dialect)}"
+
+    def _ensure_fqn(self, table_name: TableName) -> exp.Table:
+        if isinstance(table_name, exp.Table):
+            table_name = table_name.copy()
+        table = exp.to_table(table_name, dialect=self.dialect)
+        if not table.catalog:
+            table.set("catalog", self.spark.catalog.currentCatalog())
+        if not table.db:
+            table.set("db", self.spark.catalog.currentDatabase())
+        return table
+
+
+def _wap_branch_name(wap_id: str) -> str:
+    return f"wap_{wap_id}"

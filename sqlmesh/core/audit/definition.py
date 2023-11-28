@@ -195,7 +195,7 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
         extra_kwargs = {}
 
         node = snapshot_or_node if isinstance(snapshot_or_node, _Node) else snapshot_or_node.node
-        this_model = (
+        this_model = kwargs.pop("this_model", None) or (
             node.name
             if isinstance(snapshot_or_node, _Node)
             else t.cast(Snapshot, snapshot_or_node).table_name(

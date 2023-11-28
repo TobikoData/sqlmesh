@@ -321,6 +321,21 @@ class SnapshotEvaluator:
 
         logger.info("Auditing snapshot %s", snapshot.snapshot_id)
 
+        if wap_id is not None:
+            deployability_index = deployability_index or DeployabilityIndex.all_deployable()
+            original_table_name = snapshot.table_name(
+                is_deployable=deployability_index.is_deployable(snapshot)
+            )
+            wap_table_name = self.adapter.wap_table_name(original_table_name, wap_id)
+            logger.info(
+                "Auditing WAP table '%s', snapshot %s", wap_table_name, snapshot.snapshot_id
+            )
+
+            table_mapping = kwargs.get("table_mapping") or {}
+            table_mapping[snapshot.name] = wap_table_name
+            kwargs["table_mapping"] = table_mapping
+            kwargs["this_model"] = exp.to_table(wap_table_name)
+
         results = []
         for audit, audit_args in snapshot.audits_with_args:
             results.append(
@@ -334,12 +349,16 @@ class SnapshotEvaluator:
                     execution_time=execution_time,
                     raise_exception=raise_exception,
                     deployability_index=deployability_index,
-                    wap_id=wap_id,
                     **kwargs,
                 )
             )
 
         if wap_id is not None:
+            logger.info(
+                "Publishing evalaution results for snapshot %s, WAP ID '%s'",
+                snapshot.snapshot_id,
+                wap_id,
+            )
             self._wap_publish_snapshot(snapshot, wap_id, deployability_index)
 
         return results
@@ -450,7 +469,11 @@ class SnapshotEvaluator:
 
         with self.adapter.transaction(), self.adapter.session():
             wap_id: t.Optional[str] = None
-            if table_name and snapshot.is_materialized and self.adapter.wap_supported(table_name):
+            if (
+                table_name
+                and snapshot.is_materialized
+                and (model.wap_supported or self.adapter.wap_supported(table_name))
+            ):
                 wap_id = random_id()[0:8]
                 logger.info("Using WAP ID '%s' for snapshot %s", wap_id, snapshot.snapshot_id)
                 table_name = self.adapter.wap_prepare(table_name, wap_id)
@@ -659,7 +682,6 @@ class SnapshotEvaluator:
         execution_time: t.Optional[TimeLike],
         raise_exception: bool,
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> AuditResult:
         if audit.skip:
@@ -668,6 +690,7 @@ class SnapshotEvaluator:
                 model=snapshot.model_or_none,
                 skipped=True,
             )
+
         query = audit.render_query(
             snapshot,
             start=start,
