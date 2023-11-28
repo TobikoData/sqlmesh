@@ -363,18 +363,50 @@ def dag(ctx: click.Context, file: str) -> None:
 @cli.command("create_test")
 @click.argument("model")
 @click.option(
-    "--query",
     "-q",
+    "--query",
     "queries",
     type=(str, str),
     multiple=True,
+    required=True,
     help="Queries that will be used to generate data for the model's dependencies.",
+)
+@click.option(
+    "-o",
+    "--overwrite",
+    "overwrite",
+    is_flag=True,
+    default=False,
+    help="When true, the fixture file will be overwritten in case it already exists.",
+)
+@click.option(
+    "-p",
+    "--path",
+    "path",
+    help=(
+        "The file path corresponding to the fixture, relative to the test directory. "
+        "By default, the fixture will be created under the test directory and the file "
+        "name will be inferred based on the test's name."
+    ),
+)
+@click.option(
+    "-n",
+    "--name",
+    "name",
+    help="The name of the test that will be created.",
 )
 @click.pass_obj
 @error_handler
-def create_test(obj: Context, model: str, queries: t.List[t.Tuple[str, str]]) -> None:
+def create_test(
+    obj: Context,
+    model: str,
+    queries: t.List[t.Tuple[str, str]],
+    overwrite: bool = False,
+    name: t.Optional[str] = None,
+    path: t.Optional[str] = None,
+) -> None:
     """Automatically create a new unit test for a given model."""
-    obj.create_test(model, input_queries=dict(queries))
+    obj.create_test(model, input_queries=dict(queries), overwrite=overwrite, name=name, path=path)
 
 
 @cli.command("test")

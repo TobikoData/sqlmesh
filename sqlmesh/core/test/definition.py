@@ -303,6 +303,9 @@ def generate_test(
     input_queries: t.Dict[str, str],
     models: t.Dict[str, Model],
     engine_adapter: EngineAdapter,
+    overwrite: bool = False,
+    path: t.Optional[str] = None,
+    name: t.Optional[str] = None,
 ) -> None:
     """Automatically create a new unit test for a given model.
 
@@ -312,16 +315,31 @@ def generate_test(
             will be populated in the test based on the results of the corresponding query.
         models: The context's models.
         engine_adapter: The target engine adapter.
+        overwrite: Whether to overwrite the existing test in case of a file path collision.
+            When set to False, an error will be raised if there is such a collision.
+        path: The file path corresponding to the fixture, relative to the test directory.
+            By default, the fixture will be created under the test directory and the file name
+            will be inferred from the test's name.
+        name: The name of the test. This is inferred from the model name by default.
     """
-    inputs: t.Dict[str, t.Any] = {}
-    for dep, query in input_queries.items():
-        if dep not in models:
-            raise ConfigError(f"Cannot find model for '{dep}'.")
+    test_name = name or f"test_{model.view_name}"
+    path = path or f"{test_name}.yaml"
 
-        inputs[dep] = engine_adapter.fetchdf(query).to_dict(orient="records")
+    extension = path.split(".")[-1].lower()
+    if extension not in ("yaml", "yml"):
+        path = f"{path}.yaml"
 
+    fixture_path = Path(c.TESTS) / path
+    if not overwrite and fixture_path.exists():
+        raise ConfigError(
+            f"Fixture '{fixture_path}' already exists, make sure to set --overwrite if it can be safely overwritten."
+        )
+
+    inputs = {
+        dep: engine_adapter.fetchdf(query).to_dict(orient="records")
+        for dep, query in input_queries.items()
+    }
     outputs: t.Dict[str, t.Any] = {"query": {}}
-    test_name = f"test_{model.view_name}"
     test_body = {"model": model.name, "inputs": inputs, "outputs": outputs}
 
     test = ModelTest.create_test(
@@ -330,7 +348,7 @@ def generate_test(
         models=models,
         engine_adapter=engine_adapter,
         dialect=model.dialect,
-        path=None,
+        path=fixture_path,
     )
 
     test.setUp()
@@ -348,7 +366,8 @@ def generate_test(
 
     test.tearDown()
 
-    with open(Path(c.TESTS) / f"{test_name}.yaml", "w", encoding="utf-8") as file:
+    fixture_path.parent.mkdir(exist_ok=True, parents=True)
+    with open(fixture_path, "w", encoding="utf-8") as file:
         yaml.dump({test_name: test_body}, file)
 
 
