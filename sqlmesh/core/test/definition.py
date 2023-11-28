@@ -211,9 +211,9 @@ class ModelTest(unittest.TestCase):
             model_query = model.render_query_or_raise(
                 engine_adapter=engine_adapter, table_mapping=mapping
             )
-            output = t.cast(SqlModelTest, test).execute(model_query)
+            output = t.cast(SqlModelTest, test)._execute(model_query)
         else:
-            output = t.cast(PythonModelTest, test).evaluate()
+            output = t.cast(PythonModelTest, test)._execute_model()
 
         outputs["query"] = output.to_dict(orient="records")
 
@@ -264,7 +264,7 @@ class ModelTest(unittest.TestCase):
 
 
 class SqlModelTest(ModelTest):
-    def execute(self, query: exp.Expression) -> pd.DataFrame:
+    def _execute(self, query: exp.Expression) -> pd.DataFrame:
         """Executes the query with the engine adapter and returns a DataFrame."""
         return self.engine_adapter.fetchdf(query)
 
@@ -282,7 +282,7 @@ class SqlModelTest(ModelTest):
                     cte_query = cte_query.with_(alias, cte.this)
 
                 expected_df = pd.DataFrame.from_records(value)
-                actual_df = self.execute(cte_query)
+                actual_df = self._execute(cte_query)
                 self.assert_equal(expected_df, actual_df)
 
     def runTest(self) -> None:
@@ -302,7 +302,7 @@ class SqlModelTest(ModelTest):
         # Test model query
         if "query" in self.body["outputs"]:
             expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
-            actual_df = self.execute(query)
+            actual_df = self._execute(query)
             self.assert_equal(expected_df, actual_df)
 
 
@@ -337,7 +337,7 @@ class PythonModelTest(ModelTest):
             models=models,
         )
 
-    def evaluate(self) -> pd.DataFrame:
+    def _execute_model(self) -> pd.DataFrame:
         """Evaluates the python model and returns a DataFrame."""
         return t.cast(
             pd.DataFrame,
@@ -347,7 +347,7 @@ class PythonModelTest(ModelTest):
     def runTest(self) -> None:
         if "query" in self.body["outputs"]:
             expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
-            actual_df = self.evaluate()
+            actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
             self.assert_equal(expected_df, actual_df)
 
