@@ -82,12 +82,10 @@ export default function Table({
 
   return (
     <div className="w-full h-full flex flex-col">
-      {isArrayNotEmpty(virtualRows) && (
-        <Header
-          filter={filter}
-          setFilter={setFilter}
-        />
-      )}
+      <Header
+        filter={filter}
+        setFilter={setFilter}
+      />
       <div
         ref={elTableContainer}
         className="w-full h-full overflow-auto hover:scrollbar scrollbar--horizontal scrollbar--vertical"

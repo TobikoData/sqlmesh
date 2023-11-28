@@ -1,17 +1,26 @@
+import { isFalse } from '@utils/index'
 import clsx from 'clsx'
 
-export interface PropsProgress extends React.HTMLAttributes<HTMLElement> {
-  progress: number
-  delay?: number
-  duration?: number
-}
+const PROGRESS_DEFAULT_START = 3 // Start from 3% to indicate the progress is loading
 
 export default function Progress({
   progress = 0,
   delay = 0,
   duration = 0,
+  startFromZero = true,
   className,
-}: PropsProgress): JSX.Element {
+}: {
+  startFromZero?: boolean
+  progress: number
+  delay?: number
+  duration?: number
+  className?: string
+}): JSX.Element {
+  if (isFalse(startFromZero)) {
+    progress =
+      progress < PROGRESS_DEFAULT_START ? PROGRESS_DEFAULT_START : progress
+  }
+
   return (
     <div
       className={clsx(
