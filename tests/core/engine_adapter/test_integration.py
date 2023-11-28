@@ -66,7 +66,10 @@ class TestContext:
     @property
     def timestamp_columns(self) -> t.List[str]:
         return [
-            k for k, v in self.columns_to_types.items() if v.sql().lower().startswith("timestamp")
+            k
+            for k, v in self.columns_to_types.items()
+            if v.sql().lower().startswith("timestamp")
+            or (v.sql().lower() == "datetime" and self.dialect == "bigquery")
         ]
 
     @property
@@ -122,7 +125,9 @@ class TestContext:
         self._init_engine_adapter()
 
     def input_data(
-        self, data: pd.DataFrame, columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None
+        self,
+        data: pd.DataFrame,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
     ) -> t.Union[Query, pd.DataFrame]:
         columns_to_types = columns_to_types or self.columns_to_types
         if self.test_type == "query":
@@ -134,12 +139,10 @@ class TestContext:
             )
         elif self.test_type == "pyspark":
             return self.engine_adapter.spark.createDataFrame(data)  # type: ignore
-        return self._format_df(
-            data, to_datetime=self.dialect != "trino", include_tz=self.dialect == "bigquery"
-        )
+        return self._format_df(data, to_datetime=self.dialect != "trino")
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        return self._format_df(data, include_tz=self.dialect in ("databricks", "bigquery"))
+        return self._format_df(data, include_tz=self.dialect == "databricks")
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
         return exp.to_table(
@@ -600,7 +603,7 @@ def test_insert_append(ctx: TestContext):
 def test_insert_overwrite_by_time_partition(ctx: TestContext):
     ds_type = "string"
     if ctx.dialect == "bigquery":
-        ds_type = "timestamp"
+        ds_type = "datetime"
     if ctx.dialect == "tsql":
         ds_type = "varchar(max)"
 
@@ -738,12 +741,14 @@ def test_merge(ctx: TestContext):
 
 
 def test_scd_type_2(ctx: TestContext):
+    time_type = "datetime" if ctx.dialect == "bigquery" else "timestamp"
+
     ctx.columns_to_types = {
         "id": "int",
         "name": "string",
-        "updated_at": "timestamp",
-        "valid_from": "timestamp",
-        "valid_to": "timestamp",
+        "updated_at": f"{time_type}",
+        "valid_from": f"{time_type}",
+        "valid_to": f"{time_type}",
     }
     ctx.init()
     table = ctx.table("test_table")
