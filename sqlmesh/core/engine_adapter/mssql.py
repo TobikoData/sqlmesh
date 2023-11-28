@@ -186,7 +186,7 @@ class MSSQLEngineAdapter(
                     # bulk_copy() doesn't work with TZ timestamp, so load into string column and cast to
                     # timestamp in SELECT statement
                     columns_to_types[column] = exp.DataType.build("TEXT")
-                else:  # type: ignore
+                else:
                     df[column] = pd.to_datetime(df[column]).dt.strftime("%Y-%m-%d %H:%M:%S.%f")  # type: ignore
 
     def _df_to_source_queries(
