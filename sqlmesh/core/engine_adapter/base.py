@@ -1294,6 +1294,18 @@ class EngineAdapter:
         """Returns whether WAP for the target table is supported."""
         return False
 
+    def wap_prepare(self, table_name: TableName, wap_id: str) -> str:
+        """Prepares the target table for WAP and returns the updated table name.
+
+        Args:
+            table_name: The name of the target table.
+            wap_id: The WAP ID to prepare.
+
+        Returns:
+            The updated table name that should be used for writing.
+        """
+        raise NotImplementedError(f"Engine does not support WAP: {type(self)}")
+
     def wap_publish(self, table_name: TableName, wap_id: str) -> None:
         """Publishes changes with the given WAP ID to the target table.
 

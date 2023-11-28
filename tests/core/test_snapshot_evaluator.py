@@ -78,6 +78,7 @@ def adapter_mock(mocker: MockerFixture):
     adapter_mock.session.return_value = session_mock
     adapter_mock.dialect = "duckdb"
     adapter_mock.HAS_VIEW_BINDING = False
+    adapter_mock.wap_supported.return_value = False
     return adapter_mock
 
 

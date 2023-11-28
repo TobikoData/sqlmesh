@@ -405,13 +405,7 @@ class SnapshotEvaluator:
 
         evaluation_strategy = _evaluation_strategy(snapshot, self.adapter)
 
-        wap_id: t.Optional[str] = None
-        if table_name and self.adapter.wap_supported(table_name):
-            wap_id = random_id()
-            logger.info("Using WAP ID '%s' for snapshot %s", wap_id, snapshot.snapshot_id)
-
         def apply(query_or_df: QueryOrDF, index: int = 0) -> None:
-            nonlocal wap_id
             if index > 0:
                 evaluation_strategy.append(
                     snapshot,
@@ -419,7 +413,6 @@ class SnapshotEvaluator:
                     query_or_df,
                     snapshots,
                     deployability_index,
-                    wap_id,
                     start=start,
                     end=end,
                     execution_time=execution_time,
@@ -432,7 +425,6 @@ class SnapshotEvaluator:
                     query_or_df,
                     snapshots,
                     deployability_index,
-                    wap_id,
                     start=start,
                     end=end,
                     execution_time=execution_time,
@@ -457,6 +449,16 @@ class SnapshotEvaluator:
         )
 
         with self.adapter.transaction(), self.adapter.session():
+            wap_id: t.Optional[str] = None
+            if (
+                table_name
+                and snapshot.is_materialized
+                and (model.wap_supported or self.adapter.wap_supported(table_name))
+            ):
+                wap_id = random_id()[0:8]
+                logger.info("Using WAP ID '%s' for snapshot %s", wap_id, snapshot.snapshot_id)
+                table_name = self.adapter.wap_prepare(table_name, wap_id)
+
             if limit is None:
                 self.adapter.execute(model.render_pre_statements(**render_statements_kwargs))
 
@@ -749,7 +751,6 @@ class EvaluationStrategy(abc.ABC):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         """Inserts the given query or a DataFrame into the target table or replaces a view.
@@ -760,7 +761,6 @@ class EvaluationStrategy(abc.ABC):
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
-            wap_id: The WAP ID if applicable, None otherwise.
         """
 
     @abc.abstractmethod
@@ -771,7 +771,6 @@ class EvaluationStrategy(abc.ABC):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         """Appends the given query or a DataFrame to the existing table.
@@ -782,7 +781,6 @@ class EvaluationStrategy(abc.ABC):
             query_or_df: The query or DataFrame to insert.
             snapshots: Parent snapshots.
             deployability_index: Determines snapshots that are deployable in the context of this evaluation.
-            wap_id: The WAP ID if applicable, None otherwise.
         """
 
     @abc.abstractmethod
@@ -868,7 +866,6 @@ class SymbolicStrategy(EvaluationStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -880,7 +877,6 @@ class SymbolicStrategy(EvaluationStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         pass
@@ -969,7 +965,6 @@ class MaterializableStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1035,7 +1030,6 @@ class IncrementalByTimeRangeStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1058,7 +1052,6 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1077,7 +1070,6 @@ class IncrementalByUniqueKeyStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1098,7 +1090,6 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1107,15 +1098,7 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
                 name, query_or_df, model.partitioned_by, columns_to_types=model.columns_to_types
             )
         else:
-            self.append(
-                snapshot,
-                name,
-                query_or_df,
-                snapshots,
-                deployability_index,
-                wap_id,
-                **kwargs,
-            )
+            self.append(snapshot, name, query_or_df, snapshots, deployability_index, **kwargs)
 
 
 class FullRefreshStrategy(MaterializableStrategy):
@@ -1126,7 +1109,6 @@ class FullRefreshStrategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1150,7 +1132,6 @@ class SCDType2Strategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1173,7 +1154,6 @@ class SCDType2Strategy(MaterializableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1198,7 +1178,6 @@ class ViewStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         model = snapshot.model
@@ -1240,7 +1219,6 @@ class ViewStrategy(PromotableStrategy):
         query_or_df: QueryOrDF,
         snapshots: t.Dict[str, Snapshot],
         deployability_index: t.Optional[DeployabilityIndex],
-        wap_id: t.Optional[str],
         **kwargs: t.Any,
     ) -> None:
         raise ConfigError(f"Cannot append to a view '{table_name}'.")
