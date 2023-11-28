@@ -127,37 +127,39 @@ export default function PlanApplyStageTracker(): JSX.Element {
       {isTrue(isVirtualUpdate) && (
         <PlanVirtualUpdate isUpdated={isTrue(planApply.promote?.meta?.done)} />
       )}
-      {hasFailedTests && planApply.showEvaluation && (
-        <StageEvaluate
-          start={planApply.evaluationStart}
-          end={planApply.evaluationEnd}
-        >
-          {isNotNil(planApply.creation) && (
-            <StageCreation report={planApply.creation} />
-          )}
-          {isNotNil(planApply.restate) ? (
-            <StageRestate report={planApply.restate} />
-          ) : (
-            <PlanStageMessage
-              variant={EnumVariant.Info}
-              className="mt-2"
-            >
-              No Models To Restate
-            </PlanStageMessage>
-          )}
-          {isNotNil(planApply.backfill) && isNotNil(planApply.environment) && (
-            <StageBackfill
-              backfill={planApply.backfill}
-              backfills={backfills}
-              isVirtualUpdate={isVirtualUpdate}
-              environment={planApply.environment}
-            />
-          )}
-          {isNotNil(planApply.promote) && (
-            <StagePromote report={planApply.promote} />
-          )}
-        </StageEvaluate>
-      )}
+      {hasFailedTests ||
+        (planApply.showEvaluation && (
+          <StageEvaluate
+            start={planApply.evaluationStart}
+            end={planApply.evaluationEnd}
+          >
+            {isNotNil(planApply.creation) && (
+              <StageCreation report={planApply.creation} />
+            )}
+            {isNotNil(planApply.restate) ? (
+              <StageRestate report={planApply.restate} />
+            ) : (
+              <PlanStageMessage
+                variant={EnumVariant.Info}
+                className="mt-2"
+              >
+                No Models To Restate
+              </PlanStageMessage>
+            )}
+            {isNotNil(planApply.backfill) &&
+              isNotNil(planApply.environment) && (
+                <StageBackfill
+                  backfill={planApply.backfill}
+                  backfills={backfills}
+                  isVirtualUpdate={isVirtualUpdate}
+                  environment={planApply.environment}
+                />
+              )}
+            {isNotNil(planApply.promote) && (
+              <StagePromote report={planApply.promote} />
+            )}
+          </StageEvaluate>
+        ))}
     </div>
   )
 }

@@ -201,7 +201,7 @@ export default function PlanActions({
               onClick={handleCancel}
               variant={EnumVariant.Danger}
               className="justify-self-end"
-              disabled={isCancelling || isDisabled}
+              disabled={isCancelling}
             >
               {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
             </Button>

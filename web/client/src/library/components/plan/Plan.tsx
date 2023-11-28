@@ -1,4 +1,4 @@
-import { isNil, isTrue } from '~/utils'
+import { isNil, isNotNil, isTrue } from '~/utils'
 import { EnumPlanAction, useStorePlan, type PlanAction } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
@@ -58,7 +58,10 @@ function Plan({
   const [planAction, setPlanAction] = useState<PlanAction>(EnumPlanAction.Run)
 
   useEffect(() => {
-    if (environment.name !== planOverviewTracker.environment) {
+    if (
+      isNotNil(planOverviewTracker.environment) &&
+      environment.name !== planOverviewTracker.environment
+    ) {
       setPlanAction(EnumPlanAction.Run)
     } else if (
       ((planOverviewTracker.isFinished || planApplyTracker.isFinished) &&
@@ -67,13 +70,15 @@ function Plan({
       planApplyTracker.isFailed
     ) {
       setPlanAction(EnumPlanAction.Done)
-    } else if (isFetchingPlanRun) {
-      setPlanAction(EnumPlanAction.Running)
-    } else if (isFetchingPlanApply) {
+    } else if (
+      (isRunningPlan && planApplyTracker.isRunning) ||
+      isFetchingPlanApply
+    ) {
       setPlanAction(EnumPlanAction.Applying)
-    } else if (isRunningPlan && planApplyTracker.isRunning) {
-      setPlanAction(EnumPlanAction.Applying)
-    } else if (isRunningPlan && planOverviewTracker.isRunning) {
+    } else if (
+      (isRunningPlan && planOverviewTracker.isRunning) ||
+      isFetchingPlanRun
+    ) {
       setPlanAction(EnumPlanAction.Running)
     } else if (
       planOverviewTracker.isFinished &&
