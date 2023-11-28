@@ -157,11 +157,11 @@ class Scheduler:
 
         is_deployable = deployability_index.is_deployable(snapshot)
 
-        self.snapshot_evaluator.evaluate(
+        wap_id = self.snapshot_evaluator.evaluate(
             snapshot,
-            start,
-            end,
-            execution_time,
+            start=start,
+            end=end,
+            execution_time=execution_time,
             snapshots=snapshots,
             deployability_index=deployability_index,
             **kwargs,
@@ -174,6 +174,7 @@ class Scheduler:
                 execution_time=execution_time,
                 snapshots=snapshots,
                 deployability_index=deployability_index,
+                wap_id=wap_id,
                 **kwargs,
             )
         except AuditError as e:
@@ -184,6 +185,7 @@ class Scheduler:
                 )
             logger.error(f"Audit Failure: {traceback.format_exc()}")
             raise e
+
         self.state_sync.add_interval(snapshot, start, end, is_dev=not is_deployable)
 
     def run(
