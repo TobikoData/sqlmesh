@@ -435,6 +435,12 @@ def test_df_dates(make_mocked_engine_adapter: t.Callable):
 
     adapter._convert_df_datetime(df, columns_to_types)
 
+    assert columns_to_types == {
+        "date": exp.DataType.build("DATE"),
+        "timestamp_tz": exp.DataType.build("TEXT"),
+        "timestamp": exp.DataType.build("TIMESTAMP"),
+    }
+
     assert all(
         df
         == pd.DataFrame(
