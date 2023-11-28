@@ -284,7 +284,7 @@ class PythonModelTest(ModelTest):
         )
 
     def _execute_model(self) -> pd.DataFrame:
-        """Evaluates the python model and returns a DataFrame."""
+        """Executes the python model and returns a DataFrame."""
         return t.cast(
             pd.DataFrame,
             next(self.model.render(context=self.context, **self.body.get("vars", {}))),
