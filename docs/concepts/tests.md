@@ -213,7 +213,7 @@ WHERE
 
 ```
 
-As one may expect, we need to start by specifying what the input data are for `sqlmesh_example.seed_model`. The `create_test` command achieves this by executing a user-supplied query against the default target warehouse of the SQLMesh project and treating its result as the input rows of the aforementioned model.
+As one may expect, we need to start by specifying what the input data are for `sqlmesh_example.seed_model`. The `create_test` command achieves this by executing a user-supplied query against the target warehouse of the SQLMesh project to produce the input rows of the aforementioned model.
 
 Let's assume that we're only interested in specifying three input rows for `sqlmesh_example.seed_model`. One way to do that is by executing the following query:
 
