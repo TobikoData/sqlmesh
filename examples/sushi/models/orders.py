@@ -16,7 +16,7 @@ WAITERS = list(range(0, 10))
 @model(
     "sushi.orders",
     description="Table of sushi orders.",
-    kind=IncrementalByTimeRangeKind(time_column="date", batch_size=30),
+    kind=IncrementalByTimeRangeKind(time_column="event_date", batch_size=30),
     start="1 week ago",
     cron="@daily",
     grains=[
@@ -32,7 +32,7 @@ WAITERS = list(range(0, 10))
         "waiter_id": "int",
         "start_ts": "int",
         "end_ts": "int",
-        "date": "date",
+        "event_date": "date",
     },
 )
 def execute(
@@ -60,7 +60,7 @@ def execute(
                     "waiter_id": random.choices(WAITERS, k=num_orders),
                     "start_ts": start_ts,
                     "end_ts": end_ts,
-                    "date": to_date(dt),
+                    "event_date": to_date(dt),
                 }
             )
             .reset_index()

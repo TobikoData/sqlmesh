@@ -18,7 +18,7 @@ ITEMS = "sushi.items"
 @model(
     "sushi.order_items",
     kind=IncrementalByTimeRangeKind(
-        time_column="date",
+        time_column="event_date",
         batch_size=30,
     ),
     cron="@daily",
@@ -27,7 +27,7 @@ ITEMS = "sushi.items"
         "order_id": "int",
         "item_id": "int",
         "quantity": "int",
-        "date": "date",
+        "event_date": "date",
     },
     audits=[
         (
@@ -50,7 +50,7 @@ def execute(
     for dt in iter_dates(start, end):
         # Generate query with sqlglot dialect/quoting
         orders = context.fetchdf(
-            exp.select("*").from_(orders_table).where(f"date = CAST('{to_ds(dt)}' AS DATE)"),
+            exp.select("*").from_(orders_table).where(f"event_date = CAST('{to_ds(dt)}' AS DATE)"),
             quote_identifiers=True,
         )
 
@@ -59,7 +59,7 @@ def execute(
 
         # Generate query with sqlglot dialect/quoting
         items = context.fetchdf(
-            exp.select("*").from_(items_table).where(f"date = CAST('{to_ds(dt)}' AS DATE)"),
+            exp.select("*").from_(items_table).where(f"event_date = CAST('{to_ds(dt)}' AS DATE)"),
             quote_identifiers=True,
         )
 
@@ -77,7 +77,7 @@ def execute(
                         "order_id": order_id,
                         "item_id": items.sample(n=n)["id"],
                         "quantity": np.random.randint(1, 10, n),
-                        "date": to_date(dt),
+                        "event_date": to_date(dt),
                     }
                 )
                 .reset_index()

@@ -49,14 +49,14 @@ ITEMS = [
 
 @model(
     "sushi.items",
-    kind=IncrementalByTimeRangeKind(time_column="date", batch_size=30),
+    kind=IncrementalByTimeRangeKind(time_column="event_date", batch_size=30),
     start="1 week ago",
     cron="@daily",
     columns={
         "id": "int",
         "name": "text",
         "price": "double",
-        "date": "date",
+        "event_date": "date",
     },
     audits=[
         ("accepted_values", {"column": to_column("name"), "is_in": ITEMS}),
@@ -85,7 +85,7 @@ def execute(
                 {
                     "name": random.sample(ITEMS, num_items),
                     "price": np.random.uniform(3.0, 10.0, size=num_items).round(2),
-                    "date": to_date(dt),
+                    "event_date": to_date(dt),
                 }
             )
             .reset_index()

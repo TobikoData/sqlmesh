@@ -50,12 +50,12 @@ def test_rewrite(sushi_context_pre_scheduling, assert_exp_eq):
     query = rewrite(
         """
         SELECT
-          date,
+          event_date,
           METRIC(total_orders),
           METRIC(items_per_order),
           METRIC(total_orders_from_active_customers),
         FROM __semantic.__table
-        GROUP BY date
+        GROUP BY event_date
         """,
         graph=graph,
         metrics=context.metrics,
@@ -66,30 +66,30 @@ def test_rewrite(sushi_context_pre_scheduling, assert_exp_eq):
         parse_one(
             """
             SELECT
-              __table.date AS date,
+              __table.event_date AS event_date,
               __table.total_orders AS total_orders,
               __table.total_ordered_items / __table.total_orders AS items_per_order,
               __table.total_orders_from_active_customers AS total_orders_from_active_customers
             FROM (
               SELECT
-                sushi__orders.date,
+                sushi__orders.event_date,
                 COUNT(IF(sushi__customers.status = 'ACTIVE', sushi__orders.id, NULL)) AS total_orders_from_active_customers,
                 COUNT(sushi__orders.id) AS total_orders
               FROM sushi.orders AS sushi__orders
               LEFT JOIN sushi.customers AS sushi__customers
                 ON sushi__orders.customer_id = sushi__customers.customer_id
               GROUP BY
-                sushi__orders.date
+                sushi__orders.event_date
             ) AS __table
             FULL JOIN (
               SELECT
-                sushi__order_items.date,
+                sushi__order_items.event_date,
                 SUM(sushi__order_items.quantity) AS total_ordered_items
               FROM sushi.order_items AS sushi__order_items
               GROUP BY
-                sushi__order_items.date
+                sushi__order_items.event_date
             ) AS sushi__order_items
-              ON __table.date = sushi__order_items.date
+              ON __table.event_date = sushi__order_items.event_date
 
             """,
             dialect=context.config.dialect,
@@ -99,12 +99,12 @@ def test_rewrite(sushi_context_pre_scheduling, assert_exp_eq):
     query = rewrite(
         """
         SELECT
-          date,
+          event_date,
           METRIC(total_orders),
           METRIC(items_per_order),
           METRIC(total_orders_from_active_customers),
         FROM sushi.orders
-        GROUP BY date
+        GROUP BY event_date
         """,
         graph=graph,
         metrics=context.metrics,
@@ -115,30 +115,30 @@ def test_rewrite(sushi_context_pre_scheduling, assert_exp_eq):
         parse_one(
             """
             SELECT
-              orders.date AS date,
+              orders.event_date AS event_date,
               orders.total_orders AS total_orders,
               orders.total_ordered_items / orders.total_orders AS items_per_order,
               orders.total_orders_from_active_customers AS total_orders_from_active_customers
             FROM (
               SELECT
-                sushi__orders.date,
+                sushi__orders.event_date,
                 COUNT(IF(sushi__customers.status = 'ACTIVE', sushi__orders.id, NULL)) AS total_orders_from_active_customers,
                 COUNT(sushi__orders.id) AS total_orders
               FROM sushi.orders AS sushi__orders
               LEFT JOIN sushi.customers AS sushi__customers
                 ON sushi__orders.customer_id = sushi__customers.customer_id
               GROUP BY
-                sushi__orders.date
+                sushi__orders.event_date
             ) AS orders
             FULL JOIN (
               SELECT
-                sushi__order_items.date,
+                sushi__order_items.event_date,
                 SUM(sushi__order_items.quantity) AS total_ordered_items
               FROM sushi.order_items AS sushi__order_items
               GROUP BY
-                sushi__order_items.date
+                sushi__order_items.event_date
             ) AS sushi__order_items
-              ON orders.date = sushi__order_items.date
+              ON orders.event_date = sushi__order_items.event_date
 
             """,
             dialect=context.config.dialect,
@@ -148,11 +148,11 @@ def test_rewrite(sushi_context_pre_scheduling, assert_exp_eq):
     query = rewrite(
         """
         SELECT
-          date,
+          event_date,
           status,
           METRIC(total_orders),
         FROM __semantic.__table
-        GROUP BY date, status
+        GROUP BY event_date, status
         """,
         graph=graph,
         metrics=context.metrics,
@@ -162,19 +162,19 @@ def test_rewrite(sushi_context_pre_scheduling, assert_exp_eq):
         parse_one(
             """
             SELECT
-              __table.date AS date,
+              __table.event_date AS event_date,
               __table.status AS status,
               __table.total_orders AS total_orders
             FROM (
               SELECT
-                sushi__orders.date,
+                sushi__orders.event_date,
                 sushi__customers.status,
                 COUNT(sushi__orders.id) AS total_orders
               FROM sushi.orders AS sushi__orders
               LEFT JOIN sushi.customers AS sushi__customers
                 ON sushi__orders.customer_id = sushi__customers.customer_id
               GROUP BY
-                sushi__orders.date,
+                sushi__orders.event_date,
                 sushi__customers.status
             ) AS __table
             """,
@@ -185,13 +185,13 @@ def test_rewrite(sushi_context_pre_scheduling, assert_exp_eq):
     query = rewrite(
         """
         SELECT
-          t.date,
+          t.event_date,
           m.status,
           METRIC(t.total_orders),
         FROM __semantic.__table t
         LEFT JOIN sushi.raw_marketing AS m
-        WHERE t.date > '2022-01-01'
-        GROUP BY t.date, m.status
+        WHERE t.event_date > '2022-01-01'
+        GROUP BY t.event_date, m.status
         """,
         graph=graph,
         metrics=context.metrics,
@@ -201,21 +201,21 @@ def test_rewrite(sushi_context_pre_scheduling, assert_exp_eq):
         parse_one(
             """
             SELECT
-              t.date AS date,
+              t.event_date AS event_date,
               t.status AS status,
               t.total_orders AS total_orders
             FROM (
               SELECT
-                sushi__orders.date,
+                sushi__orders.event_date,
                 m.status,
                 COUNT(sushi__orders.id) AS total_orders
               FROM sushi.orders AS sushi__orders
               LEFT JOIN sushi.raw_marketing AS m
                 ON sushi__orders.customer_id = m.customer_id
               WHERE
-                sushi__orders.date > '2022-01-01'
+                sushi__orders.event_date > '2022-01-01'
               GROUP BY
-                sushi__orders.date,
+                sushi__orders.event_date,
                 m.status
             ) AS t
             """,
