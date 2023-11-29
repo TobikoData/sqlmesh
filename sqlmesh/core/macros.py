@@ -303,7 +303,7 @@ class MacroEvaluator:
 
     def get_snapshot(self, model_name: TableName | exp.Column) -> t.Optional[Snapshot]:
         """Returns the snapshot that corresponds to the given model name."""
-        return self._snapshots.get(normalize_model_name(model_name))
+        return self._snapshots.get(normalize_model_name(model_name, dialect=self.dialect))
 
     def resolve_tables(self, query: exp.Expression) -> exp.Expression:
         """Resolves queries with references to SQLMesh model names to their physical tables."""
