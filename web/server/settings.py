@@ -2,32 +2,30 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import typing as t
 from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends
+from pydantic import Field
 
 from sqlmesh.core.context import Context
 from sqlmesh.core.model.definition import Model
-from sqlmesh.utils.pydantic import PYDANTIC_MAJOR_VERSION
+from sqlmesh.utils.pydantic import PydanticModel
 from web.server.exceptions import ApiException
 from web.server.models import FileType
-
-if PYDANTIC_MAJOR_VERSION >= 2:
-    from pydantic_settings import BaseSettings  # type: ignore
-else:
-    from pydantic import BaseSettings  # type: ignore
-
 
 logger = logging.getLogger(__name__)
 get_context_lock = asyncio.Lock()
 
 
-class Settings(BaseSettings):
-    project_path: Path = Path("examples/sushi")
-    config: str = ""
-    gateway: t.Optional[str] = None
+class Settings(PydanticModel):
+    project_path: Path = Field(
+        default_factory=lambda: Path(os.getenv("PROJECT_PATH", "examples/sushi"))
+    )
+    config: str = Field(default_factory=lambda: os.getenv("CONFIG", ""))
+    gateway: t.Optional[str] = Field(default_factory=lambda: os.getenv("GATEWAY"))
 
 
 @lru_cache()
