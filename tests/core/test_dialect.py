@@ -239,5 +239,5 @@ def test_select_from_values_for_batch_range_json():
 
     assert select_from_values_for_batch_range([], columns_to_types, 0, 0).sql() == (
         "SELECT CAST(id AS INT) AS id, CAST(ds AS TEXT) AS ds, CAST(json_col AS JSON) AS json_col "
-        "FROM (VALUES (NULL, NULL, NULL)) AS t(id, ds, json_col) WHERE FALSE"
+        "FROM (VALUES (CAST(NULL AS INT), CAST(NULL AS TEXT), CAST(NULL AS JSON))) AS t(id, ds, json_col) WHERE FALSE"
     )
