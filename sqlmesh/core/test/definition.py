@@ -303,7 +303,9 @@ def generate_test(
     input_queries: t.Dict[str, str],
     models: t.Dict[str, Model],
     engine_adapter: EngineAdapter,
+    project_path: Path,
     overwrite: bool = False,
+    variables: t.Optional[t.Dict[str, str]] = None,
     path: t.Optional[str] = None,
     name: t.Optional[str] = None,
 ) -> None:
@@ -315,8 +317,10 @@ def generate_test(
             will be populated in the test based on the results of the corresponding query.
         models: The context's models.
         engine_adapter: The target engine adapter.
+        project_path: The path pointing to the project's root directory.
         overwrite: Whether to overwrite the existing test in case of a file path collision.
             When set to False, an error will be raised if there is such a collision.
+        variables: Key-value pairs that will define variables needed by the model.
         path: The file path corresponding to the fixture, relative to the test directory.
             By default, the fixture will be created under the test directory and the file name
             will be inferred from the test's name.
@@ -329,7 +333,7 @@ def generate_test(
     if extension not in ("yaml", "yml"):
         path = f"{path}.yaml"
 
-    fixture_path = Path(c.TESTS) / path
+    fixture_path = project_path / c.TESTS / path
     if not overwrite and fixture_path.exists():
         raise ConfigError(
             f"Fixture '{fixture_path}' already exists, make sure to set --overwrite if it can be safely overwritten."
@@ -340,7 +344,8 @@ def generate_test(
         for dep, query in input_queries.items()
     }
     outputs: t.Dict[str, t.Any] = {"query": {}}
-    test_body = {"model": model.name, "inputs": inputs, "outputs": outputs}
+    variables = variables or {}
+    test_body = {"model": model.name, "inputs": inputs, "outputs": outputs, "vars": variables}
 
     test = ModelTest.create_test(
         body=test_body,
@@ -356,7 +361,7 @@ def generate_test(
     if isinstance(model, SqlModel):
         mapping = {name: _test_fixture_name(name) for name in models.keys() | inputs.keys()}
         model_query = model.render_query_or_raise(
-            engine_adapter=engine_adapter, table_mapping=mapping
+            **variables, engine_adapter=engine_adapter, table_mapping=mapping
         )
         output = t.cast(SqlModelTest, test)._execute(model_query)
     else:

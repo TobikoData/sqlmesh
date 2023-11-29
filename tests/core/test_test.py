@@ -5,11 +5,15 @@ import typing as t
 
 import pytest
 
-from sqlmesh.core.config import Config, ModelDefaultsConfig
+from sqlmesh.core import constants as c
+from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import SqlModel, load_sql_based_model
+from sqlmesh.core.test import load_model_test_file
 from sqlmesh.core.test.definition import SqlModelTest
+from sqlmesh.cli.example_project import init_example_project
+from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as load_yaml
 
 
@@ -391,3 +395,58 @@ test_foo:
     }
 
     assert expected_body == normalized_body
+
+
+def test_test_generation(tmp_path: Path) -> None:
+    init_example_project(tmp_path, dialect="duckdb")
+
+    config = Config(
+        default_connection=DuckDBConnectionConfig(),
+        model_defaults=ModelDefaultsConfig(dialect="duckdb"),
+    )
+
+    context = Context(paths=[tmp_path], config=config)
+    context.plan(auto_apply=True)
+
+    input_queries = {
+        "sqlmesh_example.incremental_model": f"SELECT * FROM sqlmesh_example.incremental_model LIMIT 3"
+    }
+
+    with pytest.raises(ConfigError) as ex:
+        context.create_test("sqlmesh_example.full_model", input_queries=input_queries)
+
+    assert (
+        "tests/test_full_model.yaml' already exists, "
+        "make sure to set --overwrite if it can be safely overwritten."
+    ) in str(ex.value)
+
+    test = load_yaml(context.path / c.TESTS / "test_full_model.yaml")
+
+    assert len(test) == 1
+    assert "test_example_full_model" in test
+    assert "vars" not in test["test_example_full_model"]
+
+    context.create_test(
+        "sqlmesh_example.full_model",
+        input_queries=input_queries,
+        overwrite=True,
+        variables={"start": "2020-01-01", "end": "2024-01-01"},
+    )
+
+    test = load_yaml(context.path / c.TESTS / "test_full_model.yaml")
+
+    assert len(test) == 1
+    assert "test_full_model" in test
+    assert "vars" in test["test_full_model"]
+    assert test["test_full_model"]["vars"] == {'start': '2020-01-01', 'end': '2024-01-01'}
+
+    result = context.test()
+    assert result and result.wasSuccessful()
+
+    context.create_test(
+        "sqlmesh_example.full_model", input_queries=input_queries, name="new_name", path="foo/bar"
+    )
+
+    test = load_yaml(context.path / c.TESTS / "foo/bar.yaml")
+    assert len(test) == 1
+    assert "new_name" in test

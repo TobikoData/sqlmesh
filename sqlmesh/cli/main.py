@@ -380,6 +380,14 @@ def dag(ctx: click.Context, file: str) -> None:
     help="When true, the fixture file will be overwritten in case it already exists.",
 )
 @click.option(
+    "-v",
+    "--var",
+    "variables",
+    type=(str, str),
+    multiple=True,
+    help="Key-value pairs that will define variables needed by the model.",
+)
+@click.option(
     "-p",
     "--path",
     "path",
@@ -402,11 +410,19 @@ def create_test(
     model: str,
     queries: t.List[t.Tuple[str, str]],
     overwrite: bool = False,
+    variables: t.Optional[t.List[t.Tuple[str, str]]] = None,
     name: t.Optional[str] = None,
     path: t.Optional[str] = None,
 ) -> None:
     """Generate a unit test fixture for a given model."""
-    obj.create_test(model, input_queries=dict(queries), overwrite=overwrite, name=name, path=path)
+    obj.create_test(
+        model,
+        input_queries=dict(queries),
+        overwrite=overwrite,
+        variables=variables and dict(variables),
+        name=name,
+        path=path,
+    )
 
 
 @cli.command("test")

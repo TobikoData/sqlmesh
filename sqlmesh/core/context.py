@@ -1052,6 +1052,7 @@ class Context(BaseContext):
         model: str,
         input_queries: t.Dict[str, str],
         overwrite: bool = False,
+        variables: t.Optional[t.Dict[str, str]] = None,
         path: t.Optional[str] = None,
         name: t.Optional[str] = None,
     ) -> None:
@@ -1063,6 +1064,7 @@ class Context(BaseContext):
                 will be populated in the test based on the results of the corresponding query.
             overwrite: Whether to overwrite the existing test in case of a file path collision.
                 When set to False, an error will be raised if there is such a collision.
+            variables: Key-value pairs that will define variables needed by the model.
             path: The file path corresponding to the fixture, relative to the test directory.
                 By default, the fixture will be created under the test directory and the file name
                 will be inferred from the test's name.
@@ -1079,7 +1081,9 @@ class Context(BaseContext):
             input_queries=input_queries,
             models=self._models,
             engine_adapter=self._engine_adapter,
+            project_path=self.path,
             overwrite=overwrite,
+            variables=variables,
             path=path,
             name=name,
         )
