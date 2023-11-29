@@ -813,8 +813,9 @@ def normalize_model_name(
             table = exp.table_(table.this, db=table.args.get("table"), catalog=table.args.get("db"))
         else:
             table = exp.table_(*reversed(table.parts[:-1]))  # type: ignore
+    else:
+        table = exp.to_table(table, dialect=dialect)
 
-    table = exp.to_table(table, dialect=dialect)
     return exp.table_name(normalize_identifiers(table, dialect=dialect))
 
 
