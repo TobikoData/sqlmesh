@@ -183,7 +183,7 @@ test_example_full_model:
         num_orders: 2
 ```
 
-## Automatically generate tests
+## Automatic test generation
 
 Creating tests manually is a cumbersome process, especially as the number of rows and columns of the involved models grows. To address this, SQLMesh provides the [`create_test`](../reference/cli.md#create_test) command, which can be used to automatically create tests for a given a model.
 
