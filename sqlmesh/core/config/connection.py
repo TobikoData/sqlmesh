@@ -101,11 +101,15 @@ class DuckDBConnectionConfig(ConnectionConfig):
     Args:
         database: The optional database name. If not specified, the in-memory database will be used.
         catalogs: Key is the name of the catalog and value is the path.
+        extensions: A list of autoloadable extensions to load.
+        connector_config: A dictionary of connection configuration to pass into the duckdb connector.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
     """
 
     database: t.Optional[str] = None
     catalogs: t.Optional[t.Dict[str, str]] = None
+    extensions: t.Optional[t.List[str]] = None
+    connector_config: t.Optional[t.Dict[str, t.Any]] = None
 
     concurrent_tasks: Literal[1] = 1
 
@@ -121,6 +125,10 @@ class DuckDBConnectionConfig(ConnectionConfig):
                 "Cannot specify both `database` and `catalogs`. Define all your catalogs in `catalogs` and have the first entry be the default catalog"
             )
         return values
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        return {"config": self.connector_config} if self.connector_config else {}
 
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
@@ -142,7 +150,14 @@ class DuckDBConnectionConfig(ConnectionConfig):
         import duckdb
         from duckdb import BinderException
 
-        def init_catalogs(cursor: duckdb.DuckDBPyConnection) -> None:
+        def init(cursor: duckdb.DuckDBPyConnection) -> None:
+            for extension in self.extensions or []:
+                try:
+                    cursor.execute(f"INSTALL {extension}")
+                    cursor.execute(f"LOAD {extension}")
+                except Exception as e:
+                    raise ConfigError(f"Failed to load extension {extension}: {e}")
+
             for i, (alias, path) in enumerate((self.catalogs or {}).items()):
                 try:
                     cursor.execute(f"ATTACH '{path}' AS {alias}")
@@ -158,7 +173,7 @@ class DuckDBConnectionConfig(ConnectionConfig):
                 if i == 0 and not self.database:
                     cursor.execute(f"USE {alias}")
 
-        return init_catalogs
+        return init
 
     def get_catalog(self) -> t.Optional[str]:
         if self.database:
