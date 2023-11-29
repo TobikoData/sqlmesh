@@ -72,7 +72,7 @@ class ModelTest(unittest.TestCase):
             if table_name in self.models:
                 columns_to_types = self.models[table_name].columns_to_types or {}
 
-            if not columns_to_types:
+            if not columns_to_types and rows:
                 for i, v in rows[0].items():
                     # convert ruamel into python
                     v = v.real if hasattr(v, "real") else v
@@ -114,6 +114,10 @@ class ModelTest(unittest.TestCase):
                 check_datetimelike_compat=True,
             )
         except AssertionError as e:
+            if expected.empty and actual.empty and all(expected.columns == actual.columns):
+                # Only the index differs, so we treat the two DataFrames as equivalent in this case
+                return
+
             diff = expected.compare(actual).rename(columns={"self": "exp", "other": "act"})
             e.args = (f"Data differs (exp: expected, act: actual)\n\n{diff}",)
             raise e
@@ -175,7 +179,7 @@ class ModelTest(unittest.TestCase):
         """Normalizes all identifiers in this test according to the given dialect."""
 
         def _normalize_rows(rows: t.List[Row] | t.Dict[str, t.List[Row]]) -> t.List[Row]:
-            if isinstance(rows, dict):
+            if isinstance(rows, dict) and rows:
                 if "rows" not in rows:
                     _raise_error("Incomplete test, missing row data for table", self.path)
                 rows = rows["rows"]
@@ -183,7 +187,7 @@ class ModelTest(unittest.TestCase):
             return [
                 {
                     normalize_identifiers(column, dialect=dialect).name: value
-                    for column, value in row.items()
+                    for column, value in t.cast(Row, row).items()
                 }
                 for row in rows
             ]

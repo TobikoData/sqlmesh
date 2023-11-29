@@ -357,6 +357,38 @@ test_foo:
     assert expected_msg in result.failures[0][1]
 
 
+def test_empty_rows(sushi_context: Context) -> None:
+    model = t.cast(
+        SqlModel,
+        sushi_context.upsert_model(
+            load_sql_based_model(
+                parse(
+                    """
+                    MODEL (
+                        name sushi.foo,
+                        kind FULL,
+                    );
+
+                    SELECT id FROM sushi.items;
+                    """,
+                ),
+            )
+        ),
+    )
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    sushi.items: []
+  outputs:
+    query: []
+            """
+    )
+    result = _create_test(body, "test_foo", model, sushi_context).run()
+    assert result and result.wasSuccessful()
+
+
 @pytest.mark.parametrize("full_model_without_ctes", ["snowflake"], indirect=True)
 def test_normalization(full_model_without_ctes: SqlModel) -> None:
     body = load_yaml(
