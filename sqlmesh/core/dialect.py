@@ -803,9 +803,16 @@ def set_default_schema_and_catalog(
     return table
 
 
-def normalize_model_name(table: str | exp.Table | exp.Column, dialect: DialectType = None) -> str:
+def normalize_model_name(
+    table: str | exp.Table | exp.Column,
+    dialect: DialectType = None,
+    column_is_table: bool = False,
+) -> str:
     if isinstance(table, exp.Column):
-        table = exp.table_(*reversed(table.parts[:-1]))  # type: ignore
+        if column_is_table:
+            table = exp.table_(table.this, db=table.args.get("table"), catalog=table.args.get("db"))
+        else:
+            table = exp.table_(*reversed(table.parts[:-1]))  # type: ignore
     else:
         table = exp.to_table(table, dialect=dialect)
 

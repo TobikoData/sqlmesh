@@ -144,7 +144,9 @@ class BaseExpressionRenderer:
                     start=start,
                     end=end,
                     execution_time=execution_time,
+                    runtime_stage=runtime_stage,
                 ),
+                snapshots=snapshots,
             )
 
             for definition in self._macro_definitions:
@@ -404,6 +406,7 @@ class QueryRenderer(BaseExpressionRenderer):
             start=start,
             end=end,
             execution_time=execution_time,
+            runtime_stage=runtime_stage,
             **kwargs,
         )
 
