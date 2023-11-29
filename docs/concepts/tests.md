@@ -281,7 +281,7 @@ Ran 2 tests in 0.024s
 OK
 ```
 
-Note: since the `sqlmesh create_test` command executes queries directly in the target warehouse, the tables of the involved models must exist in it, otherwise the queries will fail.
+Note: since the `sqlmesh create_test` command executes queries directly in the target warehouse, the tables of the involved models must be built first, otherwise the queries will fail.
 
 ## Running tests
 
