@@ -821,12 +821,18 @@ class _Model(ModelMeta, frozen=True):
                     if e.comments:
                         metadata.extend(e.comments)
 
+        metadata.extend(self._additional_metadata)
+
         return hash_data(metadata)
 
     @property
     def is_model(self) -> bool:
         """Return True if this is a model node"""
         return True
+
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        return []
 
 
 class _SqlBasedModel(_Model):
@@ -941,6 +947,10 @@ class _SqlBasedModel(_Model):
             *super()._data_hash_values,
             *[e.sql(comments=False) for e in (*pre_statements, *post_statements, *macro_defs)],
         ]
+
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        return [s.sql(comments=False) for s in (*self.pre_statements, *self.post_statements)]
 
 
 class SqlModel(_SqlBasedModel):
