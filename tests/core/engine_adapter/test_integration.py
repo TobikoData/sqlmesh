@@ -748,9 +748,9 @@ def test_scd_type_2(ctx: TestContext):
     ctx.columns_to_types = {
         "id": "int",
         "name": "string",
-        "updated_at": f"{time_type}",
-        "valid_from": f"{time_type}",
-        "valid_to": f"{time_type}",
+        "updated_at": time_type,
+        "valid_from": time_type,
+        "valid_to": time_type,
     }
     ctx.init()
     table = ctx.table("test_table")
