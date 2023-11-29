@@ -42,7 +42,7 @@ setup(
         "ipywidgets",
         "jinja2",
         "pandas",
-        "pydantic[email]>=1.10.7,<2.0.0",
+        "pydantic<2.5.0",
         "requests",
         "rich[jupyter]",
         "ruamel.yaml",
@@ -91,8 +91,7 @@ setup(
             "tenacity==8.1.0",
             "types-croniter",
             "types-dateparser",
-            # Remove once fix is ready for 4.6.0
-            "typing-extensions==4.5.0",
+            "typing-extensions",
             "types-pytz",
             "types-requests==2.28.8",
         ],
