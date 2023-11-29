@@ -5,6 +5,7 @@ import os
 import pathlib
 import sys
 import typing as t
+from datetime import timedelta
 
 import pandas as pd
 import pytest
@@ -12,13 +13,14 @@ from pandas._libs import NaTType
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
-from sqlmesh import Config, EngineAdapter
+from sqlmesh import Config, Context, EngineAdapter
 from sqlmesh.core.config import load_config_from_paths
 from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter.shared import DataObject
-from sqlmesh.utils.date import to_ds
+from sqlmesh.utils.date import now, to_date, to_ds, yesterday
 from sqlmesh.utils.errors import UnsupportedCatalogOperationError
 from sqlmesh.utils.pydantic import PydanticModel
+from tests.conftest import SushiDataValidator
 
 if t.TYPE_CHECKING:
     from sqlmesh.core.engine_adapter._typing import Query
@@ -879,3 +881,74 @@ def test_scd_type_2(ctx: TestContext):
             ]
         ),
     )
+
+
+def test_sushi(ctx: TestContext):
+    if ctx.test_type == "df":
+        pytest.skip("Sushi end-to-end tests only need to run for query and pyspark tests")
+
+    # this skips the pyspark test if the engine isn't pyspark-enabled
+    ctx.init()
+
+    config = load_config_from_paths(
+        project_paths=[
+            pathlib.Path(os.path.join(os.path.dirname(__file__), "config.yaml")),
+        ],
+        personal_paths=[pathlib.Path("~/.sqlmesh/config.yaml").expanduser()],
+    )
+    gateway = "inttest_mssql" if ctx.dialect == "tsql" else f"inttest_{ctx.dialect}"
+    context = Context(paths="./examples/sushi", config=config, gateway=gateway)
+
+    start = to_date(now() - timedelta(days=7))
+    end = now()
+
+    context.plan(
+        environment="test_prod",
+        start=start,
+        end=end,
+        skip_tests=True,
+        no_prompts=True,
+        auto_apply=True,
+    )
+
+    data_validator = SushiDataValidator.from_context(context)
+    data_validator.validate(
+        "sushi.customer_revenue_lifetime",
+        start,
+        yesterday(),
+        env_name="test_prod",
+        dialect=ctx.dialect,
+    )
+
+    # Ensure that the plan has been applied successfully.
+    no_change_plan = context.plan(
+        environment="test_dev",
+        start=start,
+        end=end,
+        skip_tests=True,
+        no_prompts=True,
+        include_unmodified=True,
+    )
+    assert not no_change_plan.requires_backfill
+
+    # make and validate unmodified dev environment
+    no_change_plan.apply()
+
+    data_validator.validate(
+        "sushi.customer_revenue_lifetime",
+        start,
+        yesterday(),
+        env_name="test_dev",
+        dialect=ctx.dialect,
+    )
+
+    # clean up schemas
+    for schema in [
+        "sushi__test_prod",
+        "sushi__test_dev",
+        "sushi",
+        "sqlmesh__sushi",
+        "sqlmesh",
+        "raw",
+    ]:
+        context.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
