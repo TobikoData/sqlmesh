@@ -1250,3 +1250,4 @@ def test_audit_wap(adapter_mock, make_snapshot):
     )
 
     adapter_mock.wap_table_name.assert_called_once_with(snapshot.table_name(), wap_id)
+    adapter_mock.wap_publish.assert_called_once_with(snapshot.table_name(), wap_id)

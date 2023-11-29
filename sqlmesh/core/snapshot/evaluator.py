@@ -666,8 +666,7 @@ class SnapshotEvaluator:
         wap_id: str,
         deployability_index: t.Optional[DeployabilityIndex],
     ) -> None:
-        if deployability_index is None:
-            deployability_index = DeployabilityIndex.all_deployable()
+        deployability_index = deployability_index or DeployabilityIndex.all_deployable()
         table_name = snapshot.table_name(is_deployable=deployability_index.is_deployable(snapshot))
         self.adapter.wap_publish(table_name, wap_id)
 

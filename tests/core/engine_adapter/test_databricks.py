@@ -40,3 +40,19 @@ def test_set_current_catalog(make_mocked_engine_adapter: t.Callable):
     adapter.set_current_catalog("test_catalog")
 
     assert to_sql_calls(adapter) == ["USE CATALOG `test_catalog`"]
+
+
+def test_get_current_catalog(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    adapter.cursor.fetchone.return_value = ("test_catalog",)
+
+    assert adapter.get_current_catalog() == "test_catalog"
+    assert to_sql_calls(adapter) == ["SELECT CURRENT_CATALOG()"]
+
+
+def test_get_current_database(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    adapter.cursor.fetchone.return_value = ("test_database",)
+
+    assert adapter.get_current_database() == "test_database"
+    assert to_sql_calls(adapter) == ["SELECT CURRENT_DATABASE()"]

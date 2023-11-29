@@ -15,6 +15,7 @@ from sqlmesh.core.engine_adapter.base import (
     SourceQuery,
 )
 from sqlmesh.core.engine_adapter.mixins import (
+    GetCurrentCatalogFromFunctionMixin,
     HiveMetastoreTablePropertiesMixin,
     LogicalReplaceQueryMixin,
 )
@@ -38,7 +39,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
+class SparkEngineAdapter(GetCurrentCatalogFromFunctionMixin, HiveMetastoreTablePropertiesMixin):
     DIALECT = "spark"
     ESCAPE_JSON = True
     SUPPORTS_TRANSACTIONS = False
@@ -319,7 +320,7 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
         # Spark 3.4+ API
         if self._use_spark_session:
             return self.spark.catalog.currentCatalog()
-        return self.fetchone(exp.select(exp.func("current_catalog")))[0]
+        return super().get_current_catalog()
 
     def set_current_catalog(self, catalog_name: str) -> None:
         # Spark 3.4+ API
@@ -448,7 +449,9 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
             if isinstance(table_name_or_schema, exp.Schema)
             else exp.to_table(table_name_or_schema)
         )
-        if kwargs.get("storage_format", "").lower() == "iceberg" or self.wap_supported(table_name):
+        if (kwargs.get("storage_format") or "").lower() == "iceberg" or self.wap_supported(
+            table_name
+        ):
             # Performing a dummy insert to create a dummy snapshot for Iceberg tables
             # to workaround https://github.com/apache/iceberg/issues/8849.
             dummy_insert = exp.insert(exp.select("*").from_(table_name), table_name)
