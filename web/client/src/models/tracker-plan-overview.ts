@@ -79,8 +79,7 @@ export class ModelPlanOverviewTracker
   }
 
   get applyType(): Optional<PlanApplyType> {
-    if (isTrue(this.hasChanges) && isTrue(this.hasBackfills))
-      return EnumPlanApplyType.Backfill
+    if (isTrue(this.hasBackfills)) return EnumPlanApplyType.Backfill
     if (isNotNil(this.hasChanges)) return EnumPlanApplyType.Virtual
 
     return undefined

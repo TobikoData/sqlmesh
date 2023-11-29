@@ -15,6 +15,12 @@ import PlanApplyStageTracker from './PlanApplyStageTracker'
 import { useStoreContext } from '@context/context'
 import { useEffect, useState } from 'react'
 import { type ModelEnvironment } from '@models/environment'
+import { ModelPlanTracker } from '@models/tracker-plan'
+import { type ModelPlanOverviewTracker } from '@models/tracker-plan-overview'
+import { type ModelPlanApplyTracker } from '@models/tracker-plan-apply'
+import { type ModelPlanCancelTracker } from '@models/tracker-plan-cancel'
+
+const showPlanTracker = ModelPlanTracker.shouldDisplay
 
 function Plan({
   environment,
@@ -60,45 +66,29 @@ function Plan({
   useEffect(() => {
     if (
       isNotNil(planOverviewTracker.environment) &&
-      environment.name !== planOverviewTracker.environment
+      planOverviewTracker.environment !== environment.name
     ) {
       setPlanAction(EnumPlanAction.Run)
-    } else if (
-      ((planOverviewTracker.isFinished || planApplyTracker.isFinished) &&
-        isNil(planOverviewTracker.applyType)) ||
-      planOverviewTracker.isFailed ||
-      planApplyTracker.isFailed
-    ) {
-      setPlanAction(EnumPlanAction.Done)
-    } else if (
-      (isRunningPlan && planApplyTracker.isRunning) ||
-      isFetchingPlanApply
-    ) {
-      setPlanAction(EnumPlanAction.Applying)
-    } else if (
-      (isRunningPlan && planOverviewTracker.isRunning) ||
-      isFetchingPlanRun
-    ) {
-      setPlanAction(EnumPlanAction.Running)
-    } else if (
-      planOverviewTracker.isFinished &&
-      planOverviewTracker.isVirtualUpdate
-    ) {
-      setPlanAction(EnumPlanAction.ApplyVirtual)
-    } else if (
-      planOverviewTracker.isFinished &&
-      planOverviewTracker.isBackfillUpdate
-    ) {
-      setPlanAction(EnumPlanAction.ApplyBackfill)
-    } else if (planCancelTracker.isCancelling) {
-      setPlanAction(EnumPlanAction.Cancelling)
+      reset()
     } else {
-      setPlanAction(EnumPlanAction.Run)
+      const action = getPlanAction({
+        planOverviewTracker,
+        planApplyTracker,
+        planCancelTracker,
+        isRunningPlan,
+        isFetchingPlanCancel,
+        isFetchingPlanRun,
+        isFetchingPlanApply,
+      })
+
+      setPlanAction(action)
     }
   }, [
     planOverviewTracker,
     planApplyTracker,
+    planCancelTracker,
     isRunningPlan,
+    isFetchingPlanCancel,
     isFetchingPlanRun,
     isFetchingPlanApply,
     environment,
@@ -188,24 +178,20 @@ function Plan({
     })
   }
 
-  const isFetching =
-    isFetchingPlanRun || isFetchingPlanApply || isFetchingPlanCancel
-  const showPlanApplyTracker =
-    (planApplyTracker.isFinished || planApplyTracker.isRunning) &&
-    planApplyTracker.environment === environment.name
-  const showPlanOverviewTracker =
-    (planOverviewTracker.isFinished || planOverviewTracker.isRunning) &&
-    planOverviewTracker.environment === environment.name
-  const showPlanTracker = showPlanApplyTracker || showPlanOverviewTracker
-  const showPlanCancel = planAction === EnumPlanAction.Cancelling
+  const showPlanApplyTracker = showPlanTracker(planApplyTracker, environment)
+  const showPlanOverviewTracker = showPlanTracker(
+    planOverviewTracker,
+    environment,
+  )
+  const showPlanCancelTracker = showPlanTracker(planCancelTracker, environment)
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden">
       <PlanHeader />
       <div className="w-full h-full px-4 overflow-y-scroll hover:scrollbar scrollbar--vertical">
-        {showPlanCancel ? (
+        {showPlanCancelTracker ? (
           <CancellingPlanApply />
-        ) : showPlanTracker ? (
+        ) : showPlanApplyTracker || showPlanOverviewTracker ? (
           <PlanApplyStageTracker />
         ) : (
           <PlanOptions className="w-full" />
@@ -219,7 +205,7 @@ function Plan({
         cancel={cancel}
         close={close}
         reset={reset}
-        disabled={isFetching ?? disabled}
+        disabled={disabled}
       />
     </div>
   )
@@ -243,4 +229,46 @@ function CancellingPlanApply(): JSX.Element {
       </div>
     </div>
   )
+}
+
+function getPlanAction({
+  planOverviewTracker,
+  planApplyTracker,
+  planCancelTracker,
+  isRunningPlan,
+  isFetchingPlanCancel,
+  isFetchingPlanRun,
+  isFetchingPlanApply,
+}: {
+  planOverviewTracker: ModelPlanOverviewTracker
+  planApplyTracker: ModelPlanApplyTracker
+  planCancelTracker: ModelPlanCancelTracker
+  isRunningPlan: boolean
+  isFetchingPlanCancel: boolean
+  isFetchingPlanRun: boolean
+  isFetchingPlanApply: boolean
+}): PlanAction {
+  const isFinishedPlanOverview = planOverviewTracker.isFinished
+  const isRunningPlanOverview =
+    (isRunningPlan && planOverviewTracker.isRunning) || isFetchingPlanRun
+  const isRunningPlanApply =
+    (isRunningPlan && planApplyTracker.isRunning) || isFetchingPlanApply
+  const isRunningPlanCancel =
+    (isRunningPlan && planCancelTracker.isRunning) || isFetchingPlanCancel
+  const isVirtualUpdate =
+    isFinishedPlanOverview && planOverviewTracker.isVirtualUpdate
+  const isBackfillUpdate =
+    isFinishedPlanOverview && planOverviewTracker.isBackfillUpdate
+  const isDonePlanOverview =
+    isFinishedPlanOverview && isNil(planOverviewTracker.applyType)
+  const isDonePlanApply = planApplyTracker.isFinished
+
+  if (isRunningPlanCancel) return EnumPlanAction.Cancelling
+  if (isRunningPlanApply) return EnumPlanAction.Applying
+  if (isRunningPlanOverview) return EnumPlanAction.Running
+  if (isVirtualUpdate) return EnumPlanAction.ApplyVirtual
+  if (isBackfillUpdate) return EnumPlanAction.ApplyBackfill
+  if (isDonePlanOverview || isDonePlanApply) return EnumPlanAction.Done
+
+  return EnumPlanAction.Run
 }

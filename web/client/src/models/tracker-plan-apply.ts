@@ -106,7 +106,7 @@ export class ModelPlanApplyTracker
     return this._last?.promote ?? this._current?.promote
   }
 
-  get showEvaluation(): boolean {
+  get shouldShowEvaluation(): boolean {
     return (
       this.isFailed ||
       isNotNil(this.creation) ||
