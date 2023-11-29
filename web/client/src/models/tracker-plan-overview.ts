@@ -79,23 +79,22 @@ export class ModelPlanOverviewTracker
   }
 
   get applyType(): Optional<PlanApplyType> {
-    if (isTrue(this.hasChanges) && isTrue(this.hasBackfills))
-      return EnumPlanApplyType.Backfill
+    if (isTrue(this.hasBackfills)) return EnumPlanApplyType.Backfill
     if (isNotNil(this.hasChanges)) return EnumPlanApplyType.Virtual
 
     return undefined
   }
 
   get isLatest(): boolean {
-    return isNil(this.hasChanges) && isNil(this.hasBackfills)
+    return this.isFinished && isNil(this.hasChanges) && isNil(this.hasBackfills)
   }
 
   get isVirtualUpdate(): boolean {
-    return this.applyType === EnumPlanApplyType.Virtual
+    return this.isFinished && this.applyType === EnumPlanApplyType.Virtual
   }
 
   get isBackfillUpdate(): boolean {
-    return this.applyType === EnumPlanApplyType.Backfill
+    return this.isFinished && this.applyType === EnumPlanApplyType.Backfill
   }
 
   update(tracker: PlanOverviewTracker): void {
