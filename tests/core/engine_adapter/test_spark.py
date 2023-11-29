@@ -28,11 +28,11 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         columns_to_types,
         partitioned_by=[exp.to_column("colb")],
         clustered_by=["colc"],
-        storage_format="ICEBERG",
+        storage_format="parquet",
     )
 
     adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`)"
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING PARQUET PARTITIONED BY (`colb`)"
     )
 
     adapter.cursor.reset_mock()
@@ -40,11 +40,11 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
         "test_table",
         columns_to_types,
         partitioned_by=[exp.to_column("cola"), exp.to_column("colb")],
-        storage_format="ICEBERG",
+        storage_format="parquet",
     )
 
     adapter.cursor.execute.assert_called_once_with(
-        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`cola`, `colb`)"
+        "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING PARQUET PARTITIONED BY (`cola`, `colb`)"
     )
 
     with pytest.raises(SQLMeshError):
@@ -52,7 +52,7 @@ def test_create_table_properties(make_mocked_engine_adapter: t.Callable):
             "test_table",
             columns_to_types,
             partitioned_by=[parse_one("DATE(cola)")],
-            storage_format="ICEBERG",
+            storage_format="parquet",
         )
 
 
@@ -75,9 +75,6 @@ def test_replace_query_table_properties(make_mocked_engine_adapter: t.Callable):
 
     adapter.cursor.execute.assert_has_calls(
         [
-            call(
-                "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`) TBLPROPERTIES ('a'=1)"
-            ),
             call(
                 "INSERT OVERWRITE TABLE `test_table` (`cola`, `colb`, `colc`) SELECT `cola`, `colb`, `colc` FROM (SELECT 1 AS `cola`, '2' AS `colb`, '3' AS `colc`) AS `_subquery` WHERE TRUE"
             ),
@@ -140,7 +137,6 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int)",
         "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT `a` FROM (SELECT `a` FROM `tbl`) AS `_subquery` WHERE TRUE",
     ]
 
@@ -154,7 +150,6 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable, mocker: Mo
     )
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` INT, `b` INT)",
         "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)) AS `_subquery` WHERE TRUE",
     ]
 
@@ -164,6 +159,8 @@ def test_replace_query_self_ref(
 ):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
     adapter.cursor.fetchone.return_value = (1,)
+    adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
+    adapter.spark.catalog.currentDatabase.return_value = "default"
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "db.table"
@@ -413,6 +410,8 @@ def test_scd_type_2(
     make_mocked_engine_adapter: t.Callable, make_temp_table_name: t.Callable, mocker: MockerFixture
 ):
     adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
+    adapter.spark.catalog.currentDatabase.return_value = "default"
 
     temp_table_mock = mocker.patch("sqlmesh.core.engine_adapter.EngineAdapter._get_temp_table")
     table_name = "db.target"
@@ -617,3 +616,71 @@ FROM (
         ).sql(dialect="spark"),
         "DROP TABLE IF EXISTS `db`.`temp_target_abcdefgh`",
     ]
+
+
+def test_wap_prepare(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
+    adapter.spark.catalog.currentDatabase.return_value = "default"
+
+    table_name = "test_db.test_table"
+    wap_id = "test_wap_id"
+
+    updated_table_name = adapter.wap_prepare(table_name, wap_id)
+    assert updated_table_name == f"spark_catalog.{table_name}.branch_wap_{wap_id}"
+
+    adapter.cursor.execute.assert_called_once_with(
+        f"ALTER TABLE spark_catalog.{table_name} CREATE BRANCH wap_{wap_id}"
+    )
+
+
+def test_wap_publish(make_mocked_engine_adapter: t.Callable, mocker: MockerFixture):
+    iceberg_snapshot_id = 123
+
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+    adapter.spark.catalog.currentCatalog.return_value = "spark_catalog"
+    adapter.spark.catalog.currentDatabase.return_value = "default"
+    adapter.cursor.fetchall.return_value = [(iceberg_snapshot_id,)]
+
+    table_name = "test_db.test_table"
+    wap_id = "test_wap_id"
+
+    adapter.wap_publish(table_name, wap_id)
+
+    adapter.cursor.execute.assert_has_calls(
+        [
+            call(
+                f"SELECT snapshot_id FROM spark_catalog.{table_name}.refs WHERE name = 'wap_{wap_id}'"
+            ),
+            call(
+                f"CALL spark_catalog.system.cherrypick_snapshot('{table_name}', {iceberg_snapshot_id})"
+            ),
+            call(f"ALTER TABLE spark_catalog.{table_name} DROP BRANCH wap_{wap_id}"),
+        ]
+    )
+
+
+def test_create_table_iceberg(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(SparkEngineAdapter)
+
+    columns_to_types = {
+        "cola": exp.DataType.build("INT"),
+        "colb": exp.DataType.build("TEXT"),
+        "colc": exp.DataType.build("TEXT"),
+    }
+    adapter.create_table(
+        "test_table",
+        columns_to_types,
+        partitioned_by=[exp.to_column("colb")],
+        clustered_by=["colc"],
+        storage_format="ICEBERG",
+    )
+
+    adapter.cursor.execute.assert_has_calls(
+        [
+            call(
+                "CREATE TABLE IF NOT EXISTS `test_table` (`cola` INT, `colb` STRING, `colc` STRING) USING ICEBERG PARTITIONED BY (`colb`)"
+            ),
+            call("INSERT INTO `test_table` SELECT * FROM `test_table`"),
+        ]
+    )

@@ -53,6 +53,7 @@ class ModelKindMixin:
             self.is_incremental_by_time_range
             or self.is_incremental_by_unique_key
             or self.is_incremental_unmanaged
+            or self.is_scd_type_2
         )
 
     @property

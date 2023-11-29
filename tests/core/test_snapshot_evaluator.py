@@ -6,7 +6,7 @@ from pytest_mock.plugin import MockerFixture
 from sqlglot import expressions as exp
 from sqlglot import parse, parse_one, select
 
-from sqlmesh.core.audit import StandaloneAudit
+from sqlmesh.core.audit import ModelAudit, StandaloneAudit
 from sqlmesh.core.dialect import to_schema
 from sqlmesh.core.engine_adapter import EngineAdapter, create_engine_adapter
 from sqlmesh.core.engine_adapter.base import (
@@ -1205,3 +1205,49 @@ def test_standalone_audit(mocker: MockerFixture, adapter_mock, make_snapshot):
     adapter_mock.assert_not_called()
     adapter_mock.transaction.assert_not_called()
     adapter_mock.session.assert_not_called()
+
+
+def test_audit_wap(adapter_mock, make_snapshot):
+    evaluator = SnapshotEvaluator(adapter_mock)
+
+    custom_audit = ModelAudit(
+        name="test_audit",
+        query="SELECT * FROM test_schema.test_table WHERE 1 = 2",
+    )
+
+    model = SqlModel(
+        name="test_schema.test_table",
+        kind=FullKind(),
+        query=parse_one("SELECT a::int FROM tbl"),
+        audits=[
+            ("not_null", {"columns": exp.to_column("a")}),
+            ("test_audit", {}),
+        ],
+    )
+    snapshot = make_snapshot(model, audits={custom_audit.name: custom_audit})
+    snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+
+    wap_id = "test_wap_id"
+    expected_table_name = f"spark_catalog.test_schema.test_table.branch_wap_{wap_id}"
+    adapter_mock.wap_table_name.return_value = expected_table_name
+    adapter_mock.fetchone.return_value = (0,)
+
+    evaluator.audit(snapshot, snapshots={}, wap_id=wap_id)
+
+    call_args = adapter_mock.fetchone.call_args_list
+    assert len(call_args) == 2
+
+    not_null_query = call_args[0][0][0]
+    assert (
+        not_null_query.sql(dialect="spark")
+        == "SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM `spark_catalog`.`test_schema`.`test_table`.`branch_wap_test_wap_id` AS `branch_wap_test_wap_id`) AS `_q_0` WHERE `a` IS NULL) AS audit"
+    )
+
+    custom_audit_query = call_args[1][0][0]
+    assert (
+        custom_audit_query.sql(dialect="spark")
+        == "SELECT COUNT(*) FROM (SELECT * FROM `spark_catalog`.`test_schema`.`test_table`.`branch_wap_test_wap_id` AS `test_table` WHERE 1 = 2) AS audit"
+    )
+
+    adapter_mock.wap_table_name.assert_called_once_with(snapshot.table_name(), wap_id)
+    adapter_mock.wap_publish.assert_called_once_with(snapshot.table_name(), wap_id)

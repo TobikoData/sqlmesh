@@ -13,7 +13,6 @@ def test_replace_query(make_mocked_engine_adapter: t.Callable):
     adapter.replace_query("test_table", parse_one("SELECT a FROM tbl"), {"a": "int"})
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int)",
         "INSERT OVERWRITE TABLE `test_table` (`a`) SELECT `a` FROM (SELECT `a` FROM `tbl`) AS `_subquery` WHERE TRUE",
     ]
 
@@ -24,7 +23,6 @@ def test_replace_query_pandas(make_mocked_engine_adapter: t.Callable):
     adapter.replace_query("test_table", df, {"a": "int", "b": "int"})
 
     assert to_sql_calls(adapter) == [
-        "CREATE TABLE IF NOT EXISTS `test_table` (`a` int, `b` int)",
         "INSERT OVERWRITE TABLE `test_table` (`a`, `b`) SELECT `a`, `b` FROM (SELECT CAST(`a` AS INT) AS `a`, CAST(`b` AS INT) AS `b` FROM VALUES (1, 4), (2, 5), (3, 6) AS `t`(`a`, `b`)) AS `_subquery` WHERE TRUE",
     ]
 
@@ -42,3 +40,19 @@ def test_set_current_catalog(make_mocked_engine_adapter: t.Callable):
     adapter.set_current_catalog("test_catalog")
 
     assert to_sql_calls(adapter) == ["USE CATALOG `test_catalog`"]
+
+
+def test_get_current_catalog(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    adapter.cursor.fetchone.return_value = ("test_catalog",)
+
+    assert adapter.get_current_catalog() == "test_catalog"
+    assert to_sql_calls(adapter) == ["SELECT CURRENT_CATALOG()"]
+
+
+def test_get_current_database(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(DatabricksEngineAdapter)
+    adapter.cursor.fetchone.return_value = ("test_database",)
+
+    assert adapter.get_current_database() == "test_database"
+    assert to_sql_calls(adapter) == ["SELECT CURRENT_DATABASE()"]
