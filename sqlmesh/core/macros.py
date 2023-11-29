@@ -11,6 +11,7 @@ from sqlglot import Generator, exp
 from sqlglot.executor.env import ENV
 from sqlglot.executor.python import Python
 from sqlglot.helper import csv, ensure_collection
+from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.schema import MappingSchema
 
 from sqlmesh.core.dialect import (
@@ -303,11 +304,10 @@ class MacroEvaluator:
     def get_snapshot(self, model_name: TableName | exp.Column) -> t.Optional[Snapshot]:
         """Returns the snapshot that corresponds to the given model name."""
         if isinstance(model_name, str):
-            key = model_name
-        else:
-            key = ".".join(part.name for part in model_name.parts)
+            model_name = exp.to_table(model_name, dialect=self.dialect)
 
-        return self._snapshots.get(key)
+        normalize_model_name = normalize_identifiers(model_name, dialect=self.dialect)
+        return self._snapshots.get(".".join(part.name for part in normalize_model_name.parts))
 
     def resolve_tables(self, query: exp.Expression) -> exp.Expression:
         """Resolves queries with references to SQLMesh model names to their physical tables."""
