@@ -975,8 +975,9 @@ from sqlmesh.core.macros import macro
 @macro()
 def some_macro(evaluator):
     if evaluator.runtime_stage == "evaluating":
+        # Check the intervals a snapshot has data for and alter the behavior of the macro accordingly
         intervals = evaluator.get_snapshot("some_model_name").intervals
-        ...  # E.g. alter the behavior of the macro depending on what intervals have been processed
+        ...
     ...
 ```
 
