@@ -102,14 +102,14 @@ class DuckDBConnectionConfig(ConnectionConfig):
         database: The optional database name. If not specified, the in-memory database will be used.
         catalogs: Key is the name of the catalog and value is the path.
         extensions: A list of autoloadable extensions to load.
-        connector_config: A dictionary of connection configuration to pass into the duckdb connector.
+        connector_config: A dictionary of configuration to pass into the duckdb connector.
         concurrent_tasks: The maximum number of tasks that can use this connection concurrently.
     """
 
     database: t.Optional[str] = None
     catalogs: t.Optional[t.Dict[str, str]] = None
-    extensions: t.Optional[t.List[str]] = None
-    connector_config: t.Optional[t.Dict[str, t.Any]] = None
+    extensions: t.List[str] = []
+    connector_config: t.Dict[str, t.Any] = {}
 
     concurrent_tasks: Literal[1] = 1
 
@@ -151,7 +151,7 @@ class DuckDBConnectionConfig(ConnectionConfig):
         from duckdb import BinderException
 
         def init(cursor: duckdb.DuckDBPyConnection) -> None:
-            for extension in self.extensions or []:
+            for extension in self.extensions:
                 try:
                     cursor.execute(f"INSTALL {extension}")
                     cursor.execute(f"LOAD {extension}")

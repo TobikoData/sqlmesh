@@ -137,6 +137,8 @@ class DuckDbConfig(TargetConfig):
 
     Args:
         path: Location of the database file. If not specified, an in memory database is used.
+        extensions: A list of autoloadable extensions to load.
+        settings: A dictionary of settings to pass into the duckdb connector.
     """
 
     type: Literal["duckdb"] = "duckdb"
@@ -170,11 +172,15 @@ class DuckDbConfig(TargetConfig):
         return DuckDBRelation
 
     def to_sqlmesh(self) -> ConnectionConfig:
+        kwargs: t.Dict[str, t.Any] = {}
+        if self.extensions is not None:
+            kwargs["extensions"] = self.extensions
+        if self.settings is not None:
+            kwargs["connector_config"] = self.settings
         return DuckDBConnectionConfig(
             database=self.path,
             concurrent_tasks=self.threads,
-            extensions=self.extensions,
-            connector_config=self.settings,
+            **kwargs,
         )
 
 
