@@ -965,9 +965,9 @@ Thus, leveraging `columns_to_types` can also enable one to write code according 
 
 ### Accessing snapshots
 
-After a SQLMesh project has been successfully loaded, its snapshots can be accessed in Python macro functions and Python models that generate SQL through the `get_snapshot` method of the `MacroEvaluator`.
+After a SQLMesh project has been successfully loaded, its snapshots can be accessed in Python macro functions and Python models that generate SQL through the `get_snapshot` method of `MacroEvaluator`.
 
-This enables the inspection of physical table names or the processed intervals of certain snapshots at runtime, and can be achieved as shown in the following example:
+This enables the inspection of physical table names or the processed intervals of certain snapshots at runtime, as shown in the example below:
 
 ```sql linenums="1"
 from sqlmesh.core.macros import macro
