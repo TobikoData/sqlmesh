@@ -290,7 +290,11 @@ class MacroEvaluator:
             return {"__schema_unavailable_at_load__": exp.DataType.build("unknown")}
 
         if isinstance(model_name, exp.Column):
-            model_name = self._column_to_table(model_name)
+            model_name = exp.table_(
+                model_name.this,
+                db=model_name.args.get("table"),
+                catalog=model_name.args.get("db"),
+            )
 
         columns_to_types = self._schema.find(exp.to_table(model_name))
         if columns_to_types is None:
@@ -300,9 +304,9 @@ class MacroEvaluator:
 
     def get_snapshot(self, model_name: TableName | exp.Column) -> t.Optional[Snapshot]:
         """Returns the snapshot that corresponds to the given model name."""
-        if isinstance(model_name, exp.Column):
-            model_name = self._column_to_table(model_name)
-        return self._snapshots.get(normalize_model_name(model_name, dialect=self.dialect))
+        return self._snapshots.get(
+            normalize_model_name(model_name, dialect=self.dialect, column_is_table=True)
+        )
 
     def resolve_tables(self, query: exp.Expression) -> exp.Expression:
         """Resolves queries with references to SQLMesh model names to their physical tables."""
@@ -311,13 +315,6 @@ class MacroEvaluator:
                 "Macro evaluator not properly initialized with resolve_tables lambda."
             )
         return self._resolve_tables(query)
-
-    def _column_to_table(self, column: exp.Column) -> exp.Table:
-        """
-        Model (table) names are parsed into Columns when passed to macros as arguments, so
-        we can use this helper to fix their AST representation by converting them to Tables.
-        """
-        return exp.table_(column.this, db=column.args.get("table"), catalog=column.args.get("db"))
 
     @property
     def runtime_stage(self) -> RuntimeStage:
