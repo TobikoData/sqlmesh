@@ -232,41 +232,34 @@ function CancellingPlanApply(): JSX.Element {
 }
 
 function getPlanAction({
+  isRunning,
   planOverviewTracker,
   planApplyTracker,
   planCancelTracker,
-  isRunning,
   isFetchingPlanCancel,
   isFetchingPlanRun,
   isFetchingPlanApply,
 }: {
+  isRunning: boolean
   planOverviewTracker: ModelPlanOverviewTracker
   planApplyTracker: ModelPlanApplyTracker
   planCancelTracker: ModelPlanCancelTracker
-  isRunning: boolean
   isFetchingPlanCancel: boolean
   isFetchingPlanRun: boolean
   isFetchingPlanApply: boolean
 }): PlanAction {
-  const trackApply = planApplyTracker
-  const trackCancel = planCancelTracker
-  const trackOverview = planOverviewTracker
-
-  const isFinishedOverview = trackOverview.isFinished
-  const isRunningOverview = isRunning && trackOverview.isRunning
-  const isRunningApply = isRunning && trackApply.isRunning
-  const isRunningCancel = isRunning && trackCancel.isRunning
-  const isVirtualUpdate = isFinishedOverview && trackOverview.isVirtualUpdate
-  const isBackfillUpdate = isFinishedOverview && trackOverview.isBackfillUpdate
-  const isDoneOverview = isFinishedOverview && isNil(trackOverview.applyType)
-  const isDoneApply = trackApply.isFinished
+  const isRunningOverview = isRunning && planOverviewTracker.isRunning
+  const isRunningApply = isRunning && planApplyTracker.isRunning
+  const isRunningCancel = isRunning && planCancelTracker.isRunning
+  const { isLatest, isVirtualUpdate, isBackfillUpdate } = planOverviewTracker
+  const isFinished = planApplyTracker.isFinished || isLatest
 
   if (isRunningCancel || isFetchingPlanCancel) return EnumPlanAction.Cancelling
   if (isRunningApply || isFetchingPlanApply) return EnumPlanAction.Applying
   if (isRunningOverview || isFetchingPlanRun) return EnumPlanAction.Running
   if (isVirtualUpdate) return EnumPlanAction.ApplyVirtual
   if (isBackfillUpdate) return EnumPlanAction.ApplyBackfill
-  if (isDoneOverview || isDoneApply) return EnumPlanAction.Done
+  if (isFinished) return EnumPlanAction.Done
 
   return EnumPlanAction.Run
 }
