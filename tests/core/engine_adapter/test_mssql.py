@@ -1,5 +1,6 @@
 # type: ignore
 import typing as t
+from datetime import date
 from unittest import mock
 
 import pandas as pd
@@ -413,3 +414,40 @@ def test_drop_schema(make_mocked_engine_adapter: t.Callable):
         """DROP VIEW IF EXISTS "test_schema"."test_view";""",
         """DROP SCHEMA IF EXISTS "test_schema";""",
     ]
+
+
+def test_df_dates(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(MSSQLEngineAdapter)
+
+    columns_to_types = {
+        "date": exp.DataType.build("DATE"),
+        "timestamp_tz": exp.DataType.build("TIMESTAMPTZ"),
+        "timestamp": exp.DataType.build("TIMESTAMP"),
+    }
+
+    df = pd.DataFrame(
+        {
+            "date": [date(2023, 1, 1)],
+            "timestamp_tz": [pd.Timestamp("2023-01-01 12:00:00.1+0000")],
+            "timestamp": [pd.Timestamp("2023-01-01 12:00:00.1")],
+        }
+    )
+
+    adapter._convert_df_datetime(df, columns_to_types)
+
+    assert columns_to_types == {
+        "date": exp.DataType.build("DATE"),
+        "timestamp_tz": exp.DataType.build("TEXT"),
+        "timestamp": exp.DataType.build("TIMESTAMP"),
+    }
+
+    assert all(
+        df
+        == pd.DataFrame(
+            {
+                "date": ["2023-01-01"],
+                "timestamp_tz": ["2023-01-01 12:00:00.100000+00:00"],
+                "timestamp": ["2023-01-01 12:00:00.100000"],
+            }
+        )
+    )
