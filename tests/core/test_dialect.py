@@ -222,7 +222,7 @@ def test_seed():
     assert "../../../data/data.csv" in expressions[0].sql()
 
 
-def select_from_values_for_batch_range_json():
+def test_select_from_values_for_batch_range_json():
     values = [(1, "2022-01-01", '{"foo":"bar"}'), (2, "2022-01-01", '{"foo":"qaz"}')]
     columns_to_types = {
         "id": exp.DataType.build("int"),
@@ -238,5 +238,6 @@ def select_from_values_for_batch_range_json():
     )
 
     assert select_from_values_for_batch_range([], columns_to_types, 0, 0).sql() == (
-        "SELECT 1 AS id, 1 AS ds, 1 AS json_col WHERE FALSE"
+        "SELECT CAST(id AS INT) AS id, CAST(ds AS TEXT) AS ds, CAST(json_col AS JSON) AS json_col "
+        "FROM (VALUES (NULL, NULL, NULL)) AS t(id, ds, json_col) WHERE FALSE"
     )

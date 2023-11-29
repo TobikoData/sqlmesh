@@ -757,19 +757,17 @@ def select_from_values_for_batch_range(
     ]
 
     if not values:
-        where = exp.false()  # Force a zero-row output
-        values = [(exp.null(),) * len(columns_to_types)]  # Don't generate an empty VALUES clause
+        # Ensures we don't generate an empty VALUES clause & forces a zero-row output
+        where = exp.false()
+        expressions =  [(exp.null(),) * len(columns_to_types)]
     else:
         where = None
-        values = values[batch_start:batch_end]
+        expressions = [
+            tuple(transform_values(v, columns_to_types)) for v in values[batch_start:batch_end]
+        ]
 
-    values_exp = exp.values(
-        [tuple(transform_values(v, columns_to_types)) for v in values],
-        alias=alias,
-        columns=columns_to_types,
-    )
-
-    return exp.select(*casted_columns).from_(values_exp).where(where)
+    values_exp = exp.values(expressions, alias=alias, columns=columns_to_types)
+    return exp.select(*casted_columns).from_(values_exp, copy=False).where(where, copy=False)
 
 
 def pandas_to_sql(
