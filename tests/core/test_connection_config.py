@@ -4,6 +4,7 @@ import pytest
 
 from sqlmesh.core.config.connection import (
     ConnectionConfig,
+    DuckDBConnectionConfig,
     SnowflakeConnectionConfig,
     TrinoAuthenticationMethod,
     _connection_config_validator,
@@ -220,3 +221,13 @@ def test_trino(make_config):
         ConfigError, match="HTTP scheme can only be used with no-auth or basic method"
     ):
         make_config(method="ldap", http_scheme="http", **required_kwargs)
+
+
+def test_duckdb(make_config):
+    config = make_config(
+        type="duckdb",
+        database="test",
+        connector_config={"foo": "bar"},
+    )
+    assert isinstance(config, DuckDBConnectionConfig)
+    assert config._static_connection_kwargs == {"config": {"foo": "bar"}}

@@ -137,12 +137,16 @@ class DuckDbConfig(TargetConfig):
 
     Args:
         path: Location of the database file. If not specified, an in memory database is used.
+        extensions: A list of autoloadable extensions to load.
+        settings: A dictionary of settings to pass into the duckdb connector.
     """
 
     type: Literal["duckdb"] = "duckdb"
     database: str = "main"
     schema_: str = Field(default="main", alias="schema")
     path: str = DUCKDB_IN_MEMORY
+    extensions: t.Optional[t.List[str]] = None
+    settings: t.Optional[t.Dict[str, t.Any]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -168,7 +172,16 @@ class DuckDbConfig(TargetConfig):
         return DuckDBRelation
 
     def to_sqlmesh(self) -> ConnectionConfig:
-        return DuckDBConnectionConfig(database=self.path, concurrent_tasks=self.threads)
+        kwargs: t.Dict[str, t.Any] = {}
+        if self.extensions is not None:
+            kwargs["extensions"] = self.extensions
+        if self.settings is not None:
+            kwargs["connector_config"] = self.settings
+        return DuckDBConnectionConfig(
+            database=self.path,
+            concurrent_tasks=self.threads,
+            **kwargs,
+        )
 
 
 class SnowflakeConfig(TargetConfig):
