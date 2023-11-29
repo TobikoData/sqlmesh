@@ -94,7 +94,12 @@ from sqlmesh.core.state_sync import (
     cleanup_expired_views,
 )
 from sqlmesh.core.table_diff import TableDiff
-from sqlmesh.core.test import get_all_model_tests, run_model_tests, run_tests
+from sqlmesh.core.test import (
+    generate_test,
+    get_all_model_tests,
+    run_model_tests,
+    run_tests,
+)
 from sqlmesh.core.user import User
 from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
 from sqlmesh.utils.dag import DAG
@@ -1041,6 +1046,47 @@ class Context(BaseContext):
             raise MissingDependencyError(
                 "Graphviz is pip-installed but the system install is missing. Instructions: https://graphviz.org/download/"
             ) from e
+
+    def create_test(
+        self,
+        model: str,
+        input_queries: t.Dict[str, str],
+        overwrite: bool = False,
+        variables: t.Optional[t.Dict[str, str]] = None,
+        path: t.Optional[str] = None,
+        name: t.Optional[str] = None,
+    ) -> None:
+        """Generate a unit test fixture for a given model.
+
+        Args:
+            model: The model to test.
+            input_queries: Mapping of model names to queries. Each model included in this mapping
+                will be populated in the test based on the results of the corresponding query.
+            overwrite: Whether to overwrite the existing test in case of a file path collision.
+                When set to False, an error will be raised if there is such a collision.
+            variables: Key-value pairs that will define variables needed by the model.
+            path: The file path corresponding to the fixture, relative to the test directory.
+                By default, the fixture will be created under the test directory and the file name
+                will be inferred from the test's name.
+            name: The name of the test. This is inferred from the model name by default.
+        """
+        input_queries = {
+            # The get_model here has two purposes: return normalized names & check for missing deps
+            self.get_model(dep, raise_if_missing=True).name: query
+            for dep, query in input_queries.items()
+        }
+
+        generate_test(
+            model=self.get_model(model, raise_if_missing=True),
+            input_queries=input_queries,
+            models=self._models,
+            engine_adapter=self._engine_adapter,
+            project_path=self.path,
+            overwrite=overwrite,
+            variables=variables,
+            path=path,
+            name=name,
+        )
 
     def test(
         self,

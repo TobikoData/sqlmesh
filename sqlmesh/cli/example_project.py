@@ -133,16 +133,16 @@ EXAMPLE_TEST = f"""test_example_full_model:
   model: {EXAMPLE_FULL_MODEL_NAME}
   inputs:
     {EXAMPLE_INCREMENTAL_MODEL_NAME}:
-        rows:
-        - id: 1
-          item_id: 1
-          ds: '2020-01-01'
-        - id: 2
-          item_id: 1
-          ds: '2020-01-02'
-        - id: 3
-          item_id: 2
-          ds: '2020-01-03'
+      rows:
+      - id: 1
+        item_id: 1
+        ds: '2020-01-01'
+      - id: 2
+        item_id: 1
+        ds: '2020-01-02'
+      - id: 3
+        item_id: 2
+        ds: '2020-01-03'
   outputs:
     query:
       rows:
