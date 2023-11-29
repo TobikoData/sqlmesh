@@ -969,7 +969,7 @@ After a SQLMesh project has been successfully loaded, its snapshots can be acces
 
 This enables the inspection of physical table names or the processed intervals of certain snapshots at runtime, as shown in the example below:
 
-```sql linenums="1"
+```python linenums="1"
 from sqlmesh.core.macros import macro
 
 @macro()
