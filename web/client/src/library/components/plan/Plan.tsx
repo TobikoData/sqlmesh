@@ -75,10 +75,10 @@ function Plan({
         planOverviewTracker,
         planApplyTracker,
         planCancelTracker,
-        isRunningPlan,
         isFetchingPlanCancel,
         isFetchingPlanRun,
         isFetchingPlanApply,
+        isRunning: isRunningPlan,
       })
 
       setPlanAction(action)
@@ -235,7 +235,7 @@ function getPlanAction({
   planOverviewTracker,
   planApplyTracker,
   planCancelTracker,
-  isRunningPlan,
+  isRunning,
   isFetchingPlanCancel,
   isFetchingPlanRun,
   isFetchingPlanApply,
@@ -243,32 +243,30 @@ function getPlanAction({
   planOverviewTracker: ModelPlanOverviewTracker
   planApplyTracker: ModelPlanApplyTracker
   planCancelTracker: ModelPlanCancelTracker
-  isRunningPlan: boolean
+  isRunning: boolean
   isFetchingPlanCancel: boolean
   isFetchingPlanRun: boolean
   isFetchingPlanApply: boolean
 }): PlanAction {
-  const isFinishedPlanOverview = planOverviewTracker.isFinished
-  const isRunningPlanOverview =
-    (isRunningPlan && planOverviewTracker.isRunning) || isFetchingPlanRun
-  const isRunningPlanApply =
-    (isRunningPlan && planApplyTracker.isRunning) || isFetchingPlanApply
-  const isRunningPlanCancel =
-    (isRunningPlan && planCancelTracker.isRunning) || isFetchingPlanCancel
-  const isVirtualUpdate =
-    isFinishedPlanOverview && planOverviewTracker.isVirtualUpdate
-  const isBackfillUpdate =
-    isFinishedPlanOverview && planOverviewTracker.isBackfillUpdate
-  const isDonePlanOverview =
-    isFinishedPlanOverview && isNil(planOverviewTracker.applyType)
-  const isDonePlanApply = planApplyTracker.isFinished
+  const trackApply = planApplyTracker
+  const trackCancel = planCancelTracker
+  const trackOverview = planOverviewTracker
 
-  if (isRunningPlanCancel) return EnumPlanAction.Cancelling
-  if (isRunningPlanApply) return EnumPlanAction.Applying
-  if (isRunningPlanOverview) return EnumPlanAction.Running
+  const isFinishedOverview = trackOverview.isFinished
+  const isRunningOverview = isRunning && trackOverview.isRunning
+  const isRunningApply = isRunning && trackApply.isRunning
+  const isRunningCancel = isRunning && trackCancel.isRunning
+  const isVirtualUpdate = isFinishedOverview && trackOverview.isVirtualUpdate
+  const isBackfillUpdate = isFinishedOverview && trackOverview.isBackfillUpdate
+  const isDoneOverview = isFinishedOverview && isNil(trackOverview.applyType)
+  const isDoneApply = trackApply.isFinished
+
+  if (isRunningCancel || isFetchingPlanCancel) return EnumPlanAction.Cancelling
+  if (isRunningApply || isFetchingPlanApply) return EnumPlanAction.Applying
+  if (isRunningOverview || isFetchingPlanRun) return EnumPlanAction.Running
   if (isVirtualUpdate) return EnumPlanAction.ApplyVirtual
   if (isBackfillUpdate) return EnumPlanAction.ApplyBackfill
-  if (isDonePlanOverview || isDonePlanApply) return EnumPlanAction.Done
+  if (isDoneOverview || isDoneApply) return EnumPlanAction.Done
 
   return EnumPlanAction.Run
 }
