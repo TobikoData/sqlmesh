@@ -128,7 +128,7 @@ export default function PlanApplyStageTracker(): JSX.Element {
         <PlanVirtualUpdate isUpdated={isTrue(planApply.promote?.meta?.done)} />
       )}
       {hasFailedTests ||
-        (planApply.showEvaluation && (
+        (planApply.shouldShowEvaluation && (
           <StageEvaluate
             start={planApply.evaluationStart}
             end={planApply.evaluationEnd}

@@ -7,6 +7,7 @@ import {
 } from '@api/client'
 import { ModelInitial } from './initial'
 import { isFalseOrNil, isNil, isTrue } from '@utils/index'
+import { type ModelEnvironment } from './environment'
 
 export interface PlanTrackerMeta extends TrackableMeta {
   duration?: number
@@ -84,5 +85,15 @@ export class ModelPlanTracker<
 
   reset(): void {
     this._current = undefined
+  }
+
+  static shouldDisplay(
+    tracker: ModelPlanTracker,
+    environment: ModelEnvironment,
+  ): boolean {
+    return (
+      (tracker.isFinished || tracker.isRunning) &&
+      tracker.environment === environment.name
+    )
   }
 }
