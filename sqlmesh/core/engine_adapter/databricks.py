@@ -156,3 +156,6 @@ class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAda
             clone_kwargs=clone_kwargs,
             **kwargs,
         )
+
+    def wap_supported(self, table_name: TableName) -> bool:
+        return False

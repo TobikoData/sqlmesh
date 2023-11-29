@@ -317,11 +317,18 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
 
     def get_current_catalog(self) -> t.Optional[str]:
         # Spark 3.4+ API
-        return self.spark.catalog.currentCatalog()
+        if self._use_spark_session:
+            return self.spark.catalog.currentCatalog()
+        return self.fetchone(exp.select(exp.func("current_catalog")))[0]
 
     def set_current_catalog(self, catalog_name: str) -> None:
         # Spark 3.4+ API
         self.spark.catalog.setCurrentCatalog(catalog_name)
+
+    def get_current_database(self) -> str:
+        if self._use_spark_session:
+            return self.spark.catalog.currentDatabase()
+        return self.fetchone(exp.select(exp.func("current_database")))[0]
 
     @set_catalog(override=CatalogSupport.REQUIRES_SET_CATALOG)
     def create_schema(
@@ -499,9 +506,9 @@ class SparkEngineAdapter(HiveMetastoreTablePropertiesMixin):
             table_name = table_name.copy()
         table = exp.to_table(table_name, dialect=self.dialect)
         if not table.catalog:
-            table.set("catalog", self.spark.catalog.currentCatalog())
+            table.set("catalog", self.get_current_catalog())
         if not table.db:
-            table.set("db", self.spark.catalog.currentDatabase())
+            table.set("db", self.get_current_database())
         return table
 
 
