@@ -21,6 +21,7 @@ from sqlmesh.core.dialect import (
     MacroStrReplace,
     MacroVar,
     StagedFilePath,
+    normalize_model_name,
 )
 from sqlmesh.utils import DECORATOR_RETURN_TYPE, UniqueKeyDict, registry_decorator
 from sqlmesh.utils.errors import MacroEvalError, SQLMeshError
@@ -30,6 +31,7 @@ from sqlmesh.utils.metaprogramming import Executable, prepare_env, print_excepti
 if t.TYPE_CHECKING:
     from sqlmesh.core._typing import TableName
     from sqlmesh.core.engine_adapter import EngineAdapter
+    from sqlmesh.core.snapshot import Snapshot
 
 
 class RuntimeStage(Enum):
@@ -114,6 +116,7 @@ class MacroEvaluator:
         schema: t.Optional[t.Dict[str, t.Any]] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
+        snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
     ):
         self.dialect = dialect
         self.generator = MacroDialect().generator()
@@ -125,6 +128,7 @@ class MacroEvaluator:
         self._schema = MappingSchema(schema, dialect=dialect, normalize=False) if schema else {}
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
+        self._snapshots = snapshots if snapshots is not None else {}
 
         prepare_env(self.python_env, self.env)
         for k, v in self.python_env.items():
@@ -291,11 +295,18 @@ class MacroEvaluator:
                 db=model_name.args.get("table"),
                 catalog=model_name.args.get("db"),
             )
+
         columns_to_types = self._schema.find(exp.to_table(model_name))
         if columns_to_types is None:
             raise SQLMeshError(f"Schema for model '{model_name}' can't be statically determined.")
 
         return columns_to_types
+
+    def get_snapshot(self, model_name: TableName | exp.Column) -> t.Optional[Snapshot]:
+        """Returns the snapshot that corresponds to the given model name."""
+        return self._snapshots.get(
+            normalize_model_name(model_name, dialect=self.dialect, column_is_table=True)
+        )
 
     def resolve_tables(self, query: exp.Expression) -> exp.Expression:
         """Resolves queries with references to SQLMesh model names to their physical tables."""

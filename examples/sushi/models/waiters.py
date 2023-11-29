@@ -30,6 +30,14 @@ def entrypoint(evaluator: MacroEvaluator) -> exp.Select:
     FROM sushi.orders AS o
     WHERE @incremental_by_ds(ds)
     """
+    if evaluator.runtime_stage != "loading":
+        snapshot = evaluator.get_snapshot("sushi.waiters")
+        assert snapshot is not None
+
+        parent_snapshots = snapshot.parents
+        assert len(parent_snapshots) == 1
+        assert parent_snapshots[0].name.lower() == "sushi.orders"
+
     excluded = {"id", "customer_id", "start_ts", "end_ts"}
     projections = []
     for column, dtype in evaluator.columns_to_types("sushi.orders").items():
