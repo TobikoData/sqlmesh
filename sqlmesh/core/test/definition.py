@@ -345,7 +345,10 @@ def generate_test(
     }
     outputs: t.Dict[str, t.Any] = {"query": {}}
     variables = variables or {}
-    test_body = {"model": model.name, "inputs": inputs, "outputs": outputs, "vars": variables}
+    test_body = {"model": model.name, "inputs": inputs, "outputs": outputs}
+
+    if variables:
+        test_body["vars"] = variables
 
     test = ModelTest.create_test(
         body=test_body,
