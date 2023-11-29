@@ -76,7 +76,9 @@ Options:
                               fixture will be created under the test directory
                               and the file name will be inferred based on the
                               test's name.
-  -n, --name TEXT             The name of the test that will be created.
+  -n, --name TEXT             The name of the test that will be created. By
+                              default, it's inferred based on the model's
+                              name.
   --help                      Show this message and exit.
 ```
 
