@@ -189,7 +189,7 @@ Creating tests manually is a cumbersome process, especially as the number of row
 
 ### Example
 
-Since we already have a test for `sqlmesh_example.full_model`, in this example we'll show how to create a test for `sqlmesh_example.incremental_model`, which is provided as part of the `sqlmesh init` command and defined as follows:
+Since we already have a test for `sqlmesh_example.full_model`, in this example we'll show how to generate a test for `sqlmesh_example.incremental_model`, which is provided as part of the `sqlmesh init` command and defined as follows:
 
 ```sql linenums="1"
 MODEL (
@@ -213,7 +213,7 @@ WHERE
 
 ```
 
-As one may expect, we need to start by specifying what the input data are for `sqlmesh_example.seed_model`. The `create_test` command achieves this by executing a user-supplied query against the default target warehouse of the SQLMesh project and treating its result as the input rows for the aforementioned model.
+As one may expect, we need to start by specifying what the input data are for `sqlmesh_example.seed_model`. The `create_test` command achieves this by executing a user-supplied query against the default target warehouse of the SQLMesh project and treating its result as the input rows of the aforementioned model.
 
 Let's assume that we're only interested in specifying three input rows for `sqlmesh_example.seed_model`. One way to do that is by executing the following query:
 
