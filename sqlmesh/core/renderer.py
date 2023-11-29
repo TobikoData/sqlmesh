@@ -123,12 +123,12 @@ class BaseExpressionRenderer:
                         e for e in parse(rendered_expression, read=self._dialect) if e
                     ]
                     if not parsed_expressions:
-                        raise ConfigError(f"Failed to parse an expression {self._expression}")
+                        raise ConfigError(f"Failed to parse an expression:\n{self._expression}")
                     expressions = parsed_expressions
                 except ParsetimeAdapterCallError:
                     raise
                 except Exception as ex:
-                    raise ConfigError(f"Invalid expression. {ex} at '{self._path}'") from ex
+                    raise ConfigError(f"Invalid expression at '{self._path}'.\n{ex}") from ex
 
             macro_evaluator = MacroEvaluator(
                 self._dialect,
@@ -381,7 +381,7 @@ class QueryRenderer(BaseExpressionRenderer):
                 return None
 
             if not expressions:
-                raise ConfigError(f"Failed to render query:\n{self._expression}")
+                raise ConfigError(f"Failed to render query at '{self._path}':\n{self._expression}")
 
             if len(expressions) > 1:
                 raise ConfigError(f"Too many statements in query:\n{self._expression}")
