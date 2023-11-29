@@ -401,7 +401,7 @@ def dag(ctx: click.Context, file: str) -> None:
     "-n",
     "--name",
     "name",
-    help="The name of the test that will be created.",
+    help="The name of the test that will be created. By default, it's inferred based on the model's name.",
 )
 @click.pass_obj
 @error_handler
