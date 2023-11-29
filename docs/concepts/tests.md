@@ -183,6 +183,106 @@ test_example_full_model:
         num_orders: 2
 ```
 
+## Automatic test generation
+
+Creating tests manually is a cumbersome and, ironically, error-prone process, especially as the number of rows and columns of the involved models grows. To address this, SQLMesh provides the [`create_test` command](../reference/cli.md#create_test), which can be used to automatically create tests for a given model.
+
+### Example
+
+Since we already have a test for `sqlmesh_example.full_model`, in this example we'll show how to generate a test for `sqlmesh_example.incremental_model`, which is provided as part of the `sqlmesh init` command and defined as follows:
+
+```sql linenums="1"
+MODEL (
+    name sqlmesh_example.incremental_model,
+    kind INCREMENTAL_BY_TIME_RANGE (
+        time_column ds
+    ),
+    start '2020-01-01',
+    cron '@daily',
+    grain [id, ds]
+);
+
+SELECT
+    id,
+    item_id,
+    ds,
+FROM
+    sqlmesh_example.seed_model
+WHERE
+    ds between @start_ds and @end_ds
+
+```
+
+As one may expect, we need to start by specifying what the input data are for `sqlmesh_example.seed_model`. The `create_test` command achieves this by executing a user-supplied query against the target warehouse of the SQLMesh project to produce the input rows of the aforementioned model.
+
+Let's assume that we're only interested in specifying three input rows for `sqlmesh_example.seed_model`. One way to do that is by executing the following query:
+
+```sql linenums="1"
+SELECT * FROM sqlmesh_example.seed_model LIMIT 3
+```
+
+However, notice that `sqlmesh_example.incremental_model` also contains a filter which references the `@start_ds` and `@end_ds` [macro variables](macros/macro_variables.md). To ensure that the produced test will always pass, we modify the above query to constrain the value range of the `ds` column:
+
+```sql linenums="1"
+-- The dates '2020-01-01' and '2020-01-04' have been picked arbitrarily
+SELECT * FROM sqlmesh_example.seed_model WHERE ds BETWEEN '2020-01-01' AND '2020-01-04' LIMIT 3
+```
+
+We will also define these variables in the test, so that the filter of `sqlmesh_example.incremental_model` matches that range after it's been rendered.
+
+Finally, we don't have to specify the output `query` attribute, since we can compute its values given the input data produced by the above query.
+
+The following command captures all of the above:
+
+```bash
+$ sqlmesh create_test sqlmesh_example.incremental_model --query sqlmesh_example.seed_model "select * from sqlmesh_example.seed_model where ds between '2020-01-01' and '2020-01-04' limit 3" --var start '2020-01-01' --var end '2020-01-04'
+```
+
+Running this command produces the following new test, which is located at `tests/test_incremental_model.yaml`:
+
+```yaml linenums="1" hl_lines="16-22"
+test_incremental_model:
+  model: sqlmesh_example.incremental_model
+  inputs:
+    sqlmesh_example.seed_model:
+    - id: 1
+      item_id: 2
+      ds: '2020-01-01'
+    - id: 2
+      item_id: 1
+      ds: '2020-01-01'
+    - id: 3
+      item_id: 3
+      ds: '2020-01-03'
+  outputs:
+    query:
+    - id: 1
+      item_id: 2
+      ds: '2020-01-01'
+    - id: 2
+      item_id: 1
+      ds: '2020-01-01'
+    - id: 3
+      item_id: 3
+      ds: '2020-01-03'
+  vars:
+    start: '2020-01-01'
+    end: '2020-01-04'
+```
+
+As shown below, we now have two passing tests:
+
+```bash
+$ sqlmesh test
+.
+----------------------------------------------------------------------
+Ran 2 tests in 0.024s
+
+OK
+```
+
+Note: since the `sqlmesh create_test` command executes queries directly in the target warehouse, the tables of the involved models must be built first, otherwise the queries will fail.
+
 ## Running tests
 
 ### Automatic testing with plan

@@ -58,6 +58,30 @@ Usage: sqlmesh create_external_models [OPTIONS]
   Create a schema file containing external model schemas.
 ```
 
+## create_test
+```
+Usage: sqlmesh create_test [OPTIONS] MODEL
+
+  Generate a unit test fixture for a given model.
+
+Options:
+  -q, --query <TEXT TEXT>...  Queries that will be used to generate data for
+                              the model's dependencies.  [required]
+  -o, --overwrite             When true, the fixture file will be overwritten
+                              in case it already exists.
+  -v, --var <TEXT TEXT>...    Key-value pairs that will define variables
+                              needed by the model.
+  -p, --path TEXT             The file path corresponding to the fixture,
+                              relative to the test directory. By default, the
+                              fixture will be created under the test directory
+                              and the file name will be inferred based on the
+                              test's name.
+  -n, --name TEXT             The name of the test that will be created. By
+                              default, it's inferred based on the model's
+                              name.
+  --help                      Show this message and exit.
+```
+
 ## dag
 ```
 Usage: sqlmesh dag [OPTIONS]

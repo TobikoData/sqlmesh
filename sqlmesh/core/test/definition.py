@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-import pathlib
 import typing as t
 import unittest
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from sqlglot import exp, parse_one
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
-from sqlmesh.utils.errors import SQLMeshError
+from sqlmesh.utils import yaml
+from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 Row = t.Dict[str, t.Any]
 
@@ -23,17 +25,17 @@ class TestError(SQLMeshError):
 
 class ModelTest(unittest.TestCase):
     __test__ = False
-    view_names: list[str] = []
+    view_names: t.List[str] = []
 
     def __init__(
         self,
-        body: dict[str, t.Any],
+        body: t.Dict[str, t.Any],
         test_name: str,
         model: Model,
-        models: dict[str, Model],
+        models: t.Dict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
-        path: pathlib.Path | None,
+        path: Path | None,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
 
@@ -66,7 +68,7 @@ class ModelTest(unittest.TestCase):
         """Load all input tables"""
         for table_name, rows in self.body.get("inputs", {}).items():
             df = pd.DataFrame.from_records(rows)  # noqa
-            columns_to_types: dict[str, exp.DataType] = {}
+            columns_to_types: t.Dict[str, exp.DataType] = {}
             if table_name in self.models:
                 columns_to_types = self.models[table_name].columns_to_types or {}
 
@@ -86,9 +88,9 @@ class ModelTest(unittest.TestCase):
             self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
 
     def tearDown(self) -> None:
-        """Drop all input tables"""
+        """Drop all fixture tables."""
         for table in self.body.get("inputs", {}):
-            self.engine_adapter.drop_view(table)
+            self.engine_adapter.drop_view(_test_fixture_name(table))
 
     def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
         """Compare two DataFrames"""
@@ -119,18 +121,18 @@ class ModelTest(unittest.TestCase):
     def runTest(self) -> None:
         raise NotImplementedError
 
-    def path_relative_to(self, other: pathlib.Path) -> pathlib.Path | None:
+    def path_relative_to(self, other: Path) -> Path | None:
         """Compute a version of this test's path relative to the `other` path"""
         return self.path.relative_to(other) if self.path else None
 
     @staticmethod
     def create_test(
-        body: dict[str, t.Any],
+        body: t.Dict[str, t.Any],
         test_name: str,
-        models: dict[str, Model],
+        models: t.Dict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
-        path: pathlib.Path | None,
+        path: Path | None,
     ) -> ModelTest:
         """Create a SqlModelTest or a PythonModelTest.
 
@@ -172,7 +174,7 @@ class ModelTest(unittest.TestCase):
     def _normalize_test(self, dialect: str | None) -> None:
         """Normalizes all identifiers in this test according to the given dialect."""
 
-        def _normalize_rows(rows: list[Row] | dict[str, list[Row]]) -> t.List[Row]:
+        def _normalize_rows(rows: t.List[Row] | t.Dict[str, t.List[Row]]) -> t.List[Row]:
             if isinstance(rows, dict):
                 if "rows" not in rows:
                     _raise_error("Incomplete test, missing row data for table", self.path)
@@ -208,8 +210,8 @@ class ModelTest(unittest.TestCase):
 
 
 class SqlModelTest(ModelTest):
-    def execute(self, query: exp.Expression) -> pd.DataFrame:
-        """Execute the query with the engine adapter and return a DataFrame"""
+    def _execute(self, query: exp.Expression) -> pd.DataFrame:
+        """Executes the query with the engine adapter and returns a DataFrame."""
         return self.engine_adapter.fetchdf(query)
 
     def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
@@ -226,7 +228,7 @@ class SqlModelTest(ModelTest):
                     cte_query = cte_query.with_(alias, cte.this)
 
                 expected_df = pd.DataFrame.from_records(value)
-                actual_df = self.execute(cte_query)
+                actual_df = self._execute(cte_query)
                 self.assert_equal(expected_df, actual_df)
 
     def runTest(self) -> None:
@@ -246,20 +248,20 @@ class SqlModelTest(ModelTest):
         # Test model query
         if "query" in self.body["outputs"]:
             expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
-            actual_df = self.execute(query)
+            actual_df = self._execute(query)
             self.assert_equal(expected_df, actual_df)
 
 
 class PythonModelTest(ModelTest):
     def __init__(
         self,
-        body: dict[str, t.Any],
+        body: t.Dict[str, t.Any],
         test_name: str,
         model: PythonModel,
-        models: dict[str, Model],
+        models: t.Dict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
-        path: pathlib.Path | None,
+        path: Path | None,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
 
@@ -281,25 +283,109 @@ class PythonModelTest(ModelTest):
             models=models,
         )
 
+    def _execute_model(self) -> pd.DataFrame:
+        """Executes the python model and returns a DataFrame."""
+        return t.cast(
+            pd.DataFrame,
+            next(self.model.render(context=self.context, **self.body.get("vars", {}))),
+        )
+
     def runTest(self) -> None:
         if "query" in self.body["outputs"]:
             expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
-            actual_df = next(
-                self.model.render(
-                    context=self.context,
-                    **self.body.get("vars", {}),
-                )
-            )
-            actual_df = t.cast(pd.DataFrame, actual_df)
+            actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
             self.assert_equal(expected_df, actual_df)
+
+
+def generate_test(
+    model: Model,
+    input_queries: t.Dict[str, str],
+    models: t.Dict[str, Model],
+    engine_adapter: EngineAdapter,
+    project_path: Path,
+    overwrite: bool = False,
+    variables: t.Optional[t.Dict[str, str]] = None,
+    path: t.Optional[str] = None,
+    name: t.Optional[str] = None,
+) -> None:
+    """Generate a unit test fixture for a given model.
+
+    Args:
+        model: The model to test.
+        input_queries: Mapping of model names to queries. Each model included in this mapping
+            will be populated in the test based on the results of the corresponding query.
+        models: The context's models.
+        engine_adapter: The target engine adapter.
+        project_path: The path pointing to the project's root directory.
+        overwrite: Whether to overwrite the existing test in case of a file path collision.
+            When set to False, an error will be raised if there is such a collision.
+        variables: Key-value pairs that will define variables needed by the model.
+        path: The file path corresponding to the fixture, relative to the test directory.
+            By default, the fixture will be created under the test directory and the file name
+            will be inferred from the test's name.
+        name: The name of the test. This is inferred from the model name by default.
+    """
+    test_name = name or f"test_{model.view_name}"
+    path = path or f"{test_name}.yaml"
+
+    extension = path.split(".")[-1].lower()
+    if extension not in ("yaml", "yml"):
+        path = f"{path}.yaml"
+
+    fixture_path = project_path / c.TESTS / path
+    if not overwrite and fixture_path.exists():
+        raise ConfigError(
+            f"Fixture '{fixture_path}' already exists, make sure to set --overwrite if it can be safely overwritten."
+        )
+
+    inputs = {
+        dep: engine_adapter.fetchdf(query).to_dict(orient="records")
+        for dep, query in input_queries.items()
+    }
+    outputs: t.Dict[str, t.Any] = {"query": {}}
+    variables = variables or {}
+    test_body = {"model": model.name, "inputs": inputs, "outputs": outputs}
+
+    if variables:
+        test_body["vars"] = variables
+
+    test = ModelTest.create_test(
+        body=test_body,
+        test_name=test_name,
+        models=models,
+        engine_adapter=engine_adapter,
+        dialect=model.dialect,
+        path=fixture_path,
+    )
+
+    test.setUp()
+
+    if isinstance(model, SqlModel):
+        mapping = {name: _test_fixture_name(name) for name in models.keys() | inputs.keys()}
+        model_query = model.render_query_or_raise(
+            **t.cast(t.Dict[str, t.Any], variables),
+            engine_adapter=engine_adapter,
+            table_mapping=mapping,
+        )
+        output = t.cast(SqlModelTest, test)._execute(model_query)
+    else:
+        output = t.cast(PythonModelTest, test)._execute_model()
+
+    outputs["query"] = output.to_dict(orient="records")
+
+    test.tearDown()
+
+    fixture_path.parent.mkdir(exist_ok=True, parents=True)
+    with open(fixture_path, "w", encoding="utf-8") as file:
+        yaml.dump({test_name: test_body}, file)
 
 
 def _test_fixture_name(name: str) -> str:
     return f"{name}__fixture"
 
 
-def _raise_error(msg: str, path: pathlib.Path | None) -> None:
+def _raise_error(msg: str, path: Path | None) -> None:
     if path:
         raise TestError(f"{msg} at {path}")
     raise TestError(msg)
