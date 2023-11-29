@@ -229,9 +229,14 @@ def select_from_values_for_batch_range_json():
         "ds": exp.DataType.build("text"),
         "json_col": exp.DataType.build("json"),
     }
+
     assert select_from_values_for_batch_range(values, columns_to_types, 0, len(values)).sql() == (
         """SELECT CAST(id AS INT) AS id, CAST(ds AS TEXT) AS ds, CAST(json_col AS JSON) AS json_col """
         """FROM """
         """(VALUES (1, '2022-01-01', PARSE_JSON('{"foo":"bar"}')), (2, '2022-01-01', PARSE_JSON('{"foo":"qaz"}'))) """
         """AS t(id, ds, json_col)"""
+    )
+
+    assert select_from_values_for_batch_range([], columns_to_types, 0, 0).sql() == (
+        "SELECT 1 AS id, 1 AS ds, 1 AS json_col WHERE FALSE"
     )
