@@ -114,7 +114,7 @@ class ModelTest(unittest.TestCase):
                 check_datetimelike_compat=True,
             )
         except AssertionError as e:
-            if expected.empty and actual.empty and expected.columns == actual.columns:
+            if expected.empty and actual.empty and all(expected.columns == actual.columns):
                 # Only the index differs, so we treat the two DataFrames as equivalent in this case
                 return
 

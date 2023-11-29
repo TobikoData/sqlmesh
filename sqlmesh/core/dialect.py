@@ -755,23 +755,21 @@ def select_from_values_for_batch_range(
         exp.alias_(exp.cast(column, to=kind), column, copy=False)
         for column, kind in columns_to_types.items()
     ]
-    select = exp.select(*casted_columns)
 
-    # Make sure we don't generate an empty VALUES clause
-    if values:
-        values_exp = exp.values(
-            [tuple(transform_values(v, columns_to_types)) for v in values[batch_start:batch_end]],
-            alias=alias,
-            columns=columns_to_types,
-        )
-        return select.from_(values_exp, copy=False)
+    if not values:
+        where = exp.false()  # Force a zero-row output
+        values = [(exp.null(),) * len(columns_to_types)]  # Don't generate an empty VALUES clause
+    else:
+        where = None
+        values = values[batch_start:batch_end]
 
-    # If there are no values, return a dummy query that always produces no rows
-    for projection in select.selects:
-        # There is no source to select from anymore so we swap out the cast columns with literals
-        projection.this.replace(exp.Literal.number(1))
+    values_exp = exp.values(
+        [tuple(transform_values(v, columns_to_types)) for v in values],
+        alias=alias,
+        columns=columns_to_types,
+    )
 
-    return select.where(exp.false(), copy=False)
+    return exp.select(*casted_columns).from_(values_exp).where(where)
 
 
 def pandas_to_sql(
