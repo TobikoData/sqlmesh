@@ -353,8 +353,7 @@ class RedshiftConfig(TargetConfig):
     password: str
     port: int
     dbname: str
-    keepalives_idle: int = 240
-    connect_timeout: int = 10
+    connect_timeout: t.Optional[int] = None
     ra3_node: bool = True
     search_path: t.Optional[str] = None
     sslmode: t.Optional[str] = None
