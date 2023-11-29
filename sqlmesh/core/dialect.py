@@ -759,7 +759,7 @@ def select_from_values_for_batch_range(
     if not values:
         # Ensures we don't generate an empty VALUES clause & forces a zero-row output
         where = exp.false()
-        expressions = [tuple(exp.cast(exp.null(), to=kind) for _, kind in columns_to_types.items())]
+        expressions = [tuple(exp.cast(exp.null(), to=kind) for kind in columns_to_types.values())]
     else:
         where = None
         expressions = [
