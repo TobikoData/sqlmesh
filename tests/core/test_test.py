@@ -2,17 +2,17 @@ from __future__ import annotations
 
 import datetime
 import typing as t
+from pathlib import Path
 
 import pytest
 
+from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.core import constants as c
 from sqlmesh.core.config import Config, DuckDBConnectionConfig, ModelDefaultsConfig
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse
 from sqlmesh.core.model import SqlModel, load_sql_based_model
-from sqlmesh.core.test import load_model_test_file
 from sqlmesh.core.test.definition import SqlModelTest
-from sqlmesh.cli.example_project import init_example_project
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as load_yaml
 
@@ -405,7 +405,7 @@ def test_test_generation(tmp_path: Path) -> None:
         model_defaults=ModelDefaultsConfig(dialect="duckdb"),
     )
 
-    context = Context(paths=[tmp_path], config=config)
+    context = Context(paths=[str(tmp_path)], config=config)
     context.plan(auto_apply=True)
 
     input_queries = {
@@ -438,7 +438,7 @@ def test_test_generation(tmp_path: Path) -> None:
     assert len(test) == 1
     assert "test_full_model" in test
     assert "vars" in test["test_full_model"]
-    assert test["test_full_model"]["vars"] == {'start': '2020-01-01', 'end': '2024-01-01'}
+    assert test["test_full_model"]["vars"] == {"start": "2020-01-01", "end": "2024-01-01"}
 
     result = context.test()
     assert result and result.wasSuccessful()

@@ -361,7 +361,9 @@ def generate_test(
     if isinstance(model, SqlModel):
         mapping = {name: _test_fixture_name(name) for name in models.keys() | inputs.keys()}
         model_query = model.render_query_or_raise(
-            **variables, engine_adapter=engine_adapter, table_mapping=mapping
+            **t.cast(t.Dict[str, t.Any], variables),
+            engine_adapter=engine_adapter,
+            table_mapping=mapping,
         )
         output = t.cast(SqlModelTest, test)._execute(model_query)
     else:

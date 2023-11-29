@@ -419,7 +419,7 @@ def create_test(
         model,
         input_queries=dict(queries),
         overwrite=overwrite,
-        variables=variables and dict(variables),
+        variables=dict(variables) if variables else None,
         name=name,
         path=path,
     )
