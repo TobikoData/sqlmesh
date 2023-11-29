@@ -228,7 +228,7 @@ However, notice that `sqlmesh_example.incremental_model` also contains a filter 
 SELECT * FROM sqlmesh_example.seed_model WHERE ds BETWEEN '2020-01-01' AND '2020-01-04' LIMIT 3
 ```
 
-We also need to define these variables in the test, so that the filter of `sqlmesh_example.incremental_model` will match that range after it's been rendered.
+We will also define these variables in the test, so that the filter of `sqlmesh_example.incremental_model` matches that range after it's been rendered.
 
 Finally, we don't have to specify the output `query` attribute, since we can compute its values given the input data produced by the above query.
 
