@@ -519,17 +519,23 @@ def format_model_expressions(
 
 
 def text_diff(
-    a: t.Optional[exp.Expression],
-    b: t.Optional[exp.Expression],
-    dialect: t.Optional[str] = None,
+    a: t.List[exp.Expression],
+    b: t.List[exp.Expression],
+    a_dialect: t.Optional[str] = None,
+    b_dialect: t.Optional[str] = None,
 ) -> str:
     """Find the unified text diff between two expressions."""
-    return "\n".join(
-        unified_diff(
-            a.sql(pretty=True, comments=False, dialect=dialect).split("\n") if a else "",
-            b.sql(pretty=True, comments=False, dialect=dialect).split("\n") if b else "",
-        )
-    )
+    a_sql = [
+        line
+        for expr in a
+        for line in expr.sql(pretty=True, comments=False, dialect=a_dialect).split("\n")
+    ]
+    b_sql = [
+        line
+        for expr in b
+        for line in expr.sql(pretty=True, comments=False, dialect=b_dialect).split("\n")
+    ]
+    return "\n".join(unified_diff(a_sql, b_sql))
 
 
 DIALECT_PATTERN = re.compile(
