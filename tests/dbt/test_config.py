@@ -233,7 +233,11 @@ def test_variables(assert_exp_eq, sushi_test_project):
     context = sushi_test_project.context
     context.variables = defined_variables
 
-    model_config = ModelConfig(alias="test", sql="SELECT {{ var('foo') }}")
+    model_config = ModelConfig(
+        alias="test",
+        sql="SELECT {{ var('foo') }}",
+        dependencies=Dependencies(variables=["foo", "bar"]),
+    )
 
     kwargs = {"context": context}
 
@@ -254,6 +258,8 @@ def test_variables(assert_exp_eq, sushi_test_project):
     assert_exp_eq(sqlmesh_model.render_query(), 'SELECT 6 AS "6"')
     assert sqlmesh_model.jinja_macros.global_objs["vars"]["bar"] == "6"
     assert sqlmesh_model.jinja_macros.global_objs["vars"]["foo"] == "6"
+    assert "empty_list_var" not in sqlmesh_model.jinja_macros.global_objs["vars"]
+    assert "jinja_list_var" not in sqlmesh_model.jinja_macros.global_objs["vars"]
 
     # Case 3: using a defined variable with a default value
     model_config.sql = "SELECT {{ var('foo', 5) }}"

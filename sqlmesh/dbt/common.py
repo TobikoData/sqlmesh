@@ -178,12 +178,14 @@ class Dependencies(PydanticModel):
     macros: t.List[MacroReference] = []
     sources: t.List[str] = []
     refs: t.List[str] = []
+    variables: t.List[str] = []
 
     def union(self, other: Dependencies) -> Dependencies:
         return Dependencies(
             macros=list(set(self.macros) | set(other.macros)),
             sources=list(set(self.sources) | set(other.sources)),
             refs=list(set(self.refs) | set(other.refs)),
+            variables=list(set(self.variables) | set(other.variables)),
         )
 
     @field_validator("sources", "refs", mode="after")

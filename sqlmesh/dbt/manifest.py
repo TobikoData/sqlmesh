@@ -65,6 +65,8 @@ class ManifestHelper:
         self._sources_per_package: t.Dict[str, SourceConfigs] = defaultdict(dict)
         self._macros_per_package: t.Dict[str, MacroConfigs] = defaultdict(dict)
 
+        self._macro_flatten_dependencies: t.Dict[str, t.Dict[str, Dependencies]] = defaultdict(dict)
+
         self._tests_by_owner: t.Dict[str, t.List[TestConfig]] = defaultdict(list)
         self._disabled_refs: t.Optional[t.Set[str]] = None
         self._disabled_sources: t.Optional[t.Set[str]] = None
@@ -171,7 +173,7 @@ class ManifestHelper:
             sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
             dependencies = dependencies.union(self._extra_dependencies(sql))
             dependencies = dependencies.union(
-                self._macro_source_ref_dependencies(dependencies.macros, node.package_name)
+                self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
             )
 
             test_model = _test_model(node)
@@ -208,7 +210,7 @@ class ManifestHelper:
                 )
                 dependencies = dependencies.union(self._extra_dependencies(sql))
                 dependencies = dependencies.union(
-                    self._macro_source_ref_dependencies(dependencies.macros, node.package_name)
+                    self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
                 )
 
                 self._models_per_package[node.package_name][node.name] = ModelConfig(
@@ -253,7 +255,7 @@ class ManifestHelper:
 
         if not any(k in project.models for k in ("start", "+start")):
             raise ConfigError(
-                f"SQLMesh's requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
+                "SQLMesh's requires a start date in order to have a finite range of backfilling data. Add start to the 'models:' block in dbt_project.yml. https://sqlmesh.readthedocs.io/en/stable/integrations/dbt/#setting-model-backfill-start-dates"
             )
 
         runtime_config = RuntimeConfig.from_parts(project, profile, args)
@@ -308,17 +310,41 @@ class ManifestHelper:
             elif node.resource_type == "source":
                 self._disabled_sources.discard(node.name)
 
-    def _macro_source_ref_dependencies(
-        self, macros: t.List[MacroReference], default_package: str
+    def _flatten_dependencies_from_macros(
+        self,
+        macros: t.List[MacroReference],
+        default_package: str,
+        visited: t.Optional[t.Set[t.Tuple[str, str]]] = None,
     ) -> Dependencies:
+        if visited is None:
+            visited = set()
+
         dependencies = Dependencies()
         for macro in macros:
-            macro_config = self._macros_per_package[macro.package or default_package].get(
+            macro_package = macro.package or default_package
+
+            if (macro_package, macro.name) in visited:
+                continue
+            visited.add((macro_package, macro.name))
+
+            macro_dependencies = self._macro_flatten_dependencies.get(macro_package, {}).get(
                 macro.name
             )
-            if macro_config:
-                dependencies = dependencies.union(macro_config.dependencies)
-        dependencies.macros = []
+            if not macro_dependencies:
+                macro_config = self._macros_per_package[macro_package].get(macro.name)
+                if not macro_config:
+                    continue
+
+                macro_dependencies = macro_config.dependencies.union(
+                    self._flatten_dependencies_from_macros(
+                        macro_config.dependencies.macros, macro_package, visited=visited
+                    )
+                )
+                # We don't need flatten macro dependencies. The jinja macro registry takes care of recursive
+                # dependencies for us.
+                macro_dependencies.macros = []
+                self._macro_flatten_dependencies[macro_package][macro.name] = macro_dependencies
+            dependencies = dependencies.union(macro_dependencies)
         return dependencies
 
     def _extra_dependencies(self, target: str) -> Dependencies:
@@ -341,6 +367,10 @@ class ManifestHelper:
                     ref = ".".join(args)
                     if not self._is_disabled_ref(ref):
                         dependencies.refs.append(ref)
+            elif call_name[0] == "var":
+                args = [_jinja_call_arg_name(arg) for arg in node.args]
+                if args and args[0]:
+                    dependencies.variables.append(args[0])
 
         return dependencies
 

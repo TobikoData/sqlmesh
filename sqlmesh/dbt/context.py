@@ -238,9 +238,13 @@ class DbtContext:
             else:
                 raise ConfigError(f"Source '{source}' was not found.")
 
+        variable_deps = set(dependencies.variables)
+        variables = {k: v for k, v in self.variables.items() if k in variable_deps}
+
         dependency_context.sources = sources
         dependency_context.seeds = seeds
         dependency_context.models = models
+        dependency_context.variables = variables
         dependency_context._refs = {**dependency_context._seeds, **dependency_context._models}  # type: ignore
 
         return dependency_context

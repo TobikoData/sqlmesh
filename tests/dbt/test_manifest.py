@@ -16,6 +16,7 @@ def test_manifest_helper():
 
     assert helper.models()["top_waiters"].dependencies == Dependencies(
         refs={"sushi.waiter_revenue_by_day", "waiter_revenue_by_day"},
+        variables={"top_waiters:revenue", "top_waiters:limit"},
     )
     assert helper.models()["top_waiters"].materialized == "view"
 
@@ -38,11 +39,13 @@ def test_manifest_helper():
     assert waiter_revenue_by_day_config.dependencies == Dependencies(
         macros={
             MacroReference(name="log_value"),
+            MacroReference(name="test_dependencies"),
             MacroReference(package="customers", name="duckdb__current_engine"),
             MacroReference(package="dbt", name="run_query"),
             MacroReference(package="dbt", name="is_incremental"),
         },
         sources={"streaming.items", "streaming.orders", "streaming.order_items"},
+        variables={"yet_another_var"},
     )
     assert waiter_revenue_by_day_config.materialized == "incremental"
     assert waiter_revenue_by_day_config.incremental_strategy == "delete+insert"
@@ -51,6 +54,7 @@ def test_manifest_helper():
 
     assert helper.models("customers")["customers"].dependencies == Dependencies(
         sources={"raw.orders"},
+        variables={"customers:customer_id"},
     )
 
     assert set(helper.macros()["incremental_by_time"].info.depends_on) == {

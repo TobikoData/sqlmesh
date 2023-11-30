@@ -10,6 +10,8 @@
 {{ log_value(5) }}
 {{ log(adapter.dispatch('current_engine', 'customers')()) }}
 
+{{ test_dependencies() }}
+
 {% set results = run_query('select 1 as constant') %}
 
 SELECT

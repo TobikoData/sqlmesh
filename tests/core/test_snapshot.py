@@ -36,6 +36,7 @@ from sqlmesh.core.snapshot import (
     fingerprint_from_node,
     has_paused_forward_only,
 )
+from sqlmesh.utils import AttributeDict
 from sqlmesh.utils.date import to_date, to_datetime, to_timestamp
 from sqlmesh.utils.errors import SQLMeshError
 from sqlmesh.utils.jinja import JinjaMacroRegistry, MacroInfo
@@ -513,7 +514,7 @@ def test_fingerprint(model: Model, parent_model: Model):
     fingerprint = fingerprint_from_node(model, nodes={})
 
     original_fingerprint = SnapshotFingerprint(
-        data_hash="3271791330",
+        data_hash="1159250928",
         metadata_hash="1583920325",
     )
 
@@ -610,7 +611,7 @@ def test_fingerprint_jinja_macros(model: Model):
         }
     )
     original_fingerprint = SnapshotFingerprint(
-        data_hash="3383317328",
+        data_hash="1730168189",
         metadata_hash="1583920325",
     )
 
@@ -623,6 +624,22 @@ def test_fingerprint_jinja_macros(model: Model):
     updated_fingerprint = fingerprint_from_node(model, nodes={})
     assert updated_fingerprint.data_hash != original_fingerprint.data_hash
     assert updated_fingerprint.metadata_hash == original_fingerprint.metadata_hash
+
+
+@pytest.mark.parametrize("global_obj_key", ["refs", "sources", "vars"])
+def test_fingerprint_jinja_macros_global_objs(model: Model, global_obj_key: str):
+    model = SqlModel(
+        **{
+            **model.dict(),
+            "jinja_macros": JinjaMacroRegistry(),
+        }
+    )
+    fingerprint = fingerprint_from_node(model, nodes={})
+
+    model.jinja_macros.global_objs[global_obj_key] = AttributeDict({"test": "test"})
+    updated_fingerprint = fingerprint_from_node(model, nodes={})
+    assert updated_fingerprint.data_hash != fingerprint.data_hash
+    assert updated_fingerprint.metadata_hash == fingerprint.metadata_hash
 
 
 def test_fingerprint_builtin_audits(model: Model, parent_model: Model):
