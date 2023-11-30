@@ -522,7 +522,8 @@ FROM (
     (1)) AS t(dummy)
 ) AS o /* source: sushi.orders */
 WHERE
-  o.event_date <= CAST('1970-01-01' AS DATE) AND o.event_date >= CAST('1970-01-01' AS DATE)""",
+  o.event_date <= CAST('1970-01-01' AS DATE)
+  AND o.event_date >= CAST('1970-01-01' AS DATE)""",
                 "expression": "CAST(o.event_date AS DATE) AS event_date",
                 "models": {"sushi.orders": ["event_date"]},
             }

@@ -159,7 +159,7 @@ def test_merge_pr_has_non_breaking_change(
    CAST(o.waiter_id AS INT) AS waiter_id,
    CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue,
 -  CAST(o.event_date AS DATE) AS event_date
-+  CAST(o.date AS DATE) AS event_date,
++  CAST(o.event_date AS DATE) AS event_date,
 +  1 AS new_col
  FROM sushi.orders AS o
  LEFT JOIN sushi.order_items AS oi
