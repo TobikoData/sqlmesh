@@ -78,7 +78,7 @@ class SnapshotEvaluator:
         ddl_concurrent_tasks: int = 1,
         console: t.Optional[Console] = None,
     ):
-        self.adapter = adapter
+        self.adapter = adapter.with_log_level(logging.INFO)
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
         from sqlmesh.core.console import get_console
@@ -319,8 +319,6 @@ class SnapshotEvaluator:
                 f"Cannot audit '{snapshot.name}' because it has not been versioned yet. Apply a plan first."
             )
 
-        logger.info("Auditing snapshot %s", snapshot.snapshot_id)
-
         if wap_id is not None:
             deployability_index = deployability_index or DeployabilityIndex.all_deployable()
             original_table_name = snapshot.table_name(
@@ -337,7 +335,11 @@ class SnapshotEvaluator:
             kwargs["this_model"] = exp.to_table(wap_table_name)
 
         results = []
-        for audit, audit_args in snapshot.audits_with_args:
+
+        for i, (audit, audit_args) in enumerate(snapshot.audits_with_args):
+            if i == 0:
+                logger.info("Auditing snapshot %s", snapshot.snapshot_id)
+
             results.append(
                 self._audit(
                     audit=audit,
@@ -702,7 +704,8 @@ class SnapshotEvaluator:
             **kwargs,
         )
         count, *_ = self.adapter.fetchone(
-            select("COUNT(*)").from_(query.subquery("audit")), quote_identifiers=True
+            select("COUNT(*)").from_(query.subquery("audit")),
+            quote_identifiers=True,
         )
         if count and raise_exception:
             audit_error = AuditError(
@@ -1113,10 +1116,20 @@ class IncrementalUnmanagedStrategy(MaterializableStrategy):
         model = snapshot.model
         if isinstance(model.kind, IncrementalUnmanagedKind) and model.kind.insert_overwrite:
             self.adapter.insert_overwrite_by_partition(
-                name, query_or_df, model.partitioned_by, columns_to_types=model.columns_to_types
+                name,
+                query_or_df,
+                model.partitioned_by,
+                columns_to_types=model.columns_to_types,
             )
         else:
-            self.append(snapshot, name, query_or_df, snapshots, deployability_index, **kwargs)
+            self.append(
+                snapshot,
+                name,
+                query_or_df,
+                snapshots,
+                deployability_index,
+                **kwargs,
+            )
 
 
 class FullRefreshStrategy(MaterializableStrategy):

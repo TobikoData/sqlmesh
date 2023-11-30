@@ -31,6 +31,9 @@ EPOCH = datetime.date(1970, 1, 1)
 DEFAULT_MAX_LIMIT = 1000
 """The default maximum row limit that is used when evaluating a model."""
 
+DEFAULT_LOG_LIMIT = 20
+"""The default number of logs to keep."""
+
 AUDITS = "audits"
 MACROS = "macros"
 METRICS = "metrics"

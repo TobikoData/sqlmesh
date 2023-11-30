@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 
+import glob
 import logging
 import os
 import sys
@@ -14,6 +15,7 @@ from sqlmesh.core.dialect import extend_sqlglot
 
 extend_sqlglot()
 
+from sqlmesh.core import constants as c
 from sqlmesh.core.config import Config
 from sqlmesh.core.context import Context, ExecutionContext
 from sqlmesh.core.engine_adapter import EngineAdapter
@@ -90,6 +92,7 @@ if runtime_env.is_notebook:
 
 
 LOG_FORMAT = "%(asctime)s - %(threadName)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+LOG_PREFIX = "logs/sqlmesh_"
 
 
 # SO: https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
@@ -121,10 +124,35 @@ def configure_logging(
     ignore_warnings: bool = False,
     write_to_stdout: bool = True,
     write_to_file: bool = True,
+    log_limit: int = c.DEFAULT_LOG_LIMIT,
 ) -> None:
     logger = logging.getLogger()
-
     debug = force_debug or debug_mode_enabled()
+
+    if not logger.hasHandlers():
+        # base logger needs to be the lowest level that we plan to log
+        level = logging.DEBUG if debug else logging.INFO
+        logger.setLevel(level)
+
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        stdout_handler.setFormatter(CustomFormatter())
+        stdout_handler.setLevel(logging.ERROR if ignore_warnings else logging.WARNING)
+        logger.addHandler(stdout_handler)
+
+        if write_to_file:
+            os.makedirs("logs", exist_ok=True)
+            filename = f"{LOG_PREFIX}{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
+            file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
+            # the log files should always log at least info so that users will always have
+            # minimal info for debugging even if they specify "ignore_warnings"
+            file_handler.setLevel(level)
+            file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+            logger.addHandler(file_handler)
+
+    if log_limit > 0:
+        for path in list(sorted(glob.glob("{LOG_PREFIX}*.log"), reverse=True))[log_limit:]:
+            os.remove(path)
+
     if debug:
         import faulthandler
         import signal
@@ -136,22 +164,3 @@ def configure_logging(
         # Windows doesn't support register so we check for it here
         if hasattr(faulthandler, "register"):
             faulthandler.register(signal.SIGUSR1.value)
-
-        level = logging.DEBUG
-        logger.setLevel(level)
-        if not logger.hasHandlers():
-            if write_to_stdout:
-                handler = logging.StreamHandler(sys.stdout)
-                handler.setLevel(level)
-                handler.setFormatter(CustomFormatter())
-                logger.addHandler(handler)
-
-            if write_to_file:
-                os.makedirs("logs", exist_ok=True)
-                filename = f"logs/sqlmesh_{datetime.now().strftime('%Y_%m_%d_%H_%M_%S')}.log"
-                file_handler = logging.FileHandler(filename, mode="w", encoding="utf-8")
-                file_handler.setLevel(level)
-                file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-                logger.addHandler(file_handler)
-    elif ignore_warnings:
-        logger.setLevel(logging.ERROR)

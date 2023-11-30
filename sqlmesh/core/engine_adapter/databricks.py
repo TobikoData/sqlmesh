@@ -114,12 +114,13 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         if self.is_spark_session_cursor:
             return super()._fetch_native_df(query, quote_identifiers=quote_identifiers)
         if self._use_spark_session:
-            logger.debug(f"Executing SQL:\n{query}")
-            return self.spark.sql(
+            sql = (
                 self._to_sql(query, quote=quote_identifiers)
                 if isinstance(query, exp.Expression)
                 else query
             )
+            self._log(sql)
+            return self.spark.sql(sql)
         self.execute(query)
         return self.cursor.fetchall_arrow().to_pandas()
 

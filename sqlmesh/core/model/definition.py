@@ -8,7 +8,6 @@ import types
 import typing as t
 from difflib import unified_diff
 from pathlib import Path
-from textwrap import indent
 
 import pandas as pd
 from astor import to_source
@@ -987,10 +986,6 @@ class SqlModel(_SqlBasedModel):
             engine_adapter=engine_adapter,
             **kwargs,
         )
-        if query and engine_adapter and logger.isEnabledFor(logging.DEBUG):
-            logger.debug(
-                f"Rendered query for '{self.name}':\n{indent(query.sql(dialect=self.dialect, pretty=True), '  ')}"
-            )
         return query
 
     def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
