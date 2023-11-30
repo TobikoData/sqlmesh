@@ -146,7 +146,7 @@ def test_text_diff():
 -FROM x
 +  1
 +FROM y""" in text_diff(
-        parse_one("SELECT * FROM x"), parse_one("SELECT 1 FROM y")
+        parse("SELECT * FROM x"), parse("SELECT 1 FROM y")
     )
 
 
