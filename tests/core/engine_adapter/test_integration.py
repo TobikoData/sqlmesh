@@ -899,6 +899,17 @@ def test_sushi(ctx: TestContext):
     gateway = "inttest_mssql" if ctx.dialect == "tsql" else f"inttest_{ctx.dialect}"
     context = Context(paths="./examples/sushi", config=config, gateway=gateway)
 
+    # clean up any leftover schemas from previous runs (requires context)
+    for schema in [
+        "sushi__test_prod",
+        "sushi__test_dev",
+        "sushi",
+        "sqlmesh__sushi",
+        "sqlmesh",
+        "raw",
+    ]:
+        context.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
+
     start = to_date(now() - timedelta(days=7))
     end = now()
 
@@ -930,6 +941,7 @@ def test_sushi(ctx: TestContext):
         include_unmodified=True,
     )
     assert not no_change_plan.requires_backfill
+    assert no_change_plan.context_diff.is_new_environment
 
     # make and validate unmodified dev environment
     no_change_plan.apply()
@@ -941,14 +953,3 @@ def test_sushi(ctx: TestContext):
         env_name="test_dev",
         dialect=ctx.dialect,
     )
-
-    # clean up schemas
-    for schema in [
-        "sushi__test_prod",
-        "sushi__test_dev",
-        "sushi",
-        "sqlmesh__sushi",
-        "sqlmesh",
-        "raw",
-    ]:
-        context.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
