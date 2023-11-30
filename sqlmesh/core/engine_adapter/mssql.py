@@ -48,7 +48,7 @@ class MSSQLEngineAdapter(
     SUPPORTS_TUPLE_IN = False
     SUPPORTS_MATERIALIZED_VIEWS = False
     CATALOG_SUPPORT = CatalogSupport.REQUIRES_SET_CATALOG
-    CURRENT_CATALOG_FUNCTION = "DB_NAME()"
+    CURRENT_CATALOG_FUNCTION = "DB_NAME"
 
     @set_catalog()
     def columns(

@@ -256,7 +256,7 @@ class GetCurrentCatalogFromFunctionMixin(EngineAdapter):
 
     def get_current_catalog(self) -> t.Optional[str]:
         """Returns the catalog name of the current connection."""
-        result = self.fetchone(exp.select(exp.func("current_catalog")))
+        result = self.fetchone(exp.select(exp.func(self.CURRENT_CATALOG_FUNCTION)))
         if result:
             return result[0]
         return None

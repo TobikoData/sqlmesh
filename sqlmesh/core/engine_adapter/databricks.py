@@ -31,7 +31,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
         array_element_selector="element",
     )
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
-    CURRENT_CATALOG_FUNCTION = "current_catalog()"
+    CURRENT_CATALOG_FUNCTION = "current_catalog"
     SUPPORTS_ROW_LEVEL_OP = True
 
     def __init__(self, *args: t.Any, **kwargs: t.Any):
