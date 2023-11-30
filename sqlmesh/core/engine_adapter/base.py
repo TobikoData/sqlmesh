@@ -1408,12 +1408,11 @@ class EngineAdapter:
                     if isinstance(e, exp.Expression)
                     else e,
                 )
-                self._log(sql)
+                self._log_sql(sql)
                 self._execute(sql, **kwargs)
 
-    def _log(self, sql: str) -> None:
-        log = logger.info if self._execute_log_level == logging.INFO else logger.debug
-        log("Executing SQL: %s", sql)
+    def _log_sql(self, sql: str) -> None:
+        logger.log(self._execute_log_level, "Executing SQL: %s", sql)
 
     def _execute(self, sql: str, **kwargs: t.Any) -> None:
         self.cursor.execute(sql, **kwargs)

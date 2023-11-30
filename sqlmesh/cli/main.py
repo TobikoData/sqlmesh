@@ -11,7 +11,7 @@ from sqlmesh import configure_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
-from sqlmesh.core import constants as c
+from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
@@ -47,12 +47,6 @@ def _sqlmesh_version() -> str:
     is_flag=True,
     help="Enable debug mode.",
 )
-@click.option(
-    "--log-limit",
-    type=int,
-    default=c.DEFAULT_LOG_LIMIT,
-    help=f"Removes old logs, keeping only up to log-limit. By default {c.DEFAULT_LOG_LIMIT}, can be set to 0 to never trim.",
-)
 @click.pass_context
 @error_handler
 def cli(
@@ -62,7 +56,6 @@ def cli(
     gateway: t.Optional[str] = None,
     ignore_warnings: bool = False,
     debug: bool = False,
-    log_limit: int = c.DEFAULT_LOG_LIMIT,
 ) -> None:
     """SQLMesh command line tool."""
     if ctx.invoked_subcommand == "version":
@@ -82,12 +75,14 @@ def cli(
     if "--help" in sys.argv:
         return
 
+    configs = load_configs(config, paths)
+    log_limit = list(configs.values())[0].log_limit
     configure_logging(debug, ignore_warnings, write_to_stdout=False, log_limit=log_limit)
 
     try:
         context = Context(
             paths=paths,
-            config=config,
+            config=configs,
             gateway=gateway,
             load=load,
         )

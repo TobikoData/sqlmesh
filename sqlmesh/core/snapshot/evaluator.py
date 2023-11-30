@@ -78,7 +78,7 @@ class SnapshotEvaluator:
         ddl_concurrent_tasks: int = 1,
         console: t.Optional[Console] = None,
     ):
-        self.adapter = adapter.with_log_level(logging.INFO)
+        self.adapter = adapter
         self.ddl_concurrent_tasks = ddl_concurrent_tasks
 
         from sqlmesh.core.console import get_console
@@ -336,10 +336,12 @@ class SnapshotEvaluator:
 
         results = []
 
-        for i, (audit, audit_args) in enumerate(snapshot.audits_with_args):
-            if i == 0:
-                logger.info("Auditing snapshot %s", snapshot.snapshot_id)
+        audits_with_args = snapshot.audits_with_args
 
+        if audits_with_args:
+            logger.info("Auditing snapshot %s", snapshot.snapshot_id)
+
+        for audit, audit_args in snapshot.audits_with_args:
             results.append(
                 self._audit(
                     audit=audit,

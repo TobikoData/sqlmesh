@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import datetime
+from pathlib import Path
 
 SQLMESH = "sqlmesh"
+SQLMESH_PATH = Path.home() / ".sqlmesh"
 
 PROD = "prod"
 """Prod"""

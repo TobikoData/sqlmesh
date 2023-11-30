@@ -50,12 +50,7 @@ from sqlglot import exp
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, StandaloneAudit
-from sqlmesh.core.config import (
-    CategorizerConfig,
-    Config,
-    load_config_from_paths,
-    load_config_from_yaml,
-)
+from sqlmesh.core.config import CategorizerConfig, Config, load_configs
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.dialect import (
@@ -101,7 +96,7 @@ from sqlmesh.core.test import (
     run_tests,
 )
 from sqlmesh.core.user import User
-from sqlmesh.utils import UniqueKeyDict, env_vars, sys_path
+from sqlmesh.utils import UniqueKeyDict, sys_path
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import TimeLike, now_ds, to_date
 from sqlmesh.utils.errors import (
@@ -250,20 +245,7 @@ class Context(BaseContext):
         users: t.Optional[t.List[User]] = None,
     ):
         self.console = console or get_console()
-
-        self.sqlmesh_path = Path.home() / ".sqlmesh"
-
-        if isinstance(config, dict):
-            self.configs = config
-        else:
-            self.configs = self._load_configs(
-                config or "config",
-                [
-                    Path(path).absolute()
-                    for path in ([paths] if isinstance(paths, str) else list(paths))
-                ],
-            )
-
+        self.configs = config if isinstance(config, dict) else load_configs(config, paths)
         self.dag: DAG[str] = DAG()
         self._models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
         self._audits: UniqueKeyDict[str, Audit] = UniqueKeyDict("audits")
@@ -314,7 +296,7 @@ class Context(BaseContext):
     def snapshot_evaluator(self) -> SnapshotEvaluator:
         if not self._snapshot_evaluator:
             self._snapshot_evaluator = SnapshotEvaluator(
-                self.engine_adapter,
+                self.engine_adapter.with_log_level(logging.INFO),
                 ddl_concurrent_tasks=self.concurrent_tasks,
                 console=self.console,
             )
@@ -1475,33 +1457,6 @@ class Context(BaseContext):
             create_from=create_from or c.PROD,
             state_reader=self.state_reader,
         )
-
-    def _load_configs(
-        self, config: t.Union[str, Config], paths: t.List[Path]
-    ) -> t.Dict[Path, Config]:
-        if isinstance(config, Config):
-            return {path: config for path in paths}
-
-        config_env_vars = None
-        personal_paths = [
-            self.sqlmesh_path / "config.yml",
-            self.sqlmesh_path / "config.yaml",
-        ]
-        for path in personal_paths:
-            if path.exists():
-                config_env_vars = load_config_from_yaml(path).get("env_vars")
-                if config_env_vars:
-                    break
-
-        with env_vars(config_env_vars if config_env_vars else {}):
-            return {
-                path: load_config_from_paths(
-                    project_paths=[path / "config.py", path / "config.yml", path / "config.yaml"],
-                    personal_paths=personal_paths,
-                    config_name=config,
-                )
-                for path in paths
-            }
 
     def _run_janitor(self) -> None:
         expired_environments = self.state_sync.delete_expired_environments()

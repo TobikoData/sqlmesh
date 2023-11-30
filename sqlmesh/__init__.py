@@ -136,7 +136,9 @@ def configure_logging(
 
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setFormatter(CustomFormatter())
-        stdout_handler.setLevel(logging.ERROR if ignore_warnings else logging.WARNING)
+        stdout_handler.setLevel(
+            level if write_to_stdout else (logging.ERROR if ignore_warnings else logging.WARNING)
+        )
         logger.addHandler(stdout_handler)
 
         if write_to_file:

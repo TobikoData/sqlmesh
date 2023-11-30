@@ -119,7 +119,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
                 if isinstance(query, exp.Expression)
                 else query
             )
-            self._log(sql)
+            self._log_sql(sql)
             return self.spark.sql(sql)
         self.execute(query)
         return self.cursor.fetchall_arrow().to_pandas()
