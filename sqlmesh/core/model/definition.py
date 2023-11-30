@@ -821,12 +821,18 @@ class _Model(ModelMeta, frozen=True):
                     if e.comments:
                         metadata.extend(e.comments)
 
+        metadata.extend(self._additional_metadata)
+
         return hash_data(metadata)
 
     @property
     def is_model(self) -> bool:
         """Return True if this is a model node"""
         return True
+
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        return []
 
 
 class _SqlBasedModel(_Model):
@@ -930,16 +936,27 @@ class _SqlBasedModel(_Model):
 
     @property
     def _data_hash_values(self) -> t.List[str]:
-        pre_statements = (
-            self.pre_statements if self.hash_raw_query else self.render_pre_statements()
+        statements = (
+            self._unrendered_statements(include_comments=False)
+            if self.hash_raw_query
+            else [
+                e.sql(comments=False)
+                for e in (*self.render_pre_statements(), *self.render_post_statements())
+            ]
         )
-        post_statements = (
-            self.post_statements if self.hash_raw_query else self.render_post_statements()
-        )
-        macro_defs = self.macro_definitions if self.hash_raw_query else []
         return [
             *super()._data_hash_values,
-            *[e.sql(comments=False) for e in (*pre_statements, *post_statements, *macro_defs)],
+            *statements,
+        ]
+
+    @property
+    def _additional_metadata(self) -> t.List[str]:
+        return self._unrendered_statements()
+
+    def _unrendered_statements(self, include_comments: bool = True) -> t.List[str]:
+        return [
+            s.sql(comments=include_comments)
+            for s in (*self.pre_statements, *self.post_statements, *self.macro_definitions)
         ]
 
 

@@ -534,17 +534,28 @@ def test_fingerprint(model: Model, parent_model: Model):
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds")})
     new_fingerprint = fingerprint_from_node(model, nodes={})
     assert new_fingerprint != fingerprint
+    assert new_fingerprint.data_hash != fingerprint.data_hash
+    assert new_fingerprint.metadata_hash == fingerprint.metadata_hash
 
     model = SqlModel(**{**model.dict(), "query": parse_one("select 1, ds -- annotation")})
-    assert new_fingerprint != fingerprint_from_node(model, nodes={})
+    fingerprint = fingerprint_from_node(model, nodes={})
+    assert new_fingerprint != fingerprint
+    assert new_fingerprint.data_hash == fingerprint.data_hash
+    assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
 
     model = SqlModel(
         **{**original_model.dict(), "pre_statements": [parse_one("CREATE TABLE test")]}
     )
-    assert original_fingerprint != fingerprint_from_node(model, nodes={})
+    fingerprint = fingerprint_from_node(model, nodes={})
+    assert new_fingerprint != fingerprint
+    assert new_fingerprint.data_hash != fingerprint.data_hash
+    assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
 
     model = SqlModel(**{**original_model.dict(), "post_statements": [parse_one("DROP TABLE test")]})
-    assert original_fingerprint != fingerprint_from_node(model, nodes={})
+    fingerprint = fingerprint_from_node(model, nodes={})
+    assert new_fingerprint != fingerprint
+    assert new_fingerprint.data_hash != fingerprint.data_hash
+    assert new_fingerprint.metadata_hash != fingerprint.metadata_hash
 
 
 def test_fingerprint_seed_model():
