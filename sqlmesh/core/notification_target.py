@@ -7,7 +7,7 @@ import typing as t
 from email.message import EmailMessage
 from enum import Enum
 
-from pydantic import EmailStr, Field, SecretStr
+from pydantic import Field, SecretStr
 
 from sqlmesh.core.console import Console, get_console
 from sqlmesh.integrations import slack
@@ -301,8 +301,8 @@ class BasicSMTPNotificationTarget(BaseNotificationTarget):
     port: int = 465
     user: t.Optional[str] = None
     password: t.Optional[SecretStr] = None
-    sender: t.Optional[EmailStr] = None
-    recipients: t.Optional[t.FrozenSet[EmailStr]] = None
+    sender: t.Optional[str] = None
+    recipients: t.Optional[t.FrozenSet[str]] = None
     subject: t.Optional[str] = "SQLMesh Notification"
     type_: Literal["smtp"] = Field(alias="type", default="smtp")
 

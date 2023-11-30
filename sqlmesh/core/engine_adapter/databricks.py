@@ -7,7 +7,6 @@ import pandas as pd
 from sqlglot import exp
 
 from sqlmesh.core.engine_adapter.base import CatalogSupport, InsertOverwriteStrategy
-from sqlmesh.core.engine_adapter.mixins import GetCurrentCatalogFromFunctionMixin
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
 from sqlmesh.core.schema_diff import SchemaDiffer
 from sqlmesh.utils import classproperty
@@ -20,7 +19,7 @@ if t.TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAdapter):
+class DatabricksEngineAdapter(SparkEngineAdapter):
     DIALECT = "databricks"
     INSERT_OVERWRITE_STRATEGY = InsertOverwriteStrategy.INSERT_OVERWRITE
     SUPPORTS_CLONING = True
@@ -32,7 +31,7 @@ class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAda
         array_element_selector="element",
     )
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
-    CURRENT_CATALOG_FUNCTION = "current_catalog()"
+    CURRENT_CATALOG_FUNCTION = "current_catalog"
     SUPPORTS_ROW_LEVEL_OP = True
 
     def __init__(self, *args: t.Any, **kwargs: t.Any):
@@ -156,3 +155,6 @@ class DatabricksEngineAdapter(GetCurrentCatalogFromFunctionMixin, SparkEngineAda
             clone_kwargs=clone_kwargs,
             **kwargs,
         )
+
+    def wap_supported(self, table_name: TableName) -> bool:
+        return False

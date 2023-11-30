@@ -7,7 +7,7 @@ from pydantic import Field
 from sqlmesh.core.config import CategorizerConfig
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.utils.date import TimeLike
-from sqlmesh.utils.pydantic import model_validator
+from sqlmesh.utils.pydantic import model_validator, model_validator_v1_args
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -33,7 +33,7 @@ class GithubCICDBotConfig(BaseConfig):
     skip_pr_backfill: bool = True
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def _validate(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         if values.get("enable_deploy_command") and not values.get("merge_method"):
             raise ValueError("merge_method must be set if enable_deploy_command is True")

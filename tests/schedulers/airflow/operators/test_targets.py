@@ -42,6 +42,7 @@ def test_evaluation_target_execute(mocker: MockerFixture, make_snapshot: t.Calla
     evaluator_evaluate_mock = mocker.patch(
         "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.evaluate"
     )
+    evaluator_evaluate_mock.return_value = None
 
     add_interval_mock = mocker.patch(
         "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.add_interval"
@@ -98,6 +99,7 @@ def test_evaluation_target_execute_seed_model(mocker: MockerFixture, make_snapsh
     evaluator_evaluate_mock = mocker.patch(
         "sqlmesh.core.snapshot.evaluator.SnapshotEvaluator.evaluate"
     )
+    evaluator_evaluate_mock.return_value = None
 
     add_interval_mock = mocker.patch(
         "sqlmesh.core.state_sync.engine_adapter.EngineAdapterStateSync.add_interval"

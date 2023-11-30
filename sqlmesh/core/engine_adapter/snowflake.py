@@ -23,7 +23,7 @@ class SnowflakeEngineAdapter(GetCurrentCatalogFromFunctionMixin):
     SUPPORTS_MATERIALIZED_VIEW_SCHEMA = True
     SUPPORTS_CLONING = True
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
-    CURRENT_CATALOG_FUNCTION = "CURRENT_DATABASE()"
+    CURRENT_CATALOG_FUNCTION = "CURRENT_DATABASE"
 
     def _df_to_source_queries(
         self,

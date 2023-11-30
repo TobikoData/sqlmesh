@@ -29,7 +29,11 @@ from sqlmesh.dbt.common import DbtConfig
 from sqlmesh.dbt.util import DBT_VERSION
 from sqlmesh.utils import AttributeDict, classproperty
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import field_validator, model_validator
+from sqlmesh.utils.pydantic import (
+    field_validator,
+    model_validator,
+    model_validator_v1_args,
+)
 
 if sys.version_info >= (3, 9):
     from typing import Literal
@@ -149,7 +153,7 @@ class DuckDbConfig(TargetConfig):
     settings: t.Optional[t.Dict[str, t.Any]] = None
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def validate_authentication(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
@@ -225,7 +229,7 @@ class SnowflakeConfig(TargetConfig):
     retry_all: bool = False
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def validate_authentication(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
@@ -297,7 +301,7 @@ class PostgresConfig(TargetConfig):
     sslmode: t.Optional[str] = None
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def validate_database(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
@@ -359,7 +363,7 @@ class RedshiftConfig(TargetConfig):
     sslmode: t.Optional[str] = None
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def validate_database(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
@@ -488,7 +492,7 @@ class BigQueryConfig(TargetConfig):
     maximum_bytes_billed: t.Optional[int] = None
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def validate_fields(
         cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
     ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:

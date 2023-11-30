@@ -648,7 +648,7 @@ class _Model(ModelMeta, frozen=True):
 
     @property
     def wap_supported(self) -> bool:
-        return self.kind.is_materialized and self.storage_format == "iceberg"
+        return self.kind.is_materialized and (self.storage_format or "").lower() == "iceberg"
 
     def validate_definition(self) -> None:
         """Validates the model's definition.
