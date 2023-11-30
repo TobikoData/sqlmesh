@@ -252,11 +252,11 @@ class HiveMetastoreTablePropertiesMixin(EngineAdapter):
 
 
 class GetCurrentCatalogFromFunctionMixin(EngineAdapter):
-    CURRENT_CATALOG_FUNCTION = "current_catalog"
+    CURRENT_CATALOG_EXPRESSION: exp.Expression = exp.func("current_catalog")
 
     def get_current_catalog(self) -> t.Optional[str]:
         """Returns the catalog name of the current connection."""
-        result = self.fetchone(exp.select(exp.func(self.CURRENT_CATALOG_FUNCTION)))
+        result = self.fetchone(exp.select(self.CURRENT_CATALOG_EXPRESSION))
         if result:
             return result[0]
         return None
