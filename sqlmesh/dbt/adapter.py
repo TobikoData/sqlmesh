@@ -279,7 +279,9 @@ class RuntimeAdapter(BaseAdapter):
         )
 
         expression = parse_one(sql, read=self.engine_adapter.dialect)
-        expression = exp.replace_tables(expression, self.table_mapping, copy=False)
+        expression = exp.replace_tables(
+            expression, self.table_mapping, dialect=self.dialect, copy=False
+        )
 
         if auto_begin:
             # TODO: This could be a bug. I think dbt leaves the transaction open while we close immediately.

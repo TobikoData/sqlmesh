@@ -249,7 +249,9 @@ class BaseExpressionRenderer:
                 expression = expression.transform(_expand, copy=False)
 
             if mapping:
-                expression = exp.replace_tables(expression, mapping, copy=False)
+                expression = exp.replace_tables(
+                    expression, mapping, dialect=self._dialect, copy=False
+                )
 
             return expression
 
