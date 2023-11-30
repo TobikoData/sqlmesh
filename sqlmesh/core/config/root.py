@@ -25,7 +25,11 @@ from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.notification_target import NotificationTarget
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
-from sqlmesh.utils.pydantic import field_validator, model_validator
+from sqlmesh.utils.pydantic import (
+    field_validator,
+    model_validator,
+    model_validator_v1_args,
+)
 
 
 class Config(BaseConfig):
@@ -113,7 +117,7 @@ class Config(BaseConfig):
             return value
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def _normalize_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         if "gateways" not in values and "gateway" in values:
             values["gateways"] = values.pop("gateway")
