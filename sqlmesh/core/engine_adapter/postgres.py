@@ -27,6 +27,7 @@ class PostgresEngineAdapter(
     DIALECT = "postgres"
     SUPPORTS_INDEXES = True
     HAS_VIEW_BINDING = True
+    CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
 
     def _fetch_native_df(
         self, query: t.Union[exp.Expression, str], quote_identifiers: bool = False

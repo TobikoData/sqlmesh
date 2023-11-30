@@ -43,6 +43,7 @@ class TrinoEngineAdapter(
     # connector and then figure out how to get insert/overwrite to work correctly without it.
     SUPPORTS_TRANSACTIONS = False
     SUPPORTS_ROW_LEVEL_OP = False
+    CURRENT_CATALOG_EXPRESSION = exp.column("current_catalog")
 
     @property
     def connection(self) -> TrinoConnection:
