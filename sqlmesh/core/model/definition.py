@@ -7,7 +7,6 @@ import sys
 import types
 import typing as t
 from difflib import unified_diff
-from itertools import zip_longest
 from pathlib import Path
 from textwrap import indent
 
@@ -468,22 +467,18 @@ class _Model(ModelMeta, frozen=True):
                 f"Cannot diff model '{self.name} against a non-model node '{other.name}'"
             )
 
-        meta_a, *statements_a = self.render_definition()
-        meta_b, *statements_b = other.render_definition()
+        definition_a = [
+            line
+            for expr in self.render_definition()
+            for line in expr.sql(pretty=True, comments=False, dialect=self.dialect).split("\n")
+        ]
+        definition_b = [
+            line
+            for expr in other.render_definition()
+            for line in expr.sql(pretty=True, comments=False, dialect=other.dialect).split("\n")
+        ]
 
-        query_a = statements_a.pop() if statements_a else None
-        query_b = statements_b.pop() if statements_b else None
-
-        return "\n".join(
-            (
-                d.text_diff(meta_a, meta_b, self.dialect),
-                *(
-                    d.text_diff(sa, sb, self.dialect)
-                    for sa, sb in zip_longest(statements_a, statements_b)
-                ),
-                d.text_diff(query_a, query_b, self.dialect),
-            )
-        ).strip()
+        return "\n".join(unified_diff(definition_a, definition_b)).strip()
 
     def set_time_format(self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT) -> None:
         """Sets the default time format for a model.
@@ -1229,19 +1224,9 @@ class SeedModel(_SqlBasedModel):
         other._ensure_hydrated()
         self._ensure_hydrated()
 
-        meta_a = self.render_definition()[0]
-        meta_b = other.render_definition()[0]
         return "\n".join(
             (
-                d.text_diff(meta_a, meta_b, self.dialect),
-                *(
-                    d.text_diff(pa, pb, self.dialect)
-                    for pa, pb in zip_longest(self.pre_statements, other.pre_statements)
-                ),
-                *(
-                    d.text_diff(pa, pb, self.dialect)
-                    for pa, pb in zip_longest(self.pre_statements, other.post_statements)
-                ),
+                super().text_diff(other),
                 *unified_diff(
                     self.seed.content.split("\n"),
                     other.seed.content.split("\n"),

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pathlib
 import sys
 import typing as t
-from itertools import zip_longest
+from difflib import unified_diff
 from pathlib import Path
 
 from pydantic import Field
@@ -361,22 +361,18 @@ class StandaloneAudit(_Node, AuditMixin):
                 f"Cannot diff audit '{self.name} against a non-audit node '{other.name}'"
             )
 
-        meta_a, *statements_a = self.render_definition()
-        meta_b, *statements_b = other.render_definition()
+        definition_a = [
+            line
+            for expr in self.render_definition()
+            for line in expr.sql(pretty=True, comments=False, dialect=self.dialect).split("\n")
+        ]
+        definition_b = [
+            line
+            for expr in other.render_definition()
+            for line in expr.sql(pretty=True, comments=False, dialect=other.dialect).split("\n")
+        ]
 
-        query_a = statements_a.pop() if statements_a else None
-        query_b = statements_b.pop() if statements_b else None
-
-        return "\n".join(
-            (
-                d.text_diff(meta_a, meta_b, self.dialect),
-                *(
-                    d.text_diff(sa, sb, self.dialect)
-                    for sa, sb in zip_longest(statements_a, statements_b)
-                ),
-                d.text_diff(query_a, query_b, self.dialect),
-            )
-        ).strip()
+        return "\n".join(unified_diff(definition_a, definition_b)).strip()
 
     def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.
