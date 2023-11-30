@@ -20,7 +20,7 @@ class DuckDBEngineAdapter(LogicalMergeMixin, GetCurrentCatalogFromFunctionMixin)
     DIALECT = "duckdb"
     SUPPORTS_TRANSACTIONS = False
     CATALOG_SUPPORT = CatalogSupport.FULL_SUPPORT
-    CURRENT_CATALOG_FUNCTION = "current_catalog()"
+    CURRENT_CATALOG_FUNCTION = "current_catalog"
 
     def set_current_catalog(self, catalog: str) -> None:
         """Sets the catalog name of the current connection."""

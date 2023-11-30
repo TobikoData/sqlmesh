@@ -28,7 +28,7 @@ class RedshiftEngineAdapter(
     DIALECT = "redshift"
     ESCAPE_JSON = True
     COLUMNS_TABLE = "SVV_COLUMNS"  # Includes late-binding views
-    CURRENT_CATALOG_FUNCTION = "current_database()"
+    CURRENT_CATALOG_FUNCTION = "current_database"
 
     @property
     def cursor(self) -> t.Any:
