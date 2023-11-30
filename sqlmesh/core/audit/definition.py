@@ -3,7 +3,6 @@ from __future__ import annotations
 import pathlib
 import sys
 import typing as t
-from difflib import unified_diff
 from pathlib import Path
 
 from pydantic import Field
@@ -361,18 +360,9 @@ class StandaloneAudit(_Node, AuditMixin):
                 f"Cannot diff audit '{self.name} against a non-audit node '{other.name}'"
             )
 
-        definition_a = [
-            line
-            for expr in self.render_definition()
-            for line in expr.sql(pretty=True, comments=False, dialect=self.dialect).split("\n")
-        ]
-        definition_b = [
-            line
-            for expr in other.render_definition()
-            for line in expr.sql(pretty=True, comments=False, dialect=other.dialect).split("\n")
-        ]
-
-        return "\n".join(unified_diff(definition_a, definition_b)).strip()
+        return d.text_diff(
+            self.render_definition(), other.render_definition(), self.dialect, other.dialect
+        ).strip()
 
     def render_definition(self, include_python: bool = True) -> t.List[exp.Expression]:
         """Returns the original list of sql expressions comprising the model definition.

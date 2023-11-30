@@ -467,18 +467,9 @@ class _Model(ModelMeta, frozen=True):
                 f"Cannot diff model '{self.name} against a non-model node '{other.name}'"
             )
 
-        definition_a = [
-            line
-            for expr in self.render_definition()
-            for line in expr.sql(pretty=True, comments=False, dialect=self.dialect).split("\n")
-        ]
-        definition_b = [
-            line
-            for expr in other.render_definition()
-            for line in expr.sql(pretty=True, comments=False, dialect=other.dialect).split("\n")
-        ]
-
-        return "\n".join(unified_diff(definition_a, definition_b)).strip()
+        return d.text_diff(
+            self.render_definition(), other.render_definition(), self.dialect, other.dialect
+        ).strip()
 
     def set_time_format(self, default_time_format: str = c.DEFAULT_TIME_COLUMN_FORMAT) -> None:
         """Sets the default time format for a model.
