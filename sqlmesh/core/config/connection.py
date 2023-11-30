@@ -116,7 +116,7 @@ class DuckDBConnectionConfig(ConnectionConfig):
     type_: Literal["duckdb"] = Field(alias="type", default="duckdb")
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def _validate_database_catalogs(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
@@ -216,7 +216,7 @@ class SnowflakeConnectionConfig(ConnectionConfig):
     _concurrent_tasks_validator = concurrent_tasks_validator
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def _validate_authenticator(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
@@ -317,7 +317,7 @@ class DatabricksConnectionConfig(ConnectionConfig):
     _http_headers_validator = http_headers_validator
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def _databricks_connect_validator(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
         from sqlmesh import runtime_env
         from sqlmesh.core.engine_adapter.databricks import DatabricksEngineAdapter
@@ -567,7 +567,7 @@ class GCPPostgresConnectionConfig(ConnectionConfig):
     concurrent_tasks: int = 4
 
     @model_validator(mode="before")
-    @classmethod
+    @model_validator_v1_args
     def _validate_auth_method(
         cls, values: t.Dict[str, t.Optional[str]]
     ) -> t.Dict[str, t.Optional[str]]:
