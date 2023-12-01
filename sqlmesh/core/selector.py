@@ -68,6 +68,7 @@ class Selector:
             for s in self._state_reader.get_snapshots(
                 target_env.snapshots, hydrate_seeds=True
             ).values()
+            if s.is_model
         }
 
         all_selected_models = self.expand_model_selections(model_selections)
