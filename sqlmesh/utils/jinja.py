@@ -367,8 +367,8 @@ class JinjaMacroRegistry(PydanticModel):
             data.append(macro_name)
             data.append(macro.definition)
 
-        for _, package in sorted(self.packages.items(), key=lambda x: x[0]):
-            for macro_name, macro in sorted(package.items(), key=lambda x: x[0]):
+        for _, package in sorted(self.packages.items()):
+            for macro_name, macro in sorted(package.items()):
                 data.append(macro_name)
                 data.append(macro.definition)
 

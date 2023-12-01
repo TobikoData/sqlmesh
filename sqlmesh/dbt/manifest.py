@@ -360,17 +360,17 @@ class ManifestHelper:
                 if args and all(arg for arg in args):
                     source = ".".join(args)
                     if not self._is_disabled_source(source):
-                        dependencies.sources.append(source)
+                        dependencies.sources.add(source)
             elif call_name[0] == "ref":
                 args = [_jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
                     ref = ".".join(args)
                     if not self._is_disabled_ref(ref):
-                        dependencies.refs.append(ref)
+                        dependencies.refs.add(ref)
             elif call_name[0] == "var":
                 args = [_jinja_call_arg_name(arg) for arg in node.args]
                 if args and args[0]:
-                    dependencies.variables.append(args[0])
+                    dependencies.variables.add(args[0])
 
         return dependencies
 

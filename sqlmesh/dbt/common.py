@@ -176,22 +176,17 @@ class Dependencies(PydanticModel):
     """
 
     macros: t.List[MacroReference] = []
-    sources: t.List[str] = []
-    refs: t.List[str] = []
-    variables: t.List[str] = []
+    sources: t.Set[str] = set()
+    refs: t.Set[str] = set()
+    variables: t.Set[str] = set()
 
     def union(self, other: Dependencies) -> Dependencies:
         return Dependencies(
             macros=list(set(self.macros) | set(other.macros)),
-            sources=list(set(self.sources) | set(other.sources)),
-            refs=list(set(self.refs) | set(other.refs)),
-            variables=list(set(self.variables) | set(other.variables)),
+            sources=self.sources | other.sources,
+            refs=self.refs | other.refs,
+            variables=self.variables | other.variables,
         )
-
-    @field_validator("sources", "refs", mode="after")
-    @classmethod
-    def _sort_list(cls, v: t.List[t.Any]) -> t.List[t.Any]:
-        return sorted(v)
 
     @field_validator("macros", mode="after")
     @classmethod
