@@ -238,8 +238,7 @@ class DbtContext:
             else:
                 raise ConfigError(f"Source '{source}' was not found.")
 
-        variable_deps = dependencies.variables
-        variables = {k: v for k, v in self.variables.items() if k in variable_deps}
+        variables = {k: v for k, v in self.variables.items() if k in dependencies.variables}
 
         dependency_context.sources = sources
         dependency_context.seeds = seeds
