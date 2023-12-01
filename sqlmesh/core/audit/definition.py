@@ -250,6 +250,10 @@ class ModelAudit(PydanticModel, AuditMixin, frozen=True):
             only_execution_time=model.kind.only_execution_time,
         )
 
+    def __str__(self) -> str:
+        path = f": {self._path.name}" if self._path else ""
+        return f"{self.__class__.__name__}<{self.name}{path}>"
+
 
 class StandaloneAudit(_Node, AuditMixin):
     """
@@ -274,7 +278,6 @@ class StandaloneAudit(_Node, AuditMixin):
 
     source_type: Literal["audit"] = "audit"
 
-    _path: t.Optional[Path] = None
     _depends_on: t.Optional[t.Set[str]] = None
 
     # Validators
