@@ -134,7 +134,9 @@ class Console(abc.ABC):
         """Displays a summary of differences for the given models."""
 
     @abc.abstractmethod
-    def plan(self, plan: Plan, auto_apply: bool, no_diff: bool = False) -> None:
+    def plan(
+        self, plan: Plan, auto_apply: bool, no_diff: bool = False, no_prompts: bool = False
+    ) -> None:
         """The main plan flow.
 
         The console should present the user with choices on how to backfill and version the snapshots
@@ -144,6 +146,9 @@ class Console(abc.ABC):
             plan: The plan to make choices for.
             auto_apply: Whether to automatically apply the plan after all choices have been made.
             no_diff: Hide text differences for changed models.
+            no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
+                if this flag is set to true and there are uncategorized changes the plan creation will
+                fail. Default: False
         """
 
     @abc.abstractmethod
@@ -463,7 +468,9 @@ class TerminalConsole(Console):
             ignored_names=ignored_snapshot_names,
         )
 
-    def plan(self, plan: Plan, auto_apply: bool, no_diff: bool = False) -> None:
+    def plan(
+        self, plan: Plan, auto_apply: bool, no_diff: bool = False, no_prompts: bool = False
+    ) -> None:
         """The main plan flow.
 
         The console should present the user with choices on how to backfill and version the snapshots
@@ -473,9 +480,14 @@ class TerminalConsole(Console):
             plan: The plan to make choices for.
             auto_apply: Whether to automatically apply the plan after all choices have been made.
             no_diff: Hide text differences for changed models.
+            no_prompts: Whether to disable interactive prompts for the backfill time range. Please note that
+                if this flag is set to true and there are uncategorized changes the plan creation will
+                fail. Default: False
         """
-        self._prompt_categorize(plan, auto_apply, no_diff=no_diff)
-        self._show_options_after_categorization(plan, auto_apply)
+        self._prompt_categorize(plan, auto_apply, no_diff=no_diff, no_prompts=no_prompts)
+
+        if not no_prompts:
+            self._show_options_after_categorization(plan, auto_apply)
 
         if auto_apply:
             plan.apply()
@@ -581,7 +593,9 @@ class TerminalConsole(Console):
             self.log_status_update("\n[bold]Virtually updating unmodified models\n")
             self._prompt_promote(plan)
 
-    def _prompt_categorize(self, plan: Plan, auto_apply: bool, no_diff: bool = False) -> None:
+    def _prompt_categorize(
+        self, plan: Plan, auto_apply: bool, no_diff: bool, no_prompts: bool
+    ) -> None:
         """Get the user's change category for the directly modified models."""
         self.show_model_difference_summary(
             plan.context_diff, ignored_snapshot_names=plan.ignored_snapshot_names
@@ -602,7 +616,8 @@ class TerminalConsole(Console):
                     tree.add(indirect_tree)
                 indirect_tree.add(f"[indirect]{child}")
             self._print(tree)
-            self._get_snapshot_change_category(snapshot, plan, auto_apply)
+            if not no_prompts:
+                self._get_snapshot_change_category(snapshot, plan, auto_apply)
 
     def _show_categorized_snapshots(self, plan: Plan) -> None:
         context_diff = plan.context_diff

@@ -842,10 +842,7 @@ class Context(BaseContext):
             default_end=default_end,
         )
 
-        if not no_prompts:
-            self.console.plan(plan, auto_apply, no_diff=no_diff)
-        elif auto_apply:
-            self.apply(plan)
+        self.console.plan(plan, auto_apply, no_diff=no_diff, no_prompts=no_prompts)
 
         return plan
 
