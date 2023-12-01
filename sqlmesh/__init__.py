@@ -152,7 +152,7 @@ def configure_logging(
             logger.addHandler(file_handler)
 
     if log_limit > 0:
-        for path in list(sorted(glob.glob("{LOG_PREFIX}*.log"), reverse=True))[log_limit:]:
+        for path in list(sorted(glob.glob(f"{LOG_PREFIX}*.log"), reverse=True))[log_limit:]:
             os.remove(path)
 
     if debug:
