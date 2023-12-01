@@ -1007,7 +1007,7 @@ def test_create_ctas_scd_type_2(mocker: MockerFixture, adapter_mock, make_snapsh
     evaluator.create([snapshot], {})
 
     query = parse_one(
-        """SELECT *, CAST(NULL AS TIMESTAMP) AS valid_from, CAST(NULL AS TIMESTAMP) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE"""
+        """SELECT *, CAST(NULL AS TIMESTAMP) AS valid_from, CAST(NULL AS TIMESTAMP) AS valid_to FROM "tbl" AS "tbl" WHERE FALSE LIMIT 0"""
     )
 
     # Verify that managed columns are included in CTAS with types

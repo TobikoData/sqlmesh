@@ -1307,6 +1307,7 @@ FROM (VALUES
   (1)) AS t(dummy)
 WHERE
   FALSE
+LIMIT 0
 	""",
     )
 
@@ -1625,13 +1626,13 @@ def test_model_ctas_query():
     expressions = d.parse(
         """
         MODEL (name `a-b-c.table`, kind FULL, dialect bigquery);
-        SELECT 1 as a
+        SELECT 1 as a WHERE TRUE LIMIT 2
     """
     )
 
     assert (
         load_sql_based_model(expressions, dialect="bigquery").ctas_query().sql()
-        == 'SELECT 1 AS "a"'
+        == 'SELECT 1 AS "a" WHERE FALSE LIMIT 0'
     )
 
     expressions = d.parse(
@@ -1643,7 +1644,7 @@ def test_model_ctas_query():
 
     assert (
         load_sql_based_model(expressions).ctas_query().sql()
-        == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE'
+        == 'SELECT 1 AS "a" FROM "b" AS "b" WHERE FALSE LIMIT 0'
     )
 
 
