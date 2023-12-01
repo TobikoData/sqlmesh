@@ -212,3 +212,20 @@ def test_table_exists_table_only(mocker: MockerFixture):
     cursor_mock.execute.assert_called_once_with(
         """SELECT 1 FROM "information_schema"."tables" WHERE "table_name" = 'some_table'"""
     )
+
+
+def test_create_view(make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(RedshiftEngineAdapter)
+    adapter.create_view(
+        view_name="test_view",
+        query_or_df=parse_one("SELECT cola FROM table"),
+        columns_to_types={
+            "a": exp.DataType.build("int"),
+            "b": exp.DataType.build("int"),
+        },
+    )
+
+    assert to_sql_calls(adapter) == [
+        'DROP VIEW IF EXISTS "test_view" CASCADE',
+        'CREATE VIEW "test_view" ("a", "b") AS SELECT "cola" FROM "table" WITH NO SCHEMA BINDING',
+    ]

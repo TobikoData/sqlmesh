@@ -71,6 +71,30 @@ class RedshiftEngineAdapter(
             table_name, source_queries, exists=False, **kwargs
         )
 
+    def create_view(
+        self,
+        view_name: TableName,
+        query_or_df: QueryOrDF,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        replace: bool = True,
+        materialized: bool = False,
+        **create_kwargs: t.Any,
+    ) -> None:
+        """
+        Redshift views are "binding" by default to their underlying table which means you can't drop that
+        underlying table without dropping the view first. This is a problem for us since we want to be able to
+        swap tables out from under views. Therefore, we create the view as non-binding.
+        """
+        return super().create_view(
+            view_name,
+            query_or_df,
+            columns_to_types,
+            replace,
+            materialized,
+            no_schema_binding=True,
+            **create_kwargs,
+        )
+
     def replace_query(
         self,
         table_name: TableName,
