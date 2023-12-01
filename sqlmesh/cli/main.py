@@ -107,17 +107,27 @@ def cli(
     type=str,
     help="Project template. Supported values: airflow, dbt, default.",
 )
+@click.option(
+    "-e",
+    "--empty",
+    is_flag=True,
+    default=False,
+    help="Create empty SQLMesh project directories.",
+)
 @click.pass_context
 @error_handler
 def init(
-    ctx: click.Context, sql_dialect: t.Optional[str] = None, template: t.Optional[str] = None
+    ctx: click.Context,
+    sql_dialect: t.Optional[str] = None,
+    template: t.Optional[str] = None,
+    empty: bool = False,
 ) -> None:
     """Create a new SQLMesh repository."""
     try:
         project_template = ProjectTemplate(template.lower() if template else "default")
     except ValueError:
         raise click.ClickException(f"Invalid project template '{template}'")
-    init_example_project(ctx.obj, dialect=sql_dialect, template=project_template)
+    init_example_project(ctx.obj, dialect=sql_dialect, template=project_template, empty=empty)
 
 
 @cli.command("render")

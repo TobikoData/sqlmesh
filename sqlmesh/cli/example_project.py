@@ -157,6 +157,7 @@ def init_example_project(
     path: t.Union[str, Path],
     dialect: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
+    empty: bool = False,
 ) -> None:
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
@@ -180,11 +181,13 @@ def init_example_project(
         return
 
     _create_folders([audits_path, macros_path, models_path, seeds_path, tests_path])
-    _create_macros(macros_path)
-    _create_audits(audits_path)
-    _create_models(models_path)
-    _create_seeds(seeds_path)
-    _create_tests(tests_path)
+
+    if not empty:
+        _create_macros(macros_path)
+        _create_audits(audits_path)
+        _create_models(models_path)
+        _create_seeds(seeds_path)
+        _create_tests(tests_path)
 
 
 def _create_folders(target_folders: t.Sequence[Path]) -> None:
