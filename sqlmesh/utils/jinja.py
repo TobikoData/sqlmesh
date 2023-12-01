@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import re
 import typing as t
 from collections import defaultdict
@@ -357,6 +358,26 @@ class JinjaMacroRegistry(PydanticModel):
                 output.append(d.jinja_statement(macro_info.definition))
 
         return output
+
+    @property
+    def data_hash_values(self) -> t.List[str]:
+        data = []
+
+        for macro_name, macro in sorted(self.root_macros.items()):
+            data.append(macro_name)
+            data.append(macro.definition)
+
+        for _, package in sorted(self.packages.items()):
+            for macro_name, macro in sorted(package.items()):
+                data.append(macro_name)
+                data.append(macro.definition)
+
+        trimmed_global_objs = {
+            k: self.global_objs[k] for k in ("refs", "sources", "vars") if k in self.global_objs
+        }
+        data.append(json.dumps(trimmed_global_objs, sort_keys=True))
+
+        return data
 
     def __deepcopy__(self, memo: t.Optional[t.Dict[int, t.Any]] = None) -> JinjaMacroRegistry:
         return JinjaMacroRegistry.parse_obj(self.dict())
