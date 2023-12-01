@@ -502,14 +502,14 @@ def test_delete_environment_failure(web_sushi_context: Context, mocker: MockerFi
 
 
 def test_get_lineage(web_sushi_context: Context) -> None:
-    response = client.get("/api/lineage/sushi.waiters/ds")
+    response = client.get("/api/lineage/sushi.waiters/event_date")
 
     assert response.status_code == 200
     assert response.json() == {
         "sushi.waiters": {
-            "ds": {
+            "event_date": {
                 "source": """SELECT DISTINCT
-  CAST(o.ds AS TEXT) AS ds
+  CAST(o.event_date AS DATE) AS event_date
 FROM (
   SELECT
     CAST(NULL AS INT) AS id,
@@ -517,20 +517,21 @@ FROM (
     CAST(NULL AS INT) AS waiter_id,
     CAST(NULL AS INT) AS start_ts,
     CAST(NULL AS INT) AS end_ts,
-    CAST(NULL AS TEXT) AS ds
+    CAST(NULL AS DATE) AS event_date
   FROM (VALUES
     (1)) AS t(dummy)
 ) AS o /* source: sushi.orders */
 WHERE
-  o.ds <= '1970-01-01' AND o.ds >= '1970-01-01'""",
-                "expression": "CAST(o.ds AS TEXT) AS ds",
-                "models": {"sushi.orders": ["ds"]},
+  o.event_date <= CAST('1970-01-01' AS DATE)
+  AND o.event_date >= CAST('1970-01-01' AS DATE)""",
+                "expression": "CAST(o.event_date AS DATE) AS event_date",
+                "models": {"sushi.orders": ["event_date"]},
             }
         },
         "sushi.orders": {
-            "ds": {
-                "source": "SELECT\n  CAST(NULL AS TEXT) AS ds\nFROM (VALUES\n  (1)) AS t(dummy)",
-                "expression": "CAST(NULL AS TEXT) AS ds",
+            "event_date": {
+                "source": "SELECT\n  CAST(NULL AS DATE) AS event_date\nFROM (VALUES\n  (1)) AS t(dummy)",
+                "expression": "CAST(NULL AS DATE) AS event_date",
                 "models": {},
             }
         },

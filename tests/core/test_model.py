@@ -432,7 +432,7 @@ def test_column_descriptions(sushi_context, assert_exp_eq):
     assert sushi_context.models["sushi.customer_revenue_by_day"].column_descriptions == {
         "customer_id": "Customer id",
         "revenue": "Revenue from orders made by this customer",
-        "ds": "Date",
+        "event_date": "Date",
     }
 
     expressions = d.parse(
@@ -1053,10 +1053,10 @@ def test_render_query(assert_exp_eq, sushi_context):
         """
         SELECT DISTINCT
           CAST("o"."waiter_id" AS INT) AS "waiter_id",
-          CAST("o"."ds" AS TEXT) AS "ds"
+          CAST("o"."event_date" AS DATE) AS "event_date"
         FROM "sushi"."orders" AS "o"
         WHERE
-          "o"."ds" <= '1970-01-01' AND "o"."ds" >= '1970-01-01'
+          "o"."event_date" <= CAST('1970-01-01' AS DATE) AND "o"."event_date" >= CAST('1970-01-01' AS DATE)
         """,
     )
 

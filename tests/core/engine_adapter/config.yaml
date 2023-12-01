@@ -21,6 +21,7 @@ gateways:
       type: spark
       config:
         spark.remote: sc://localhost
+        spark.sql.hive.metastorePartitionPruningFallbackOnException: true
     state_connection:
       type: duckdb
   inttest_mssql:
@@ -46,3 +47,6 @@ gateways:
       password: mysql
       port: 3306
       charset: utf8
+
+model_defaults:
+    dialect: duckdb

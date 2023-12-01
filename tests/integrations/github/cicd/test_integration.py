@@ -33,7 +33,7 @@ def get_environment_objects(controller: GithubController, environment: str) -> t
 def get_num_days_loaded(controller: GithubController, environment: str, model: str) -> int:
     return int(
         controller._context.engine_adapter.fetchdf(
-            f"SELECT distinct ds FROM sushi__{environment}.{model}"
+            f"SELECT distinct event_date FROM sushi__{environment}.{model}"
         ).count()
     )
 
@@ -158,12 +158,12 @@ def test_merge_pr_has_non_breaking_change(
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
    CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue,
--  CAST(o.ds AS TEXT) AS ds
-+  CAST(o.ds AS TEXT) AS ds,
+-  CAST(o.event_date AS DATE) AS event_date
++  CAST(o.event_date AS DATE) AS event_date,
 +  1 AS new_col
  FROM sushi.orders AS o
  LEFT JOIN sushi.order_items AS oi
-   ON o.id = oi.order_id AND o.ds = oi.ds
+   ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
 ```
@@ -357,12 +357,12 @@ def test_merge_pr_has_non_breaking_change_diff_start(
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
    CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue,
--  CAST(o.ds AS TEXT) AS ds
-+  CAST(o.ds AS TEXT) AS ds,
+-  CAST(o.event_date AS DATE) AS event_date
++  CAST(o.event_date AS DATE) AS event_date,
 +  1 AS new_col
  FROM sushi.orders AS o
  LEFT JOIN sushi.order_items AS oi
-   ON o.id = oi.order_id AND o.ds = oi.ds
+   ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
 ```
@@ -871,12 +871,12 @@ def test_no_merge_since_no_deploy_signal(
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
    CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue,
--  CAST(o.ds AS TEXT) AS ds
-+  CAST(o.ds AS TEXT) AS ds,
+-  CAST(o.event_date AS DATE) AS event_date
++  CAST(o.event_date AS DATE) AS event_date,
 +  1 AS new_col
  FROM sushi.orders AS o
  LEFT JOIN sushi.order_items AS oi
-   ON o.id = oi.order_id AND o.ds = oi.ds
+   ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
 ```
@@ -1054,12 +1054,12 @@ def test_no_merge_since_no_deploy_signal_no_approvers_defined(
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
    CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue,
--  CAST(o.ds AS TEXT) AS ds
-+  CAST(o.ds AS TEXT) AS ds,
+-  CAST(o.event_date AS DATE) AS event_date
++  CAST(o.event_date AS DATE) AS event_date,
 +  1 AS new_col
  FROM sushi.orders AS o
  LEFT JOIN sushi.order_items AS oi
-   ON o.id = oi.order_id AND o.ds = oi.ds
+   ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
 ```
@@ -1230,12 +1230,12 @@ def test_deploy_comment_pre_categorized(
  SELECT
    CAST(o.waiter_id AS INT) AS waiter_id,
    CAST(SUM(oi.quantity * i.price) AS DOUBLE) AS revenue,
--  CAST(o.ds AS TEXT) AS ds
-+  CAST(o.ds AS TEXT) AS ds,
+-  CAST(o.event_date AS DATE) AS event_date
++  CAST(o.event_date AS DATE) AS event_date,
 +  1 AS new_col
  FROM sushi.orders AS o
  LEFT JOIN sushi.order_items AS oi
-   ON o.id = oi.order_id AND o.ds = oi.ds
+   ON o.id = oi.order_id AND o.event_date = oi.event_date
 ```
 
 ```

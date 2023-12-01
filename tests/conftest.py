@@ -8,9 +8,10 @@ from tempfile import TemporaryDirectory
 from unittest import mock
 
 import duckdb
+import pandas as pd
 import pytest
 from pytest_mock.plugin import MockerFixture
-from sqlglot import exp, maybe_parse
+from sqlglot import exp, maybe_parse, parse_one
 from sqlglot.helper import ensure_list
 
 from sqlmesh.core.context import Context
@@ -18,7 +19,7 @@ from sqlmesh.core.engine_adapter.base import EngineAdapter
 from sqlmesh.core.plan import BuiltInPlanEvaluator, Plan
 from sqlmesh.core.snapshot import Node, Snapshot
 from sqlmesh.utils import random_id
-from sqlmesh.utils.date import TimeLike, to_date, to_ds
+from sqlmesh.utils.date import TimeLike, to_date
 
 pytest_plugins = ["tests.common_fixtures"]
 
@@ -91,7 +92,13 @@ class SushiDataValidator:
         return cls(engine_adapter=context.engine_adapter)
 
     def validate(
-        self, model_name: str, start: TimeLike, end: TimeLike, *, env_name: t.Optional[str] = None
+        self,
+        model_name: str,
+        start: TimeLike,
+        end: TimeLike,
+        *,
+        env_name: t.Optional[str] = None,
+        dialect: t.Optional[str] = None,
     ) -> t.Dict[t.Any, t.Any]:
         """
         Both start and end are inclusive.
@@ -99,14 +106,23 @@ class SushiDataValidator:
         if model_name == "sushi.customer_revenue_lifetime":
             env_name = f"__{env_name}" if env_name else ""
             full_table_path = f"sushi{env_name}.customer_revenue_lifetime"
-            query = f"SELECT ds, count(*) AS the_count FROM {full_table_path} group by 1 order by 2 desc, 1 desc"
-            results = self.engine_adapter.fetchdf(query).to_dict()
+            query = f"SELECT event_date, count(*) AS the_count FROM {full_table_path} group by event_date order by 2 desc, 1 desc"
+            results = self.engine_adapter.fetchdf(
+                parse_one(query), quote_identifiers=True
+            ).to_dict()
             start_date, end_date = to_date(start), to_date(end)
             num_days_diff = (end_date - start_date).days + 1
-            assert len(results["ds"]) == num_days_diff
-            assert list(results["ds"].values()) == [
-                to_ds(end_date - datetime.timedelta(days=x)) for x in range(num_days_diff)
+            assert len(results["event_date"]) == num_days_diff
+
+            # this creates Pandas Timestamp objects
+            expected_dates = [
+                pd.to_datetime(end_date - datetime.timedelta(days=x)) for x in range(num_days_diff)
             ]
+            # all engines but duckdb fetch dates as datetime.date objects
+            if dialect and dialect != "duckdb":
+                expected_dates = [x.date() for x in expected_dates]  # type: ignore
+            assert list(results["event_date"].values()) == expected_dates
+
             return results
         else:
             raise NotImplementedError(f"Unknown model_name: {model_name}")

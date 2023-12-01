@@ -2,7 +2,7 @@
 MODEL (
   name sushi.waiter_revenue_by_day,
   kind incremental_by_time_range (
-    time_column (ds, '%Y-%m-%d'),
+    time_column event_date,
     batch_size 10,
   ),
   owner jen,
@@ -10,20 +10,20 @@ MODEL (
   audits (
     NUMBER_OF_ROWS(threshold=0)
   ),
-  grain (waiter_id, ds)
+  grain (waiter_id, event_date)
 );
 
 SELECT
   o.waiter_id::INT AS waiter_id, /* Waiter id */
   SUM(oi.quantity * i.price)::DOUBLE AS revenue, /* Revenue from orders taken by this waiter */
-  o.ds::TEXT AS ds /* Date */
+  o.event_date::DATE AS event_date /* Date */
 FROM sushi.orders AS o
 LEFT JOIN sushi.order_items AS oi
-  ON o.id = oi.order_id AND o.ds = oi.ds
+  ON o.id = oi.order_id AND o.event_date = oi.event_date
 LEFT JOIN sushi.items AS i
-  ON oi.item_id = i.id AND oi.ds = i.ds
+  ON oi.item_id = i.id AND oi.event_date = i.event_date
 WHERE
-  o.ds BETWEEN @start_ds AND @end_ds
+  o.event_date BETWEEN @start_date AND @end_date
 GROUP BY
   o.waiter_id,
-  o.ds
+  o.event_date

@@ -6,7 +6,7 @@
 MODEL (
   name sushi.customer_revenue_lifetime,
   kind incremental_by_time_range (
-    time_column (ds, 'YYYY-MM-dd'),
+    time_column event_date,
     batch_size 1
   ),
   owner jen,
@@ -15,9 +15,9 @@ MODEL (
   columns (
     customer_id INT,
     revenue DOUBLE,
-    ds STRING
+    event_date DATE
   ),
-  grain [customer_id, ds],
+  grain [customer_id, event_date],
 );
 
 WITH order_total AS (
@@ -26,9 +26,9 @@ WITH order_total AS (
     SUM(oi.quantity * i.price) AS total
   FROM sushi.order_items AS oi
   LEFT JOIN sushi.items AS i
-    ON oi.item_id = i.id AND oi.ds = i.ds
+    ON oi.item_id = i.id AND oi.event_date = i.event_date
   WHERE
-    oi.ds = @end_ds
+    oi.event_date = @end_date
   GROUP BY
     oi.order_id
 ), incremental_total AS (
@@ -39,7 +39,7 @@ WITH order_total AS (
   LEFT JOIN order_total AS ot
     ON o.id = ot.order_id
   WHERE
-    o.ds = @end_ds
+    o.event_date = @end_date
   GROUP BY
     o.customer_id
 ), prev_total AS (
@@ -48,12 +48,12 @@ WITH order_total AS (
     crl.revenue
   FROM sushi.customer_revenue_lifetime AS crl
   WHERE
-    crl.ds = DATE_FORMAT(@end_date - INTERVAL 1 DAY, 'YYYY-MM-dd')
+    crl.event_date = @end_date - INTERVAL 1 DAY
 )
 SELECT
   COALESCE(it.customer_id, prev_total.customer_id) AS customer_id, /* Customer id */
   COALESCE(it.revenue, 0) + COALESCE(prev_total.revenue, 0) AS revenue, /* Lifetime revenue from this customer */
-  @end_ds AS ds /* End date of the lifetime calculation */
+  @end_date AS event_date /* End date of the lifetime calculation */
 FROM incremental_total AS it
 FULL OUTER JOIN prev_total AS prev_total
   ON it.customer_id = prev_total.customer_id
