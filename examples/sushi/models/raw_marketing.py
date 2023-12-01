@@ -42,11 +42,15 @@ def execute(
     seed = int(end.strftime("%Y%m%d"))
     np.random.seed(seed)
     num_customers = random.randint(30, 100)
+
+    # Remove timezone because we specify `timestamp` in the columns type list
+    exec_time = execution_time.replace(tzinfo=None)
+
     df_new = pd.DataFrame(
         {
             "customer_id": random.sample(range(0, 100), k=num_customers),
             "status": np.random.choice(["active", "inactive"], size=num_customers, p=[0.8, 0.2]),
-            "updated_at": [execution_time] * num_customers,
+            "updated_at": [exec_time] * num_customers,
         }
     )
     df = df_new.merge(df_existing, on="customer_id", how="left", suffixes=(None, "_old"))

@@ -13,9 +13,9 @@ SELECT
   revenue::DOUBLE AS revenue
 FROM sushi.waiter_revenue_by_day
 WHERE
-  ds = (
+  event_date = (
     SELECT
-      MAX(ds)
+      MAX(event_date)
     FROM sushi.waiter_revenue_by_day
   )
 ORDER BY

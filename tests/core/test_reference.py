@@ -51,4 +51,4 @@ def test_models_for_column(sushi_context_pre_scheduling):
         "sushi.marketing",
         "sushi.raw_marketing",
     ]
-    assert graph.models_for_column("sushi.orders", "ds") == ["sushi.orders"]
+    assert graph.models_for_column("sushi.orders", "event_date") == ["sushi.orders"]

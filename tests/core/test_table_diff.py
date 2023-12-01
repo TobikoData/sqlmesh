@@ -64,7 +64,7 @@ def test_data_diff(sushi_context_fixed_date):
     diff = sushi_context_fixed_date.table_diff(
         source="source_dev",
         target="target_dev",
-        on=exp.condition("s.customer_id = t.customer_id AND s.ds = t.ds"),
+        on=exp.condition("s.customer_id = t.customer_id AND s.event_date = t.event_date"),
         model_or_snapshot="sushi.customer_revenue_by_day",
     )
 

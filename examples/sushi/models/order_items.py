@@ -10,7 +10,7 @@ from sqlglot.expressions import to_column
 
 from sqlmesh import ExecutionContext, model
 from sqlmesh.core.model import IncrementalByTimeRangeKind
-from sqlmesh.utils.date import to_ds
+from sqlmesh.utils.date import to_date, to_ds
 
 ITEMS = "sushi.items"
 
@@ -18,7 +18,7 @@ ITEMS = "sushi.items"
 @model(
     "sushi.order_items",
     kind=IncrementalByTimeRangeKind(
-        time_column="ds",
+        time_column="event_date",
         batch_size=30,
     ),
     cron="@daily",
@@ -27,7 +27,7 @@ ITEMS = "sushi.items"
         "order_id": "int",
         "item_id": "int",
         "quantity": "int",
-        "ds": "text",
+        "event_date": "date",
     },
     audits=[
         (
@@ -50,7 +50,8 @@ def execute(
     for dt in iter_dates(start, end):
         # Generate query with sqlglot dialect/quoting
         orders = context.fetchdf(
-            exp.select("*").from_(orders_table).where(f"ds = '{to_ds(dt)}'"), quote_identifiers=True
+            exp.select("*").from_(orders_table).where(f"event_date = CAST('{to_ds(dt)}' AS DATE)"),
+            quote_identifiers=True,
         )
 
         # Normalize column names to support Snowflake.
@@ -58,7 +59,8 @@ def execute(
 
         # Generate query with sqlglot dialect/quoting
         items = context.fetchdf(
-            exp.select("*").from_(items_table).where(f"ds = '{to_ds(dt)}'"), quote_identifiers=True
+            exp.select("*").from_(items_table).where(f"event_date = CAST('{to_ds(dt)}' AS DATE)"),
+            quote_identifiers=True,
         )
 
         # Normalize column names to support Snowflake.
@@ -75,7 +77,7 @@ def execute(
                         "order_id": order_id,
                         "item_id": items.sample(n=n)["id"],
                         "quantity": np.random.randint(1, 10, n),
-                        "ds": to_ds(dt),
+                        "event_date": to_date(dt),
                     }
                 )
                 .reset_index()
