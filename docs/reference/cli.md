@@ -177,8 +177,7 @@ Usage: sqlmesh init [OPTIONS] [SQL_DIALECT]
 
 Options:
   -t, --template TEXT  Project template. Supported values: airflow, dbt,
-                       default.
-  -e, --empty          Create empty project directories.
+                       default, empty.
   --help               Show this message and exit.
 ```
 

@@ -105,14 +105,12 @@ def cli(
     "-t",
     "--template",
     type=str,
-    help="Project template. Supported values: airflow, dbt, default.",
+    help="Project template. Supported values: airflow, dbt, default, empty.",
 )
 @click.pass_context
 @error_handler
 def init(
-    ctx: click.Context,
-    sql_dialect: t.Optional[str] = None,
-    template: t.Optional[str] = None,
+    ctx: click.Context, sql_dialect: t.Optional[str] = None, template: t.Optional[str] = None
 ) -> None:
     """Create a new SQLMesh repository."""
     try:
