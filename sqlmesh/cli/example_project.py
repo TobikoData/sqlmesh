@@ -10,6 +10,7 @@ class ProjectTemplate(Enum):
     AIRFLOW = "airflow"
     DBT = "dbt"
     DEFAULT = "default"
+    EMPTY = "empty"
 
 
 def _gen_config(dialect: t.Optional[str], template: ProjectTemplate) -> str:
@@ -50,6 +51,7 @@ config = sqlmesh_config(Path(__file__).parent)
 """,
     }
 
+    default_configs[ProjectTemplate.EMPTY] = default_configs[ProjectTemplate.DEFAULT]
     return default_configs[template]
 
 
@@ -157,7 +159,6 @@ def init_example_project(
     path: t.Union[str, Path],
     dialect: t.Optional[str],
     template: ProjectTemplate = ProjectTemplate.DEFAULT,
-    empty: bool = False,
 ) -> None:
     root_path = Path(path)
     config_extension = "py" if template == ProjectTemplate.DBT else "yaml"
@@ -182,7 +183,7 @@ def init_example_project(
 
     _create_folders([audits_path, macros_path, models_path, seeds_path, tests_path])
 
-    if not empty:
+    if template != ProjectTemplate.EMPTY:
         _create_macros(macros_path)
         _create_audits(audits_path)
         _create_models(models_path)

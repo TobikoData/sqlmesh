@@ -102,13 +102,7 @@ class SQLMeshMagics(Magics):
         "--template",
         "-t",
         type=str,
-        help="Project template. Supported values: airflow, dbt, default.",
-    )
-    @argument(
-        "--empty",
-        "-e",
-        action="store_true",
-        help="Create empty project directories.",
+        help="Project template. Supported values: airflow, dbt, default, empty.",
     )
     @line_magic
     def init(self, line: str) -> None:
@@ -120,7 +114,7 @@ class SQLMeshMagics(Magics):
             )
         except ValueError:
             raise MagicError(f"Invalid project template '{args.template}'")
-        init_example_project(args.path, args.sql_dialect, project_template, args.empty)
+        init_example_project(args.path, args.sql_dialect, project_template)
         self.display(self.success_message({"green-bold": "SQLMesh project scaffold created"}))
 
     @magic_arguments()
