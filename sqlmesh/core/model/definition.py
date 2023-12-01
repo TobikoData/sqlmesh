@@ -1146,16 +1146,7 @@ class SqlModel(_SqlBasedModel):
 
         query = self.query if self.hash_raw_query else self.render_query() or self.query
         data.append(query.sql(comments=False))
-
-        for macro_name, macro in sorted(self.jinja_macros.root_macros.items()):
-            data.append(macro_name)
-            data.append(macro.definition)
-
-        for _, package in sorted(self.jinja_macros.packages.items(), key=lambda x: x[0]):
-            for macro_name, macro in sorted(package.items(), key=lambda x: x[0]):
-                data.append(macro_name)
-                data.append(macro.definition)
-
+        data.extend(self.jinja_macros.data_hash_values)
         return data
 
     def __repr__(self) -> str:
