@@ -15,7 +15,7 @@ def test_columns(make_mocked_engine_adapter: t.Callable):
     adapter.cursor.fetchall.return_value = [("col", "INT")]
     resp = adapter.columns("db.table")
     adapter.cursor.execute.assert_called_once_with(
-        """SELECT "column_name", "data_type" FROM "SVV_COLUMNS" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
+        """SELECT "column_name", "data_type" FROM "svv_columns" WHERE "table_name" = 'table' AND "table_schema" = 'db'"""
     )
     assert resp == {"col": exp.DataType.build("INT")}
 

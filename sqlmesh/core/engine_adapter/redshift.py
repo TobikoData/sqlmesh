@@ -27,7 +27,7 @@ class RedshiftEngineAdapter(
 ):
     DIALECT = "redshift"
     ESCAPE_JSON = True
-    COLUMNS_TABLE = "SVV_COLUMNS"  # Includes late-binding views
+    COLUMNS_TABLE = "svv_columns"  # Includes late-binding views
     CURRENT_CATALOG_EXPRESSION = exp.func("current_database")
 
     @property
