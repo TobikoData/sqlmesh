@@ -10,6 +10,7 @@ class ProjectTemplate(Enum):
     AIRFLOW = "airflow"
     DBT = "dbt"
     DEFAULT = "default"
+    EMPTY = "empty"
 
 
 def _gen_config(dialect: t.Optional[str], template: ProjectTemplate) -> str:
@@ -50,6 +51,7 @@ config = sqlmesh_config(Path(__file__).parent)
 """,
     }
 
+    default_configs[ProjectTemplate.EMPTY] = default_configs[ProjectTemplate.DEFAULT]
     return default_configs[template]
 
 
@@ -180,11 +182,13 @@ def init_example_project(
         return
 
     _create_folders([audits_path, macros_path, models_path, seeds_path, tests_path])
-    _create_macros(macros_path)
-    _create_audits(audits_path)
-    _create_models(models_path)
-    _create_seeds(seeds_path)
-    _create_tests(tests_path)
+
+    if template != ProjectTemplate.EMPTY:
+        _create_macros(macros_path)
+        _create_audits(audits_path)
+        _create_models(models_path)
+        _create_seeds(seeds_path)
+        _create_tests(tests_path)
 
 
 def _create_folders(target_folders: t.Sequence[Path]) -> None:

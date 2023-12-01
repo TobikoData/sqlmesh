@@ -171,14 +171,13 @@ Options:
 
 ## init
 ```
-Usage: sqlmesh init [SQL_DIALECT] [OPTIONS]
+Usage: sqlmesh init [OPTIONS] [SQL_DIALECT]
 
-  Create a new SQLMesh repository. Argument SQL_DIALECT is required unless the dbt
-  template option is specified.
+  Create a new SQLMesh repository.
 
 Options:
-  -t, --template TEXT  Project template. Support values: airflow, dbt,
-                       default.
+  -t, --template TEXT  Project template. Supported values: airflow, dbt,
+                       default, empty.
   --help               Show this message and exit.
 ```
 
