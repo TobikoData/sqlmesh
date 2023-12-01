@@ -959,6 +959,10 @@ def test_dialects(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Dialect tests only need to run once so we skip anything not query")
 
+    # https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html
+    if ctx.dialect == "mysql":
+        pytest.skip("MySQL test isn't valid right now since it depends on OS")
+
     from sqlglot import Dialect, parse_one
 
     dialect = Dialect[ctx.dialect]
@@ -979,11 +983,8 @@ def test_dialects(ctx: TestContext):
         c = '"C"'
         d = '"D"'
 
-    # https://stackoverflow.com/questions/51791618/sql-with-clause-error-code-1046-no-database-selected-select-the-default-db
-    if ctx.dialect == "mysql":
-        ctx.engine_adapter.execute("USE sys")
-
-    q = parse_one(f"""
+    q = parse_one(
+        f"""
         WITH 
           "a" AS (SELECT 1 w),
           "B" AS (SELECT 1 x),
@@ -995,6 +996,10 @@ def test_dialects(ctx: TestContext):
           CROSS JOIN {b}
           CROSS JOIN {c}
           CROSS JOIN {d}
-    """)
+    """
+    )
     df = ctx.engine_adapter.fetchdf(q)
-    assert list(df.itertuples(index=False, name=None)) == [(1, 1, 1, 1)]
+    expected_columns = ["W", "X", "Y", "Z"] if ctx.dialect == "snowflake" else ["w", "x", "y", "z"]
+    pd.testing.assert_frame_equal(
+        df, pd.DataFrame([[1, 1, 1, 1]], columns=expected_columns), check_dtype=False
+    )
