@@ -953,3 +953,48 @@ def test_sushi(ctx: TestContext):
         env_name="test_dev",
         dialect=ctx.dialect,
     )
+
+
+def test_dialects(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("Dialect tests only need to run once so we skip anything not query")
+
+    from sqlglot import Dialect, parse_one
+
+    dialect = Dialect[ctx.dialect]
+
+    if dialect.RESOLVES_IDENTIFIERS_AS_UPPERCASE is None:
+        a = '"a"'
+        b = '"b"'
+        c = '"c"'
+        d = '"d"'
+    elif dialect.RESOLVES_IDENTIFIERS_AS_UPPERCASE is False:
+        a = '"a"'
+        b = '"B"'
+        c = '"c"'
+        d = '"d"'
+    else:
+        a = '"a"'
+        b = '"B"'
+        c = '"C"'
+        d = '"D"'
+
+    # https://stackoverflow.com/questions/51791618/sql-with-clause-error-code-1046-no-database-selected-select-the-default-db
+    if ctx.dialect == "mysql":
+        ctx.engine_adapter.execute("USE sys")
+
+    q = parse_one(f"""
+        WITH 
+          "a" AS (SELECT 1 w),
+          "B" AS (SELECT 1 x),
+          c AS (SELECT 1 y),
+          D AS (SELECT 1 z)
+    
+          SELECT *
+          FROM {a}
+          CROSS JOIN {b}
+          CROSS JOIN {c}
+          CROSS JOIN {d}
+    """)
+    df = ctx.engine_adapter.fetchdf(q)
+    assert list(df.itertuples(index=False, name=None)) == [(1, 1, 1, 1)]
