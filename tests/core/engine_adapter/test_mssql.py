@@ -109,8 +109,7 @@ def test_insert_overwrite_by_time_partition_supports_insert_overwrite_pandas(
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_test_table_{temp_table_id}"',
-        [(1, "2022-01-01"), (2, "2022-01-02")],
+        f"__temp_test_table_{temp_table_id}", [(1, "2022-01-01"), (2, "2022-01-02")]
     )
     assert to_sql_calls(adapter) == [
         f"""IF NOT EXISTS (SELECT * FROM information_schema.tables WHERE table_name = '__temp_test_table_{temp_table_id}') EXEC('CREATE TABLE "__temp_test_table_{temp_table_id}" ("a" INTEGER, "ds" VARCHAR(MAX))');""",
@@ -141,8 +140,7 @@ def test_insert_overwrite_by_time_partition_replace_where_pandas(
         columns_to_types={"a": exp.DataType.build("INT"), "ds": exp.DataType.build("STRING")},
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_test_table_{temp_table_id}"',
-        [(1, "2022-01-01"), (2, "2022-01-02")],
+        f"__temp_test_table_{temp_table_id}", [(1, "2022-01-01"), (2, "2022-01-02")]
     )
 
     assert to_sql_calls(adapter) == [
@@ -172,8 +170,7 @@ def test_insert_append_pandas(
         },
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_test_table_{temp_table_id}"',
-        [(1, 4), (2, 5), (3, 6)],
+        f"__temp_test_table_{temp_table_id}", [(1, 4), (2, 5), (3, 6)]
     )
 
     assert to_sql_calls(adapter) == [
@@ -238,8 +235,7 @@ def test_merge_pandas(
         unique_key=[exp.to_identifier("id")],
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_target_{temp_table_id}"',
-        [(1, 1, 4), (2, 2, 5), (3, 3, 6)],
+        f"__temp_target_{temp_table_id}", [(1, 1, 4), (2, 2, 5), (3, 3, 6)]
     )
 
     assert to_sql_calls(adapter) == [
@@ -250,6 +246,7 @@ def test_merge_pandas(
 
     adapter.cursor.reset_mock()
     adapter._connection_pool.get().reset_mock()
+    temp_table_mock.return_value = make_temp_table_name(table_name, temp_table_id)
     adapter.merge(
         target_table=table_name,
         source_table=df,
@@ -261,8 +258,7 @@ def test_merge_pandas(
         unique_key=[exp.to_identifier("id"), exp.to_column("ts")],
     )
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_target_{temp_table_id}"',
-        [(1, 1, 4), (2, 2, 5), (3, 3, 6)],
+        f"__temp_target_{temp_table_id}", [(1, 1, 4), (2, 2, 5), (3, 3, 6)]
     )
 
     assert to_sql_calls(adapter) == [
@@ -301,8 +297,7 @@ def test_replace_query_pandas(
     )
 
     adapter._connection_pool.get().bulk_copy.assert_called_with(
-        f'"__temp_test_table_{temp_table_id}"',
-        [(1, 4), (2, 5), (3, 6)],
+        f"__temp_test_table_{temp_table_id}", [(1, 4), (2, 5), (3, 6)]
     )
 
     assert to_sql_calls(adapter) == [

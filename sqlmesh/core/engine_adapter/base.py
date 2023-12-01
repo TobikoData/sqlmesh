@@ -1497,11 +1497,7 @@ class EngineAdapter:
         """
         raise NotImplementedError()
 
-    def _get_temp_table(
-        self,
-        table: TableName,
-        table_only: bool = False,
-    ) -> exp.Table:
+    def _get_temp_table(self, table: TableName, table_only: bool = False) -> exp.Table:
         """
         Returns the name of the temp table that should be used for the given table name.
         """

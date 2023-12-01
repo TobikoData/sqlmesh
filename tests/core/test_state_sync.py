@@ -1110,15 +1110,15 @@ def test_rollback(state_sync: EngineAdapterStateSync, mocker: MockerFixture) -> 
     calls = {(a.sql(), b.sql()) for (a, b), _ in restore_table_spy.call_args_list}
     assert (
         f'"{state_sync.schema}"."_snapshots"',
-        f'"{state_sync.schema}"."_snapshots_backup"',
+        f'"{state_sync.schema}"._snapshots_backup',
     ) in calls
     assert (
         f'"{state_sync.schema}"."_environments"',
-        f'"{state_sync.schema}"."_environments_backup"',
+        f'"{state_sync.schema}"._environments_backup',
     ) in calls
     assert (
         f'"{state_sync.schema}"."_versions"',
-        f'"{state_sync.schema}"."_versions_backup"',
+        f'"{state_sync.schema}"._versions_backup',
     ) in calls
     assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._snapshots_backup")
     assert not state_sync.engine_adapter.table_exists(f"{state_sync.schema}._environments_backup")
