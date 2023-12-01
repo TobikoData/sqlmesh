@@ -419,10 +419,6 @@ def _norm_var_arg_lambda(
     return expressions, func
 
 
-def _norm_env_value(value: t.Any) -> t.Any:
-    return tuple(value) if isinstance(value, list) else value
-
-
 @macro()
 def each(
     evaluator: MacroEvaluator,
