@@ -1016,8 +1016,12 @@ class MaterializableStrategy(PromotableStrategy):
                 table_properties=model.table_properties,
             )
 
-            logger.info("Dry running model '%s'", model.name)
-            self.adapter.fetchall(ctas_query)
+            # only sql models have queries that can be tested
+            # additionally, we always create temp tables and sometimes
+            # we additionally created prod tables, so we only need to test one.
+            if model.is_sql and not is_table_deployable:
+                logger.info("Dry running model '%s'", model.name)
+                self.adapter.fetchall(ctas_query)
         else:
             self.adapter.ctas(
                 name,
