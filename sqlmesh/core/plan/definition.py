@@ -291,7 +291,6 @@ class Plan:
             if snapshot.change_category:
                 loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
             else:
-                logger.debug(f"Got an unloaded snapshot. Snapshot: {snapshot.name}")
                 unloaded_snapshots.append(snapshot)
             for downstream_indirect in self.indirectly_modified.get(snapshot.name, set()):
                 downstream_snapshot = self._snapshot_mapping[downstream_indirect]
@@ -303,9 +302,6 @@ class Plan:
                         LoadedSnapshotIntervals.from_snapshot(downstream_snapshot)
                     )
                 else:
-                    logger.debug(
-                        f"Got an unloaded indirectly-modified snapshot. Snapshot: {downstream_snapshot.name}"
-                    )
                     unloaded_snapshots.append(downstream_snapshot)
         return loaded_snapshots, unloaded_snapshots
 
@@ -494,7 +490,6 @@ class Plan:
     def _add_restatements(self) -> None:
         def is_restateable_snapshot(snapshot: Snapshot) -> bool:
             if not self.is_dev and snapshot.disable_restatement:
-                logger.debug("Restatement is disabled for model '%s'.", snapshot.name)
                 return False
             return not snapshot.is_symbolic and not snapshot.is_seed
 

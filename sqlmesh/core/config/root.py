@@ -61,6 +61,7 @@ class Config(BaseConfig):
         physical_schema_override: A mapping from model schema names to names of schemas in which physical tables for corresponding models will be placed.
         environment_suffix_target: Indicates whether to append the environment name to the schema or table name.
         default_target_environment: The name of the environment that will be the default target for the `sqlmesh plan` and `sqlmesh run` commands.
+        log_limit: The default number of logs to keep.
     """
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
@@ -88,6 +89,7 @@ class Config(BaseConfig):
         default=EnvironmentSuffixTarget.default
     )
     default_target_environment: str = c.PROD
+    log_limit: int = c.DEFAULT_LOG_LIMIT
     cicd_bot: t.Optional[CICDBotConfig] = None
     run: RunConfig = RunConfig()
 

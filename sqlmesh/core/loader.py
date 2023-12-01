@@ -118,9 +118,9 @@ class Loader(abc.ABC):
                 self._track_file(config_file)
                 config_mtimes[context_path].append(self._path_mtimes[config_file])
 
-        for config_file in context.sqlmesh_path.glob("config.*"):
+        for config_file in c.SQLMESH_PATH.glob("config.*"):
             self._track_file(config_file)
-            config_mtimes[context.sqlmesh_path].append(self._path_mtimes[config_file])
+            config_mtimes[c.SQLMESH_PATH].append(self._path_mtimes[config_file])
 
         self._config_mtimes = {path: max(mtimes) for path, mtimes in config_mtimes.items()}
 
@@ -439,7 +439,7 @@ class SqlMeshLoader(Loader):
                 self._loader._path_mtimes[model_path],
                 self._loader._macros_max_mtime,
                 self._loader._config_mtimes.get(self._context_path),
-                self._loader._config_mtimes.get(self._loader._context.sqlmesh_path),
+                self._loader._config_mtimes.get(c.SQLMESH_PATH),
             ]
             return "__".join(
                 [

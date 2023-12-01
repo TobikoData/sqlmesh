@@ -11,6 +11,7 @@ from sqlmesh import configure_logging
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
 from sqlmesh.cli.example_project import ProjectTemplate, init_example_project
+from sqlmesh.core.config import load_configs
 from sqlmesh.core.context import Context
 from sqlmesh.utils.date import TimeLike
 from sqlmesh.utils.errors import MissingDependencyError
@@ -74,12 +75,14 @@ def cli(
     if "--help" in sys.argv:
         return
 
-    configure_logging(debug, ignore_warnings, write_to_stdout=False)
+    configs = load_configs(config, paths)
+    log_limit = list(configs.values())[0].log_limit
+    configure_logging(debug, ignore_warnings, write_to_stdout=False, log_limit=log_limit)
 
     try:
         context = Context(
             paths=paths,
-            config=config,
+            config=configs,
             gateway=gateway,
             load=load,
         )

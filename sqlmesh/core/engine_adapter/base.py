@@ -173,6 +173,7 @@ class EngineAdapter:
         cursor_kwargs: t.Optional[t.Dict[str, t.Any]] = None,
         cursor_init: t.Optional[t.Callable[[t.Any], None]] = None,
         default_catalog: t.Optional[str] = None,
+        execute_log_level: int = logging.DEBUG,
         **kwargs: t.Any,
     ):
         self.dialect = dialect.lower() or self.DIALECT
@@ -181,7 +182,22 @@ class EngineAdapter:
         )
         self.sql_gen_kwargs = sql_gen_kwargs or {}
         self.default_catalog = default_catalog
+        self._execute_log_level = execute_log_level
         self._extra_config = kwargs
+
+    def with_log_level(self, level: int) -> EngineAdapter:
+        adapter = self.__class__(
+            lambda: None,
+            dialect=self.dialect,
+            sql_gen_kwargs=self.sql_gen_kwargs,
+            default_catalog=self.default_catalog,
+            execute_log_level=level,
+            **self._extra_config,
+        )
+
+        adapter._connection_pool = self._connection_pool
+
+        return adapter
 
     @property
     def cursor(self) -> t.Any:
@@ -1386,13 +1402,20 @@ class EngineAdapter:
 
         with self.transaction():
             for e in ensure_list(expressions):
-                sql = (
+                sql = t.cast(
+                    str,
                     self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
                     if isinstance(e, exp.Expression)
-                    else e
+                    else e,
                 )
-                logger.debug(f"Executing SQL:\n{sql}")
-                self.cursor.execute(sql, **kwargs)
+                self._log_sql(sql)
+                self._execute(sql, **kwargs)
+
+    def _log_sql(self, sql: str) -> None:
+        logger.log(self._execute_log_level, "Executing SQL: %s", sql)
+
+    def _execute(self, sql: str, **kwargs: t.Any) -> None:
+        self.cursor.execute(sql, **kwargs)
 
     @contextlib.contextmanager
     def temp_table(

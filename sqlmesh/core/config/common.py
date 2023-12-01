@@ -24,6 +24,9 @@ class EnvironmentSuffixTarget(str, Enum):
     def default(cls) -> EnvironmentSuffixTarget:
         return EnvironmentSuffixTarget.SCHEMA
 
+    def __repr__(self) -> str:
+        return str(self)
+
 
 def _concurrent_tasks_validator(v: t.Any) -> int:
     if isinstance(v, str):

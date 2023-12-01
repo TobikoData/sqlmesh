@@ -5,8 +5,6 @@ import typing as t
 
 import pandas as pd
 from sqlglot import exp
-from sqlglot.errors import ErrorLevel
-from sqlglot.helper import ensure_list
 from sqlglot.transforms import remove_precision_parameterized_types
 
 from sqlmesh.core.dialect import to_schema
@@ -262,7 +260,7 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
         job_config = bigquery.job.LoadJobConfig(schema=self.__get_bq_schema(columns_to_types))
         if replace:
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
-        logger.debug(f"Loading dataframe to BigQuery. Table Path: {table.path}")
+        logger.info(f"Loading dataframe to BigQuery. Table Path: {table.path}")
         # This client call does not support retry so we don't use the `_db_call` method.
         result = self.__retry(
             self.__db_load_table_from_dataframe,
@@ -496,58 +494,42 @@ class BigQueryEngineAdapter(InsertOverwriteWithMergeMixin):
             **kwargs,
         )
 
-    def execute(
+    def _execute(
         self,
-        expressions: t.Union[str, exp.Expression, t.Sequence[exp.Expression]],
-        ignore_unsupported_errors: bool = False,
-        quote_identifiers: bool = True,
+        sql: str,
         **kwargs: t.Any,
     ) -> None:
         """Execute a sql query."""
         from google.cloud.bigquery import QueryJobConfig
         from google.cloud.bigquery.query import ConnectionProperty
 
-        to_sql_kwargs = (
-            {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
+        # BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
+        # So we update the cursor's query job and query data with the results of the new query job. This makes sure
+        # that other cursor based operations execute correctly.
+        session_id = self._session_id
+        connection_properties = (
+            [
+                ConnectionProperty(key="session_id", value=session_id),
+            ]
+            if session_id
+            else []
         )
 
-        for e in ensure_list(expressions):
-            sql = (
-                self._to_sql(e, quote=quote_identifiers, **to_sql_kwargs)
-                if isinstance(e, exp.Expression)
-                else e
-            )
-            logger.debug(f"Executing SQL:\n{sql}")
-
-            # BigQuery's Python DB API implementation does not support retries, so we have to implement them ourselves.
-            # So we update the cursor's query job and query data with the results of the new query job. This makes sure
-            # that other cursor based operations execute correctly.
-            session_id = self._session_id
-            connection_properties = (
-                [
-                    ConnectionProperty(key="session_id", value=session_id),
-                ]
-                if session_id
-                else []
-            )
-
-            job_config = QueryJobConfig(
-                **self._job_params, connection_properties=connection_properties
-            )
-            self._query_job = self._db_call(
-                self.client.query,
-                query=sql,
-                job_config=job_config,
-                timeout=self._extra_config.get("job_creation_timeout_seconds"),
-            )
-            results = self._db_call(
-                self._query_job.result,
-                timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
-            )
-            self._query_data = iter(results) if results.total_rows else iter([])
-            query_results = self._query_job._query_results
-            self.cursor._set_rowcount(query_results)
-            self.cursor._set_description(query_results.schema)
+        job_config = QueryJobConfig(**self._job_params, connection_properties=connection_properties)
+        self._query_job = self._db_call(
+            self.client.query,
+            query=sql,
+            job_config=job_config,
+            timeout=self._extra_config.get("job_creation_timeout_seconds"),
+        )
+        results = self._db_call(
+            self._query_job.result,
+            timeout=self._extra_config.get("job_execution_timeout_seconds"),  # type: ignore
+        )
+        self._query_data = iter(results) if results.total_rows else iter([])
+        query_results = self._query_job._query_results
+        self.cursor._set_rowcount(query_results)
+        self.cursor._set_description(query_results.schema)
 
     def _get_data_objects(self, schema_name: SchemaName) -> t.List[DataObject]:
         """
@@ -637,9 +619,7 @@ class _ErrorCounter:
             return False
         self.error_count += 1
         if self._is_retryable(error) and self.error_count <= self.num_retries:
-            logger.debug(
-                f"Retry Num {self.error_count} of {self.num_retries}. Error: {repr(error)}"
-            )
+            logger.info(f"Retry Num {self.error_count} of {self.num_retries}. Error: {repr(error)}")
             return True
         return False
 

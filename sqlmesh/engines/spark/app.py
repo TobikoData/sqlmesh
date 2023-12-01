@@ -51,6 +51,7 @@ def main(
             lambda: spark_session_db.connection(spark),
             dialect,
             multithreaded=ddl_concurrent_tasks > 1,
+            execute_log_level=logging.INFO,
         ),
         ddl_concurrent_tasks=ddl_concurrent_tasks,
     )

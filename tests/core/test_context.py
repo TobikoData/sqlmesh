@@ -15,6 +15,7 @@ from sqlmesh.core.config import (
     EnvironmentSuffixTarget,
     ModelDefaultsConfig,
     SnowflakeConnectionConfig,
+    load_configs,
 )
 from sqlmesh.core.context import Context
 from sqlmesh.core.dialect import parse, schema_
@@ -313,9 +314,8 @@ model_defaults:
             ConfigError,
             match="User and password must be provided if using default authentication",
         ):
-            context._load_configs("config", paths=[project_config.parent])
-        context.sqlmesh_path = home_path
-        loaded_configs = context._load_configs("config", paths=[project_config.parent])
+            load_configs("config", paths=project_config.parent)
+        loaded_configs = load_configs("config", paths=project_config.parent, sqlmesh_path=home_path)
         assert len(loaded_configs) == 1
         snowflake_connection = list(loaded_configs.values())[0].gateways["snowflake"].connection  # type: ignore
         assert isinstance(snowflake_connection, SnowflakeConnectionConfig)
