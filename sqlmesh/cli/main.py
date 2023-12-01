@@ -105,7 +105,7 @@ def cli(
     "-t",
     "--template",
     type=str,
-    help="Project template. Supported values: airflow, dbt, default.",
+    help="Project template. Supported values: airflow, dbt, default, empty.",
 )
 @click.pass_context
 @error_handler

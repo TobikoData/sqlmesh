@@ -102,7 +102,7 @@ class SQLMeshMagics(Magics):
         "--template",
         "-t",
         type=str,
-        help="Project template. Supported values: airflow, dbt, default.",
+        help="Project template. Supported values: airflow, dbt, default, empty.",
     )
     @line_magic
     def init(self, line: str) -> None:
