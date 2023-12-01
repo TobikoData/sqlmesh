@@ -417,11 +417,13 @@ class _Model(ModelMeta, frozen=True):
         Return:
             The mocked out ctas query.
         """
-        query = self.render_query_or_raise(**render_kwarg)
         # the query is expanded so it's been copied, it's safe to mutate.
-        for select in query.find_all(exp.Select):
-            if select.args.get("from"):
-                select.where(exp.false(), copy=False)
+        query = (
+            self.render_query_or_raise(**render_kwarg)
+            .limit(0, copy=False)
+            .where(exp.false(), copy=False, append=False)
+        )
+
         if self.managed_columns:
             query.select(
                 *[
