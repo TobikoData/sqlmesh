@@ -7,6 +7,7 @@ import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import dialect as d
+from sqlmesh.core.audit import StandaloneAudit
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import Model, SqlModel
 from sqlmesh.core.selector import Selector
@@ -24,18 +25,26 @@ def test_select_models(mocker: MockerFixture, make_snapshot):
         name="modified_model", query=d.parse_one("SELECT a + 2 FROM added_model")
     )
     removed_model = SqlModel(name="removed_model", query=d.parse_one("SELECT a FROM added_model"))
+    standalone_audit = StandaloneAudit(
+        name="test_audit", query=d.parse_one(f"SELECT * FROM added_model WHERE a IS NULL")
+    )
 
     modified_model_v1_snapshot = make_snapshot(modified_model_v1)
     modified_model_v1_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     removed_model_snapshot = make_snapshot(removed_model)
     removed_model_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    standalone_audit_snapshot = make_snapshot(standalone_audit)
+    standalone_audit_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
 
     env_name = "test_env"
 
     state_reader_mock = mocker.Mock()
     state_reader_mock.get_environment.return_value = Environment(
         name=env_name,
-        snapshots=[s.table_info for s in (modified_model_v1_snapshot, removed_model_snapshot)],
+        snapshots=[
+            s.table_info
+            for s in (modified_model_v1_snapshot, removed_model_snapshot, standalone_audit_snapshot)
+        ],
         start_at="2023-01-01",
         end_at="2023-02-01",
         plan_id="test_plan_id",
@@ -43,6 +52,7 @@ def test_select_models(mocker: MockerFixture, make_snapshot):
     state_reader_mock.get_snapshots.return_value = {
         modified_model_v1_snapshot.snapshot_id: modified_model_v1_snapshot,
         removed_model_snapshot.snapshot_id: removed_model_snapshot,
+        standalone_audit_snapshot.snapshot_id: standalone_audit_snapshot,
     }
 
     added_model_schema = {"added_model": {"a": "INT"}}
