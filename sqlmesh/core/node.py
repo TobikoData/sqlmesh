@@ -361,6 +361,9 @@ class NodeType(str, Enum):
     MODEL = "model"
     AUDIT = "audit"
 
+    def __repr__(self) -> str:
+        return str(self)
+
 
 def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:
     if isinstance(v, exp.Expression):

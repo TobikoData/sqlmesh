@@ -1,4 +1,5 @@
 import abc
+import logging
 import typing as t
 
 from airflow.exceptions import AirflowSkipException
@@ -60,6 +61,7 @@ class BaseTarget(abc.ABC, t.Generic[CP]):
                 connection_factory,
                 dialect,
                 multithreaded=self.ddl_concurrent_tasks > 1,
+                execute_log_level=logging.INFO,
                 **kwargs,
             ),
             ddl_concurrent_tasks=self.ddl_concurrent_tasks,

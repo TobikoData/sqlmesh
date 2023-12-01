@@ -112,6 +112,9 @@ class ModelKindName(str, ModelKindMixin, Enum):
     def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self
 
+    def __repr__(self) -> str:
+        return str(self)
+
 
 _unique_key_validator = field_validator("unique_key", mode="before")(parse_expressions)
 

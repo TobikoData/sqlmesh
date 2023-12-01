@@ -4,12 +4,50 @@ import os
 import typing as t
 from pathlib import Path
 
+from sqlglot.helper import ensure_list
+
 from sqlmesh.core import constants as c
 from sqlmesh.core.config.root import Config
-from sqlmesh.utils import merge_dicts, sys_path
+from sqlmesh.utils import env_vars, merge_dicts, sys_path
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.metaprogramming import import_python_file
 from sqlmesh.utils.yaml import load as yaml_load
+
+
+def load_configs(
+    config: t.Optional[str | Config],
+    paths: t.Union[str | Path, t.Iterable[str | Path]],
+    sqlmesh_path: Path = c.SQLMESH_PATH,
+) -> t.Dict[Path, Config]:
+    config = config or "config"
+
+    absolute_paths = [
+        Path(t.cast(t.Union[str, Path], path)).absolute() for path in ensure_list(paths)
+    ]
+
+    if isinstance(config, Config):
+        return {path: config for path in absolute_paths}
+
+    config_env_vars = None
+    personal_paths = [
+        sqlmesh_path / "config.yml",
+        sqlmesh_path / "config.yaml",
+    ]
+    for path in personal_paths:
+        if path.exists():
+            config_env_vars = load_config_from_yaml(path).get("env_vars")
+            if config_env_vars:
+                break
+
+    with env_vars(config_env_vars if config_env_vars else {}):
+        return {
+            path: load_config_from_paths(
+                project_paths=[path / "config.py", path / "config.yml", path / "config.yaml"],
+                personal_paths=personal_paths,
+                config_name=config,
+            )
+            for path in absolute_paths
+        }
 
 
 def load_config_from_paths(

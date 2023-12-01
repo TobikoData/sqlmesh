@@ -15,7 +15,11 @@ from sqlmesh.core.config.connection import (
     parse_connection_config,
 )
 from sqlmesh.core.config.gateway import GatewayConfig
-from sqlmesh.core.config.loader import load_config_from_paths, load_config_from_yaml
+from sqlmesh.core.config.loader import (
+    load_config_from_paths,
+    load_config_from_yaml,
+    load_configs,
+)
 from sqlmesh.core.config.model import ModelDefaultsConfig
 from sqlmesh.core.config.root import Config
 from sqlmesh.core.config.run import RunConfig
