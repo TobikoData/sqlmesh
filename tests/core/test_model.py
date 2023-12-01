@@ -1060,6 +1060,22 @@ def test_render_query(assert_exp_eq, sushi_context):
         """,
     )
 
+    expressions = d.parse(
+        """
+        MODEL (
+          name dummy.model,
+          kind FULL,
+          dialect duckdb
+        );
+
+        @DEF(x, ['1', '2', '3']);
+
+        SELECT @x AS "x"
+        """
+    )
+    model = load_sql_based_model(expressions, dialect="duckdb")
+    assert model.render_query().sql("duckdb") == '''SELECT ['1', '2', '3'] AS "x"'''
+
 
 def test_time_column():
     expressions = d.parse(

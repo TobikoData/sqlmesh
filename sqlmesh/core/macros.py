@@ -169,7 +169,8 @@ class MacroEvaluator:
 
                     return node
 
-                return exp.convert(_norm_env_value(self.locals[node.name]))
+                value = self.locals[node.name]
+                return exp.convert(tuple(value) if isinstance(value, list) else value)
             if node.is_string:
                 text = node.this
                 if has_jinja(text):
@@ -419,11 +420,7 @@ def _norm_var_arg_lambda(
 
 
 def _norm_env_value(value: t.Any) -> t.Any:
-    if isinstance(value, list):
-        return tuple(value)
-    if isinstance(value, exp.Array):
-        return exp.Tuple(expressions=value.expressions)
-    return value
+    return tuple(value) if isinstance(value, list) else value
 
 
 @macro()

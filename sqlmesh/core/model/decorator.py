@@ -29,15 +29,19 @@ class model(registry_decorator):
         self.is_sql = is_sql
         self.kwargs = kwargs
 
-        # Make sure that argument values are expressions in order to
-        # pass validation in ModelMeta.
+        # Make sure that argument values are expressions in order to pass validation in ModelMeta.
         calls = self.kwargs.pop("audits", [])
         self.kwargs["audits"] = [
             (call, {})
             if isinstance(call, str)
             else (
                 call[0],
-                {arg_key: exp.convert(arg_value) for arg_key, arg_value in call[1].items()},
+                {
+                    arg_key: exp.convert(
+                        tuple(arg_value) if isinstance(arg_value, list) else arg_value
+                    )
+                    for arg_key, arg_value in call[1].items()
+                },
             )
             for call in calls
         ]
