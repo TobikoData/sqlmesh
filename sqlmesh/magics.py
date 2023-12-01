@@ -108,7 +108,7 @@ class SQLMeshMagics(Magics):
         "--empty",
         "-e",
         action="store_true",
-        help="Create empty SQLMesh project directories.",
+        help="Create empty project directories.",
     )
     @line_magic
     def init(self, line: str) -> None:

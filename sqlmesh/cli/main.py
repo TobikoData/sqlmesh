@@ -112,7 +112,7 @@ def cli(
     "--empty",
     is_flag=True,
     default=False,
-    help="Create empty SQLMesh project directories.",
+    help="Create empty project directories.",
 )
 @click.pass_context
 @error_handler
