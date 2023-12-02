@@ -950,3 +950,53 @@ def test_sushi(ctx: TestContext):
         env_name="test_dev",
         dialect=ctx.dialect,
     )
+
+
+def test_dialects(ctx: TestContext):
+    if ctx.test_type != "query":
+        pytest.skip("Dialect tests only need to run once so we skip anything not query")
+
+    # https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html
+    if ctx.dialect == "mysql":
+        pytest.skip("MySQL test isn't valid right now since it depends on OS")
+
+    from sqlglot import Dialect, parse_one
+
+    dialect = Dialect[ctx.dialect]
+
+    if dialect.RESOLVES_IDENTIFIERS_AS_UPPERCASE is None:
+        a = '"a"'
+        b = '"b"'
+        c = '"c"'
+        d = '"d"'
+    elif dialect.RESOLVES_IDENTIFIERS_AS_UPPERCASE is False:
+        a = '"a"'
+        b = '"B"'
+        c = '"c"'
+        d = '"d"'
+    else:
+        a = '"a"'
+        b = '"B"'
+        c = '"C"'
+        d = '"D"'
+
+    q = parse_one(
+        f"""
+        WITH 
+          "a" AS (SELECT 1 w),
+          "B" AS (SELECT 1 x),
+          c AS (SELECT 1 y),
+          D AS (SELECT 1 z)
+    
+          SELECT *
+          FROM {a}
+          CROSS JOIN {b}
+          CROSS JOIN {c}
+          CROSS JOIN {d}
+    """
+    )
+    df = ctx.engine_adapter.fetchdf(q)
+    expected_columns = ["W", "X", "Y", "Z"] if ctx.dialect == "snowflake" else ["w", "x", "y", "z"]
+    pd.testing.assert_frame_equal(
+        df, pd.DataFrame([[1, 1, 1, 1]], columns=expected_columns), check_dtype=False
+    )

@@ -95,6 +95,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
             catalog = self._extra_config.get("catalog")
             if catalog:
                 from py4j.protocol import Py4JError
+                from pyspark.errors.exceptions.connect import SparkConnectGrpcException
 
                 try:
                     # Note: Spark 3.4+ Only API
@@ -102,7 +103,7 @@ class DatabricksEngineAdapter(SparkEngineAdapter):
                 # If `setCurrentCatalog` should work for both non-unity and Unity single user
                 # clusters. If it fails then we try `USE CATALOG` which is Unity only but works
                 # across all clusters
-                except Py4JError:
+                except (Py4JError, SparkConnectGrpcException):
                     self.set_current_catalog(catalog)
             self._spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
         return self._spark
