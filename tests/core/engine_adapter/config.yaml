@@ -21,7 +21,6 @@ gateways:
       type: spark
       config:
         spark.remote: sc://localhost
-        spark.sql.hive.metastorePartitionPruningFallbackOnException: true
     state_connection:
       type: duckdb
   inttest_mssql:

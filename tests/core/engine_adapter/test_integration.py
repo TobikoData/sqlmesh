@@ -884,11 +884,8 @@ def test_scd_type_2(ctx: TestContext):
 
 
 def test_sushi(ctx: TestContext):
-    if ctx.test_type == "df":
+    if ctx.test_type != "query":
         pytest.skip("Sushi end-to-end tests only need to run for query and pyspark tests")
-
-    # this skips the pyspark test if the engine isn't pyspark-enabled
-    ctx.init()
 
     config = load_config_from_paths(
         project_paths=[
