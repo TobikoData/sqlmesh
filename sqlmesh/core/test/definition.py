@@ -307,6 +307,7 @@ def generate_test(
     input_queries: t.Dict[str, str],
     models: t.Dict[str, Model],
     engine_adapter: EngineAdapter,
+    test_engine_adapter: EngineAdapter,
     project_path: Path,
     overwrite: bool = False,
     variables: t.Optional[t.Dict[str, str]] = None,
@@ -321,6 +322,7 @@ def generate_test(
             will be populated in the test based on the results of the corresponding query.
         models: The context's models.
         engine_adapter: The target engine adapter.
+        test_engine_adapter: The test engine adapter.
         project_path: The path pointing to the project's root directory.
         overwrite: Whether to overwrite the existing test in case of a file path collision.
             When set to False, an error will be raised if there is such a collision.
@@ -358,7 +360,7 @@ def generate_test(
         body=test_body,
         test_name=test_name,
         models=models,
-        engine_adapter=engine_adapter,
+        engine_adapter=test_engine_adapter,
         dialect=model.dialect,
         path=fixture_path,
     )
@@ -369,7 +371,7 @@ def generate_test(
         mapping = {name: _test_fixture_name(name) for name in models.keys() | inputs.keys()}
         model_query = model.render_query_or_raise(
             **t.cast(t.Dict[str, t.Any], variables),
-            engine_adapter=engine_adapter,
+            engine_adapter=test_engine_adapter,
             table_mapping=mapping,
         )
         output = t.cast(SqlModelTest, test)._execute(model_query)
