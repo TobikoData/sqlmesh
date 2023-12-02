@@ -171,6 +171,20 @@ class PydanticModel(pydantic.BaseModel):
             if predicate(field_info)
         }
 
+    def __str__(self) -> str:
+        args = []
+
+        for k, info in self.all_field_infos().items():
+            v = getattr(self, k)
+
+            if v != info.default:
+                args.append(f"{k}: {v}")
+
+        return f"{self.__class__.__name__}<{', '.join(args)}>"
+
+    def __repr__(self) -> str:
+        return str(self)
+
 
 def model_validator_v1_args(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
     @wraps(func)
