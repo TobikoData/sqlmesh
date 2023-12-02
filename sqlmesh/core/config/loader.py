@@ -17,8 +17,9 @@ from sqlmesh.utils.yaml import load as yaml_load
 def load_configs(
     config: t.Optional[str | Config],
     paths: t.Union[str | Path, t.Iterable[str | Path]],
-    sqlmesh_path: Path = c.SQLMESH_PATH,
+    sqlmesh_path: t.Optional[Path] = None,
 ) -> t.Dict[Path, Config]:
+    sqlmesh_path = sqlmesh_path or c.SQLMESH_PATH
     config = config or "config"
 
     absolute_paths = [

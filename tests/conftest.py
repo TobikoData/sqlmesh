@@ -131,9 +131,7 @@ class SushiDataValidator:
 # Ignore all local config files
 @pytest.fixture(scope="session", autouse=True)
 def ignore_local_config_files():
-    mock_home = mock.Mock()
-    mock_home.return_value = Path(TemporaryDirectory().name)
-    with mock.patch("pathlib.Path.home", mock_home):
+    with mock.patch("sqlmesh.core.constants.SQLMESH_PATH", Path(TemporaryDirectory().name)):
         yield
 
 
