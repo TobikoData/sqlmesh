@@ -5,6 +5,7 @@ import uuid
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.errors import ErrorLevel
 
 from sqlmesh.core.engine_adapter.base_postgres import BasePostgresEngineAdapter
 from sqlmesh.core.engine_adapter.mixins import (
@@ -70,6 +71,48 @@ class RedshiftEngineAdapter(
         super()._create_table_from_source_queries(
             table_name, source_queries, exists=False, **kwargs
         )
+
+    def _create_table_exp(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
+    ) -> exp.Create:
+        statement = super()._create_table_exp(
+            table_name_or_schema,
+            expression=expression,
+            exists=exists,
+            replace=replace,
+            columns_to_types=columns_to_types,
+            **kwargs,
+        )
+
+        if statement.expression:
+            # redshift has a bug where CTAS statements have non determistic types. if a limit
+            # is applied to a ctas statement, VARCHAR types default to 1 in some instances.
+            # this checks the explain plain from redshift and tries to detect when these optimizer
+            # bugs occur and force a cast
+            sql = statement.sql(
+                dialect=self.dialect, identify=True, unsupported_level=ErrorLevel.IGNORE
+            )
+            plan = parse_plan("\n".join(r[0] for r in self.fetchall(f"EXPLAIN VERBOSE {sql}")))
+
+            for i, target in enumerate(plan["targetlist"] if plan else []):  # type: ignore
+                if target["name"] == "TARGETENTRY":
+                    resdom = target["resdom"]
+                    # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
+                    if resdom["restype"] == "1043" and resdom["restypmod"] == "- 1":
+                        select = statement.selects[i]
+
+                        if not isinstance(select, exp.Cast):
+                            select.replace(
+                                exp.cast(select.copy(), "VARCHAR(MAX)", dialect=self.dialect)
+                            )
+
+        return statement
 
     def create_view(
         self,
@@ -176,3 +219,66 @@ class RedshiftEngineAdapter(
 
     def _short_hash(self) -> str:
         return uuid.uuid4().hex[:8]
+
+
+def parse_plan(plan: str) -> t.Optional[t.Dict]:
+    """Parse the output of a redshift explain verbose query plan into a Python dict."""
+    from sqlglot import Tokenizer, TokenType
+    from sqlglot.tokens import Token
+
+    tokens = Tokenizer().tokenize(plan)
+    i = 0
+    terminal_tokens = {TokenType.L_PAREN, TokenType.R_PAREN, TokenType.R_BRACE, TokenType.COLON}
+
+    def curr() -> t.Optional[TokenType]:
+        return tokens[i].token_type if i < len(tokens) else None
+
+    def advance() -> Token:
+        nonlocal i
+        i += 1
+        return tokens[i - 1]
+
+    def match(token_type: TokenType, raise_unmatched: bool = False) -> t.Optional[Token]:
+        if curr() is token_type:
+            return advance()
+        if raise_unmatched:
+            raise Exception(f"Expected {token_type}")
+        return None
+
+    def parse_value() -> t.Any:
+        if match(TokenType.L_PAREN):
+            values = []
+            while not match(TokenType.R_PAREN):
+                values.append(parse_value())
+            return values
+
+        nested = parse_nested()
+
+        if nested:
+            return nested
+
+        value = []
+
+        while not curr() in terminal_tokens:
+            value.append(advance().text)
+
+        return " ".join(value)
+
+    def parse_nested() -> t.Optional[t.Dict]:
+        if not match(TokenType.L_BRACE):
+            return None
+        query_plan = {}
+        query_plan["name"] = advance().text
+
+        while match(TokenType.COLON):
+            key = advance().text
+
+            while match(TokenType.DOT):
+                key += f".{advance().text}"
+
+            query_plan[key] = parse_value()
+
+        match(TokenType.R_BRACE, True)
+        return query_plan
+
+    return parse_nested()

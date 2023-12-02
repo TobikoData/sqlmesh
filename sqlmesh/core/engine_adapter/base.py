@@ -518,6 +518,26 @@ class EngineAdapter:
         columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
         **kwargs: t.Any,
     ) -> None:
+        self.execute(
+            self._create_table_exp(
+                table_name_or_schema,
+                expression=expression,
+                exists=exists,
+                replace=replace,
+                columns_to_types=columns_to_types,
+                **kwargs,
+            )
+        )
+
+    def _create_table_exp(
+        self,
+        table_name_or_schema: t.Union[exp.Schema, TableName],
+        expression: t.Optional[exp.Expression],
+        exists: bool = True,
+        replace: bool = False,
+        columns_to_types: t.Optional[t.Dict[str, exp.DataType]] = None,
+        **kwargs: t.Any,
+    ) -> exp.Create:
         exists = False if replace else exists
         if not isinstance(table_name_or_schema, exp.Schema):
             table_name_or_schema = exp.to_table(table_name_or_schema)
@@ -526,7 +546,7 @@ class EngineAdapter:
             if kwargs
             else None
         )
-        create = exp.Create(
+        return exp.Create(
             this=table_name_or_schema,
             kind="TABLE",
             replace=replace,
@@ -534,7 +554,6 @@ class EngineAdapter:
             expression=expression,
             properties=properties,
         )
-        self.execute(create)
 
     def create_table_like(
         self,
