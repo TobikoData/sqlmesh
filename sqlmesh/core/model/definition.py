@@ -115,7 +115,6 @@ class _Model(ModelMeta, frozen=True):
     jinja_macros: JinjaMacroRegistry = JinjaMacroRegistry()
     mapping_schema: t.Dict[str, t.Any] = {}
 
-    _path: Path = Path()
     _depends_on: t.Optional[t.Set[str]] = None
     _depends_on_past: t.Optional[bool] = None
     _column_descriptions: t.Optional[t.Dict[str, str]] = None
@@ -1149,9 +1148,6 @@ class SqlModel(_SqlBasedModel):
         data.extend(self.jinja_macros.data_hash_values)
         return data
 
-    def __repr__(self) -> str:
-        return f"Model<name: {self.name}, query: {self.query.sql(dialect=self.dialect)[0:30]}>"
-
 
 class SeedModel(_SqlBasedModel):
     """The model definition which uses a pre-built static dataset to source the data from.
@@ -1321,9 +1317,6 @@ class SeedModel(_SqlBasedModel):
             data.append(column_hash)
         return data
 
-    def __repr__(self) -> str:
-        return f"Model<name: {self.name}, seed: {self.kind.path}>"
-
 
 class PythonModel(_Model):
     """The model definition which relies on a Python script to fetch the data.
@@ -1383,9 +1376,6 @@ class PythonModel(_Model):
         data = super()._data_hash_values
         data.append(self.entrypoint)
         return data
-
-    def __repr__(self) -> str:
-        return f"Model<name: {self.name}, entrypoint: {self.entrypoint}>"
 
 
 class ExternalModel(_Model):

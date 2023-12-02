@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 
 from pydantic import Field
 from sqlglot import exp
@@ -181,9 +182,14 @@ class _Node(PydanticModel):
     interval_unit_: t.Optional[IntervalUnit] = Field(alias="interval_unit", default=None)
     tags: t.List[str] = []
     stamp: t.Optional[str] = None
+    _path: Path = Path()
 
     _croniter: t.Optional[CroniterCache] = None
     __inferred_interval_unit: t.Optional[IntervalUnit] = None
+
+    def __str__(self) -> str:
+        path = f": {self._path.name}" if self._path else ""
+        return f"{self.__class__.__name__}<{self.name}{path}>"
 
     @field_validator("name", mode="before")
     @classmethod
@@ -361,8 +367,8 @@ class NodeType(str, Enum):
     MODEL = "model"
     AUDIT = "audit"
 
-    def __repr__(self) -> str:
-        return str(self)
+    def __str__(self) -> str:
+        return self.name
 
 
 def str_or_exp_to_str(v: t.Any) -> t.Optional[str]:

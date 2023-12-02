@@ -112,6 +112,9 @@ class ModelKindName(str, ModelKindMixin, Enum):
     def model_kind_name(self) -> t.Optional[ModelKindName]:
         return self
 
+    def __str__(self) -> str:
+        return self.name
+
     def __repr__(self) -> str:
         return str(self)
 

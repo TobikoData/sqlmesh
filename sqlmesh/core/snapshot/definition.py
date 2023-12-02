@@ -86,6 +86,9 @@ class SnapshotChangeCategory(IntEnum):
     def is_indirect_non_breaking(self) -> bool:
         return self == self.INDIRECT_NON_BREAKING
 
+    def __repr__(self) -> str:
+        return self.name
+
 
 class SnapshotFingerprint(PydanticModel, frozen=True):
     data_hash: str
@@ -106,6 +109,9 @@ class SnapshotFingerprint(PydanticModel, frozen=True):
             ]
         )
 
+    def __str__(self) -> str:
+        return f"SnapshotFingerprint<{self.to_identifier()}, data: {self.data_hash}, meta: {self.metadata_hash}, pdata: {self.parent_data_hash}, pmeta: {self.parent_metadata_hash}>"
+
 
 class SnapshotId(PydanticModel, frozen=True):
     name: str
@@ -118,6 +124,9 @@ class SnapshotId(PydanticModel, frozen=True):
 
     def __lt__(self, other: SnapshotId) -> bool:
         return self.name < other.name
+
+    def __str__(self) -> str:
+        return f"SnapshotId<{self.name}: {self.identifier}>"
 
 
 class SnapshotNameVersion(PydanticModel, frozen=True):
