@@ -797,19 +797,22 @@ class Context(BaseContext):
             self.path,
         )
 
+        if backfill_models:
+            backfill_models = model_selector.expand_model_selections(backfill_models)
+        else:
+            backfill_models = None
+
         models_override: t.Optional[UniqueKeyDict[str, Model]] = None
         if select_models:
             models_override = model_selector.select_models(
                 select_models, environment, fallback_env_name=create_from or c.PROD
             )
+            if not backfill_models:
+                # Only backfill selected models unless explicitly specified.
+                backfill_models = model_selector.expand_model_selections(select_models)
 
         if restate_models is not None:
             restate_models = model_selector.expand_model_selections(restate_models)
-
-        if backfill_models:
-            backfill_models = model_selector.expand_model_selections(backfill_models)
-        else:
-            backfill_models = None
 
         # If no end date is specified, use the max interval end from prod
         # to prevent unintended evaluation of the entire DAG.
