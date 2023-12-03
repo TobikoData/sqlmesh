@@ -82,7 +82,7 @@ class ModelTest(unittest.TestCase):
                     schema_(table.args["db"], table.args.get("catalog"))
                 )
 
-            df = pd.DataFrame.from_records(rows, columns=columns_to_types)
+            df = pd.DataFrame.from_records(rows, columns=columns_to_types)  # type: ignore
             self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
 
     def tearDown(self) -> None:
@@ -243,7 +243,7 @@ class SqlModelTest(ModelTest):
         # Test model query
         query_rows = self.body["outputs"].get("query")
         if query_rows is not None:
-            expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)
+            expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)  # type: ignore
             actual_df = self._execute(query)
             self.assert_equal(expected_df, actual_df)
 
@@ -289,7 +289,7 @@ class PythonModelTest(ModelTest):
     def runTest(self) -> None:
         query_rows = self.body["outputs"].get("query")
         if query_rows is not None:
-            expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)
+            expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)  # type: ignore
             actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
             self.assert_equal(expected_df, actual_df)
