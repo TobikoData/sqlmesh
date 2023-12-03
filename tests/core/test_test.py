@@ -16,80 +16,7 @@ from sqlmesh.core.test.definition import SqlModelTest
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.yaml import load as load_yaml
 
-
-@pytest.fixture
-def full_model_without_ctes(request) -> SqlModel:
-    dialect = getattr(request, "param", None)
-    return t.cast(
-        SqlModel,
-        load_sql_based_model(
-            parse(
-                """
-                MODEL (
-                    name sushi.foo,
-                    kind FULL,
-                );
-
-                SELECT id, value, ds FROM raw;
-                """,
-                default_dialect=dialect,
-            ),
-            dialect=dialect,
-        ),
-    )
-
-
-@pytest.fixture
-def full_model_with_single_cte(request) -> SqlModel:
-    dialect = getattr(request, "param", None)
-    return t.cast(
-        SqlModel,
-        load_sql_based_model(
-            parse(
-                """
-                MODEL (
-                    name sushi.foo,
-                    kind FULL,
-                );
-
-                WITH source AS (
-                    SELECT id FROM raw
-                )
-                SELECT id FROM source;
-                """,
-                default_dialect=dialect,
-            ),
-            dialect=dialect,
-        ),
-    )
-
-
-@pytest.fixture
-def full_model_with_two_ctes(request) -> SqlModel:
-    dialect = getattr(request, "param", None)
-    return t.cast(
-        SqlModel,
-        load_sql_based_model(
-            parse(
-                """
-                MODEL (
-                    name sushi.foo,
-                    kind FULL,
-                );
-
-                WITH source AS (
-                    SELECT id FROM raw
-                ),
-                renamed AS (
-                    SELECT id as fid FROM source
-                )
-                SELECT fid FROM renamed;
-                """,
-                default_dialect=dialect,
-            ),
-            dialect=dialect,
-        ),
-    )
+SUSHI_FOO_META = "MODEL (name sushi.foo, kind FULL)"
 
 
 def _create_test(
@@ -106,6 +33,45 @@ def _create_test(
         engine_adapter=context._test_engine_adapter,
         dialect=context.config.dialect,
         path=None,
+    )
+
+
+def _create_model(
+    query: str, meta: str = SUSHI_FOO_META, dialect: t.Optional[str] = None
+) -> SqlModel:
+    parsed_definition = parse(f"{meta};{query}", default_dialect=dialect)
+    return t.cast(SqlModel, load_sql_based_model(parsed_definition, dialect=dialect))
+
+
+@pytest.fixture
+def full_model_without_ctes(request) -> SqlModel:
+    return _create_model(
+        "SELECT id, value, ds FROM raw",
+        dialect=getattr(request, "param", None),
+    )
+
+
+@pytest.fixture
+def full_model_with_single_cte(request) -> SqlModel:
+    return _create_model(
+        "WITH source AS (SELECT id FROM raw) SELECT id FROM source",
+        dialect=getattr(request, "param", None),
+    )
+
+
+@pytest.fixture
+def full_model_with_two_ctes(request) -> SqlModel:
+    return _create_model(
+        """
+        WITH source AS (
+            SELECT id FROM raw
+        ),
+        renamed AS (
+            SELECT id AS fid FROM source
+        )
+        SELECT fid FROM renamed;
+        """,
+        dialect=getattr(request, "param", None),
     )
 
 
@@ -129,7 +95,7 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
@@ -153,7 +119,7 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
@@ -174,7 +140,7 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
@@ -201,7 +167,7 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
@@ -225,7 +191,7 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
@@ -250,7 +216,7 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
@@ -275,33 +241,17 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
 
 
-def test_partial_inputs(sushi_context: Context) -> None:
-    model = t.cast(
-        SqlModel,
-        sushi_context.upsert_model(
-            load_sql_based_model(
-                parse(
-                    """
-                    MODEL (
-                        name sushi.foo,
-                        kind FULL
-                    );
-
-                    WITH source AS (
-                        SELECT id, name FROM sushi.waiter_names
-                    )
-                    SELECT id, name FROM source;
-                    """,
-                ),
-            ),
-        ),
+def test_partial_data(sushi_context: Context) -> None:
+    model = _create_model(
+        "WITH source AS (SELECT id, name FROM sushi.waiter_names) SELECT id, name FROM source"
     )
+    model = t.cast(SqlModel, sushi_context.upsert_model(model))
 
     body = load_yaml(
         """
@@ -333,6 +283,58 @@ test_foo:
     assert result and result.wasSuccessful()
 
 
+def test_partial_data_column_order(sushi_context: Context) -> None:
+    model = _create_model("SELECT id, name, price, event_date FROM sushi.items")
+    model = t.cast(SqlModel, sushi_context.upsert_model(model))
+
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    sushi.items:
+      - id: 1234
+        event_date: 2020-01-01
+      - id: 9876
+        name: hello
+        event_date: 2020-01-02
+  outputs:
+    query:
+      - id: 1234
+        event_date: 2020-01-01
+      - id: 9876
+        name: hello
+        event_date: 2020-01-02
+        """
+    )
+    result = _create_test(body, "test_foo", model, sushi_context).run()
+    assert result and result.wasSuccessful()
+
+
+def test_partial_data_missing_schemas(sushi_context: Context) -> None:
+    model = _create_model("SELECT * FROM unknown")
+    model = t.cast(SqlModel, sushi_context.upsert_model(model))
+
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    unknown:
+      - a: 1
+        b: bla
+      - b: baz
+  outputs:
+    query:
+      - a: 1
+        b: bla
+      - b: baz
+        """
+    )
+    result = _create_test(body, "test_foo", model, sushi_context).run()
+    assert result and result.wasSuccessful()
+
+
 def test_missing_column_failure(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
     model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes))
     body = load_yaml(
@@ -348,7 +350,7 @@ test_foo:
     query:
       - id: 1
         value: null
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and not result.wasSuccessful()
@@ -358,23 +360,9 @@ test_foo:
 
 
 def test_empty_rows(sushi_context: Context) -> None:
-    model = t.cast(
-        SqlModel,
-        sushi_context.upsert_model(
-            load_sql_based_model(
-                parse(
-                    """
-                    MODEL (
-                        name sushi.foo,
-                        kind FULL,
-                    );
+    model = _create_model("SELECT id FROM sushi.items")
+    model = t.cast(SqlModel, sushi_context.upsert_model(model))
 
-                    SELECT id FROM sushi.items;
-                    """,
-                ),
-            )
-        ),
-    )
     body = load_yaml(
         """
 test_foo:
@@ -383,7 +371,7 @@ test_foo:
     sushi.items: []
   outputs:
     query: []
-            """
+        """
     )
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
@@ -410,7 +398,7 @@ test_foo:
   vars:
     start: 2022-01-01
     end: 2022-01-01
-            """
+        """
     )
 
     context = Context(config=Config(model_defaults=ModelDefaultsConfig(dialect="snowflake")))
