@@ -1063,6 +1063,7 @@ class Context(BaseContext):
             input_queries=input_queries,
             models=self._models,
             engine_adapter=self._engine_adapter,
+            test_engine_adapter=self._test_engine_adapter,
             project_path=self.path,
             overwrite=overwrite,
             variables=variables,
