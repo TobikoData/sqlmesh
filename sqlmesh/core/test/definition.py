@@ -25,7 +25,6 @@ class TestError(SQLMeshError):
 
 class ModelTest(unittest.TestCase):
     __test__ = False
-    view_names: t.List[str] = []
 
     def __init__(
         self,
@@ -67,7 +66,6 @@ class ModelTest(unittest.TestCase):
     def setUp(self) -> None:
         """Load all input tables"""
         for table_name, rows in self.body.get("inputs", {}).items():
-            df = pd.DataFrame.from_records(rows)  # noqa
             columns_to_types: t.Dict[str, exp.DataType] = {}
             if table_name in self.models:
                 columns_to_types = self.models[table_name].columns_to_types or {}
@@ -84,7 +82,7 @@ class ModelTest(unittest.TestCase):
                     schema_(table.args["db"], table.args.get("catalog"))
                 )
 
-            self._add_missing_columns(df, columns_to_types)
+            df = pd.DataFrame.from_records(rows, columns=columns_to_types)
             self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
 
     def tearDown(self) -> None:
@@ -94,7 +92,6 @@ class ModelTest(unittest.TestCase):
 
     def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
         """Compare two DataFrames"""
-        self._add_missing_columns(expected, actual)
 
         # Two astypes are necessary, pandas converts strings to times as NS,
         # but if the actual is US, it doesn't take effect until the 2nd try!
@@ -169,12 +166,6 @@ class ModelTest(unittest.TestCase):
     def __str__(self) -> str:
         return f"{self.test_name} ({self.path})"
 
-    def _add_missing_columns(self, df: pd.DataFrame, columns: t.Iterable) -> None:
-        """Add missing columns to a given dataframe with None values."""
-        for index, column in enumerate(columns):
-            if column not in df:
-                df.insert(index, column, None)  # type: ignore
-
     def _normalize_test(self, dialect: str | None) -> None:
         """Normalizes all identifiers in this test according to the given dialect."""
 
@@ -220,7 +211,7 @@ class SqlModelTest(ModelTest):
 
     def test_ctes(self, ctes: t.Dict[str, exp.Expression]) -> None:
         """Run CTE queries and compare output to expected output"""
-        for cte_name, value in self.body["outputs"].get("ctes", {}).items():
+        for cte_name, rows in self.body["outputs"].get("ctes", {}).items():
             with self.subTest(cte=cte_name):
                 if cte_name not in ctes:
                     _raise_error(
@@ -231,7 +222,7 @@ class SqlModelTest(ModelTest):
                 for alias, cte in ctes.items():
                     cte_query = cte_query.with_(alias, cte.this)
 
-                expected_df = pd.DataFrame.from_records(value)
+                expected_df = pd.DataFrame.from_records(rows, columns=cte_query.named_selects)
                 actual_df = self._execute(cte_query)
                 self.assert_equal(expected_df, actual_df)
 
@@ -250,8 +241,9 @@ class SqlModelTest(ModelTest):
         self.test_ctes({cte.alias: cte for cte in query.ctes})
 
         # Test model query
-        if "query" in self.body["outputs"]:
-            expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
+        query_rows = self.body["outputs"].get("query")
+        if query_rows is not None:
+            expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)
             actual_df = self._execute(query)
             self.assert_equal(expected_df, actual_df)
 
@@ -295,8 +287,9 @@ class PythonModelTest(ModelTest):
         )
 
     def runTest(self) -> None:
-        if "query" in self.body["outputs"]:
-            expected_df = pd.DataFrame.from_records(self.body["outputs"]["query"])
+        query_rows = self.body["outputs"].get("query")
+        if query_rows is not None:
+            expected_df = pd.DataFrame.from_records(query_rows, columns=self.model.columns_to_types)
             actual_df = self._execute_model()
             actual_df.reset_index(drop=True, inplace=True)
             self.assert_equal(expected_df, actual_df)
