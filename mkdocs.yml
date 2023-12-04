@@ -26,6 +26,7 @@ nav:
       - guides/testing.md
     - SQLMesh tools:
       - guides/tablediff.md
+      - guides/observer.md
   - Concepts:
     - concepts/overview.md
     - Development:
