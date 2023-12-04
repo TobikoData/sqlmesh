@@ -25,13 +25,4 @@ sushi:
       threads: 1
       keyfile: "{{ env_var('BQ_KEYFILE') }}"
       location: "{{ env_var('BQ_LOCATION') }}"
-    redshift:
-      host: "{{ env_var('REDSHIFT_HOST') }}"
-      user: "{{ env_var('REDSHIFT_USER') }}"
-      password: "{{ env_var('REDSHIFT_PASSWORD') }}"
-      port: "{{ env_var('REDSHIFT_PORT') }}"
-      dbname: "{{ env_var('REDSHIFT_DBNAME') }}"
-      schema: sushi
-      threads: 1
-      type: redshift
   target: in_memory
