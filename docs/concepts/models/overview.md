@@ -110,7 +110,7 @@ Name is ***required*** and must be ***unique***.
 - Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.
 
 ### partitioned_by
-- Partitioned by is an optional property for engines such as Spark or Hive that support partitioning. Use this to add additional columns to the time column partition key.
+- Partitioned by is an optional property for engines such as Spark or BigQuery that support partitioning. Use this to specify a multi-column partition key or to modify a date column for partitioning. For example, in BigQuery you could partition by day by extracting the day component of a timestamp column `event_ts` with `partitioned_by TIMESTAMP_TRUNC(event_ts, DAY)`.
 
 ### clustered_by
 - Clustered by is an optional property for engines such as Bigquery that support clustering.
@@ -137,7 +137,8 @@ MODEL (
 For models that are incremental, the following parameters can be specified in the `kind`'s definition.
 
 ### time_column
-- Time column is a required property for incremental models. It is used to determine which records to overwrite when doing an incremental insert. Engines that support partitioning such as Spark and Hive also use it as the partition key. Additional partition key columns can be specified with the `partitioned_by` property (see below). Time column can have an optional format string. The format should be in the dialect of the model.
+- Time column is a required property for incremental models. It is used to determine which records to overwrite when doing an incremental insert. Time column can have an optional format string specified in the SQL dialect of the model.
+- Engines that support partitioning, such as Spark and BigQuery, use the time column as the model's partition key. Multi-column partitions or modifications to columns can be specified with the [`partitioned_by` property](#partitioned_by).
 
 ### lookback
 - Lookback is used for [incremental](model_kinds.md#incremental_by_time_range) models to capture late arriving data. This must be a positive integer and refers to the number of units that late arriving data is expected.
