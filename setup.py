@@ -81,7 +81,7 @@ setup(
             "pyarrow>=10.0.1,<10.1.0",
             "PyGithub",
             "pytest",
-            "pytest-asyncio",
+            "pytest-asyncio<0.23.0",
             "pytest-lazy-fixture",
             "pytest-mock",
             "pyspark>=3.4.0",
