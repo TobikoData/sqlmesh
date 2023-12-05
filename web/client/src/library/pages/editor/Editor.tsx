@@ -40,7 +40,7 @@ export default function PageEditor(): JSX.Element {
       sizes={[20, 80]}
       minSize={[8, 8]}
       snapOffset={0}
-      className="flex w-full h-full overflow-hidden"
+      className="flex w-full h-full overflow-hidden z-10"
     >
       <div className="h-full">
         <Suspense

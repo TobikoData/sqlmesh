@@ -315,7 +315,7 @@ function mergeLineageWithModels(
       key = encodeURI(key)
 
       acc[key] = {
-        models,
+        models: models.map(encodeURI),
         columns: currentLineage?.[key]?.columns ?? undefined,
       }
 
