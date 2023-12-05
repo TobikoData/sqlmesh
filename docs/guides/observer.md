@@ -4,7 +4,7 @@ Data pipelines break. Upstream sources change without warning, buggy code gets m
 
 SQLMesh Observer provides the information you need to rapidly detect, understand, and remedy problems with SQLMesh data transformation pipelines.
 
-This page describes how to install, run, and use SQLMesh Observer's features.
+This page describes how to install, run, and use SQLMesh Observer.
 
 ## The Challenge
 
@@ -14,7 +14,7 @@ A useful observation tool should enable answering the following questions:
 
 - Did a problem occur?
 - When did it occur?
-- What type/class of problem is it?
+- What type of problem is it?
 - Where is the problem coming from?
 - What is causing the problem?
 
@@ -23,7 +23,7 @@ SQLMesh Observer supports answering these questions in four ways:
 1. Automatically [notifying users](./notifications.md) if a problem occurs
 2. Capturing, storing, and displaying historical measures to reveal when a problem occurred
 3. Enabling easy navigation from aggregated to granular information about pipeline components to identify the problem source
-4. Centralizing error information from multiple sources to access the information necessary to debug the problem
+4. Centralizing error information from multiple sources to debug the problem
 
 ## Measures
 
@@ -33,11 +33,15 @@ SQLMesh Observer automatically captures and stores measures from all SQLMesh act
 
 The core of a SQLMesh project is its **models**. Roughly, each model consists of one SQL query and metadata that tells SQLMesh about how the model should be processed.
 
-Each model may have **audits** and/or tests associated with it. Audits validate the data returned by a model (e.g., verifying that a column contains no `NULL` values), and tests validate the code contained in a model by executing against known input data and the output data it should return. By default, SQLMesh will stop running a project if an audit fails for any of its models.
+Each model may have **audits** that validate the data returned by a model (e.g., verifying that a column contains no `NULL` values). By default, SQLMesh will stop running a project if an audit fails for any of its models.
 
-When you run a project on a SQL engine, you must choose an **environment** in which to run it. Environments allow people to modify projects in their own isolated space that won't interfere with anyone else (or the version of the project running in production). SQLMesh stores a unique fingerprint of the project's content so it can determine if any of that content has changed the next time you run it in that environment.
+When you run a project on a SQL engine, you must choose an **environment** in which to run it. Environments allow people to modify projects in an isolated space that won't interfere with anyone else (or the version of the project running in production).
 
-When a project's content has changed, an environment is updated to reflect those changes with a SQLMesh **plan**. The plan identifies all the changes and determines which data will be affected by them so it only has to re-run the models that have been affected. After changes have been applied with a plan, the project is **run** on a schedule to process new data that has arrived since the previous run.
+SQLMesh stores a unique fingerprint of the project's content on each run so it can determine if any of that content has changed the next time you run it in that environment.
+
+When a project's content has changed, an environment is updated to reflect those changes with a SQLMesh **plan**. The plan identifies all the changes and determines which data will be affected by them so it only has to re-run the relevant models.
+
+After changes have been applied with a plan, the project is **run** on a schedule to process new data that has arrived since the previous run.
 
 The five entities in bold - models, audits, environments, runs, and plans - provide the information SQLMesh Observer captures to help you efficiently identify and remediate problems with your transformation pipeline.
 
@@ -52,9 +56,9 @@ These measures are recorded and stored for each plan or run in a specific enviro
 - When it began and ended
 - Total run time
 - Whether it failed
-- The model versions evaluated during the plan/run
-- Each model's total run time
 - Whether and how any model audits failed
+- The model versions evaluated during the plan/run
+- Each model's run time
 
 Additionally, you can define custom measures that will be captured for each model. Defined with a SQL query, the measures are calculated for each model in the project. For example, you might record the total number of rows returned by each model so you can detect significant increases or decreases over time.
 
@@ -72,28 +76,24 @@ Run the installation command and read the key file with the following command. T
 > pip install "sqlmesh-enterprise" --extra-index-url  "$(cat <path to key file>)"
 ```
 
-`sqlmesh-enterprise` works by overriding components of `sqlmesh` open source. Installing `sqlmesh-enterprise` will automatically install `sqlmesh`, but it does not include any SQLMesh "extras" such as SQL engine libraries.
+`sqlmesh-enterprise` works by overriding components of `sqlmesh` open source, and installing `sqlmesh-enterprise` will automatically install open-source `sqlmesh`.
 
-Install SQLMesh extras by first installing `sqlmesh` as normal, then installing `sqlmesh-enterprise` afterward. This example installs the SQLMesh Snowflake engine driver before installing `sqlmesh-enterprise`:
+SQLMesh extras, such as SQL engine drivers, can be passed directly to the `sqlmesh-enterprise` installation command. This example installs the SQLMesh Slack notification and Snowflake engine driver extras:
 
 ``` bash
-> pip install "sqlmesh[snowflake]"
-
-....installation output....
-
-> pip install "sqlmesh-enterprise" --extra-index-url  "$(cat <path to key file>)"
+> pip install "sqlmesh-enterprise[slack,snowflake]" --extra-index-url  "$(cat <path to key file>)"
 ```
 
-NOTE: `sqlmesh-enterprise` must be installed **after** `sqlmesh` to function properly.
+NOTE: `sqlmesh-enterprise` will not function properly if open-source `sqlmesh` is installed after it.
 
 ## Startup
 
 As with the open-source [SQLMesh Browser UI](../quickstart/ui.md), SQLMesh Observer is initiated from the command line then opened in a web browser.
 
-First, navigate to your project directory in the CLI. Then start Observer by running the `sqlmesh dash` command:
+First, navigate to your project directory in the CLI. Then start Observer by running the `sqlmesh observe` command:
 
 ```bash
-sqlmesh dash
+sqlmesh observe
 ```
 
 After starting up, SQLMesh Observer is served at `http://127.0.0.1:8000` by default:
@@ -128,7 +128,7 @@ In a chart's top left corner is the `Time` selector, which sets the range of the
 
 ![SQLMesh Observer chart x-axis time selector](./observer/observer_chart-time-selector.png)
 
-In a chart's top right corner is the `Scale` selector, which toggles between a linear and log y-axis scale. A log scale may be helpful for comparing highly variable data series over time. This example displays the data from chart B in the previous figure with a log y-axis scale:
+In a chart's top right corner is the `Scale` selector, which toggles between a linear and log y-axis scale. A log scale may be helpful for comparing highly variable data series over time. This example displays the data from the second chart in the previous figure with a log y-axis scale:
 
 ![SQLMesh Observer chart y-axis scale selector](./observer/observer_chart-scale-selector.png)
 
@@ -137,6 +137,11 @@ Charts also display the data underlying a specific data point when the mouse hov
 ![SQLMesh Observer chart mouse hover](./observer/observer_chart-hover.png)
 
 Many charts display purple `Plan` markers, which provide contextual information about when changes to the project occurred. Clicking on the marker will open a page containing [more information about the plan](#plan-applications).
+
+Some Observer tables include a button that toggles a chart of the measures in the table:
+
+![SQLMesh Observer table chart toggle](./observer/observer_table-chart-toggle.png)
+
 
 ### Environments
 
@@ -199,6 +204,6 @@ Next, the Loaded Intervals section displays the time intervals that have been lo
 
 ![SQLMesh Observer model time intervals](./observer/observer_model-information-3.png)
 
-The model information page concludes with a list of most frequent audits the model has failed, XXXX, and the largest historical model run times:
+The model information page concludes with a list of most frequent audits the model has failed, the most frequent time intervals that failed, and the largest historical model run times:
 
 ![SQLMesh Observer historical outliers](./observer/observer_model-information-4.png)
