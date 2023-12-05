@@ -22,6 +22,54 @@ Models **require** a start date for backfilling data through use of the `start` 
 >   +start: Jan 1 2000
 ```
 
+
+### Runtime vars
+
+dbt supports passing variable values at runtime with its [CLI `vars` option](https://docs.getdbt.com/docs/build/project-variables#defining-variables-on-the-command-line).
+
+In SQLMesh, these variables are passed via configurations. When you initialize a dbt project with `sqlmesh init`, a file `config.py` is created in your project directory.
+
+The file creates a SQLMesh `config` object pointing to the project directory:
+
+```python
+config = sqlmesh_config(Path(__file__).parent)
+```
+
+Specify runtime variables by adding a Python dictionary to the `sqlmesh_config()` `variables` argument.
+
+For example, we could specify the runtime variable `is_marketing` and its value `no` as:
+
+```python
+config = sqlmesh_config(
+    Path(__file__).parent,
+    variables={"is_marketing": "no"}
+    )
+```
+
+Some projects use combinations of runtime variables to control project behavior. Different combinations can be specified in different `sqlmesh_config` objects, with the relevant configuration passed to the SQLMesh CLI command.
+
+For example, consider a project with a special configuration for the `marketing` department. We could create separate configurations to pass at runtime like this:
+
+```python
+config = sqlmesh_config(
+    Path(__file__).parent,
+    variables={"is_marketing": "no", "include_pii": "no"}
+    )
+
+marketing_config = sqlmesh_config(
+    Path(__file__).parent,
+    variables={"is_marketing": "yes", "include_pii": "yes"}
+    )
+```
+
+By default, SQLMesh will use the configuration object named `config`. Use a different configuration by passing the object name to SQLMesh CLI commands with the `--config` option. For example, we could run a `plan` with the marketing configuration like this:
+
+```python
+sqlmesh --config marketing_config plan
+```
+
+Note that the `--config` option is specified between the word `sqlmesh` and the command being executed (e.g., `plan`, `run`).
+
 ### Running SQLMesh
 
 Run SQLMesh as with a SQLMesh project, generating and applying [plans](../concepts/overview.md#make-a-plan), running [tests](../concepts/overview.md#tests) or [audits](../concepts/overview.md#audits), and executing models with a [scheduler](../guides/scheduling.md) if desired.
@@ -160,7 +208,6 @@ SQLMesh is continuously adding functionality to run dbt projects. This is a list
 * dbt deps
     - While SQLMesh can read dbt packages, it does not currently support managing those packages.
     - Continue to use dbt deps and dbt clean to update, add, or remove packages. For more information, refer to the [dbt deps](https://docs.getdbt.com/reference/commands/deps) documentation.
-* dbt test (in development)
 * dbt docs
 * dbt snapshots
 
