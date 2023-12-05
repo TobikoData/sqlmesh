@@ -57,7 +57,7 @@ export default function ReportErrors(): JSX.Element {
           >
             <Popover.Panel
               className={clsx(
-                'absolute top-20 right-2 z-[1000] rounded-md bg-light transform overflow-hidden text-danger-700 shadow-2xl',
+                'absolute top-20 right-2 z-50 rounded-md bg-light transform overflow-hidden text-danger-700 shadow-2xl',
                 'w-[90vw] max-h-[80vh]',
               )}
             >

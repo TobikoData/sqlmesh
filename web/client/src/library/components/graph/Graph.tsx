@@ -924,7 +924,7 @@ function ModelColumnLineage({
   return (
     <div className={clsx('px-1 w-full h-full relative', className)}>
       {isBuildingLayout && (
-        <div className="absolute top-0 left-0 z-[1000] bg-theme flex justify-center items-center w-full h-full">
+        <div className="absolute top-0 left-0 z-50 bg-theme flex justify-center items-center w-full h-full">
           <Loading className="inline-block">
             <Spinner className="w-3 h-3 border border-neutral-10 mr-4" />
             <h3 className="text-md">Building Lineage...</h3>
