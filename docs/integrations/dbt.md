@@ -8,10 +8,8 @@ SQLMesh has native support for running dbt projects with its dbt adapter.
 Prepare an existing dbt project to be run by SQLMesh by executing the `sqlmesh init` command *within the dbt project root directory* and with the `dbt` template option:
 
 ```bash
-$ sqlmesh init <default SQL dialect> -t dbt
+$ sqlmesh init -t dbt
 ```
-
-Replace `<default SQL dialect>` with the SQL dialect most of your models will use. The default dialect can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
 SQLMesh will use the data warehouse connection target in your dbt project `profiles.yml` file. The target can be changed at any time.
 
@@ -29,17 +27,15 @@ Models **require** a start date for backfilling data through use of the `start` 
 
 dbt supports passing variable values at runtime with its [CLI `vars` option](https://docs.getdbt.com/docs/build/project-variables#defining-variables-on-the-command-line).
 
-In SQLMesh, these variables are passed via configurations. When you initialize a dbt project with `sqlmesh init`, a file `config.py` is created in your project directory. The file contents are:
+In SQLMesh, these variables are passed via configurations. When you initialize a dbt project with `sqlmesh init`, a file `config.py` is created in your project directory.
+
+The file creates a SQLMesh `config` object pointing to the project directory:
 
 ```python
-from pathlib import Path
-
-from sqlmesh.dbt.loader import sqlmesh_config
-
 config = sqlmesh_config(Path(__file__).parent)
 ```
 
-The final line creates a SQLMesh `config` object pointing to the project directory. Specify runtime variables by adding a Python dictionary to the `sqlmesh_config()` `variables` argument.
+Specify runtime variables by adding a Python dictionary to the `sqlmesh_config()` `variables` argument.
 
 For example, we could specify the runtime variable `is_marketing` and its value `no` as:
 
