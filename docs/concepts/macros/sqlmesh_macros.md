@@ -6,7 +6,7 @@ SQLMesh macros behave differently than those of templating systems like [Jinja](
 
 Macro systems are based on string substitution. The macro system scans code files, identifies special characters that signify macro content, and replaces the macro elements with other text.
 
-In a general sense, that is the entire functionality templating systems. They have tools that provide control flow logic (if-then) and other functionality, but *that functionality is solely to support substituting in the correct strings*.
+In a general sense, that is the entire functionality of templating systems. They have tools that provide control flow logic (if-then) and other functionality, but *that functionality is solely to support substituting in the correct strings*.
 
 Templating systems are intentionally agnostic to the programming language being templated, and most of them work for everything from blog posts to HTML to SQL.
 
