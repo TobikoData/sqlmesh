@@ -22,7 +22,7 @@ export default function Modal({
     >
       <Dialog
         as="div"
-        className="relative z-[100]"
+        className="relative z-50"
         onClose={onClose}
       >
         <Transition.Child

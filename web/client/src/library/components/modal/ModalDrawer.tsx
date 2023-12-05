@@ -21,7 +21,7 @@ export default function ModalDrawer({
     >
       <Dialog
         as="div"
-        className="relative z-[100] w-full h-full "
+        className="relative z-50 w-full h-full "
         onClose={onClose}
         tabIndex={1}
       >
