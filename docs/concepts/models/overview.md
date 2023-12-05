@@ -110,7 +110,7 @@ Name is ***required*** and must be ***unique***.
 - Storage format is a property for engines such as Spark or Hive that support storage formats such as  `parquet` and `orc`.
 
 ### partitioned_by
-- Partitioned by is an optional property for engines such as Spark or BigQuery that support partitioning. Use this to specify a multi-column partition key or to modify a data column for partitioning. For example, in BigQuery you could partition by day by extracting the day component of a timestamp column `event_ts` with `partitioned_by TIMESTAMP_TRUNC(event_ts, DAY)`.
+- Partitioned by is an optional property for engines such as Spark or BigQuery that support partitioning. Use this to specify a multi-column partition key or to modify a date column for partitioning. For example, in BigQuery you could partition by day by extracting the day component of a timestamp column `event_ts` with `partitioned_by TIMESTAMP_TRUNC(event_ts, DAY)`.
 
 ### clustered_by
 - Clustered by is an optional property for engines such as Bigquery that support clustering.
