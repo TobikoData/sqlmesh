@@ -8,8 +8,10 @@ SQLMesh has native support for running dbt projects with its dbt adapter.
 Prepare an existing dbt project to be run by SQLMesh by executing the `sqlmesh init` command *within the dbt project root directory* and with the `dbt` template option:
 
 ```bash
-$ sqlmesh init -t dbt
+$ sqlmesh init <default SQL dialect> -t dbt
 ```
+
+Replace `<default SQL dialect>` with the SQL dialect most of your models will use. The default dialect can be overridden for specific models in the model's `MODEL` specification. All SQL dialects [supported by the SQLGlot library](https://github.com/tobymao/sqlglot/blob/main/sqlglot/dialects/dialect.py) are allowed.
 
 SQLMesh will use the data warehouse connection target in your dbt project `profiles.yml` file. The target can be changed at any time.
 
@@ -21,6 +23,56 @@ Models **require** a start date for backfilling data through use of the `start` 
 > models:
 >   +start: Jan 1 2000
 ```
+
+
+### Runtime vars
+
+dbt supports passing variable values at runtime with its [CLI `vars` option](https://docs.getdbt.com/docs/build/project-variables#defining-variables-on-the-command-line).
+
+In SQLMesh, these variables are passed via configurations. When you initialize a dbt project with `sqlmesh init`, a file `config.py` is created in your project directory. The file contents are:
+
+```python
+from pathlib import Path
+
+from sqlmesh.dbt.loader import sqlmesh_config
+
+config = sqlmesh_config(Path(__file__).parent)
+```
+
+The final line creates a SQLMesh `config` object pointing to the project directory. Specify runtime variables by adding a Python dictionary to the `sqlmesh_config()` `variables` argument.
+
+For example, we could specify the runtime variable `is_marketing` and its value `no` as:
+
+```python
+config = sqlmesh_config(
+    Path(__file__).parent,
+    variables={"is_marketing": "no"}
+    )
+```
+
+Some projects use combinations of runtime variables to control project behavior. Different combinations can be specified in different `sqlmesh_config` objects, with the relevant configuration passed to the SQLMesh CLI command.
+
+For example, consider a project with a special configuration for the `marketing` department. We could create separate configurations to pass at runtime like this:
+
+```python
+config = sqlmesh_config(
+    Path(__file__).parent,
+    variables={"is_marketing": "no", "include_pii": "no"}
+    )
+
+marketing_config = sqlmesh_config(
+    Path(__file__).parent,
+    variables={"is_marketing": "yes", "include_pii": "yes"}
+    )
+```
+
+By default, SQLMesh will use the configuration object named `config`. Use a different configuration by passing the object name to SQLMesh CLI commands with the `--config` option. For example, we could run a `plan` with the marketing configuration like this:
+
+```python
+sqlmesh --config marketing_config plan
+```
+
+Note that the `--config` option is specified between the word `sqlmesh` and the command being executed (e.g., `plan`, `run`).
 
 ### Running SQLMesh
 
