@@ -27,9 +27,9 @@ RUN curl https://jdbc.postgresql.org/download/postgresql-42.5.0.jar -o /opt/spar
     curl -L https://search.maven.org/remotecontent?filepath=org/apache/iceberg/iceberg-spark-runtime-3.4_2.12/1.4.2/iceberg-spark-runtime-3.4_2.12-1.4.2.jar -o /opt/spark/jars/iceberg-spark-runtime-3.4_2.12-1.4.2.jar
 
 # Install Hadoop
-RUN curl https://dlcdn.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz -o hadoop-3.3.4.tar.gz && \
-    tar xf hadoop-3.3.4.tar.gz -C /opt/ && \
-    mv /opt/hadoop-3.3.4 /opt/hadoop
+RUN curl https://dlcdn.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz -o hadoop-3.3.6.tar.gz && \
+    tar xf hadoop-3.3.6.tar.gz -C /opt/ && \
+    mv /opt/hadoop-3.3.6 /opt/hadoop
 
 ENV HADOOP_HOME="/opt/hadoop"
 
