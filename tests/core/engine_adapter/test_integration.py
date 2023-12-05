@@ -982,12 +982,12 @@ def test_dialects(ctx: TestContext):
 
     q = parse_one(
         f"""
-        WITH 
+        WITH
           "a" AS (SELECT 1 w),
           "B" AS (SELECT 1 x),
           c AS (SELECT 1 y),
           D AS (SELECT 1 z)
-    
+
           SELECT *
           FROM {a}
           CROSS JOIN {b}
