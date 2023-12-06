@@ -76,11 +76,10 @@ class SourceConfig(GeneralConfig):
                     f"'source' macro failed for '{self.config_name}' with exeception '{e}'."
                 )
 
-            if relation.database == context.target.database:
-                relation = relation.include(database=False)
+            # if relation.database == context.target.database:
+            #    relation = relation.include(database=False)
             table = exp.to_table(relation.render(), dialect=context.dialect)
             self._canonical_name = d.normalize_model_name(table, dialect=context.dialect)
-            print(self._canonical_name)
         return self._canonical_name
 
     @property
