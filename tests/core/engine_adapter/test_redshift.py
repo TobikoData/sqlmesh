@@ -61,19 +61,26 @@ def test_create_table_from_query_exists_no_if_not_exists(
                         "restypmod": "- 1",
                     },
                 },
+                {
+                    "name": "TARGETENTRY",
+                    "resdom": {
+                        "restype": "1043",
+                        "restypmod": "- 1",
+                    },
+                },
             ]
         },
     )
 
     adapter.ctas(
         table_name="test_table",
-        query_or_df=parse_one("SELECT a, b, CAST(c AS VARCHAR) FROM table"),
+        query_or_df=parse_one("SELECT a, b, CAST(c AS VARCHAR), d AS d FROM table"),
         exists=False,
     )
 
     assert to_sql_calls(adapter) == [
-        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", CAST("c" AS VARCHAR) FROM "table"',
-        'CREATE TABLE "test_table" AS SELECT CAST("a" AS VARCHAR(MAX)), "b", CAST("c" AS VARCHAR) FROM "table"',
+        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", CAST("c" AS VARCHAR), "d" AS "d" FROM "table"',
+        'CREATE TABLE "test_table" AS SELECT CAST("a" AS VARCHAR(MAX)), "b", CAST("c" AS VARCHAR), CAST("d" AS VARCHAR(MAX)) AS "d" FROM "table"',
     ]
 
 
