@@ -949,7 +949,7 @@ class EngineAdapterStateSync(CommonStateSyncMixin, StateSync):
                 if environment.name == c.PROD:
                     updated_prod_environment = environment
 
-        for environment in environments:
+        for environment in updated_environments:
             self._update_environment(environment)
 
         if updated_prod_environment:
