@@ -382,6 +382,9 @@ def _macro_references(
 ) -> t.Set[MacroReference]:
     result = set()
     for macro_node_id in node.depends_on.macros:
+        if not macro_node_id:
+            continue
+
         macro_node = manifest.macros[macro_node_id]
         macro_name = macro_node.name
         macro_package = (
