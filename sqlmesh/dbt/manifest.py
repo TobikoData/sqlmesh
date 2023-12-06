@@ -347,9 +347,9 @@ class ManifestHelper:
         # Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
         dependencies = Dependencies()
         for call_name, node in extract_call_names(target):
-            if call_name[0] in ("var", "config"):
+            if call_name[0] == "config":
                 continue
-            if call_name[0] == "source":
+            elif call_name[0] == "source":
                 args = [_jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
                     source = ".".join(args)
@@ -382,9 +382,6 @@ def _macro_references(
 ) -> t.Set[MacroReference]:
     result = set()
     for macro_node_id in node.depends_on.macros:
-        if not macro_node_id:
-            continue
-
         macro_node = manifest.macros[macro_node_id]
         macro_name = macro_node.name
         macro_package = (
