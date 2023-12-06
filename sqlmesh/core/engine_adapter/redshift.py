@@ -107,6 +107,9 @@ class RedshiftEngineAdapter(
                     if resdom["restype"] == "1043" and resdom["restypmod"] == "- 1":
                         select = statement.selects[i]
 
+                        if isinstance(select, exp.Alias):
+                            select = select.this
+
                         if not isinstance(select, exp.Cast):
                             select.replace(
                                 exp.cast(select.copy(), "VARCHAR(MAX)", dialect=self.dialect)
