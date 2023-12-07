@@ -586,7 +586,7 @@ class Context(BaseContext):
     def snapshots(self) -> t.Dict[str, Snapshot]:
         """Generates and returns snapshots based on models registered in this context.
 
-        If one of the snapshots has been previosly stored in the persisted state, the stored
+        If one of the snapshots has been previously stored in the persisted state, the stored
         instance will be returned.
         """
         return self._snapshots()
@@ -774,7 +774,7 @@ class Context(BaseContext):
 
         if skip_backfill and not no_gaps and environment == c.PROD:
             raise ConfigError(
-                "When targeting the production enviornment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
+                "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
 
         self._run_plan_tests(skip_tests=skip_tests)
