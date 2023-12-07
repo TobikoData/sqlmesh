@@ -457,8 +457,7 @@ class SQLMeshMagics(Magics):
     def dag(self, line: str) -> None:
         """Displays the dag"""
         self._context.refresh()
-        dag = self._context.get_dag()
-        self.display(HTML(dag.pipe().decode("utf-8")))
+        self.display(self._context.get_dag())
 
     @magic_arguments()
     @line_magic

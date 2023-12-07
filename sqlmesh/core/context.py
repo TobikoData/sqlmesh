@@ -47,6 +47,7 @@ from types import MappingProxyType
 
 import pandas as pd
 from sqlglot import exp
+from sqlglot.lineage import GraphHTML
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.audit import Audit, StandaloneAudit
@@ -102,7 +103,6 @@ from sqlmesh.utils.date import TimeLike, now_ds, to_date
 from sqlmesh.utils.errors import (
     CircuitBreakerError,
     ConfigError,
-    MissingDependencyError,
     PlanError,
     SQLMeshError,
     UncategorizedPlanError,
@@ -110,7 +110,6 @@ from sqlmesh.utils.errors import (
 from sqlmesh.utils.jinja import JinjaMacroRegistry
 
 if t.TYPE_CHECKING:
-    import graphviz
     from typing_extensions import Literal
 
     from sqlmesh.core.engine_adapter._typing import DF, PySparkDataFrame, PySparkSession
@@ -974,60 +973,49 @@ class Context(BaseContext):
             self.console.show_row_diff(table_diff.row_diff(), show_sample=show_sample)
         return table_diff
 
-    def get_dag(self, format: str = "svg") -> graphviz.Digraph:
-        """Gets a graphviz dag.
+    def get_dag(self, **options: t.Any) -> GraphHTML:
+        """Gets an HTML object representation of the DAG."""
+        nodes = {}
+        edges: t.List[t.Dict] = []
 
-        This method requires installing the graphviz base library through your package manager
-        and the python graphviz library.
+        for node, deps in self.dag.graph.items():
+            nodes[node] = {
+                "id": node,
+                "label": node.split(".")[-1],
+                "title": f"<span>{node}</span>",
+            }
+            edges.extend({"from": node, "to": d} for d in deps)
 
-        To display within Databricks:
-        displayHTML(context.get_dag().pipe(encoding='utf-8'))
+        return GraphHTML(
+            nodes,
+            edges,
+            options={
+                "height": "100%",
+                "width": "100%",
+                "interaction": {},
+                "layout": {
+                    "hierarchical": {
+                        "enabled": True,
+                        "nodeSpacing": 200,
+                        "sortMethod": "directed",
+                    },
+                },
+                "nodes": {
+                    "shape": "box",
+                },
+                **options,
+            },
+        )
 
-        Args:
-            format: The desired format to use for representing the graph
-        """
-        from sqlmesh import runtime_env
-
-        try:
-            import graphviz  # type: ignore
-        except ModuleNotFoundError as e:
-            if runtime_env.is_databricks:
-                raise MissingDependencyError(
-                    "Rendering a dag requires graphviz. Run `pip install graphviz` and then `sudo apt-get install -y python3-dev graphviz libgraphviz-dev pkg-config`"
-                )
-            raise MissingDependencyError(
-                "Rendering a dag requires a manual install of graphviz. Run `pip install graphviz` and then install graphviz library: https://graphviz.org/download/."
-            ) from e
-
-        graph = graphviz.Digraph(node_attr={"shape": "box"}, format=format)
-
-        for name, upstream in self.dag.graph.items():
-            graph.node(name)
-            for u in upstream:
-                graph.edge(u, name)
-        return graph
-
-    def render_dag(self, path: str, format: str = "jpeg") -> str:
-        """Render the dag using graphviz.
-
-        This method requires installing the graphviz base library through your package manager
-        and the python graphviz library.
+    def render_dag(self, path: str) -> None:
+        """Render the dag as HTML and save it to a file.
 
         Args:
-            path: filename to save the dag to
-            format: The desired format to use when rending the dag
+            path: filename to save the dag html to
         """
-        graph = self.get_dag(format=format)
-        # We know graphviz is installed because the command above would have failed if it was not. This allows
-        # us to then catch the specific error that occurs when the system install is missing.
-        import graphviz  # type: ignore
 
-        try:
-            return graph.render(path, format=format)
-        except graphviz.backend.execute.ExecutableNotFound as e:
-            raise MissingDependencyError(
-                "Graphviz is pip-installed but the system install is missing. Instructions: https://graphviz.org/download/"
-            ) from e
+        with open(path, "w", encoding="utf-8") as file:
+            file.write(str(self.get_dag()))
 
     def create_test(
         self,
