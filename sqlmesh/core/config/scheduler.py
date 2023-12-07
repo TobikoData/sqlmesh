@@ -230,7 +230,7 @@ class CloudComposerSchedulerConfig(_BaseAirflowSchedulerConfig, BaseConfig, extr
     @model_validator(mode="before")
     @model_validator_v1_args
     def check_supported_fields(cls, values: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        allowed_field_names = {field.alias for field in cls.all_field_infos().values()}
+        allowed_field_names = {field.alias or name for name, field in cls.all_field_infos().items()}
         allowed_field_names.add("session")
 
         for field_name in values:
