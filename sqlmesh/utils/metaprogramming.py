@@ -302,6 +302,9 @@ class ExecutableKind(str, Enum):
         values = list(ExecutableKind.__dict__.values())
         return values.index(self) < values.index(other)
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class Executable(PydanticModel):
     payload: str
@@ -427,7 +430,7 @@ def print_exception(
     tb: t.List[str] = []
 
     for error_line in format_exception(exception):
-        match = re.search(f'File "<string>", line (.*), in (.*)', error_line)
+        match = re.search('File "<string>", line (.*), in (.*)', error_line)
 
         if not match:
             tb.append(error_line)
