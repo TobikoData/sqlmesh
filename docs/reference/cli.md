@@ -84,16 +84,12 @@ Options:
 
 ## dag
 ```
-Usage: sqlmesh dag [OPTIONS]
+Usage: sqlmesh dag [OPTIONS] FILE
 
-  Renders the dag using graphviz.
-
-  This command requires a manual install of both the python and system
-  graphviz package.
+  Renders the dag as an html file.
 
 Options:
-  --file TEXT  The file to which the dag image should be written.
-  --help       Show this message and exit.
+  --help  Show this message and exit.
 ```
 
 ## diff

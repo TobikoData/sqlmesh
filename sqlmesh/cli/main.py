@@ -349,14 +349,13 @@ def invalidate(ctx: click.Context, environment: str) -> None:
 
 
 @cli.command("dag")
-@opt.file
+@click.argument("file", required=True)
 @click.pass_context
 @error_handler
 def dag(ctx: click.Context, file: str) -> None:
     """
-    Renders the dag using graphviz.
+    Renders the dag as an html file.
 
-    This command requires a manual install of both the python and system graphviz package.
     """
     rendered_dag_path = ctx.obj.render_dag(file)
     if rendered_dag_path:
