@@ -1348,7 +1348,10 @@ class Context(BaseContext):
     ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
         if self._test_engine_adapter and not skip_tests:
             result, test_output = self._run_tests()
-            self.console.log_test_results(result, test_output, self._test_engine_adapter.dialect)
+            if result.testsRun > 0:
+                self.console.log_test_results(
+                    result, test_output, self._test_engine_adapter.dialect
+                )
             if not result.wasSuccessful():
                 raise PlanError(
                     "Cannot generate plan due to failing test(s). Fix test(s) and run again"
