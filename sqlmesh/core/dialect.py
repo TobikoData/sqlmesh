@@ -609,7 +609,7 @@ def parse(
         A list of the parsed expressions: [Model, *Statements, Query, *Statements]
     """
     match = match_dialect and DIALECT_PATTERN.search(sql[:MAX_MODEL_DEFINITION_SIZE])
-    dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)()
+    dialect = Dialect.get_or_raise(match.group(2) if match else default_dialect)
 
     tokens = dialect.tokenizer.tokenize(sql)
     chunks: t.List[t.Tuple[t.List[Token], ChunkType]] = [([], ChunkType.SQL)]

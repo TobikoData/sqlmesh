@@ -956,24 +956,27 @@ def test_dialects(ctx: TestContext):
     if ctx.test_type != "query":
         pytest.skip("Dialect tests only need to run once so we skip anything not query")
 
-    # https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html
-    if ctx.dialect == "mysql":
-        pytest.skip("MySQL test isn't valid right now since it depends on OS")
-
     from sqlglot import Dialect, parse_one
 
     dialect = Dialect[ctx.dialect]
 
-    if dialect.RESOLVES_IDENTIFIERS_AS_UPPERCASE is None:
+    if dialect.NORMALIZATION_STRATEGY == "CASE_INSENSITIVE" is None:
         a = '"a"'
         b = '"b"'
         c = '"c"'
         d = '"d"'
-    elif dialect.RESOLVES_IDENTIFIERS_AS_UPPERCASE is False:
+    elif dialect.NORMALIZATION_STRATEGY == "LOWER" is False:
         a = '"a"'
         b = '"B"'
         c = '"c"'
         d = '"d"'
+    # https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html
+    # if these tests fail for mysql it means you're running on os x or windows
+    elif dialect.NORMALIZATION_STRATEGY == "CASE_SENSITIVE" is False:
+        a = '"a"'
+        b = '"B"'
+        c = '"c"'
+        d = '"D"'
     else:
         a = '"a"'
         b = '"B"'
