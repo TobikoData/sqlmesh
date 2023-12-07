@@ -965,7 +965,7 @@ def test_dialects(ctx: TestContext):
         b = '"b"'
         c = '"c"'
         d = '"d"'
-    elif dialect.NORMALIZATION_STRATEGY == "LOWER":
+    elif dialect.NORMALIZATION_STRATEGY == "LOWERCASE":
         a = '"a"'
         b = '"B"'
         c = '"c"'
