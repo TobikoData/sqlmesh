@@ -57,7 +57,7 @@ By default, SQLMesh backfills all of a plan's directly and indirectly modified m
 
 You can limit which downstream models are backfilled with `plan`'s `--backfill-model` argument, which uses the same selection [syntax](#syntax) as `--select-model`.
 
-`--select-model` determines which directly modified models are included in a `plan`, and `--backfill-model` determines which of their children are backfilled by the `plan`.
+`--select-model` determines which directly modified models are included in a `plan`, and `--backfill-model` determines which models are backfilled by the `plan`.
 
 A model's backfilled data is only current if its parents have also been backfilled, so the parents of each model specified with `--backfill-model` will also be backfilled. The `--backfill-model` option overrides `--select-model`, so an unselected directly modified model *will be* included in a plan if it is upstream of a `--backfill-model` model (see [example](#select-sushimarketing-and-backfill-sushicustomers) below).
 
@@ -178,13 +178,13 @@ Models:
 
 ### Backfill examples
 
-#### No backfill
+#### No backfill selection
 
 Recall that a plan with no selection or backfill options includes all four models, two of which were directly and two of which were indirectly modified.
 
 The `--backfill-model` option does not affect whether a model is included in a plan (i.e., it will still appear in the output shown in the selection examples above). Instead, it is excluded from the list of models needing backfill at the bottom of the plan's output.
 
-With no options specified, the `plan` will backfill all four models (and others):
+With no options specified, the `plan` will backfill all four models (and others). The backfills occur in the `sushi__dev` schema because we are creating a plan for the `dev` environment:
 
 ```bash hl_lines="16 17 21 24"
 ❯ sqlmesh plan dev
@@ -218,7 +218,7 @@ Models needing backfill (missing dates):
 If we specify the `--backfill-model` option with `"sushi.customers"`, two things happen:
 
 1. The indirectly modified `sushi.waiter_as_customer_by_day` model is excluded from the backfills list because it is downstream of `sushi.customers`
-2. Many other models are excluded from the backfills list because they were neither indirectly modified nor in the path between `sushi.raw_marketing` and `sushi.customers`
+2. Many other models are excluded from the backfills list because they were neither indirectly modified nor upstream of `sushi.customers`
 
 ```bash hl_lines="15-17"
 ❯ sqlmesh plan dev --backfill-model "sushi.customers"
@@ -240,11 +240,13 @@ Models needing backfill (missing dates):
 └── sushi__dev.customers: 2023-11-30 - 2023-12-06
 ```
 
+The model `sushi.demographics` is upstream of `sushi.customers`, but it does not appear in the backfill list because it is an external model that SQLMesh does not evaluate directly.
+
 #### Select `sushi.marketing` and backfill `sushi.customers`
 
 This example demonstrates one potentially surprising way model selection and backfill specification interact.
 
-We select `sushi.marketing`, so `sushi.raw_marketing` does not appear in the list of directly modified models. However, it *does* appear in the list of models needing backfill because it is upstream of `sushi.customers`:
+We select `sushi.marketing`, so `sushi.raw_marketing` does not appear in the list of directly modified models. However, it *does* appear in the list of models needing backfill because it is upstream of `sushi.customers`, along with another upstream model `sushi.orders`:
 
 ```bash hl_lines="4 5 14"
 ❯ sqlmesh plan dev --select-model "sushi.marketing" --backfill-model "sushi.customers"
@@ -264,3 +266,5 @@ Models needing backfill (missing dates):
 ├── sushi__dev.marketing: 2023-12-06 - 2023-12-06
 └── sushi__dev.customers: 2023-12-06 - 2023-12-06
 ```
+
+The model `sushi.demographics` is upstream of `sushi.customers`, but it does not appear in the backfill list because it is an external model that SQLMesh does not evaluate directly.
