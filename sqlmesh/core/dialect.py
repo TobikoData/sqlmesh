@@ -486,29 +486,21 @@ def format_model_expressions(
         return expressions[0].sql(pretty=True, dialect=dialect)
 
     *statements, query = expressions
-    query = query.copy()
-    selects = []
 
-    for expression in query.expressions:
-        column = None
-        comments = expression.comments
-        expression.comments = None
+    def cast_to_colon(node: exp.Expression) -> exp.Expression:
+        if isinstance(node, exp.Cast) and not node.args.get("format"):
+            this = node.this
 
-        if not isinstance(expression, exp.Alias) and expression.output_name not in ("", "*"):
-            expression = expression.replace(exp.alias_(expression, expression.output_name))
-
-        column = column or expression
-        expression = expression.this
-
-        if isinstance(expression, exp.Cast):
-            this = expression.this
             if not isinstance(this, (exp.Binary, exp.Unary)) or isinstance(this, exp.Paren):
-                expression.replace(DColonCast(this=this, to=expression.to))
+                cast = DColonCast(this=this, to=node.to)
+                cast.comments = node.comments
+                node = cast
 
-        column.comments = comments
-        selects.append(column)
+        exp.replace_children(node, cast_to_colon)
+        return node
 
-    query.set("expressions", selects)
+    query = query.copy()
+    exp.replace_children(query, cast_to_colon)
 
     return ";\n\n".join(
         [
