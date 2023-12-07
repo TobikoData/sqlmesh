@@ -46,6 +46,7 @@ def test_format_model_expressions():
     sum(n + 1)::int as n, -- n
     o,
     p + 1,
+    CAST(x as int)::int,
     """
         )
     )
@@ -61,26 +62,27 @@ def test_format_model_expressions():
 
 SELECT
   *,
-  a::INT AS a,
+  a::INT,
   b::INT AS b,
   CAST(c + 1 AS INT) AS c,
-  d::INT AS d,
+  d::INT,
   e::INT AS e,
   (
     f + 1
   )::INT AS f,
   SUM(g + 1)::INT AS g,
-  h::INT AS h, /* h */
+  h::INT, /* h */
   i::INT AS i, /* i */
   CAST(j + 1 AS INT) AS j, /* j */
-  k::INT AS k, /* k */
+  k::INT, /* k */
   l::INT AS l, /* l */
   (
     m + 1
   )::INT AS m, /* m */
   SUM(n + 1)::INT AS n, /* n */
-  o AS o,
-  p + 1"""
+  o,
+  p + 1,
+  x::INT::INT"""
     )
 
     x = format_model_expressions(
@@ -130,7 +132,7 @@ def test_format_body_macros():
     1
 )
 SELECT
-  col::INT AS col
+  col::INT
 FROM foo
 @ORDER_BY(@include_order_by)
   @EACH(@columns, item -> @'@iteaoeuatnoehutoenahuoanteuhonateuhaoenthuaoentuhaeotnhaoem'),
