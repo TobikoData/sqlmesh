@@ -100,20 +100,25 @@ class RedshiftEngineAdapter(
             )
             plan = parse_plan("\n".join(r[0] for r in self.fetchall(f"EXPLAIN VERBOSE {sql}")))
 
-            for i, target in enumerate(plan["targetlist"] if plan else []):  # type: ignore
-                if target["name"] == "TARGETENTRY":
-                    resdom = target["resdom"]
-                    # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
-                    if resdom["restype"] == "1043" and resdom["restypmod"] == "- 1":
-                        select = statement.selects[i]
+            if plan:
+                select = exp.Select().from_(statement.expression.subquery("_subquery"))
+                statement.expression.replace(select)
 
-                        if isinstance(select, exp.Alias):
-                            select = select.this
-
-                        if not isinstance(select, exp.Cast):
-                            select.replace(
-                                exp.cast(select.copy(), "VARCHAR(MAX)", dialect=self.dialect)
+                for target in plan["targetlist"]:  # type: ignore
+                    if target["name"] == "TARGETENTRY":
+                        resdom = target["resdom"]
+                        # https://github.com/postgres/postgres/blob/master/src/include/catalog/pg_type.dat
+                        if resdom["restype"] == "1043" and resdom["restypmod"] == "- 1":
+                            select.select(
+                                exp.cast(
+                                    exp.to_identifier(resdom["resname"]),
+                                    "VARCHAR(MAX)",
+                                    dialect=self.dialect,
+                                ),
+                                copy=False,
                             )
+                        else:
+                            select.select(resdom["resname"], copy=False)
 
         return statement
 
