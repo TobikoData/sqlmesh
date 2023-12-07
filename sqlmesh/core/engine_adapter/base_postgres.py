@@ -15,7 +15,7 @@ if t.TYPE_CHECKING:
 
 
 class BasePostgresEngineAdapter(EngineAdapter):
-    DEFAULT_BATCH_SIZE = 1000
+    DEFAULT_BATCH_SIZE = 400
     COLUMNS_TABLE = "information_schema.columns"
     CATALOG_SUPPORT = CatalogSupport.SINGLE_CATALOG_ONLY
 
