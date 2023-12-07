@@ -21,7 +21,7 @@ export interface InitialFile extends InitialArtifact, File {
 
 export class ModelFile extends ModelArtifact<InitialFile> {
   private _content: string = ''
-  private _type?: FileType
+  private _type?: Maybe<FileType>
 
   content: string
   is_supported: boolean
@@ -49,11 +49,11 @@ export class ModelFile extends ModelArtifact<InitialFile> {
     this.type = initial?.type
   }
 
-  get type(): FileType | undefined {
+  get type(): Maybe<FileType> {
     return this._type
   }
 
-  set type(newType: FileType | undefined) {
+  set type(newType: Maybe<FileType>) {
     this._type = newType ?? getFileType(this.path)
   }
 
@@ -121,7 +121,7 @@ export class ModelFile extends ModelArtifact<InitialFile> {
         (newFile.extension as FileExtensions) ?? EnumFileExtensions.None
       this.type = newFile.type as FileType
 
-      this.updateContent(newFile.content)
+      this.updateContent(newFile.content ?? '')
     }
   }
 }

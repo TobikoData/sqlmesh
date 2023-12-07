@@ -1,17 +1,10 @@
 import { type Table } from 'apache-arrow'
 import clsx from 'clsx'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  type EvaluateInputStart,
-  type RenderInputStart,
-  type EvaluateInputEnd,
-  type RenderInputEnd,
-  type EvaluateInputExecutionTime,
-  type RenderInputExecutionTime,
-} from '~/api/client'
+import { type RenderInput, type EvaluateInput } from '~/api/client'
 import { useStoreContext } from '~/context/context'
 import { EnumSize, EnumVariant } from '~/types/enum'
-import { isFalse, toDate, toDateFormat } from '~/utils'
+import { isFalse, isNotNil, toDate, toDateFormat } from '~/utils'
 import { Button } from '../button/Button'
 import { Divider } from '../divider/Divider'
 import Input from '../input/Input'
@@ -33,14 +26,6 @@ import { CodeEditorDefault } from './EditorCode'
 import { EnumFileExtensions } from '@models/file'
 import { useSQLMeshModelExtensions } from './hooks'
 import { useLineageFlow } from '@components/graph/context'
-
-interface FormModel {
-  model?: string
-  start: EvaluateInputStart | RenderInputStart
-  end: EvaluateInputEnd | RenderInputEnd
-  execution_time: EvaluateInputExecutionTime | RenderInputExecutionTime
-  limit: number
-}
 
 const DAY = 24 * 60 * 60 * 1000
 const LIMIT = 1000
@@ -318,7 +303,8 @@ function FormActionsModel({
   const setPreviewQuery = useStoreEditor(s => s.setPreviewQuery)
   const setPreviewTable = useStoreEditor(s => s.setPreviewTable)
 
-  const [form, setForm] = useState<FormModel>({
+  const [form, setForm] = useState<EvaluateInput | RenderInput>({
+    model: model.name,
     start: toDateFormat(toDate(Date.now() - DAY)),
     end: toDateFormat(new Date()),
     execution_time: toDateFormat(toDate(Date.now() - DAY)),
@@ -326,13 +312,15 @@ function FormActionsModel({
   })
 
   const { refetch: getRender } = useApiRender(
-    Object.assign(form, { model: model.name }),
+    Object.assign(form, { model: model.name }) as RenderInput,
   )
   const {
     refetch: getEvaluate,
     isFetching,
     cancel: cancelEvaluate,
-  } = useApiEvaluate(Object.assign(form, { model: model.name }))
+  } = useApiEvaluate(
+    Object.assign(form, { model: model.name }) as EvaluateInput,
+  )
 
   const shouldEvaluate =
     tab.file.isSQLMeshModel && Object.values(form).every(Boolean)
@@ -430,27 +418,29 @@ function FormActionsModel({
                 />
               )}
             </Input>
-            <Input
-              className="w-full mx-0"
-              label="Limit"
-            >
-              {({ className }) => (
-                <Input.Textfield
-                  className={clsx(className, 'w-full')}
-                  type="number"
-                  placeholder="1000"
-                  value={form.limit}
-                  onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    e.stopPropagation()
+            {isNotNil((form as EvaluateInput).limit) && (
+              <Input
+                className="w-full mx-0"
+                label="Limit"
+              >
+                {({ className }) => (
+                  <Input.Textfield
+                    className={clsx(className, 'w-full')}
+                    type="number"
+                    placeholder="1000"
+                    value={(form as EvaluateInput).limit}
+                    onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      e.stopPropagation()
 
-                    setForm({
-                      ...form,
-                      limit: e.target.valueAsNumber ?? LIMIT,
-                    })
-                  }}
-                />
-              )}
-            </Input>
+                      setForm({
+                        ...form,
+                        limit: e.target.valueAsNumber ?? LIMIT,
+                      })
+                    }}
+                  />
+                )}
+              </Input>
+            )}
           </fieldset>
         </form>
       </InspectorForm>

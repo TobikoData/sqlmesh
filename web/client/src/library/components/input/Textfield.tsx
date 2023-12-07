@@ -3,7 +3,7 @@ import React from 'react'
 import { isFalse } from '~/utils'
 
 export interface PropsTextfield {
-  value?: string | number
+  value?: Maybe<string | number>
   type?: string
   placeholder?: string
   disabled?: boolean
@@ -17,7 +17,7 @@ export default React.forwardRef<HTMLInputElement, PropsTextfield>(
   function Input(
     {
       type = 'text',
-      value = '',
+      value,
       placeholder,
       className,
       disabled = false,
@@ -27,6 +27,7 @@ export default React.forwardRef<HTMLInputElement, PropsTextfield>(
     }: PropsTextfield,
     ref?: React.Ref<HTMLInputElement>,
   ): JSX.Element {
+    value = value ?? ''
     return (
       <input
         ref={ref}

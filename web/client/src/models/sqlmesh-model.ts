@@ -1,4 +1,10 @@
-import { type Column, type ModelDetails, type Model } from '@api/client'
+import {
+  type Column,
+  type ModelDetails,
+  type Model,
+  type ModelDescription,
+  type ModelSql,
+} from '@api/client'
 import { type Lineage } from '@context/editor'
 import { ModelInitial } from './initial'
 
@@ -15,8 +21,8 @@ export class ModelSQLMeshModel<
   type: string
   columns: Column[]
   details: ModelDetails
-  description?: string
-  sql?: string
+  description?: ModelDescription
+  sql?: ModelSql
 
   constructor(initial?: T | ModelSQLMeshModel) {
     super(

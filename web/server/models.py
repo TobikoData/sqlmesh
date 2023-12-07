@@ -202,7 +202,7 @@ class FetchdfInput(BaseModel):
 class Column(BaseModel):
     name: str
     type: str
-    description: t.Optional[str]
+    description: t.Optional[str] = None
 
 
 class Reference(BaseModel):
@@ -335,7 +335,7 @@ class RowDiff(BaseModel):
 class TableDiff(BaseModel):
     schema_diff: SchemaDiff
     row_diff: RowDiff
-    on: t.List[t.Tuple[str, str]]
+    on: t.List[t.List[str]]
 
 
 class TestCase(BaseModel):
@@ -391,7 +391,7 @@ class ReportTestsFailure(ReportTestsResult):
 class BackfillDetails(BaseModel):
     model_name: t.Optional[str] = None
     view_name: str
-    interval: t.Tuple[str, str]
+    interval: t.List[str]
     batches: int
 
 
