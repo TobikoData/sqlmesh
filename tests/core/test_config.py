@@ -295,3 +295,27 @@ def test_load_config_from_python_module_invalid_config_object(tmp_path):
         match=r"^Config needs to be a valid object.*",
     ):
         load_config_from_python_module(config_path)
+
+
+def test_cloud_composer_scheduler_config(tmp_path_factory):
+    config_path = tmp_path_factory.mktemp("yaml_config") / "config.yaml"
+    with open(config_path, "w") as fd:
+        fd.write(
+            """
+gateways:
+    another_gateway:
+        connection:
+            type: duckdb
+            database: test_db
+        scheduler:
+            type: cloud_composer
+            airflow_url: https://airflow.url
+
+model_defaults:
+    dialect: bigquery
+        """
+        )
+
+    assert load_config_from_paths(
+        project_paths=[config_path],
+    )
