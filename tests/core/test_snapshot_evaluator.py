@@ -1246,7 +1246,7 @@ def test_audit_wap(adapter_mock, make_snapshot):
     custom_audit_query = call_args[1][0][0]
     assert (
         custom_audit_query.sql(dialect="spark")
-        == "SELECT COUNT(*) FROM (SELECT * FROM `spark_catalog`.`test_schema`.`test_table`.`branch_wap_test_wap_id` AS `test_table` WHERE 1 = 2) AS audit"
+        == "SELECT COUNT(*) FROM (SELECT * FROM `spark_catalog`.`test_schema`.`test_table`.`branch_wap_test_wap_id` AS `test_table` /* test_schema.test_table */ WHERE 1 = 2) AS audit"
     )
 
     adapter_mock.wap_table_name.assert_called_once_with(snapshot.table_name(), wap_id)
