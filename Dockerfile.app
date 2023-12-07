@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.37.1-jammy
+FROM mcr.microsoft.com/playwright:v1.40.1-jammy 
 
 WORKDIR /app
 
