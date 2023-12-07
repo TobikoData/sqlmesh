@@ -42,11 +42,6 @@ expand = click.option(
     help="Whether or not to expand materialized models (defaults to False). If True, all referenced models are expanded as raw queries. Multiple model names can also be specified, in which case only they will be expanded as raw queries.",
 )
 
-file = click.option(
-    "--file",
-    help="The file to which the dag image should be written.",
-)
-
 match_pattern = click.option(
     "-k",
     multiple=True,
