@@ -8,7 +8,7 @@ A SQLMesh [plan](../concepts/plans.md) automatically detects changes between the
 
 In large SQLMesh projects, a single model change may impact many downstream models, such that evaluating it and its affected children takes a significant amount of time. In some situations, a user is blocked by the long run time and can accomplish their task without backfilling all changed models and affected children.
 
-SQLMesh model selection allows you to filter a plan's directly changed models to only the ones necessary to accomplish your task. This can be useful when you only need to inspect the results of some of the model changes you have made.
+SQLMesh model selection allows you to filter which direct model changes should be included into a plan. This can be useful when you only need to inspect the results of some of the model changes you have made.
 
 Model selections only apply to models that have been directly modified. Selected models' indirectly modified children are always included in the plan, unless you additionally specify which models to backfill (more information [below](#backfill)).
 
