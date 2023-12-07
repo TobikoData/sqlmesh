@@ -960,19 +960,19 @@ def test_dialects(ctx: TestContext):
 
     dialect = Dialect[ctx.dialect]
 
-    if dialect.NORMALIZATION_STRATEGY == "CASE_INSENSITIVE" is None:
+    if dialect.NORMALIZATION_STRATEGY == "CASE_INSENSITIVE":
         a = '"a"'
         b = '"b"'
         c = '"c"'
         d = '"d"'
-    elif dialect.NORMALIZATION_STRATEGY == "LOWER" is False:
+    elif dialect.NORMALIZATION_STRATEGY == "LOWER":
         a = '"a"'
         b = '"B"'
         c = '"c"'
         d = '"d"'
     # https://dev.mysql.com/doc/refman/8.0/en/identifier-case-sensitivity.html
     # if these tests fail for mysql it means you're running on os x or windows
-    elif dialect.NORMALIZATION_STRATEGY == "CASE_SENSITIVE" is False:
+    elif dialect.NORMALIZATION_STRATEGY == "CASE_SENSITIVE":
         a = '"a"'
         b = '"B"'
         c = '"c"'

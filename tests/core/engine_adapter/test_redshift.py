@@ -43,6 +43,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
                 {
                     "name": "TARGETENTRY",
                     "resdom": {
+                        "resname": "a",
                         "restype": "1043",
                         "restypmod": "- 1",
                     },
@@ -50,6 +51,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
                 {
                     "name": "TARGETENTRY",
                     "resdom": {
+                        "resname": "b",
                         "restype": "1043",
                         "restypmod": "64",
                     },
@@ -57,6 +59,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
                 {
                     "name": "TARGETENTRY",
                     "resdom": {
+                        "resname": "c",
                         "restype": "1043",
                         "restypmod": "- 1",
                     },
@@ -64,6 +67,7 @@ def test_create_table_from_query_exists_no_if_not_exists(
                 {
                     "name": "TARGETENTRY",
                     "resdom": {
+                        "resname": "d",
                         "restype": "1043",
                         "restypmod": "- 1",
                     },
@@ -74,13 +78,15 @@ def test_create_table_from_query_exists_no_if_not_exists(
 
     adapter.ctas(
         table_name="test_table",
-        query_or_df=parse_one("SELECT a, b, CAST(c AS VARCHAR), d AS d FROM table"),
+        query_or_df=parse_one("SELECT a, b, x + 1 AS c, d AS d FROM table"),
         exists=False,
     )
 
     assert to_sql_calls(adapter) == [
-        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", CAST("c" AS VARCHAR), "d" AS "d" FROM "table"',
-        'CREATE TABLE "test_table" AS SELECT CAST("a" AS VARCHAR(MAX)), "b", CAST("c" AS VARCHAR), CAST("d" AS VARCHAR(MAX)) AS "d" FROM "table"',
+        'EXPLAIN VERBOSE CREATE TABLE "test_table" AS SELECT "a", "b", "x" + 1 AS "c", "d" AS "d" FROM "table"',
+        'CREATE TABLE "test_table" AS SELECT CAST("a" AS VARCHAR(MAX)), "b", CAST("c" '
+        'AS VARCHAR(MAX)), CAST("d" AS VARCHAR(MAX)) FROM (SELECT "a", "b", "x" + 1 '
+        'AS "c", "d" AS "d" FROM "table") AS "_subquery"',
     ]
 
 
