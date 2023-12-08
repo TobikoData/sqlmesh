@@ -572,7 +572,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             )
 
         start_ts, end_ts = self.inclusive_exclusive(start, end, strict=False)
-        if start_ts == end_ts:
+        if start_ts >= end_ts:
             # Skipping partial interval.
             return
 
@@ -637,11 +637,16 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         if is_date(end):
             end = to_datetime(end) + timedelta(days=1)
         end_ts = to_timestamp(interval_unit.cron_floor(end) if not allow_partial else end)
+        if end_ts < start_ts and to_timestamp(end) > to_timestamp(start) and not strict:
+            # This can happen when the interval unit is coarser than the size of the input interval.
+            # For example, if the interval unit is monthly, but the input interval is only 1 hour long.
+            return (start_ts, end_ts)
 
         if (strict and start_ts >= end_ts) or (start_ts > end_ts):
             raise ValueError(
                 f"`end` ({to_datetime(end_ts)}) must be greater than `start` ({to_datetime(start_ts)})"
             )
+
         return (start_ts, end_ts)
 
     def merge_intervals(self, other: t.Union[Snapshot, SnapshotIntervals]) -> None:

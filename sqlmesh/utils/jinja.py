@@ -350,6 +350,19 @@ class JinjaMacroRegistry(PydanticModel):
     def to_expressions(self) -> t.List[Expression]:
         output: t.List[Expression] = []
 
+        filtered_objs = {
+            k: v for k, v in self.global_objs.items() if k in ("refs", "sources", "vars")
+        }
+        if filtered_objs:
+            output.append(
+                d.PythonCode(
+                    expressions=[
+                        f"{k} = '{v}'" if isinstance(v, str) else f"{k} = {v}"
+                        for k, v in sorted(filtered_objs.items())
+                    ]
+                )
+            )
+
         for macro_name, macro_info in sorted(self.root_macros.items()):
             output.append(d.jinja_statement(macro_info.definition))
 
