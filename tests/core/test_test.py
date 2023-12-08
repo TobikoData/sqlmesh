@@ -334,6 +334,36 @@ test_foo:
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and result.wasSuccessful()
 
+    model = _create_model(
+        "SELECT *, DATE_TRUNC('month', date)::DATE AS month, NULL::DATE AS null_date, FROM unknown"
+    )
+    model = t.cast(SqlModel, sushi_context.upsert_model(model))
+
+    body = load_yaml(
+        """
+test_foo:
+  model: sushi.foo
+  inputs:
+    unknown:
+      - id: 1234
+        date: 2023-01-12
+      - id: 9876
+        date: 2023-02-10
+  outputs:
+    query:
+      - id: 1234
+        date: 2023-01-12
+        month: 2023-01-01
+        null_date:
+      - id: 9876
+        date: 2023-02-10
+        month: 2023-02-01
+        null_date:
+        """
+    )
+    result = _create_test(body, "test_foo", model, sushi_context).run()
+    assert result and result.wasSuccessful()
+
 
 def test_missing_column_failure(sushi_context: Context, full_model_without_ctes: SqlModel) -> None:
     model = t.cast(SqlModel, sushi_context.upsert_model(full_model_without_ctes))
@@ -355,7 +385,7 @@ test_foo:
     result = _create_test(body, "test_foo", model, sushi_context).run()
     assert result and not result.wasSuccessful()
 
-    expected_msg = "AssertionError: Data differs (exp: expected, act: actual)\n\n  value        ds    \n    exp act   exp act\n0  None   2  None   3\n"
+    expected_msg = "AssertionError: Data differs (exp: expected, act: actual)\n\n  value      ds    \n    exp act exp act\n0   NaN   2 NaN   3\n"
     assert expected_msg in result.failures[0][1]
 
 
