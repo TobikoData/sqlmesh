@@ -20,7 +20,6 @@ import {
   isTrue,
   isNil,
   toDateFormat,
-  isFalseOrNil,
 } from '../../../utils'
 import Spinner from '../logo/Spinner'
 import { EnumPlanChangeType, usePlan } from './context'
@@ -45,6 +44,7 @@ import {
   SnapshotChangeCategory,
   type PlanOverviewStageTrackerStart,
   type PlanOverviewStageTrackerEnd,
+  Status,
 } from '@api/client'
 import { type PlanTrackerMeta } from '@models/tracker-plan'
 import { type Tests, useStoreProject } from '@context/project'
@@ -60,8 +60,10 @@ export default function PlanApplyStageTracker(): JSX.Element {
 
   const planApply = useStorePlan(s => s.planApply)
   const planOverview = useStorePlan(s => s.planOverview)
+  const planAction = useStorePlan(s => s.planAction)
 
   const {
+    meta,
     start,
     end,
     hasChanges,
@@ -70,7 +72,6 @@ export default function PlanApplyStageTracker(): JSX.Element {
     backfills,
     validation,
     plan_options,
-    isVirtualUpdate,
   } = getPlanOverviewDetails(planApply, planOverview)
 
   const showTestsDetails = isNotNil(tests) && Boolean(tests.total)
@@ -90,41 +91,46 @@ export default function PlanApplyStageTracker(): JSX.Element {
           </small>
         </div>
       )}
-      {isFalseOrNil(hasChanges) || isNil(changes) ? (
+      {planAction.isRunning || (isNotNil(changes) && isTrue(hasChanges)) ? (
+        <StageChanges
+          report={changes ?? { meta: meta ?? { status: Status.init } }}
+        />
+      ) : (
         <PlanStageMessage
           variant={EnumVariant.Info}
           className="mt-2"
         >
           No Changes
         </PlanStageMessage>
-      ) : (
-        <StageChanges
-          report={changes}
-          isOpen={true}
-        />
       )}
-      {isFalseOrNil(hasBackfills) || isNil(backfills) ? (
+
+      {planAction.isRunning || (isNotNil(backfills) && isTrue(hasBackfills)) ? (
+        <StageBackfills
+          report={backfills ?? { meta: meta ?? { status: Status.init } }}
+        />
+      ) : (
         <PlanStageMessage
           variant={EnumVariant.Info}
           className="mt-2"
         >
           No Backfills
         </PlanStageMessage>
-      ) : (
-        <StageBackfills report={backfills} />
       )}
-      {isTrue(plan_options?.skip_tests) && (
+      {isTrue(plan_options?.skip_tests) ? (
         <PlanStageMessage
           variant={EnumVariant.Info}
           className="mt-2"
         >
           Tests Skipped
         </PlanStageMessage>
+      ) : (
+        <>
+          {showTestsMessage && <StageTestsCompleted report={tests} />}
+          {showTestsDetails && <StageTestsFailed report={tests} />}
+        </>
       )}
-      {showTestsMessage && <StageTestsCompleted report={tests} />}
-      {showTestsDetails && <StageTestsFailed report={tests} />}
       {isNotNil(validation) && <StageValidate report={validation} />}
-      {isTrue(isVirtualUpdate) && (
+      {planAction.isApplyVirtual && (
         <PlanVirtualUpdate isUpdated={isTrue(planApply.promote?.meta?.done)} />
       )}
       {hasFailedTests ||
@@ -151,7 +157,7 @@ export default function PlanApplyStageTracker(): JSX.Element {
                 <StageBackfill
                   backfill={planApply.backfill}
                   backfills={backfills}
-                  isVirtualUpdate={isVirtualUpdate}
+                  isVirtualUpdate={planAction.isApplyVirtual}
                   environment={planApply.environment}
                 />
               )}
@@ -555,19 +561,18 @@ function StagePromote({ report }: { report: PlanStagePromote }): JSX.Element {
 function PlanChanges(): JSX.Element {
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
+  const planAction = useStorePlan(s => s.planAction)
 
-  const { hasChanges, changes, isVirtualUpdate, isRunning } =
-    getPlanOverviewDetails(planApply, planOverview)
-
-  const shouldBeFullAndCenter =
-    (isFalse(hasChanges) && isFalse(isRunning) && isFalse(isVirtualUpdate)) ||
-    isRunning
+  const { hasChanges, changes } = getPlanOverviewDetails(
+    planApply,
+    planOverview,
+  )
 
   const { added = [], removed = [], modified = {} } = changes ?? {}
 
   return (
-    <div className={clsx('w-full my-2', shouldBeFullAndCenter && 'h-[25vh]')}>
-      {isRunning && (
+    <div className="w-full my-2">
+      {planAction.isRunning && (
         <Banner
           isFull
           isCenter
@@ -579,18 +584,18 @@ function PlanChanges(): JSX.Element {
           />
         </Banner>
       )}
-      {isFalse(hasChanges) && isFalse(isRunning) && (
+      {isFalse(hasChanges) && isFalse(planAction.isRunning) && (
         <Banner
-          isFull={isFalse(isVirtualUpdate)}
-          isCenter={isFalse(isVirtualUpdate)}
+          isFull={isFalse(planAction.isApplyVirtual)}
+          isCenter={isFalse(planAction.isApplyVirtual)}
         >
           <Title
-            size={isVirtualUpdate ? EnumSize.md : EnumSize.lg}
+            size={planAction.isApplyVirtual ? EnumSize.md : EnumSize.lg}
             text="No Changes"
           />
         </Banner>
       )}
-      {isTrue(hasChanges) && isFalse(isRunning) && (
+      {isTrue(hasChanges) && isFalse(planAction.isRunning) && (
         <>
           {isArrayNotEmpty(added) && (
             <PlanChangePreview

@@ -10,8 +10,7 @@ import {
   type PlanStageChangesRemoved,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
-import { isArrayNotEmpty, isNil, isNotNil, isTrue } from '@utils/index'
-import { EnumPlanApplyType, type PlanApplyType } from '@context/plan'
+import { isArrayNotEmpty, isNil } from '@utils/index'
 
 export interface PlanOverviewTracker extends PlanTracker {
   validation?: PlanStageValidation
@@ -31,10 +30,9 @@ export class ModelPlanOverviewTracker
   hasBackfills: Optional<boolean> = undefined
 
   constructor(model?: ModelPlanOverviewTracker) {
-    super(model?.initial)
+    super(model)
 
     if (model instanceof ModelPlanOverviewTracker) {
-      this._current = structuredClone(model.current)
       this.hasChanges = model.hasChanges
       this.hasBackfills = model.hasBackfills
     }
@@ -80,23 +78,16 @@ export class ModelPlanOverviewTracker
     return this._current?.changes?.modified?.metadata
   }
 
-  get applyType(): Optional<PlanApplyType> {
-    if (isTrue(this.hasBackfills)) return EnumPlanApplyType.Backfill
-    if (isNotNil(this.hasChanges)) return EnumPlanApplyType.Virtual
-
-    return undefined
-  }
-
   get isLatest(): boolean {
-    return this.isFinished && isNil(this.hasChanges) && isNil(this.hasBackfills)
+    return this.isFinished && isNil(this.hasBackfills) && isNil(this.hasChanges)
   }
 
-  get isVirtualUpdate(): boolean {
-    return this.isFinished && this.applyType === EnumPlanApplyType.Virtual
+  get skipTests(): boolean {
+    return this._current?.plan_options?.skip_tests ?? false
   }
 
-  get isBackfillUpdate(): boolean {
-    return this.isFinished && this.applyType === EnumPlanApplyType.Backfill
+  get skipBackfill(): boolean {
+    return this._current?.plan_options?.skip_backfill ?? false
   }
 
   update(tracker: PlanOverviewTracker): void {

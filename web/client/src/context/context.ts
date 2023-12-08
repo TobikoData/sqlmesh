@@ -11,7 +11,6 @@ import { isNil, isStringEmptyOrNil } from '~/utils'
 
 interface ContextStore {
   version?: string
-  isRunningPlan: boolean
   showConfirmation: boolean
   confirmations: Confirmation[]
   environment: ModelEnvironment
@@ -20,7 +19,6 @@ interface ContextStore {
   pinnedEnvironments: ModelEnvironment[]
   models: Map<string, ModelSQLMeshModel>
   setVersion: (version?: string) => void
-  setIsRunningPlan: (isRunningPlan: boolean) => void
   setShowConfirmation: (showConfirmation: boolean) => void
   addConfirmation: (confirmation: Confirmation) => void
   removeConfirmation: () => void
@@ -48,7 +46,6 @@ const environment = environments.values().next().value
 
 export const useStoreContext = create<ContextStore>((set, get) => ({
   version: undefined,
-  isRunningPlan: false,
   showConfirmation: false,
   confirmations: [],
   environment,
@@ -58,11 +55,6 @@ export const useStoreContext = create<ContextStore>((set, get) => ({
   initialStartDate: undefined,
   initialEndDate: undefined,
   models: new Map(),
-  setIsRunningPlan(isRunningPlan) {
-    set(() => ({
-      isRunningPlan,
-    }))
-  },
   setVersion(version) {
     set(() => ({
       version,

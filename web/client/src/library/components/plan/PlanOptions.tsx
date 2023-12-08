@@ -9,11 +9,7 @@ import { ModelEnvironment } from '~/models/environment'
 import { useStoreContext } from '~/context/context'
 import PlanBackfillDates from './PlanBackfillDates'
 
-interface PropsPlanOptions extends React.HTMLAttributes<HTMLElement> {}
-
-export default function PlanOptions({
-  className,
-}: PropsPlanOptions): JSX.Element {
+export default function PlanOptions(): JSX.Element {
   const dispatch = usePlanDispatch()
   const {
     skip_tests,
@@ -127,7 +123,7 @@ export default function PlanOptions({
                         label="Skip Tests"
                         info="Skip tests prior to generating the plan if they
               are defined"
-                        enabled={Boolean(skip_tests)}
+                        enabled={skip_tests}
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -142,8 +138,16 @@ export default function PlanOptions({
                         info="Ensure that new snapshots have no data gaps when
               comparing to existing snapshots for matching
               models in the target environment"
-                        enabled={Boolean(no_gaps)}
-                        disabled={isInitialPlanRun}
+                        enabled={
+                          no_gaps ||
+                          (skip_backfill && environment.isDefaultInitial) ||
+                          environment.isDefaultInitial
+                        }
+                        disabled={
+                          isInitialPlanRun ||
+                          (skip_backfill && environment.isDefaultInitial) ||
+                          environment.isDefaultInitial
+                        }
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -156,8 +160,10 @@ export default function PlanOptions({
                       <InputToggle
                         label="Skip Backfill"
                         info="Skip the backfill step"
-                        enabled={Boolean(skip_backfill)}
-                        disabled={isInitialPlanRun}
+                        enabled={skip_backfill}
+                        disabled={
+                          isInitialPlanRun || environment.isDefaultInitial
+                        }
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -172,8 +178,10 @@ export default function PlanOptions({
                       <InputToggle
                         label="Include Unmodified"
                         info="Indicates whether to create views for all models in the target development environment or only for modified ones"
-                        enabled={Boolean(include_unmodified)}
-                        disabled={isInitialPlanRun}
+                        enabled={include_unmodified}
+                        disabled={
+                          isInitialPlanRun || environment.isDefaultInitial
+                        }
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -184,8 +192,10 @@ export default function PlanOptions({
                       <InputToggle
                         label="Forward Only"
                         info="Create a plan for forward-only changes"
-                        enabled={Boolean(forward_only)}
-                        disabled={isInitialPlanRun}
+                        enabled={forward_only}
+                        disabled={
+                          isInitialPlanRun || environment.isDefaultInitial
+                        }
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -198,7 +208,7 @@ export default function PlanOptions({
                       <InputToggle
                         label="Auto Apply"
                         info="Automatically apply the plan after it is generated"
-                        enabled={Boolean(auto_apply)}
+                        enabled={auto_apply}
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,
@@ -211,8 +221,10 @@ export default function PlanOptions({
                       <InputToggle
                         label="No Auto Categorization"
                         info="Set category manually"
-                        enabled={Boolean(no_auto_categorization)}
-                        disabled={isInitialPlanRun}
+                        enabled={no_auto_categorization}
+                        disabled={
+                          isInitialPlanRun || environment.isDefaultInitial
+                        }
                         setEnabled={(value: boolean) => {
                           dispatch({
                             type: EnumPlanActions.PlanOptions,

@@ -30,7 +30,6 @@ const PlanSidebar = memo(function PlanSidebar(): JSX.Element {
       <Dialog.Panel className="bg-theme border-8 border-r-0 border-secondary-10 dark:border-primary-10 absolute w-[90%] md:w-[75%] xl:w-[60%] h-full right-0 flex flex-col">
         <PlanProvider>
           <Plan
-            disabled={isClosingModal}
             onClose={closeModal}
             key={environment.name}
             environment={environment}
