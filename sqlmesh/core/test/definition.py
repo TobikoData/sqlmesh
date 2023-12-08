@@ -100,8 +100,8 @@ class ModelTest(unittest.TestCase):
             actual_types, errors="ignore"
         )
 
-        expected = expected.replace({np.nan: None, "nan": None})
-        actual = actual.replace({np.nan: None, "nan": None})
+        expected = expected.replace({None: np.nan})
+        actual = actual.replace({None: np.nan})
 
         try:
             pd.testing.assert_frame_equal(
