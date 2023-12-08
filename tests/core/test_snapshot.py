@@ -205,7 +205,7 @@ def test_add_interval_dev(snapshot: Snapshot):
     assert snapshot.dev_intervals == [(to_timestamp("2020-01-02"), to_timestamp("2020-01-03"))]
 
 
-def test_add_interval_partial(snapshot: Snapshot):
+def test_add_interval_partial(snapshot: Snapshot, make_snapshot):
     snapshot.add_interval("2023-01-01 00:00:00", "2023-01-01 23:59:59")
     assert snapshot.intervals == []
 
@@ -215,6 +215,17 @@ def test_add_interval_partial(snapshot: Snapshot):
     snapshot.add_interval("2023-01-01 15:00:00", "2023-01-03 00:00:00")
     assert snapshot.intervals == [
         (to_timestamp("2023-01-02"), to_timestamp("2023-01-03")),
+    ]
+
+    monthly_snapshot = make_snapshot(
+        SqlModel(name="test_model", cron="0 7 1 * *", query=parse_one("SELECT 1"))
+    )
+    monthly_snapshot.add_interval("2023-01-01 15:00:00", "2023-01-01 16:00:00")
+    assert monthly_snapshot.intervals == []
+
+    monthly_snapshot.add_interval("2023-01-01 15:00:00", "2023-03-01 16:00:00")
+    assert monthly_snapshot.intervals == [
+        (to_timestamp("2023-02-01"), to_timestamp("2023-03-01")),
     ]
 
 
