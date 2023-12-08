@@ -574,7 +574,7 @@ class _Model(ModelMeta, frozen=True):
         if not columns_to_types:
             return False
         return all(
-            column_type.this != exp.DataType.Type.UNKNOWN
+            not column_type.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.NULL)
             for column_type in columns_to_types.values()
         )
 

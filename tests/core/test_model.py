@@ -108,6 +108,7 @@ def test_load(assert_exp_eq):
         "f": exp.DataType.build("boolean"),
         "g": exp.DataType.build("int"),
     }
+    assert model.annotated
     assert model.view_name == "table"
     assert model.macro_definitions == [d.parse_one("@DEF(x, 1)"), d.parse_one("@DEF(y, @x + 1)")]
     assert list(model.pre_statements) == [
@@ -1282,6 +1283,7 @@ def test_parse(assert_exp_eq):
         "ds": exp.DataType.build("unknown"),
         "id": exp.DataType.build("int"),
     }
+    assert not model.annotated
     assert model.dialect == ""
     assert isinstance(model.query, exp.Select)
     assert isinstance(SqlModel.parse_raw(model.json()).query, exp.Select)
@@ -2529,3 +2531,28 @@ def test_signals():
         "signals ((table_name = 'table_a', ds = @end_ds), (table_name = 'table_b', ds = @end_ds, hour = @end_hour), (bool_key = TRUE, int_key = 1, float_key = 1.0, string_key = 'string')"
         in model.render_definition()[0].sql()
     )
+
+
+def test_null_column_type():
+    expressions = d.parse(
+        """
+        MODEL (
+          name test_db.test_model,
+          columns (
+            id INT,
+            ds NULL,
+          )
+        );
+
+        SELECT
+          id::INT AS id,
+          ds
+        FROM x
+    """
+    )
+    model = load_sql_based_model(expressions, dialect="hive")
+    assert model.columns_to_types == {
+        "ds": exp.DataType.build("null"),
+        "id": exp.DataType.build("int"),
+    }
+    assert not model.annotated
