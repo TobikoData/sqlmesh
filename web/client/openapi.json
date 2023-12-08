@@ -27,7 +27,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlanApplyStageTracker"
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/PlanApplyStageTracker" },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Apply Api Commands Apply Post"
                 }
               }
             }
@@ -406,7 +410,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlanOverviewStageTracker"
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/PlanOverviewStageTracker" },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Run Plan Api Plan Post"
                 }
               }
             }
@@ -433,7 +441,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlanCancelStageTracker"
+                  "anyOf": [
+                    { "$ref": "#/components/schemas/PlanCancelStageTracker" },
+                    { "type": "null" }
+                  ],
+                  "title": "Response Cancel Plan Api Plan Cancel Post"
                 }
               }
             }

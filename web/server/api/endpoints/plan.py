@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import typing as t
 
 from fastapi import APIRouter, Body, Depends, Request
@@ -11,22 +12,19 @@ from web.server import models
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
+from web.server.utils import run_in_executor
 
 router = APIRouter()
 
 
-@router.post(
-    "",
-    response_model=models.PlanOverviewStageTracker,
-    response_model_exclude_unset=True,
-)
+@router.post("", response_model=t.Optional[models.PlanOverviewStageTracker])
 async def run_plan(
     request: Request,
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(None),
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: t.Optional[models.PlanOptions] = None,
-) -> models.PlanOverviewStageTracker:
+) -> t.Optional[models.PlanOverviewStageTracker]:
     """Get a plan for an environment."""
 
     plan_options = plan_options or models.PlanOptions()
@@ -37,24 +35,23 @@ async def run_plan(
             origin="API -> plan -> run_plan",
         )
 
-    tracker, _ = get_plan_tracker(
-        context=context,
-        environment=environment,
-        plan_dates=plan_dates,
-        plan_options=plan_options,
+    request.app.state.task = asyncio.create_task(
+        run_in_executor(
+            get_plan_tracker,
+            plan_options,
+            context,
+            environment,
+            plan_dates,
+        )
     )
 
-    return tracker
+    return None
 
 
-@router.post(
-    "/cancel",
-    response_model=models.PlanCancelStageTracker,
-    response_model_exclude_unset=True,
-)
+@router.post("/cancel", response_model=t.Optional[models.PlanCancelStageTracker])
 async def cancel_plan(
     request: Request,
-) -> models.PlanCancelStageTracker:
+) -> t.Optional[models.PlanCancelStageTracker]:
     """Cancel a plan application"""
     if not hasattr(request.app.state, "task") or request.app.state.task.done():
         raise ApiException(
@@ -69,7 +66,7 @@ async def cancel_plan(
     tracker_stage_cancel.stop(success=True)
     api_console.stop_plan_tracker(tracker)
 
-    return tracker
+    return None
 
 
 def get_plan_tracker(

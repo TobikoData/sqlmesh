@@ -25,9 +25,7 @@ from web.server.utils import (
 router = APIRouter()
 
 
-@router.post(
-    "/apply", response_model=models.PlanApplyStageTracker, response_model_exclude_unset=True
-)
+@router.post("/apply", response_model=t.Optional[models.PlanApplyStageTracker])
 async def apply(
     request: Request,
     context: Context = Depends(get_loaded_context),
@@ -35,7 +33,7 @@ async def apply(
     plan_dates: t.Optional[models.PlanDates] = None,
     plan_options: t.Optional[models.PlanOptions] = None,
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
-) -> models.PlanApplyStageTracker:
+) -> t.Optional[models.PlanApplyStageTracker]:
     """Apply a plan"""
     plan_options = plan_options or models.PlanOptions()
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
@@ -67,8 +65,7 @@ async def apply(
                 message=str(e),
                 origin="API -> commands -> apply",
             )
-
-    return tracker_apply
+    return None
 
 
 @router.post("/evaluate")
