@@ -2,10 +2,12 @@ import {
   type PlanStageValidation,
   type PlanStageBackfills,
   type PlanStageChanges,
-  type BackfillDetails,
   type ChangeIndirect,
   type ChangeDirect,
-  type ModelsDiff,
+  type PlanStageBackfillsModels,
+  type PlanStageChangesAdded,
+  type PlanStageChangesModified,
+  type PlanStageChangesRemoved,
 } from '@api/client'
 import { ModelPlanTracker, type PlanTracker } from './tracker-plan'
 import { isArrayNotEmpty, isNil, isNotNil, isTrue } from '@utils/index'
@@ -50,19 +52,19 @@ export class ModelPlanOverviewTracker
     return this._current?.backfills
   }
 
-  get models(): Optional<BackfillDetails[]> {
+  get models(): Optional<PlanStageBackfillsModels> {
     return this._current?.backfills?.models
   }
 
-  get added(): Optional<string[]> {
+  get added(): Optional<PlanStageChangesAdded> {
     return this._current?.changes?.added
   }
 
-  get removed(): Optional<string[]> {
+  get removed(): Optional<PlanStageChangesRemoved> {
     return this._current?.changes?.removed
   }
 
-  get modified(): Optional<ModelsDiff> {
+  get modified(): Optional<PlanStageChangesModified> {
     return this._current?.changes?.modified
   }
 

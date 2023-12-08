@@ -11,7 +11,12 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_apply_api_commands_apply_post"
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Body_apply_api_commands_apply_post"
+                  }
+                ],
+                "title": "Body"
               }
             }
           }
@@ -136,20 +141,23 @@
         "operationId": "test_api_commands_test_get",
         "parameters": [
           {
-            "required": false,
-            "schema": { "type": "string", "title": "Test" },
             "name": "test",
-            "in": "query"
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Test"
+            }
           },
           {
+            "name": "verbose",
+            "in": "query",
             "required": false,
             "schema": {
               "type": "boolean",
-              "title": "Verbose",
-              "default": false
-            },
-            "name": "verbose",
-            "in": "query"
+              "default": false,
+              "title": "Verbose"
+            }
           }
         ],
         "responses": {
@@ -196,10 +204,10 @@
         "operationId": "get_file_api_files__path__get",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Path" },
             "name": "path",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "responses": {
@@ -227,17 +235,22 @@
         "operationId": "write_file_api_files__path__post",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Path" },
             "name": "path",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_write_file_api_files__path__post"
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Body_write_file_api_files__path__post"
+                  }
+                ],
+                "title": "Body"
               }
             }
           }
@@ -267,10 +280,10 @@
         "operationId": "delete_file_api_files__path__delete",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Path" },
             "name": "path",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "responses": {
@@ -303,17 +316,22 @@
         "operationId": "write_directory_api_directories__path__post",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Path" },
             "name": "path",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_write_directory_api_directories__path__post"
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Body_write_directory_api_directories__path__post"
+                  }
+                ],
+                "title": "Body"
               }
             }
           }
@@ -343,10 +361,10 @@
         "operationId": "delete_directory_api_directories__path__delete",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Path" },
             "name": "path",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Path" }
           }
         ],
         "responses": {
@@ -374,7 +392,10 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_run_plan_api_plan_post"
+                "allOf": [
+                  { "$ref": "#/components/schemas/Body_run_plan_api_plan_post" }
+                ],
+                "title": "Body"
               }
             }
           }
@@ -444,10 +465,10 @@
         "operationId": "delete_environment_api_environments__environment__delete",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Environment" },
             "name": "environment",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Environment" }
           }
         ],
         "responses": {
@@ -486,16 +507,16 @@
         "operationId": "column_lineage_api_lineage__model_name___column_name__get",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Column Name" },
             "name": "column_name",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Column Name" }
           },
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Model Name" },
             "name": "model_name",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Model Name" }
           }
         ],
         "responses": {
@@ -504,13 +525,13 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "object",
                   "additionalProperties": {
+                    "type": "object",
                     "additionalProperties": {
                       "$ref": "#/components/schemas/LineageColumn"
-                    },
-                    "type": "object"
+                    }
                   },
-                  "type": "object",
                   "title": "Response Column Lineage Api Lineage  Model Name   Column Name  Get"
                 }
               }
@@ -534,10 +555,10 @@
         "operationId": "model_lineage_api_lineage__model_name__get",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Model Name" },
             "name": "model_name",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Model Name" }
           }
         ],
         "responses": {
@@ -546,12 +567,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "items": { "type": "string" },
-                    "type": "array",
-                    "uniqueItems": true
-                  },
                   "type": "object",
+                  "additionalProperties": {
+                    "type": "array",
+                    "uniqueItems": true,
+                    "items": { "type": "string" }
+                  },
                   "title": "Response Model Lineage Api Lineage  Model Name  Get"
                 }
               }
@@ -618,40 +639,49 @@
         "operationId": "get_table_diff_api_table_diff_get",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Source" },
             "name": "source",
-            "in": "query"
-          },
-          {
+            "in": "query",
             "required": true,
-            "schema": { "type": "string", "title": "Target" },
+            "schema": { "type": "string", "title": "Source" }
+          },
+          {
             "name": "target",
-            "in": "query"
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "title": "Target" }
           },
           {
-            "required": false,
-            "schema": { "type": "string", "title": "On" },
             "name": "on",
-            "in": "query"
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "On"
+            }
           },
           {
-            "required": false,
-            "schema": { "type": "string", "title": "Model Or Snapshot" },
             "name": "model_or_snapshot",
-            "in": "query"
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Model Or Snapshot"
+            }
           },
           {
-            "required": false,
-            "schema": { "type": "string", "title": "Where" },
             "name": "where",
-            "in": "query"
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Where"
+            }
           },
           {
-            "required": false,
-            "schema": { "type": "integer", "title": "Limit", "default": 20 },
             "name": "limit",
-            "in": "query"
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 20, "title": "Limit" }
           }
         ],
         "responses": {
@@ -699,10 +729,10 @@
         "operationId": "index__full_path__get",
         "parameters": [
           {
-            "required": true,
-            "schema": { "type": "string", "title": "Full Path" },
             "name": "full_path",
-            "in": "path"
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Full Path" }
           }
         ],
         "responses": {
@@ -729,14 +759,31 @@
           "timestamp": { "type": "integer", "title": "Timestamp" },
           "message": { "type": "string", "title": "Message" },
           "origin": { "type": "string", "title": "Origin" },
-          "status": { "type": "integer", "title": "Status" },
-          "trigger": { "type": "string", "title": "Trigger" },
-          "type": { "type": "string", "title": "Type" },
-          "description": { "type": "string", "title": "Description" },
-          "traceback": { "type": "string", "title": "Traceback" },
+          "status": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Status"
+          },
+          "trigger": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Trigger"
+          },
+          "type": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Type"
+          },
+          "description": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description"
+          },
+          "traceback": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Traceback"
+          },
           "stack": {
-            "items": { "type": "string" },
-            "type": "array",
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
             "title": "Stack"
           }
         },
@@ -746,13 +793,14 @@
       },
       "BackfillDetails": {
         "properties": {
-          "model_name": { "type": "string", "title": "Model Name" },
+          "model_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Model Name"
+          },
           "view_name": { "type": "string", "title": "View Name" },
           "interval": {
-            "items": [{ "type": "string" }, { "type": "string" }],
+            "items": { "type": "string" },
             "type": "array",
-            "maxItems": 2,
-            "minItems": 2,
             "title": "Interval"
           },
           "batches": { "type": "integer", "title": "Batches" }
@@ -767,7 +815,10 @@
           "total": { "type": "integer", "title": "Total" },
           "view_name": { "type": "string", "title": "View Name" },
           "start": { "type": "integer", "title": "Start" },
-          "end": { "type": "integer", "title": "End" }
+          "end": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "End"
+          }
         },
         "type": "object",
         "required": ["completed", "total", "view_name", "start"],
@@ -775,14 +826,33 @@
       },
       "Body_apply_api_commands_apply_post": {
         "properties": {
-          "environment": { "type": "string", "title": "Environment" },
-          "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
-          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
+          "environment": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Environment"
+          },
+          "plan_dates": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanDates" },
+              { "type": "null" }
+            ]
+          },
+          "plan_options": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
+            ]
+          },
           "categories": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/SnapshotChangeCategory"
-            },
-            "type": "object"
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/SnapshotChangeCategory"
+                },
+                "type": "object"
+              },
+              { "type": "null" }
+            ],
+            "title": "Categories"
           }
         },
         "type": "object",
@@ -790,22 +860,43 @@
       },
       "Body_run_plan_api_plan_post": {
         "properties": {
-          "environment": { "type": "string", "title": "Environment" },
-          "plan_dates": { "$ref": "#/components/schemas/PlanDates" },
-          "plan_options": { "$ref": "#/components/schemas/PlanOptions" }
+          "environment": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Environment"
+          },
+          "plan_dates": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanDates" },
+              { "type": "null" }
+            ]
+          },
+          "plan_options": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
+            ]
+          }
         },
         "type": "object",
         "title": "Body_run_plan_api_plan_post"
       },
       "Body_write_directory_api_directories__path__post": {
-        "properties": { "new_path": { "type": "string", "title": "New Path" } },
+        "properties": {
+          "new_path": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "New Path"
+          }
+        },
         "type": "object",
         "title": "Body_write_directory_api_directories__path__post"
       },
       "Body_write_file_api_files__path__post": {
         "properties": {
           "content": { "type": "string", "title": "Content", "default": "" },
-          "new_path": { "type": "string", "title": "New Path" }
+          "new_path": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "New Path"
+          }
         },
         "type": "object",
         "title": "Body_write_file_api_files__path__post"
@@ -821,7 +912,10 @@
             "default": []
           },
           "change_category": {
-            "$ref": "#/components/schemas/SnapshotChangeCategory"
+            "anyOf": [
+              { "$ref": "#/components/schemas/SnapshotChangeCategory" },
+              { "type": "null" }
+            ]
           }
         },
         "type": "object",
@@ -846,7 +940,10 @@
         "properties": {
           "name": { "type": "string", "title": "Name" },
           "type": { "type": "string", "title": "Type" },
-          "description": { "type": "string", "title": "Description" }
+          "description": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description"
+          }
         },
         "type": "object",
         "required": ["name", "type"],
@@ -903,17 +1000,32 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End At"
           },
           "plan_id": { "type": "string", "title": "Plan Id" },
-          "previous_plan_id": { "type": "string", "title": "Previous Plan Id" },
-          "expiration_ts": { "type": "integer", "title": "Expiration Ts" },
-          "finalized_ts": { "type": "integer", "title": "Finalized Ts" },
+          "previous_plan_id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Previous Plan Id"
+          },
+          "expiration_ts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Expiration Ts"
+          },
+          "finalized_ts": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Finalized Ts"
+          },
           "promoted_snapshot_ids": {
-            "items": { "$ref": "#/components/schemas/SnapshotId" },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/SnapshotId" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
             "title": "Promoted Snapshot Ids"
           }
         },
@@ -926,8 +1038,7 @@
       "EnvironmentSuffixTarget": {
         "type": "string",
         "enum": ["schema", "table"],
-        "title": "EnvironmentSuffixTarget",
-        "description": "An enumeration."
+        "title": "EnvironmentSuffixTarget"
       },
       "Environments": {
         "properties": {
@@ -1017,8 +1128,16 @@
             "title": "Is Supported",
             "default": false
           },
-          "content": { "type": "string", "title": "Content" },
-          "type": { "$ref": "#/components/schemas/FileType" }
+          "content": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Content"
+          },
+          "type": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/FileType" },
+              { "type": "null" }
+            ]
+          }
         },
         "type": "object",
         "required": ["name", "path"],
@@ -1057,18 +1176,30 @@
       },
       "LineageColumn": {
         "properties": {
-          "source": { "type": "string", "title": "Source" },
-          "expression": { "type": "string", "title": "Expression" },
+          "source": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Source"
+          },
+          "expression": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Expression"
+          },
           "models": {
-            "additionalProperties": {
-              "items": { "type": "string" },
-              "type": "array"
-            },
-            "type": "object",
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": { "type": "string" },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              { "type": "null" }
+            ],
             "title": "Models"
           }
         },
         "type": "object",
+        "required": ["models"],
         "title": "LineageColumn"
       },
       "Meta": {
@@ -1095,9 +1226,20 @@
             "type": "array",
             "title": "Columns"
           },
-          "description": { "type": "string", "title": "Description" },
-          "details": { "$ref": "#/components/schemas/ModelDetails" },
-          "sql": { "type": "string", "title": "Sql" }
+          "description": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description"
+          },
+          "details": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ModelDetails" },
+              { "type": "null" }
+            ]
+          },
+          "sql": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Sql"
+          }
         },
         "type": "object",
         "required": ["name", "path", "dialect", "type", "columns"],
@@ -1105,17 +1247,30 @@
       },
       "ModelDetails": {
         "properties": {
-          "owner": { "type": "string", "title": "Owner" },
-          "kind": { "type": "string", "title": "Kind" },
-          "batch_size": { "type": "integer", "title": "Batch Size" },
-          "cron": { "type": "string", "title": "Cron" },
+          "owner": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Owner"
+          },
+          "kind": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Kind"
+          },
+          "batch_size": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Batch Size"
+          },
+          "cron": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Cron"
+          },
           "stamp": {
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Stamp"
           },
@@ -1125,30 +1280,53 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
-          "retention": { "type": "integer", "title": "Retention" },
-          "storage_format": { "type": "string", "title": "Storage Format" },
-          "time_column": { "type": "string", "title": "Time Column" },
-          "tags": { "type": "string", "title": "Tags" },
+          "retention": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Retention"
+          },
+          "storage_format": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Storage Format"
+          },
+          "time_column": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Time Column"
+          },
+          "tags": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Tags"
+          },
           "references": {
             "items": { "$ref": "#/components/schemas/Reference" },
             "type": "array",
             "title": "References",
             "default": []
           },
-          "partitioned_by": { "type": "string", "title": "Partitioned By" },
-          "clustered_by": { "type": "string", "title": "Clustered By" },
-          "lookback": { "type": "integer", "title": "Lookback" },
+          "partitioned_by": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Partitioned By"
+          },
+          "clustered_by": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Clustered By"
+          },
+          "lookback": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Lookback"
+          },
           "cron_prev": {
             "anyOf": [
               { "type": "string", "format": "date" },
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Cron Prev"
           },
@@ -1158,12 +1336,21 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Cron Next"
           },
-          "interval_unit": { "$ref": "#/components/schemas/IntervalUnit" },
-          "annotated": { "type": "boolean", "title": "Annotated" }
+          "interval_unit": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/IntervalUnit" },
+              { "type": "null" }
+            ]
+          },
+          "annotated": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Annotated"
+          }
         },
         "type": "object",
         "title": "ModelDetails"
@@ -1212,8 +1399,7 @@
       "NodeType": {
         "type": "string",
         "enum": ["model", "audit"],
-        "title": "NodeType",
-        "description": "An enumeration."
+        "title": "NodeType"
       },
       "PlanApplyStageTracker": {
         "properties": {
@@ -1223,7 +1409,8 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
@@ -1233,17 +1420,46 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           },
           "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "environment": { "type": "string", "title": "Environment" },
-          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
-          "creation": { "$ref": "#/components/schemas/PlanStageCreation" },
-          "restate": { "$ref": "#/components/schemas/PlanStageRestate" },
-          "backfill": { "$ref": "#/components/schemas/PlanStageBackfill" },
-          "promote": { "$ref": "#/components/schemas/PlanStagePromote" }
+          "environment": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Environment"
+          },
+          "plan_options": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
+            ]
+          },
+          "creation": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageCreation" },
+              { "type": "null" }
+            ]
+          },
+          "restate": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageRestate" },
+              { "type": "null" }
+            ]
+          },
+          "backfill": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageBackfill" },
+              { "type": "null" }
+            ]
+          },
+          "promote": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStagePromote" },
+              { "type": "null" }
+            ]
+          }
         },
         "type": "object",
         "title": "PlanApplyStageTracker"
@@ -1256,7 +1472,8 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
@@ -1266,14 +1483,28 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           },
           "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "environment": { "type": "string", "title": "Environment" },
-          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
-          "cancel": { "$ref": "#/components/schemas/PlanStageCancel" }
+          "environment": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Environment"
+          },
+          "plan_options": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
+            ]
+          },
+          "cancel": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageCancel" },
+              { "type": "null" }
+            ]
+          }
         },
         "type": "object",
         "title": "PlanCancelStageTracker"
@@ -1286,7 +1517,8 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
@@ -1296,7 +1528,8 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           }
@@ -1336,8 +1569,14 @@
             "title": "Include Unmodified",
             "default": false
           },
-          "create_from": { "type": "string", "title": "Create From" },
-          "restate_models": { "type": "string", "title": "Restate Models" }
+          "create_from": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Create From"
+          },
+          "restate_models": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Restate Models"
+          }
         },
         "type": "object",
         "title": "PlanOptions"
@@ -1350,7 +1589,8 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
@@ -1360,16 +1600,40 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           },
           "meta": { "$ref": "#/components/schemas/TrackableMeta" },
-          "environment": { "type": "string", "title": "Environment" },
-          "plan_options": { "$ref": "#/components/schemas/PlanOptions" },
-          "validation": { "$ref": "#/components/schemas/PlanStageValidation" },
-          "changes": { "$ref": "#/components/schemas/PlanStageChanges" },
-          "backfills": { "$ref": "#/components/schemas/PlanStageBackfills" }
+          "environment": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Environment"
+          },
+          "plan_options": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanOptions" },
+              { "type": "null" }
+            ]
+          },
+          "validation": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageValidation" },
+              { "type": "null" }
+            ]
+          },
+          "changes": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageChanges" },
+              { "type": "null" }
+            ]
+          },
+          "backfills": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/PlanStageBackfills" },
+              { "type": "null" }
+            ]
+          }
         },
         "type": "object",
         "title": "PlanOverviewStageTracker"
@@ -1400,8 +1664,13 @@
         "properties": {
           "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "models": {
-            "items": { "$ref": "#/components/schemas/BackfillDetails" },
-            "type": "array",
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/BackfillDetails" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
             "title": "Models"
           }
         },
@@ -1419,18 +1688,33 @@
         "properties": {
           "meta": { "$ref": "#/components/schemas/TrackableMeta" },
           "added": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
+            "anyOf": [
+              {
+                "items": { "type": "string" },
+                "type": "array",
+                "uniqueItems": true
+              },
+              { "type": "null" }
+            ],
             "title": "Added"
           },
           "removed": {
-            "items": { "type": "string" },
-            "type": "array",
-            "uniqueItems": true,
+            "anyOf": [
+              {
+                "items": { "type": "string" },
+                "type": "array",
+                "uniqueItems": true
+              },
+              { "type": "null" }
+            ],
             "title": "Removed"
           },
-          "modified": { "$ref": "#/components/schemas/ModelsDiff" }
+          "modified": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ModelsDiff" },
+              { "type": "null" }
+            ]
+          }
         },
         "type": "object",
         "title": "PlanStageChanges"
@@ -1498,7 +1782,8 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Start"
           },
@@ -1508,7 +1793,8 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "End"
           },
@@ -1518,7 +1804,8 @@
               { "type": "string", "format": "date-time" },
               { "type": "string" },
               { "type": "integer" },
-              { "type": "number" }
+              { "type": "number" },
+              { "type": "null" }
             ],
             "title": "Execution Time"
           },
@@ -1531,7 +1818,10 @@
             "default": false
           },
           "pretty": { "type": "boolean", "title": "Pretty", "default": true },
-          "dialect": { "type": "string", "title": "Dialect" }
+          "dialect": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Dialect"
+          }
         },
         "type": "object",
         "required": ["model"],
@@ -1615,11 +1905,20 @@
         "properties": {
           "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
           "version": { "type": "string", "title": "Version" },
-          "temp_version": { "type": "string", "title": "Temp Version" },
-          "change_category": {
-            "$ref": "#/components/schemas/SnapshotChangeCategory"
+          "temp_version": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Temp Version"
           },
-          "physical_schema": { "type": "string", "title": "Physical Schema" }
+          "change_category": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/SnapshotChangeCategory" },
+              { "type": "null" }
+            ]
+          },
+          "physical_schema": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Physical Schema"
+          }
         },
         "additionalProperties": false,
         "type": "object",
@@ -1659,25 +1958,36 @@
       "SnapshotTableInfo": {
         "properties": {
           "name": { "type": "string", "title": "Name" },
-          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
-          "version": { "type": "string", "title": "Version" },
-          "temp_version": { "type": "string", "title": "Temp Version" },
-          "physical_schema": { "type": "string", "title": "Physical Schema" },
-          "parents": {
-            "items": { "$ref": "#/components/schemas/SnapshotId" },
-            "type": "array",
-            "title": "Parents"
+          "temp_version": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Temp Version"
           },
+          "change_category": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/SnapshotChangeCategory" },
+              { "type": "null" }
+            ]
+          },
+          "fingerprint": { "$ref": "#/components/schemas/SnapshotFingerprint" },
           "previous_versions": {
             "items": { "$ref": "#/components/schemas/SnapshotDataVersion" },
             "type": "array",
             "title": "Previous Versions",
             "default": []
           },
-          "change_category": {
-            "$ref": "#/components/schemas/SnapshotChangeCategory"
+          "version": { "type": "string", "title": "Version" },
+          "physical_schema": { "type": "string", "title": "Physical Schema" },
+          "parents": {
+            "items": { "$ref": "#/components/schemas/SnapshotId" },
+            "type": "array",
+            "title": "Parents"
           },
-          "kind_name": { "$ref": "#/components/schemas/ModelKindName" },
+          "kind_name": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/ModelKindName" },
+              { "type": "null" }
+            ]
+          },
           "node_type": {
             "allOf": [{ "$ref": "#/components/schemas/NodeType" }],
             "default": "model"
@@ -1705,12 +2015,7 @@
           "schema_diff": { "$ref": "#/components/schemas/SchemaDiff" },
           "row_diff": { "$ref": "#/components/schemas/RowDiff" },
           "on": {
-            "items": {
-              "items": [{ "type": "string" }, { "type": "string" }],
-              "type": "array",
-              "maxItems": 2,
-              "minItems": 2
-            },
+            "items": { "items": { "type": "string" }, "type": "array" },
             "type": "array",
             "title": "On"
           }
@@ -1769,7 +2074,10 @@
             "default": "init"
           },
           "start": { "type": "integer", "title": "Start" },
-          "end": { "type": "integer", "title": "End" },
+          "end": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "End"
+          },
           "done": { "type": "boolean", "title": "Done", "default": false }
         },
         "type": "object",

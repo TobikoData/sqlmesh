@@ -1,4 +1,4 @@
-import { type LineageColumn } from '@api/client'
+import { type FileContent, type LineageColumn } from '@api/client'
 import { type TableColumn, type TableRow } from '@components/table/help'
 import { isFalse, isNil, isNotNil, uid } from '@utils/index'
 import { create } from 'zustand'
@@ -18,7 +18,7 @@ export interface Lineage {
 
 export interface StoredTab {
   id?: ID
-  content?: string
+  content?: FileContent
 }
 
 interface EditorStore {
