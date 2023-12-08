@@ -480,8 +480,8 @@ class GithubController:
         query = f"""{{
             repository(owner: "{self._event.pull_request_info.owner}", name: "{self._event.pull_request_info.repo}") {{
                 pullRequest(number: {self._event.pull_request_info.pr_number}) {{
-                    title 
-                    state 
+                    title
+                    state
                     mergeStateStatus
                 }}
             }}
@@ -654,6 +654,7 @@ class GithubController:
         ) -> t.Tuple[GithubCheckConclusion, str, t.Optional[str]]:
             if not result:
                 return GithubCheckConclusion.SKIPPED, "Skipped Tests", None
+
             # Clear out console
             self._console.consume_captured_output()
             self._console.log_test_results(
