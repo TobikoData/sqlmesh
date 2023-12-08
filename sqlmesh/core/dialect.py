@@ -23,6 +23,8 @@ SQLMESH_MACRO_PREFIX = "@"
 
 JSON_TYPE = exp.DataType.build("json")
 
+TABLES_META = "sqlmesh.tables"
+
 
 class Model(exp.Expression):
     arg_types = {"expressions": True}
@@ -824,16 +826,10 @@ def normalize_model_name(
     return exp.table_name(normalize_identifiers(table, dialect=dialect))
 
 
-def extract_columns_to_types(query: exp.Subqueryable) -> t.Dict[str, exp.DataType]:
-    """Extract the column names and types from a query."""
-    return {
-        expression.output_name: expression.type or exp.DataType.build("unknown")
-        for expression in query.selects
-    }
-
-
 def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Set[str]:
     """Find all tables referenced in a query.
+
+    Caches the result in the meta field 'tables'.
 
     Args:
         expressions: The query to find the tables in.
@@ -842,12 +838,15 @@ def find_tables(expression: exp.Expression, dialect: DialectType = None) -> t.Se
     Returns:
         A Set of all the table names.
     """
-    return {
-        normalize_model_name(table, dialect=dialect)
-        for scope in traverse_scope(expression)
-        for table in scope.tables
-        if not isinstance(table.this, exp.Func) and exp.table_name(table) not in scope.cte_sources
-    }
+    if TABLES_META not in expression.meta:
+        expression.meta[TABLES_META] = {
+            normalize_model_name(table, dialect=dialect)
+            for scope in traverse_scope(expression)
+            for table in scope.tables
+            if not isinstance(table.this, exp.Func)
+            and exp.table_name(table) not in scope.cte_sources
+        }
+    return expression.meta[TABLES_META]
 
 
 def add_table(node: exp.Expression, table: str) -> exp.Expression:
