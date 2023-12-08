@@ -18,7 +18,7 @@ router = APIRouter()
 
 
 @router.post("", response_model=t.Optional[models.PlanOverviewStageTracker])
-async def run_plan(
+async def initiate_plan(
     request: Request,
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(None),
@@ -26,25 +26,22 @@ async def run_plan(
     plan_options: t.Optional[models.PlanOptions] = None,
 ) -> t.Optional[models.PlanOverviewStageTracker]:
     """Get a plan for an environment."""
-
-    plan_options = plan_options or models.PlanOptions()
-
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
             message="Plan/apply is already running",
             origin="API -> plan -> run_plan",
         )
 
+    plan_options = plan_options or models.PlanOptions()
     request.app.state.task = asyncio.create_task(
         run_in_executor(
-            get_plan_tracker,
-            plan_options,
+            get_plan,
             context,
+            plan_options,
             environment,
             plan_dates,
         )
     )
-
     return None
 
 
@@ -58,6 +55,7 @@ async def cancel_plan(
             message="Plan/apply is already running",
             origin="API -> plan -> cancel_plan",
         )
+
     request.app.state.task.cancel()
     tracker = models.PlanCancelStageTracker()
     api_console.start_plan_tracker(tracker)
@@ -65,16 +63,15 @@ async def cancel_plan(
     tracker.add_stage(stage=models.PlanStage.cancel, data=tracker_stage_cancel)
     tracker_stage_cancel.stop(success=True)
     api_console.stop_plan_tracker(tracker)
-
     return None
 
 
-def get_plan_tracker(
+def get_plan(
+    context: Context,
     plan_options: models.PlanOptions,
-    context: Context = Depends(get_loaded_context),
-    environment: t.Optional[str] = Body(None),
+    environment: t.Optional[str] = None,
     plan_dates: t.Optional[models.PlanDates] = None,
-) -> t.Tuple[models.PlanOverviewStageTracker, Plan]:
+) -> Plan:
     tracker = models.PlanOverviewStageTracker(environment=environment, plan_options=plan_options)
     api_console.start_plan_tracker(tracker)
     tracker_stage_validate = models.PlanStageValidation()
@@ -109,42 +106,49 @@ def get_plan_tracker(
     tracker_stage_changes = models.PlanStageChanges()
     tracker.add_stage(stage=models.PlanStage.changes, data=tracker_stage_changes)
     if plan.context_diff.has_changes:
-        tracker_stage_changes.update(
-            {
-                "removed": set(plan.context_diff.removed_snapshots),
-                "added": plan.context_diff.added,
-                "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
-            }
-        )
-    tracker_stage_changes.stop(success=True)
+        tracker_stage_changes.update(_get_plan_changes(plan))
 
+    tracker_stage_changes.stop(success=True)
     tracker_stage_backfills = models.PlanStageBackfills()
     tracker.add_stage(stage=models.PlanStage.backfills, data=tracker_stage_backfills)
     if plan.requires_backfill:
-        batches = context.scheduler().batches()
-        tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
         tracker_stage_backfills.update(
-            {
-                "models": [
-                    models.BackfillDetails(
-                        model_name=interval.snapshot_name,
-                        view_name=plan.context_diff.snapshots[
-                            interval.snapshot_name
-                        ].qualified_view_name.for_environment(plan.environment.naming_info)
-                        if interval.snapshot_name in plan.context_diff.snapshots
-                        else interval.snapshot_name,
-                        interval=[
-                            tuple(to_ds(t) for t in make_inclusive(start, end))
-                            for start, end in interval.merged_intervals
-                        ][0],
-                        batches=tasks.get(interval.snapshot_name, 0),
-                    )
-                    for interval in plan.missing_intervals
-                ]
-            }
+            _get_plan_backfills(context, plan),
         )
+
     tracker_stage_backfills.stop(success=True)
-
     api_console.stop_plan_tracker(tracker)
+    return plan
 
-    return tracker, plan
+
+def _get_plan_changes(plan: Plan) -> t.Dict[str, t.Any]:
+    """Get plan changes"""
+    return {
+        "removed": set(plan.context_diff.removed_snapshots),
+        "added": plan.context_diff.added,
+        "modified": models.ModelsDiff.get_modified_snapshots(plan.context_diff),
+    }
+
+
+def _get_plan_backfills(context: Context, plan: Plan) -> t.Dict[str, t.Any]:
+    """Get plan backfills"""
+    batches = context.scheduler().batches()
+    tasks = {snapshot.name: len(intervals) for snapshot, intervals in batches.items()}
+    return {
+        "models": [
+            models.BackfillDetails(
+                model_name=interval.snapshot_name,
+                view_name=plan.context_diff.snapshots[
+                    interval.snapshot_name
+                ].qualified_view_name.for_environment(plan.environment.naming_info)
+                if interval.snapshot_name in plan.context_diff.snapshots
+                else interval.snapshot_name,
+                interval=[
+                    tuple(to_ds(t) for t in make_inclusive(start, end))
+                    for start, end in interval.merged_intervals
+                ][0],
+                batches=tasks.get(interval.snapshot_name, 0),
+            )
+            for interval in plan.missing_intervals
+        ]
+    }

@@ -12,7 +12,7 @@ from sqlmesh.core.snapshot.definition import SnapshotChangeCategory
 from sqlmesh.core.test import ModelTest
 from sqlmesh.utils.errors import PlanError
 from web.server import models
-from web.server.api.endpoints.plan import get_plan_tracker
+from web.server.api.endpoints.plan import get_plan
 from web.server.console import api_console
 from web.server.exceptions import ApiException
 from web.server.settings import get_loaded_context
@@ -26,7 +26,7 @@ router = APIRouter()
 
 
 @router.post("/apply", response_model=t.Optional[models.PlanApplyStageTracker])
-async def apply(
+async def initiate_apply(
     request: Request,
     context: Context = Depends(get_loaded_context),
     environment: t.Optional[str] = Body(None),
@@ -35,36 +35,23 @@ async def apply(
     categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
 ) -> t.Optional[models.PlanApplyStageTracker]:
     """Apply a plan"""
-    plan_options = plan_options or models.PlanOptions()
     if hasattr(request.app.state, "task") and not request.app.state.task.done():
         raise ApiException(
             message="Plan/apply is already running",
             origin="API -> commands -> apply",
         )
-    _, plan = get_plan_tracker(
-        context=context, environment=environment, plan_options=plan_options, plan_dates=plan_dates
+
+    request.app.state.task = asyncio.create_task(
+        run_in_executor(
+            _run_plan_apply,
+            context,
+            environment,
+            plan_options,
+            plan_dates,
+            categories,
+        )
     )
 
-    if categories is not None:
-        for new, _ in plan.context_diff.modified_snapshots.values():
-            if plan.is_new_snapshot(new) and new.name in categories:
-                plan.set_choice(new, categories[new.name])
-
-    tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
-    tracker_apply.start = plan.start
-    tracker_apply.end = plan.end
-    api_console.start_plan_tracker(tracker_apply)
-    request.app.state.task = apply_task = asyncio.create_task(run_in_executor(context.apply, plan))
-    if not plan.requires_backfill or plan_options.skip_backfill:
-        try:
-            await apply_task
-            api_console.stop_plan_tracker(tracker_apply, success=True)
-        except PlanError as e:
-            api_console.stop_plan_tracker(tracker_apply, success=False)
-            raise ApiException(
-                message=str(e),
-                origin="API -> commands -> apply",
-            )
     return None
 
 
@@ -191,3 +178,38 @@ async def test(
         ],
         tests_run=result.testsRun,
     )
+
+
+def _run_plan_apply(
+    context: Context,
+    environment: t.Optional[str] = None,
+    plan_options: t.Optional[models.PlanOptions] = None,
+    plan_dates: t.Optional[models.PlanDates] = None,
+    categories: t.Optional[t.Dict[str, SnapshotChangeCategory]] = None,
+) -> None:
+    """Run plan apply"""
+    plan_options = plan_options or models.PlanOptions()
+
+    plan = get_plan(context, plan_options, environment, plan_dates)
+
+    if categories is not None:
+        for new, _ in plan.context_diff.modified_snapshots.values():
+            if plan.is_new_snapshot(new) and new.name in categories:
+                plan.set_choice(new, categories[new.name])
+
+    tracker_apply = models.PlanApplyStageTracker(environment=environment, plan_options=plan_options)
+    tracker_apply.start = plan.start
+    tracker_apply.end = plan.end
+    api_console.start_plan_tracker(tracker_apply)
+    try:
+        context.apply(plan)
+        if not plan.requires_backfill or plan_options.skip_backfill:
+            api_console.stop_plan_tracker(tracker_apply, success=True)
+    except PlanError as e:
+        api_console.stop_plan_tracker(tracker_apply, success=False)
+        raise ApiException(
+            message=str(e),
+            origin="API -> commands -> apply",
+        )
+
+    return None
