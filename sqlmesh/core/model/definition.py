@@ -15,6 +15,7 @@ from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
+from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
@@ -1016,9 +1017,14 @@ class SqlModel(_SqlBasedModel):
             self._columns_to_types = self.columns_to_types_
         elif self._columns_to_types is None:
             query = self._query_renderer.render()
+
             if query is None:
                 return None
-            self._columns_to_types = d.extract_columns_to_types(query)
+
+            self._columns_to_types = {
+                select.output_name: select.type or exp.DataType.build("unknown")
+                for select in annotate_types(query, schema=self._query_renderer.schema).selects
+            }
 
         if "*" in self._columns_to_types:
             return None
@@ -1052,7 +1058,7 @@ class SqlModel(_SqlBasedModel):
             schema, default_schema=default_schema, default_catalog=default_catalog
         )
         self._columns_to_types = None
-        self._query_renderer._optimized_cache = {}
+        self._query_renderer.update_schema(self.mapping_schema)
 
     def validate_definition(self) -> None:
         query = self._query_renderer.render()
