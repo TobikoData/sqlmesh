@@ -8,7 +8,6 @@ from pathlib import Path
 
 from sqlglot import exp, parse
 from sqlglot.errors import SqlglotError
-from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -59,9 +58,11 @@ class BaseExpressionRenderer:
         self._jinja_macro_registry = jinja_macro_registry or JinjaMacroRegistry()
         self._python_env = python_env or {}
         self._only_execution_time = only_execution_time
-        self.schema = {} if schema is None else schema
-
+        self.update_schema({} if schema is None else schema)
         self._cache: t.Dict[CacheKey, t.List[exp.Expression]] = {}
+
+    def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
+        self.schema = MappingSchema(schema, dialect=self._dialect, normalize=False)
 
     def _render(
         self,
@@ -166,7 +167,19 @@ class BaseExpressionRenderer:
 
                 if expression:
                     with _normalize_and_quote(expression, self._dialect) as expression:
-                        pass
+                        if hasattr(expression, "selects"):
+                            for select in expression.selects:
+                                if not isinstance(select, exp.Alias) and select.output_name not in (
+                                    "*",
+                                    "",
+                                ):
+                                    alias = exp.alias_(select, select.output_name, quoted=True)
+                                    comments = alias.this.comments
+                                    if comments:
+                                        alias.add_comments(comments)
+                                        comments.clear()
+
+                                    select.replace(alias)
                     resolved_expressions.append(expression)
 
             # We dont cache here if columns_to_type was called in a macro.
@@ -334,6 +347,10 @@ class QueryRenderer(BaseExpressionRenderer):
 
         self._optimized_cache: t.Dict[CacheKey, exp.Expression] = {}
 
+    def update_schema(self, schema: t.Dict[str, t.Any]) -> None:
+        super().update_schema(schema)
+        self._optimized_cache = {}
+
     def render(
         self,
         start: t.Optional[TimeLike] = None,
@@ -435,15 +452,13 @@ class QueryRenderer(BaseExpressionRenderer):
 
     def _optimize_query(self, query: exp.Subqueryable) -> exp.Subqueryable:
         # We don't want to normalize names in the schema because that's handled by the optimizer
-        schema = MappingSchema(self.schema, dialect=self._dialect, normalize=False)
         original = query
-        failure = False
         missing_deps = set()
         all_deps = d.find_tables(query, dialect=self._dialect) - {self._model_name}
-        should_optimize = not schema.empty or not all_deps
+        should_optimize = not self.schema.empty or not all_deps
 
         for dep in all_deps:
-            if not schema.find(exp.to_table(dep)):
+            if not self.schema.find(exp.to_table(dep)):
                 should_optimize = False
                 missing_deps.add(dep)
 
@@ -459,31 +474,16 @@ class QueryRenderer(BaseExpressionRenderer):
         try:
             if should_optimize:
                 query = query.copy()
-                simplify(qualify(query, dialect=self._dialect, schema=schema, infer_schema=False))
+                simplify(
+                    qualify(query, dialect=self._dialect, schema=self.schema, infer_schema=False)
+                )
         except SqlglotError as ex:
-            failure = True
+            query = original
             logger.error(
                 "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_name
             )
-        finally:
-            if failure or not should_optimize:
-                query = original.copy()
 
-                with _normalize_and_quote(query, self._dialect) as query:
-                    for select in query.selects:
-                        if not isinstance(select, exp.Alias) and select.output_name not in (
-                            "*",
-                            "",
-                        ):
-                            alias = exp.alias_(select, select.output_name)
-                            comments = alias.this.comments
-                            if comments:
-                                alias.add_comments(comments)
-                                comments.clear()
-
-                            select.replace(alias)
-
-        return annotate_types(query, schema=schema)
+        return query
 
 
 @contextmanager
