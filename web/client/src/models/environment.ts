@@ -1,4 +1,3 @@
-import { type PlanProgress } from '@context/plan'
 import { type Environment } from '~/api/client'
 import useLocalStorage from '~/hooks/useLocalStorage'
 import {
@@ -29,6 +28,7 @@ interface InitialEnvironmemt extends Partial<Environment> {
 
 interface ProfileEnvironment {
   name: EnvironmentName
+  type: RelativeLocation
   createFrom: EnvironmentName
   isPinned: boolean
 }
@@ -44,7 +44,6 @@ export class ModelEnvironment {
   private _initial: InitialEnvironmemt
   private _type: RelativeLocation
   private _createFrom: EnvironmentName
-  private _plan: Optional<PlanProgress>
 
   isPinned = false
   isModel = true
@@ -71,12 +70,8 @@ export class ModelEnvironment {
     return this._initial.name ?? EnumDefaultEnvironment.Empty
   }
 
-  get type(): string {
+  get type(): RelativeLocation {
     return this._type
-  }
-
-  get plan(): Optional<PlanProgress> {
-    return this._plan
   }
 
   get createFrom(): string {
@@ -88,17 +83,22 @@ export class ModelEnvironment {
   }
 
   get isInitial(): boolean {
-    return (
-      isNil(this._initial?.plan_id) || isStringEmptyOrNil(this._initial.plan_id)
-    )
+    return isStringEmptyOrNil(this._initial?.plan_id)
   }
 
   get isLocal(): boolean {
-    return this._type === EnumRelativeLocation.Local
+    return this._type === EnumRelativeLocation.Local && this.isInitial
   }
 
   get isSynchronized(): boolean {
-    return this._type === EnumRelativeLocation.Synchronized
+    return (
+      this._type === EnumRelativeLocation.Synchronized &&
+      isFalse(this.isInitial)
+    )
+  }
+
+  get isDefaultInitial(): boolean {
+    return this.isDefault && this.isInitial
   }
 
   setType(type: RelativeLocation): void {
@@ -113,10 +113,6 @@ export class ModelEnvironment {
     this._initial = initial
   }
 
-  setPlan(plan: Optional<PlanProgress>): void {
-    this._plan = plan
-  }
-
   static save({
     environment,
     environments,
@@ -129,6 +125,7 @@ export class ModelEnvironment {
     if (isNotNil(environment)) {
       output.environment = {
         name: environment.name,
+        type: environment.type,
         createFrom: environment.createFrom,
         isPinned: environment.isPinned,
       }
@@ -138,6 +135,7 @@ export class ModelEnvironment {
       output.environments = ModelEnvironment.getOnlyLocal(environments).map(
         env => ({
           name: env.name,
+          type: env.type,
           createFrom: env.createFrom,
           isPinned: env.isPinned,
         }),
@@ -187,7 +185,7 @@ export class ModelEnvironment {
       output.push(
         new ModelEnvironment(
           { name },
-          EnumRelativeLocation.Local,
+          environment.type,
           environment.createFrom,
           environment.isPinned,
         ),

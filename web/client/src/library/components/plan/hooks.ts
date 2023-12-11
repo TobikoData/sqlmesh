@@ -42,7 +42,7 @@ export function usePlanPayload({
   }, [environment, start, end, isInitialPlanRun, restate_models])
 
   const planOptions = useMemo(() => {
-    if (environment.isDefault || environment.isInitial)
+    if (environment.isDefaultInitial)
       return { skip_tests, include_unmodified: true }
 
     return {
