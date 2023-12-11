@@ -444,8 +444,10 @@ class Context(BaseContext):
         Returns:
             True if the run was successful, False otherwise.
         """
+        environment = environment or self.config.default_target_environment
+
         self.notification_target_manager.notify(
-            NotificationEvent.RUN_START, environment=environment or c.PROD
+            NotificationEvent.RUN_START, environment=environment
         )
         success = False
         try:
@@ -1255,7 +1257,7 @@ class Context(BaseContext):
 
     def _run(
         self,
-        environment: t.Optional[str],
+        environment: str,
         *,
         start: t.Optional[TimeLike],
         end: t.Optional[TimeLike],
@@ -1263,8 +1265,6 @@ class Context(BaseContext):
         skip_janitor: bool,
         ignore_cron: bool,
     ) -> bool:
-        environment = environment or self.config.default_target_environment
-
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
 
