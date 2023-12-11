@@ -11,7 +11,6 @@ from sqlmesh.core.model import Model
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import UniqueKeyDict
 from sqlmesh.utils.dag import DAG
-from sqlmesh.utils.errors import SQLMeshError
 
 
 class Selector:
@@ -58,18 +57,18 @@ class Selector:
             target_env = self._state_reader.get_environment(
                 Environment.normalize_name(fallback_env_name)
             )
-        if not target_env:
-            raise SQLMeshError(
-                f"Either the '{target_env_name}' or the '{fallback_env_name}' environment must exist in order to apply model selection."
-            )
 
-        env_models = {
-            s.name: s.model
-            for s in self._state_reader.get_snapshots(
-                target_env.snapshots, hydrate_seeds=True
-            ).values()
-            if s.is_model
-        }
+        env_models = (
+            {
+                s.name: s.model
+                for s in self._state_reader.get_snapshots(
+                    target_env.snapshots, hydrate_seeds=True
+                ).values()
+                if s.is_model
+            }
+            if target_env
+            else {}
+        )
 
         all_selected_models = self.expand_model_selections(model_selections)
 
