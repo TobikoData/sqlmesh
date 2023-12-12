@@ -59,7 +59,7 @@ export default function PlanActionsDescription(): JSX.Element {
         )}
         {isFalse(isStringEmptyOrNil(restate_models)) && (
           <span className="inline-block mr-1">
-            and restate folowing models <b>{restate_models}</b>
+            and restate the followingmodels <b>{restate_models}</b>
           </span>
         )}
         {include_unmodified && (

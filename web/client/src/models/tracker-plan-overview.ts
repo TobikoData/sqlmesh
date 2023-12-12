@@ -26,24 +26,30 @@ export class ModelPlanOverviewTracker
   extends ModelPlanTracker<PlanOverviewTracker>
   implements InitialModelPlanOverviewTracker
 {
-  hasChanges: Optional<boolean> = undefined
-  hasBackfills: Optional<boolean> = undefined
-
-  constructor(model?: ModelPlanOverviewTracker) {
-    super(model)
-
-    if (model instanceof ModelPlanOverviewTracker) {
-      this.hasChanges = model.hasChanges
-      this.hasBackfills = model.hasBackfills
-    }
-  }
-
   get validation(): Optional<PlanStageValidation> {
     return this._current?.validation
   }
 
+  get hasChanges(): Optional<boolean> {
+    if (isNil(this._current?.changes)) return undefined
+
+    const { added, removed, modified } = this._current.changes ?? {}
+
+    if ([added, removed, modified].every(isNil)) return undefined
+
+    const { direct, indirect, metadata } = modified ?? {}
+
+    return [added, removed, direct, indirect, metadata].some(isArrayNotEmpty)
+  }
+
   get changes(): Optional<PlanStageChanges> {
     return this._current?.changes
+  }
+
+  get hasBackfills(): Optional<boolean> {
+    return isNil(this._current?.backfills?.models)
+      ? undefined
+      : isArrayNotEmpty(this._current.backfills?.models)
   }
 
   get backfills(): Optional<PlanStageBackfills> {
@@ -92,36 +98,9 @@ export class ModelPlanOverviewTracker
 
   update(tracker: PlanOverviewTracker): void {
     this._current = tracker
-
-    if (isNil(this._current.backfills?.models)) {
-      this.hasBackfills = undefined
-    } else {
-      this.hasBackfills = isArrayNotEmpty(this._current.backfills?.models)
-    }
-
-    if (isNil(this._current.changes)) {
-      this.hasChanges = undefined
-    } else {
-      const { added, removed, modified } = this._current.changes ?? {}
-
-      if (isNil(added) && isNil(removed) && isNil(modified)) {
-        this.hasChanges = undefined
-      } else {
-        const { direct, indirect, metadata } = modified ?? {}
-
-        this.hasChanges =
-          isArrayNotEmpty(added) ||
-          isArrayNotEmpty(removed) ||
-          isArrayNotEmpty(direct) ||
-          isArrayNotEmpty(indirect) ||
-          isArrayNotEmpty(metadata)
-      }
-    }
   }
 
   reset(): void {
     this._current = undefined
-    this.hasChanges = undefined
-    this.hasBackfills = undefined
   }
 }

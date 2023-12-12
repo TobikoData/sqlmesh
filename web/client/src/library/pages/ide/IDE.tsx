@@ -9,7 +9,13 @@ import {
 } from '../../../api'
 import { useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
-import { isArrayEmpty, isNil, isNotNil, isObjectEmpty, isFalse } from '~/utils'
+import {
+  isArrayEmpty,
+  isNil,
+  isNotNil,
+  isFalse,
+  isObjectNotEmpty,
+} from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
 import { EnumSize, EnumVariant } from '~/types/enum'
@@ -17,7 +23,12 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { type Tests, useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
-import { type Directory, type Model, type Environments } from '@api/client'
+import {
+  type Directory,
+  type Model,
+  type Environments,
+  type EnvironmentsEnvironments,
+} from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
@@ -333,22 +344,16 @@ export default function PageIDE(): JSX.Element {
   }
 
   function updateEnviroments(data: Optional<Environments>): void {
-    if (
-      isNil(data) ||
-      isNil(data.environments) ||
-      isObjectEmpty(data) ||
-      isObjectEmpty(data.environments)
-    )
-      return
-
     const { environments, default_target_environment, pinned_environments } =
-      data
+      data ?? {}
 
-    addSynchronizedEnvironments(
-      Object.values(environments),
-      default_target_environment,
-      pinned_environments,
-    )
+    if (isObjectNotEmpty<EnvironmentsEnvironments>(environments)) {
+      addSynchronizedEnvironments(
+        Object.values(environments),
+        default_target_environment,
+        pinned_environments,
+      )
+    }
   }
 
   function restoreEditorTabsFromSaved(files: ModelFile[]): void {
