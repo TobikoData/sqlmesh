@@ -3,7 +3,6 @@ from __future__ import annotations
 import typing as t
 from unittest.mock import call
 
-import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import dialect as d
@@ -13,7 +12,6 @@ from sqlmesh.core.model import Model, SqlModel
 from sqlmesh.core.selector import Selector
 from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils import UniqueKeyDict
-from sqlmesh.utils.errors import SQLMeshError
 
 
 def test_select_models(mocker: MockerFixture, make_snapshot):
@@ -141,14 +139,16 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
 
     selector = Selector(state_reader_mock, local_models, {})
 
-    with pytest.raises(SQLMeshError):
-        selector.select_models([model.name], "missing_env")
+    assert selector.select_models([model.name], "missing_env").keys() == {model.name}
+    assert not selector.select_models(["missing"], "missing_env")
 
-    with pytest.raises(SQLMeshError):
-        selector.select_models([model.name], "missing_env", fallback_env_name="another_missing_env")
+    assert selector.select_models(
+        [model.name], "missing_env", fallback_env_name="another_missing_env"
+    ).keys() == {model.name}
 
     state_reader_mock.get_environment.assert_has_calls(
         [
+            call("missing_env"),
             call("missing_env"),
             call("missing_env"),
             call("another_missing_env"),
