@@ -46,7 +46,7 @@ export function isObjectEmpty(value: unknown): boolean {
   return isObject(value) && isArrayEmpty(Object.keys(value as object))
 }
 
-export function isObjectNotEmpty(value: unknown): boolean {
+export function isObjectNotEmpty<TValue>(value: unknown): value is TValue {
   return isObject(value) && isArrayNotEmpty(Object.keys(value as object))
 }
 

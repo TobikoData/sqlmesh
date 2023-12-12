@@ -1,13 +1,11 @@
 import { type MouseEvent } from 'react'
-import { useStoreContext } from '~/context/context'
-import { EnumPlanAction, useStorePlan, type PlanAction } from '~/context/plan'
 import useActiveFocus from '~/hooks/useActiveFocus'
 import { EnumVariant } from '~/types/enum'
-import { includes, isFalse, isStringEmptyOrNil } from '~/utils'
+import { includes, isFalse } from '~/utils'
 import { Button } from '../button/Button'
-import { usePlan } from './context'
-import { getActionName } from './help'
 import { Divider } from '@components/divider/Divider'
+import PlanActionsDescription from './PlanActionsDescription'
+import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
 
 export default function PlanActions({
   run,
@@ -16,45 +14,15 @@ export default function PlanActions({
   reset,
   close,
   planAction,
-  disabled = false,
 }: {
   apply: () => void
   run: () => void
   cancel: () => void
   close: () => void
   reset: () => void
-  planAction: PlanAction
-  disabled: boolean
+  planAction: ModelPlanAction
 }): JSX.Element {
-  const {
-    start,
-    end,
-    skip_tests,
-    auto_apply,
-    skip_backfill,
-    no_gaps,
-    no_auto_categorization,
-    forward_only,
-    restate_models,
-    include_unmodified,
-  } = usePlan()
-
-  const environment = useStoreContext(s => s.environment)
-
-  const planOverview = useStorePlan(s => s.planOverview)
-  const planApply = useStorePlan(s => s.planApply)
-  const planCancel = useStorePlan(s => s.planCancel)
-
   const setFocus = useActiveFocus<HTMLButtonElement>()
-
-  const isRun = planAction === EnumPlanAction.Run
-  const isDone = planAction === EnumPlanAction.Done
-  const isCancelling = planAction === EnumPlanAction.Cancelling
-  const isApplyVirtual = planAction === EnumPlanAction.ApplyVirtual
-  const isApplyBackfill = planAction === EnumPlanAction.ApplyBackfill
-  const isApplying = planAction === EnumPlanAction.Applying
-  const isRunning = planAction === EnumPlanAction.Running
-  const isProcessing = isRunning || isApplying || isCancelling
 
   function handleClose(e: MouseEvent): void {
     e.stopPropagation()
@@ -86,153 +54,100 @@ export default function PlanActions({
     run()
   }
 
-  const isDisabled =
-    disabled ||
-    planOverview.isRunning ||
-    planApply.isRunning ||
-    planCancel.isCancelling
-
   return (
     <div>
-      {(isRun ||
-        isRunning ||
-        isApplyVirtual ||
-        isApplyBackfill ||
-        isApplying) && (
-        <>
-          <div className="w-full flex px-4 py-2">
-            <p className="ml-2 text-xs">
-              <span>Plan for</span>
-              <b className="text-primary-500 font-bold mx-1">
-                {environment.name}
-              </b>
-              <span className="inline-block mr-1">environment</span>
-              {
-                <span className="inline-block mr-1">
-                  from{' '}
-                  <b>
-                    {isFalse(isStringEmptyOrNil(start))
-                      ? start
-                      : 'the begining of history'}
-                  </b>
-                </span>
-              }
-              {
-                <span className="inline-block mr-1">
-                  till{' '}
-                  <b>{isFalse(isStringEmptyOrNil(start)) ? end : 'today'}</b>
-                </span>
-              }
-              {no_gaps && (
-                <span className="inline-block mr-1">
-                  with <b>No Gaps</b>
-                </span>
-              )}
-              {skip_backfill && (
-                <span className="inline-block mr-1">
-                  without <b>Backfills</b>
-                </span>
-              )}
-              {forward_only && (
-                <span className="inline-block mr-1">
-                  consider as a <b>Breaking Change</b>
-                </span>
-              )}
-              {no_auto_categorization && (
-                <span className="inline-block mr-1">
-                  also set <b>Change Category</b> manually
-                </span>
-              )}
-              {isFalse(isStringEmptyOrNil(restate_models)) && (
-                <span className="inline-block mr-1">
-                  and restate folowing models <b>{restate_models}</b>
-                </span>
-              )}
-              {include_unmodified && (
-                <span className="inline-block mr-1">
-                  with views for all models
-                </span>
-              )}
-            </p>
-          </div>
-          <Divider />
-        </>
-      )}
+      <PlanActionsDescription />
+      <Divider />
       <div className="flex justify-between px-4 py-2">
         <div className="flex w-full items-center">
-          {(isRun || isRunning) && (
+          {(planAction.isRun || planAction.isRunning) && (
             <Button
-              disabled={isRunning || isDisabled}
+              disabled={planAction.isRunning}
               onClick={handleRun}
               ref={setFocus}
               variant={EnumVariant.Primary}
               autoFocus
             >
               <span>
-                {getActionName(planAction, [
+                {ModelPlanAction.getActionDisplayName(planAction, [
+                  EnumPlanAction.RunningTask,
                   EnumPlanAction.Running,
                   EnumPlanAction.Run,
                 ])}
               </span>
-              {skip_tests && (
-                <span className="inline-block ml-1">And Skip Test</span>
-              )}
-              {auto_apply && (
-                <span className="inline-block ml-1">And Auto Apply</span>
-              )}
             </Button>
           )}
-          {(isApplyBackfill || isApplyVirtual || isApplying) && (
+          {(planAction.isApply || planAction.isApplying) && (
             <Button
               onClick={handleApply}
-              disabled={isApplying || isDisabled}
+              disabled={planAction.isApplying}
               ref={setFocus}
               variant={EnumVariant.Primary}
             >
-              {getActionName(
+              {ModelPlanAction.getActionDisplayName(
                 planAction,
-                [EnumPlanAction.Applying],
-                isApplyBackfill ? 'Apply And Backfill' : 'Apply Virtual Update',
+                [
+                  EnumPlanAction.Applying,
+                  EnumPlanAction.ApplyBackfill,
+                  EnumPlanAction.ApplyVirtual,
+                  EnumPlanAction.ApplyChangesAndBackfill,
+                  EnumPlanAction.ApplyChanges,
+                  EnumPlanAction.ApplyMetadata,
+                ],
+                'Apply',
               )}
             </Button>
           )}
-          {isProcessing && (
+          {planAction.isProcessing && (
             <Button
               onClick={handleCancel}
               variant={EnumVariant.Danger}
               className="justify-self-end"
-              disabled={isCancelling}
+              disabled={planAction.isCancelling}
             >
-              {getActionName(planAction, [EnumPlanAction.Cancelling], 'Cancel')}
+              {ModelPlanAction.getActionDisplayName(
+                planAction,
+                [EnumPlanAction.Cancelling],
+                'Cancel',
+              )}
             </Button>
           )}
         </div>
         <div className="flex items-center">
-          {[isProcessing, disabled, isRun].every(isFalse) && (
+          {[planAction.isProcessing, planAction.isRun].every(isFalse) && (
             <Button
               onClick={handleReset}
               variant={EnumVariant.Neutral}
-              disabled={
-                includes(
-                  [
-                    EnumPlanAction.Running,
-                    EnumPlanAction.Applying,
-                    EnumPlanAction.Cancelling,
-                  ],
-                  planAction,
-                ) || isDisabled
-              }
+              disabled={includes(
+                [
+                  EnumPlanAction.Running,
+                  EnumPlanAction.Applying,
+                  EnumPlanAction.Cancelling,
+                ],
+                planAction.value,
+              )}
             >
-              {getActionName(planAction, [], 'Start Over')}
+              {ModelPlanAction.getActionDisplayName(
+                planAction,
+                [],
+                'Start Over',
+              )}
             </Button>
           )}
           <Button
             onClick={handleClose}
-            variant={isDone ? EnumVariant.Primary : EnumVariant.Neutral}
-            disabled={disabled}
-            ref={isDone || isApplying ? setFocus : undefined}
+            variant={
+              planAction.isDone ? EnumVariant.Primary : EnumVariant.Neutral
+            }
+            ref={
+              planAction.isDone || planAction.isApplying ? setFocus : undefined
+            }
           >
-            {getActionName(planAction, [EnumPlanAction.Done], 'Close')}
+            {ModelPlanAction.getActionDisplayName(
+              planAction,
+              [EnumPlanAction.Done],
+              'Close',
+            )}
           </Button>
         </div>
       </div>

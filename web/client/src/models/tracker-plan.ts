@@ -6,8 +6,7 @@ import {
   Status,
 } from '@api/client'
 import { ModelInitial } from './initial'
-import { isFalseOrNil, isNil, isTrue } from '@utils/index'
-import { type ModelEnvironment } from './environment'
+import { isFalse, isFalseOrNil, isNil, isTrue } from '@utils/index'
 
 export interface PlanTrackerMeta extends TrackableMeta {
   duration?: number
@@ -25,6 +24,16 @@ export class ModelPlanTracker<
   TData extends PlanTracker = PlanTracker,
 > extends ModelInitial<TData> {
   _current: Optional<TData>
+  _isFetching: boolean = false
+
+  constructor(model?: ModelPlanTracker<TData>) {
+    super(model?.initial)
+
+    if ((model as ModelPlanTracker<TData>)?.isModel) {
+      this._current = structuredClone(model?.current)
+      this._isFetching = model?.isFetching ?? false
+    }
+  }
 
   get current(): Optional<TData> {
     return this._current
@@ -57,14 +66,16 @@ export class ModelPlanTracker<
   get isFinished(): boolean {
     return (
       isTrue(this.current?.meta?.done) &&
-      this.current?.meta?.status !== Status.init
+      this.current?.meta?.status !== Status.init &&
+      isFalse(this.isFetching)
     )
   }
 
   get isRunning(): boolean {
     return (
-      isFalseOrNil(this.current?.meta?.done) &&
-      this.current?.meta?.status === Status.init
+      (isFalseOrNil(this.current?.meta?.done) &&
+        this.current?.meta?.status === Status.init) ||
+      this.isFetching
     )
   }
 
@@ -83,17 +94,15 @@ export class ModelPlanTracker<
     return isNil(this.current)
   }
 
-  reset(): void {
-    this._current = undefined
+  get isFetching(): boolean {
+    return this._isFetching
   }
 
-  static shouldDisplay(
-    tracker: ModelPlanTracker,
-    environment: ModelEnvironment,
-  ): boolean {
-    return (
-      (tracker.isFinished || tracker.isRunning) &&
-      tracker.environment === environment.name
-    )
+  set isFetching(value: boolean) {
+    this._isFetching = value
+  }
+
+  reset(): void {
+    this._current = undefined
   }
 }

@@ -38,10 +38,9 @@ export class ModelPlanApplyTracker
   _lastPlanOverview: Optional<ModelPlanOverviewTracker>
 
   constructor(model?: ModelPlanApplyTracker) {
-    super(model?.initial)
+    super(model)
 
     if (model instanceof ModelPlanApplyTracker) {
-      this._current = structuredClone(model.current)
       this._last = structuredClone(model._last)
       this._planOverview = new ModelPlanOverviewTracker(model._planOverview)
       this._lastPlanOverview = new ModelPlanOverviewTracker(

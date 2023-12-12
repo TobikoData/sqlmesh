@@ -1,5 +1,5 @@
 import { isNil, isNotNil, isTrue } from '~/utils'
-import { EnumPlanAction, useStorePlan, type PlanAction } from '~/context/plan'
+import { useStorePlan } from '~/context/plan'
 import { Divider } from '~/library/components/divider/Divider'
 import { useApiPlanRun, useApiPlanApply, useApiCancelPlan } from '~/api'
 import PlanHeader from './PlanHeader'
@@ -12,23 +12,16 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { EnumVariant } from '~/types/enum'
 import PlanApplyStageTracker from './PlanApplyStageTracker'
-import { useStoreContext } from '@context/context'
-import { useEffect, useState } from 'react'
 import { type ModelEnvironment } from '@models/environment'
-import { ModelPlanTracker } from '@models/tracker-plan'
-import { type ModelPlanOverviewTracker } from '@models/tracker-plan-overview'
-import { type ModelPlanApplyTracker } from '@models/tracker-plan-apply'
-import { type ModelPlanCancelTracker } from '@models/tracker-plan-cancel'
-
-const showPlanTracker = ModelPlanTracker.shouldDisplay
+import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
+import { useEffect } from 'react'
+import { useStoreProject } from '@context/project'
 
 function Plan({
   environment,
-  disabled,
   onClose,
 }: {
   environment: ModelEnvironment
-  disabled: boolean
   onClose: () => void
 }): JSX.Element {
   const dispatch = usePlanDispatch()
@@ -36,11 +29,12 @@ function Plan({
 
   const { auto_apply } = usePlan()
 
-  const isRunningPlan = useStoreContext(s => s.isRunningPlan)
-
   const planOverviewTracker = useStorePlan(s => s.planOverview)
   const planApplyTracker = useStorePlan(s => s.planApply)
-  const planCancelTracker = useStorePlan(s => s.planCancel)
+  const planAction = useStorePlan(s => s.planAction)
+  const setPlanAction = useStorePlan(s => s.setPlanAction)
+
+  const setTests = useStoreProject(s => s.setTests)
 
   const isInitialPlanRun =
     isNil(environment?.isDefault) || isTrue(environment?.isDefault)
@@ -48,51 +42,23 @@ function Plan({
   const planPayload = usePlanPayload({ environment, isInitialPlanRun })
   const applyPayload = useApplyPayload({ isInitialPlanRun })
 
-  const {
-    refetch: planRun,
-    cancel: cancelRequestPlanRun,
-    isFetching: isFetchingPlanRun,
-  } = useApiPlanRun(environment.name, planPayload)
-  const {
-    refetch: planApply,
-    cancel: cancelRequestPlanApply,
-    isFetching: isFetchingPlanApply,
-  } = useApiPlanApply(environment.name, applyPayload)
-  const { refetch: cancelPlan, isFetching: isFetchingPlanCancel } =
-    useApiCancelPlan()
-
-  const [planAction, setPlanAction] = useState<PlanAction>(EnumPlanAction.Run)
+  const { refetch: planRun, cancel: cancelRequestPlanRun } = useApiPlanRun(
+    environment.name,
+    planPayload,
+  )
+  const { refetch: planApply, cancel: cancelRequestPlanApply } =
+    useApiPlanApply(environment.name, applyPayload)
+  const { refetch: cancelPlan } = useApiCancelPlan()
 
   useEffect(() => {
     if (
       isNotNil(planOverviewTracker.environment) &&
       planOverviewTracker.environment !== environment.name
     ) {
-      setPlanAction(EnumPlanAction.Run)
+      setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Run }))
       reset()
-    } else {
-      const action = getPlanAction({
-        planOverviewTracker,
-        planApplyTracker,
-        planCancelTracker,
-        isFetchingPlanCancel,
-        isFetchingPlanRun,
-        isFetchingPlanApply,
-        isRunning: isRunningPlan,
-      })
-
-      setPlanAction(action)
     }
-  }, [
-    planOverviewTracker,
-    planApplyTracker,
-    planCancelTracker,
-    isRunningPlan,
-    isFetchingPlanCancel,
-    isFetchingPlanRun,
-    isFetchingPlanApply,
-    environment,
-  ])
+  }, [planOverviewTracker, environment])
 
   function cleanUp(): void {
     dispatch([
@@ -103,12 +69,11 @@ function Plan({
   }
 
   function reset(): void {
-    planOverviewTracker.reset()
     planApplyTracker.reset()
 
     cleanUp()
 
-    setPlanAction(EnumPlanAction.Run)
+    setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Run }))
   }
 
   function close(): void {
@@ -124,11 +89,11 @@ function Plan({
         type: EnumPlanActions.ResetTestsReport,
       },
     ])
-    setPlanAction(EnumPlanAction.Cancelling)
+    setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Cancelling }))
 
     let cancelAction
 
-    if (planAction === EnumPlanAction.Applying) {
+    if (planAction.isApplying) {
       cancelAction = cancelRequestPlanRun
     } else {
       cancelAction = cancelRequestPlanApply
@@ -137,7 +102,7 @@ function Plan({
     cancelAction()
     cancelPlan()
       .then(() => {
-        setPlanAction(EnumPlanAction.Run)
+        setPlanAction(new ModelPlanAction({ value: EnumPlanAction.Run }))
       })
       .catch(() => {
         reset()
@@ -155,6 +120,9 @@ function Plan({
   }
 
   function run(): void {
+    setTests(undefined)
+
+    planOverviewTracker.reset()
     planApplyTracker.reset()
 
     dispatch([
@@ -178,23 +146,16 @@ function Plan({
     })
   }
 
-  const showPlanApplyTracker = showPlanTracker(planApplyTracker, environment)
-  const showPlanOverviewTracker = showPlanTracker(
-    planOverviewTracker,
-    environment,
-  )
-  const showPlanCancelTracker = showPlanTracker(planCancelTracker, environment)
-
   return (
     <div className="flex flex-col w-full h-full overflow-hidden">
       <PlanHeader />
       <div className="w-full h-full px-4 overflow-y-scroll hover:scrollbar scrollbar--vertical">
-        {showPlanCancelTracker ? (
+        {planAction.isCancelling ? (
           <CancellingPlanApply />
-        ) : showPlanApplyTracker || showPlanOverviewTracker ? (
-          <PlanApplyStageTracker />
+        ) : planAction.isRun ? (
+          <PlanOptions />
         ) : (
-          <PlanOptions className="w-full" />
+          <PlanApplyStageTracker />
         )}
       </div>
       <Divider />
@@ -205,7 +166,6 @@ function Plan({
         cancel={cancel}
         close={close}
         reset={reset}
-        disabled={disabled}
       />
     </div>
   )
@@ -229,37 +189,4 @@ function CancellingPlanApply(): JSX.Element {
       </div>
     </div>
   )
-}
-
-function getPlanAction({
-  isRunning,
-  planOverviewTracker,
-  planApplyTracker,
-  planCancelTracker,
-  isFetchingPlanCancel,
-  isFetchingPlanRun,
-  isFetchingPlanApply,
-}: {
-  isRunning: boolean
-  planOverviewTracker: ModelPlanOverviewTracker
-  planApplyTracker: ModelPlanApplyTracker
-  planCancelTracker: ModelPlanCancelTracker
-  isFetchingPlanCancel: boolean
-  isFetchingPlanRun: boolean
-  isFetchingPlanApply: boolean
-}): PlanAction {
-  const isRunningOverview = isRunning && planOverviewTracker.isRunning
-  const isRunningApply = isRunning && planApplyTracker.isRunning
-  const isRunningCancel = isRunning && planCancelTracker.isRunning
-  const { isLatest, isVirtualUpdate, isBackfillUpdate } = planOverviewTracker
-  const isFinished = planApplyTracker.isFinished || isLatest
-
-  if (isRunningCancel || isFetchingPlanCancel) return EnumPlanAction.Cancelling
-  if (isRunningApply || isFetchingPlanApply) return EnumPlanAction.Applying
-  if (isRunningOverview || isFetchingPlanRun) return EnumPlanAction.Running
-  if (isVirtualUpdate) return EnumPlanAction.ApplyVirtual
-  if (isBackfillUpdate) return EnumPlanAction.ApplyBackfill
-  if (isFinished) return EnumPlanAction.Done
-
-  return EnumPlanAction.Run
 }

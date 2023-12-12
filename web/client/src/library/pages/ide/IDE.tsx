@@ -4,16 +4,17 @@ import {
   useApiFiles,
   useApiEnvironments,
   useApiPlanRun,
+  useApiPlanApply,
+  useApiCancelPlan,
 } from '../../../api'
 import { useStorePlan } from '../../../context/plan'
 import { useChannelEvents } from '../../../api/channels'
 import {
   isArrayEmpty,
-  isFalse,
   isNil,
   isNotNil,
-  isObjectEmpty,
-  isTrue,
+  isFalse,
+  isObjectNotEmpty,
 } from '~/utils'
 import { useStoreContext } from '~/context/context'
 import { ArrowLongRightIcon } from '@heroicons/react/24/solid'
@@ -22,7 +23,12 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
 import { type Tests, useStoreProject } from '@context/project'
 import { EnumErrorKey, type ErrorIDE, useIDE } from './context'
-import { Status, type Directory, type Model } from '@api/client'
+import {
+  type Directory,
+  type Model,
+  type Environments,
+  type EnvironmentsEnvironments,
+} from '@api/client'
 import { Button } from '@components/button/Button'
 import { Divider } from '@components/divider/Divider'
 import Container from '@components/container/Container'
@@ -39,6 +45,7 @@ import {
 import { type PlanOverviewTracker } from '@models/tracker-plan-overview'
 import { type PlanApplyTracker } from '@models/tracker-plan-apply'
 import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
+import { ModelPlanAction } from '@models/plan-action'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -52,28 +59,25 @@ export default function PageIDE(): JSX.Element {
 
   const { removeError, addError } = useIDE()
 
-  const isRunningPlan = useStoreContext(s => s.isRunningPlan)
-  const setIsRunningPlan = useStoreContext(s => s.setIsRunningPlan)
+  const models = useStoreContext(s => s.models)
   const showConfirmation = useStoreContext(s => s.showConfirmation)
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
   const confirmations = useStoreContext(s => s.confirmations)
   const removeConfirmation = useStoreContext(s => s.removeConfirmation)
-  const models = useStoreContext(s => s.models)
   const environment = useStoreContext(s => s.environment)
   const setModels = useStoreContext(s => s.setModels)
   const addSynchronizedEnvironments = useStoreContext(
     s => s.addSynchronizedEnvironments,
   )
-  const hasSynchronizedEnvironments = useStoreContext(
-    s => s.hasSynchronizedEnvironments,
-  )
 
   const planOverview = useStorePlan(s => s.planOverview)
   const planApply = useStorePlan(s => s.planApply)
   const planCancel = useStorePlan(s => s.planCancel)
+  const planAction = useStorePlan(s => s.planAction)
   const setPlanOverview = useStorePlan(s => s.setPlanOverview)
   const setPlanApply = useStorePlan(s => s.setPlanApply)
   const setPlanCancel = useStorePlan(s => s.setPlanCancel)
+  const setPlanAction = useStorePlan(s => s.setPlanAction)
 
   const project = useStoreProject(s => s.project)
   const setProject = useStoreProject(s => s.setProject)
@@ -97,20 +101,20 @@ export default function PageIDE(): JSX.Element {
   // all pages have access to models and files
   const { refetch: getModels, cancel: cancelRequestModels } = useApiModels()
   const { refetch: getFiles, cancel: cancelRequestFiles } = useApiFiles()
+  const { refetch: getEnvironments, cancel: cancelRequestEnvironments } =
+    useApiEnvironments()
+  const { isFetching: isFetchingPlanApply } = useApiPlanApply(environment.name)
+  const { isFetching: isFetchingPlanCancel } = useApiCancelPlan()
   const {
-    data: dataEnvironments,
-    refetch: getEnvironments,
-    cancel: cancelRequestEnvironments,
-  } = useApiEnvironments()
-  const { refetch: planRun, cancel: cancelRequestPlan } = useApiPlanRun(
-    environment.name,
-    {
-      planOptions: {
-        skip_tests: true,
-        include_unmodified: true,
-      },
+    refetch: planRun,
+    cancel: cancelRequestPlan,
+    isFetching: isFetchingPlanRun,
+  } = useApiPlanRun(environment.name, {
+    planOptions: {
+      skip_tests: true,
+      include_unmodified: true,
     },
-  )
+  })
 
   useEffect(() => {
     const channelModels = channel<Model[]>('models', updateModels)
@@ -219,6 +223,8 @@ export default function PageIDE(): JSX.Element {
       setProject(project)
     })
 
+    void getEnvironments().then(({ data }) => updateEnviroments(data))
+
     channelModels.subscribe()
     channelErrors.subscribe()
     channelPlanOverview.subscribe()
@@ -250,55 +256,59 @@ export default function PageIDE(): JSX.Element {
   }, [location])
 
   useEffect(() => {
-    if (
-      isNil(dataEnvironments) ||
-      isNil(dataEnvironments.environments) ||
-      isObjectEmpty(dataEnvironments) ||
-      isObjectEmpty(dataEnvironments.environments)
-    )
-      return
-
-    const { environments, default_target_environment, pinned_environments } =
-      dataEnvironments
-
-    addSynchronizedEnvironments(
-      Object.values(environments),
-      default_target_environment,
-      pinned_environments,
-    )
-
-    // This use case is happening when user refreshes the page
-    // while plan is still applying
-    if (isFalse(isRunningPlan) && isFalse(planCancel.isCancelling)) {
-      void planRun()
-    }
-  }, [dataEnvironments])
+    setShowConfirmation(confirmations.length > 0)
+  }, [confirmations])
 
   useEffect(() => {
-    if (models.size > 0 && isFalse(hasSynchronizedEnvironments())) {
-      void getEnvironments()
-    }
-
-    if (hasSynchronizedEnvironments() && isFalse(planCancel.isCancelling)) {
+    if (models.size > 0 && isFalse(planAction.isProcessing)) {
       void planRun()
     }
   }, [models])
 
   useEffect(() => {
-    setShowConfirmation(confirmations.length > 0)
-  }, [confirmations])
+    if (planOverview.isFetching !== isFetchingPlanRun) {
+      planOverview.isFetching = isFetchingPlanRun
 
-  useEffect(() => {
-    const { promote, meta } = planApply
-
-    if (
-      isNotNil(promote) &&
-      isTrue(meta?.done) &&
-      meta?.status === Status.success
-    ) {
-      void getEnvironments()
+      setPlanOverview(planOverview)
     }
-  }, [planApply])
+
+    if (planApply.isFetching !== isFetchingPlanApply) {
+      planApply.isFetching = isFetchingPlanApply
+
+      if (planApply.isFinished) {
+        void getEnvironments().then(({ data }) => {
+          updateEnviroments(data)
+
+          void planRun()
+        })
+      }
+
+      setPlanApply(planApply)
+    }
+
+    if (planCancel.isFetching !== isFetchingPlanCancel) {
+      planCancel.isFetching = isFetchingPlanCancel
+
+      setPlanCancel(planCancel)
+    }
+
+    const value = ModelPlanAction.getPlanAction({
+      planOverview,
+      planApply,
+      planCancel,
+    })
+
+    if (isNotNil(value)) {
+      setPlanAction(new ModelPlanAction({ value }))
+    }
+  }, [
+    planOverview,
+    planApply,
+    planCancel,
+    isFetchingPlanRun,
+    isFetchingPlanApply,
+    isFetchingPlanCancel,
+  ])
 
   function updateModels(models?: Model[]): void {
     if (isNotNil(models)) {
@@ -328,15 +338,22 @@ export default function PageIDE(): JSX.Element {
   }
 
   function updatePlanApplyTracker(data: PlanApplyTracker): void {
-    if (isNotNil(data)) {
-      setIsRunningPlan(isFalse(data?.meta?.done))
-    } else {
-      setIsRunningPlan(false)
-    }
-
     planApply.update(data, planOverview)
 
     setPlanApply(planApply)
+  }
+
+  function updateEnviroments(data: Optional<Environments>): void {
+    const { environments, default_target_environment, pinned_environments } =
+      data ?? {}
+
+    if (isObjectNotEmpty<EnvironmentsEnvironments>(environments)) {
+      addSynchronizedEnvironments(
+        Object.values(environments),
+        default_target_environment,
+        pinned_environments,
+      )
+    }
   }
 
   function restoreEditorTabsFromSaved(files: ModelFile[]): void {

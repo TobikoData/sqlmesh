@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import {
-  type BodyApplyApiCommandsApplyPostCategoriesAnyOf,
-  type BodyApplyApiCommandsApplyPostCategories,
+  type BodyInitiateApplyApiCommandsApplyPostCategoriesAnyOf,
+  type BodyInitiateApplyApiCommandsApplyPostCategories,
   type PlanDates,
   type PlanOptions,
 } from '~/api/client'
@@ -80,7 +80,7 @@ export function useApplyPayload({
 }): {
   planDates?: PlanDates
   planOptions: PlanOptions
-  categories: BodyApplyApiCommandsApplyPostCategories
+  categories: BodyInitiateApplyApiCommandsApplyPostCategories
 } {
   const {
     start,
@@ -108,7 +108,7 @@ export function useApplyPayload({
   const categories = useMemo(() => {
     return Array.from(
       change_categorization.values(),
-    ).reduce<BodyApplyApiCommandsApplyPostCategoriesAnyOf>(
+    ).reduce<BodyInitiateApplyApiCommandsApplyPostCategoriesAnyOf>(
       (acc, { category, change }) => {
         acc[change.model_name] = category.value
 
