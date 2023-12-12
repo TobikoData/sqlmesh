@@ -98,32 +98,6 @@ class StagedFilePath(exp.Table):
     """Represents paths to "staged files" in Snowflake."""
 
 
-def _scan_var(self: Tokenizer) -> None:
-    param = False
-    bracket = False
-
-    while True:
-        char = self._peek.strip()
-
-        if char and (
-            char in self.VAR_SINGLE_TOKENS
-            or (param and char == "{")
-            or (bracket and char == "}")
-            or char not in self.SINGLE_TOKENS
-        ):
-            param = char == "@"
-            bracket = (bracket and char != "}") or char == "{"
-            self._advance(alnum=True)
-        else:
-            break
-
-    self._add(
-        TokenType.VAR
-        if self.tokens and self.tokens[-1].token_type == TokenType.PARAMETER
-        else self.KEYWORDS.get(self._text.upper(), TokenType.VAR)
-    )
-
-
 def _parse_statement(self: Parser) -> t.Optional[exp.Expression]:
     if self._curr is None:
         return None
@@ -148,6 +122,52 @@ def _parse_lambda(self: Parser, alias: bool = False) -> t.Optional[exp.Expressio
     if isinstance(node, exp.Lambda):
         node.set("this", self._parse_alias(node.this))
     return node
+
+
+def _parse_id_var(
+    self: Parser,
+    any_token: bool = True,
+    tokens: t.Optional[t.Collection[TokenType]] = None,
+) -> t.Optional[exp.Expression]:
+
+    if self._match(TokenType.L_BRACE):
+        identifier = self.__parse_id_var(any_token=any_token, tokens=tokens)  # type: ignore
+        if not self._match(TokenType.R_BRACE):
+            self.raise_error("Expecting }")
+        identifier.args["this"] = f"@{{{identifier.args['this']}}}"
+    else:
+        identifier = self.__parse_id_var(any_token=any_token, tokens=tokens)  # type: ignore
+
+    while (
+        identifier
+        and self._is_connected()
+        and (
+            self._match_texts(("{", SQLMESH_MACRO_PREFIX), advance=False)
+            or self._curr.token_type not in self.RESERVED_TOKENS
+        )
+    ):
+        this = identifier.args["this"]
+        brace = self._match(TokenType.L_BRACE)
+
+        if brace:
+            this += "{"
+
+        next_id = self._parse_id_var(any_token=False)
+
+        if next_id:
+            this += next_id.this
+        else:
+            return identifier
+
+        if brace:
+            if self._match(TokenType.R_BRACE):
+                this += "}"
+            else:
+                self.raise_error("Expecting }")
+
+        identifier = self.expression(exp.Identifier, this=this, quoted=identifier.quoted)
+
+    return identifier
 
 
 def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expression]:
@@ -182,6 +202,8 @@ def _parse_macro(self: Parser, keyword_macro: str = "") -> t.Optional[exp.Expres
     if field.is_string or (isinstance(field, exp.Identifier) and field.quoted):
         return self.expression(MacroStrReplace, this=exp.Literal.string(field.this))
 
+    if "@" in field.this:
+        return field
     return self.expression(MacroVar, this=field.this)
 
 
@@ -702,7 +724,6 @@ def extend_sqlglot() -> None:
 
             generator.WITH_SEPARATED_COMMENTS = (*generator.WITH_SEPARATED_COMMENTS, Model)
 
-    _override(Tokenizer, _scan_var)
     _override(Parser, _parse_statement)
     _override(Parser, _parse_join)
     _override(Parser, _parse_order)
@@ -713,6 +734,7 @@ def extend_sqlglot() -> None:
     _override(Parser, _parse_lambda)
     _override(Parser, _parse_types)
     _override(Parser, _parse_if)
+    _override(Parser, _parse_id_var)
     _override(Snowflake.Parser, _parse_table_parts)
 
 
