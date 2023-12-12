@@ -16,6 +16,7 @@ from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
 from sqlglot.optimizer.annotate_types import annotate_types
+from sqlglot.optimizer.simplify import gen
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
 
@@ -719,11 +720,11 @@ class _Model(ModelMeta, frozen=True):
             *self.kind.data_hash_values,
             self.storage_format,
             str(self.lookback),
-            *(expr.sql() for expr in (self.partitioned_by or [])),
+            *(gen(expr) for expr in (self.partitioned_by or [])),
             *(self.clustered_by or []),
             self.stamp,
             self.physical_schema,
-            str(self.interval_unit) if self.interval_unit is not None else None,
+            self.interval_unit.value if self.interval_unit is not None else None,
         ]
 
         for column_name, column_type in (self.columns_to_types_ or {}).items():
@@ -732,13 +733,13 @@ class _Model(ModelMeta, frozen=True):
 
         for key, value in (self.table_properties or {}).items():
             data.append(key)
-            data.append(value.sql())
+            data.append(gen(value))
 
         if isinstance(self.kind, IncrementalByTimeRangeKind):
             data.append(self.kind.time_column.column)
             data.append(self.kind.time_column.format)
         elif isinstance(self.kind, IncrementalByUniqueKeyKind):
-            data.extend((k.sql() for k in self.kind.unique_key))
+            data.extend((gen(k) for k in self.kind.unique_key))
 
         return data  # type: ignore
 
@@ -758,6 +759,7 @@ class _Model(ModelMeta, frozen=True):
             self.dialect,
             self.owner,
             self.description,
+            json.dumps(self.column_descriptions, sort_keys=True),
             self.cron,
             str(self.start) if self.start else None,
             str(self.retention) if self.retention else None,
@@ -769,7 +771,7 @@ class _Model(ModelMeta, frozen=True):
             str(self.disable_restatement),
             self.project,
             str(self.allow_partials),
-            self.session_properties_.sql() if self.session_properties_ else None,
+            gen(self.session_properties_) if self.session_properties_ else None,
         ]
 
         for audit_name, audit_args in sorted(self.audits, key=lambda a: a[0]):
@@ -778,7 +780,7 @@ class _Model(ModelMeta, frozen=True):
             if audit_name in BUILT_IN_AUDITS:
                 for arg_name, arg_value in audit_args.items():
                     metadata.append(arg_name)
-                    metadata.append(arg_value.sql(comments=True))
+                    metadata.append(gen(arg_value))
             elif audit_name in audits:
                 audit = audits[audit_name]
                 query = (
@@ -789,7 +791,7 @@ class _Model(ModelMeta, frozen=True):
                 )
                 metadata.extend(
                     [
-                        query.sql(comments=True),
+                        gen(query),
                         audit.dialect,
                         str(audit.skip),
                         str(audit.blocking),
@@ -798,16 +800,7 @@ class _Model(ModelMeta, frozen=True):
             else:
                 raise SQLMeshError(f"Unexpected audit name '{audit_name}'.")
 
-        metadata.extend([s.sql(comments=True) for s in self.signals])
-
-        # Add comments from the query.
-        if self.is_sql:
-            rendered_query = self.render_query()
-            if rendered_query:
-                for e, _, _ in rendered_query.walk():
-                    if e.comments:
-                        metadata.extend(e.comments)
-
+        metadata.extend(gen(s) for s in self.signals)
         metadata.extend(self._additional_metadata)
 
         return hash_data(metadata)
@@ -924,12 +917,9 @@ class _SqlBasedModel(_Model):
     @property
     def _data_hash_values(self) -> t.List[str]:
         statements = (
-            self._unrendered_statements(include_comments=False)
+            self._additional_metadata
             if self.hash_raw_query
-            else [
-                e.sql(comments=False)
-                for e in (*self.render_pre_statements(), *self.render_post_statements())
-            ]
+            else [gen(e) for e in (*self.render_pre_statements(), *self.render_post_statements())]
         )
         return [
             *super()._data_hash_values,
@@ -938,12 +928,8 @@ class _SqlBasedModel(_Model):
 
     @property
     def _additional_metadata(self) -> t.List[str]:
-        return self._unrendered_statements()
-
-    def _unrendered_statements(self, include_comments: bool = True) -> t.List[str]:
         return [
-            s.sql(comments=include_comments)
-            for s in (*self.pre_statements, *self.post_statements, *self.macro_definitions)
+            gen(s) for s in (*self.pre_statements, *self.post_statements, *self.macro_definitions)
         ]
 
 
@@ -1150,7 +1136,7 @@ class SqlModel(_SqlBasedModel):
         data = super()._data_hash_values
 
         query = self.query if self.hash_raw_query else self.render_query() or self.query
-        data.append(query.sql(comments=False))
+        data.append(gen(query))
         data.extend(self.jinja_macros.data_hash_values)
         return data
 
