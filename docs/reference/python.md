@@ -1,4 +1,4 @@
-# Python
+# Python API
 
 SQLMesh is built in Python, and its complete Python API reference is located [here](https://sqlmesh.readthedocs.io/en/stable/_readthedocs/html/sqlmesh.html).
 
