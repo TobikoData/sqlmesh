@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import {
+  type BodyApplyApiCommandsApplyPostCategoriesAnyOf,
   type BodyApplyApiCommandsApplyPostCategories,
   type PlanDates,
   type PlanOptions,
@@ -41,7 +42,7 @@ export function usePlanPayload({
   }, [environment, start, end, isInitialPlanRun, restate_models])
 
   const planOptions = useMemo(() => {
-    if (environment.isDefault || environment.isInitial)
+    if (environment.isDefaultInitial)
       return { skip_tests, include_unmodified: true }
 
     return {
@@ -107,7 +108,7 @@ export function useApplyPayload({
   const categories = useMemo(() => {
     return Array.from(
       change_categorization.values(),
-    ).reduce<BodyApplyApiCommandsApplyPostCategories>(
+    ).reduce<BodyApplyApiCommandsApplyPostCategoriesAnyOf>(
       (acc, { category, change }) => {
         acc[change.model_name] = category.value
 

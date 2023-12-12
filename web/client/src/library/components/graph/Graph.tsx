@@ -56,9 +56,11 @@ import {
 } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import {
+  type ColumnDescription,
   type Column,
   type ColumnLineageApiLineageModelNameColumnNameGet200,
   type LineageColumn,
+  type LineageColumnSource,
 } from '@api/client'
 import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
@@ -100,8 +102,8 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
 }: {
   columnName: string
   columnType: string
-  columnDescription?: string
-  source?: string
+  columnDescription?: ColumnDescription
+  source?: LineageColumnSource
   disabled?: boolean
   withDescription?: boolean
   className?: string
@@ -372,7 +374,7 @@ const ModelColumn = memo(function ModelColumn({
   hasLeft?: boolean
   hasRight?: boolean
   withHandles?: boolean
-  source?: string
+  source?: LineageColumnSource
   withDescription?: boolean
   updateColumnLineage: (
     lineage: ColumnLineageApiLineageModelNameColumnNameGet200,

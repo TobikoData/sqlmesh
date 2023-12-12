@@ -13,7 +13,7 @@ export interface FetchOptionsWithSignal {
 
 export interface FetchOptions<B extends object = any> {
   url: string
-  method: 'get' | 'post' | 'put' | 'delete' | 'patch'
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   data?: B
   responseType?: string
   headers?: Record<string, string>
@@ -26,7 +26,7 @@ export interface FetchOptions<B extends object = any> {
     | 'no-cache'
     | 'force-cache'
     | 'only-if-cached'
-  params?: Record<string, string | number | boolean>
+  params?: Record<string, Maybe<string | number | boolean>>
 }
 
 export async function fetchAPI<T = any, B extends object = any>(

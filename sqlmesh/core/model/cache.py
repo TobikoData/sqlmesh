@@ -14,7 +14,7 @@ from sqlmesh.utils.pydantic import PydanticModel
 
 class SqlModelCacheEntry(PydanticModel):
     model: SqlModel
-    rendered_query: t.Optional[exp.Expression]
+    rendered_query: t.Optional[exp.Expression] = None
 
 
 class ModelCache:

@@ -22,6 +22,7 @@ import { dracula, tomorrow } from 'thememirror'
 import { python } from '@codemirror/lang-python'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
+import { type FileContent } from '@api/client'
 
 export { CodeEditorDefault, CodeEditorRemoteFile }
 
@@ -37,7 +38,7 @@ function CodeEditorDefault({
   type: FileExtensions
   dialect?: string
   className?: string
-  content?: string
+  content?: FileContent
   keymaps?: KeyBinding[]
   extensions?: Extension[]
   onChange?: (value: string) => void
@@ -137,7 +138,7 @@ function CodeEditorDefault({
         height="100%"
         width="100%"
         className={clsx('flex w-full h-full font-mono text-sm', className)}
-        value={content}
+        value={content ?? ''}
         extensions={extensionsAll}
         onChange={onChange}
         readOnly={isNil(onChange)}

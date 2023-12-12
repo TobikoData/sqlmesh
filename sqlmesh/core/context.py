@@ -444,8 +444,10 @@ class Context(BaseContext):
         Returns:
             True if the run was successful, False otherwise.
         """
+        environment = environment or self.config.default_target_environment
+
         self.notification_target_manager.notify(
-            NotificationEvent.RUN_START, environment=environment or c.PROD
+            NotificationEvent.RUN_START, environment=environment
         )
         success = False
         try:
@@ -586,7 +588,7 @@ class Context(BaseContext):
     def snapshots(self) -> t.Dict[str, Snapshot]:
         """Generates and returns snapshots based on models registered in this context.
 
-        If one of the snapshots has been previosly stored in the persisted state, the stored
+        If one of the snapshots has been previously stored in the persisted state, the stored
         instance will be returned.
         """
         return self._snapshots()
@@ -774,7 +776,7 @@ class Context(BaseContext):
 
         if skip_backfill and not no_gaps and environment == c.PROD:
             raise ConfigError(
-                "When targeting the production enviornment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
+                "When targeting the production environment either the backfill should not be skipped or the lack of data gaps should be enforced (--no-gaps flag)."
             )
 
         self._run_plan_tests(skip_tests=skip_tests)
@@ -1255,7 +1257,7 @@ class Context(BaseContext):
 
     def _run(
         self,
-        environment: t.Optional[str],
+        environment: str,
         *,
         start: t.Optional[TimeLike],
         end: t.Optional[TimeLike],
@@ -1263,8 +1265,6 @@ class Context(BaseContext):
         skip_janitor: bool,
         ignore_cron: bool,
     ) -> bool:
-        environment = environment or self.config.default_target_environment
-
         if not skip_janitor and environment.lower() == c.PROD:
             self._run_janitor()
 
@@ -1336,7 +1336,10 @@ class Context(BaseContext):
     ) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
         if self._test_engine_adapter and not skip_tests:
             result, test_output = self._run_tests()
-            self.console.log_test_results(result, test_output, self._test_engine_adapter.dialect)
+            if result.testsRun > 0:
+                self.console.log_test_results(
+                    result, test_output, self._test_engine_adapter.dialect
+                )
             if not result.wasSuccessful():
                 raise PlanError(
                     "Cannot generate plan due to failing test(s). Fix test(s) and run again"

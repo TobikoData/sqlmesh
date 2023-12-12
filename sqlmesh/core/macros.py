@@ -113,7 +113,7 @@ class MacroEvaluator:
         dialect: str = "",
         python_env: t.Optional[t.Dict[str, Executable]] = None,
         jinja_env: t.Optional[Environment] = None,
-        schema: t.Optional[t.Dict[str, t.Any]] = None,
+        schema: t.Optional[MappingSchema] = None,
         runtime_stage: RuntimeStage = RuntimeStage.LOADING,
         resolve_tables: t.Optional[t.Callable[[exp.Expression], exp.Expression]] = None,
         snapshots: t.Optional[t.Dict[str, Snapshot]] = None,
@@ -125,7 +125,7 @@ class MacroEvaluator:
         self.python_env = python_env or {}
         self._jinja_env: t.Optional[Environment] = jinja_env
         self.macros = {normalize_macro_name(k): v.func for k, v in macro.get_registry().items()}
-        self._schema = MappingSchema(schema, dialect=dialect, normalize=False) if schema else {}
+        self._schema = schema
         self._resolve_tables = resolve_tables
         self.columns_to_types_called = False
         self._snapshots = snapshots if snapshots is not None else {}
@@ -158,9 +158,14 @@ class MacroEvaluator:
     ) -> exp.Expression | t.List[exp.Expression] | None:
         changed = False
 
-        def _transform_node(node: exp.Expression) -> exp.Expression:
+        def evaluate_macros(
+            node: exp.Expression,
+        ) -> exp.Expression | t.List[exp.Expression] | None:
             nonlocal changed
 
+            exp.replace_children(
+                node, lambda n: n if isinstance(n, exp.Lambda) else evaluate_macros(n)
+            )
             if isinstance(node, MacroVar):
                 changed = True
                 if node.name not in self.locals:
@@ -177,32 +182,23 @@ class MacroEvaluator:
                     changed = True
                     node.set("this", self.jinja_env.from_string(node.this).render())
                 return node
-            return node
-
-        expression = expression.transform(_transform_node)
-
-        def evaluate_macros(
-            node: exp.Expression,
-        ) -> exp.Expression | t.List[exp.Expression] | None:
-            nonlocal changed
-
-            exp.replace_children(
-                node, lambda n: n if isinstance(n, exp.Lambda) else evaluate_macros(n)
-            )
             if isinstance(node, MacroFunc):
                 changed = True
                 return self.evaluate(node)
             return node
 
-        transformed = evaluate_macros(expression)
+        transformed = evaluate_macros(expression.copy())
 
         if changed:
             # the transformations could have corrupted the ast, turning this into sql and reparsing ensures
             # that the ast is correct
             if isinstance(transformed, list):
-                return [self.parse_one(node.sql(dialect=self.dialect)) for node in transformed]
+                return [
+                    self.parse_one(node.sql(dialect=self.dialect, copy=False))
+                    for node in transformed
+                ]
             elif isinstance(transformed, exp.Expression):
-                return self.parse_one(transformed.sql(dialect=self.dialect))
+                return self.parse_one(transformed.sql(dialect=self.dialect, copy=False))
 
         return transformed
 
@@ -286,7 +282,7 @@ class MacroEvaluator:
 
     def columns_to_types(self, model_name: TableName | exp.Column) -> t.Dict[str, exp.DataType]:
         """Returns the columns-to-types mapping corresponding to the specified model."""
-        if not isinstance(self._schema, MappingSchema):
+        if self._schema is None or self._schema.empty:
             self.columns_to_types_called = True
             return {"__schema_unavailable_at_load__": exp.DataType.build("unknown")}
 
@@ -712,9 +708,10 @@ def star(
 
     Example:
         >>> from sqlglot import parse_one
+        >>> from sqlglot.schema import MappingSchema
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "SELECT @STAR(foo, bar, [c], 'baz_') FROM foo AS bar"
-        >>> MacroEvaluator(schema={"foo": {"a": "string", "b": "string", "c": "string", "d": "int"}}).transform(parse_one(sql)).sql()
+        >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "string", "b": "string", "c": "string", "d": "int"}})).transform(parse_one(sql)).sql()
         'SELECT CAST("bar"."a" AS TEXT) AS "baz_a", CAST("bar"."b" AS TEXT) AS "baz_b", CAST("bar"."d" AS INT) AS "baz_d" FROM foo AS bar'
     """
     if alias and not isinstance(alias, (exp.Identifier, exp.Column)):
@@ -825,9 +822,10 @@ def union(
 
     Example:
         >>> from sqlglot import parse_one
+        >>> from sqlglot.schema import MappingSchema
         >>> from sqlmesh.core.macros import MacroEvaluator
         >>> sql = "@UNION('distinct', foo, bar)"
-        >>> MacroEvaluator(schema={"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}}).transform(parse_one(sql)).sql()
+        >>> MacroEvaluator(schema=MappingSchema({"foo": {"a": "int", "b": "string", "c": "string"}, "bar": {"c": "string", "a": "int", "b": "int"}})).transform(parse_one(sql)).sql()
         'SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM foo UNION SELECT CAST(a AS INT) AS a, CAST(c AS TEXT) AS c FROM bar'
     """
     kind = type_.name.upper()
