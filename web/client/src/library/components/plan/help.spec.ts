@@ -1,89 +1,113 @@
 import { describe, it, expect } from 'vitest'
-import { EnumPlanAction } from '../../../context/plan'
-import { getActionName, isModified } from './help'
+import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
+import { isModified } from './help'
 
-describe('getActionName', () => {
+describe('getActionDisplayName', () => {
   it('should return "Done" when action is EnumPlanAction.Done', () => {
-    const action = EnumPlanAction.Done
+    const action = new ModelPlanAction({ value: EnumPlanAction.Done })
     const options = [EnumPlanAction.Done]
     const fallback = 'Start'
     const expected = 'Done'
 
-    const result = getActionName(action, options, fallback)
+    const result = ModelPlanAction.getActionDisplayName(
+      action,
+      options,
+      fallback,
+    )
 
     expect(result).toBe(expected)
   })
 
   it('should return "Running..." when action is EnumPlanAction.Running', () => {
-    const action = EnumPlanAction.Running
+    const action = new ModelPlanAction({ value: EnumPlanAction.Running })
     const options = [EnumPlanAction.Running]
     const fallback = 'Start'
     const expected = 'Running...'
 
-    const result = getActionName(action, options, fallback)
+    const result = ModelPlanAction.getActionDisplayName(
+      action,
+      options,
+      fallback,
+    )
 
     expect(result).toBe(expected)
   })
 
   it('should return "Applying..." when action is EnumPlanAction.Applying', () => {
-    const action = EnumPlanAction.Applying
+    const action = new ModelPlanAction({ value: EnumPlanAction.Applying })
     const options = [EnumPlanAction.Applying]
     const fallback = 'Start'
     const expected = 'Applying...'
 
-    const result = getActionName(action, options, fallback)
+    const result = ModelPlanAction.getActionDisplayName(
+      action,
+      options,
+      fallback,
+    )
 
     expect(result).toBe(expected)
   })
 
   it('should return "Cancelling..." when action is EnumPlanAction.Cancelling', () => {
-    const action = EnumPlanAction.Cancelling
+    const action = new ModelPlanAction({ value: EnumPlanAction.Cancelling })
     const options = [EnumPlanAction.Cancelling]
     const fallback = 'Start'
     const expected = 'Cancelling...'
 
-    const result = getActionName(action, options, fallback)
+    const result = ModelPlanAction.getActionDisplayName(
+      action,
+      options,
+      fallback,
+    )
 
     expect(result).toBe(expected)
   })
 
   it('should return "Run" when action is EnumPlanAction.Run', () => {
-    const action = EnumPlanAction.Run
+    const action = new ModelPlanAction({ value: EnumPlanAction.Run })
     const options = [EnumPlanAction.Run]
     const fallback = 'Start'
     const expected = 'Run'
 
-    const result = getActionName(action, options, fallback)
+    const result = ModelPlanAction.getActionDisplayName(
+      action,
+      options,
+      fallback,
+    )
 
     expect(result).toBe(expected)
   })
 
   it('should return "Apply" when action is EnumPlanAction.ApplyBackfill', () => {
     const fallback = 'Start'
-    let result = getActionName(
-      EnumPlanAction.ApplyBackfill,
+    let result = ModelPlanAction.getActionDisplayName(
+      new ModelPlanAction({ value: EnumPlanAction.ApplyBackfill }),
       [EnumPlanAction.ApplyBackfill],
       fallback,
     )
 
-    expect(result).toBe('Apply Backfill')
+    expect(result).toBe('Apply And Backfill')
 
-    result = getActionName(
-      EnumPlanAction.ApplyVirtual,
+    result = ModelPlanAction.getActionDisplayName(
+      new ModelPlanAction({ value: EnumPlanAction.ApplyVirtual }),
       [EnumPlanAction.ApplyVirtual],
       fallback,
     )
 
-    expect(result).toBe('Apply Virtual')
+    expect(result).toBe('Apply Virtual Update')
   })
 
   it('should return fallback when action is not included in options', () => {
-    const action = EnumPlanAction.Done
+    const action = new ModelPlanAction({ value: EnumPlanAction.Done })
     const options = [EnumPlanAction.Run]
     const fallback = 'Start'
     const expected = 'Start'
 
-    const result = getActionName(action, options, fallback)
+    const result = ModelPlanAction.getActionDisplayName(
+      action,
+      options,
+      fallback,
+    )
 
     expect(result).toBe(expected)
   })

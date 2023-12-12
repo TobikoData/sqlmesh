@@ -20,10 +20,9 @@ import {
   getFilesApiFilesGet,
   getEnvironmentsApiEnvironmentsGet,
   writeFileApiFilesPathPost,
-  runPlanApiPlanPost,
-  applyApiCommandsApplyPost,
+  initiatePlanApiPlanPost,
+  initiateApplyApiCommandsApplyPost,
   cancelPlanApiPlanCancelPost,
-  type BodyApplyApiCommandsApplyPostCategories,
   getModelsApiModelsGet,
   type ModelLineageApiLineageModelNameGet200,
   modelLineageApiLineageModelNameGet,
@@ -47,6 +46,7 @@ import {
   type Environments,
   type PlanOverviewStageTracker,
   type PlanApplyStageTracker,
+  type BodyInitiateApplyApiCommandsApplyPostCategories,
 } from './client'
 import {
   useIDE,
@@ -235,7 +235,7 @@ export function useApiPlanRun(
     {
       queryKey: ['/api/plan', environment],
       async queryFn({ signal }) {
-        return await runPlanApiPlanPost(
+        return await initiatePlanApiPlanPost(
           {
             environment,
             plan_dates: inputs?.planDates,
@@ -258,7 +258,7 @@ export function useApiPlanApply(
   inputs?: {
     planDates?: PlanDates
     planOptions?: PlanOptions
-    categories?: BodyApplyApiCommandsApplyPostCategories
+    categories?: BodyInitiateApplyApiCommandsApplyPostCategories
   },
   options?: ApiOptions,
 ): UseQueryWithTimeoutOptions<PlanApplyStageTracker> {
@@ -266,7 +266,7 @@ export function useApiPlanApply(
     {
       queryKey: ['/api/commands/apply', environment],
       async queryFn({ signal }) {
-        return await applyApiCommandsApplyPost(
+        return await initiateApplyApiCommandsApplyPost(
           {
             environment,
             plan_dates: inputs?.planDates,

@@ -8,17 +8,25 @@ import Loading from '@components/loading/Loading'
 import Spinner from '@components/logo/Spinner'
 import { useApiMeta } from './api'
 import { useStoreContext } from '@context/context'
+import { useStorePlan } from '@context/plan'
+import { EnumPlanAction, ModelPlanAction } from '@models/plan-action'
+import { isNotNil } from './utils'
 
 export default function App(): JSX.Element {
   const setVersion = useStoreContext(s => s.setVersion)
-  const setIsRunningPlan = useStoreContext(s => s.setIsRunningPlan)
+  const setPlanAction = useStorePlan(s => s.setPlanAction)
 
   const { refetch: getMeta, cancel: cancelRequestMeta } = useApiMeta()
 
   useEffect(() => {
     void getMeta().then(({ data }) => {
       setVersion(data?.version)
-      setIsRunningPlan(data?.has_running_task ?? false)
+
+      if (isNotNil(data) && Boolean(data.has_running_task)) {
+        setPlanAction(
+          new ModelPlanAction({ value: EnumPlanAction.RunningTask }),
+        )
+      }
     })
 
     return () => {
