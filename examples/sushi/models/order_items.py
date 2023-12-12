@@ -47,7 +47,11 @@ def execute(
     orders_table = context.table("sushi.orders")
     items_table = context.table(ITEMS)
 
+    rng = random.Random()
+
     for dt in iter_dates(start, end):
+        rng.seed(int(dt.timestamp()))
+
         # Generate query with sqlglot dialect/quoting
         orders = context.fetchdf(
             exp.select("*").from_(orders_table).where(f"event_date = CAST('{to_ds(dt)}' AS DATE)"),
@@ -69,7 +73,7 @@ def execute(
         dfs = []
 
         for order_id in orders["id"]:
-            n = random.randint(1, 5)
+            n = rng.randint(1, 5)
 
             dfs.append(
                 pd.DataFrame(
