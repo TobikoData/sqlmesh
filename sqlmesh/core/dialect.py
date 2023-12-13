@@ -155,7 +155,7 @@ def _parse_id_var(
         next_id = self._parse_id_var(any_token=False)
 
         if next_id:
-            this += next_id.this
+            this += next_id.name
         else:
             return identifier
 
