@@ -146,7 +146,7 @@ def _parse_id_var(
             or self._curr.token_type not in self.RESERVED_TOKENS
         )
     ):
-        this = identifier.args["this"]
+        this = identifier.name
         brace = self._match(TokenType.L_BRACE)
 
         if brace:
