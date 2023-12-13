@@ -41,6 +41,9 @@ SourceConfigs = t.Dict[str, SourceConfig]
 MacroConfigs = t.Dict[str, MacroConfig]
 
 
+BUILTIN_CALLS = {*BUILTIN_GLOBALS, *BUILTIN_FILTERS}
+
+
 class ManifestHelper:
     def __init__(
         self,
@@ -356,9 +359,9 @@ class ManifestHelper:
         # Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
         dependencies = Dependencies()
         for call_name, node in extract_call_names(target):
-            if call_name[0] in ("config"):
+            if call_name[0] == "config":
                 continue
-            if call_name[0] == "source":
+            elif call_name[0] == "source":
                 args = [_jinja_call_arg_name(arg) for arg in node.args]
                 if args and all(arg for arg in args):
                     source = ".".join(args)
@@ -376,7 +379,7 @@ class ManifestHelper:
                     dependencies.variables.add(args[0])
             elif len(call_name) == 1:
                 macro_name = call_name[0]
-                if macro_name in {**BUILTIN_GLOBALS, **BUILTIN_FILTERS}:
+                if macro_name in BUILTIN_CALLS:
                     continue
                 if (
                     f"macro.{package}.{macro_name}" not in self._manifest.macros
@@ -388,7 +391,7 @@ class ManifestHelper:
                     package_name = package if package != self._project_name else None
                 dependencies.macros.append(MacroReference(package=package_name, name=macro_name))
             else:
-                if call_name[0] not in ("adapter"):
+                if call_name[0] != "adapter":
                     dependencies.macros.append(
                         MacroReference(package=call_name[0], name=call_name[1])
                     )
