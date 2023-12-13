@@ -17,6 +17,7 @@ from dbt.parser.manifest import ManifestLoader
 from dbt.tracking import do_not_track
 
 from sqlmesh.dbt.basemodel import Dependencies
+from sqlmesh.dbt.builtin import BUILTIN_FILTERS, BUILTIN_GLOBALS
 from sqlmesh.dbt.model import ModelConfig
 from sqlmesh.dbt.package import MacroConfig
 from sqlmesh.dbt.seed import SeedConfig
@@ -130,7 +131,9 @@ class ManifestHelper:
 
             dependencies = Dependencies(macros=_macro_references(self._manifest, macro))
             if not macro.name.startswith("materialization_") and not macro.name.startswith("test_"):
-                dependencies = dependencies.union(self._extra_dependencies(macro.macro_sql))
+                dependencies = dependencies.union(
+                    self._extra_dependencies(macro.macro_sql, macro.package_name)
+                )
 
             self._macros_per_package[macro.package_name][macro.name] = MacroConfig(
                 info=MacroInfo(
@@ -171,7 +174,7 @@ class ManifestHelper:
             dependencies.macros.append(MacroReference(package="dbt", name="should_store_failures"))
 
             sql = node.raw_code if DBT_VERSION >= (1, 3) else node.raw_sql  # type: ignore
-            dependencies = dependencies.union(self._extra_dependencies(sql))
+            dependencies = dependencies.union(self._extra_dependencies(sql, node.package_name))
             dependencies = dependencies.union(
                 self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
             )
@@ -208,7 +211,7 @@ class ManifestHelper:
                 dependencies = Dependencies(
                     macros=macro_references, refs=_refs(node), sources=_sources(node)
                 )
-                dependencies = dependencies.union(self._extra_dependencies(sql))
+                dependencies = dependencies.union(self._extra_dependencies(sql, node.package_name))
                 dependencies = dependencies.union(
                     self._flatten_dependencies_from_macros(dependencies.macros, node.package_name)
                 )
@@ -347,13 +350,13 @@ class ManifestHelper:
             dependencies = dependencies.union(macro_dependencies)
         return dependencies
 
-    def _extra_dependencies(self, target: str) -> Dependencies:
+    def _extra_dependencies(self, target: str, package: str) -> Dependencies:
         # We sometimes observe that the manifest doesn't capture all macros, refs, and sources within a macro.
         # This behavior has been observed with macros like dbt.current_timestamp(), dbt_utils.slugify(), and source().
         # Here we apply our custom extractor to make a best effort to supplement references captured in the manifest.
         dependencies = Dependencies()
         for call_name, node in extract_call_names(target):
-            if call_name[0] in ("var", "config"):
+            if call_name[0] in ("config"):
                 continue
             if call_name[0] == "source":
                 args = [_jinja_call_arg_name(arg) for arg in node.args]
@@ -372,9 +375,23 @@ class ManifestHelper:
                 if args and args[0]:
                     dependencies.variables.add(args[0])
             elif len(call_name) == 1:
-                dependencies.macros.append(MacroReference(package=None, name=call_name[0]))
+                macro_name = call_name[0]
+                if macro_name in {**BUILTIN_GLOBALS, **BUILTIN_FILTERS}:
+                    continue
+                if (
+                    f"macro.{package}.{macro_name}" not in self._manifest.macros
+                    and f"macro.dbt.{macro_name}" in self._manifest.macros
+                ):
+                    package_name: t.Optional[str] = "dbt"
+                else:
+                    # dbt doesn't include the package name for project macros
+                    package_name = package if package != self._project_name else None
+                dependencies.macros.append(MacroReference(package=package_name, name=macro_name))
             else:
-                dependencies.macros.append(MacroReference(package=call_name[0], name=call_name[1]))
+                if call_name[0] not in ("adapter"):
+                    dependencies.macros.append(
+                        MacroReference(package=call_name[0], name=call_name[1])
+                    )
 
         return dependencies
 
