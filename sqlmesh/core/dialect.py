@@ -134,7 +134,7 @@ def _parse_id_var(
         identifier = self.__parse_id_var(any_token=any_token, tokens=tokens)  # type: ignore
         if not self._match(TokenType.R_BRACE):
             self.raise_error("Expecting }")
-        identifier.args["this"] = f"@{{{identifier.args['this']}}}"
+        identifier.args["this"] = f"@{{{identifier.name}}}"
     else:
         identifier = self.__parse_id_var(any_token=any_token, tokens=tokens)  # type: ignore
 
