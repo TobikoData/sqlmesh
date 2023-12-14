@@ -103,4 +103,4 @@ ui-build:
 clean-build:
 	rm -rf build/ && rm -rf dist/ && rm -rf *.egg-info
 
-dev-publish: clean-build ui-build publish
+dev-publish: ui-build clean-build publish
