@@ -217,12 +217,45 @@ class BaseModelConfig(GeneralConfig):
         dependencies.macros = []
         return dependencies
 
+    def check_for_circular_test_refs(self, context: DbtContext) -> None:
+        """
+        Checks for direct circular references between two models and raises an exception if found.
+        This addresses the most common circular reference seen when importing a dbt project -
+        relationship tests in both directions. In the future, we may want to increase coverage by
+        checking for indirect circular references.
+
+        Args:
+            context: The dbt context this model resides within.
+
+        Returns:
+            None
+        """
+        for test in self.tests:
+            for ref in test.dependencies.refs:
+                model = context.refs[ref]
+                if ref == self.name or ref in self.dependencies.refs:
+                    continue
+                elif self.name in model.dependencies.refs:
+                    raise ConfigError(
+                        f"Test '{test.name}' for model '{self.name}' depends on downstream model '{model.name}'."
+                        " Move the test to the downstream model to avoid circular references."
+                    )
+                elif self.name in model.tests_ref_source_dependencies.refs:
+                    circular_test = next(
+                        test.name for test in model.tests if ref in test.dependencies.refs
+                    )
+                    raise ConfigError(
+                        f"Circular reference detected between tests for models '{self.name}' and '{model.name}':"
+                        f" '{test.name}' ({self.name}), '{circular_test}' ({model.name})."
+                    )
+
     @property
     def sqlmesh_config_fields(self) -> t.Set[str]:
         return {"description", "owner", "stamp", "storage_format"}
 
     def sqlmesh_model_kwargs(self, context: DbtContext) -> t.Dict[str, t.Any]:
         """Get common sqlmesh model parameters"""
+        self.check_for_circular_test_refs(context)
         model_context = context.context_for_dependencies(
             self.dependencies.union(self.tests_ref_source_dependencies)
         )
