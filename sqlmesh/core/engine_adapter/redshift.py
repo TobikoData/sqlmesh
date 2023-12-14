@@ -247,7 +247,7 @@ def parse_plan(plan: str) -> t.Optional[t.Dict]:
         return tokens[i - 1]
 
     def match(token_type: TokenType, raise_unmatched: bool = False) -> t.Optional[Token]:
-        if curr() is token_type:
+        if curr() == token_type:
             return advance()
         if raise_unmatched:
             raise Exception(f"Expected {token_type}")
