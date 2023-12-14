@@ -176,6 +176,12 @@ class MacroEvaluator:
 
                 value = self.locals[node.name]
                 return exp.convert(tuple(value) if isinstance(value, list) else value)
+            if isinstance(node, exp.Identifier):
+                text = self.template(node.this, self.locals)
+                if node.this != text:
+                    changed = True
+                    node.args["this"] = text
+                    return node
             if node.is_string:
                 text = node.this
                 if has_jinja(text):
