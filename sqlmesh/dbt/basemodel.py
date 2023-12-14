@@ -218,6 +218,18 @@ class BaseModelConfig(GeneralConfig):
         return dependencies
 
     def check_for_circular_test_refs(self, context: DbtContext) -> None:
+        """
+        Checks for direct circular references between two models and raises an exception if found.
+        This addresses the most common circular reference seen when importing a dbt project -
+        relationship tests in both directions. In the future, we may want to increase coverage by
+        checking for indirect circular references.
+
+        Args:
+            context: The dbt context this model resides within.
+
+        Returns:
+            None
+        """
         for test in self.tests:
             for ref in test.dependencies.refs:
                 model = context.refs[ref]
