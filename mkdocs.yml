@@ -24,6 +24,7 @@ nav:
       - guides/models.md
       - guides/incremental_time.md
       - guides/testing.md
+      - guides/model_selection.md
     - SQLMesh tools:
       - guides/tablediff.md
       - guides/observer.md
