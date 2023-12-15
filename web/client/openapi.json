@@ -4,16 +4,16 @@
   "paths": {
     "/api/commands/apply": {
       "post": {
-        "summary": "Apply",
+        "summary": "Initiate Apply",
         "description": "Apply a plan",
-        "operationId": "apply_api_commands_apply_post",
+        "operationId": "initiate_apply_api_commands_apply_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/Body_apply_api_commands_apply_post"
+                    "$ref": "#/components/schemas/Body_initiate_apply_api_commands_apply_post"
                   }
                 ],
                 "title": "Body"
@@ -31,7 +31,7 @@
                     { "$ref": "#/components/schemas/PlanApplyStageTracker" },
                     { "type": "null" }
                   ],
-                  "title": "Response Apply Api Commands Apply Post"
+                  "title": "Response Initiate Apply Api Commands Apply Post"
                 }
               }
             }
@@ -389,15 +389,17 @@
     },
     "/api/plan": {
       "post": {
-        "summary": "Run Plan",
+        "summary": "Initiate Plan",
         "description": "Get a plan for an environment.",
-        "operationId": "run_plan_api_plan_post",
+        "operationId": "initiate_plan_api_plan_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "allOf": [
-                  { "$ref": "#/components/schemas/Body_run_plan_api_plan_post" }
+                  {
+                    "$ref": "#/components/schemas/Body_initiate_plan_api_plan_post"
+                  }
                 ],
                 "title": "Body"
               }
@@ -414,7 +416,7 @@
                     { "$ref": "#/components/schemas/PlanOverviewStageTracker" },
                     { "type": "null" }
                   ],
-                  "title": "Response Run Plan Api Plan Post"
+                  "title": "Response Initiate Plan Api Plan Post"
                 }
               }
             }
@@ -836,7 +838,7 @@
         "required": ["completed", "total", "view_name", "start"],
         "title": "BackfillTask"
       },
-      "Body_apply_api_commands_apply_post": {
+      "Body_initiate_apply_api_commands_apply_post": {
         "properties": {
           "environment": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -868,9 +870,9 @@
           }
         },
         "type": "object",
-        "title": "Body_apply_api_commands_apply_post"
+        "title": "Body_initiate_apply_api_commands_apply_post"
       },
-      "Body_run_plan_api_plan_post": {
+      "Body_initiate_plan_api_plan_post": {
         "properties": {
           "environment": {
             "anyOf": [{ "type": "string" }, { "type": "null" }],
@@ -890,7 +892,7 @@
           }
         },
         "type": "object",
-        "title": "Body_run_plan_api_plan_post"
+        "title": "Body_initiate_plan_api_plan_post"
       },
       "Body_write_directory_api_directories__path__post": {
         "properties": {

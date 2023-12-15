@@ -7,14 +7,6 @@ export interface PlanCancelTracker extends PlanTracker {
 }
 
 export class ModelPlanCancelTracker extends ModelPlanTracker<PlanCancelTracker> {
-  constructor(model?: ModelPlanCancelTracker) {
-    super(model?.initial)
-
-    if (model instanceof ModelPlanCancelTracker) {
-      this._current = structuredClone(model.current)
-    }
-  }
-
   get cancel(): Optional<PlanStageCancel> {
     return this._current?.cancel
   }
