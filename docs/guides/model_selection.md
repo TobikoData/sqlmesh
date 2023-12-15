@@ -196,22 +196,12 @@ Models:
 
 Recall that a plan with no selection or backfill options includes all four models, two of which were directly and two of which were indirectly modified.
 
-The `--backfill-model` option does not affect whether a model is included in a plan (i.e., it will still appear in the output shown in the selection examples above). Instead, it is excluded from the list of models needing backfill at the bottom of the plan's output.
+The `--backfill-model` option does not affect whether a model is included in a plan (i.e., it will still appear in the output shown in the selection examples above). Instead, it determines whether a model is included in the list of models needing backfill (shown at the bottom of the plan's output).
 
 With no options specified, the `plan` will backfill all six models. The backfills occur in the `sushi__dev` schema because we are creating a plan for the `dev` environment:
 
-```bash hl_lines="16 17 21 24"
+```bash
 ❯ sqlmesh plan dev
-Summary of differences against `dev`:
-Models:
-├── Directly Modified:
-│   ├── sushi.items
-│   └── sushi.order_items
-└── Indirectly Modified:
-    ├── sushi.customer_revenue_by_day
-    ├── sushi.customer_revenue_lifetime
-    ├── sushi.waiter_revenue_by_day
-    └── sushi.top_waiters
 
 < output omitted>
 
@@ -226,24 +216,13 @@ Models needing backfill (missing dates):
 
 #### Backfill `sushi.waiter_revenue_by_day`
 
-If we specify the `--backfill-model` option with `"sushi.waiter_revenue_by_day"`, two things happen:
+If we specify the `--backfill-model` option with `"sushi.waiter_revenue_by_day"`, there are fewer models in the backfills list:
 
-1. The indirectly modified `sushi.top_waiters` model is excluded from the backfills list because it is downstream of `sushi.waiter_revenue_by_day`
-2. `sushi.customer_revenue_lifetime` and `sushi.customer_revenue_by_day` are excluded from the backfills list because they are not upstream of `sushi.waiter_revenue_by_day`
+1. The directly modified `sushi__dev.items` and `sushi__dev.order_items` models are still included because they are upstream of `sushi.waiter_revenue_by_day`
+2. The indirectly modified `sushi.customer_revenue_by_day`, `sushi.customer_revenue_lifetime`, and `sushi.top_waiters` models are excluded because they are not upstream of `sushi.waiter_revenue_by_day`
 
-```bash hl_lines="15-17"
+```bash
 ❯ sqlmesh plan dev --backfill-model "sushi.waiter_revenue_by_day"
-New environment `dev` will be created from `prod`
-Summary of differences against `dev`:
-Models:
-├── Directly Modified:
-│   ├── sushi.items
-│   └── sushi.order_items
-└── Indirectly Modified:
-    ├── sushi.top_waiters
-    ├── sushi.customer_revenue_by_day
-    ├── sushi.waiter_revenue_by_day
-    └── sushi.customer_revenue_lifetime
 
 < output omitted>
 
