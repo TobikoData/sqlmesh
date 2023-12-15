@@ -30,6 +30,8 @@ GROUP BY o.customer_id;
 ## Conventions
 SQLMesh attempts to infer as much as possible about your pipelines through SQL alone to reduce the cognitive overhead of switching to another format such as YAML.
 
+One way it does this is by inferring a model's column names and data types from its SQL query. Disable this behavior for a model by manually specifying its column names and types in the [`columns` model property](#columns).
+
 The `SELECT` expression of a model must follow certain conventions for SQLMesh to detect the necessary metadata to operate.
 
 ### Unique column names
@@ -114,6 +116,11 @@ Name is ***required*** and must be ***unique***.
 
 ### clustered_by
 - Clustered by is an optional property for engines such as Bigquery that support clustering.
+
+### columns
+- By default, SQLMesh [infers a model's column names and types](#conventions) from its SQL query. Disable that behavior by manually specifying all column names and data types in the model's `columns` property.
+- **WARNING**: SQLMesh may exhibit unexpected behavior if the `columns` property includes columns not returned by the query, omits columns returned by the query, or specifies data types other than the ones returned by the query.
+- NOTE: Specifying column names and data types is required for [Python models](../models/python_models.md) that do not contain a SQL query.
 
 ### table_properties
 - A key-value of arbitrary table properties specific to the target engine. For example:
