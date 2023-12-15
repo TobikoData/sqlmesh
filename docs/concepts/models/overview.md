@@ -120,7 +120,7 @@ Name is ***required*** and must be ***unique***.
 ### columns
 - By default, SQLMesh [infers a model's column names and types](#conventions) from its SQL query. Disable that behavior by manually specifying all column names and data types in the model's `columns` property.
 - **WARNING**: SQLMesh may exhibit unexpected behavior if the `columns` property includes columns not returned by the query, omits columns returned by the query, or specifies data types other than the ones returned by the query.
-- NOTE: Specifying column names and data types is required for [Python models](../models/python_models.md) that do not contain a SQL query.
+- NOTE: Specifying column names and data types is required for [Python models](../models/python_models.md) that return DataFrames.
 
 ### table_properties
 - A key-value of arbitrary table properties specific to the target engine. For example:
