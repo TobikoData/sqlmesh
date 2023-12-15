@@ -130,7 +130,7 @@ def _parse_id_var(
     tokens: t.Optional[t.Collection[TokenType]] = None,
 ) -> t.Optional[exp.Expression]:
 
-    if self._match(TokenType.L_BRACE):
+    if self._prev and self._prev.text == SQLMESH_MACRO_PREFIX and self._match(TokenType.L_BRACE):
         identifier = self.__parse_id_var(any_token=any_token, tokens=tokens)  # type: ignore
         if not self._match(TokenType.R_BRACE):
             self.raise_error("Expecting }")
@@ -142,15 +142,22 @@ def _parse_id_var(
         identifier
         and self._is_connected()
         and (
-            self._match_texts(("{", SQLMESH_MACRO_PREFIX), advance=False)
+            self._match_texts(("{", SQLMESH_MACRO_PREFIX))
             or self._curr.token_type not in self.RESERVED_TOKENS
         )
     ):
         this = identifier.name
-        brace = self._match(TokenType.L_BRACE)
+        brace = False
 
-        if brace:
+        if self._prev.text == "{":
             this += "{"
+            brace = True
+        else:
+            if self._prev.text == SQLMESH_MACRO_PREFIX:
+                this += "@"
+            if self._match(TokenType.L_BRACE):
+                this += "{"
+                brace = True
 
         next_id = self._parse_id_var(any_token=False)
 

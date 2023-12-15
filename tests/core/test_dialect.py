@@ -182,6 +182,8 @@ def test_parse():
     assert isinstance(expressions[2], JinjaQuery)
     assert isinstance(expressions[3], JinjaStatement)
 
+    assert parse_one("{'a': 1}", read="duckdb").sql(dialect="duckdb") == "{'a': 1}"
+
 
 def test_parse_jinja_with_semicolons():
     expressions = parse(
