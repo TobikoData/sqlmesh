@@ -218,7 +218,7 @@ Models needing backfill (missing dates):
 
 If we specify the `--backfill-model` option with `"sushi.waiter_revenue_by_day"`, there are fewer models in the backfills list:
 
-1. The directly modified `sushi__dev.items` and `sushi__dev.order_items` models are still included because they are upstream of `sushi.waiter_revenue_by_day`
+1. `sushi__dev.items` and `sushi__dev.order_items` models are still included because they are upstream of `sushi.waiter_revenue_by_day`
 2. The indirectly modified `sushi.customer_revenue_by_day`, `sushi.customer_revenue_lifetime`, and `sushi.top_waiters` models are excluded because they are not upstream of `sushi.waiter_revenue_by_day`
 
 ```bash
