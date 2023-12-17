@@ -140,7 +140,7 @@ def _get_plan_backfills(context: Context, plan: Plan) -> t.Dict[str, t.Any]:
                 model_name=interval.snapshot_name,
                 view_name=plan.context_diff.snapshots[
                     interval.snapshot_name
-                ].qualified_view_name.for_environment(plan.environment.naming_info)
+                ].qualified_view_name.for_environment(plan.environment_naming_info)
                 if interval.snapshot_name in plan.context_diff.snapshots
                 else interval.snapshot_name,
                 interval=[
