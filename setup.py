@@ -74,6 +74,11 @@ setup(
             "mkdocs-include-markdown-plugin==4.0.3",
             "mkdocs-material==9.0.5",
             "mypy~=1.4.0",
+            # Pendulum 3.0.0 contains a breaking change for Airflow.
+            # To test if this is fixed with future versions, check if this line works:
+            # https://github.com/apache/airflow/blob/main/airflow/settings.py#L59
+            # `TIMEZONE = pendulum.tz.timezone("UTC")`
+            "pendulum<3.0.0",
             "pre-commit",
             "pandas-stubs",
             "pdoc",
