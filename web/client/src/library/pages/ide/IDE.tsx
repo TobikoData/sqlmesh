@@ -46,6 +46,8 @@ import { type PlanOverviewTracker } from '@models/tracker-plan-overview'
 import { type PlanApplyTracker } from '@models/tracker-plan-apply'
 import { type PlanCancelTracker } from '@models/tracker-plan-cancel'
 import { ModelPlanAction } from '@models/plan-action'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
 
 const ReportErrors = lazy(
   async () => await import('../../components/report/ReportErrors'),
@@ -99,10 +101,17 @@ export default function PageIDE(): JSX.Element {
 
   // We need to fetch from IDE level to make sure
   // all pages have access to models and files
-  const { refetch: getModels, cancel: cancelRequestModels } = useApiModels()
+  const {
+    refetch: getModels,
+    isFetching: isFetchingModels,
+    cancel: cancelRequestModels,
+  } = useApiModels()
   const { refetch: getFiles, cancel: cancelRequestFiles } = useApiFiles()
-  const { refetch: getEnvironments, cancel: cancelRequestEnvironments } =
-    useApiEnvironments()
+  const {
+    refetch: getEnvironments,
+    isFetching: isFetchingEnvironments,
+    cancel: cancelRequestEnvironments,
+  } = useApiEnvironments()
   const { isFetching: isFetchingPlanApply } = useApiPlanApply(environment.name)
   const { isFetching: isFetchingPlanCancel } = useApiCancelPlan()
   const {
@@ -208,10 +217,6 @@ export default function PageIDE(): JSX.Element {
       setActiveRange()
     })
 
-    void getModels().then(({ data }) => {
-      updateModels(data as Model[])
-    })
-
     void getFiles().then(({ data }) => {
       if (isNil(data)) return
 
@@ -224,6 +229,10 @@ export default function PageIDE(): JSX.Element {
     })
 
     void getEnvironments().then(({ data }) => updateEnviroments(data))
+
+    void getModels().then(({ data }) => {
+      updateModels(data as Model[])
+    })
 
     channelModels.subscribe()
     channelErrors.subscribe()
@@ -407,7 +416,18 @@ export default function PageIDE(): JSX.Element {
           </Button>
         </div>
         <div className="px-3 flex items-center min-w-[10rem] justify-end">
-          <RunPlan />
+          {isFetchingEnvironments || isFetchingModels ? (
+            <div className="flex justify-center items-center w-full h-full">
+              <Loading className="inline-block">
+                <Spinner className="w-3 h-3 border border-neutral-10 mr-2" />
+                <h3 className="text-xs">
+                  Loading {isFetchingModels ? 'Models' : 'Environments'}...
+                </h3>
+              </Loading>
+            </div>
+          ) : (
+            <RunPlan />
+          )}
           <ReportErrors />
         </div>
       </div>

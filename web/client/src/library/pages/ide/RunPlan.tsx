@@ -117,7 +117,9 @@ export default function RunPlan(): JSX.Element {
           }}
         >
           {planAction.isProcessing && <Spinner className="w-3 h-3 mr-1" />}
-          <span className="inline-block">{planAction.displayStatus}</span>
+          <span className="inline-block">
+            {planAction.displayStatus(planOverview)}
+          </span>
         </Button>
         <SelectEnvironemnt
           className="rounded-none rounded-r-lg border-l mx-0"

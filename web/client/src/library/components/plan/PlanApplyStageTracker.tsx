@@ -572,7 +572,7 @@ function PlanChanges(): JSX.Element {
 
   return (
     <div className="w-full my-2">
-      {planAction.isRunning && (
+      {planAction.isRunning && isNil(hasChanges) && (
         <Banner
           isFull
           isCenter
@@ -584,7 +584,7 @@ function PlanChanges(): JSX.Element {
           />
         </Banner>
       )}
-      {isFalse(hasChanges) && isFalse(planAction.isRunning) && (
+      {isFalse(hasChanges) && (
         <Banner
           isFull={isFalse(planAction.isApplyVirtual)}
           isCenter={isFalse(planAction.isApplyVirtual)}
@@ -595,7 +595,7 @@ function PlanChanges(): JSX.Element {
           />
         </Banner>
       )}
-      {isTrue(hasChanges) && isFalse(planAction.isRunning) && (
+      {isTrue(hasChanges) && (
         <>
           {isArrayNotEmpty(added) && (
             <PlanChangePreview
