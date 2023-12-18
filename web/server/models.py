@@ -268,6 +268,7 @@ class PlanOptions(BaseModel):
     include_unmodified: bool = False
     create_from: t.Optional[str] = None
     restate_models: t.Optional[str] = None
+    auto_apply: bool = False
 
     @field_validator("restate_models")
     @classmethod

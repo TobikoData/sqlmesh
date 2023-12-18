@@ -25,8 +25,7 @@ export interface InitialModelPlanOverviewTracker {
 
 export class ModelPlanOverviewTracker
   extends ModelPlanTracker<PlanOverviewTracker>
-  implements InitialModelPlanOverviewTracker
-{
+  implements InitialModelPlanOverviewTracker {
   get validation(): Optional<PlanStageValidation> {
     return this._current?.validation
   }
@@ -130,6 +129,7 @@ export class ModelPlanOverviewTracker
 
   update(tracker: PlanOverviewTracker): void {
     this._current = tracker
+    this.isFetching = isFalse(tracker.meta?.done)
   }
 
   reset(): void {
