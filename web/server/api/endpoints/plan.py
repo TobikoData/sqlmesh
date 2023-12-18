@@ -80,7 +80,7 @@ def get_plan(
         plan = context.plan(
             environment=environment,
             no_prompts=True,
-            include_unmodified=True,
+            include_unmodified=plan_options.include_unmodified,
             start=plan_dates.start if plan_dates else None,
             end=plan_dates.end if plan_dates else None,
             create_from=plan_options.create_from,

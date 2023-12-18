@@ -122,10 +122,7 @@ export default function RunPlan(): JSX.Element {
         <SelectEnvironemnt
           className="rounded-none rounded-r-lg border-l mx-0"
           environment={environment}
-          disabled={
-            planAction.isProcessing ||
-            (environment.isDefaultInitial && environment.isLocal)
-          }
+          disabled={planAction.isProcessing || environment.isDefaultInitial}
         />
       </div>
       <EnvironmentStatus />

@@ -245,53 +245,49 @@ function EditorMain({ tab }: { tab: EditorTab }): JSX.Element {
     >
       <div
         className={clsx(
-          'flex flex-col overflow-hidden',
+          'flex flex-col',
           direction === 'vertical' ? 'w-full ' : 'h-full',
         )}
       >
-        <div className="flex flex-col h-full overflow-hidden">
-          <SplitPane
-            key={tab.id}
-            className="flex h-full"
-            sizes={sizesCodeEditorAndInspector}
-            minSize={0}
-            snapOffset={0}
-          >
-            <div className="flex flex-col h-full">
-              {tab.file.isLocal && (
-                <CodeEditorDefault
-                  key={tab.id}
-                  type={EnumFileExtensions.SQL}
-                  dialect={tab.dialect}
-                  content={tab.file.content}
-                  keymaps={customSQLKeymaps}
-                  onChange={updateFileContent}
-                />
-              )}
-              {tab.file.isRemote && (
-                <CodeEditorRemoteFile path={tab.file.path}>
-                  {({ file, keymaps }) => (
-                    <CodeEditorDefault
-                      type={file.extension}
-                      dialect={tab.dialect}
-                      content={file.content}
-                      extensions={modelExtensions}
-                      keymaps={keymaps.concat(defaultKeymapsEditorTab)}
-                      onChange={updateFileContent}
-                    />
-                  )}
-                </CodeEditorRemoteFile>
-              )}
-            </div>
-            <div className="flex flex-col h-full">
-              <EditorInspector tab={tab} />
-            </div>
-          </SplitPane>
-        </div>
+        <SplitPane
+          key={tab.id}
+          className="flex h-full overflow-hidden"
+          sizes={sizesCodeEditorAndInspector}
+          minSize={0}
+          snapOffset={0}
+        >
+          <div className="flex flex-col h-full">
+            {tab.file.isLocal && (
+              <CodeEditorDefault
+                key={tab.id}
+                type={EnumFileExtensions.SQL}
+                dialect={tab.dialect}
+                content={tab.file.content}
+                keymaps={customSQLKeymaps}
+                onChange={updateFileContent}
+              />
+            )}
+            {tab.file.isRemote && (
+              <CodeEditorRemoteFile path={tab.file.path}>
+                {({ file, keymaps }) => (
+                  <CodeEditorDefault
+                    type={file.extension}
+                    dialect={tab.dialect}
+                    content={file.content}
+                    extensions={modelExtensions}
+                    keymaps={keymaps.concat(defaultKeymapsEditorTab)}
+                    onChange={updateFileContent}
+                  />
+                )}
+              </CodeEditorRemoteFile>
+            )}
+          </div>
+          <div className="flex flex-col h-full">
+            <EditorInspector tab={tab} />
+          </div>
+        </SplitPane>
         <Divider />
-        <div className="px-2 flex justify-between items-center min-h-[2rem]">
-          <EditorFooter tab={tab} />
-        </div>
+        <EditorFooter tab={tab} />
       </div>
       <EditorPreview
         tab={tab}
