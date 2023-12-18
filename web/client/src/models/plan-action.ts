@@ -111,10 +111,14 @@ export class ModelPlanAction<
     return isFalse(this.isProcessing)
   }
 
-  get displayStatus(): string {
+  displayStatus(planOverview: ModelPlanOverviewTracker): string {
     if (this.isRunningTask) return 'Running Task...'
     if (this.isApplying) return 'Applying Plan...'
-    if (this.isRunning) return 'Getting Changes...'
+    if (this.isRunning && isNil(planOverview.hasChanges))
+      return 'Getting Changes...'
+    if (this.isRunning && isNil(planOverview.hasBackfills))
+      return 'Getting Backfills...'
+    if (this.isRunning) return 'Checking Plan...'
 
     return 'Plan'
   }
