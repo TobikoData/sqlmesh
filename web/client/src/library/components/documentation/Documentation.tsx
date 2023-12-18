@@ -9,6 +9,7 @@ import {
   isString,
   isTrue,
   toDateFormat,
+  truncate,
 } from '@utils/index'
 import clsx from 'clsx'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
@@ -59,7 +60,7 @@ const Documentation = function Documentation({
             />
             <DetailsItem
               name="Name"
-              value={model.name}
+              value={truncate(model.name, 25, 15)}
             />
             <DetailsItem
               name="Dialect"
@@ -214,7 +215,7 @@ function Section({
           <>
             <Disclosure.Button
               className={clsx(
-                'flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 mb-2',
+                'flex items-center justify-between rounded-lg text-left w-full bg-neutral-10 px-3 mb-2 overflow-hidden',
                 className,
               )}
             >
@@ -244,8 +245,10 @@ function DetailsItem<TValue = Record<string, Primitive>>({
   isHighlighted = false,
   isCapitalize = false,
   children,
+  title,
 }: {
   name: string
+  title?: string
   value: Primitive | TValue[]
   className?: string
   isHighlighted?: boolean
@@ -258,7 +261,12 @@ function DetailsItem<TValue = Record<string, Primitive>>({
     >
       {isArrayNotEmpty<TValue>(value) ? (
         <>
-          <strong className="mr-2 text-xs capitalize">{name}</strong>
+          <strong
+            title={title}
+            className="mr-2 text-xs capitalize"
+          >
+            {name}
+          </strong>
           {value.map((item, idx) => (
             <span
               className="w-full items-center flex ml-2 mb-1"

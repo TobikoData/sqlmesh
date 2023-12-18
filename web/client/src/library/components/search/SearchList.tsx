@@ -1,6 +1,6 @@
 import React, { Fragment, useMemo, useRef, useState } from 'react'
 import Input from '@components/input/Input'
-import { isArrayEmpty, isNil, isNotNil } from '@utils/index'
+import { isArrayEmpty, isNil, isNotNil, truncate } from '@utils/index'
 import { EnumSize, type Size } from '~/types/enum'
 import { EMPTY_STRING, filterListBy, highlightMatch } from './help'
 import { useNavigate } from 'react-router-dom'
@@ -141,6 +141,7 @@ export default function SearchList<
           value={search}
           placeholder={placeholder}
           onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
+            console.log(e, e.target.value)
             setSearch(e.target.value.trim())
           }}
           onKeyDown={(e: React.KeyboardEvent) => {
@@ -165,10 +166,10 @@ export default function SearchList<
             focus
             className={clsx(
               'absolute z-10 transform cursor-pointer rounded-lg bg-theme border-2 border-neutral-200',
-              'p-2 bg-theme dark:bg-theme-lighter max-h-[25vh] overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
-              size === EnumSize.sm && 'mt-10',
-              size === EnumSize.md && 'mt-12',
-              size === EnumSize.lg && 'mt-14',
+              'p-2 bg-theme dark:bg-theme-lighter overflow-auto hover:scrollbar scrollbar--vertical scrollbar--horizontal shadow-2xl',
+              size === EnumSize.sm && 'mt-7 max-h-[30vh]',
+              size === EnumSize.md && 'mt-9 max-h-[40vh]',
+              size === EnumSize.lg && 'mt-12 max-h-[50vh]',
               isFullWidth ? 'w-full' : 'w-full max-w-[20rem]',
             )}
             ref={elList}
@@ -216,7 +217,7 @@ export default function SearchList<
             ) : (
               found.map(([item, index], idx) => (
                 <div
-                  key={index}
+                  key={item[displayBy]}
                   role="menuitem"
                   data-index={idx}
                   className={clsx(
@@ -280,7 +281,12 @@ function SearchResult<T extends Record<string, any> = Record<string, any>>({
     >
       {showIndex ? (
         <>
-          <span className="font-bold">{item[displayBy]}</span>
+          <span
+            title={item[displayBy]}
+            className="font-bold"
+          >
+            {truncate(item[displayBy], 50, 20)}
+          </span>
           <small
             className="block text-neutral-600 italic overflow-hidden whitespace-nowrap overflow-ellipsis"
             dangerouslySetInnerHTML={{
