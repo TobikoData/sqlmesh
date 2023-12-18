@@ -31,7 +31,7 @@ export function usePlanPayload({
   } = usePlan()
 
   const planDates = useMemo(() => {
-    if (environment.isDefault) return
+    if (environment.isProd) return
 
     return {
       start,
@@ -43,24 +43,24 @@ export function usePlanPayload({
   }, [environment, start, end, isInitialPlanRun, restate_models])
 
   const planOptions = useMemo(() => {
-    return environment.isDefaultInitial
+    return environment.isInitialProd
       ? {
-          include_unmodified: true,
-          no_gaps: true,
-          skip_tests,
-          auto_apply,
-        }
+        include_unmodified: true,
+        no_gaps: true,
+        skip_tests,
+        auto_apply,
+      }
       : {
-          skip_tests,
-          no_gaps,
-          skip_backfill,
-          forward_only,
-          create_from,
-          no_auto_categorization,
-          restate_models,
-          include_unmodified,
-          auto_apply,
-        }
+        skip_tests,
+        no_gaps,
+        skip_backfill,
+        forward_only,
+        create_from,
+        no_auto_categorization,
+        restate_models,
+        include_unmodified,
+        auto_apply,
+      }
   }, [
     environment,
     no_gaps,

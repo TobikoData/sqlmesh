@@ -7,7 +7,7 @@ import {
 } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { useState, useEffect, Fragment, type MouseEvent } from 'react'
-import { apiDeleteEnvironment, useApiPlanRun } from '~/api'
+import { apiDeleteEnvironment, useApiEnvironments, useApiPlanRun } from '~/api'
 import { useStoreContext } from '~/context/context'
 import { type ModelEnvironment } from '~/models/environment'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
@@ -37,6 +37,8 @@ export default function RunPlan(): JSX.Element {
   const setShowConfirmation = useStoreContext(s => s.setShowConfirmation)
   const environment = useStoreContext(s => s.environment)
   const environments = useStoreContext(s => s.environments)
+
+  const { isFetching: isFetchingEnvironments } = useApiEnvironments()
 
   const [shouldStartPlanAutomatically, setShouldStartPlanAutomatically] =
     useState(false)
@@ -68,10 +70,7 @@ export default function RunPlan(): JSX.Element {
 
             if (planAction.isProcessing) {
               setIsPlanOpen(true)
-            } else if (
-              environment.isDefault &&
-              isFalse(environment.isInitial)
-            ) {
+            } else if (environment.isProd && environment.isSyncronized) {
               addConfirmation({
                 headline: 'Running Plan Directly On Prod Environment!',
                 description: `Are you sure you want to run your changes directly on prod? Safer choice will be to select or add new environment first.`,
@@ -82,9 +81,8 @@ export default function RunPlan(): JSX.Element {
                 },
                 children: (
                   <div className="mt-5 pt-4">
-                    <h4 className="mb-2">{`${
-                      environments.size > 1 ? 'Select or ' : ''
-                    }Add Environment`}</h4>
+                    <h4 className="mb-2">{`${environments.size > 1 ? 'Select or ' : ''
+                      }Add Environment`}</h4>
                     <div className="flex items-center relative">
                       {environments.size > 1 && (
                         <SelectEnvironemnt
@@ -125,7 +123,11 @@ export default function RunPlan(): JSX.Element {
         <SelectEnvironemnt
           className="rounded-none rounded-r-lg border-l mx-0"
           environment={environment}
-          disabled={planAction.isProcessing || environment.isDefaultInitial}
+          disabled={
+            isFetchingEnvironments ||
+            planAction.isProcessing ||
+            environment.isInitialProd
+          }
         />
       </div>
       <EnvironmentStatus />
@@ -140,19 +142,24 @@ function EnvironmentStatus(): JSX.Element {
 
   return (
     <span className="flex align-center h-full w-full">
-      {environment.isLocal && (
-        <span
-          title="New"
-          className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold"
-        >
+      {environment.isProd ? (
+        <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-warning-10 text-warning-700  dark:text-warning-400  text-xs text-center">
+          Production
+        </span>
+      ) : environment.isDefault ? (
+        <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center">
+          Default
+        </span>
+      ) : (
+        <></>
+      )}
+      {environment.isInitial && (
+        <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-success-10 text-success-500 text-xs text-center font-bold">
           New
         </span>
       )}
-      {environment.isSynchronized && planOverview.isLatest && (
-        <span
-          title="Latest"
-          className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center"
-        >
+      {environment.isSyncronized && planOverview.isLatest && (
+        <span className="block ml-1 px-2 first-child:ml-0 rounded-full bg-neutral-10 text-xs text-center">
           Latest
         </span>
       )}
@@ -221,6 +228,17 @@ function PlanChanges(): JSX.Element {
           changes={planOverview.removed ?? []}
         />
       )}
+      {isArrayNotEmpty(planOverview.backfills?.models) && (
+        <ChangesPreview
+          headline="Backfills"
+          type={EnumPlanChangeType.Default}
+          changes={
+            planOverview.backfills?.models.map(
+              ({ model_name, view_name }) => model_name ?? view_name,
+            ) ?? []
+          }
+        />
+      )}
     </span>
   )
 }
@@ -245,8 +263,6 @@ function SelectEnvironemnt({
   const { addError } = useIDE()
 
   const environments = useStoreContext(s => s.environments)
-  const pinnedEnvironments = useStoreContext(s => s.pinnedEnvironments)
-  const defaultEnvironment = useStoreContext(s => s.defaultEnvironment)
   const setEnvironment = useStoreContext(s => s.setEnvironment)
   const removeLocalEnvironment = useStoreContext(s => s.removeLocalEnvironment)
 
@@ -280,7 +296,7 @@ function SelectEnvironemnt({
               className={clsx(
                 'block overflow-hidden truncate',
                 (environment.isLocal || disabled) && 'text-neutral-500',
-                environment.isSynchronized && 'text-primary-500',
+                environment.isRemote && 'text-primary-500',
               )}
             >
               {environment.name}
@@ -313,9 +329,7 @@ function SelectEnvironemnt({
                         onClick={(e: MouseEvent) => {
                           e.stopPropagation()
 
-                          if (env.isSynchronized) {
-                            void planRun()
-                          }
+                          void planRun()
 
                           setEnvironment(env)
 
@@ -325,7 +339,7 @@ function SelectEnvironemnt({
                           'flex justify-between items-center pl-2 pr-1 py-1 cursor-pointer overflow-auto',
                           active && 'bg-primary-10',
                           env === environment &&
-                            'pointer-events-none cursor-default bg-secondary-10',
+                          'pointer-events-none cursor-default bg-secondary-10',
                         )}
                       >
                         <div className="flex items-start">
@@ -341,21 +355,21 @@ function SelectEnvironemnt({
                               <span
                                 className={clsx(
                                   'block truncate ml-2',
-                                  env.isSynchronized && 'text-primary-500',
+                                  env.isRemote && 'text-primary-500',
                                 )}
                               >
                                 {env.name}
                               </span>
                               <small className="block ml-2">({env.type})</small>
                             </span>
-                            {env.isDefault && (
+                            {env.isProd && (
                               <span className="flex ml-2">
                                 <small className="text-xs text-neutral-500">
-                                  Main Environment
+                                  Production Environment
                                 </small>
                               </span>
                             )}
-                            {defaultEnvironment === env && (
+                            {env.isDefault && (
                               <span className="flex ml-2">
                                 <small className="text-xs text-neutral-500">
                                   Default Environment
@@ -371,8 +385,8 @@ function SelectEnvironemnt({
                               className="w-4 text-primary-500 dark:text-primary-100 mx-1"
                             />
                           )}
-                          {env.isLocal &&
-                            isFalse(env.isPinned) &&
+                          {isFalse(env.isPinned) &&
+                            env.isLocal &&
                             env !== environment && (
                               <Button
                                 className="!m-0 !px-2 bg-transparent hover:bg-transparent border-none"
@@ -387,10 +401,9 @@ function SelectEnvironemnt({
                                 <MinusCircleIcon className="w-4 text-neutral-500 dark:text-neutral-100" />
                               </Button>
                             )}
-                          {isFalse(env.isDefault) &&
-                            env !== environment &&
-                            env.isSynchronized &&
-                            isFalse(pinnedEnvironments.includes(env)) && (
+                          {isFalse(env.isPinned) &&
+                            env.isRemote &&
+                            env !== environment && (
                               <Button
                                 className="!px-2 !my-0"
                                 size={EnumSize.xs}
@@ -518,15 +531,15 @@ function ChangesPreview({
             className={clsx(
               'inline-block ml-1 px-2 rounded-full text-xs font-bold text-neutral-100 cursor-default border border-inherit',
               type === EnumPlanChangeType.Add &&
-                'bg-success-500 border-success-500',
+              'bg-success-500 border-success-500',
               type === EnumPlanChangeType.Remove &&
-                'bg-danger-500 border-danger-500',
+              'bg-danger-500 border-danger-500',
               type === EnumPlanChangeType.Direct &&
-                'bg-secondary-500 border-secondary-500',
+              'bg-secondary-500 border-secondary-500',
               type === EnumPlanChangeType.Indirect &&
-                'bg-warning-500 border-warning-500',
+              'bg-warning-500 border-warning-500',
               type === EnumPlanChangeType.Default &&
-                'bg-neutral-500 border-neutral-500',
+              'bg-neutral-500 border-neutral-500',
             )}
           >
             {changes.length}
@@ -545,7 +558,7 @@ function ChangesPreview({
               <PlanChangePreview
                 headline={headline}
                 type={type}
-                className="w-full h-full max-w-[50vw] max-h-[40vh] overflow-hidden overflow-y-auto "
+                className="w-full h-full max-w-[50vw] max-h-[40vh] overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical"
               >
                 <PlanChangePreview.Default
                   type={type}

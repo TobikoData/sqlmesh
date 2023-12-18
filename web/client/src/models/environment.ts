@@ -15,7 +15,7 @@ export const EnumDefaultEnvironment = {
 
 export const EnumRelativeLocation = {
   Local: 'local',
-  Synchronized: 'synchronized',
+  Remote: 'remote',
 } as const
 
 export type EnvironmentName = DefaultEnvironment | string
@@ -28,9 +28,11 @@ interface InitialEnvironmemt extends Partial<Environment> {
 
 interface ProfileEnvironment {
   name: EnvironmentName
+  plan_id: string
   type: RelativeLocation
   createFrom: EnvironmentName
   isPinned: boolean
+  isDefault: boolean
 }
 
 interface Profile {
@@ -45,7 +47,8 @@ export class ModelEnvironment {
   private _type: RelativeLocation
   private _createFrom: EnvironmentName
 
-  isPinned = false
+  _isPinned = false
+  _isDefault = false
   isModel = true
 
   constructor(
@@ -53,13 +56,15 @@ export class ModelEnvironment {
     type: RelativeLocation,
     createFrom: EnvironmentName = EnumDefaultEnvironment.Prod,
     isPinned = false,
+    isDefault = false,
   ) {
     this._initial = initial
     this._type = type ?? EnumRelativeLocation.Local
-    this._createFrom = this.isDefault
+    this._createFrom = this._isDefault
       ? EnumDefaultEnvironment.Empty
       : createFrom
-    this.isPinned = isPinned
+    this._isPinned = isPinned
+    this._isDefault = isDefault
   }
 
   get id(): string {
@@ -78,8 +83,24 @@ export class ModelEnvironment {
     return this._createFrom
   }
 
+  get isProd(): boolean {
+    return this.name === EnumDefaultEnvironment.Prod
+  }
+
   get isDefault(): boolean {
-    return isNil(this.name) || this.name === EnumDefaultEnvironment.Prod
+    return this._isDefault
+  }
+
+  set isDefault(isDefault: boolean) {
+    this._isDefault = isDefault
+  }
+
+  get isPinned(): boolean {
+    return this._isPinned || this.isDefault || this.isProd
+  }
+
+  set isPinned(isPinned: boolean) {
+    this._isPinned = isPinned
   }
 
   get isInitial(): boolean {
@@ -87,18 +108,19 @@ export class ModelEnvironment {
   }
 
   get isLocal(): boolean {
-    return this._type === EnumRelativeLocation.Local && this.isInitial
+    return this._type === EnumRelativeLocation.Local
   }
 
-  get isSynchronized(): boolean {
-    return (
-      this._type === EnumRelativeLocation.Synchronized &&
-      isFalse(this.isInitial)
-    )
+  get isRemote(): boolean {
+    return this._type === EnumRelativeLocation.Remote
   }
 
-  get isDefaultInitial(): boolean {
-    return this.isDefault && this.isInitial
+  get isSyncronized(): boolean {
+    return this.isRemote && isFalse(this.isInitial)
+  }
+
+  get isInitialProd(): boolean {
+    return this.isInitial && this.isProd
   }
 
   setType(type: RelativeLocation): void {
@@ -125,9 +147,11 @@ export class ModelEnvironment {
     if (isNotNil(environment)) {
       output.environment = {
         name: environment.name,
+        plan_id: environment.id,
         type: environment.type,
         createFrom: environment.createFrom,
         isPinned: environment.isPinned,
+        isDefault: environment.isDefault,
       }
     }
 
@@ -135,9 +159,11 @@ export class ModelEnvironment {
       output.environments = ModelEnvironment.getOnlyLocal(environments).map(
         env => ({
           name: env.name,
+          plan_id: env.id,
           type: env.type,
           createFrom: env.createFrom,
           isPinned: env.isPinned,
+          isDefault: env.isDefault,
         }),
       )
     }
@@ -151,18 +177,26 @@ export class ModelEnvironment {
     )
   }
 
-  static getOnlySynchronized(
-    envs: ModelEnvironment[] = [],
-  ): ModelEnvironment[] {
+  static getOnlyRemote(envs: ModelEnvironment[] = []): ModelEnvironment[] {
     return envs.filter(
-      env => isFalse(isStringEmptyOrNil(env.name)) && env.isSynchronized,
+      env => isFalse(isStringEmptyOrNil(env.name)) && env.isRemote,
     )
   }
 
-  static getEnvironment(): Optional<ProfileEnvironment> {
-    const profile = getProfile()
+  static getEnvironment(): Optional<ModelEnvironment> {
+    const { environment } = getProfile() ?? {}
 
-    return profile?.environment
+    if (isNil(environment)) return
+
+    const { name, plan_id, type, createFrom, isPinned, isDefault } = environment
+
+    return new ModelEnvironment(
+      { name, plan_id },
+      type,
+      createFrom,
+      isPinned,
+      isDefault,
+    )
   }
 
   static getEnvironments(): ModelEnvironment[] {
@@ -184,10 +218,11 @@ export class ModelEnvironment {
     Array.from(environments.entries()).forEach(([name, environment]) => {
       output.push(
         new ModelEnvironment(
-          { name },
+          { name, plan_id: environment.plan_id },
           environment.type,
           environment.createFrom,
           environment.isPinned,
+          environment.isDefault,
         ),
       )
     })
@@ -205,7 +240,7 @@ export class ModelEnvironment {
   }
 
   static sort(environments: ModelEnvironment[]): ModelEnvironment[] {
-    environments.sort(env => (env.isSynchronized ? -1 : 1))
+    environments.sort(env => (env.isRemote ? -1 : 1))
 
     return environments
   }
