@@ -17,7 +17,7 @@ function filterListBy<T extends Record<string, any> = Record<string, any>>(
   search = search.toLocaleLowerCase()
 
   return indices.reduce((acc: Array<[T, string]>, [model, index]) => {
-    const idx = index.indexOf(search)
+    const idx = index.toLocaleLowerCase().indexOf(search)
 
     if (idx < 0) return acc
 

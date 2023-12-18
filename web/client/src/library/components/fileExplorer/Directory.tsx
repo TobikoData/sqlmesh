@@ -3,7 +3,7 @@ import { FolderOpenIcon, FolderIcon } from '@heroicons/react/24/solid'
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { ModelDirectory } from '~/models'
-import { isArrayNotEmpty, isFalse, isNil } from '~/utils'
+import { isArrayNotEmpty, isFalse, isNil, truncate } from '~/utils'
 import { useStoreProject } from '@context/project'
 import File from './File'
 import * as ContextMenu from '@radix-ui/react-context-menu'
@@ -404,8 +404,11 @@ function DirectoryDisplay({
 }): JSX.Element {
   return (
     <div className="w-full flex justify-between items-center py-[0.125rem]">
-      <span className="overflow-hidden overflow-ellipsis whitespace-nowrap">
-        {directory.name}
+      <span
+        title={directory.name}
+        className="overflow-hidden overflow-ellipsis whitespace-nowrap"
+      >
+        {truncate(directory.name, 50, 20)}
       </span>
       <span className="inline-block text-xs rounded-full px-2 bg-primary-10 ml-2">
         {directory.directories.length + directory.files.length}

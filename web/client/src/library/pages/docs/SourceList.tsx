@@ -2,7 +2,7 @@ import { type LineageNodeModelType } from '@components/graph/Graph'
 import { getModelNodeTypeTitle } from '@components/graph/help'
 import Input from '@components/input/Input'
 import { type ModelSQLMeshModel } from '@models/sqlmesh-model'
-import { isArrayEmpty, isArrayNotEmpty } from '@utils/index'
+import { isArrayEmpty, isArrayNotEmpty, truncate } from '@utils/index'
 import clsx from 'clsx'
 import { NavLink } from 'react-router-dom'
 import { EnumRoutes } from '~/routes'
@@ -18,7 +18,7 @@ export default function SourceList({
   setFilter: (filter: string) => void
 }): JSX.Element {
   const modelsFiltered = Array.from(new Set(models.values())).filter(model =>
-    filter === '' ? true : model.name.includes(filter),
+    filter === '' ? true : model.name.toLocaleLowerCase().includes(filter),
   )
   return (
     <div className="flex flex-col w-full h-full">
@@ -61,6 +61,7 @@ export default function SourceList({
               className={clsx('text-sm font-normal')}
             >
               <NavLink
+                title={model.name}
                 to={`${EnumRoutes.IdeDocsModels}/${model.name}`}
                 className={({ isActive }) =>
                   clsx(
@@ -71,7 +72,7 @@ export default function SourceList({
                   )
                 }
               >
-                {model.name}
+                {truncate(model.name, 50, 20)}
                 <span className="inline-block ml-2 bg-primary-10 px-2 rounded-md text-[0.65rem]">
                   {getModelNodeTypeTitle(model.type as LineageNodeModelType)}
                 </span>
