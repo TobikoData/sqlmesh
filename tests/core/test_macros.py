@@ -120,6 +120,11 @@ def test_ast_correctness(macro_evaluator):
     "sql, expected, args",
     [
         (
+            """select @each(['a', 'b'], x -> @x + @{x}_z + @y + @{y}_@{x})""",
+            "SELECT 'a' + a_z + 'c' + c_a, 'b' + b_z + 'c' + c_b",
+            {"y": "c"},
+        ),
+        (
             '"is_@{x}"',
             '"is_b"',
             {"x": "b"},

@@ -387,8 +387,12 @@ def _norm_var_arg_lambda(
         node: exp.Expression, args: t.Dict[str, exp.Expression]
     ) -> exp.Expression | t.List[exp.Expression] | None:
         if isinstance(node, (exp.Identifier, exp.Var)):
-            if node.name in args and not isinstance(node.parent, exp.Column):
-                return args[node.name].copy()
+            if not isinstance(node.parent, exp.Column):
+                name = node.name
+                if name in args:
+                    return args[name].copy()
+                if name in evaluator.locals:
+                    return exp.convert(evaluator.locals[name])
             if SQLMESH_MACRO_PREFIX in node.name:
                 return node.__class__(
                     this=evaluator.template(node.name, {k: v.name for k, v in args.items()})
