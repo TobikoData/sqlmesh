@@ -94,6 +94,7 @@ def get_plan(
         tracker.start = plan.start
         tracker.end = plan.end
         tracker_stage_validate.stop(success=True)
+        api_console.log_event_plan_overview()
     except Exception:
         tracker_stage_validate.stop(success=False)
         tracker.stop(success=False)
@@ -107,16 +108,16 @@ def get_plan(
     tracker.add_stage(stage=models.PlanStage.changes, data=tracker_stage_changes)
     if plan.context_diff.has_changes:
         tracker_stage_changes.update(_get_plan_changes(plan))
-
     tracker_stage_changes.stop(success=True)
+    api_console.log_event_plan_overview()
     tracker_stage_backfills = models.PlanStageBackfills()
     tracker.add_stage(stage=models.PlanStage.backfills, data=tracker_stage_backfills)
     if plan.requires_backfill:
         tracker_stage_backfills.update(
             _get_plan_backfills(context, plan),
         )
-
     tracker_stage_backfills.stop(success=True)
+    api_console.log_event_plan_overview()
     api_console.stop_plan_tracker(tracker)
     return plan
 

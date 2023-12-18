@@ -57,7 +57,6 @@ def _get_path_mappings(context: Context) -> dict[Path, FileType]:
 
 @lru_cache()
 def _get_loaded_context(path: str | Path, config: str, gateway: str) -> Context:
-    print(config)
     context = _get_context(path, config, gateway)
     context.load()
     return context
