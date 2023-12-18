@@ -12,6 +12,9 @@ import SearchList from '@components/search/SearchList'
 import { type ModelFile } from '@models/file'
 import { EnumSize } from '~/types/enum'
 import { useStoreContext } from '@context/context'
+import { useApiFiles } from '@api/index'
+import Loading from '@components/loading/Loading'
+import Spinner from '@components/logo/Spinner'
 
 /* TODO:
   - add drag and drop files/directories from desktop
@@ -30,6 +33,8 @@ const FileExplorer = function FileExplorer({
   const setActiveRange = useStoreProject(s => s.setActiveRange)
 
   const addConfirmation = useStoreContext(s => s.addConfirmation)
+
+  const { isFetching: isFetchingFiles } = useApiFiles()
 
   const { removeArtifacts, createDirectory, createFile } = useFileExplorer()
 
@@ -61,53 +66,64 @@ const FileExplorer = function FileExplorer({
       )}
       onKeyDown={handleKeyDown}
     >
-      <SearchList<ModelFile>
-        list={project.allFiles}
-        searchBy="path"
-        displayBy="name"
-        size={EnumSize.sm}
-        onSelect={setSelectedFile}
-      />
-      <FileExplorer.ContextMenu
-        key={project.id}
-        trigger={
-          <FileExplorer.ContextMenuTrigger className="h-full pb-2">
-            <DndProvider backend={HTML5Backend}>
-              <div className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
-                <DragLayer />
-                <Directory
-                  key={project.id}
-                  className="z-20 relative"
-                  directory={project}
-                />
-              </div>
-            </DndProvider>
-          </FileExplorer.ContextMenuTrigger>
-        }
-      >
-        <ContextMenu.Item
-          className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
-          onSelect={(e: Event) => {
-            e.stopPropagation()
+      {isFetchingFiles ? (
+        <div className="flex justify-center items-center w-full h-full">
+          <Loading className="inline-block">
+            <Spinner className="w-3 h-3 border border-neutral-10 mr-2" />
+            <h3 className="text-md">Getting Project Files...</h3>
+          </Loading>
+        </div>
+      ) : (
+        <>
+          <SearchList<ModelFile>
+            list={project.allFiles}
+            searchBy="path"
+            displayBy="name"
+            size={EnumSize.sm}
+            onSelect={setSelectedFile}
+          />
+          <FileExplorer.ContextMenu
+            key={project.id}
+            trigger={
+              <FileExplorer.ContextMenuTrigger className="h-full pb-2">
+                <DndProvider backend={HTML5Backend}>
+                  <div className="w-full relative h-full p-2 overflow-hidden overflow-y-auto hover:scrollbar scrollbar--vertical">
+                    <DragLayer />
+                    <Directory
+                      key={project.id}
+                      className="z-20 relative"
+                      directory={project}
+                    />
+                  </div>
+                </DndProvider>
+              </FileExplorer.ContextMenuTrigger>
+            }
+          >
+            <ContextMenu.Item
+              className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+              onSelect={(e: Event) => {
+                e.stopPropagation()
 
-            createFile(project)
-          }}
-        >
-          New File
-          <div className="ml-auto pl-5"></div>
-        </ContextMenu.Item>
-        <ContextMenu.Item
-          className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
-          onSelect={(e: Event) => {
-            e.stopPropagation()
+                createFile(project)
+              }}
+            >
+              New File
+              <div className="ml-auto pl-5"></div>
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="py-1.5 group leading-none rounded-md flex items-center relative pl-6 pr-2 select-none outline-none font-medium text-xs text-neutral-500 hover:bg-accent-500 hover:text-light"
+              onSelect={(e: Event) => {
+                e.stopPropagation()
 
-            createDirectory(project)
-          }}
-        >
-          New Folder
-          <div className="ml-auto pl-5"></div>
-        </ContextMenu.Item>
-      </FileExplorer.ContextMenu>
+                createDirectory(project)
+              }}
+            >
+              New Folder
+              <div className="ml-auto pl-5"></div>
+            </ContextMenu.Item>
+          </FileExplorer.ContextMenu>
+        </>
+      )}
     </div>
   )
 }
