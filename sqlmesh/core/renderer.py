@@ -8,6 +8,7 @@ from pathlib import Path
 
 from sqlglot import exp, parse
 from sqlglot.errors import SqlglotError
+from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.optimizer.qualify_columns import quote_identifiers
@@ -475,13 +476,23 @@ class QueryRenderer(BaseExpressionRenderer):
             if should_optimize:
                 query = query.copy()
                 simplify(
-                    qualify(query, dialect=self._dialect, schema=self.schema, infer_schema=False)
+                    annotate_types(
+                        qualify(
+                            query, dialect=self._dialect, schema=self.schema, infer_schema=False
+                        ),
+                        schema=self.schema,
+                    )
                 )
         except SqlglotError as ex:
             query = original
+
             logger.error(
                 "%s for model '%s', the column may not exist or is ambiguous", ex, self._model_name
             )
+
+        if not query.type:
+            for select in query.expressions:
+                annotate_types(select)
 
         return query
 
