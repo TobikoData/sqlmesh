@@ -46,6 +46,7 @@ import {
   isFalse,
   isNil,
   isNotNil,
+  truncate,
 } from '../../../utils'
 import { EnumSide, EnumSize, EnumVariant, type Side } from '~/types/enum'
 import { NoSymbolIcon, ArrowRightCircleIcon } from '@heroicons/react/24/solid'
@@ -169,11 +170,16 @@ const ModelColumnDisplay = memo(function ModelColumnDisplay({
       <div className="w-full">
         <div className="w-full flex justify-between items-center">
           <span
-            title="No column level lineage for Python models"
+            title={decodeURI(columnName)}
             className={clsx('flex items-center', disabled && 'opacity-50')}
           >
-            {disabled && <NoSymbolIcon className="w-3 h-3 mr-2" />}
-            <b>{decodeURI(columnName)}</b>
+            {disabled && (
+              <NoSymbolIcon
+                title="No column level lineage for Python models"
+                className="w-3 h-3 mr-2"
+              />
+            )}
+            <b>{truncate(decodeURI(columnName), 50, 20)}</b>
           </span>
           <span className="inline-block text-neutral-400 dark:text-neutral-300 ml-2">
             {columnType}
@@ -321,14 +327,14 @@ const ModelNodeHeaderHandles = memo(function ModelNodeHeaderHandles({
             </span>
           )}
           <span
-            title={label}
+            title={decodeURI(label)}
             className={clsx(
               'inline-block whitespace-nowrap overflow-hidden overflow-ellipsis pr-2',
               isNotNil(handleClick) && 'cursor-pointer hover:underline',
             )}
             onClick={handleClick}
           >
-            {decodeURI(label)}
+            {truncate(decodeURI(label), 50, 20)}
           </span>
           <span className="flex justify-between mx-2 px-2 rounded-full bg-neutral-10">
             {count}
@@ -1068,50 +1074,53 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
 
   return (
     <div className="pl-2 flex items-center text-xs text-neutral-400">
-      <div className="flex w-full whitespace-nowrap">
-        <span className="mr-2">
+      <div className="contents">
+        <span
+          title={mainNode}
+          className="mr-2 whitespace-nowrap text-ellipsis overflow-hidden"
+        >
           <b>Model:</b> {mainNode}
         </span>
         {isNotNil(highlightedNodes) ?? (
-          <span className="mr-2">
+          <span className="mr-2 whitespace-nowrap">
             <b>Highlighted:</b> {Object.keys(highlightedNodes ?? {}).length}
           </span>
         )}
         {countSelected > 0 && (
-          <span className="mr-2">
+          <span className="mr-2 whitespace-nowrap">
             <b>Selected:</b> {countSelected}
           </span>
         )}
         {withImpacted && countSelected === 0 && countImpact > 0 && (
-          <span className="mr-2">
+          <span className="mr-2 whitespace-nowrap">
             <b>Impact:</b> {countImpact}
           </span>
         )}
         {withSecondary && countSelected === 0 && countSecondary > 0 && (
-          <span className="mr-2">
+          <span className="mr-2 whitespace-nowrap">
             <b>Secondary:</b> {countSecondary}
           </span>
         )}
-        <span className="mr-2">
+        <span className="mr-2 whitespace-nowrap">
           <b>Active:</b> {countActive}
         </span>
         {countVisible > 0 && countVisible !== countActive && (
-          <span className="mr-2">
+          <span className="mr-2 whitespace-nowrap">
             <b>Visible:</b> {countVisible}
           </span>
         )}
         {countHidden > 0 && (
-          <span className="mr-2">
+          <span className="mr-2 whitespace-nowrap">
             <b>Hidden:</b> {countHidden}
           </span>
         )}
         {countDataSources > 0 && (
-          <span className="mr-2">
+          <span className="mr-2 whitespace-nowrap">
             <b>Data Sources</b>: {countDataSources}
           </span>
         )}
         {countCTEs > 0 && (
-          <span className="mr-2">
+          <span className="mr-2 whitespace-nowrap">
             <b>CTEs:</b> {countCTEs}
           </span>
         )}
@@ -1125,7 +1134,7 @@ function GraphControls({ nodes = [] }: { nodes: Node[] }): JSX.Element {
         showIndex={false}
         size={EnumSize.sm}
         onSelect={handleSelect}
-        className="w-full min-w-[15rem] max-w-[20rem]"
+        className="w-full min-w-[10rem] max-w-[15rem]"
         isFullWidth={true}
       />
       <ListboxShow

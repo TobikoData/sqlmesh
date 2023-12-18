@@ -17,7 +17,7 @@ import {
   usePlanDispatch,
   type PlanChangeType,
 } from './context'
-import { isArrayNotEmpty } from '@utils/index'
+import { isArrayNotEmpty, truncate } from '@utils/index'
 import LineageFlowProvider from '@components/graph/context'
 import { useStoreContext } from '@context/context'
 import ModelLineage from '@components/graph/ModelLineage'
@@ -102,8 +102,11 @@ function PlanChangePreviewDefault({
           ) : (
             <ArrowPathRoundedSquareIcon className="h-4 mr-2" />
           )}
-          <small className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden">
-            {change}
+          <small
+            title={change}
+            className="w-full text-xs whitespace-nowrap text-ellipsis overflow-hidden"
+          >
+            {truncate(change, 50, 20)}
           </small>
         </li>
       ))}

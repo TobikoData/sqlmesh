@@ -176,3 +176,29 @@ export function toUniqueName(prefix?: string, suffix?: string): string {
     suffix ?? ''
   }`.toLowerCase()
 }
+
+export function truncate(
+  text: string,
+  maxChars = 0,
+  displayBefore = 5,
+  delimiter = '...',
+  displayAfter?: number,
+): string {
+  const textLength = text.length
+  displayBefore = Math.abs(displayBefore)
+  displayAfter = isNil(displayAfter) ? displayBefore : Math.abs(displayAfter)
+
+  if (maxChars > textLength || displayBefore + displayAfter >= textLength) {
+    return text
+  }
+
+  if (displayAfter === 0) {
+    return text.substring(0, displayBefore) + delimiter
+  }
+
+  return (
+    text.substring(0, displayBefore) +
+    delimiter +
+    text.substring(textLength - displayAfter)
+  )
+}

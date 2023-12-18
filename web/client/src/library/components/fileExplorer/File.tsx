@@ -11,7 +11,7 @@ import { getEmptyImage } from 'react-dnd-html5-backend'
 import { useLongPress } from '@uidotdev/usehooks'
 import { type ModelArtifact } from '@models/artifact'
 import { useStoreEditor } from '@context/editor'
-import { debounceSync } from '@utils/index'
+import { debounceSync, truncate } from '@utils/index'
 
 function File({
   file,
@@ -217,12 +217,13 @@ function File({
 function FileDisplay({ file }: { file: ModelFile }): JSX.Element {
   return (
     <span
+      title={file.name}
       className={clsx(
         'inline-block overflow-hidden overflow-ellipsis py-[0.125rem]',
         !file.is_supported && 'opacity-50',
       )}
     >
-      {file.name}
+      {truncate(file.name, 50, 20)}
     </span>
   )
 }
