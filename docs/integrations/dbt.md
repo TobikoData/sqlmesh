@@ -157,6 +157,12 @@ SQLMesh uses dbt tests to perform SQLMesh [audits](../concepts/audits.md) (comin
 
 Add SQLMesh [unit tests](../concepts/tests.md) to a dbt project by placing them in the "tests" directory.
 
+## Package Management
+SQLMesh does not have its own package manager; however, SQLMesh's dbt adapter is compatible with dbt's package manager. Continue to use [dbt deps](https://docs.getdbt.com/reference/commands/deps) and [dbt clean](https://docs.getdbt.com/reference/commands/clean) to update, add, or remove packages.
+
+## Documentation
+Model documentation is available in the [SQLMesh UI](../quickstart/ui.md#2-open-the-sqlmesh-web-ui). 
+
 ## Using Airflow
 To use SQLMesh and dbt projects with Airflow, first configure SQLMesh to use Airflow as described in the [Airflow integrations documentation](./airflow.md).
 
@@ -205,10 +211,6 @@ SQLMesh supports running dbt projects using the majority of dbt jinja methods, i
 
 SQLMesh is continuously adding functionality to run dbt projects. This is a list of major dbt features that are currently unsupported, but it is not exhaustive:
 
-* dbt deps
-    - While SQLMesh can read dbt packages, it does not currently support managing those packages.
-    - Continue to use dbt deps and dbt clean to update, add, or remove packages. For more information, refer to the [dbt deps](https://docs.getdbt.com/reference/commands/deps) documentation.
-* dbt docs
 * dbt snapshots
 
 The dbt jinja methods that are not currently supported are:
