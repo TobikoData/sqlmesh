@@ -68,7 +68,7 @@ def cli(
         if ctx.invoked_subcommand == "init":
             ctx.obj = path
             return
-        elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback"):
+        elif ctx.invoked_subcommand in ("create_external_models", "migrate", "rollback", "ui"):
             load = False
 
     # Delegates the execution of the --help option to the corresponding subcommand
