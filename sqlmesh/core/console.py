@@ -91,11 +91,16 @@ class Console(abc.ABC):
         """Stops the snapshot evaluation progress."""
 
     @abc.abstractmethod
-    def start_creation_progress(self, total_tasks: int) -> None:
+    def start_creation_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         """Indicates that a new snapshot creation progress has begun."""
 
     @abc.abstractmethod
-    def update_creation_progress(self, num_tasks: int) -> None:
+    def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
         """Update the snapshot creation progress."""
 
     @abc.abstractmethod
@@ -103,11 +108,16 @@ class Console(abc.ABC):
         """Stop the snapshot creation progress."""
 
     @abc.abstractmethod
-    def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
+    def start_promotion_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
 
     @abc.abstractmethod
-    def update_promotion_progress(self, num_tasks: int) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
 
     @abc.abstractmethod
@@ -208,7 +218,9 @@ class Console(abc.ABC):
 class TerminalConsole(Console):
     """A rich based implementation of the console."""
 
-    def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
+    def __init__(
+        self, console: t.Optional[RichConsole] = None, verbose: bool = False, **kwargs: t.Any
+    ) -> None:
         self.console: RichConsole = console or srich.console
 
         self.evaluation_progress_live: t.Optional[Live] = None
@@ -219,7 +231,7 @@ class TerminalConsole(Console):
         self.evaluation_model_batches: t.Dict[Snapshot, int] = {}
 
         # Put in temporary values that are replaced when evaluating
-        self.evaluation_environment_naming_info = EnvironmentNamingInfo()
+        self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog: t.Optional[str] = None
 
         self.creation_progress: t.Optional[Progress] = None
@@ -232,6 +244,8 @@ class TerminalConsole(Console):
         self.migration_task: t.Optional[TaskID] = None
 
         self.loading_status: t.Dict[uuid.UUID, Status] = {}
+
+        self.verbose = verbose
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         self.console.print(value, **kwargs)
@@ -285,14 +299,12 @@ class TerminalConsole(Console):
             )
 
             self.evaluation_model_batches = batches
-            self.evaluation_environment_naming_info = environment_naming_info
+            self.environment_naming_info = environment_naming_info
             self.default_catalog = default_catalog
 
     def start_snapshot_evaluation_progress(self, snapshot: Snapshot) -> None:
         if self.evaluation_model_progress and snapshot.name not in self.evaluation_model_tasks:
-            display_name = snapshot.display_name(
-                self.evaluation_environment_naming_info, self.default_catalog
-            )
+            display_name = snapshot.display_name(self.environment_naming_info, self.default_catalog)
             self.evaluation_model_tasks[snapshot.name] = self.evaluation_model_progress.add_task(
                 f"Evaluating {display_name}...",
                 view_name=display_name,
@@ -312,7 +324,7 @@ class TerminalConsole(Console):
 
             if duration_ms:
                 self.evaluation_progress_live.console.print(
-                    f"[{batch_idx + 1}/{total_batches}] {snapshot.display_name(self.evaluation_environment_naming_info, self.default_catalog)} [green]finished[/green] in {(duration_ms / 1000.0):.2f}s"
+                    f"[{batch_idx + 1}/{total_batches}] {snapshot.display_name(self.environment_naming_info, self.default_catalog)} [green]evaluated[/green] in {(duration_ms / 1000.0):.2f}s"
                 )
 
             self.evaluation_total_progress.update(
@@ -337,10 +349,15 @@ class TerminalConsole(Console):
         self.evaluation_model_progress = None
         self.evaluation_model_tasks = {}
         self.evaluation_model_batches = {}
-        self.evaluation_environment_naming_info = EnvironmentNamingInfo()
+        self.environment_naming_info = EnvironmentNamingInfo()
         self.default_catalog = None
 
-    def start_creation_progress(self, total_tasks: int) -> None:
+    def start_creation_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         """Indicates that a new creation progress has begun."""
         if self.creation_progress is None:
             self.creation_progress = Progress(
@@ -360,10 +377,17 @@ class TerminalConsole(Console):
                 total=total_tasks,
             )
 
-    def update_creation_progress(self, num_tasks: int) -> None:
+            self.environment_naming_info = environment_naming_info
+            self.default_catalog = default_catalog
+
+    def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
         """Update the snapshot creation progress."""
         if self.creation_progress is not None and self.creation_task is not None:
-            self.creation_progress.update(self.creation_task, refresh=True, advance=num_tasks)
+            if self.verbose:
+                self.creation_progress.live.console.print(
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog)} [green]created[/green]"
+                )
+            self.creation_progress.update(self.creation_task, refresh=True, advance=1)
 
     def stop_creation_progress(self, success: bool = True) -> None:
         """Stop the snapshot creation progress."""
@@ -374,11 +398,22 @@ class TerminalConsole(Console):
             if success:
                 self.log_success("All model versions have been created successfully")
 
-    def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
+        self.environment_naming_info = EnvironmentNamingInfo()
+        self.default_catalog = None
+
+    def start_promotion_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
         if self.promotion_progress is None:
             self.promotion_progress = Progress(
-                TextColumn(f"[bold blue]Virtually Updating '{environment}'", justify="right"),
+                TextColumn(
+                    f"[bold blue]Virtually Updating '{environment_naming_info.name}'",
+                    justify="right",
+                ),
                 BarColumn(bar_width=40),
                 "[progress.percentage]{task.percentage:>3.1f}%",
                 "•",
@@ -388,14 +423,22 @@ class TerminalConsole(Console):
 
             self.promotion_progress.start()
             self.promotion_task = self.promotion_progress.add_task(
-                f"Virtually Updating {environment}...",
+                f"Virtually Updating {environment_naming_info.name}...",
                 total=total_tasks,
             )
 
-    def update_promotion_progress(self, num_tasks: int) -> None:
+            self.environment_naming_info = environment_naming_info
+            self.default_catalog = default_catalog
+
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
         if self.promotion_progress is not None and self.promotion_task is not None:
-            self.promotion_progress.update(self.promotion_task, refresh=True, advance=num_tasks)
+            if self.verbose:
+                action_str = "[green]promoted[/green]" if promoted else "[yellow]demoted[/yellow]"
+                self.promotion_progress.live.console.print(
+                    f"{snapshot.display_name(self.environment_naming_info, self.default_catalog)} {action_str}"
+                )
+            self.promotion_progress.update(self.promotion_task, refresh=True, advance=1)
 
     def stop_promotion_progress(self, success: bool = True) -> None:
         """Stop the snapshot promotion progress."""
@@ -405,6 +448,9 @@ class TerminalConsole(Console):
             self.promotion_progress = None
             if success:
                 self.log_success("The target environment has been updated successfully")
+
+        self.environment_naming_info = EnvironmentNamingInfo()
+        self.default_catalog = None
 
     def start_migration_progress(self, total_tasks: int) -> None:
         """Indicates that a new migration progress has begun."""
@@ -1524,15 +1570,20 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         super().stop_evaluation_progress(success)
         print(f"Loading {'succeeded' if success else 'failed'}")
 
-    def start_creation_progress(self, total_tasks: int) -> None:
+    def start_creation_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         """Indicates that a new creation progress has begun."""
         self.model_creation_status = (0, total_tasks)
         print(f"Starting Creating New Model Versions")
 
-    def update_creation_progress(self, num_tasks: int) -> None:
+    def update_creation_progress(self, snapshot: SnapshotInfoLike) -> None:
         """Update the snapshot creation progress."""
         num_creations, total_creations = self.model_creation_status
-        num_creations += num_tasks
+        num_creations += 1
         self.model_creation_status = (num_creations, total_creations)
         if num_creations % 5 == 0:
             print(f"Created New Model Versions: {num_creations}/{total_creations}")
@@ -1542,15 +1593,20 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
         self.model_creation_status = (0, 0)
         print(f"New Model Creation {'succeeded' if success else 'failed'}")
 
-    def start_promotion_progress(self, environment: str, total_tasks: int) -> None:
+    def start_promotion_progress(
+        self,
+        total_tasks: int,
+        environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
+    ) -> None:
         """Indicates that a new snapshot promotion progress has begun."""
         self.promotion_status = (0, total_tasks)
-        print(f"Virtually Updating '{environment}'")
+        print(f"Virtually Updating '{environment_naming_info.name}'")
 
-    def update_promotion_progress(self, num_tasks: int) -> None:
+    def update_promotion_progress(self, snapshot: SnapshotInfoLike, promoted: bool) -> None:
         """Update the snapshot promotion progress."""
         num_promotions, total_promotions = self.promotion_status
-        num_promotions += num_tasks
+        num_promotions += 1
         self.promotion_status = (num_promotions, total_promotions)
         if num_promotions % 5 == 0:
             print(f"Virtually Updated {num_promotions}/{total_promotions}")
