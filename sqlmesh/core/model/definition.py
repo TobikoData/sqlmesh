@@ -15,7 +15,6 @@ from pydantic import Field
 from sqlglot import diff, exp
 from sqlglot.diff import Insert, Keep
 from sqlglot.helper import ensure_list
-from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.simplify import gen
 from sqlglot.schema import MappingSchema, nested_set
 from sqlglot.time import format_time
@@ -1009,7 +1008,7 @@ class SqlModel(_SqlBasedModel):
 
             self._columns_to_types = {
                 select.output_name: select.type or exp.DataType.build("unknown")
-                for select in annotate_types(query, schema=self._query_renderer.schema).selects
+                for select in query.expressions
             }
 
         if "*" in self._columns_to_types:
