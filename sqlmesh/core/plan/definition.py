@@ -13,7 +13,6 @@ from sqlmesh.core.config import (
     CategorizerConfig,
     EnvironmentSuffixTarget,
 )
-from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR
 from sqlmesh.core.context_diff import ContextDiff
 from sqlmesh.core.environment import Environment, EnvironmentNamingInfo
 from sqlmesh.core.node import IntervalUnit
@@ -132,6 +131,7 @@ class Plan:
         self.__missing_intervals: t.Optional[t.Dict[t.Tuple[str, str], Intervals]] = None
         self._categorized: t.Optional[t.List[Snapshot]] = None
         self._uncategorized: t.Optional[t.List[Snapshot]] = None
+        self._modified_snapshots: t.Optional[t.Dict[SnapshotId, Snapshot]] = None
 
         self._input_backfill_models = backfill_models
         self._models_to_backfill: t.Optional[t.Set[str]] = None
@@ -154,6 +154,22 @@ class Plan:
         if self._uncategorized is None:
             self._uncategorized = [s for s in self.directly_modified if not s.version]
         return self._uncategorized
+
+    @property
+    def modified_snapshots(self) -> t.Dict[SnapshotId, Snapshot]:
+        """Returns the modified (either directly or indirectly) snapshots."""
+        if self.__snapshot_mapping is None:
+            raise SQLMeshError("Internal Error: Tried to access modified snapshots before init")
+        if self._modified_snapshots is None:
+            self._modified_snapshots = {
+                **{s.snapshot_id: s for s in self.directly_modified},
+                **{
+                    s_id: self.__snapshot_mapping[s_id]
+                    for downstream_s_ids in self.indirectly_modified.values()
+                    for s_id in downstream_s_ids
+                },
+            }
+        return self._modified_snapshots
 
     @property
     def start(self) -> TimeLike:
@@ -294,32 +310,6 @@ class Plan:
     def models_to_backfill(self) -> t.Optional[t.Set[str]]:
         """Names of the models that should be backfilled as part of this plan. None means all models."""
         return self._models_to_backfill
-
-    @property
-    def loaded_snapshot_intervals(
-        self,
-    ) -> t.Tuple[t.List[LoadedSnapshotIntervals], t.List[Snapshot]]:
-        loaded_snapshots = []
-        unloaded_snapshots = []
-        for snapshot in self.directly_modified:
-            if snapshot.change_category:
-                loaded_snapshots.append(LoadedSnapshotIntervals.from_snapshot(snapshot))
-            else:
-                unloaded_snapshots.append(snapshot)
-            for downstream_indirect_s_id in self.indirectly_modified.get(
-                snapshot.snapshot_id, set()
-            ):
-                downstream_snapshot = self.snapshot_mapping[downstream_indirect_s_id]
-                # We don't want to display indirect non-breaking since to users these are effectively no-op changes
-                if downstream_snapshot.is_indirect_non_breaking:
-                    continue
-                if downstream_snapshot.change_category:
-                    loaded_snapshots.append(
-                        LoadedSnapshotIntervals.from_snapshot(downstream_snapshot)
-                    )
-                else:
-                    unloaded_snapshots.append(downstream_snapshot)
-        return loaded_snapshots, unloaded_snapshots
 
     @property
     def has_changes(self) -> bool:
@@ -762,6 +752,7 @@ class Plan:
 
         self._categorized = None
         self._uncategorized = None
+        self._modified_snapshots = None
 
     def _build_snapshots_and_dag(
         self,
@@ -844,29 +835,3 @@ class SnapshotIntervals:
 
     def format_intervals(self, unit: t.Optional[IntervalUnit] = None) -> str:
         return format_intervals(self.merged_intervals, unit)
-
-
-@dataclass
-class LoadedSnapshotIntervals(SnapshotIntervals):
-    change_category: SnapshotChangeCategory
-    interval_unit: t.Optional[IntervalUnit]
-    node_name: str
-    view_name: t.Optional[str] = None
-
-    @classmethod
-    def from_snapshot(cls, snapshot: Snapshot) -> LoadedSnapshotIntervals:
-        assert snapshot.change_category
-        return cls(
-            snapshot_id=snapshot.snapshot_id,
-            intervals=snapshot.dev_intervals
-            if snapshot.change_category.is_forward_only
-            else snapshot.intervals,
-            interval_unit=snapshot.node.interval_unit,
-            node_name=snapshot.node.name,
-            view_name=snapshot.model.view_name if snapshot.is_model else None,
-            change_category=snapshot.change_category,
-        )
-
-    @property
-    def change_category_str(self) -> str:
-        return SNAPSHOT_CHANGE_CATEGORY_STR[self.change_category]

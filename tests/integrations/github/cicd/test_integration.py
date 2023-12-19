@@ -1453,3 +1453,226 @@ def test_error_msg_when_applying_plan_with_bug(
             output
             == "run_unit_tests=success\nhas_required_approval=success\npr_environment_name=hello_world_2\npr_environment_synced=failure\nprod_plan_preview=skipped\nprod_environment_synced=skipped\n"
         )
+
+
+@freeze_time("2023-01-01 15:00:00")
+def test_overlapping_changes_models(
+    github_client,
+    make_controller,
+    make_mock_check_run,
+    make_mock_issue_comment,
+    make_pull_request_review,
+    tmp_path: pathlib.Path,
+    mocker: MockerFixture,
+):
+    """
+    PR with breaking and non-breaking change that both affect a common child. Ensuring that child is reported correctly.
+
+    Scenario:
+    - PR is not merged
+    - PR has been approved by a required reviewer
+    - Tests passed
+    - PR Merge Method defined
+    - Delete environment is disabled
+    - Changes made in PR with auto-categorization
+    """
+    mock_repo = github_client.get_repo()
+    mock_repo.create_check_run = mocker.MagicMock(
+        side_effect=lambda **kwargs: make_mock_check_run(**kwargs)
+    )
+
+    created_comments: t.List[MockIssueComment] = []
+    mock_issue = mock_repo.get_issue()
+    mock_issue.create_comment = mocker.MagicMock(
+        side_effect=lambda comment: make_mock_issue_comment(
+            comment=comment, created_comments=created_comments
+        )
+    )
+    mock_issue.get_comments = mocker.MagicMock(side_effect=lambda: created_comments)
+
+    mock_pull_request = mock_repo.get_pull()
+    mock_pull_request.get_reviews = mocker.MagicMock(
+        side_effect=lambda: [make_pull_request_review(username="test_github", state="APPROVED")]
+    )
+    mock_pull_request.merged = False
+    mock_pull_request.merge = mocker.MagicMock()
+
+    controller = make_controller(
+        "tests/fixtures/github/pull_request_synchronized.json",
+        github_client,
+        bot_config=GithubCICDBotConfig(
+            merge_method=MergeMethod.MERGE,
+            invalidate_environment_after_deploy=False,
+            auto_categorize_changes=CategorizerConfig.all_full(),
+            default_pr_start=None,
+            skip_pr_backfill=False,
+        ),
+        mock_out_context=False,
+    )
+    controller._context.plan("prod", no_prompts=True, auto_apply=True)
+    controller._context.users = [
+        User(username="test", github_username="test_github", roles=[UserRole.REQUIRED_APPROVER])
+    ]
+
+    # These changes have shared children and this ensures we don't repeat the children in the output
+    # Make a non-breaking change
+    model = controller._context.get_model("sushi.customers").copy()
+    model.query.expressions.append(exp.alias_("1", "new_col"))
+    controller._context.upsert_model(model)
+
+    # Make a breaking change
+    model = controller._context.get_model("sushi.waiter_names").copy()
+    model.seed.content += "10,Trey\n"
+    controller._context.upsert_model(model)
+
+    github_output_file = tmp_path / "github_output.txt"
+
+    with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(github_output_file)}):
+        command._run_all(controller)
+
+    assert "SQLMesh - Run Unit Tests" in controller._check_run_mapping
+    test_checks_runs = controller._check_run_mapping["SQLMesh - Run Unit Tests"].all_kwargs
+    assert len(test_checks_runs) == 3
+    assert GithubCheckStatus(test_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(test_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(test_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(test_checks_runs[2]["conclusion"]).is_success
+    assert test_checks_runs[2]["output"]["title"] == "Tests Passed"
+    assert (
+        test_checks_runs[2]["output"]["summary"].strip()
+        == "**Successfully Ran `2` Tests Against `duckdb`**"
+    )
+
+    assert "SQLMesh - PR Environment Synced" in controller._check_run_mapping
+    pr_checks_runs = controller._check_run_mapping["SQLMesh - PR Environment Synced"].all_kwargs
+    assert len(pr_checks_runs) == 3
+    assert GithubCheckStatus(pr_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(pr_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(pr_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(pr_checks_runs[2]["conclusion"]).is_success
+    assert pr_checks_runs[2]["output"]["title"] == "PR Virtual Data Environment: hello_world_2"
+    assert (
+        pr_checks_runs[2]["output"]["summary"]
+        == """<table><thead><tr><th colspan="3">PR Environment Summary</th></tr><tr><th>Model</th><th>Change Type</th><th>Dates Loaded</th></tr></thead><tbody><tr><td>sushi.waiter_names</td><td>Breaking</td><td>2022-12-31 - 2022-12-31</td></tr><tr><td>sushi.customers</td><td>Non-breaking</td><td>2022-12-25 - 2022-12-31</td></tr><tr><td>sushi.waiter_as_customer_by_day</td><td>Indirect Breaking</td><td>2022-12-25 - 2022-12-31</td></tr></tbody></table>"""
+    )
+
+    assert "SQLMesh - Prod Plan Preview" in controller._check_run_mapping
+    prod_plan_preview_checks_runs = controller._check_run_mapping[
+        "SQLMesh - Prod Plan Preview"
+    ].all_kwargs
+    assert len(prod_plan_preview_checks_runs) == 3
+    assert GithubCheckStatus(prod_plan_preview_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(prod_plan_preview_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(prod_plan_preview_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(prod_plan_preview_checks_runs[2]["conclusion"]).is_success
+    expected_prod_plan_summary = """```diff
+--- 
+
++++ 
+
+@@ -9,4 +9,5 @@
+
+ 7,Iaroslav
+ 8,Emma
+ 9,Maia
++10,Trey
+```
+
+```
+
+Directly Modified: sushi.waiter_names (Breaking)
+└── Indirectly Modified Children:
+    └── sushi.waiter_as_customer_by_day (Indirect Breaking)
+
+```
+```diff
+--- 
+
++++ 
+
+@@ -25,7 +25,8 @@
+
+ SELECT DISTINCT
+   CAST(o.customer_id AS INT) AS customer_id,
+   m.status,
+-  d.zip
++  d.zip,
++  1 AS new_col
+ FROM sushi.orders AS o
+ LEFT JOIN current_marketing AS m
+   ON o.customer_id = m.customer_id
+```
+
+```
+
+Directly Modified: sushi.customers (Non-breaking)
+└── Indirectly Modified Children:
+    └── sushi.waiter_as_customer_by_day (Indirect Breaking)
+
+```
+
+"""
+    assert prod_plan_preview_checks_runs[2]["output"]["title"] == "Prod Plan Preview"
+    assert (
+        prod_plan_preview_checks_runs[2]["output"]["summary"]
+        == "**Preview of Prod Plan**\n" + expected_prod_plan_summary
+    )
+
+    assert "SQLMesh - Prod Environment Synced" in controller._check_run_mapping
+    prod_checks_runs = controller._check_run_mapping["SQLMesh - Prod Environment Synced"].all_kwargs
+    assert len(prod_checks_runs) == 3
+    assert GithubCheckStatus(prod_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(prod_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(prod_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(prod_checks_runs[2]["conclusion"]).is_success
+    assert prod_checks_runs[2]["output"]["title"] == "Deployed to Prod"
+    assert (
+        prod_checks_runs[2]["output"]["summary"]
+        == "**Generated Prod Plan**\n" + expected_prod_plan_summary
+    )
+
+    assert "SQLMesh - Has Required Approval" in controller._check_run_mapping
+    approval_checks_runs = controller._check_run_mapping[
+        "SQLMesh - Has Required Approval"
+    ].all_kwargs
+    assert len(approval_checks_runs) == 3
+    assert GithubCheckStatus(approval_checks_runs[0]["status"]).is_queued
+    assert GithubCheckStatus(approval_checks_runs[1]["status"]).is_in_progress
+    assert GithubCheckStatus(approval_checks_runs[2]["status"]).is_completed
+    assert GithubCheckConclusion(approval_checks_runs[2]["conclusion"]).is_success
+    assert (
+        approval_checks_runs[2]["output"]["title"]
+        == "Obtained approval from required approvers: test_github"
+    )
+    assert (
+        approval_checks_runs[2]["output"]["summary"]
+        == """**List of possible required approvers:**
+- `test_github`
+"""
+    )
+
+    assert len(get_environment_objects(controller, "hello_world_2")) == 3
+    assert "new_col" in get_columns(controller, "hello_world_2", "customers")
+
+    assert mock_pull_request.merge.called
+
+    assert len(created_comments) == 1
+    assert (
+        created_comments[0].body
+        == f"""**SQLMesh Bot Info**
+- PR Virtual Data Environment: hello_world_2
+<details>
+  <summary>Prod Plan Being Applied</summary>
+
+{expected_prod_plan_summary}
+</details>
+
+"""
+    )
+
+    with open(github_output_file, "r") as f:
+        output = f.read()
+        assert (
+            output
+            == "run_unit_tests=success\nhas_required_approval=success\ncreated_pr_environment=true\npr_environment_name=hello_world_2\npr_environment_synced=success\nprod_plan_preview=success\nprod_environment_synced=success\n"
+        )
