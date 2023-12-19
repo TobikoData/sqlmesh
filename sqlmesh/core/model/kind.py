@@ -231,7 +231,7 @@ class IncrementalByUniqueKeyKind(_Incremental):
     @field_validator("when_matched", mode="before")
     @field_validator_v1_args
     def _when_matched_validator(
-        cls, v: t.Optional[exp.When], values: t.Dict[str, t.Any]
+        cls, v: t.Optional[t.Union[exp.When, str]], values: t.Dict[str, t.Any]
     ) -> t.Optional[exp.When]:
         def replace_table_references(expression: exp.Expression) -> exp.Expression:
             from sqlmesh.core.engine_adapter.base import (
@@ -252,9 +252,12 @@ class IncrementalByUniqueKeyKind(_Incremental):
                     )
             return expression
 
+        if isinstance(v, str):
+            return t.cast(exp.When, d.parse_one(v, into=exp.When))
+
         if not v:
             return v
-        v.meta["dialect"] = values.get("dialect")
+
         return v.transform(replace_table_references)
 
 

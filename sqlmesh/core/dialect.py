@@ -11,6 +11,7 @@ import pandas as pd
 from sqlglot import Dialect, Generator, ParseError, Parser, Tokenizer, TokenType, exp
 from sqlglot.dialects.dialect import DialectType
 from sqlglot.dialects.snowflake import Snowflake
+from sqlglot.helper import seq_get
 from sqlglot.optimizer.normalize_identifiers import normalize_identifiers
 from sqlglot.optimizer.scope import traverse_scope
 from sqlglot.tokens import Token
@@ -607,8 +608,10 @@ class ChunkType(Enum):
     SQL = auto()
 
 
-def parse_one(sql: str, dialect: t.Optional[str] = None) -> exp.Expression:
-    expressions = parse(sql, default_dialect=dialect, match_dialect=False)
+def parse_one(
+    sql: str, dialect: t.Optional[str] = None, into: t.Optional[exp.IntoType] = None
+) -> exp.Expression:
+    expressions = parse(sql, default_dialect=dialect, match_dialect=False, into=into)
     if not expressions:
         raise SQLMeshError(f"No expressions found in '{sql}'")
     elif len(expressions) > 1:
@@ -617,7 +620,10 @@ def parse_one(sql: str, dialect: t.Optional[str] = None) -> exp.Expression:
 
 
 def parse(
-    sql: str, default_dialect: t.Optional[str] = None, match_dialect: bool = True
+    sql: str,
+    default_dialect: t.Optional[str] = None,
+    match_dialect: bool = True,
+    into: t.Optional[exp.IntoType] = None,
 ) -> t.List[exp.Expression]:
     """Parse a sql string.
 
@@ -668,7 +674,10 @@ def parse(
 
     for chunk, chunk_type in chunks:
         if chunk_type == ChunkType.SQL:
-            for expression in parser.parse(chunk, sql):
+            parsed_expressions: t.List[t.Optional[exp.Expression]] = (
+                parser.parse(chunk, sql) if into is None else parser.parse_into(into, chunk, sql)
+            )
+            for expression in parsed_expressions:
                 if expression:
                     expression.meta["sql"] = parser._find_sql(chunk[0], chunk[-1])
                     expressions.append(expression)
@@ -705,6 +714,10 @@ def extend_sqlglot() -> None:
         parser.PLACEHOLDER_PARSERS.update({TokenType.PARAMETER: _parse_macro})
         parser.QUERY_MODIFIER_PARSERS.update(
             {TokenType.PARAMETER: lambda self: _parse_body_macro(self)}
+        )
+        # FIXME: Delete the extension below after upgrading to SQLGlot >= 20.3.0.
+        parser.EXPRESSION_PARSERS.update(
+            {exp.When: lambda self: seq_get(self._parse_when_matched(), 0)}
         )
 
     for generator in generators:
