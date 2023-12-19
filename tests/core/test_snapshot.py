@@ -78,7 +78,7 @@ def snapshot(
     monkeypatch.setattr("sqlmesh.utils.date.now", mock)
     snapshot = make_snapshot(
         model,
-        nodes={parent_model.name: parent_model, model.name: model},
+        nodes={parent_model.fqn: parent_model, model.fqn: model},
     )
     snapshot.version = snapshot.fingerprint.to_version()
     return snapshot
@@ -125,8 +125,8 @@ def test_json(snapshot: Snapshot):
             "signals": [],
         },
         "audits": [],
-        "name": "name",
-        "parents": [{"name": "parent.tbl", "identifier": snapshot.parents[0].identifier}],
+        "name": '"name"',
+        "parents": [{"name": '"parent"."tbl"', "identifier": snapshot.parents[0].identifier}],
         "previous_versions": [],
         "indirect_versions": {},
         "updated_ts": 1663891973000,
@@ -531,7 +531,7 @@ def test_fingerprint(model: Model, parent_model: Model):
 
     assert fingerprint == original_fingerprint
 
-    with_parent_fingerprint = fingerprint_from_node(model, nodes={"parent.tbl": parent_model})
+    with_parent_fingerprint = fingerprint_from_node(model, nodes={'"parent"."tbl"': parent_model})
     assert with_parent_fingerprint != fingerprint
     assert int(with_parent_fingerprint.parent_data_hash) > 0
     assert int(with_parent_fingerprint.parent_metadata_hash) > 0
@@ -539,7 +539,9 @@ def test_fingerprint(model: Model, parent_model: Model):
     assert (
         fingerprint_from_node(
             model,
-            nodes={"parent.tbl": SqlModel(**{**model.dict(), "query": parse_one("select 2, ds")})},
+            nodes={
+                '"parent"."tbl"': SqlModel(**{**model.dict(), "query": parse_one("select 2, ds")})
+            },
         )
         != with_parent_fingerprint
     )
@@ -727,7 +729,17 @@ def test_table_name(snapshot: Snapshot, make_snapshot: t.Callable):
     fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
     assert (
         fully_qualified_snapshot.table_name()
-        == f'"my-catalog".sqlmesh__db.my_catalog__db__table__{fully_qualified_snapshot.version}'
+        == f'"my-catalog".sqlmesh__db.db__table__{fully_qualified_snapshot.version}'
+    )
+    non_fully_qualified_snapshot = make_snapshot(
+        SqlModel(
+            name="db.table", query=parse_one("select 1, ds"), default_catalog='"other-catalog"'
+        )
+    )
+    non_fully_qualified_snapshot.categorize_as(SnapshotChangeCategory.BREAKING)
+    assert (
+        non_fully_qualified_snapshot.table_name(is_deployable=True)
+        == f'"other-catalog".sqlmesh__db.db__table__{non_fully_qualified_snapshot.version}'
     )
 
 
@@ -1324,11 +1336,12 @@ def test_multi_interval_merge(make_snapshot):
 
 def test_earliest_start_date(sushi_context: Context):
     model_name = "sushi.waiter_names"
-    assert sushi_context.snapshots[model_name].node.start is None
+    fqn_name = '"memory"."sushi"."waiter_names"'
+    assert sushi_context.get_snapshot(model_name, raise_if_missing=True).node.start is None
 
     cache: t.Dict[str, datetime] = {}
     earliest_start_date(sushi_context.snapshots.values(), cache)
-    assert cache[model_name] == to_datetime("yesterday")
+    assert cache[fqn_name] == to_datetime("yesterday")
 
 
 def test_deployability_index(make_snapshot):

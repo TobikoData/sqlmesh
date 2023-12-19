@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from unittest.mock import call
 
+import pytest
 from pytest_mock.plugin import MockerFixture
 
 from sqlmesh.core import dialect as d
@@ -14,15 +15,32 @@ from sqlmesh.core.snapshot import SnapshotChangeCategory
 from sqlmesh.utils import UniqueKeyDict
 
 
-def test_select_models(mocker: MockerFixture, make_snapshot):
-    added_model = SqlModel(name="added_model", query=d.parse_one("SELECT 1 AS a"))
+@pytest.mark.parametrize(
+    "default_catalog",
+    [
+        None,
+        "test_catalog",
+    ],
+)
+def test_select_models(mocker: MockerFixture, make_snapshot, default_catalog: t.Optional[str]):
+    added_model = SqlModel(
+        name="db.added_model", query=d.parse_one("SELECT 1 AS a"), default_catalog=default_catalog
+    )
     modified_model_v1 = SqlModel(
-        name="modified_model", query=d.parse_one("SELECT a + 1 FROM added_model")
+        name="db.modified_model",
+        query=d.parse_one("SELECT a + 1 FROM db.added_model"),
+        default_catalog=default_catalog,
     )
     modified_model_v2 = SqlModel(
-        name="modified_model", query=d.parse_one("SELECT a + 2 FROM added_model")
+        name="db.modified_model",
+        query=d.parse_one("SELECT a + 2 FROM db.added_model"),
+        default_catalog=default_catalog,
     )
-    removed_model = SqlModel(name="removed_model", query=d.parse_one("SELECT a FROM added_model"))
+    removed_model = SqlModel(
+        name="db.removed_model",
+        query=d.parse_one("SELECT a FROM db.added_model"),
+        default_catalog=default_catalog,
+    )
     standalone_audit = StandaloneAudit(
         name="test_audit", query=d.parse_one(f"SELECT * FROM added_model WHERE a IS NULL")
     )
@@ -53,77 +71,80 @@ def test_select_models(mocker: MockerFixture, make_snapshot):
         standalone_audit_snapshot.snapshot_id: standalone_audit_snapshot,
     }
 
-    added_model_schema = {"added_model": {"a": "INT"}}
+    added_model_schema = {'"db"': {'"added_model"': {"a": "INT"}}}
+    if default_catalog:
+        added_model_schema = {f'"{default_catalog}"': added_model_schema}  # type: ignore
 
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-    local_models[added_model.name] = added_model
-    local_models[modified_model_v2.name] = modified_model_v2.copy(
+    local_models[added_model.fqn] = added_model
+    local_models[modified_model_v2.fqn] = modified_model_v2.copy(
         update={"mapping_schema": added_model_schema}
     )
-
-    selector = Selector(state_reader_mock, local_models, {})
+    selector = Selector(state_reader_mock, local_models, default_catalog=default_catalog)
 
     _assert_models_equal(
-        selector.select_models(["added_model"], env_name),
+        selector.select_models(["db.added_model"], env_name),
         {
-            added_model.name: added_model,
-            modified_model_v1.name: modified_model_v1.copy(
+            added_model.fqn: added_model,
+            modified_model_v1.fqn: modified_model_v1.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
+            removed_model.fqn: removed_model.copy(update={"mapping_schema": added_model_schema}),
         },
     )
     _assert_models_equal(
-        selector.select_models(["modified_model"], "missing_env", fallback_env_name=env_name),
+        selector.select_models(["db.modified_model"], "missing_env", fallback_env_name=env_name),
         {
-            modified_model_v2.name: modified_model_v2,
-            removed_model.name: removed_model,
+            modified_model_v2.fqn: modified_model_v2,
+            removed_model.fqn: removed_model,
         },
     )
     _assert_models_equal(
-        selector.select_models(["removed_model"], env_name),
+        selector.select_models(["db.removed_model"], env_name),
         {
-            modified_model_v1.name: modified_model_v1,
+            modified_model_v1.fqn: modified_model_v1,
         },
     )
     _assert_models_equal(
         selector.select_models(
-            ["added_model", "modified_model"], "missing_env", fallback_env_name=env_name
+            ["db.added_model", "db.modified_model"], "missing_env", fallback_env_name=env_name
         ),
         {
-            added_model.name: added_model,
-            modified_model_v2.name: modified_model_v2.copy(
+            added_model.fqn: added_model,
+            modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
+            removed_model.fqn: removed_model.copy(update={"mapping_schema": added_model_schema}),
         },
     )
     _assert_models_equal(
-        selector.select_models(["+modified_model"], env_name),
+        selector.select_models(["+db.modified_model"], env_name),
         {
-            added_model.name: added_model,
-            modified_model_v2.name: modified_model_v2.copy(
+            added_model.fqn: added_model,
+            modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
+            removed_model.fqn: removed_model.copy(update={"mapping_schema": added_model_schema}),
         },
     )
     _assert_models_equal(
-        selector.select_models(["added_model+"], env_name),
+        selector.select_models(["db.added_model+"], env_name),
         {
-            added_model.name: added_model,
-            modified_model_v2.name: modified_model_v2.copy(
+            added_model.fqn: added_model,
+            modified_model_v2.fqn: modified_model_v2.copy(
                 update={"mapping_schema": added_model_schema}
             ),
-            removed_model.name: removed_model.copy(update={"mapping_schema": added_model_schema}),
+            removed_model.fqn: removed_model.copy(update={"mapping_schema": added_model_schema}),
         },
     )
     _assert_models_equal(
-        selector.select_models(["added_model", "modified_model", "removed_model"], env_name),
+        selector.select_models(
+            ["db.added_model", "db.modified_model", "db.removed_model"], env_name
+        ),
         local_models,
     )
     _assert_models_equal(
-        selector.select_models(["*_model", "removed_model"], env_name),
+        selector.select_models(["*_model", "db.removed_model"], env_name),
         local_models,
     )
 
@@ -135,16 +156,16 @@ def test_select_models_missing_env(mocker: MockerFixture, make_snapshot):
     state_reader_mock.get_environment.return_value = None
 
     local_models: UniqueKeyDict[str, Model] = UniqueKeyDict("models")
-    local_models[model.name] = model
+    local_models[model.fqn] = model
 
-    selector = Selector(state_reader_mock, local_models, {})
+    selector = Selector(state_reader_mock, local_models)
 
-    assert selector.select_models([model.name], "missing_env").keys() == {model.name}
+    assert selector.select_models([model.name], "missing_env").keys() == {model.fqn}
     assert not selector.select_models(["missing"], "missing_env")
 
     assert selector.select_models(
         [model.name], "missing_env", fallback_env_name="another_missing_env"
-    ).keys() == {model.name}
+    ).keys() == {model.fqn}
 
     state_reader_mock.get_environment.assert_has_calls(
         [

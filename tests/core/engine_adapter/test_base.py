@@ -10,6 +10,7 @@ from sqlglot import expressions as exp
 from sqlglot import parse_one
 from sqlglot.helper import ensure_list
 
+from sqlmesh.core.dialect import normalize_model_name
 from sqlmesh.core.engine_adapter import EngineAdapter, EngineAdapterWithIndexSupport
 from sqlmesh.core.engine_adapter.base import InsertOverwriteStrategy
 from sqlmesh.core.schema_diff import SchemaDiffer, TableAlterOperation
@@ -1412,3 +1413,15 @@ def test_get_current_catalog(make_mocked_engine_adapter: t.Callable):
 
     with pytest.raises(NotImplementedError):
         adapter.get_current_catalog()
+
+
+def test_get_temp_table(mocker: MockerFixture, make_mocked_engine_adapter: t.Callable):
+    adapter = make_mocked_engine_adapter(EngineAdapter)
+
+    mocker.patch("sqlmesh.core.engine_adapter.base.random_id", return_value="abcdefgh")
+
+    value = adapter._get_temp_table(
+        normalize_model_name("catalog.db.test_table", default_catalog=None, dialect=None)
+    )
+
+    assert value.sql() == '"catalog"."db"."__temp_test_table_abcdefgh"'

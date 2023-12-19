@@ -14,15 +14,17 @@ from sqlmesh.core.test.discovery import (
     load_model_test_file,
 )
 from sqlmesh.core.test.result import ModelTextTestResult
+from sqlmesh.utils import UniqueKeyDict
 
 
 def run_tests(
     model_test_metadata: list[ModelTestMetadata],
-    models: dict[str, Model],
+    models: UniqueKeyDict[str, Model],
     engine_adapter: EngineAdapter,
     dialect: str | None = None,
     verbosity: int = 1,
     stream: t.TextIO | None = None,
+    default_catalog: str | None = None,
 ) -> unittest.result.TestResult:
     """Create a test suite of ModelTest objects and run it.
 
@@ -40,6 +42,7 @@ def run_tests(
             engine_adapter=engine_adapter,
             dialect=dialect,
             path=metadata.path,
+            default_catalog=default_catalog,
         )
         for metadata in model_test_metadata
     )
@@ -51,12 +54,13 @@ def run_tests(
 
 def run_model_tests(
     tests: list[str],
-    models: dict[str, Model],
+    models: UniqueKeyDict[str, Model],
     engine_adapter: EngineAdapter,
     dialect: str | None = None,
     verbosity: int = 1,
     patterns: list[str] | None = None,
     stream: t.TextIO | None = None,
+    default_catalog: t.Optional[str] = None,
 ) -> unittest.result.TestResult:
     """Load and run tests.
 
@@ -80,4 +84,12 @@ def run_model_tests(
     if patterns:
         loaded_tests = filter_tests_by_patterns(loaded_tests, patterns)
 
-    return run_tests(loaded_tests, models, engine_adapter, dialect, verbosity, stream)
+    return run_tests(
+        loaded_tests,
+        models,
+        engine_adapter,
+        dialect,
+        verbosity,
+        stream,
+        default_catalog=default_catalog,
+    )

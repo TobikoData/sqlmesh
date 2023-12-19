@@ -441,9 +441,9 @@ class GithubController:
         try:
             # Clear out any output that might exist from prior steps
             self._console.clear_captured_outputs()
-            self._console._show_categorized_snapshots(plan)
+            self._console._show_categorized_snapshots(plan, self._context.default_catalog)
             catagorized_snapshots = self._console.consume_captured_output()
-            self._console._show_missing_dates(plan)
+            self._console._show_missing_dates(plan, self._context.default_catalog)
             missing_dates = self._console.consume_captured_output()
             if not catagorized_snapshots and not missing_dates:
                 return "No changes to apply."
@@ -773,7 +773,7 @@ class GithubController:
                     for unloaded_snapshot in unloaded_snapshots:
                         body_rows.append(
                             [
-                                h("td", unloaded_snapshot.name),
+                                h("td", unloaded_snapshot.node.name),
                                 h("td", "Uncategorized"),
                                 h("td", "N/A"),
                             ]

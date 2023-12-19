@@ -23,11 +23,13 @@ def scheduler(sushi_context_fixed_date: Context) -> Scheduler:
 
 @pytest.fixture
 def orders(sushi_context_fixed_date: Context) -> Snapshot:
-    return sushi_context_fixed_date.snapshots["sushi.orders"]
+    return sushi_context_fixed_date.get_snapshot("sushi.orders", raise_if_missing=True)
 
 
 def test_interval_params(scheduler: Scheduler, sushi_context_fixed_date: Context, orders: Snapshot):
-    waiter_revenue = sushi_context_fixed_date.snapshots["sushi.waiter_revenue_by_day"]
+    waiter_revenue = sushi_context_fixed_date.get_snapshot(
+        "sushi.waiter_revenue_by_day", raise_if_missing=True
+    )
     start_ds = "2022-01-01"
     end_ds = "2022-02-05"
 
@@ -60,7 +62,9 @@ def test_interval_params_nonconsecutive(scheduler: Scheduler, orders: Snapshot):
 
 
 def test_interval_params_missing(scheduler: Scheduler, sushi_context_fixed_date: Context):
-    waiters = sushi_context_fixed_date.snapshots["sushi.waiter_as_customer_by_day"]
+    waiters = sushi_context_fixed_date.get_snapshot(
+        "sushi.waiter_as_customer_by_day", raise_if_missing=True
+    )
 
     start_ds = "2022-01-01"
     end_ds = "2022-03-01"
@@ -73,7 +77,7 @@ def test_interval_params_missing(scheduler: Scheduler, sushi_context_fixed_date:
 
 def test_run(sushi_context_fixed_date: Context, scheduler: Scheduler):
     adapter = sushi_context_fixed_date.engine_adapter
-    snapshot = sushi_context_fixed_date.snapshots["sushi.items"]
+    snapshot = sushi_context_fixed_date.get_snapshot("sushi.items", raise_if_missing=True)
     scheduler.run(
         EnvironmentNamingInfo(),
         "2022-01-01",
@@ -115,6 +119,7 @@ def test_incremental_by_unique_key_kind_dag(mocker: MockerFixture, make_snapshot
         snapshot_evaluator=snapshot_evaluator,
         state_sync=mock_state_sync,
         max_workers=2,
+        default_catalog=None,
     )
     batches = scheduler.batches(start, end, end)
     dag = scheduler._dag(batches)
@@ -154,6 +159,7 @@ def test_incremental_time_self_reference_dag(mocker: MockerFixture, make_snapsho
         snapshot_evaluator=snapshot_evaluator,
         state_sync=mocker.MagicMock(),
         max_workers=2,
+        default_catalog=None,
     )
     batches = scheduler.batches(start, end, end)
     dag = scheduler._dag(batches)

@@ -9,6 +9,10 @@ from sqlmesh.core.config.base import UpdateStrategy
 from sqlmesh.dbt.column import ColumnConfig
 from sqlmesh.dbt.common import GeneralConfig
 from sqlmesh.utils import AttributeDict
+from sqlmesh.utils.errors import ConfigError
+
+if t.TYPE_CHECKING:
+    from sqlmesh.dbt.context import DbtContext
 
 
 class SourceConfig(GeneralConfig):
@@ -42,6 +46,8 @@ class SourceConfig(GeneralConfig):
     external: t.Optional[t.Dict[str, t.Any]] = {}
     columns: t.Dict[str, ColumnConfig] = {}
 
+    _canonical_name: t.Optional[str] = None
+
     _FIELD_UPDATE_STRATEGY: t.ClassVar[t.Dict[str, UpdateStrategy]] = {
         **GeneralConfig._FIELD_UPDATE_STRATEGY,
         **{"columns": UpdateStrategy.KEY_EXTEND},
@@ -55,9 +61,28 @@ class SourceConfig(GeneralConfig):
     def config_name(self) -> str:
         return f"{self.source_name_}.{self.name}"
 
-    @property
-    def sql_name(self) -> str:
-        return ".".join(part for part in (self.database, self.schema_, self.table_name) if part)
+    def canonical_name(self, context: DbtContext) -> str:
+        if self._canonical_name is None:
+            source = context.get_callable_macro("source")
+            if not source:
+                raise ConfigError("'source' macro not found.")
+
+            try:
+                relation = source(self.source_name_, self.name)
+            except Exception as e:
+                raise ConfigError(
+                    f"'source' macro failed for '{self.config_name}' with exeception '{e}'."
+                )
+
+            relation = relation.quote(
+                database=False,
+                schema=False,
+                identifier=False,
+            )
+            if relation.database == context.target.database:
+                relation = relation.include(database=False)
+            self._canonical_name = relation.render()
+        return self._canonical_name
 
     @property
     def relation_info(self) -> AttributeDict:

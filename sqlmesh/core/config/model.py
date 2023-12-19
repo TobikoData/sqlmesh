@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import typing as t
 
-from pydantic import Field
-
 from sqlmesh.core.config.base import BaseConfig
 from sqlmesh.core.model.kind import ModelKind, model_kind_validator
 from sqlmesh.utils.date import TimeLike
@@ -26,8 +24,6 @@ class ModelDefaultsConfig(BaseConfig):
             will be chunked such that each individual job will only contain jobs with max `batch_size` intervals.
         storage_format: The storage format used to store the physical table, only applicable in certain engines.
             (eg. 'parquet')
-        catalog: The default catalog to use if one is not provided (catalog.schema.table).
-        schema: The default schema to use if one is not provided. (catalog.schema.table).
     """
 
     kind: t.Optional[ModelKind] = None
@@ -37,7 +33,5 @@ class ModelDefaultsConfig(BaseConfig):
     start: t.Optional[TimeLike] = None
     batch_size: t.Optional[int] = None
     storage_format: t.Optional[str] = None
-    catalog: t.Optional[str] = None
-    schema_: t.Optional[str] = Field(default=None, alias="schema")
 
     _model_kind_validator = model_kind_validator

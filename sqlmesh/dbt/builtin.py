@@ -334,6 +334,7 @@ def create_builtin_globals(
                 "engine_adapter": engine_adapter,
             },
             relation_type=api.Relation,
+            column_type=api.Column,
             quote_policy=api.quote_policy,
             snapshots=jinja_globals.get("snapshots", {}),
             table_mapping=jinja_globals.get("table_mapping", {}),
@@ -352,7 +353,7 @@ def create_builtin_globals(
         {
             "adapter": adapter,
             "execute": True,
-            "load_relation": lambda r: adapter.get_relation(r.database, r.schema, r.identifier),
+            "load_relation": adapter.load_relation,
             "store_result": sql_execution.store_result,
             "load_result": sql_execution.load_result,
             "run_query": sql_execution.run_query,

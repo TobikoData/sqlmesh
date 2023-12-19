@@ -14,7 +14,7 @@ import pluralize from 'pluralize'
 import { type EnvironmentName } from '~/models/environment'
 import { EnumPlanChangeType, type PlanChangeType } from '../plan/context'
 import Title from '@components/title/Title'
-import { type PlanStageChanges } from '@api/client'
+import { type SnapshotId, type PlanStageChanges } from '@api/client'
 
 interface PropsTasks {
   tasks: PlanTasks
@@ -602,13 +602,15 @@ function getChangeType({
   changesModifiedIndirect,
 }: {
   modelName: string
-  changesAdded: string[]
-  changesRemoved: string[]
+  changesAdded: SnapshotId[]
+  changesRemoved: SnapshotId[]
   changesModifiedDirect: string[]
   changesModifiedIndirect: string[]
 }): PlanChangeType {
-  if (changesAdded.includes(modelName)) return EnumPlanChangeType.Add
-  if (changesRemoved.includes(modelName)) return EnumPlanChangeType.Remove
+  if (changesAdded.some(c => c.name === modelName))
+    return EnumPlanChangeType.Add
+  if (changesRemoved.some(c => c.name === modelName))
+    return EnumPlanChangeType.Remove
   if (changesModifiedDirect.includes(modelName))
     return EnumPlanChangeType.Direct
   if (changesModifiedIndirect.includes(modelName))

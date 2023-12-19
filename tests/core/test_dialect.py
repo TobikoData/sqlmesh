@@ -1,14 +1,18 @@
-from sqlglot import exp, parse_one
+import pytest
+from sqlglot import Dialect, ParseError, exp, parse_one
+from sqlglot.dialects.dialect import NormalizationStrategy
 
 from sqlmesh.core.dialect import (
     JinjaQuery,
     JinjaStatement,
     Model,
     format_model_expressions,
+    normalize_model_name,
     parse,
     select_from_values_for_batch_range,
     text_diff,
 )
+from sqlmesh.core.model import SqlModel, load_sql_based_model
 
 
 def test_format_model_expressions():
@@ -245,3 +249,189 @@ def test_select_from_values_for_batch_range_json():
         "SELECT CAST(id AS INT) AS id, CAST(ds AS TEXT) AS ds, CAST(json_col AS JSON) AS json_col "
         "FROM (VALUES (CAST(NULL AS INT), CAST(NULL AS TEXT), CAST(NULL AS JSON))) AS t(id, ds, json_col) WHERE FALSE"
     )
+
+
+@pytest.fixture(params=["mysql", "duckdb", "postgres", "snowflake"])
+def normalization_dialect(request):
+    if request.param == "duckdb":
+        assert Dialect["duckdb"].NORMALIZATION_STRATEGY == NormalizationStrategy.CASE_INSENSITIVE
+    elif request.param == "mysql":
+        assert Dialect["mysql"].NORMALIZATION_STRATEGY == NormalizationStrategy.CASE_SENSITIVE
+    elif request.param == "snowflake":
+        assert Dialect["snowflake"].NORMALIZATION_STRATEGY == NormalizationStrategy.UPPERCASE
+    elif request.param == "postgres":
+        assert Dialect["postgres"].NORMALIZATION_STRATEGY == NormalizationStrategy.LOWERCASE
+    return request.param
+
+
+normalization_tests_fields = (
+    "table, default_catalog, case_sensitive, case_insensitive, lowercase, uppercase"
+)
+normalization_tests = [
+    ("table", None, '"table"', '"table"', '"table"', '"TABLE"'),
+    ("db.table", None, '"db"."table"', '"db"."table"', '"db"."table"', '"DB"."TABLE"'),
+    (
+        "catalog.db.table",
+        None,
+        '"catalog"."db"."table"',
+        '"catalog"."db"."table"',
+        '"catalog"."db"."table"',
+        '"CATALOG"."DB"."TABLE"',
+    ),
+    ("table", "catalog", '"table"', '"table"', '"table"', '"TABLE"'),
+    (
+        "db.table",
+        "catalog",
+        '"catalog"."db"."table"',
+        '"catalog"."db"."table"',
+        '"catalog"."db"."table"',
+        '"CATALOG"."DB"."TABLE"',
+    ),
+    (
+        "DB.TABLE",
+        "CATALOG",
+        '"CATALOG"."DB"."TABLE"',
+        '"catalog"."db"."table"',
+        '"catalog"."db"."table"',
+        '"CATALOG"."DB"."TABLE"',
+    ),
+    ("tAble", None, '"tAble"', '"table"', '"table"', '"TABLE"'),
+    (
+        "Db.tAble",
+        "CaTalog",
+        '"CaTalog"."Db"."tAble"',
+        '"catalog"."db"."table"',
+        '"catalog"."db"."table"',
+        '"CATALOG"."DB"."TABLE"',
+    ),
+    ('"tAble"', None, '"tAble"', '"table"', '"tAble"', '"tAble"'),
+    (
+        'Db."tAble"',
+        '"CaTalog"',
+        '"CaTalog"."Db"."tAble"',
+        '"catalog"."db"."table"',
+        '"CaTalog"."db"."tAble"',
+        '"CaTalog"."DB"."tAble"',
+    ),
+]
+
+
+@pytest.mark.parametrize(normalization_tests_fields, normalization_tests)
+def test_normalize_model_name(
+    table,
+    default_catalog,
+    case_sensitive,
+    case_insensitive,
+    lowercase,
+    uppercase,
+    normalization_dialect,
+):
+    if Dialect[normalization_dialect].NORMALIZATION_STRATEGY == NormalizationStrategy.UPPERCASE:
+        expected = uppercase
+    elif (
+        Dialect[normalization_dialect].NORMALIZATION_STRATEGY
+        == NormalizationStrategy.CASE_SENSITIVE
+    ):
+        expected = case_sensitive
+    elif (
+        Dialect[normalization_dialect].NORMALIZATION_STRATEGY
+        == NormalizationStrategy.CASE_INSENSITIVE
+    ):
+        expected = case_insensitive
+    else:
+        expected = lowercase
+    assert normalize_model_name(table, default_catalog, normalization_dialect) == expected
+
+
+@pytest.mark.parametrize(normalization_tests_fields, normalization_tests)
+def test_multiple_normalization(
+    table,
+    default_catalog,
+    case_sensitive,
+    case_insensitive,
+    lowercase,
+    uppercase,
+    normalization_dialect,
+):
+    if Dialect[normalization_dialect].NORMALIZATION_STRATEGY == NormalizationStrategy.UPPERCASE:
+        expected = uppercase
+    elif (
+        Dialect[normalization_dialect].NORMALIZATION_STRATEGY
+        == NormalizationStrategy.CASE_SENSITIVE
+    ):
+        expected = case_sensitive
+    elif (
+        Dialect[normalization_dialect].NORMALIZATION_STRATEGY
+        == NormalizationStrategy.CASE_INSENSITIVE
+    ):
+        expected = case_insensitive
+    else:
+        expected = lowercase
+    kwargs = {"default_catalog": default_catalog, "dialect": normalization_dialect}
+    assert (
+        normalize_model_name(
+            normalize_model_name(normalize_model_name(table, **kwargs), **kwargs), **kwargs
+        )
+        == expected
+    )
+
+
+@pytest.mark.parametrize(normalization_tests_fields, normalization_tests)
+def test_model_normalization_multiple_serde(
+    table,
+    default_catalog,
+    case_sensitive,
+    case_insensitive,
+    lowercase,
+    uppercase,
+    normalization_dialect,
+):
+    if Dialect[normalization_dialect].NORMALIZATION_STRATEGY == NormalizationStrategy.UPPERCASE:
+        expected = uppercase
+    elif (
+        Dialect[normalization_dialect].NORMALIZATION_STRATEGY
+        == NormalizationStrategy.CASE_SENSITIVE
+    ):
+        expected = case_sensitive
+    elif (
+        Dialect[normalization_dialect].NORMALIZATION_STRATEGY
+        == NormalizationStrategy.CASE_INSENSITIVE
+    ):
+        expected = case_insensitive
+    else:
+        expected = lowercase
+    expressions = parse(
+        f"""
+        MODEL (
+            name {table},
+            kind INCREMENTAL_BY_TIME_RANGE(
+                time_column ds
+            ),
+            dialect {normalization_dialect},
+        );
+
+        SELECT col::text, ds::text
+    """
+    )
+    model = load_sql_based_model(
+        expressions, time_column_format="%Y", default_catalog=default_catalog
+    )
+    assert model.fqn == expected
+    # double serialization to ensure even multiple passes don't change results
+    model_serialized = SqlModel.parse_raw(SqlModel.parse_raw(model.json()).json())
+    assert model_serialized.fqn == expected
+
+
+def test_model_normalization_quote_flexibility():
+    assert (
+        normalize_model_name("`catalog`.`db`.`table`", default_catalog=None, dialect="spark")
+        == '"catalog"."db"."table"'
+    )
+    # This takes advantage of the fact that although double quotes ('"') aren't valid quotes in spark, sqlglot still allows it
+    assert (
+        normalize_model_name('"catalog"."db"."table"', default_catalog=None, dialect="spark")
+        == '"catalog"."db"."table"'
+    )
+    # It doesn't work the other way which is what we currently expect
+    with pytest.raises(ParseError):
+        normalize_model_name("`catalog`.`db`.`table`", default_catalog=None, dialect=None)

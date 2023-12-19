@@ -42,20 +42,22 @@ class ContextDiff(PydanticModel):
     """Whether the currently stored environment record is in unfinalized state."""
     create_from: str
     """The name of the environment the target environment will be created from if new."""
-    added: t.Set[str]
+    added: t.Set[SnapshotId]
     """New nodes."""
-    removed_snapshots: t.Dict[str, SnapshotTableInfo]
+    removed_snapshots: t.Dict[SnapshotId, SnapshotTableInfo]
     """Deleted nodes."""
     modified_snapshots: t.Dict[str, t.Tuple[Snapshot, Snapshot]]
     """Modified snapshots."""
-    snapshots: t.Dict[str, Snapshot]
+    snapshots: t.Dict[SnapshotId, Snapshot]
     """Merged snapshots."""
     new_snapshots: t.Dict[SnapshotId, Snapshot]
     """New snapshots."""
     previous_plan_id: t.Optional[str]
     """Previous plan id."""
-    previously_promoted_model_names: t.Set[str]
-    """Models that were promoted by the previous plan."""
+    previously_promoted_snapshot_ids: t.Set[SnapshotId]
+    """Snapshot IDs that were promoted by the previous plan."""
+
+    _snapshots_by_name: t.Optional[t.Dict[str, Snapshot]] = None
 
     @classmethod
     def create(
@@ -83,26 +85,39 @@ class ContextDiff(PydanticModel):
         if env is None:
             env = state_reader.get_environment(create_from.lower())
             is_new_environment = True
-            previously_promoted_model_names = set()
+            previously_promoted_snapshot_ids = set()
         else:
             is_new_environment = False
-            previously_promoted_model_names = {s.name for s in env.promoted_snapshots}
+            previously_promoted_snapshot_ids = {s.snapshot_id for s in env.promoted_snapshots}
 
-        existing_info = {info.name: info for info in (env.snapshots if env else [])}
-        existing_nodes = set(existing_info)
-        current_nodes = set(snapshots)
-        removed = existing_nodes - current_nodes
-        added = current_nodes - existing_nodes
-        modified_info = {
-            name: existing_info[name]
-            for name, snapshot in snapshots.items()
-            if name not in added and snapshot.fingerprint != existing_info[name].fingerprint
+        environment_snapshot_infos = env.snapshots if env else []
+        remote_snapshot_name_to_info = {
+            snapshot_info.name: snapshot_info for snapshot_info in environment_snapshot_infos
         }
-
+        removed = {
+            snapshot_table_info.snapshot_id: snapshot_table_info
+            for snapshot_table_info in environment_snapshot_infos
+            if snapshot_table_info.name not in snapshots
+        }
+        added = {
+            snapshot.snapshot_id
+            for snapshot in snapshots.values()
+            if snapshot.name not in remote_snapshot_name_to_info
+        }
+        modified_snapshot_name_to_snapshot_info = {
+            snapshot.name: remote_snapshot_name_to_info[snapshot.name]
+            for snapshot in snapshots.values()
+            if snapshot.snapshot_id not in added
+            and snapshot.fingerprint != remote_snapshot_name_to_info[snapshot.name].fingerprint
+        }
         modified_local_seed_snapshot_ids = {
-            s.snapshot_id for s in snapshots.values() if s.is_seed and s.name in modified_info
+            s.snapshot_id
+            for s in snapshots.values()
+            if s.is_seed and s.name in modified_snapshot_name_to_snapshot_info
         }
-        modified_remote_snapshot_ids = {s.snapshot_id for s in modified_info.values()}
+        modified_remote_snapshot_ids = {
+            s.snapshot_id for s in modified_snapshot_name_to_snapshot_info.values()
+        }
 
         stored = {
             **state_reader.get_snapshots(
@@ -123,35 +138,45 @@ class ContextDiff(PydanticModel):
         new_snapshots = {}
         snapshot_remote_versions: t.Dict[str, t.Tuple[t.Tuple[SnapshotDataVersion, ...], int]] = {}
 
-        for name, snapshot in snapshots.items():
-            modified = modified_info.get(name)
-            existing = stored.get(snapshot.snapshot_id)
+        for snapshot in snapshots.values():
+            s_id = snapshot.snapshot_id
+            modified_snapshot_info = modified_snapshot_name_to_snapshot_info.get(snapshot.name)
+            existing_snapshot = stored.get(s_id)
 
-            if modified and snapshot.node_type != modified.node_type:
-                added.add(snapshot.name)
-                removed.add(modified.name)
-                modified_info.pop(name)
-            elif existing:
+            if modified_snapshot_info and snapshot.node_type != modified_snapshot_info.node_type:
+                added.add(snapshot.snapshot_id)
+                removed[modified_snapshot_info.snapshot_id] = modified_snapshot_info
+                modified_snapshot_name_to_snapshot_info.pop(snapshot.name)
+            elif existing_snapshot:
                 # Keep the original node instance to preserve the query cache.
-                existing.node = snapshot.node
+                existing_snapshot.node = snapshot.node
 
-                merged_snapshots[name] = existing.copy()
-                if modified:
-                    modified_snapshots[name] = (existing, stored[modified.snapshot_id])
-                    for child, versions in existing.indirect_versions.items():
-                        existing_versions = snapshot_remote_versions.get(child)
-                        if not existing_versions or existing_versions[1] < existing.created_ts:
-                            snapshot_remote_versions[child] = (
+                merged_snapshots[s_id] = existing_snapshot.copy()
+                if modified_snapshot_info:
+                    modified_snapshots[s_id.name] = (
+                        existing_snapshot,
+                        stored[modified_snapshot_info.snapshot_id],
+                    )
+                    for child_name, versions in existing_snapshot.indirect_versions.items():
+                        existing_versions = snapshot_remote_versions.get(child_name)
+                        if (
+                            not existing_versions
+                            or existing_versions[1] < existing_snapshot.created_ts
+                        ):
+                            snapshot_remote_versions[child_name] = (
                                 versions,
-                                existing.created_ts,
+                                existing_snapshot.created_ts,
                             )
             else:
                 snapshot = snapshot.copy()
-                merged_snapshots[name] = snapshot
+                merged_snapshots[s_id] = snapshot
                 new_snapshots[snapshot.snapshot_id] = snapshot
-                if modified:
-                    snapshot.previous_versions = modified.all_versions
-                    modified_snapshots[name] = (snapshot, stored[modified.snapshot_id])
+                if modified_snapshot_info:
+                    snapshot.previous_versions = modified_snapshot_info.all_versions
+                    modified_snapshots[s_id.name] = (
+                        snapshot,
+                        stored[modified_snapshot_info.snapshot_id],
+                    )
 
         for snapshot in new_snapshots.values():
             if (
@@ -178,12 +203,12 @@ class ContextDiff(PydanticModel):
             is_unfinalized_environment=bool(env and not env.finalized_ts),
             create_from=create_from,
             added=added,
-            removed_snapshots={name: existing_info[name] for name in removed},
+            removed_snapshots=removed,
             modified_snapshots=modified_snapshots,
             snapshots=merged_snapshots,
             new_snapshots=new_snapshots,
             previous_plan_id=env.plan_id if env and not is_new_environment else None,
-            previously_promoted_model_names=previously_promoted_model_names,
+            previously_promoted_snapshot_ids=previously_promoted_snapshot_ids,
         )
 
     @property
@@ -197,34 +222,44 @@ class ContextDiff(PydanticModel):
         return bool(self.added or self.removed_snapshots or self.modified_snapshots)
 
     @property
-    def added_materialized_models(self) -> t.Set[str]:
-        """Returns the set of added internal models."""
+    def added_materialized_snapshot_ids(self) -> t.Set[SnapshotId]:
+        """Returns the set of added internal snapshot ids."""
         return {
-            name
-            for name in self.added
-            if self.snapshots[name].model_kind_name
-            and self.snapshots[name].model_kind_name.is_materialized  # type: ignore
+            s_id
+            for s_id in self.added
+            if self.snapshots[s_id].model_kind_name
+            and self.snapshots[s_id].model_kind_name.is_materialized  # type: ignore
         }
 
     @property
-    def promotable_models(self) -> t.Set[str]:
-        """The set of model names that have to be promoted in the target environment."""
+    def promotable_snapshot_ids(self) -> t.Set[SnapshotId]:
+        """The set of snapshot ids that have to be promoted in the target environment."""
         return {
-            *self.previously_promoted_model_names,
+            *self.previously_promoted_snapshot_ids,
             *self.added,
-            *self.modified_snapshots,
+            *self.current_modified_snapshot_ids,
         } - set(self.removed_snapshots)
 
     @property
-    def unpromoted_models(self) -> t.Set[str]:
-        """The set of model names that have not yet been promoted in the target environment."""
-        return set(self.snapshots) - self.previously_promoted_model_names
+    def unpromoted_models(self) -> t.Set[SnapshotId]:
+        """The set of snapshot IDs that have not yet been promoted in the target environment."""
+        return set(self.snapshots) - self.previously_promoted_snapshot_ids
+
+    @property
+    def current_modified_snapshot_ids(self) -> t.Set[SnapshotId]:
+        return {current.snapshot_id for current, _ in self.modified_snapshots.values()}
+
+    @property
+    def snapshots_by_name(self) -> t.Dict[str, Snapshot]:
+        if self._snapshots_by_name is None:
+            self._snapshots_by_name = {x.name: x for x in self.snapshots.values()}
+        return self._snapshots_by_name
 
     def directly_modified(self, name: str) -> bool:
         """Returns whether or not a node was directly modified in this context.
 
         Args:
-            name: The node name to check.
+            name: The snapshot name to check.
 
         Returns:
             Whether or not the node was directly modified.
@@ -240,7 +275,7 @@ class ContextDiff(PydanticModel):
         """Returns whether or not a node was indirectly modified in this context.
 
         Args:
-            name: The node name to check.
+            name: The snapshot name to check.
 
         Returns:
             Whether or not the node was indirectly modified.
@@ -259,7 +294,7 @@ class ContextDiff(PydanticModel):
         """Returns whether or not the given node's metadata has been updated.
 
         Args:
-            name: The node name to check.
+            name: The node to check.
 
         Returns:
             Whether or not the node's metadata has been updated.
@@ -271,19 +306,19 @@ class ContextDiff(PydanticModel):
         current, previous = self.modified_snapshots[name]
         return current.fingerprint.metadata_hash != previous.fingerprint.metadata_hash
 
-    def text_diff(self, node: str) -> str:
+    def text_diff(self, name: str) -> str:
         """Finds the difference of a node between the current and remote environment.
 
         Args:
-            node: The node name.
+            name: The Snapshot name.
 
         Returns:
             A unified text diff of the node.
         """
-        if node not in self.snapshots:
-            raise SQLMeshError(f"`{node}` does not exist.")
-        if node not in self.modified_snapshots:
+        if name not in self.snapshots_by_name:
+            raise SQLMeshError(f"`{name}` does not exist.")
+        if name not in self.modified_snapshots:
             return ""
 
-        new, old = self.modified_snapshots[node]
+        new, old = self.modified_snapshots[name]
         return old.node.text_diff(new.node)

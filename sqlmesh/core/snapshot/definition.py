@@ -212,6 +212,9 @@ class SnapshotInfoMixin(ModelKindMixin):
     change_category: t.Optional[SnapshotChangeCategory]
     fingerprint: SnapshotFingerprint
     previous_versions: t.Tuple[SnapshotDataVersion, ...]
+    # Added to support Migration # 34 (default catalog)
+    # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
+    base_table_name_override: t.Optional[str] = None
 
     @property
     def identifier(self) -> str:
@@ -223,7 +226,7 @@ class SnapshotInfoMixin(ModelKindMixin):
 
     @property
     def qualified_view_name(self) -> QualifiedViewName:
-        view_name = exp.to_table(self.name)
+        view_name = exp.to_table(self.fully_qualified_table or self.name)
         return QualifiedViewName(
             catalog=view_name.catalog or None,
             schema_name=view_name.db or None,
@@ -250,6 +253,10 @@ class SnapshotInfoMixin(ModelKindMixin):
         raise NotImplementedError
 
     @property
+    def fully_qualified_table(self) -> t.Optional[exp.Table]:
+        raise NotImplementedError
+
+    @property
     def is_forward_only(self) -> bool:
         return self.change_category == SnapshotChangeCategory.FORWARD_ONLY
 
@@ -261,6 +268,16 @@ class SnapshotInfoMixin(ModelKindMixin):
     def all_versions(self) -> t.Tuple[SnapshotDataVersion, ...]:
         """Returns previous versions with the current version trimmed to DATA_VERSION_LIMIT."""
         return (*self.previous_versions, self.data_version)[-c.DATA_VERSION_LIMIT :]
+
+    def display_name(
+        self, environment_naming_info: EnvironmentNamingInfo, default_catalog: t.Optional[str]
+    ) -> str:
+        """
+        Returns the model name as a qualified view name.
+        This is just used for presenting information back to the user and `qualified_view_name` should be used
+        when wanting a view name in all other cases.
+        """
+        return display_name(self, environment_naming_info, default_catalog)
 
     def data_hash_matches(self, other: t.Optional[SnapshotInfoMixin | SnapshotDataVersion]) -> bool:
         return other is not None and self.fingerprint.data_hash == other.fingerprint.data_hash
@@ -276,11 +293,24 @@ class SnapshotInfoMixin(ModelKindMixin):
         if is_dev_table:
             version = self.temp_version or self.fingerprint.to_version()
 
+        if self.fully_qualified_table is None:
+            raise SQLMeshError(
+                f"Tried to get a table name for a snapshot that does not have a table. {self.name}"
+            )
+        # We want to exclude the catalog from the name but still include catalog when determining the fqn
+        # for the table.
+        if self.base_table_name_override:
+            base_table_name = self.base_table_name_override
+        else:
+            fqt = self.fully_qualified_table.copy()
+            fqt.set("catalog", None)
+            base_table_name = fqt.sql()
         return table_name(
             self.physical_schema,
-            self.name,
+            base_table_name,
             version,
             is_dev_table=is_dev_table,
+            catalog=self.fully_qualified_table.catalog,
         )
 
     @property
@@ -307,6 +337,11 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     change_category: t.Optional[SnapshotChangeCategory] = None
     kind_name: t.Optional[ModelKindName] = None
     node_type_: NodeType = Field(default=NodeType.MODEL, alias="node_type")
+    # Added to support Migration # 34 (default catalog)
+    # This can be removed from this model once Pydantic 1 support is dropped (must remain in `Snapshot` though)
+    base_table_name_override: t.Optional[str] = None
+
+    _fully_qualified_table: t.Optional[exp.Table] = None
 
     def __lt__(self, other: SnapshotTableInfo) -> bool:
         return self.name < other.name
@@ -322,6 +357,12 @@ class SnapshotTableInfo(PydanticModel, SnapshotInfoMixin, frozen=True):
     @property
     def physical_schema(self) -> str:
         return self.physical_schema_
+
+    @property
+    def fully_qualified_table(self) -> exp.Table:
+        if not self._fully_qualified_table:
+            self._fully_qualified_table = exp.to_table(self.name)
+        return self._fully_qualified_table
 
     @property
     def table_info(self) -> SnapshotTableInfo:
@@ -415,6 +456,8 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
     effective_from: t.Optional[TimeLike] = None
     migrated: bool = False
     unrestorable: bool = False
+    # Added to support Migration # 34 (default catalog)
+    base_table_name_override: t.Optional[str] = None
 
     @field_validator("ttl")
     @classmethod
@@ -516,7 +559,7 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             kwargs["audits"] = tuple(t.cast(_Model, node).referenced_audits(audits or {}))
 
         return cls(
-            name=node.name,
+            name=node.fqn,
             fingerprint=fingerprint_from_node(
                 node,
                 nodes=nodes,
@@ -526,15 +569,15 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
             node=node,
             parents=tuple(
                 SnapshotId(
-                    name=name,
+                    name=parent_node.fqn,
                     identifier=fingerprint_from_node(
-                        nodes[name],
+                        parent_node,
                         nodes=nodes,
                         audits=audits,
                         cache=cache,
                     ).to_identifier(),
                 )
-                for name in _parents_from_node(node, nodes)
+                for parent_node in _parents_from_node(node, nodes).values()
             ),
             intervals=[],
             dev_intervals=[],
@@ -1017,6 +1060,12 @@ class Snapshot(PydanticModel, SnapshotInfoMixin):
         """Is restatement disabled for the node"""
         return self.is_model and self.model.disable_restatement
 
+    @property
+    def fully_qualified_table(self) -> t.Optional[exp.Table]:
+        if not self.is_model:
+            return None
+        return t.cast(Model, self.node).fully_qualified_table
+
     def _ensure_categorized(self) -> None:
         if not self.change_category:
             raise SQLMeshError(f"Snapshot {self.snapshot_id} has not been categorized yet.")
@@ -1125,7 +1174,6 @@ class DeployabilityIndex(PydanticModel, frozen=True):
     ) -> DeployabilityIndex:
         if not isinstance(snapshots, dict):
             snapshots = {s.snapshot_id: s for s in snapshots}
-
         dag = snapshots_to_dag(snapshots.values())
         reversed_dag = dag.reversed.graph
 
@@ -1192,7 +1240,13 @@ class DeployabilityIndex(PydanticModel, frozen=True):
         return f"{snapshot_id.name}__{snapshot_id.identifier}"
 
 
-def table_name(physical_schema: str, name: str, version: str, is_dev_table: bool = False) -> str:
+def table_name(
+    physical_schema: str,
+    name: str,
+    version: str,
+    is_dev_table: bool = False,
+    catalog: t.Optional[str] = None,
+) -> str:
     table = exp.to_table(name)
 
     # bigquery projects usually have "-" in them which is illegal in the table name, so we aggressively prune
@@ -1201,7 +1255,32 @@ def table_name(physical_schema: str, name: str, version: str, is_dev_table: bool
 
     table.set("this", exp.to_identifier(f"{name}__{version}{temp_suffix}"))
     table.set("db", exp.to_identifier(physical_schema))
+    if not table.catalog and catalog:
+        table.set("catalog", exp.parse_identifier(catalog))
     return exp.table_name(table)
+
+
+def display_name(
+    snapshot_info_like: t.Union[SnapshotInfoLike, SnapshotInfoMixin],
+    environment_naming_info: EnvironmentNamingInfo,
+    default_catalog: t.Optional[str],
+) -> str:
+    """
+    Returns the model name as a qualified view name.
+    This is just used for presenting information back to the user and `qualified_view_name` should be used
+    when wanting a view name in all other cases.
+    """
+    if snapshot_info_like.is_audit:
+        return snapshot_info_like.name
+    view_name = exp.to_table(snapshot_info_like.name)
+    qvn = QualifiedViewName(
+        catalog=view_name.catalog
+        if view_name.catalog and view_name.catalog != default_catalog
+        else None,
+        schema_name=view_name.db or None,
+        table=view_name.name,
+    )
+    return qvn.for_environment(environment_naming_info)
 
 
 def fingerprint_from_node(
@@ -1229,7 +1308,7 @@ def fingerprint_from_node(
     """
     cache = {} if cache is None else cache
 
-    if node.name not in cache:
+    if node.fqn not in cache:
         parents = [
             fingerprint_from_node(
                 nodes[table],
@@ -1247,26 +1326,27 @@ def fingerprint_from_node(
             sorted(h for p in parents for h in (p.metadata_hash, p.parent_metadata_hash))
         )
 
-        cache[node.name] = SnapshotFingerprint(
+        cache[node.fqn] = SnapshotFingerprint(
             data_hash=node.data_hash,
             metadata_hash=node.metadata_hash(audits or {}),
             parent_data_hash=parent_data_hash,
             parent_metadata_hash=parent_metadata_hash,
         )
 
-    return cache[node.name]
+    return cache[node.fqn]
 
 
 def _parents_from_node(
     node: Node,
     nodes: t.Dict[str, Node],
-) -> t.Set[str]:
-    parent_nodes = set()
-    for parent in node.depends_on:
-        if parent in nodes:
-            parent_nodes.add(parent)
-            if nodes[parent].is_model and t.cast(_Model, nodes[parent]).kind.is_embedded:
-                parent_nodes.update(_parents_from_node(nodes[parent], nodes))
+) -> t.Dict[str, Node]:
+    parent_nodes = {}
+    for parent_fqn in node.depends_on:
+        parent = nodes.get(parent_fqn)
+        if parent:
+            parent_nodes[parent.fqn] = parent
+            if parent.is_model and t.cast(_Model, parent).kind.is_embedded:
+                parent_nodes.update(_parents_from_node(parent, nodes))
 
     return parent_nodes
 
@@ -1347,7 +1427,7 @@ def to_table_mapping(
     return {
         snapshot.name: snapshot.table_name(deployability_index.is_representative(snapshot))
         for snapshot in snapshots
-        if snapshot.version and not snapshot.is_symbolic
+        if snapshot.version and not snapshot.is_symbolic and snapshot.is_model
     }
 
 
@@ -1369,7 +1449,7 @@ def missing_intervals(
     start: t.Optional[TimeLike] = None,
     end: t.Optional[TimeLike] = None,
     execution_time: t.Optional[TimeLike] = None,
-    restatements: t.Optional[t.Dict[str, Interval]] = None,
+    restatements: t.Optional[t.Dict[SnapshotId, Interval]] = None,
     deployability_index: t.Optional[DeployabilityIndex] = None,
     ignore_cron: bool = False,
 ) -> t.Dict[Snapshot, Intervals]:
@@ -1389,7 +1469,7 @@ def missing_intervals(
     for snapshot in snapshots:
         if snapshot.is_symbolic:
             continue
-        interval = restatements.get(snapshot.name)
+        interval = restatements.get(snapshot.snapshot_id)
         snapshot_start_date = start_dt
         snapshot_end_date = end_date
         if interval:

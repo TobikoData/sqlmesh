@@ -202,7 +202,7 @@ from sqlmesh import ExecutionContext, model
 def execute(
     context: ExecutionContext,
     start: datetime,
-    end: datetime
+    end: datetime,
     execution_time: datetime,
     **kwargs: t.Any,
 ) -> DataFrame:

@@ -4,7 +4,7 @@ from sqlglot import exp
 from sqlmesh.utils.migration import index_text_type
 
 
-def migrate(state_sync):  # type: ignore
+def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     intervals_table = "_intervals"
     if state_sync.schema:

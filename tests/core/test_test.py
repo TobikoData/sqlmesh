@@ -33,14 +33,21 @@ def _create_test(
         engine_adapter=context._test_engine_adapter,
         dialect=context.config.dialect,
         path=None,
+        default_catalog=context.default_catalog,
     )
 
 
 def _create_model(
-    query: str, meta: str = SUSHI_FOO_META, dialect: t.Optional[str] = None
+    query: str,
+    meta: str = SUSHI_FOO_META,
+    dialect: t.Optional[str] = None,
+    default_catalog: t.Optional[str] = None,
 ) -> SqlModel:
     parsed_definition = parse(f"{meta};{query}", default_dialect=dialect)
-    return t.cast(SqlModel, load_sql_based_model(parsed_definition, dialect=dialect))
+    return t.cast(
+        SqlModel,
+        load_sql_based_model(parsed_definition, dialect=dialect, default_catalog=default_catalog),
+    )
 
 
 @pytest.fixture
@@ -48,6 +55,7 @@ def full_model_without_ctes(request) -> SqlModel:
     return _create_model(
         "SELECT id, value, ds FROM raw",
         dialect=getattr(request, "param", None),
+        default_catalog="memory",
     )
 
 
@@ -56,6 +64,7 @@ def full_model_with_single_cte(request) -> SqlModel:
     return _create_model(
         "WITH source AS (SELECT id FROM raw) SELECT id FROM source",
         dialect=getattr(request, "param", None),
+        default_catalog="memory",
     )
 
 
@@ -72,6 +81,7 @@ def full_model_with_two_ctes(request) -> SqlModel:
         SELECT fid FROM renamed;
         """,
         dialect=getattr(request, "param", None),
+        default_catalog="memory",
     )
 
 
@@ -224,7 +234,8 @@ test_foo:
 
 def test_partial_data(sushi_context: Context) -> None:
     model = _create_model(
-        "WITH source AS (SELECT id, name FROM sushi.waiter_names) SELECT id, name, 'nan' as str FROM source"
+        "WITH source AS (SELECT id, name FROM sushi.waiter_names) SELECT id, name, 'nan' as str FROM source",
+        default_catalog=sushi_context.default_catalog,
     )
     model = t.cast(SqlModel, sushi_context.upsert_model(model))
 
@@ -262,7 +273,10 @@ test_foo:
 
 
 def test_partial_data_column_order(sushi_context: Context) -> None:
-    model = _create_model("SELECT id, name, price, event_date FROM sushi.items")
+    model = _create_model(
+        "SELECT id, name, price, event_date FROM sushi.items",
+        default_catalog=sushi_context.default_catalog,
+    )
     model = t.cast(SqlModel, sushi_context.upsert_model(model))
 
     body = load_yaml(
@@ -368,7 +382,9 @@ test_foo:
 
 
 def test_empty_rows(sushi_context: Context) -> None:
-    model = _create_model("SELECT id FROM sushi.items")
+    model = _create_model(
+        "SELECT id FROM sushi.items", default_catalog=sushi_context.default_catalog
+    )
     model = t.cast(SqlModel, sushi_context.upsert_model(model))
 
     body = load_yaml(
@@ -413,10 +429,10 @@ test_foo:
     normalized_body = _create_test(body, "test_foo", full_model_without_ctes, context).body
 
     expected_body = {
-        "model": "SUSHI.FOO",
-        "inputs": {"RAW": [{"ID": 1}]},
+        "model": '"MEMORY"."SUSHI"."FOO"',
+        "inputs": {'"RAW"': [{"ID": 1}]},
         "outputs": {
-            "ctes": {"SOURCE": [{"ID": 1}], "RENAMED": [{"FID": 1}]},
+            "ctes": {'"SOURCE"': [{"ID": 1}], '"RENAMED"': [{"FID": 1}]},
             "query": [{"FID": 1}],
         },
         "vars": {"start": datetime.date(2022, 1, 1), "end": datetime.date(2022, 1, 1)},

@@ -64,12 +64,14 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         self,
         state_sync: StateSync,
         snapshot_evaluator: SnapshotEvaluator,
+        default_catalog: t.Optional[str],
         backfill_concurrent_tasks: int = 1,
         console: t.Optional[Console] = None,
         notification_target_manager: t.Optional[NotificationTargetManager] = None,
     ):
         self.state_sync = state_sync
         self.snapshot_evaluator = snapshot_evaluator
+        self.default_catalog = default_catalog
         self.backfill_concurrent_tasks = backfill_concurrent_tasks
         self.console = console or get_console()
         self.notification_target_manager = notification_target_manager
@@ -127,6 +129,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             snapshots,
             self.snapshot_evaluator,
             self.state_sync,
+            default_catalog=self.default_catalog,
             max_workers=self.backfill_concurrent_tasks,
             console=self.console,
             notification_target_manager=self.notification_target_manager,
@@ -152,7 +155,6 @@ class BuiltInPlanEvaluator(PlanEvaluator):
             plan: The plan to source snapshots from.
             deployability_index: Indicates which snapshots are deployable in the context of this creation.
         """
-        snapshot_id_to_snapshot = {s.snapshot_id: s for s in plan.snapshots}
         new_model_snapshot_count = len([s for s in plan.new_snapshots if s.is_model])
 
         if new_model_snapshot_count > 0:
@@ -165,7 +167,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         try:
             self.snapshot_evaluator.create(
                 plan.new_snapshots,
-                snapshot_id_to_snapshot,
+                plan.snapshot_mapping,
                 deployability_index=deployability_index,
                 on_complete=on_complete,
             )
@@ -193,7 +195,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         if not plan.is_dev:
             self.snapshot_evaluator.migrate(
                 [s for s in plan.snapshots if s.is_paused],
-                {s.snapshot_id: s for s in plan.snapshots},
+                plan.snapshot_mapping,
             )
             self.state_sync.unpause_snapshots(promotion_result.added, now())
 
@@ -224,7 +226,7 @@ class BuiltInPlanEvaluator(PlanEvaluator):
         completed = False
         try:
             self.snapshot_evaluator.promote(
-                [plan.context_diff.snapshots[s.name] for s in promotion_result.added],
+                [plan.context_diff.snapshots[s.snapshot_id] for s in promotion_result.added],
                 environment.naming_info,
                 deployability_index=deployability_index,
                 on_complete=on_complete,
@@ -246,8 +248,8 @@ class BuiltInPlanEvaluator(PlanEvaluator):
 
         self.state_sync.remove_interval(
             [
-                (plan.context_diff.snapshots[s], interval)
-                for s, interval in plan.restatements.items()
+                (plan.context_diff.snapshots[s_id], interval)
+                for s_id, interval in plan.restatements.items()
             ],
             plan._execution_time,
             remove_shared_versions=not plan.is_dev,

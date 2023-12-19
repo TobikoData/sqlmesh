@@ -227,7 +227,7 @@ def test_restatement(
         no_gaps=True,
         skip_backfill=False,
         restatements={
-            the_snapshot.name: (
+            the_snapshot.snapshot_id: (
                 to_timestamp("2022-01-02"),
                 to_timestamp("2022-01-04"),
             )
@@ -394,7 +394,7 @@ def test_select_models_for_backfill(mocker: MockerFixture, random_name, make_sna
         forward_only=True,
         dag_start_ts=to_timestamp("2023-01-01"),
         deployability_index=DeployabilityIndex.all_deployable(),
-        no_gaps_snapshot_names={"a", "b"},
+        no_gaps_snapshot_names={'"a"', '"b"'},
     )
 
 

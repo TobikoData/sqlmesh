@@ -12,7 +12,7 @@ def _hash(data):  # type: ignore
     return str(zlib.crc32(";".join("" if d is None else d for d in data).encode("utf-8")))
 
 
-def migrate(state_sync):  # type: ignore
+def migrate(state_sync, **kwargs):  # type: ignore
     engine_adapter = state_sync.engine_adapter
     schema = state_sync.schema
     environments_table = "_environments"

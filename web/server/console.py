@@ -82,6 +82,7 @@ class ApiConsole(TerminalConsole):
         self,
         batches: t.Dict[Snapshot, int],
         environment_naming_info: EnvironmentNamingInfo,
+        default_catalog: t.Optional[str],
     ) -> None:
         if self.plan_apply_stage_tracker:
             tasks = {
@@ -89,7 +90,7 @@ class ApiConsole(TerminalConsole):
                     completed=0,
                     total=total_tasks,
                     start=now_timestamp(),
-                    view_name=snapshot.qualified_view_name.for_environment(environment_naming_info),
+                    view_name=snapshot.display_name(environment_naming_info, default_catalog),
                 )
                 for snapshot, total_tasks in batches.items()
             }

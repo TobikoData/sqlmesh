@@ -1,22 +1,19 @@
 from __future__ import annotations
 
 import typing as t
-from pathlib import Path
 
 import pytest
 
+from sqlmesh.core.context import Context
 from sqlmesh.dbt.context import DbtContext
+from sqlmesh.dbt.loader import DbtLoader
 from sqlmesh.dbt.project import Project
-from tests.conftest import delete_cache
 
 
 @pytest.fixture()
-def sushi_test_project() -> Project:
-    project_root = "tests/fixtures/dbt/sushi_test"
-    delete_cache(project_root)
-    project = Project.load(DbtContext(project_root=Path(project_root)))
-    for package_name, package in project.packages.items():
-        project.context.jinja_macros.add_macros(package.macro_infos, package=package_name)
+def sushi_test_project(sushi_test_dbt_context: Context) -> Project:
+    project = t.cast(DbtLoader, sushi_test_dbt_context._loader)._project
+    assert project
     return project
 
 

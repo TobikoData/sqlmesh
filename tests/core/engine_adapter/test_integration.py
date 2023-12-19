@@ -113,12 +113,10 @@ class TestContext:
         self.engine_adapter.drop_schema(schema, ignore_if_not_exists=True, cascade=True)
         self.engine_adapter.create_schema(schema)
 
-    def _format_df(
-        self, data: pd.DataFrame, include_tz: bool = False, to_datetime: bool = True
-    ) -> pd.DataFrame:
+    def _format_df(self, data: pd.DataFrame, to_datetime: bool = True) -> pd.DataFrame:
         for timestamp_column in self.timestamp_columns:
             if timestamp_column in data.columns and to_datetime:
-                data[timestamp_column] = pd.to_datetime(data[timestamp_column], utc=include_tz)
+                data[timestamp_column] = pd.to_datetime(data[timestamp_column])
         return data
 
     def init(self):
@@ -144,20 +142,35 @@ class TestContext:
         return self._format_df(data, to_datetime=self.dialect != "trino")
 
     def output_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        return self._format_df(data, include_tz=self.dialect == "databricks")
+        return self._format_df(data)
 
     def table(self, table_name: str, schema: str = TEST_SCHEMA) -> exp.Table:
         return exp.to_table(
-            normalize_model_name(".".join([schema, table_name]), dialect=self.dialect)
+            normalize_model_name(
+                ".".join([schema, table_name]),
+                default_catalog=self.engine_adapter.default_catalog,
+                dialect=self.dialect,
+            )
         )
 
     def schema(self, schema_name: str, catalog_name: t.Optional[str] = None) -> str:
-        return normalize_model_name(
-            ".".join(p for p in (catalog_name, schema_name) if p), dialect=self.dialect
+
+        return exp.table_name(
+            normalize_model_name(
+                ".".join(
+                    p
+                    for p in (catalog_name or self.engine_adapter.default_catalog, schema_name)
+                    if p
+                )
+                if "." not in schema_name
+                else schema_name,
+                default_catalog=None,
+                dialect=self.dialect,
+            )
         )
 
     def get_current_data(self, table: exp.Table) -> pd.DataFrame:
-        return self.engine_adapter.fetchdf(exp.select("*").from_(table))
+        return self.engine_adapter.fetchdf(exp.select("*").from_(table), quote_identifiers=True)
 
     def compare_with_current(self, table: exp.Table, expected: pd.DataFrame) -> None:
         self._compare_dfs(self.get_current_data(table), self.output_data(expected))
@@ -335,6 +348,9 @@ def test_drop_schema_catalog(ctx: TestContext):
         ctx.engine_adapter.create_table(
             f"{schema_name}.test_table", {"col": exp.DataType.build("int")}
         )
+        ctx.engine_adapter.create_table(
+            f"{schema_name}.replace_table", {"col": exp.DataType.build("int")}
+        )
         ctx.engine_adapter.replace_query(
             f"{schema_name}.replace_table",
             parse_one("SELECT 1 as col"),
@@ -380,8 +396,8 @@ def test_drop_schema_catalog(ctx: TestContext):
         ):
             drop_schema_and_validate(schema)
         return
-    create_objects_and_validate(schema)
     drop_schema_and_validate(schema)
+    create_objects_and_validate(schema)
 
 
 def test_temp_table(ctx: TestContext):
@@ -394,9 +410,7 @@ def test_temp_table(ctx: TestContext):
         ]
     )
     table = ctx.table("example")
-    with ctx.engine_adapter.temp_table(
-        ctx.input_data(input_data), table.sql(dialect=ctx.dialect)
-    ) as table_name:
+    with ctx.engine_adapter.temp_table(ctx.input_data(input_data), table.sql()) as table_name:
         results = ctx.get_metadata_results()
         assert len(results.views) == 0
         assert len(results.tables) == 1
@@ -810,7 +824,7 @@ def test_scd_type_2(ctx: TestContext):
         ),
     )
 
-    if test_type == "query":
+    if ctx.test_type == "query":
         return
     current_data = pd.DataFrame(
         [
@@ -885,7 +899,7 @@ def test_scd_type_2(ctx: TestContext):
 
 def test_sushi(ctx: TestContext):
     if ctx.test_type != "query":
-        pytest.skip("Sushi end-to-end tests only need to run for query and pyspark tests")
+        pytest.skip("Sushi end-to-end tests only need to run for query")
 
     config = load_config_from_paths(
         project_paths=[

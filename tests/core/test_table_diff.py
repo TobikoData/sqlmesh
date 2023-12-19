@@ -5,7 +5,7 @@ from sqlmesh.core.model import SqlModel
 
 
 def test_data_diff(sushi_context_fixed_date):
-    model = sushi_context_fixed_date.models["sushi.customer_revenue_by_day"]
+    model = sushi_context_fixed_date.models['"memory"."sushi"."customer_revenue_by_day"']
 
     model.query.select(exp.cast("'1'", "VARCHAR").as_("modified_col"), "1 AS y", copy=False)
     sushi_context_fixed_date.upsert_model(model)
@@ -18,7 +18,7 @@ def test_data_diff(sushi_context_fixed_date):
         start="2023-01-31",
         end="2023-01-31",
     )
-    model = sushi_context_fixed_date.models["sushi.customer_revenue_by_day"]
+    model = sushi_context_fixed_date.models['"memory"."sushi"."customer_revenue_by_day"']
 
     for column in model.query.find_all(exp.Column):
         if column.name == "total":

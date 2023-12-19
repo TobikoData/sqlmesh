@@ -13,7 +13,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core.dialect import normalize_model_name, schema_
 from sqlmesh.core.engine_adapter import EngineAdapter
 from sqlmesh.core.model import Model, PythonModel, SqlModel
-from sqlmesh.utils import yaml
+from sqlmesh.utils import UniqueKeyDict, yaml
 from sqlmesh.utils.errors import ConfigError, SQLMeshError
 
 Row = t.Dict[str, t.Any]
@@ -31,10 +31,11 @@ class ModelTest(unittest.TestCase):
         body: t.Dict[str, t.Any],
         test_name: str,
         model: Model,
-        models: t.Dict[str, Model],
+        models: UniqueKeyDict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
         path: Path | None,
+        default_catalog: str | None = None,
     ) -> None:
         """ModelTest encapsulates a unit test for a model.
 
@@ -53,10 +54,15 @@ class ModelTest(unittest.TestCase):
         self.models = models
         self.engine_adapter = engine_adapter
         self.path = path
+        self.default_catalog = default_catalog
+        self.dialect = dialect
 
         self._normalize_test(dialect)
 
-        inputs = self.body.get("inputs", {})
+        inputs = [
+            normalize_model_name(input, default_catalog=default_catalog, dialect=dialect)
+            for input in self.body.get("inputs", {})
+        ]
         for depends_on in self.model.depends_on:
             if depends_on not in inputs:
                 _raise_error(f"Incomplete test, missing input for table {depends_on}", path)
@@ -76,19 +82,23 @@ class ModelTest(unittest.TestCase):
                     v = v.real if hasattr(v, "real") else v
                     columns_to_types[i] = parse_one(type(v).__name__, into=exp.DataType)
 
-            table = exp.to_table(table_name)
-            if table.db:
+            test_fixture_table = _fully_qualified_test_fixture_table(table_name, self.dialect)
+            if test_fixture_table.db:
                 self.engine_adapter.create_schema(
-                    schema_(table.args["db"], table.args.get("catalog"))
+                    schema_(test_fixture_table.args["db"], test_fixture_table.args.get("catalog"))
                 )
 
             df = pd.DataFrame.from_records(rows, columns=columns_to_types)  # type: ignore
-            self.engine_adapter.create_view(_test_fixture_name(table_name), df, columns_to_types)
+            self.engine_adapter.create_view(test_fixture_table, df, columns_to_types)
 
     def tearDown(self) -> None:
         """Drop all fixture tables."""
         for table in self.body.get("inputs", {}):
-            self.engine_adapter.drop_view(_test_fixture_name(table))
+            self.engine_adapter.drop_view(
+                _fully_qualified_test_fixture_name(table, self.dialect)
+                if table in self.models
+                else table
+            )
 
     def assert_equal(self, expected: pd.DataFrame, actual: pd.DataFrame) -> None:
         """Compare two DataFrames"""
@@ -130,10 +140,11 @@ class ModelTest(unittest.TestCase):
     def create_test(
         body: t.Dict[str, t.Any],
         test_name: str,
-        models: t.Dict[str, Model],
+        models: UniqueKeyDict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
         path: Path | None,
+        default_catalog: str | None = None,
     ) -> ModelTest:
         """Create a SqlModelTest or a PythonModelTest.
 
@@ -151,15 +162,21 @@ class ModelTest(unittest.TestCase):
         if "outputs" not in body:
             _raise_error("Incomplete test, missing outputs", path)
 
-        model_name = normalize_model_name(body["model"], dialect=dialect)
+        model_name = normalize_model_name(
+            body["model"], default_catalog=default_catalog, dialect=dialect
+        )
         if model_name not in models:
             _raise_error(f"Model '{model_name}' was not found", path)
 
         model = models[model_name]
         if isinstance(model, SqlModel):
-            return SqlModelTest(body, test_name, model, models, engine_adapter, dialect, path)
+            return SqlModelTest(
+                body, test_name, model, models, engine_adapter, dialect, path, default_catalog
+            )
         if isinstance(model, PythonModel):
-            return PythonModelTest(body, test_name, model, models, engine_adapter, dialect, path)
+            return PythonModelTest(
+                body, test_name, model, models, engine_adapter, dialect, path, default_catalog
+            )
 
         raise TestError(f"Model '{model_name}' is an unsupported model type for testing at {path}")
 
@@ -185,7 +202,9 @@ class ModelTest(unittest.TestCase):
 
         def _normalize_sources(sources: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
             return {
-                normalize_model_name(name, dialect=dialect): _normalize_rows(rows)
+                normalize_model_name(
+                    name, default_catalog=self.default_catalog, dialect=dialect
+                ): _normalize_rows(rows)
                 for name, rows in sources.items()
             }
 
@@ -201,7 +220,9 @@ class ModelTest(unittest.TestCase):
         if query:
             outputs["query"] = _normalize_rows(query)
 
-        self.body["model"] = normalize_model_name(self.body["model"], dialect=dialect)
+        self.body["model"] = normalize_model_name(
+            self.body["model"], default_catalog=self.default_catalog, dialect=dialect
+        )
 
 
 class SqlModelTest(ModelTest):
@@ -229,8 +250,11 @@ class SqlModelTest(ModelTest):
     def runTest(self) -> None:
         # For tests we just use the model name for the table reference and we don't want to expand
         mapping = {
-            name: _test_fixture_name(name)
-            for name in self.models.keys() | self.body.get("inputs", {}).keys()
+            name: _fully_qualified_test_fixture_name(name, dialect=self.dialect)
+            for name in [
+                normalize_model_name(name, self.default_catalog, self.dialect)
+                for name in self.models.keys() | self.body.get("inputs", {}).keys()
+            ]
         }
         query = self.model.render_query_or_raise(
             **self.body.get("vars", {}),
@@ -238,7 +262,9 @@ class SqlModelTest(ModelTest):
             table_mapping=mapping,
         )
 
-        self.test_ctes({cte.alias: cte for cte in query.ctes})
+        self.test_ctes(
+            {normalize_model_name(cte.alias, None, self.dialect): cte for cte in query.ctes}
+        )
 
         # Test model query
         query_rows = self.body["outputs"].get("query")
@@ -254,10 +280,11 @@ class PythonModelTest(ModelTest):
         body: t.Dict[str, t.Any],
         test_name: str,
         model: PythonModel,
-        models: t.Dict[str, Model],
+        models: UniqueKeyDict[str, Model],
         engine_adapter: EngineAdapter,
         dialect: str | None,
         path: Path | None,
+        default_catalog: str | None = None,
     ) -> None:
         """PythonModelTest encapsulates a unit test for a Python model.
 
@@ -272,11 +299,15 @@ class PythonModelTest(ModelTest):
         """
         from sqlmesh.core.test.context import TestExecutionContext
 
-        super().__init__(body, test_name, model, models, engine_adapter, dialect, path)
+        super().__init__(
+            body, test_name, model, models, engine_adapter, dialect, path, default_catalog
+        )
 
         self.context = TestExecutionContext(
             engine_adapter=engine_adapter,
             models=models,
+            default_dialect=dialect,
+            default_catalog=default_catalog,
         )
 
     def _execute_model(self) -> pd.DataFrame:
@@ -298,7 +329,7 @@ class PythonModelTest(ModelTest):
 def generate_test(
     model: Model,
     input_queries: t.Dict[str, str],
-    models: t.Dict[str, Model],
+    models: UniqueKeyDict[str, Model],
     engine_adapter: EngineAdapter,
     test_engine_adapter: EngineAdapter,
     project_path: Path,
@@ -356,12 +387,16 @@ def generate_test(
         engine_adapter=test_engine_adapter,
         dialect=model.dialect,
         path=fixture_path,
+        default_catalog=model.default_catalog,
     )
 
     test.setUp()
 
     if isinstance(model, SqlModel):
-        mapping = {name: _test_fixture_name(name) for name in models.keys() | inputs.keys()}
+        mapping = {
+            name: _fully_qualified_test_fixture_name(name, test_engine_adapter.dialect)
+            for name in models.keys() | inputs.keys()
+        }
         model_query = model.render_query_or_raise(
             **t.cast(t.Dict[str, t.Any], variables),
             engine_adapter=test_engine_adapter,
@@ -380,8 +415,14 @@ def generate_test(
         yaml.dump({test_name: test_body}, file)
 
 
-def _test_fixture_name(name: str) -> str:
-    return f"{name}__fixture"
+def _fully_qualified_test_fixture_table(name: str, dialect: str | None) -> exp.Table:
+    fqt = exp.to_table(name, dialect=dialect)
+    fqt.this.set("this", f"{fqt.this.this}__fixture")
+    return fqt
+
+
+def _fully_qualified_test_fixture_name(name: str, dialect: str | None) -> str:
+    return _fully_qualified_test_fixture_table(name, dialect).sql()
 
 
 def _raise_error(msg: str, path: Path | None) -> None:
