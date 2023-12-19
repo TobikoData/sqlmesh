@@ -66,7 +66,9 @@ class Config(BaseConfig):
 
     gateways: t.Dict[str, GatewayConfig] = {"": GatewayConfig()}
     default_connection: ConnectionConfig = DuckDBConnectionConfig()
-    default_test_connection: ConnectionConfig = DuckDBConnectionConfig()
+    default_test_connection_: t.Optional[ConnectionConfig] = Field(
+        default=None, alias="default_test_connection"
+    )
     default_scheduler: SchedulerConfig = BuiltInSchedulerConfig()
     default_gateway: str = ""
     notification_targets: t.List[NotificationTarget] = []
@@ -126,6 +128,13 @@ class Config(BaseConfig):
 
         return values
 
+    def get_default_test_connection(
+        self, default_catalog: t.Optional[str] = None
+    ) -> ConnectionConfig:
+        return self.default_test_connection_ or DuckDBConnectionConfig(
+            catalogs=None if default_catalog is None else {default_catalog: ":memory:"}
+        )
+
     def get_gateway(self, name: t.Optional[str] = None) -> GatewayConfig:
         if isinstance(self.gateways, dict):
             if name is None:
@@ -158,8 +167,12 @@ class Config(BaseConfig):
     ) -> t.Optional[ConnectionConfig]:
         return self.get_gateway(gateway_name).state_connection
 
-    def get_test_connection(self, gateway_name: t.Optional[str] = None) -> ConnectionConfig:
-        return self.get_gateway(gateway_name).test_connection or self.default_test_connection
+    def get_test_connection(
+        self, gateway_name: t.Optional[str] = None, default_catalog: t.Optional[str] = None
+    ) -> ConnectionConfig:
+        return self.get_gateway(gateway_name).test_connection or self.get_default_test_connection(
+            default_catalog=default_catalog
+        )
 
     def get_scheduler(self, gateway_name: t.Optional[str] = None) -> SchedulerConfig:
         return self.get_gateway(gateway_name).scheduler or self.default_scheduler
